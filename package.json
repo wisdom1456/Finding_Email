@@ -1,0 +1,27 @@
+{
+  "name": "legal-document-analysis-portal",
+  "version": "1.0.0",
+  "description": "Legal Document Analysis Portal - A modern front-end interface for AI-powered legal document analysis",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "type-check": "tsc --noEmit"
+  },
+  "keywords": [
+    "legal",
+    "document-analysis",
+    "frontend",
+    "typescript",
+    "vite"
+  ],
+  "author": "Your Law Firm",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^20.10.6",
+    "typescript": "^5.3.3",
+    "vite": "^5.0.10"
+  },
+  "dependencies": {}
+}

@@ -1,5 +1,5 @@
 // Configuration
-const WEBHOOK_URL = 'https://brflorida.app.n8n.cloud/webhook/legal-analysis-upload';
+const WEBHOOK_URL = 'https://brflorida.app.n8n.cloud/webhook-test/legal-analysis-upload';
 const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB in bytes
 
 // Type definitions

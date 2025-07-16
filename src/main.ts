@@ -312,36 +312,59 @@ async function handleSubmit(e: Event): Promise<void> {
     console.log('Server response status:', response.status, response.statusText);
     console.log('Response headers:', Object.fromEntries(response.headers.entries()));
     
-    // Parse response
-    const result: AnalysisResult = await response.json();
+    // Check if response has content before parsing JSON
+    const contentLength = response.headers.get('content-length');
+    let result: AnalysisResult | null = null;
     
-    // Log successful response
-    console.log('Server response:', result);
+    if (contentLength && contentLength !== '0') {
+      try {
+        result = await response.json();
+        console.log('Server response:', result);
+      } catch (jsonError) {
+        console.warn('Failed to parse JSON response:', jsonError);
+        console.log('Response text:', await response.clone().text());
+      }
+    } else {
+      console.log('Server returned empty response (content-length: 0)');
+    }
+    
     console.log('Submission successful:', response.ok);
     
-    if (response.ok && result.status === 'success') {
-      showStatus(`✅ Legal Analysis Complete! Generated professional findings letter and comprehensive case analysis for ${result.documentsProcessed} documents.`, 'success');
-      
-      // Create download links for generated files
-      if (result.downloadLinks) {
-        const downloadHtml = `
-          <div style="margin-top: 20px; padding: 20px; background: #f0f9ff; border-radius: 8px;">
-            <h4 style="color: #1e40af; margin-bottom: 15px;">📥 Download Generated Legal Documents:</h4>
-            <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-              <a href="${result.downloadLinks.findingsLetter}" target="_blank" style="background: #059669; color: white; padding: 12px 20px; text-decoration: none; border-radius: 6px; font-weight: 600;">📧 Professional Findings Letter</a>
-              <a href="${result.downloadLinks.caseAnalysis}" target="_blank" style="background: #0284c7; color: white; padding: 12px 20px; text-decoration: none; border-radius: 6px; font-weight: 600;">📊 Detailed Case Analysis</a>
-              <a href="${result.downloadLinks.executiveSummary}" target="_blank" style="background: #7c3aed; color: white; padding: 12px 20px; text-decoration: none; border-radius: 6px; font-weight: 600;">📋 Executive Summary</a>
+    if (response.ok) {
+      // If we have a successful response, consider it a success regardless of JSON content
+      if (result && result.status === 'success') {
+        // Handle full response with result data
+        showStatus(`✅ Legal Analysis Complete! Generated professional findings letter and comprehensive case analysis for ${result.documentsProcessed} documents.`, 'success');
+        
+        // Create download links for generated files
+        if (result.downloadLinks) {
+          const downloadHtml = `
+            <div style="margin-top: 20px; padding: 20px; background: #f0f9ff; border-radius: 8px;">
+              <h4 style="color: #1e40af; margin-bottom: 15px;">📥 Download Generated Legal Documents:</h4>
+              <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                <a href="${result.downloadLinks.findingsLetter}" target="_blank" style="background: #059669; color: white; padding: 12px 20px; text-decoration: none; border-radius: 6px; font-weight: 600;">📧 Professional Findings Letter</a>
+                <a href="${result.downloadLinks.caseAnalysis}" target="_blank" style="background: #0284c7; color: white; padding: 12px 20px; text-decoration: none; border-radius: 6px; font-weight: 600;">📊 Detailed Case Analysis</a>
+                <a href="${result.downloadLinks.executiveSummary}" target="_blank" style="background: #7c3aed; color: white; padding: 12px 20px; text-decoration: none; border-radius: 6px; font-weight: 600;">📋 Executive Summary</a>
+              </div>
             </div>
-          </div>
-        `;
-        statusElement.innerHTML += downloadHtml;
+          `;
+          statusElement.innerHTML += downloadHtml;
+        }
+      } else {
+        // Handle successful HTTP response but no detailed result data
+        const totalFiles = caseDocuments.size + 1; // +1 for intake form
+        showStatus(`✅ Form submitted successfully! Your legal documents (${totalFiles} files) have been uploaded to the analysis system. Processing will begin shortly.`, 'success');
       }
       
       console.log('Form submitted successfully to n8n webhook');
     } else {
       console.error('Server returned error:', response.status, response.statusText);
-      console.error('Error response:', result);
-      showStatus(`❌ Analysis Failed: ${result.message || 'Unknown error occurred during document processing.'}`, 'error');
+      if (result) {
+        console.error('Error response:', result);
+        showStatus(`❌ Analysis Failed: ${result.message || 'Unknown error occurred during document processing.'}`, 'error');
+      } else {
+        showStatus(`❌ Server Error: HTTP ${response.status} ${response.statusText}`, 'error');
+      }
       throw new Error(`Server error: ${response.status} ${response.statusText}`);
     }
   } catch (error) {

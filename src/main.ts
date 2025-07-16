@@ -267,16 +267,19 @@ async function handleSubmit(e: Event): Promise<void> {
     showStatus('⚠️ Please upload at least one case document.', 'error');
     return;
   }
+
+  const form = document.getElementById('uploadForm') as HTMLFormElement;
+  if (!form) {
+    console.error('Form with ID "uploadForm" not found');
+    showStatus('❌ System Error: Form not found. Please refresh the page.', 'error');
+    return;
+  }
+
+  // Create FormData object to capture all form fields automatically
+  const formData = new FormData(form);
   
-  const formData = new FormData();
-  
-  // Add form fields
-  formData.append('clientName', (document.getElementById('clientName') as HTMLInputElement).value);
-  formData.append('caseReference', (document.getElementById('caseReference') as HTMLInputElement).value);
-  formData.append('attorneyName', (document.getElementById('attorneyName') as HTMLInputElement).value);
-  
-  // Add intake form
-  formData.append('intakeForm', intakeForm.file);
+  // Add intake form file (override any existing intakeForm field)
+  formData.set('intakeForm', intakeForm.file);
   
   // Add case documents
   let fileIndex = 0;
@@ -290,15 +293,33 @@ async function handleSubmit(e: Event): Promise<void> {
   submitBtn.disabled = true;
   submitBtn.textContent = '⏳ Generating Legal Analysis...';
   
+  console.log('Submitting form data to n8n webhook...');
+  console.log('Webhook URL:', WEBHOOK_URL);
+  console.log('Form data entries:', Array.from(formData.entries()).map(([key, value]) =>
+    value instanceof File ? [key, `File: ${value.name} (${value.size} bytes)`] : [key, value]
+  ));
+  
   try {
+    // Send POST request using fetch API
     const response = await fetch(WEBHOOK_URL, {
       method: 'POST',
       body: formData
+      // Deliberately NOT setting Content-Type header to allow browser
+      // to set correct multipart/form-data boundary automatically
     });
     
+    // Log response details
+    console.log('Server response status:', response.status, response.statusText);
+    console.log('Response headers:', Object.fromEntries(response.headers.entries()));
+    
+    // Parse response
     const result: AnalysisResult = await response.json();
     
-    if (result.status === 'success') {
+    // Log successful response
+    console.log('Server response:', result);
+    console.log('Submission successful:', response.ok);
+    
+    if (response.ok && result.status === 'success') {
       showStatus(`✅ Legal Analysis Complete! Generated professional findings letter and comprehensive case analysis for ${result.documentsProcessed} documents.`, 'success');
       
       // Create download links for generated files
@@ -316,13 +337,25 @@ async function handleSubmit(e: Event): Promise<void> {
         statusElement.innerHTML += downloadHtml;
       }
       
-      console.log('Legal Analysis Results:', result);
+      console.log('Form submitted successfully to n8n webhook');
     } else {
+      console.error('Server returned error:', response.status, response.statusText);
+      console.error('Error response:', result);
       showStatus(`❌ Analysis Failed: ${result.message || 'Unknown error occurred during document processing.'}`, 'error');
+      throw new Error(`Server error: ${response.status} ${response.statusText}`);
     }
   } catch (error) {
+    // Log any errors with comprehensive details
+    console.error('Error submitting form to n8n webhook:', error);
+    console.error('Error details:', {
+      message: error instanceof Error ? error.message : 'Unknown error',
+      name: error instanceof Error ? error.name : 'Unknown',
+      stack: error instanceof Error ? error.stack : undefined
+    });
+    
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     showStatus(`❌ System Error: ${errorMessage}. Please try again or contact technical support.`, 'error');
+    throw error;
   } finally {
     updateSubmitButton();
   }

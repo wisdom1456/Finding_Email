@@ -275,11 +275,16 @@ async function handleSubmit(e: Event): Promise<void> {
     return;
   }
 
-  // Create FormData object to capture all form fields automatically
-  const formData = new FormData(form);
+  // Create FormData object and manually add all fields
+  const formData = new FormData();
   
-  // Add intake form file (override any existing intakeForm field)
-  formData.set('intakeForm', intakeForm.file);
+  // Add text form fields manually
+  formData.append('clientName', (document.getElementById('clientName') as HTMLInputElement).value);
+  formData.append('caseReference', (document.getElementById('caseReference') as HTMLInputElement).value);
+  formData.append('attorneyName', (document.getElementById('attorneyName') as HTMLInputElement).value);
+  
+  // Add intake form file with the exact name n8n expects
+  formData.append('intakeForm', intakeForm.file);
   
   // Add case documents
   let fileIndex = 0;

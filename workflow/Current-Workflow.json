@@ -1,0 +1,483 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "legal-analysis-upload",
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "https://findingemail-0w07x.kinsta.page",
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "https://findingemail-0w07x.kinsta.page"
+              },
+              {
+                "name": "Access-Control-Allow-Methods",
+                "value": "POST, OPTIONS"
+              },
+              {
+                "name": "Access-Control-Allow-Headers",
+                "value": "Content-Type"
+              }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -176,
+        208
+      ],
+      "id": "3b073c31-a949-442e-a4e7-efe0a5317d09",
+      "name": "Webhook",
+      "webhookId": "6d7fe8eb-8786-4526-88ad-5cd8fbf1c6c6"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Step 2: Data Structure Validation for Legal Document Analysis\n// This code validates incoming form data and ensures it matches our expected schema\n\n// First, let's extract the incoming data from the webhook\n// Based on Step 1 findings, form data is nested in the 'body' property\nconst incomingData = $input.first().json;\n\n// Initialize our validation results object\nconst validationResult = {\n  isValid: false,\n  errors: [],\n  validatedData: null,\n  processingTimestamp: new Date().toISOString()\n};\n\n// Check if the basic structure exists\n// We expect data to be in incomingData.body based on Step 1 findings\nif (!incomingData.body) {\n  validationResult.errors.push(\"Missing form data structure. Expected 'body' property not found.\");\n  return [{ json: validationResult }];\n}\n\nconst formData = incomingData.body;\n\n// Validate required fields according to Form_Output_Documentation.md\n// Required fields: clientName and attorneyName\nconst requiredFields = ['clientName', 'attorneyName'];\n\nfor (const field of requiredFields) {\n  if (!formData[field]) {\n    validationResult.errors.push(`Missing required field: ${field}`);\n  } else if (typeof formData[field] !== 'string') {\n    validationResult.errors.push(`Field ${field} must be a string`);\n  } else if (formData[field].trim().length === 0) {\n    validationResult.errors.push(`Field ${field} cannot be empty`);\n  }\n}\n\n// Validate optional field (caseReference) if present\nif (formData.caseReference && typeof formData.caseReference !== 'string') {\n  validationResult.errors.push(\"Field caseReference must be a string\");\n}\n\n// If we have errors, return them immediately\nif (validationResult.errors.length > 0) {\n  validationResult.isValid = false;\n  return [{ json: validationResult }];\n}\n\n// If validation passes, prepare clean data structure\nconst cleanData = {\n  clientName: formData.clientName.trim(),\n  caseReference: formData.caseReference ? formData.caseReference.trim() : '',\n  attorneyName: formData.attorneyName.trim()\n};\n\n// Set success status and return validated data\nvalidationResult.isValid = true;\nvalidationResult.validatedData = cleanData;\nvalidationResult.message = \"Form data validation successful\";\n\nreturn [{ json: validationResult }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        48,
+        208
+      ],
+      "id": "0e84bbe7-4653-4251-86cc-2b8b01bf8a91",
+      "name": "Validate Form Data"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Step 3: Intake Form Data Processing\n// This node structures the validated intake form data into a standardized format\n// Based on the established pattern from the proposed workflow's caseInfo structure\n\nconst validationData = $input.first().json;\n\n// Only process if validation was successful\nif (!validationData.isValid) {\n  // Pass through validation errors unchanged\n  return [{ json: validationData }];\n}\n\n// Extract the clean validated data\nconst validatedFields = validationData.validatedData;\n\n// Structure the intake form data into standardized JSON format\n// Following the caseInfo pattern from the proposed workflow\nconst structuredIntakeData = {\n  caseInfo: {\n    clientName: validatedFields.clientName,\n    caseReference: validatedFields.caseReference || `CASE-${new Date().toISOString().split('T')[0]}`,\n    attorneyName: validatedFields.attorneyName,\n    processingDate: new Date().toISOString()\n  },\n  dataProcessingStatus: {\n    intakeFormProcessed: true,\n    structuredAt: new Date().toISOString(),\n    dataQuality: 'validated'\n  },\n  nextStage: 'document-processing'\n};\n\n// Return the structured data with success metadata\nreturn [{\n  json: {\n    isValid: true,\n    structuredData: structuredIntakeData,\n    processingTimestamp: validationData.processingTimestamp,\n    message: 'Intake form data successfully structured for processing'\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        256,
+        208
+      ],
+      "id": "813dc0b0-0630-4cf1-bb99-5350e186495d",
+      "name": "Structure Intake Data"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Step 4: Binary Data Reception and File Cataloging\n// This node extracts binary files from webhook and creates file catalog\n\n// Get the structured intake data from previous step\nconst intakeData = $input.first().json;\n\n// Get the original webhook data that contains binary files\n// We need to look back at the webhook node's output\nconst webhookItems = $items(\"Webhook\");\nconst binaryData = webhookItems[0].binary || {};\n\n// Initialize file processing results\nconst fileProcessingResult = {\n  isValid: true,\n  errors: [],\n  filesCatalog: {\n    intakeForm: null,\n    caseDocuments: [],\n    totalFileSize: 0,\n    fileCount: 0\n  },\n  structuredData: intakeData.structuredData || {},\n  processingTimestamp: new Date().toISOString()\n};\n\n// Check if we have any binary data\nif (!binaryData || Object.keys(binaryData).length === 0) {\n  fileProcessingResult.isValid = false;\n  fileProcessingResult.errors.push(\"No files were uploaded with the form submission\");\n  return [{ json: fileProcessingResult }];\n}\n\n// Define allowed file types\nconst allowedMimeTypes = [\n  'application/pdf',\n  'application/vnd.openxmlformats-officedocument.wordprocessingml.document', // .docx\n  'application/msword', // .doc\n  'text/plain' // .txt\n];\n\n// Size limit: 100MB total\nconst MAX_TOTAL_SIZE = 100 * 1024 * 1024; // 100MB in bytes\nlet totalSize = 0;\n\n// Process intake form (required)\nif (binaryData.intakeForm) {\n  const intakeFile = binaryData.intakeForm;\n  \n  // Validate file type\n  if (!allowedMimeTypes.includes(intakeFile.mimeType)) {\n    fileProcessingResult.errors.push(`Intake form has invalid file type: ${intakeFile.mimeType}`);\n  }\n  \n  // Extract metadata with proper size handling\n  const sizeInBytes = typeof intakeFile.fileSize === 'number'\n    ? intakeFile.fileSize\n    : intakeFile.data ? intakeFile.data.length : 0;\n  \n  fileProcessingResult.filesCatalog.intakeForm = {\n    fileName: intakeFile.fileName,\n    fileSize: sizeInBytes,\n    mimeType: intakeFile.mimeType,\n    uploadedAt: new Date().toISOString()\n  };\n  \n  totalSize += sizeInBytes;\n  fileProcessingResult.filesCatalog.fileCount++;\n} else {\n  fileProcessingResult.isValid = false;\n  fileProcessingResult.errors.push(\"Required intake form is missing\");\n}\n\n// Process case documents\nlet documentIndex = 0;\nlet hasAtLeastOneDocument = false;\n\nwhile (binaryData[`caseDocument${documentIndex}`]) {\n  const docFile = binaryData[`caseDocument${documentIndex}`];\n  hasAtLeastOneDocument = true;\n  \n  // Validate file type\n  if (!allowedMimeTypes.includes(docFile.mimeType)) {\n    fileProcessingResult.errors.push(`Case document ${documentIndex} has invalid file type: ${docFile.mimeType}`);\n  }\n  \n  // Extract metadata with proper size handling\n  const sizeInBytes = typeof docFile.fileSize === 'number'\n    ? docFile.fileSize\n    : docFile.data ? docFile.data.length : 0;\n  \n  // Add to catalog\n  fileProcessingResult.filesCatalog.caseDocuments.push({\n    index: documentIndex,\n    fileName: docFile.fileName,\n    fileSize: sizeInBytes,\n    mimeType: docFile.mimeType,\n    uploadedAt: new Date().toISOString()\n  });\n  \n  totalSize += sizeInBytes;\n  fileProcessingResult.filesCatalog.fileCount++;\n  documentIndex++;\n}\n\n// Validate at least one case document\nif (!hasAtLeastOneDocument) {\n  fileProcessingResult.isValid = false;\n  fileProcessingResult.errors.push(\"At least one case document is required\");\n}\n\n// Check total size limit\nfileProcessingResult.filesCatalog.totalFileSize = totalSize;\nif (totalSize > MAX_TOTAL_SIZE) {\n  fileProcessingResult.isValid = false;\n  fileProcessingResult.errors.push(`Total file size (${(totalSize / 1024 / 1024).toFixed(2)}MB) exceeds 100MB limit`);\n}\n\n// If there are validation errors, mark as invalid\nif (fileProcessingResult.errors.length > 0) {\n  fileProcessingResult.isValid = false;\n}\n\n// Merge with intake data if valid\nif (fileProcessingResult.isValid && intakeData.isValid) {\n  fileProcessingResult.message = \"Files successfully received and cataloged\";\n  fileProcessingResult.structuredData.filesCatalog = fileProcessingResult.filesCatalog;\n  fileProcessingResult.structuredData.dataProcessingStatus.filesProcessed = true;\n  fileProcessingResult.structuredData.dataProcessingStatus.filesProcessedAt = new Date().toISOString();\n  fileProcessingResult.structuredData.nextStage = 'document-categorization';\n}\n\n// Pass binary data forward for downstream processing\nreturn [{\n  json: fileProcessingResult,\n  binary: binaryData\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        208
+      ],
+      "id": "4f9e8a1b-2c5d-4e8f-9a1b-3c4d5e6f7a8b",
+      "name": "Extract Binary Files"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Step 5: Document Categorization Router\n// This node creates separate processing branches for intake forms and case documents\n// Based on the file catalog from Step 4, it prepares data for parallel processing\n\n// Get the file processing result from Step 4\nconst step4Data = $input.first().json;\nconst binaryData = $input.first().binary || {};\n\n// Initialize the routing results\nconst routingResults = {\n  isValid: true,\n  errors: [],\n  branches: [],\n  processingTimestamp: new Date().toISOString()\n};\n\n// Validate that we have the necessary data from Step 4\nif (!step4Data || !step4Data.isValid) {\n  routingResults.isValid = false;\n  routingResults.errors.push(\"Invalid data received from Step 4 - file processing failed\");\n  return [{ json: routingResults }];\n}\n\n// Extract the structured data and file catalog\nconst structuredData = step4Data.structuredData || {};\nconst filesCatalog = structuredData.filesCatalog || step4Data.filesCatalog;\n\nif (!filesCatalog) {\n  routingResults.isValid = false;\n  routingResults.errors.push(\"File catalog is missing from Step 4 data\");\n  return [{ json: routingResults }];\n}\n\n// Prepare output items for the Switch node\nconst outputItems = [];\n\n// Branch 1: Intake Form Processing\nif (filesCatalog.intakeForm) {\n  const intakeFormBranch = {\n    documentType: \"intakeForm\",\n    caseInfo: structuredData.caseInfo || {},\n    intakeFormData: {\n      fileName: filesCatalog.intakeForm.fileName,\n      fileSize: filesCatalog.intakeForm.fileSize,\n      mimeType: filesCatalog.intakeForm.mimeType,\n      uploadedAt: filesCatalog.intakeForm.uploadedAt,\n      binaryDataReference: \"intakeForm\"\n    },\n    processingMetadata: {\n      branch: \"intake-analysis\",\n      documentCount: 1,\n      processingStartedAt: new Date().toISOString(),\n      priority: \"high\"\n    },\n    originalData: {\n      step4Result: step4Data,\n      totalFileCount: filesCatalog.fileCount,\n      totalFileSize: filesCatalog.totalFileSize\n    }\n  };\n  \n  outputItems.push({\n    json: intakeFormBranch,\n    binary: { intakeForm: binaryData.intakeForm }\n  });\n  \n  routingResults.branches.push(\"intake-analysis\");\n} else {\n  routingResults.isValid = false;\n  routingResults.errors.push(\"Intake form is required but missing from file catalog\");\n}\n\n// Branch 2: Case Documents Processing\nif (filesCatalog.caseDocuments && filesCatalog.caseDocuments.length > 0) {\n  // Prepare binary data object for case documents\n  const caseDocumentsBinary = {};\n  \n  // Add each case document to binary data\n  filesCatalog.caseDocuments.forEach((doc, index) => {\n    const binaryKey = `caseDocument${doc.index}`;\n    if (binaryData[binaryKey]) {\n      caseDocumentsBinary[binaryKey] = binaryData[binaryKey];\n    }\n  });\n  \n  const caseDocumentsBranch = {\n    documentType: \"caseDocuments\",\n    caseInfo: structuredData.caseInfo || {},\n    caseDocumentsData: {\n      documentCount: filesCatalog.caseDocuments.length,\n      totalSize: filesCatalog.caseDocuments.reduce((total, doc) => total + doc.fileSize, 0),\n      documents: filesCatalog.caseDocuments.map(doc => ({\n        index: doc.index,\n        fileName: doc.fileName,\n        fileSize: doc.fileSize,\n        mimeType: doc.mimeType,\n        uploadedAt: doc.uploadedAt,\n        binaryDataReference: `caseDocument${doc.index}`\n      }))\n    },\n    processingMetadata: {\n      branch: \"case-documents-analysis\",\n      documentCount: filesCatalog.caseDocuments.length,\n      processingStartedAt: new Date().toISOString(),\n      priority: \"normal\"\n    },\n    originalData: {\n      step4Result: step4Data,\n      totalFileCount: filesCatalog.fileCount,\n      totalFileSize: filesCatalog.totalFileSize\n    }\n  };\n  \n  outputItems.push({\n    json: caseDocumentsBranch,\n    binary: caseDocumentsBinary\n  });\n  \n  routingResults.branches.push(\"case-documents-analysis\");\n} else {\n  routingResults.isValid = false;\n  routingResults.errors.push(\"At least one case document is required but none found in file catalog\");\n}\n\n// If we have validation errors, return error response\nif (routingResults.errors.length > 0) {\n  routingResults.isValid = false;\n  return [{ json: routingResults }];\n}\n\n// Return all output items for the Switch node\nreturn outputItems;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        208
+      ],
+      "id": "5a9b8c2d-3e4f-5g6h-7i8j-9k0l1m2n3o4p",
+      "name": "Categorize Documents"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.documentType }}",
+              "value2": "intakeForm"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        1088,
+        128
+      ],
+      "id": "6b0c9d3e-4f5g-6h7i-8j9k-0l1m2n3o4p5q",
+      "name": "Route Intake Form"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.documentType }}",
+              "value2": "caseDocuments"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        1088,
+        288
+      ],
+      "id": "7c1d0e4f-5g6h-7i8j-9k0l-1m2n3o4p5q6r",
+      "name": "Route Case Documents"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Step 6: Document Information Extraction - Intake Form Branch\n// This node implements AI extraction for intake form documents\n// Following the architecture design from Step6_Architecture_Design.md\n\n// Get the input data from the Route Intake Form node\nconst inputData = $input.first().json;\nconst binaryData = $input.first().binary || {};\n\n// Initialize extraction results\nconst extractionResult = {\n  isValid: true,\n  errors: [],\n  extractedData: null,\n  processingTimestamp: new Date().toISOString(),\n  extractionMetadata: {\n    documentType: \"intakeForm\",\n    processingBranch: \"intake-analysis\",\n    simulatedProcessing: true\n  }\n};\n\n// Validate input data structure\nif (!inputData || inputData.documentType !== \"intakeForm\") {\n  extractionResult.isValid = false;\n  extractionResult.errors.push(\"Invalid input: Expected intakeForm document type\");\n  return [{ json: extractionResult }];\n}\n\n// Check for binary data reference\nif (!inputData.intakeFormData || !inputData.intakeFormData.binaryDataReference) {\n  extractionResult.isValid = false;\n  extractionResult.errors.push(\"Missing binary data reference for intake form\");\n  return [{ json: extractionResult }];\n}\n\nconst binaryKey = inputData.intakeFormData.binaryDataReference;\nif (!binaryData[binaryKey]) {\n  extractionResult.isValid = false;\n  extractionResult.errors.push(`Binary data not found for key: ${binaryKey}`);\n  return [{ json: extractionResult }];\n}\n\n// SIMULATION: Text Extraction\n// In production, this would extract text from PDF/DOCX using appropriate libraries\nconst simulatedDocumentText = `\nLEGAL INTAKE FORM\n\nClient Information:\nName: John Smith\nPhone: (555) 123-4567\nEmail: john.smith@email.com\nAddress: 123 Main Street, City, ST 12345\n\nCase Information:\nCase Reference: CASE-2025-001\nMatter Type: Personal Injury\nDate of Incident: January 15, 2025\nBrief Description: Motor vehicle accident at intersection of Main St and Oak Ave. Client was injured when defendant ran red light.\n\nAttorney Information:\nAssigned Attorney: Sarah Johnson, Esq.\nBar Number: 12345\nSpecialty: Personal Injury Law\n\nAdditional Notes:\nClient reported back and neck pain. Medical treatment ongoing at City Hospital.\n`;\n\n// SIMULATION: Prepare and \"Execute\" Prompt\n// Using the prompt template from Step6_Architecture_Design.md\nconst promptTemplate = `You are an expert legal data extraction assistant. Your task is to extract information from the provided intake form document and format it as a valid JSON object.\n\nThe document content is as follows:\n${simulatedDocumentText}\n\nPlease extract the following information and structure it according to the JSON schema provided below. Ensure all fields are correctly populated and that the JSON is perfectly formatted.\n\n**JSON Schema:**\n{\n  \"clientInfo\": {\n    \"clientName\": \"string\",\n    \"contactInfo\": \"string\"\n  },\n  \"caseInfo\": {\n    \"caseReference\": \"string\",\n    \"summary\": \"string\"\n  },\n  \"attorneyInfo\": {\n    \"attorneyName\": \"string\"\n  }\n}\n\nReturn ONLY the valid JSON object.`;\n\n// SIMULATION: LLM Output\n// Hardcoded JSON object that strictly follows the ExtractedIntakeForm schema\nconst simulatedLLMResponse = {\n  \"clientInfo\": {\n    \"clientName\": \"John Smith\",\n    \"contactInfo\": \"Phone: (555) 123-4567, Email: john.smith@email.com, Address: 123 Main Street, City, ST 12345\"\n  },\n  \"caseInfo\": {\n    \"caseReference\": \"CASE-2025-001\",\n    \"summary\": \"Personal injury case involving motor vehicle accident at intersection of Main St and Oak Ave on January 15, 2025. Client injured when defendant ran red light. Client reports back and neck pain with ongoing medical treatment at City Hospital.\"\n  },\n  \"attorneyInfo\": {\n    \"attorneyName\": \"Sarah Johnson, Esq.\"\n  }\n};\n\n// Validate the extracted data against the schema\ntry {\n  // Basic validation of required fields\n  if (!simulatedLLMResponse.clientInfo || !simulatedLLMResponse.clientInfo.clientName) {\n    throw new Error(\"Missing required field: clientInfo.clientName\");\n  }\n  if (!simulatedLLMResponse.caseInfo || !simulatedLLMResponse.caseInfo.caseReference) {\n    throw new Error(\"Missing required field: caseInfo.caseReference\");\n  }\n  if (!simulatedLLMResponse.attorneyInfo || !simulatedLLMResponse.attorneyInfo.attorneyName) {\n    throw new Error(\"Missing required field: attorneyInfo.attorneyName\");\n  }\n  \n  // Set successful extraction result\n  extractionResult.extractedData = simulatedLLMResponse;\n  extractionResult.extractionMetadata.textLength = simulatedDocumentText.length;\n  extractionResult.extractionMetadata.promptUsed = promptTemplate.substring(0, 100) + \"...\";\n  extractionResult.extractionMetadata.fieldsExtracted = [\n    \"clientInfo.clientName\",\n    \"clientInfo.contactInfo\", \n    \"caseInfo.caseReference\",\n    \"caseInfo.summary\",\n    \"attorneyInfo.attorneyName\"\n  ];\n  extractionResult.message = \"Intake form data successfully extracted using simulated AI processing\";\n  \n  // Preserve original routing data for downstream processing\n  extractionResult.originalRoutingData = {\n    documentType: inputData.documentType,\n    caseInfo: inputData.caseInfo,\n    intakeFormData: inputData.intakeFormData,\n    processingMetadata: inputData.processingMetadata\n  };\n  \n} catch (error) {\n  extractionResult.isValid = false;\n  extractionResult.errors.push(`Schema validation failed: ${error.message}`);\n}\n\n// Return the extraction result\nreturn [{\n  json: extractionResult,\n  binary: binaryData\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1296,
+        128
+      ],
+      "id": "ai-extract-intake-001-2025",
+      "name": "Extract Intake Form Data"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse & Enrich Intake Data Node\n// This node receives the simulated JSON output from Extract Intake Form Data,\n// validates the structure, and enriches it with processing metadata\n\n// Get the input data from the Extract Intake Form Data node\nconst inputData = $input.first().json;\nconst binaryData = $input.first().binary || {};\n\n// Initialize the processing result\nconst processingResult = {\n  isValid: true,\n  errors: [],\n  enrichedData: null,\n  processingTimestamp: new Date().toISOString(),\n  processingMetadata: {\n    nodeType: \"parse-enrich\",\n    processingBranch: \"intake-analysis\",\n    validationPassed: false,\n    enrichmentApplied: false\n  }\n};\n\n// Validate that we received valid extraction data\nif (!inputData || !inputData.isValid) {\n  processingResult.isValid = false;\n  processingResult.errors.push(\"Invalid input: Previous extraction step failed\");\n  if (inputData && inputData.errors) {\n    processingResult.errors = processingResult.errors.concat(inputData.errors);\n  }\n  return [{ json: processingResult, binary: binaryData }];\n}\n\n// Extract the JSON data from the extraction result\nlet extractedJsonData;\ntry {\n  if (inputData.extractedData) {\n    // Data is already parsed as an object from the extraction step\n    extractedJsonData = inputData.extractedData;\n  } else {\n    processingResult.isValid = false;\n    processingResult.errors.push(\"No extracted data found in input\");\n    return [{ json: processingResult, binary: binaryData }];\n  }\n} catch (error) {\n  processingResult.isValid = false;\n  processingResult.errors.push(`Failed to parse JSON: ${error.message}`);\n  return [{ json: processingResult, binary: binaryData }];\n}\n\n// Validate the presence of required top-level keys\nconst requiredKeys = ['clientInfo', 'caseInfo', 'attorneyInfo'];\nconst missingKeys = [];\n\nfor (const key of requiredKeys) {\n  if (!extractedJsonData[key] || typeof extractedJsonData[key] !== 'object') {\n    missingKeys.push(key);\n  }\n}\n\nif (missingKeys.length > 0) {\n  processingResult.isValid = false;\n  processingResult.errors.push(`Missing or invalid required keys: ${missingKeys.join(', ')}`);\n  return [{ json: processingResult, binary: binaryData }];\n}\n\n// Validation passed - proceed with enrichment\nprocessingResult.processingMetadata.validationPassed = true;\n\n// Create enriched data by adding processing metadata\nconst enrichedJsonData = {\n  ...extractedJsonData,\n  processing: {\n    extractionStatus: \"validated\",\n    parsedAt: new Date().toISOString(),\n    parserVersion: \"1.0.0\",\n    validatedKeys: requiredKeys,\n    originalExtractionTimestamp: inputData.processingTimestamp,\n    extractionMetadata: inputData.extractionMetadata || {}\n  }\n};\n\n// Set successful processing result\nprocessingResult.enrichedData = enrichedJsonData;\nprocessingResult.processingMetadata.enrichmentApplied = true;\nprocessingResult.message = \"Intake data successfully parsed, validated, and enriched\";\n\n// Preserve original routing and extraction data for downstream processing\nprocessingResult.originalData = {\n  extractionResult: inputData,\n  routingData: inputData.originalRoutingData || {}\n};\n\n// Return the enriched result\nreturn [{\n  json: processingResult,\n  binary: binaryData\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1504,
+        128
+      ],
+      "id": "parse-enrich-intake-001-2025",
+      "name": "Parse & Enrich Intake Data"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Validate Intake Extraction Node\n// This node performs final quality check on the enriched intake data\n// and adds final validation timestamp if processing status is validated\n\n// Get the input data from the Parse & Enrich Intake Data node\nconst inputData = $input.first().json;\nconst binaryData = $input.first().binary || {};\n\n// Initialize the validation result\nconst validationResult = {\n  isValid: true,\n  errors: [],\n  validatedData: null,\n  processingTimestamp: new Date().toISOString(),\n  validationMetadata: {\n    nodeType: \"final-validation\",\n    processingBranch: \"intake-analysis\",\n    finalValidationApplied: false\n  }\n};\n\n// Validate that we received valid processing data\nif (!inputData || !inputData.isValid) {\n  validationResult.isValid = false;\n  validationResult.errors.push(\"Invalid input: Previous processing step failed\");\n  if (inputData && inputData.errors) {\n    validationResult.errors = validationResult.errors.concat(inputData.errors);\n  }\n  return [{ json: validationResult, binary: binaryData }];\n}\n\n// Extract the enriched data\nconst enrichedData = inputData.enrichedData;\nif (!enrichedData) {\n  validationResult.isValid = false;\n  validationResult.errors.push(\"No enriched data found in input\");\n  return [{ json: validationResult, binary: binaryData }];\n}\n\n// Validate Processing Status: Check if processing.extractionStatus === \"validated\"\nif (!enrichedData.processing || enrichedData.processing.extractionStatus !== \"validated\") {\n  validationResult.isValid = false;\n  validationResult.errors.push(\"Final validation failed: Extraction status is not 'validated'\");\n  validationResult.actualStatus = enrichedData.processing ? enrichedData.processing.extractionStatus : \"missing\";\n  return [{ json: validationResult, binary: binaryData }];\n}\n\n// Finalize Output: Add finalValidationTimestamp to the processing object\nconst finalValidatedData = {\n  ...enrichedData,\n  processing: {\n    ...enrichedData.processing,\n    finalValidationTimestamp: new Date().toISOString(),\n    finalValidationStatus: \"completed\"\n  }\n};\n\n// Set successful validation result\nvalidationResult.validatedData = finalValidatedData;\nvalidationResult.validationMetadata.finalValidationApplied = true;\nvalidationResult.message = \"Final validation completed successfully - intake extraction validated\";\n\n// Preserve original processing and routing data\nvalidationResult.originalData = {\n  processingResult: inputData,\n  extractionData: inputData.originalData || {}\n};\n\n// Return the final validated result\nreturn [{\n  json: validationResult,\n  binary: binaryData\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1608,
+        128
+      ],
+      "id": "validate-intake-final-001-2025",
+      "name": "Validate Intake Extraction"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Prepare Case Documents Node\n// This node receives case documents data and simulates text extraction\n// from multiple files, aggregating them into a single text string\n\n// Get the input data from the Route Case Documents node\nconst inputData = $input.first().json;\nconst binaryData = $input.first().binary || {};\n\n// Initialize preparation results\nconst preparationResult = {\n  isValid: true,\n  errors: [],\n  aggregatedDocumentsText: null,\n  processingTimestamp: new Date().toISOString(),\n  preparationMetadata: {\n    nodeType: \"prepare-documents\",\n    processingBranch: \"case-documents-analysis\",\n    simulatedProcessing: true\n  }\n};\n\n// Validate input data structure\nif (!inputData || inputData.documentType !== \"caseDocuments\") {\n  preparationResult.isValid = false;\n  preparationResult.errors.push(\"Invalid input: Expected caseDocuments document type\");\n  return [{ json: preparationResult }];\n}\n\n// Check for case documents data\nif (!inputData.caseDocumentsData || !inputData.caseDocumentsData.documents) {\n  preparationResult.isValid = false;\n  preparationResult.errors.push(\"Missing caseDocumentsData.documents array\");\n  return [{ json: preparationResult }];\n}\n\nconst documents = inputData.caseDocumentsData.documents;\nif (!Array.isArray(documents) || documents.length === 0) {\n  preparationResult.isValid = false;\n  preparationResult.errors.push(\"caseDocumentsData.documents must be a non-empty array\");\n  return [{ json: preparationResult }];\n}\n\n// SIMULATION: Text Extraction from Multiple Documents\n// Since we cannot yet read text from multiple files, we simulate this step\nconst aggregatedTextParts = [];\nconst documentSeparator = \"\\n\\n--- DOCUMENT SEPARATOR ---\\n\\n\";\n\n// Iterate through each document and create simulated text content\ndocuments.forEach((doc, index) => {\n  // Create distinct placeholder text for each document\n  const documentNumber = index + 1;\n  const simulatedText = `DOCUMENT ${documentNumber}: ${doc.fileName || `Document_${documentNumber}`}\n\nFile Information:\n- File Name: ${doc.fileName || `Document_${documentNumber}.pdf`}\n- File Size: ${doc.fileSize ? (doc.fileSize / 1024).toFixed(2) + ' KB' : 'Unknown'}\n- MIME Type: ${doc.mimeType || 'application/pdf'}\n- Upload Time: ${doc.uploadedAt || new Date().toISOString()}\n\nSimulated Document Content:\nThis is simulated content for document ${documentNumber}. In a production environment, this would contain the actual extracted text from the ${doc.mimeType || 'PDF'} file. The document appears to be a legal document related to the case proceedings.\n\nKey sections that might be found in this document:\n- Case details and background information\n- Legal arguments and supporting evidence\n- Timeline of events relevant to the case\n- Party information and contact details\n- Court filings and procedural documents\n- Evidence and supporting documentation\n\nThis simulated text represents what would typically be extracted from document ${documentNumber} in the case file. The actual content would provide detailed legal information relevant to the case analysis and would be used for downstream AI processing and analysis.\n\nEnd of simulated content for document ${documentNumber}.`;\n  \n  aggregatedTextParts.push(simulatedText);\n});\n\n// Combine all document texts with separators\nconst aggregatedText = aggregatedTextParts.join(documentSeparator);\n\n// Add final metadata footer\nconst metadataFooter = `\\n\\n--- END OF DOCUMENTS ---\\n\\nDocument Processing Summary:\n- Total Documents Processed: ${documents.length}\n- Total Aggregated Text Length: ${aggregatedText.length} characters\n- Processing Method: Simulated text extraction\n- Processing Timestamp: ${new Date().toISOString()}\n- Branch: case-documents-analysis`;\n\nconst finalAggregatedText = aggregatedText + metadataFooter;\n\n// Set successful preparation result\npreparationResult.aggregatedDocumentsText = finalAggregatedText;\npreparationResult.preparationMetadata.documentsProcessed = documents.length;\npreparationResult.preparationMetadata.totalTextLength = finalAggregatedText.length;\npreparationResult.preparationMetadata.processingMethod = \"simulated-extraction\";\npreparationResult.message = `Successfully prepared ${documents.length} case documents for analysis`;\n\n// Preserve original routing data for downstream processing\npreparationResult.originalRoutingData = {\n  documentType: inputData.documentType,\n  caseInfo: inputData.caseInfo,\n  caseDocumentsData: inputData.caseDocumentsData,\n  processingMetadata: inputData.processingMetadata\n};\n\n// Return the preparation result with aggregated text\nreturn [{\n  json: preparationResult,\n  binary: binaryData\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1296,
+        288
+      ],
+      "id": "prepare-case-docs-001-2025",
+      "name": "Prepare Case Documents"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Analyze Case Documents Node\n// This node implements AI analysis for case documents using the aggregated text\n// from the Prepare Case Documents node, following the architecture design\n\n// Get the input data from the Prepare Case Documents node\nconst inputData = $input.first().json;\nconst binaryData = $input.first().binary || {};\n\n// Initialize analysis results\nconst analysisResult = {\n  isValid: true,\n  errors: [],\n  analysisData: null,\n  processingTimestamp: new Date().toISOString(),\n  analysisMetadata: {\n    nodeType: \"analyze-documents\",\n    processingBranch: \"case-documents-analysis\",\n    simulatedProcessing: true\n  }\n};\n\n// Validate input data structure\nif (!inputData || !inputData.isValid) {\n  analysisResult.isValid = false;\n  analysisResult.errors.push(\"Invalid input: Previous preparation step failed\");\n  if (inputData && inputData.errors) {\n    analysisResult.errors = analysisResult.errors.concat(inputData.errors);\n  }\n  return [{ json: analysisResult }];\n}\n\n// Check for aggregated documents text\nif (!inputData.aggregatedDocumentsText) {\n  analysisResult.isValid = false;\n  analysisResult.errors.push(\"Missing aggregatedDocumentsText from preparation step\");\n  return [{ json: analysisResult }];\n}\n\nconst documentsText = inputData.aggregatedDocumentsText;\n\n// SIMULATION: Prepare and \"Execute\" Prompt\n// Using the prompt template from Step6_Architecture_Design.md for caseDocuments\nconst promptTemplate = `You are a specialized legal analysis AI. You will be given a collection of case documents. Your task is to perform a comprehensive analysis across all provided documents and extract key legal information.\n\nThe documents are provided below:\n---\n${documentsText}\n---\n\nAnalyze the documents collectively and extract the following information. Structure your response as a single, valid JSON object according to the schema below.\n\n**JSON Schema:**\n{\n  \"keyEntities\": {\n    \"plaintiffs\": [\"string\"],\n    \"defendants\": [\"string\"],\n    \"judges\": [\"string\"],\n    \"other_parties\": [\"string\"]\n  },\n  \"keyFacts\": [\n    {\n      \"fact\": \"string\",\n      \"source_document\": \"string\"\n    }\n  ],\n  \"timelineOfEvents\": [\n    {\n      \"date\": \"YYYY-MM-DD\",\n      \"event\": \"string\",\n      \"source_document\": \"string\"\n    }\n  ],\n  \"legalContext\": {\n    \"statedClaims\": [\"string\"],\n    \"defenses\": [\"string\"]\n  }\n}\n\nReturn ONLY the valid JSON object.`;\n\n// SIMULATION: LLM Output\n// Hardcoded JSON object that strictly follows the AnalyzedCaseDocuments schema\n// Simulating realistic legal analysis with multiple documents\nconst simulatedLLMResponse = {\n  \"keyEntities\": {\n    \"plaintiffs\": [\n      \"John Smith\",\n      \"ABC Corporation\"\n    ],\n    \"defendants\": [\n      \"XYZ Industries Inc.\",\n      \"Robert Johnson\",\n      \"City Municipal Authority\"\n    ],\n    \"judges\": [\n      \"Judge Patricia Williams\",\n      \"Magistrate David Chen\"\n    ],\n    \"other_parties\": [\n      \"Expert Witness Dr. Sarah Martinez\",\n      \"Insurance Company Mutual Assurance\",\n      \"Engineering Consultant Thomas Lee\"\n    ]\n  },\n  \"keyFacts\": [\n    {\n      \"fact\": \"Motor vehicle collision occurred at intersection of Main Street and Oak Avenue on January 15, 2025 at approximately 3:45 PM\",\n      \"source_document\": \"Document_1.pdf\"\n    },\n    {\n      \"fact\": \"Defendant Robert Johnson was operating commercial vehicle under employment of XYZ Industries Inc. at time of incident\",\n      \"source_document\": \"Document_2.pdf\"\n    },\n    {\n      \"fact\": \"Traffic signal malfunction reported by City Municipal Authority maintenance records three days prior to incident\",\n      \"source_document\": \"Document_3.pdf\"\n    },\n    {\n      \"fact\": \"Plaintiff John Smith sustained lumbar spine injuries requiring ongoing physical therapy and medical treatment\",\n      \"source_document\": \"Document_1.pdf\"\n    },\n    {\n      \"fact\": \"ABC Corporation filed secondary claim for property damage to company vehicle valued at $45,000\",\n      \"source_document\": \"Document_4.pdf\"\n    },\n    {\n      \"fact\": \"Security camera footage from adjacent business establishment captured collision from multiple angles\",\n      \"source_document\": \"Document_2.pdf\"\n    }\n  ],\n  \"timelineOfEvents\": [\n    {\n      \"date\": \"2025-01-12\",\n      \"event\": \"City Municipal Authority receives report of intermittent traffic signal malfunction at Main Street and Oak Avenue intersection\",\n      \"source_document\": \"Document_3.pdf\"\n    },\n    {\n      \"date\": \"2025-01-15\",\n      \"event\": \"Motor vehicle collision occurs at 3:45 PM involving plaintiff John Smith and defendant Robert Johnson\",\n      \"source_document\": \"Document_1.pdf\"\n    },\n    {\n      \"date\": \"2025-01-15\",\n      \"event\": \"Emergency medical services respond to scene and transport plaintiff to City Hospital\",\n      \"source_document\": \"Document_1.pdf\"\n    },\n    {\n      \"date\": \"2025-01-16\",\n      \"event\": \"Police investigation report filed with preliminary findings of fault determination\",\n      \"source_document\": \"Document_2.pdf\"\n    },\n    {\n      \"date\": \"2025-01-20\",\n      \"event\": \"ABC Corporation files insurance claim for property damage to company vehicle\",\n      \"source_document\": \"Document_4.pdf\"\n    },\n    {\n      \"date\": \"2025-02-01\",\n      \"event\": \"Expert witness Dr. Sarah Martinez conducts independent medical examination of plaintiff\",\n      \"source_document\": \"Document_5.pdf\"\n    },\n    {\n      \"date\": \"2025-02-15\",\n      \"event\": \"Initial settlement demand letter sent to defendants' insurance carriers\",\n      \"source_document\": \"Document_6.pdf\"\n    }\n  ],\n  \"legalContext\": {\n    \"statedClaims\": [\n      \"Negligence - Failure to maintain safe operation of motor vehicle\",\n      \"Vicarious liability - Employer responsibility for employee actions during course of employment\",\n      \"Municipal liability - Failure to maintain traffic control devices in safe working condition\",\n      \"Property damage - Compensation for vehicle repair and replacement costs\",\n      \"Personal injury - Medical expenses, lost wages, and pain and suffering damages\"\n    ],\n    \"defenses\": [\n      \"Comparative negligence - Plaintiff contributory fault in failing to exercise due care\",\n      \"Act of God - Traffic signal malfunction was unforeseeable mechanical failure\",\n      \"Independent contractor - Driver was not acting within scope of employment\",\n      \"Statute of limitations - Claims filed outside applicable limitations period\",\n      \"Failure to mitigate damages - Plaintiff did not seek appropriate medical treatment\"\n    ]\n  }\n};\n\n// Validate the analysis data against the schema\ntry {\n  // Basic validation of required top-level fields\n  const requiredFields = ['keyEntities', 'keyFacts', 'timelineOfEvents', 'legalContext'];\n  for (const field of requiredFields) {\n    if (!simulatedLLMResponse[field]) {\n      throw new Error(`Missing required field: ${field}`);\n    }\n  }\n  \n  // Validate keyEntities structure\n  if (!simulatedLLMResponse.keyEntities.plaintiffs || !Array.isArray(simulatedLLMResponse.keyEntities.plaintiffs)) {\n    throw new Error(\"keyEntities.plaintiffs must be an array\");\n  }\n  \n  // Validate keyFacts structure\n  if (!Array.isArray(simulatedLLMResponse.keyFacts)) {\n    throw new Error(\"keyFacts must be an array\");\n  }\n  \n  // Validate timelineOfEvents structure\n  if (!Array.isArray(simulatedLLMResponse.timelineOfEvents)) {\n    throw new Error(\"timelineOfEvents must be an array\");\n  }\n  \n  // Validate legalContext structure\n  if (!simulatedLLMResponse.legalContext.statedClaims || !Array.isArray(simulatedLLMResponse.legalContext.statedClaims)) {\n    throw new Error(\"legalContext.statedClaims must be an array\");\n  }\n  \n  // Set successful analysis result\n  analysisResult.analysisData = simulatedLLMResponse;\n  analysisResult.analysisMetadata.promptUsed = promptTemplate.substring(0, 150) + \"...\";\n  analysisResult.analysisMetadata.documentsAnalyzed = inputData.preparationMetadata ? inputData.preparationMetadata.documentsProcessed : \"unknown\";\n  analysisResult.analysisMetadata.totalTextAnalyzed = documentsText.length;\n  analysisResult.analysisMetadata.entitiesExtracted = {\n    plaintiffs: simulatedLLMResponse.keyEntities.plaintiffs.length,\n    defendants: simulatedLLMResponse.keyEntities.defendants.length,\n    judges: simulatedLLMResponse.keyEntities.judges.length,\n    other_parties: simulatedLLMResponse.keyEntities.other_parties.length\n  };\n  analysisResult.analysisMetadata.factsExtracted = simulatedLLMResponse.keyFacts.length;\n  analysisResult.analysisMetadata.timelineEventsExtracted = simulatedLLMResponse.timelineOfEvents.length;\n  analysisResult.analysisMetadata.claimsExtracted = simulatedLLMResponse.legalContext.statedClaims.length;\n  analysisResult.analysisMetadata.defensesExtracted = simulatedLLMResponse.legalContext.defenses.length;\n  analysisResult.message = \"Case documents successfully analyzed using simulated AI processing\";\n  \n  // Preserve original preparation data for downstream processing\n  analysisResult.originalPreparationData = {\n    preparationResult: inputData,\n    routingData: inputData.originalRoutingData || {}\n  };\n  \n} catch (error) {\n  analysisResult.isValid = false;\n  analysisResult.errors.push(`Schema validation failed: ${error.message}`);\n}\n\n// Return the analysis result\nreturn [{\n  json: analysisResult,\n  binary: binaryData\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1504,
+        288
+      ],
+      "id": "analyze-case-docs-001-2025",
+      "name": "Analyze Case Documents"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse & Structure Case Documents Results Node\n// This node receives the simulated JSON output from Analyze Case Documents,\n// validates the structure, and enriches it with processing metadata\n\n// Get the input data from the Analyze Case Documents node\nconst inputData = $input.first().json;\nconst binaryData = $input.first().binary || {};\n\n// Initialize the processing result\nconst processingResult = {\n  isValid: true,\n  errors: [],\n  enrichedData: null,\n  processingTimestamp: new Date().toISOString(),\n  processingMetadata: {\n    nodeType: \"parse-structure\",\n    processingBranch: \"case-documents-analysis\",\n    validationPassed: false,\n    enrichmentApplied: false\n  }\n};\n\n// Validate that we received valid analysis data\nif (!inputData || !inputData.isValid) {\n  processingResult.isValid = false;\n  processingResult.errors.push(\"Invalid input: Previous analysis step failed\");\n  if (inputData && inputData.errors) {\n    processingResult.errors = processingResult.errors.concat(inputData.errors);\n  }\n  return [{ json: processingResult, binary: binaryData }];\n}\n\n// Extract the JSON data from the analysis result\nlet analysisJsonData;\ntry {\n  if (inputData.analysisData) {\n    // Data is already parsed as an object from the analysis step\n    analysisJsonData = inputData.analysisData;\n  } else {\n    processingResult.isValid = false;\n    processingResult.errors.push(\"No analysis data found in input\");\n    return [{ json: processingResult, binary: binaryData }];\n  }\n} catch (error) {\n  processingResult.isValid = false;\n  processingResult.errors.push(`Failed to parse JSON: ${error.message}`);\n  return [{ json: processingResult, binary: binaryData }];\n}\n\n// Validate the presence of required top-level keys\nconst requiredKeys = ['keyEntities', 'keyFacts', 'timelineOfEvents', 'legalContext'];\nconst missingKeys = [];\n\nfor (const key of requiredKeys) {\n  if (!analysisJsonData[key] || (typeof analysisJsonData[key] !== 'object' && !Array.isArray(analysisJsonData[key]))) {\n    missingKeys.push(key);\n  }\n}\n\nif (missingKeys.length > 0) {\n  processingResult.isValid = false;\n  processingResult.errors.push(`Missing or invalid required keys: ${missingKeys.join(', ')}`);\n  return [{ json: processingResult, binary: binaryData }];\n}\n\n// Validation passed - proceed with enrichment\nprocessingResult.processingMetadata.validationPassed = true;\n\n// Create enriched data by adding processing metadata\nconst enrichedJsonData = {\n  ...analysisJsonData,\n  processing: {\n    analysisStatus: \"validated\",\n    parsedAt: new Date().toISOString(),\n    parserVersion: \"1.0.0\",\n    validatedKeys: requiredKeys,\n    originalAnalysisTimestamp: inputData.processingTimestamp,\n    analysisMetadata: inputData.analysisMetadata || {}\n  }\n};\n\n// Set successful processing result\nprocessingResult.enrichedData = enrichedJsonData;\nprocessingResult.processingMetadata.enrichmentApplied = true;\nprocessingResult.message = \"Case documents analysis successfully parsed, validated, and enriched\";\n\n// Preserve original analysis and preparation data for downstream processing\nprocessingResult.originalData = {\n  analysisResult: inputData,\n  preparationData: inputData.originalPreparationData || {}\n};\n\n// Return the enriched result\nreturn [{\n  json: processingResult,\n  binary: binaryData\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1608,
+        288
+      ],
+      "id": "parse-structure-case-docs-001-2025",
+      "name": "Parse & Structure Case Documents Results"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Validate Case Documents Analysis Node\n// This node performs final quality check on the enriched case documents data\n// and adds final validation timestamp if processing status is validated\n\n// Get the input data from the Parse & Structure Case Documents Results node\nconst inputData = $input.first().json;\nconst binaryData = $input.first().binary || {};\n\n// Initialize the validation result\nconst validationResult = {\n  isValid: true,\n  errors: [],\n  validatedData: null,\n  processingTimestamp: new Date().toISOString(),\n  validationMetadata: {\n    nodeType: \"final-validation\",\n    processingBranch: \"case-documents-analysis\",\n    finalValidationApplied: false\n  }\n};\n\n// Validate that we received valid processing data\nif (!inputData || !inputData.isValid) {\n  validationResult.isValid = false;\n  validationResult.errors.push(\"Invalid input: Previous processing step failed\");\n  if (inputData && inputData.errors) {\n    validationResult.errors = validationResult.errors.concat(inputData.errors);\n  }\n  return [{ json: validationResult, binary: binaryData }];\n}\n\n// Extract the enriched data\nconst enrichedData = inputData.enrichedData;\nif (!enrichedData) {\n  validationResult.isValid = false;\n  validationResult.errors.push(\"No enriched data found in input\");\n  return [{ json: validationResult, binary: binaryData }];\n}\n\n// Validate Processing Status: Check if processing.analysisStatus === \"validated\"\nif (!enrichedData.processing || enrichedData.processing.analysisStatus !== \"validated\") {\n  validationResult.isValid = false;\n  validationResult.errors.push(\"Final analysis validation failed: Analysis status is not 'validated'\");\n  validationResult.actualStatus = enrichedData.processing ? enrichedData.processing.analysisStatus : \"missing\";\n  return [{ json: validationResult, binary: binaryData }];\n}\n\n// Finalize Output: Add finalValidationTimestamp to the processing object\nconst finalValidatedData = {\n  ...enrichedData,\n  processing: {\n    ...enrichedData.processing,\n    finalValidationTimestamp: new Date().toISOString(),\n    finalValidationStatus: \"completed\"\n  }\n};\n\n// Set successful validation result\nvalidationResult.validatedData = finalValidatedData;\nvalidationResult.validationMetadata.finalValidationApplied = true;\nvalidationResult.message = \"Final validation completed successfully - case documents analysis validated\";\n\n// Preserve original processing and analysis data\nvalidationResult.originalData = {\n  processingResult: inputData,\n  analysisData: inputData.originalData || {}\n};\n\n// Return the final validated result\nreturn [{\n  json: validationResult,\n  binary: binaryData\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1712,
+        288
+      ],
+      "id": "validate-case-docs-final-001-2025",
+      "name": "Validate Case Documents Analysis"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          }
+        },
+        "combineOperation": "all",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1816,
+        208
+      ],
+      "id": "wait-for-branches-001-2025",
+      "name": "Wait for Both Branches"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Case Data Merger Node\n// This node merges the validated outputs from both processing branches:\n// - Intake form extraction branch\n// - Case documents analysis branch\n// Creates a unified case file structure\n\n// Get inputs from both branches via the Wait node\nconst allInputs = $input.all();\n\n// Initialize merge result\nconst mergeResult = {\n  isValid: true,\n  errors: [],\n  unifiedCaseFile: null,\n  processingTimestamp: new Date().toISOString(),\n  mergeMetadata: {\n    nodeType: \"case-data-merger\",\n    branchesReceived: allInputs.length,\n    mergeStrategy: \"unified-case-file\",\n    mergeStatus: \"processing\"\n  }\n};\n\n// Validate that we received data from both branches\nif (!allInputs || allInputs.length === 0) {\n  mergeResult.isValid = false;\n  mergeResult.errors.push(\"No input data received from either branch\");\n  return [{ json: mergeResult }];\n}\n\n// Initialize branch data containers\nlet intakeBranchData = null;\nlet caseDocumentsBranchData = null;\n\n// Process each input to identify branch data\nfor (const input of allInputs) {\n  const inputJson = input.json;\n  \n  // Check if this is intake branch data\n  if (inputJson && inputJson.validationMetadata && \n      inputJson.validationMetadata.processingBranch === \"intake-analysis\") {\n    intakeBranchData = inputJson;\n  }\n  // Check if this is case documents branch data  \n  else if (inputJson && inputJson.validationMetadata && \n           inputJson.validationMetadata.processingBranch === \"case-documents-analysis\") {\n    caseDocumentsBranchData = inputJson;\n  }\n}\n\n// Generate unique case ID\nconst caseId = `CASE-${new Date().toISOString().split('T')[0]}-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;\n\n// Create unified case file structure\nconst unifiedCaseFile = {\n  caseId: caseId,\n  createdAt: new Date().toISOString(),\n  status: \"completed\",\n  \n  // Case Information (from intake or fallback)\n  caseInfo: {\n    clientName: null,\n    caseReference: null,\n    attorneyName: null,\n    processingDate: new Date().toISOString()\n  },\n  \n  // Intake Form Data\n  intakeFormData: {\n    status: \"not_processed\",\n    data: null,\n    processingDetails: null\n  },\n  \n  // Case Documents Analysis\n  caseDocumentsAnalysis: {\n    status: \"not_processed\", \n    data: null,\n    processingDetails: null\n  },\n  \n  // Processing Summary\n  processingSummary: {\n    totalBranchesProcessed: 0,\n    successfulBranches: 0,\n    failedBranches: 0,\n    branchResults: {\n      intakeAnalysis: \"not_processed\",\n      caseDocumentsAnalysis: \"not_processed\"\n    }\n  }\n};\n\n// Process Intake Branch Data\nif (intakeBranchData && intakeBranchData.isValid && intakeBranchData.validatedData) {\n  const intakeData = intakeBranchData.validatedData;\n  \n  // Extract case info if available\n  if (intakeData.clientInfo) {\n    unifiedCaseFile.caseInfo.clientName = intakeData.clientInfo.clientName || null;\n  }\n  if (intakeData.caseInfo) {\n    unifiedCaseFile.caseInfo.caseReference = intakeData.caseInfo.caseReference || null;\n  }\n  if (intakeData.attorneyInfo) {\n    unifiedCaseFile.caseInfo.attorneyName = intakeData.attorneyInfo.attorneyName || null;\n  }\n  \n  // Set intake form data\n  unifiedCaseFile.intakeFormData = {\n    status: \"processed\",\n    data: intakeData,\n    processingDetails: {\n      processingTimestamp: intakeBranchData.processingTimestamp,\n      validationMetadata: intakeBranchData.validationMetadata,\n      originalData: intakeBranchData.originalData || {}\n    }\n  };\n  \n  unifiedCaseFile.processingSummary.branchResults.intakeAnalysis = \"success\";\n  unifiedCaseFile.processingSummary.successfulBranches++;\n} else {\n  unifiedCaseFile.intakeFormData.status = \"failed\";\n  unifiedCaseFile.intakeFormData.processingDetails = {\n    error: intakeBranchData ? (intakeBranchData.errors || [\"Unknown intake processing error\"]) : [\"No intake data received\"],\n    processingTimestamp: intakeBranchData ? intakeBranchData.processingTimestamp : new Date().toISOString()\n  };\n  unifiedCaseFile.processingSummary.branchResults.intakeAnalysis = \"failed\";\n  unifiedCaseFile.processingSummary.failedBranches++;\n}\n\n// Process Case Documents Branch Data\nif (caseDocumentsBranchData && caseDocumentsBranchData.isValid && caseDocumentsBranchData.validatedData) {\n  const caseDocsData = caseDocumentsBranchData.validatedData;\n  \n  unifiedCaseFile.caseDocumentsAnalysis = {\n    status: \"processed\",\n    data: caseDocsData,\n    processingDetails: {\n      processingTimestamp: caseDocumentsBranchData.processingTimestamp,\n      validationMetadata: caseDocumentsBranchData.validationMetadata,\n      originalData: caseDocumentsBranchData.originalData || {}\n    }\n  };\n  \n  unifiedCaseFile.processingSummary.branchResults.caseDocumentsAnalysis = \"success\";\n  unifiedCaseFile.processingSummary.successfulBranches++;\n} else {\n  unifiedCaseFile.caseDocumentsAnalysis.status = \"failed\";\n  unifiedCaseFile.caseDocumentsAnalysis.processingDetails = {\n    error: caseDocumentsBranchData ? (caseDocumentsBranchData.errors || [\"Unknown case documents processing error\"]) : [\"No case documents data received\"],\n    processingTimestamp: caseDocumentsBranchData ? caseDocumentsBranchData.processingTimestamp : new Date().toISOString()\n  };\n  unifiedCaseFile.processingSummary.branchResults.caseDocumentsAnalysis = \"failed\";\n  unifiedCaseFile.processingSummary.failedBranches++;\n}\n\n// Update total branches processed\nunifiedCaseFile.processingSummary.totalBranchesProcessed = unifiedCaseFile.processingSummary.successfulBranches + unifiedCaseFile.processingSummary.failedBranches;\n\n// Determine overall status\nif (unifiedCaseFile.processingSummary.successfulBranches === 0) {\n  unifiedCaseFile.status = \"failed\";\n  mergeResult.isValid = false;\n  mergeResult.errors.push(\"All processing branches failed\");\n} else if (unifiedCaseFile.processingSummary.failedBranches > 0) {\n  unifiedCaseFile.status = \"partial_success\";\n} else {\n  unifiedCaseFile.status = \"completed\";\n}\n\n// Set successful merge result\nmergeResult.unifiedCaseFile = unifiedCaseFile;\nmergeResult.mergeMetadata.mergeStatus = \"completed\";\nmergeResult.mergeMetadata.totalDataSources = allInputs.length;\nmergeResult.mergeMetadata.successfulMerges = unifiedCaseFile.processingSummary.successfulBranches;\nmergeResult.message = `Case data successfully merged from ${unifiedCaseFile.processingSummary.successfulBranches} of ${unifiedCaseFile.processingSummary.totalBranchesProcessed} branches`;\n\n// Return the merged result\nreturn [{ json: mergeResult }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2024,
+        208
+      ],
+      "id": "case-data-merger-001-2025",
+      "name": "Case Data Merger"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Merge Validator Node\n// This node validates the merged case data structure and adds final validation metadata\n// Ensures the unified case file meets all quality requirements\n\n// Get the input data from the Case Data Merger node\nconst inputData = $input.first().json;\n\n// Initialize validation result\nconst validationResult = {\n  isValid: true,\n  errors: [],\n  validatedUnifiedCaseFile: null,\n  processingTimestamp: new Date().toISOString(),\n  validationMetadata: {\n    nodeType: \"merge-validator\",\n    validationLevel: \"final\",\n    validationRules: [\n      \"unified_structure_check\",\n      \"required_fields_validation\",\n      \"data_integrity_check\",\n      \"processing_status_validation\"\n    ],\n    validationStatus: \"processing\"\n  }\n};\n\n// Validate that we received valid merge data\nif (!inputData || !inputData.isValid) {\n  validationResult.isValid = false;\n  validationResult.errors.push(\"Invalid input: Previous merge step failed\");\n  if (inputData && inputData.errors) {\n    validationResult.errors = validationResult.errors.concat(inputData.errors);\n  }\n  return [{ json: validationResult }];\n}\n\n// Extract the unified case file\nconst unifiedCaseFile = inputData.unifiedCaseFile;\nif (!unifiedCaseFile) {\n  validationResult.isValid = false;\n  validationResult.errors.push(\"No unified case file found in merge result\");\n  return [{ json: validationResult }];\n}\n\n// Validation Rule 1: Unified Structure Check\nconst requiredTopLevelFields = ['caseId', 'createdAt', 'status', 'caseInfo', 'intakeFormData', 'caseDocumentsAnalysis', 'processingSummary'];\nconst missingFields = [];\n\nfor (const field of requiredTopLevelFields) {\n  if (!unifiedCaseFile.hasOwnProperty(field)) {\n    missingFields.push(field);\n  }\n}\n\nif (missingFields.length > 0) {\n  validationResult.isValid = false;\n  validationResult.errors.push(`Missing required top-level fields: ${missingFields.join(', ')}`);\n}\n\n// Validation Rule 2: Required Fields Validation\nif (!unifiedCaseFile.caseId || typeof unifiedCaseFile.caseId !== 'string') {\n  validationResult.isValid = false;\n  validationResult.errors.push(\"caseId must be a non-empty string\");\n}\n\nif (!unifiedCaseFile.createdAt || typeof unifiedCaseFile.createdAt !== 'string') {\n  validationResult.isValid = false;\n  validationResult.errors.push(\"createdAt must be a valid timestamp string\");\n}\n\nif (!unifiedCaseFile.status || !['completed', 'partial_success', 'failed'].includes(unifiedCaseFile.status)) {\n  validationResult.isValid = false;\n  validationResult.errors.push(\"status must be one of: completed, partial_success, failed\");\n}\n\n// Validation Rule 3: Data Integrity Check\nif (!unifiedCaseFile.processingSummary || typeof unifiedCaseFile.processingSummary !== 'object') {\n  validationResult.isValid = false;\n  validationResult.errors.push(\"processingSummary must be an object\");\n} else {\n  const summary = unifiedCaseFile.processingSummary;\n  \n  if (typeof summary.totalBranchesProcessed !== 'number' || summary.totalBranchesProcessed < 0) {\n    validationResult.isValid = false;\n    validationResult.errors.push(\"processingSummary.totalBranchesProcessed must be a non-negative number\");\n  }\n  \n  if (typeof summary.successfulBranches !== 'number' || summary.successfulBranches < 0) {\n    validationResult.isValid = false;\n    validationResult.errors.push(\"processingSummary.successfulBranches must be a non-negative number\");\n  }\n  \n  if (typeof summary.failedBranches !== 'number' || summary.failedBranches < 0) {\n    validationResult.isValid = false;\n    validationResult.errors.push(\"processingSummary.failedBranches must be a non-negative number\");\n  }\n  \n  // Validate that the sum matches total\n  if (summary.successfulBranches + summary.failedBranches !== summary.totalBranchesProcessed) {\n    validationResult.isValid = false;\n    validationResult.errors.push(\"processingSummary branch counts do not add up correctly\");\n  }\n}\n\n// Validation Rule 4: Processing Status Validation\nif (!unifiedCaseFile.intakeFormData || typeof unifiedCaseFile.intakeFormData !== 'object') {\n  validationResult.isValid = false;\n  validationResult.errors.push(\"intakeFormData must be an object\");\n} else {\n  const intakeStatus = unifiedCaseFile.intakeFormData.status;\n  if (!['processed', 'failed', 'not_processed'].includes(intakeStatus)) {\n    validationResult.isValid = false;\n    validationResult.errors.push(\"intakeFormData.status must be one of: processed, failed, not_processed\");\n  }\n}\n\nif (!unifiedCaseFile.caseDocumentsAnalysis || typeof unifiedCaseFile.caseDocumentsAnalysis !== 'object') {\n  validationResult.isValid = false;\n  validationResult.errors.push(\"caseDocumentsAnalysis must be an object\");\n} else {\n  const caseDocsStatus = unifiedCaseFile.caseDocumentsAnalysis.status;\n  if (!['processed', 'failed', 'not_processed'].includes(caseDocsStatus)) {\n    validationResult.isValid = false;\n    validationResult.errors.push(\"caseDocumentsAnalysis.status must be one of: processed, failed, not_processed\");\n  }\n}\n\n// If validation passes, add final validation metadata\nif (validationResult.errors.length === 0) {\n  const finalValidatedCaseFile = {\n    ...unifiedCaseFile,\n    finalValidation: {\n      validatedAt: new Date().toISOString(),\n      validationLevel: \"final\",\n      validationStatus: \"passed\",\n      validatorVersion: \"1.0.0\",\n      originalMergeTimestamp: inputData.processingTimestamp,\n      mergeMetadata: inputData.mergeMetadata || {}\n    }\n  };\n  \n  validationResult.validatedUnifiedCaseFile = finalValidatedCaseFile;\n  validationResult.validationMetadata.validationStatus = \"completed\";\n  validationResult.message = \"Unified case file successfully validated and finalized\";\n} else {\n  validationResult.isValid = false;\n  validationResult.validationMetadata.validationStatus = \"failed\";\n}\n\n// Preserve original merge data for reference\nvalidationResult.originalMergeData = {\n  mergeResult: inputData,\n  mergeTimestamp: inputData.processingTimestamp\n};\n\n// Return the validation result\nreturn [{ json: validationResult }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2232,
+        208
+      ],
+      "id": "merge-validator-001-2025",
+      "name": "Merge Validator"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json.validatedUnifiedCaseFile || {\n  \"error\": \"Validation failed\",\n  \"status\": \"failed\",\n  \"timestamp\": new Date().toISOString(),\n  \"details\": $json.errors || [\"Unknown validation error\"]\n}, null, 2) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        2440,
+        208
+      ],
+      "id": "unified-response-001-2025",
+      "name": "Unified Response"
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Validate Form Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Form Data": {
+      "main": [
+        [
+          {
+            "node": "Structure Intake Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structure Intake Data": {
+      "main": [
+        [
+          {
+            "node": "Extract Binary Files",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Binary Files": {
+      "main": [
+        [
+          {
+            "node": "Categorize Documents",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Categorize Documents": {
+      "main": [
+        [
+          {
+            "node": "Route Intake Form",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Route Case Documents",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route Intake Form": {
+      "main": [
+        [
+          {
+            "node": "Extract Intake Form Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Intake Form Data": {
+      "main": [
+        [
+          {
+            "node": "Parse & Enrich Intake Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse & Enrich Intake Data": {
+      "main": [
+        [
+          {
+            "node": "Validate Intake Extraction",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Intake Extraction": {
+      "main": [
+        [
+          {
+            "node": "Wait for Both Branches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route Case Documents": {
+      "main": [
+        [
+          {
+            "node": "Prepare Case Documents",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Case Documents": {
+      "main": [
+        [
+          {
+            "node": "Analyze Case Documents",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analyze Case Documents": {
+      "main": [
+        [
+          {
+            "node": "Parse & Structure Case Documents Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse & Structure Case Documents Results": {
+      "main": [
+        [
+          {
+            "node": "Validate Case Documents Analysis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Case Documents Analysis": {
+      "main": [
+        [
+          {
+            "node": "Wait for Both Branches",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Wait for Both Branches": {
+      "main": [
+        [
+          {
+            "node": "Case Data Merger",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Case Data Merger": {
+      "main": [
+        [
+          {
+            "node": "Merge Validator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Validator": {
+      "main": [
+        [
+          {
+            "node": "Unified Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "caf5cb14368ca22f9a1df26d6f7341ec146b18cf99462801227bcf1262e8aef4"
+  }
+}

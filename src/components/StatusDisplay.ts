@@ -34,9 +34,9 @@ export function showStatus(
       <div style="margin-top: 20px; padding: 20px; background: #f0f9ff; border-radius: 8px;">
         <h4 style="color: #1e40af; margin-bottom: 15px;">📥 Download Generated Files:</h4>
         <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-          <a href="${result.downloadLinks.findingsEmail}" target="_blank" style="background: #059669; color: white; padding: 10px 20px; text-decoration: none; border-radius: 6px;">📧 Findings Email</a>
-          <a href="${result.downloadLinks.summaryReport}" target="_blank" style="background: #0284c7; color: white; padding: 10px 20px; text-decoration: none; border-radius: 6px;">📊 Summary Report</a>
-          <a href="${result.downloadLinks.quickSummary}" target="_blank" style="background: #7c3aed; color: white; padding: 10px 20px; text-decoration: none; border-radius: 6px;">📋 Quick Summary</a>
+          <a href="${result.downloadLinks.findingsLetter}" target="_blank" style="background: #059669; color: white; padding: 10px 20px; text-decoration: none; border-radius: 6px;">📧 Findings Letter</a>
+          <a href="${result.downloadLinks.caseAnalysis}" target="_blank" style="background: #0284c7; color: white; padding: 10px 20px; text-decoration: none; border-radius: 6px;">📊 Case Analysis</a>
+          <a href="${result.downloadLinks.executiveSummary}" target="_blank" style="background: #7c3aed; color: white; padding: 10px 20px; text-decoration: none; border-radius: 6px;">📋 Executive Summary</a>
         </div>
       </div>
     `;

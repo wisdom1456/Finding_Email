@@ -2,6 +2,8 @@
 const WEBHOOK_URL = 'https://brflorida.app.n8n.cloud/webhook/legal-analysis-upload';
 const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB in bytes
 
+import { AnalysisResult } from './components/types';
+
 // Type definitions
 interface FileData {
   file: File;
@@ -10,16 +12,6 @@ interface FileData {
   type: string;
 }
 
-interface AnalysisResult {
-  status: string;
-  message?: string;
-  documentsProcessed?: number;
-  downloadLinks?: {
-    findingsLetter?: string;
-    caseAnalysis?: string;
-    executiveSummary?: string;
-  };
-}
 
 // Global variables
 let intakeForm: FileData | null = null;
@@ -309,81 +301,76 @@ async function handleSubmit(e: Event): Promise<void> {
     const response = await fetch(WEBHOOK_URL, {
       method: 'POST',
       body: formData
-      // Deliberately NOT setting Content-Type header to allow browser
-      // to set correct multipart/form-data boundary automatically
     });
     
-    // Log response details
-    console.log('Server response status:', response.status, response.statusText);
-    console.log('Response headers:', Object.fromEntries(response.headers.entries()));
-    
-    // Check if response has content before parsing JSON
-    const contentLength = response.headers.get('content-length');
+    // Parse JSON response
     let result: AnalysisResult | null = null;
     
-    if (contentLength && contentLength !== '0') {
+    if (response.ok) {
       try {
         result = await response.json();
-        console.log('Server response:', result);
+        console.log('Full n8n response:', result); // DEBUG LINE
       } catch (jsonError) {
         console.warn('Failed to parse JSON response:', jsonError);
-        console.log('Response text:', await response.clone().text());
-      }
-    } else {
-      console.log('Server returned empty response (content-length: 0)');
-    }
-    
-    console.log('Submission successful:', response.ok);
-    
-    if (response.ok) {
-      // If we have a successful response, consider it a success regardless of JSON content
-      if (result && result.status === 'success') {
-        // Handle full response with result data
-        showStatus(`✅ Legal Analysis Complete! Generated professional findings letter and comprehensive case analysis for ${result.documentsProcessed} documents.`, 'success');
-        
-        // Create download links for generated files
-        if (result.downloadLinks) {
-          const downloadHtml = `
-            <div style="margin-top: 20px; padding: 20px; background: #f0f9ff; border-radius: 8px;">
-              <h4 style="color: #1e40af; margin-bottom: 15px;">📥 Download Generated Legal Documents:</h4>
-              <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-                <a href="${result.downloadLinks.findingsLetter}" target="_blank" style="background: #059669; color: white; padding: 12px 20px; text-decoration: none; border-radius: 6px; font-weight: 600;">📧 Professional Findings Letter</a>
-                <a href="${result.downloadLinks.caseAnalysis}" target="_blank" style="background: #0284c7; color: white; padding: 12px 20px; text-decoration: none; border-radius: 6px; font-weight: 600;">📊 Detailed Case Analysis</a>
-                <a href="${result.downloadLinks.executiveSummary}" target="_blank" style="background: #7c3aed; color: white; padding: 12px 20px; text-decoration: none; border-radius: 6px; font-weight: 600;">📋 Executive Summary</a>
-              </div>
-            </div>
-          `;
-          statusElement.innerHTML += downloadHtml;
-        }
-      } else {
-        // Handle successful HTTP response but no detailed result data
-        const totalFiles = caseDocuments.size + 1; // +1 for intake form
-        showStatus(`✅ Form submitted successfully! Your legal documents (${totalFiles} files) have been uploaded to the analysis system. Processing will begin shortly.`, 'success');
       }
       
-      console.log('Form submitted successfully to n8n webhook');
-    } else {
-      console.error('Server returned error:', response.status, response.statusText);
-      if (result) {
-        console.error('Error response:', result);
-        showStatus(`❌ Analysis Failed: ${result.message || 'Unknown error occurred during document processing.'}`, 'error');
+      // Check if we got the expected response format
+      if (result && result.status === 'success') {
+        // Show success message
+        showStatus(result.message, 'success');
+        
+        // CRITICAL: Check for downloadLinks
+        if (result.downloadLinks) {
+          console.log('Download links found:', result.downloadLinks); // DEBUG LINE
+          
+          // Create download section
+          const downloadHtml = `
+            <div style="margin-top: 20px; padding: 20px; background: #f0f9ff; border-radius: 8px; border: 1px solid #bfdbfe;">
+              <h4 style="color: #1e40af; margin-bottom: 15px; font-size: 18px;">📥 Download Generated Files</h4>
+              <div style="display: flex; gap: 15px; flex-wrap: wrap; margin-bottom: 15px;">
+                <a href="${result.downloadLinks.findingsLetter}"
+                   download="${result.emailDetails?.emlFileName || 'findings-letter.eml'}"
+                   style="background: #059669; color: white; padding: 12px 20px; text-decoration: none; border-radius: 6px; font-weight: 600; display: inline-block;">
+                   📧 Email Letter (.eml)
+                </a>
+                <a href="${result.downloadLinks.caseAnalysis}"
+                   download="${result.emailDetails?.txtFileName || 'case-analysis.txt'}"
+                   style="background: #0284c7; color: white; padding: 12px 20px; text-decoration: none; border-radius: 6px; font-weight: 600; display: inline-block;">
+                   📄 Text Format (.txt)
+                </a>
+                <a href="${result.downloadLinks.executiveSummary}"
+                   download="executive-summary.txt"
+                   style="background: #7c3aed; color: white; padding: 12px 20px; text-decoration: none; border-radius: 6px; font-weight: 600; display: inline-block;">
+                   📋 Summary (.txt)
+                </a>
+              </div>
+              <p style="margin: 10px 0 0 0; color: #4b5563; font-size: 14px; line-height: 1.4;">
+                💡 <strong>How to use:</strong> Click ".eml" to import into your email client, or click ".txt" to download text you can copy/paste.
+              </p>
+            </div>
+          `;
+          
+          // Add download section to the status element
+          statusElement.innerHTML += downloadHtml;
+        } else {
+          console.error('No downloadLinks in response. Full result:', result);
+          // Still show success but note missing downloads
+          statusElement.innerHTML += '<p style="color: #f59e0b; margin-top: 10px;">⚠️ Analysis completed but download links not available.</p>';
+        }
       } else {
-        showStatus(`❌ Server Error: HTTP ${response.status} ${response.statusText}`, 'error');
+        // Handle non-success response
+        const errorMsg = result?.message || 'Analysis completed but response format unexpected';
+        showStatus(`⚠️ ${errorMsg}`, 'error');
+        console.error('Unexpected response format:', result);
       }
-      throw new Error(`Server error: ${response.status} ${response.statusText}`);
+    } else {
+      // Handle HTTP errors
+      showStatus(`❌ Server Error: HTTP ${response.status} ${response.statusText}`, 'error');
     }
-  } catch (error) {
-    // Log any errors with comprehensive details
-    console.error('Error submitting form to n8n webhook:', error);
-    console.error('Error details:', {
-      message: error instanceof Error ? error.message : 'Unknown error',
-      name: error instanceof Error ? error.name : 'Unknown',
-      stack: error instanceof Error ? error.stack : undefined
-    });
     
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    showStatus(`❌ System Error: ${errorMessage}. Please try again or contact technical support.`, 'error');
-    throw error;
+  } catch (error) {
+    console.error('Error submitting form:', error);
+    showStatus(`❌ System Error: ${(error as Error).message}`, 'error');
   } finally {
     updateSubmitButton();
   }

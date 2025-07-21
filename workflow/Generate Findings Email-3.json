@@ -1,4 +1,5 @@
 {
+  "name": "Generate Findings Email",
   "nodes": [
     {
       "parameters": {
@@ -28,10 +29,10 @@
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
       "position": [
-        -176,
-        208
+        -1776,
+        -208
       ],
-      "id": "3b073c31-a949-442e-a4e7-efe0a5317d09",
+      "id": "82a89565-426d-4a6b-a3f2-ea702b39ea0b",
       "name": "Webhook",
       "webhookId": "6d7fe8eb-8786-4526-88ad-5cd8fbf1c6c6"
     },
@@ -42,10 +43,10 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        48,
-        208
+        -1552,
+        -208
       ],
-      "id": "0e84bbe7-4653-4251-86cc-2b8b01bf8a91",
+      "id": "23ceec5e-7b3f-4ada-89e0-31043f460369",
       "name": "Validate Form Data"
     },
     {
@@ -55,10 +56,10 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        256,
-        208
+        -1328,
+        -208
       ],
-      "id": "813dc0b0-0630-4cf1-bb99-5350e186495d",
+      "id": "462a4512-a812-4ef8-ae38-2b15a4e5f7c1",
       "name": "Structure Intake Data"
     },
     {
@@ -68,10 +69,10 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        672,
-        208
+        -1104,
+        -208
       ],
-      "id": "4f9e8a1b-2c5d-4e8f-9a1b-3c4d5e6f7a8b",
+      "id": "7b42c597-966d-4190-ba66-4d1e5ecf2e57",
       "name": "Extract Binary Files"
     },
     {
@@ -81,10 +82,10 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        880,
-        208
+        -880,
+        -208
       ],
-      "id": "5a9b8c2d-3e4f-5g6h-7i8j-9k0l1m2n3o4p",
+      "id": "47614ad3-f9d9-4286-ad60-25a5eba9c887",
       "name": "Categorize Documents"
     },
     {
@@ -101,10 +102,10 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 1,
       "position": [
-        1088,
-        128
+        -208,
+        -304
       ],
-      "id": "6b0c9d3e-4f5g-6h7i-8j9k-0l1m2n3o4p5q",
+      "id": "e83366cd-4c7e-435d-924f-28fea536d57b",
       "name": "Route Intake Form"
     },
     {
@@ -121,36 +122,36 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 1,
       "position": [
-        1088,
-        288
+        -656,
+        -112
       ],
-      "id": "7c1d0e4f-5g6h-7i8j-9k0l-1m2n3o4p5q6r",
+      "id": "7380300f-f26f-40e7-bc4f-28aecee7dc55",
       "name": "Route Case Documents"
     },
     {
       "parameters": {
-        "jsCode": "// Step 6: Document Information Extraction - Intake Form Branch\n// This node implements AI extraction for intake form documents\n// Following the architecture design from Step6_Architecture_Design.md\n\n// Get the input data from the Route Intake Form node\nconst inputData = $input.first().json;\nconst binaryData = $input.first().binary || {};\n\n// Initialize extraction results\nconst extractionResult = {\n  isValid: true,\n  errors: [],\n  extractedData: null,\n  processingTimestamp: new Date().toISOString(),\n  extractionMetadata: {\n    documentType: \"intakeForm\",\n    processingBranch: \"intake-analysis\",\n    simulatedProcessing: true\n  }\n};\n\n// Validate input data structure\nif (!inputData || inputData.documentType !== \"intakeForm\") {\n  extractionResult.isValid = false;\n  extractionResult.errors.push(\"Invalid input: Expected intakeForm document type\");\n  return [{ json: extractionResult }];\n}\n\n// Check for binary data reference\nif (!inputData.intakeFormData || !inputData.intakeFormData.binaryDataReference) {\n  extractionResult.isValid = false;\n  extractionResult.errors.push(\"Missing binary data reference for intake form\");\n  return [{ json: extractionResult }];\n}\n\nconst binaryKey = inputData.intakeFormData.binaryDataReference;\nif (!binaryData[binaryKey]) {\n  extractionResult.isValid = false;\n  extractionResult.errors.push(`Binary data not found for key: ${binaryKey}`);\n  return [{ json: extractionResult }];\n}\n\n// SIMULATION: Text Extraction\n// In production, this would extract text from PDF/DOCX using appropriate libraries\nconst simulatedDocumentText = `\nLEGAL INTAKE FORM\n\nClient Information:\nName: John Smith\nPhone: (555) 123-4567\nEmail: john.smith@email.com\nAddress: 123 Main Street, City, ST 12345\n\nCase Information:\nCase Reference: CASE-2025-001\nMatter Type: Personal Injury\nDate of Incident: January 15, 2025\nBrief Description: Motor vehicle accident at intersection of Main St and Oak Ave. Client was injured when defendant ran red light.\n\nAttorney Information:\nAssigned Attorney: Sarah Johnson, Esq.\nBar Number: 12345\nSpecialty: Personal Injury Law\n\nAdditional Notes:\nClient reported back and neck pain. Medical treatment ongoing at City Hospital.\n`;\n\n// SIMULATION: Prepare and \"Execute\" Prompt\n// Using the prompt template from Step6_Architecture_Design.md\nconst promptTemplate = `You are an expert legal data extraction assistant. Your task is to extract information from the provided intake form document and format it as a valid JSON object.\n\nThe document content is as follows:\n${simulatedDocumentText}\n\nPlease extract the following information and structure it according to the JSON schema provided below. Ensure all fields are correctly populated and that the JSON is perfectly formatted.\n\n**JSON Schema:**\n{\n  \"clientInfo\": {\n    \"clientName\": \"string\",\n    \"contactInfo\": \"string\"\n  },\n  \"caseInfo\": {\n    \"caseReference\": \"string\",\n    \"summary\": \"string\"\n  },\n  \"attorneyInfo\": {\n    \"attorneyName\": \"string\"\n  }\n}\n\nReturn ONLY the valid JSON object.`;\n\n// SIMULATION: LLM Output\n// Hardcoded JSON object that strictly follows the ExtractedIntakeForm schema\nconst simulatedLLMResponse = {\n  \"clientInfo\": {\n    \"clientName\": \"John Smith\",\n    \"contactInfo\": \"Phone: (555) 123-4567, Email: john.smith@email.com, Address: 123 Main Street, City, ST 12345\"\n  },\n  \"caseInfo\": {\n    \"caseReference\": \"CASE-2025-001\",\n    \"summary\": \"Personal injury case involving motor vehicle accident at intersection of Main St and Oak Ave on January 15, 2025. Client injured when defendant ran red light. Client reports back and neck pain with ongoing medical treatment at City Hospital.\"\n  },\n  \"attorneyInfo\": {\n    \"attorneyName\": \"Sarah Johnson, Esq.\"\n  }\n};\n\n// Validate the extracted data against the schema\ntry {\n  // Basic validation of required fields\n  if (!simulatedLLMResponse.clientInfo || !simulatedLLMResponse.clientInfo.clientName) {\n    throw new Error(\"Missing required field: clientInfo.clientName\");\n  }\n  if (!simulatedLLMResponse.caseInfo || !simulatedLLMResponse.caseInfo.caseReference) {\n    throw new Error(\"Missing required field: caseInfo.caseReference\");\n  }\n  if (!simulatedLLMResponse.attorneyInfo || !simulatedLLMResponse.attorneyInfo.attorneyName) {\n    throw new Error(\"Missing required field: attorneyInfo.attorneyName\");\n  }\n  \n  // Set successful extraction result\n  extractionResult.extractedData = simulatedLLMResponse;\n  extractionResult.extractionMetadata.textLength = simulatedDocumentText.length;\n  extractionResult.extractionMetadata.promptUsed = promptTemplate.substring(0, 100) + \"...\";\n  extractionResult.extractionMetadata.fieldsExtracted = [\n    \"clientInfo.clientName\",\n    \"clientInfo.contactInfo\", \n    \"caseInfo.caseReference\",\n    \"caseInfo.summary\",\n    \"attorneyInfo.attorneyName\"\n  ];\n  extractionResult.message = \"Intake form data successfully extracted using simulated AI processing\";\n  \n  // Preserve original routing data for downstream processing\n  extractionResult.originalRoutingData = {\n    documentType: inputData.documentType,\n    caseInfo: inputData.caseInfo,\n    intakeFormData: inputData.intakeFormData,\n    processingMetadata: inputData.processingMetadata\n  };\n  \n} catch (error) {\n  extractionResult.isValid = false;\n  extractionResult.errors.push(`Schema validation failed: ${error.message}`);\n}\n\n// Return the extraction result\nreturn [{\n  json: extractionResult,\n  binary: binaryData\n}];"
+        "jsCode": "// Parse Intake Form Extraction Response\n// Validates and structures the OpenAI response for intake form data\n\nconst openAIInput = $input.first().json;\n// Remove the problematic line that references a non-existent node\n// const promptData = $items(\"Prepare OpenAI Prompt\")[0].json;\n\n// Get routing data from the OpenAI node input instead\nconst routingItems = $items(\"Route Intake Form\");\nconst routingData = routingItems && routingItems[0] ? routingItems[0].json : {};\n\n// Initialize extraction result\nconst extractionResult = {\n  isValid: true,\n  errors: [],\n  extractedData: null,\n  processingTimestamp: new Date().toISOString(),\n  extractionMetadata: {\n    nodeType: \"parse-openai-extraction\",\n    processingBranch: \"intake-analysis\",\n    aiModel: \"gpt-4o-mini\",\n    extractionProcessed: false\n  }\n};\n\n// Extract OpenAI response\nlet responseText;\nif (openAIInput.message && openAIInput.message.content) {\n  responseText = openAIInput.message.content.trim();\n} else {\n  extractionResult.isValid = false;\n  extractionResult.errors.push(\"No message content found in OpenAI response\");\n  return [{ json: extractionResult }];\n}\n\n// Clean and parse JSON response\ntry {\n  // Remove any markdown formatting\n  const cleanText = responseText.replace(/```json|```/g, '').trim();\n  \n  // Validate JSON structure\n  if (!cleanText.startsWith('{') || !cleanText.endsWith('}')) {\n    throw new Error('Response is not properly formatted JSON');\n  }\n  \n  const parsedData = JSON.parse(cleanText);\n  \n  // Validate required schema fields\n  const requiredFields = ['clientInfo', 'caseInfo', 'attorneyInfo'];\n  const missingFields = [];\n  \n  for (const field of requiredFields) {\n    if (!parsedData[field] || typeof parsedData[field] !== 'object') {\n      missingFields.push(field);\n    }\n  }\n  \n  if (missingFields.length > 0) {\n    throw new Error(`Missing or invalid required fields: ${missingFields.join(', ')}`);\n  }\n  \n  // Validate specific required subfields\n  if (!parsedData.clientInfo.clientName) {\n    throw new Error('Missing required field: clientInfo.clientName');\n  }\n  if (!parsedData.caseInfo.caseReference) {\n    throw new Error('Missing required field: caseInfo.caseReference');\n  }\n  if (!parsedData.attorneyInfo.attorneyName) {\n    throw new Error('Missing required field: attorneyInfo.attorneyName');\n  }\n  \n  // Set successful extraction result\n  extractionResult.extractedData = parsedData;\n  extractionResult.extractionMetadata.extractionProcessed = true;\n  extractionResult.extractionMetadata.fieldsExtracted = [\n    \"clientInfo.clientName\",\n    \"clientInfo.contactInfo\",\n    \"caseInfo.caseReference\", \n    \"caseInfo.summary\",\n    \"attorneyInfo.attorneyName\"\n  ];\n  extractionResult.message = \"Intake form data successfully extracted using OpenAI\";\n  \n} catch (error) {\n  extractionResult.isValid = false;\n  extractionResult.errors.push(`JSON parsing failed: ${error.message}`);\n  extractionResult.rawResponse = responseText;\n  \n  // Log for debugging\n  console.error('OpenAI Extraction Response Parsing Error:', {\n    error: error.message,\n    rawResponse: responseText.substring(0, 200) + '...'\n  });\n}\n\n// Preserve original routing data for downstream processing using available data\nextractionResult.originalRoutingData = {\n  documentType: routingData.documentType || \"intakeForm\",\n  caseInfo: routingData.caseInfo || {},\n  intakeFormData: routingData.intakeFormData || {},\n  processingMetadata: routingData.processingMetadata || {}\n};\n\n// Return the extraction result\nreturn [{ json: extractionResult }];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1296,
-        128
+        416,
+        -304
       ],
-      "id": "ai-extract-intake-001-2025",
-      "name": "Extract Intake Form Data"
+      "id": "44033c4c-8fed-43f7-8fc4-861f0ded537f",
+      "name": "Parse Intake Extraction Response"
     },
     {
       "parameters": {
-        "jsCode": "// Parse & Enrich Intake Data Node\n// This node receives the simulated JSON output from Extract Intake Form Data,\n// validates the structure, and enriches it with processing metadata\n\n// Get the input data from the Extract Intake Form Data node\nconst inputData = $input.first().json;\nconst binaryData = $input.first().binary || {};\n\n// Initialize the processing result\nconst processingResult = {\n  isValid: true,\n  errors: [],\n  enrichedData: null,\n  processingTimestamp: new Date().toISOString(),\n  processingMetadata: {\n    nodeType: \"parse-enrich\",\n    processingBranch: \"intake-analysis\",\n    validationPassed: false,\n    enrichmentApplied: false\n  }\n};\n\n// Validate that we received valid extraction data\nif (!inputData || !inputData.isValid) {\n  processingResult.isValid = false;\n  processingResult.errors.push(\"Invalid input: Previous extraction step failed\");\n  if (inputData && inputData.errors) {\n    processingResult.errors = processingResult.errors.concat(inputData.errors);\n  }\n  return [{ json: processingResult, binary: binaryData }];\n}\n\n// Extract the JSON data from the extraction result\nlet extractedJsonData;\ntry {\n  if (inputData.extractedData) {\n    // Data is already parsed as an object from the extraction step\n    extractedJsonData = inputData.extractedData;\n  } else {\n    processingResult.isValid = false;\n    processingResult.errors.push(\"No extracted data found in input\");\n    return [{ json: processingResult, binary: binaryData }];\n  }\n} catch (error) {\n  processingResult.isValid = false;\n  processingResult.errors.push(`Failed to parse JSON: ${error.message}`);\n  return [{ json: processingResult, binary: binaryData }];\n}\n\n// Validate the presence of required top-level keys\nconst requiredKeys = ['clientInfo', 'caseInfo', 'attorneyInfo'];\nconst missingKeys = [];\n\nfor (const key of requiredKeys) {\n  if (!extractedJsonData[key] || typeof extractedJsonData[key] !== 'object') {\n    missingKeys.push(key);\n  }\n}\n\nif (missingKeys.length > 0) {\n  processingResult.isValid = false;\n  processingResult.errors.push(`Missing or invalid required keys: ${missingKeys.join(', ')}`);\n  return [{ json: processingResult, binary: binaryData }];\n}\n\n// Validation passed - proceed with enrichment\nprocessingResult.processingMetadata.validationPassed = true;\n\n// Create enriched data by adding processing metadata\nconst enrichedJsonData = {\n  ...extractedJsonData,\n  processing: {\n    extractionStatus: \"validated\",\n    parsedAt: new Date().toISOString(),\n    parserVersion: \"1.0.0\",\n    validatedKeys: requiredKeys,\n    originalExtractionTimestamp: inputData.processingTimestamp,\n    extractionMetadata: inputData.extractionMetadata || {}\n  }\n};\n\n// Set successful processing result\nprocessingResult.enrichedData = enrichedJsonData;\nprocessingResult.processingMetadata.enrichmentApplied = true;\nprocessingResult.message = \"Intake data successfully parsed, validated, and enriched\";\n\n// Preserve original routing and extraction data for downstream processing\nprocessingResult.originalData = {\n  extractionResult: inputData,\n  routingData: inputData.originalRoutingData || {}\n};\n\n// Return the enriched result\nreturn [{\n  json: processingResult,\n  binary: binaryData\n}];"
+        "jsCode": "// Parse & Enrich Intake Data Node\n// This node receives the extraction output and enriches it with processing metadata\n\n// Get the input data from the Parse Intake Extraction Response node\nconst inputData = $input.first().json;\nconst binaryData = $input.first().binary || {};\n\n// Initialize the processing result\nconst processingResult = {\n  isValid: true,\n  errors: [],\n  enrichedData: null,\n  processingTimestamp: new Date().toISOString(),\n  processingMetadata: {\n    nodeType: \"parse-enrich\",\n    processingBranch: \"intake-analysis\",\n    validationPassed: false,\n    enrichmentApplied: false\n  }\n};\n\n// Validate that we received valid extraction data\nif (!inputData || !inputData.isValid) {\n  processingResult.isValid = false;\n  processingResult.errors.push(\"Invalid input: Previous extraction step failed\");\n  if (inputData && inputData.errors) {\n    processingResult.errors = processingResult.errors.concat(inputData.errors);\n  }\n  return [{ json: processingResult, binary: binaryData }];\n}\n\n// Extract the JSON data from the extraction result\nlet extractedJsonData;\ntry {\n  if (inputData.extractedData) {\n    // Data is already parsed as an object from the extraction step\n    extractedJsonData = inputData.extractedData;\n  } else {\n    processingResult.isValid = false;\n    processingResult.errors.push(\"No extracted data found in input\");\n    return [{ json: processingResult, binary: binaryData }];\n  }\n} catch (error) {\n  processingResult.isValid = false;\n  processingResult.errors.push(`Failed to parse JSON: ${error.message}`);\n  return [{ json: processingResult, binary: binaryData }];\n}\n\n// Validate the presence of required top-level keys\nconst requiredKeys = ['clientInfo', 'caseInfo', 'attorneyInfo'];\nconst missingKeys = [];\n\nfor (const key of requiredKeys) {\n  if (!extractedJsonData[key] || typeof extractedJsonData[key] !== 'object') {\n    missingKeys.push(key);\n  }\n}\n\nif (missingKeys.length > 0) {\n  processingResult.isValid = false;\n  processingResult.errors.push(`Missing or invalid required keys: ${missingKeys.join(', ')}`);\n  return [{ json: processingResult, binary: binaryData }];\n}\n\n// Validation passed - proceed with enrichment\nprocessingResult.processingMetadata.validationPassed = true;\n\n// Create enriched data by adding processing metadata\nconst enrichedJsonData = {\n  ...extractedJsonData,\n  processing: {\n    extractionStatus: \"validated\",\n    parsedAt: new Date().toISOString(),\n    parserVersion: \"1.0.0\",\n    validatedKeys: requiredKeys,\n    originalExtractionTimestamp: inputData.processingTimestamp,\n    extractionMetadata: inputData.extractionMetadata || {}\n  }\n};\n\n// Set successful processing result\nprocessingResult.enrichedData = enrichedJsonData;\nprocessingResult.processingMetadata.enrichmentApplied = true;\nprocessingResult.message = \"Intake data successfully parsed, validated, and enriched\";\n\n// Preserve original routing and extraction data for downstream processing\nprocessingResult.originalData = {\n  extractionResult: inputData,\n  routingData: inputData.originalRoutingData || {}\n};\n\n// Return the enriched result\nreturn [{\n  json: processingResult,\n  binary: binaryData\n}];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1504,
-        128
+        640,
+        -304
       ],
-      "id": "parse-enrich-intake-001-2025",
+      "id": "674cb383-2e88-466b-95cb-20c9c82a799e",
       "name": "Parse & Enrich Intake Data"
     },
     {
@@ -160,10 +161,10 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1608,
-        128
+        864,
+        -304
       ],
-      "id": "validate-intake-final-001-2025",
+      "id": "6d73cf36-84cf-4a50-8f4b-d045d860268b",
       "name": "Validate Intake Extraction"
     },
     {
@@ -173,36 +174,49 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1296,
-        288
+        -432,
+        -112
       ],
-      "id": "prepare-case-docs-001-2025",
+      "id": "bc5c9128-292c-4cec-8df2-50cff194bf05",
       "name": "Prepare Case Documents"
     },
     {
       "parameters": {
-        "jsCode": "// Analyze Case Documents Node\n// This node implements AI analysis for case documents using the aggregated text\n// from the Prepare Case Documents node, following the architecture design\n\n// Get the input data from the Prepare Case Documents node\nconst inputData = $input.first().json;\nconst binaryData = $input.first().binary || {};\n\n// Initialize analysis results\nconst analysisResult = {\n  isValid: true,\n  errors: [],\n  analysisData: null,\n  processingTimestamp: new Date().toISOString(),\n  analysisMetadata: {\n    nodeType: \"analyze-documents\",\n    processingBranch: \"case-documents-analysis\",\n    simulatedProcessing: true\n  }\n};\n\n// Validate input data structure\nif (!inputData || !inputData.isValid) {\n  analysisResult.isValid = false;\n  analysisResult.errors.push(\"Invalid input: Previous preparation step failed\");\n  if (inputData && inputData.errors) {\n    analysisResult.errors = analysisResult.errors.concat(inputData.errors);\n  }\n  return [{ json: analysisResult }];\n}\n\n// Check for aggregated documents text\nif (!inputData.aggregatedDocumentsText) {\n  analysisResult.isValid = false;\n  analysisResult.errors.push(\"Missing aggregatedDocumentsText from preparation step\");\n  return [{ json: analysisResult }];\n}\n\nconst documentsText = inputData.aggregatedDocumentsText;\n\n// SIMULATION: Prepare and \"Execute\" Prompt\n// Using the prompt template from Step6_Architecture_Design.md for caseDocuments\nconst promptTemplate = `You are a specialized legal analysis AI. You will be given a collection of case documents. Your task is to perform a comprehensive analysis across all provided documents and extract key legal information.\n\nThe documents are provided below:\n---\n${documentsText}\n---\n\nAnalyze the documents collectively and extract the following information. Structure your response as a single, valid JSON object according to the schema below.\n\n**JSON Schema:**\n{\n  \"keyEntities\": {\n    \"plaintiffs\": [\"string\"],\n    \"defendants\": [\"string\"],\n    \"judges\": [\"string\"],\n    \"other_parties\": [\"string\"]\n  },\n  \"keyFacts\": [\n    {\n      \"fact\": \"string\",\n      \"source_document\": \"string\"\n    }\n  ],\n  \"timelineOfEvents\": [\n    {\n      \"date\": \"YYYY-MM-DD\",\n      \"event\": \"string\",\n      \"source_document\": \"string\"\n    }\n  ],\n  \"legalContext\": {\n    \"statedClaims\": [\"string\"],\n    \"defenses\": [\"string\"]\n  }\n}\n\nReturn ONLY the valid JSON object.`;\n\n// SIMULATION: LLM Output\n// Hardcoded JSON object that strictly follows the AnalyzedCaseDocuments schema\n// Simulating realistic legal analysis with multiple documents\nconst simulatedLLMResponse = {\n  \"keyEntities\": {\n    \"plaintiffs\": [\n      \"John Smith\",\n      \"ABC Corporation\"\n    ],\n    \"defendants\": [\n      \"XYZ Industries Inc.\",\n      \"Robert Johnson\",\n      \"City Municipal Authority\"\n    ],\n    \"judges\": [\n      \"Judge Patricia Williams\",\n      \"Magistrate David Chen\"\n    ],\n    \"other_parties\": [\n      \"Expert Witness Dr. Sarah Martinez\",\n      \"Insurance Company Mutual Assurance\",\n      \"Engineering Consultant Thomas Lee\"\n    ]\n  },\n  \"keyFacts\": [\n    {\n      \"fact\": \"Motor vehicle collision occurred at intersection of Main Street and Oak Avenue on January 15, 2025 at approximately 3:45 PM\",\n      \"source_document\": \"Document_1.pdf\"\n    },\n    {\n      \"fact\": \"Defendant Robert Johnson was operating commercial vehicle under employment of XYZ Industries Inc. at time of incident\",\n      \"source_document\": \"Document_2.pdf\"\n    },\n    {\n      \"fact\": \"Traffic signal malfunction reported by City Municipal Authority maintenance records three days prior to incident\",\n      \"source_document\": \"Document_3.pdf\"\n    },\n    {\n      \"fact\": \"Plaintiff John Smith sustained lumbar spine injuries requiring ongoing physical therapy and medical treatment\",\n      \"source_document\": \"Document_1.pdf\"\n    },\n    {\n      \"fact\": \"ABC Corporation filed secondary claim for property damage to company vehicle valued at $45,000\",\n      \"source_document\": \"Document_4.pdf\"\n    },\n    {\n      \"fact\": \"Security camera footage from adjacent business establishment captured collision from multiple angles\",\n      \"source_document\": \"Document_2.pdf\"\n    }\n  ],\n  \"timelineOfEvents\": [\n    {\n      \"date\": \"2025-01-12\",\n      \"event\": \"City Municipal Authority receives report of intermittent traffic signal malfunction at Main Street and Oak Avenue intersection\",\n      \"source_document\": \"Document_3.pdf\"\n    },\n    {\n      \"date\": \"2025-01-15\",\n      \"event\": \"Motor vehicle collision occurs at 3:45 PM involving plaintiff John Smith and defendant Robert Johnson\",\n      \"source_document\": \"Document_1.pdf\"\n    },\n    {\n      \"date\": \"2025-01-15\",\n      \"event\": \"Emergency medical services respond to scene and transport plaintiff to City Hospital\",\n      \"source_document\": \"Document_1.pdf\"\n    },\n    {\n      \"date\": \"2025-01-16\",\n      \"event\": \"Police investigation report filed with preliminary findings of fault determination\",\n      \"source_document\": \"Document_2.pdf\"\n    },\n    {\n      \"date\": \"2025-01-20\",\n      \"event\": \"ABC Corporation files insurance claim for property damage to company vehicle\",\n      \"source_document\": \"Document_4.pdf\"\n    },\n    {\n      \"date\": \"2025-02-01\",\n      \"event\": \"Expert witness Dr. Sarah Martinez conducts independent medical examination of plaintiff\",\n      \"source_document\": \"Document_5.pdf\"\n    },\n    {\n      \"date\": \"2025-02-15\",\n      \"event\": \"Initial settlement demand letter sent to defendants' insurance carriers\",\n      \"source_document\": \"Document_6.pdf\"\n    }\n  ],\n  \"legalContext\": {\n    \"statedClaims\": [\n      \"Negligence - Failure to maintain safe operation of motor vehicle\",\n      \"Vicarious liability - Employer responsibility for employee actions during course of employment\",\n      \"Municipal liability - Failure to maintain traffic control devices in safe working condition\",\n      \"Property damage - Compensation for vehicle repair and replacement costs\",\n      \"Personal injury - Medical expenses, lost wages, and pain and suffering damages\"\n    ],\n    \"defenses\": [\n      \"Comparative negligence - Plaintiff contributory fault in failing to exercise due care\",\n      \"Act of God - Traffic signal malfunction was unforeseeable mechanical failure\",\n      \"Independent contractor - Driver was not acting within scope of employment\",\n      \"Statute of limitations - Claims filed outside applicable limitations period\",\n      \"Failure to mitigate damages - Plaintiff did not seek appropriate medical treatment\"\n    ]\n  }\n};\n\n// Validate the analysis data against the schema\ntry {\n  // Basic validation of required top-level fields\n  const requiredFields = ['keyEntities', 'keyFacts', 'timelineOfEvents', 'legalContext'];\n  for (const field of requiredFields) {\n    if (!simulatedLLMResponse[field]) {\n      throw new Error(`Missing required field: ${field}`);\n    }\n  }\n  \n  // Validate keyEntities structure\n  if (!simulatedLLMResponse.keyEntities.plaintiffs || !Array.isArray(simulatedLLMResponse.keyEntities.plaintiffs)) {\n    throw new Error(\"keyEntities.plaintiffs must be an array\");\n  }\n  \n  // Validate keyFacts structure\n  if (!Array.isArray(simulatedLLMResponse.keyFacts)) {\n    throw new Error(\"keyFacts must be an array\");\n  }\n  \n  // Validate timelineOfEvents structure\n  if (!Array.isArray(simulatedLLMResponse.timelineOfEvents)) {\n    throw new Error(\"timelineOfEvents must be an array\");\n  }\n  \n  // Validate legalContext structure\n  if (!simulatedLLMResponse.legalContext.statedClaims || !Array.isArray(simulatedLLMResponse.legalContext.statedClaims)) {\n    throw new Error(\"legalContext.statedClaims must be an array\");\n  }\n  \n  // Set successful analysis result\n  analysisResult.analysisData = simulatedLLMResponse;\n  analysisResult.analysisMetadata.promptUsed = promptTemplate.substring(0, 150) + \"...\";\n  analysisResult.analysisMetadata.documentsAnalyzed = inputData.preparationMetadata ? inputData.preparationMetadata.documentsProcessed : \"unknown\";\n  analysisResult.analysisMetadata.totalTextAnalyzed = documentsText.length;\n  analysisResult.analysisMetadata.entitiesExtracted = {\n    plaintiffs: simulatedLLMResponse.keyEntities.plaintiffs.length,\n    defendants: simulatedLLMResponse.keyEntities.defendants.length,\n    judges: simulatedLLMResponse.keyEntities.judges.length,\n    other_parties: simulatedLLMResponse.keyEntities.other_parties.length\n  };\n  analysisResult.analysisMetadata.factsExtracted = simulatedLLMResponse.keyFacts.length;\n  analysisResult.analysisMetadata.timelineEventsExtracted = simulatedLLMResponse.timelineOfEvents.length;\n  analysisResult.analysisMetadata.claimsExtracted = simulatedLLMResponse.legalContext.statedClaims.length;\n  analysisResult.analysisMetadata.defensesExtracted = simulatedLLMResponse.legalContext.defenses.length;\n  analysisResult.message = \"Case documents successfully analyzed using simulated AI processing\";\n  \n  // Preserve original preparation data for downstream processing\n  analysisResult.originalPreparationData = {\n    preparationResult: inputData,\n    routingData: inputData.originalRoutingData || {}\n  };\n  \n} catch (error) {\n  analysisResult.isValid = false;\n  analysisResult.errors.push(`Schema validation failed: ${error.message}`);\n}\n\n// Return the analysis result\nreturn [{\n  json: analysisResult,\n  binary: binaryData\n}];"
+        "jsCode": "// Prepare Case Documents Analysis Prompt\n// Takes aggregated text from Prepare Case Documents and creates OpenAI prompt\n\nconst inputData = $input.first().json;\nconst binaryData = $input.first().binary || {};\n\n// Validate input from Prepare Case Documents node\nif (!inputData || !inputData.isValid || !inputData.aggregatedDocumentsText) {\n  return [{\n    json: {\n      isValid: false,\n      errors: [\"Invalid input: Missing aggregated documents text from preparation step\"],\n      processingTimestamp: new Date().toISOString()\n    }\n  }];\n}\n\nconst documentsText = inputData.aggregatedDocumentsText;\n\n// Create the analysis prompt using your existing template\nconst analysisPrompt = `You are a specialized legal analysis AI. You will be given a collection of case documents. Your task is to perform a comprehensive analysis across all provided documents and extract key legal information.\n\nThe documents are provided below:\n---\n${documentsText}\n---\n\nAnalyze the documents collectively and extract the following information. Structure your response as a single, valid JSON object according to the schema below.\n\n**JSON Schema:**\n{\n  \"keyEntities\": {\n    \"plaintiffs\": [\"string\"],\n    \"defendants\": [\"string\"],\n    \"judges\": [\"string\"],\n    \"other_parties\": [\"string\"]\n  },\n  \"keyFacts\": [\n    {\n      \"fact\": \"string\",\n      \"source_document\": \"string\"\n    }\n  ],\n  \"timelineOfEvents\": [\n    {\n      \"date\": \"YYYY-MM-DD\",\n      \"event\": \"string\",\n      \"source_document\": \"string\"\n    }\n  ],\n  \"legalContext\": {\n    \"statedClaims\": [\"string\"],\n    \"defenses\": [\"string\"]\n  }\n}\n\nReturn ONLY the valid JSON object.`;\n\n// Return the prompt with preserved metadata\nreturn [{\n  json: {\n    openaiPrompt: analysisPrompt,\n    originalData: inputData,\n    processingTimestamp: new Date().toISOString(),\n    promptMetadata: {\n      documentsTextLength: documentsText.length,\n      preparationData: inputData.preparationMetadata || {},\n      promptType: \"case-documents-analysis\"\n    }\n  },\n  binary: binaryData\n}];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1504,
-        288
+        -208,
+        -112
       ],
-      "id": "analyze-case-docs-001-2025",
-      "name": "Analyze Case Documents"
+      "id": "ea71588b-8687-45e3-baee-940f4b08d879",
+      "name": "Prepare Case Docs Analysis Prompt"
     },
     {
       "parameters": {
-        "jsCode": "// Parse & Structure Case Documents Results Node\n// This node receives the simulated JSON output from Analyze Case Documents,\n// validates the structure, and enriches it with processing metadata\n\n// Get the input data from the Analyze Case Documents node\nconst inputData = $input.first().json;\nconst binaryData = $input.first().binary || {};\n\n// Initialize the processing result\nconst processingResult = {\n  isValid: true,\n  errors: [],\n  enrichedData: null,\n  processingTimestamp: new Date().toISOString(),\n  processingMetadata: {\n    nodeType: \"parse-structure\",\n    processingBranch: \"case-documents-analysis\",\n    validationPassed: false,\n    enrichmentApplied: false\n  }\n};\n\n// Validate that we received valid analysis data\nif (!inputData || !inputData.isValid) {\n  processingResult.isValid = false;\n  processingResult.errors.push(\"Invalid input: Previous analysis step failed\");\n  if (inputData && inputData.errors) {\n    processingResult.errors = processingResult.errors.concat(inputData.errors);\n  }\n  return [{ json: processingResult, binary: binaryData }];\n}\n\n// Extract the JSON data from the analysis result\nlet analysisJsonData;\ntry {\n  if (inputData.analysisData) {\n    // Data is already parsed as an object from the analysis step\n    analysisJsonData = inputData.analysisData;\n  } else {\n    processingResult.isValid = false;\n    processingResult.errors.push(\"No analysis data found in input\");\n    return [{ json: processingResult, binary: binaryData }];\n  }\n} catch (error) {\n  processingResult.isValid = false;\n  processingResult.errors.push(`Failed to parse JSON: ${error.message}`);\n  return [{ json: processingResult, binary: binaryData }];\n}\n\n// Validate the presence of required top-level keys\nconst requiredKeys = ['keyEntities', 'keyFacts', 'timelineOfEvents', 'legalContext'];\nconst missingKeys = [];\n\nfor (const key of requiredKeys) {\n  if (!analysisJsonData[key] || (typeof analysisJsonData[key] !== 'object' && !Array.isArray(analysisJsonData[key]))) {\n    missingKeys.push(key);\n  }\n}\n\nif (missingKeys.length > 0) {\n  processingResult.isValid = false;\n  processingResult.errors.push(`Missing or invalid required keys: ${missingKeys.join(', ')}`);\n  return [{ json: processingResult, binary: binaryData }];\n}\n\n// Validation passed - proceed with enrichment\nprocessingResult.processingMetadata.validationPassed = true;\n\n// Create enriched data by adding processing metadata\nconst enrichedJsonData = {\n  ...analysisJsonData,\n  processing: {\n    analysisStatus: \"validated\",\n    parsedAt: new Date().toISOString(),\n    parserVersion: \"1.0.0\",\n    validatedKeys: requiredKeys,\n    originalAnalysisTimestamp: inputData.processingTimestamp,\n    analysisMetadata: inputData.analysisMetadata || {}\n  }\n};\n\n// Set successful processing result\nprocessingResult.enrichedData = enrichedJsonData;\nprocessingResult.processingMetadata.enrichmentApplied = true;\nprocessingResult.message = \"Case documents analysis successfully parsed, validated, and enriched\";\n\n// Preserve original analysis and preparation data for downstream processing\nprocessingResult.originalData = {\n  analysisResult: inputData,\n  preparationData: inputData.originalPreparationData || {}\n};\n\n// Return the enriched result\nreturn [{\n  json: processingResult,\n  binary: binaryData\n}];"
+        "jsCode": "// Parse Case Documents Analysis Response\n// Validates and structures the OpenAI response\n\nconst openAIInput = $input.first().json;\nconst originalData = openAIInput.originalData || {};\n\n// Initialize processing result\nconst processingResult = {\n  isValid: true,\n  errors: [],\n  analysisData: null,\n  processingTimestamp: new Date().toISOString(),\n  analysisMetadata: {\n    nodeType: \"parse-openai-response\",\n    processingBranch: \"case-documents-analysis\",\n    aiModel: \"gpt-4o\",\n    responseProcessed: false\n  }\n};\n\n// Extract OpenAI response\nlet responseText;\nif (openAIInput.message && openAIInput.message.content) {\n  responseText = openAIInput.message.content.trim();\n} else {\n  processingResult.isValid = false;\n  processingResult.errors.push(\"No message content found in OpenAI response\");\n  return [{ json: processingResult }];\n}\n\n// Clean and parse JSON response\ntry {\n  // Remove any markdown formatting\n  const cleanText = responseText.replace(/```json|```/g, '').trim();\n  \n  // Validate JSON structure\n  if (!cleanText.startsWith('{') || !cleanText.endsWith('}')) {\n    throw new Error('Response is not properly formatted JSON');\n  }\n  \n  const parsedData = JSON.parse(cleanText);\n  \n  // Validate required schema fields\n  const requiredFields = ['keyEntities', 'keyFacts', 'timelineOfEvents', 'legalContext'];\n  const missingFields = [];\n  \n  for (const field of requiredFields) {\n    if (!parsedData[field]) {\n      missingFields.push(field);\n    }\n  }\n  \n  if (missingFields.length > 0) {\n    throw new Error(`Missing required fields: ${missingFields.join(', ')}`);\n  }\n  \n  // Validate keyEntities structure\n  if (!parsedData.keyEntities.plaintiffs || !Array.isArray(parsedData.keyEntities.plaintiffs)) {\n    throw new Error('keyEntities.plaintiffs must be an array');\n  }\n  \n  // Set successful result\n  processingResult.analysisData = parsedData;\n  processingResult.analysisMetadata.responseProcessed = true;\n  processingResult.analysisMetadata.entitiesFound = {\n    plaintiffs: parsedData.keyEntities.plaintiffs.length,\n    defendants: parsedData.keyEntities.defendants.length,\n    judges: parsedData.keyEntities.judges.length,\n    other_parties: parsedData.keyEntities.other_parties.length\n  };\n  processingResult.analysisMetadata.factsExtracted = parsedData.keyFacts.length;\n  processingResult.analysisMetadata.timelineEvents = parsedData.timelineOfEvents.length;\n  processingResult.analysisMetadata.claimsFound = parsedData.legalContext.statedClaims.length;\n  processingResult.analysisMetadata.defensesFound = parsedData.legalContext.defenses.length;\n  processingResult.message = \"Case documents analysis completed successfully with OpenAI\";\n  \n} catch (error) {\n  processingResult.isValid = false;\n  processingResult.errors.push(`JSON parsing failed: ${error.message}`);\n  processingResult.rawResponse = responseText;\n  \n  // Log for debugging\n  console.error('OpenAI Response Parsing Error:', {\n    error: error.message,\n    rawResponse: responseText.substring(0, 200) + '...'\n  });\n}\n\n// Preserve original data for downstream processing\nprocessingResult.originalPreparationData = {\n  preparationResult: originalData,\n  routingData: originalData.originalRoutingData || {}\n};\n\n// Return the processing result\nreturn [{ json: processingResult }];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1608,
-        288
+        416,
+        -112
       ],
-      "id": "parse-structure-case-docs-001-2025",
+      "id": "3c1bb54f-4657-494e-a6d9-349c1ea7e6cb",
+      "name": "Parse Case Docs Analysis Response"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse & Structure Case Documents Results Node\n// This node receives the OpenAI output and enriches it with processing metadata\n\n// Get the input data from the Parse Case Docs Analysis Response node\nconst inputData = $input.first().json;\nconst binaryData = $input.first().binary || {};\n\n// Initialize the processing result\nconst processingResult = {\n  isValid: true,\n  errors: [],\n  enrichedData: null,\n  processingTimestamp: new Date().toISOString(),\n  processingMetadata: {\n    nodeType: \"parse-structure\",\n    processingBranch: \"case-documents-analysis\",\n    validationPassed: false,\n    enrichmentApplied: false\n  }\n};\n\n// Validate that we received valid analysis data\nif (!inputData || !inputData.isValid) {\n  processingResult.isValid = false;\n  processingResult.errors.push(\"Invalid input: Previous analysis step failed\");\n  if (inputData && inputData.errors) {\n    processingResult.errors = processingResult.errors.concat(inputData.errors);\n  }\n  return [{ json: processingResult, binary: binaryData }];\n}\n\n// Extract the JSON data from the analysis result\nlet analysisJsonData;\ntry {\n  if (inputData.analysisData) {\n    // Data is already parsed as an object from the analysis step\n    analysisJsonData = inputData.analysisData;\n  } else {\n    processingResult.isValid = false;\n    processingResult.errors.push(\"No analysis data found in input\");\n    return [{ json: processingResult, binary: binaryData }];\n  }\n} catch (error) {\n  processingResult.isValid = false;\n  processingResult.errors.push(`Failed to parse JSON: ${error.message}`);\n  return [{ json: processingResult, binary: binaryData }];\n}\n\n// Validate the presence of required top-level keys\nconst requiredKeys = ['keyEntities', 'keyFacts', 'timelineOfEvents', 'legalContext'];\nconst missingKeys = [];\n\nfor (const key of requiredKeys) {\n  if (!analysisJsonData[key] || (typeof analysisJsonData[key] !== 'object' && !Array.isArray(analysisJsonData[key]))) {\n    missingKeys.push(key);\n  }\n}\n\nif (missingKeys.length > 0) {\n  processingResult.isValid = false;\n  processingResult.errors.push(`Missing or invalid required keys: ${missingKeys.join(', ')}`);\n  return [{ json: processingResult, binary: binaryData }];\n}\n\n// Validation passed - proceed with enrichment\nprocessingResult.processingMetadata.validationPassed = true;\n\n// Create enriched data by adding processing metadata\nconst enrichedJsonData = {\n  ...analysisJsonData,\n  processing: {\n    analysisStatus: \"validated\",\n    parsedAt: new Date().toISOString(),\n    parserVersion: \"1.0.0\",\n    validatedKeys: requiredKeys,\n    originalAnalysisTimestamp: inputData.processingTimestamp,\n    analysisMetadata: inputData.analysisMetadata || {}\n  }\n};\n\n// Set successful processing result\nprocessingResult.enrichedData = enrichedJsonData;\nprocessingResult.processingMetadata.enrichmentApplied = true;\nprocessingResult.message = \"Case documents analysis successfully parsed, validated, and enriched\";\n\n// Preserve original analysis and preparation data for downstream processing\nprocessingResult.originalData = {\n  analysisResult: inputData,\n  preparationData: inputData.originalPreparationData || {}\n};\n\n// Return the enriched result\nreturn [{\n  json: processingResult,\n  binary: binaryData\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        640,
+        -112
+      ],
+      "id": "14822ca9-b452-447b-9ad4-15c645bb036b",
       "name": "Parse & Structure Case Documents Results"
     },
     {
@@ -212,32 +226,23 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1712,
-        288
+        864,
+        -112
       ],
-      "id": "validate-case-docs-final-001-2025",
+      "id": "83140ec4-ec0b-4cb2-b0fc-803a72efdc7f",
       "name": "Validate Case Documents Analysis"
     },
     {
-      "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "strict"
-          }
-        },
-        "combineOperation": "all",
-        "options": {}
-      },
+      "parameters": {},
       "type": "n8n-nodes-base.wait",
       "typeVersion": 1.1,
       "position": [
-        1816,
-        208
+        1088,
+        -208
       ],
-      "id": "wait-for-branches-001-2025",
-      "name": "Wait for Both Branches"
+      "id": "94107457-ba29-4cf5-835d-252f011a3b44",
+      "name": "Wait for Both Branches",
+      "webhookId": "a385eb2d-887c-4b6d-a616-b54b30edb622"
     },
     {
       "parameters": {
@@ -246,10 +251,10 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        2024,
-        208
+        1312,
+        -208
       ],
-      "id": "case-data-merger-001-2025",
+      "id": "b0ff4ec8-72dc-443a-8e34-1e53b0842f48",
       "name": "Case Data Merger"
     },
     {
@@ -259,28 +264,146 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        2232,
-        208
+        1536,
+        -208
       ],
-      "id": "merge-validator-001-2025",
+      "id": "2cc20c17-4f2c-4843-9bc5-16115a06b8e3",
       "name": "Merge Validator"
     },
     {
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={{ JSON.stringify($json.validatedUnifiedCaseFile || {\n  \"error\": \"Validation failed\",\n  \"status\": \"failed\",\n  \"timestamp\": new Date().toISOString(),\n  \"details\": $json.errors || [\"Unknown validation error\"]\n}, null, 2) }}",
+        "responseBody": "={\n  \"respondWith\": \"json\",\n  \"responseBody\": \"={{ $json }}\",\n  \"options\": {}\n}",
         "options": {}
       },
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [
-        2440,
-        208
+        2384,
+        -208
       ],
-      "id": "unified-response-001-2025",
+      "id": "95916991-8a2a-4617-8fb9-a36637ab7637",
       "name": "Unified Response"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4o-mini",
+          "mode": "list",
+          "cachedResultName": "GPT-4O-MINI"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "You are an expert legal data extraction assistant. Based on the intake form information provided, create a comprehensive legal intake analysis.\n\nClient Information:\n- Name: {{ $json.caseInfo.clientName }}\n- Case Reference: {{ $json.caseInfo.caseReference }}  \n- Attorney: {{ $json.caseInfo.attorneyName }}\n\nBased on this information and typical legal intake forms, please create a structured analysis that would normally be extracted from an intake document.\n\nPlease structure your response as this exact JSON format:\n\n{\n  \"clientInfo\": {\n    \"clientName\": \"{{ $json.caseInfo.clientName }}\",\n    \"contactInfo\": \"Contact information would be collected via intake form - phone, email, address details\"\n  },\n  \"caseInfo\": {\n    \"caseReference\": \"{{ $json.caseInfo.caseReference }}\",\n    \"summary\": \"Based on the client name and case reference, this appears to be a legal matter requiring professional analysis. Detailed case summary would typically include nature of legal issue, timeline of events, and key concerns raised by the client.\"\n  },\n  \"attorneyInfo\": {\n    \"attorneyName\": \"{{ $json.caseInfo.attorneyName }}\"\n  }\n}\n\nReturn ONLY the valid JSON object with no additional text or formatting."
+            }
+          ]
+        },
+        "options": {
+          "maxTokens": 4000
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.8,
+      "position": [
+        16,
+        -304
+      ],
+      "id": "4ccff641-6a5e-406d-948f-93869c14442d",
+      "name": "OpenAI Extract Intake Data",
+      "credentials": {
+        "openAiApi": {
+          "id": "Cw2fFTz1VBPuCSPE",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4o",
+          "mode": "list",
+          "cachedResultName": "GPT-4O"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "={{ $json.openaiPrompt }}"
+            }
+          ]
+        },
+        "options": {
+          "maxTokens": 8000,
+          "temperature": 0.1
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.8,
+      "position": [
+        16,
+        -112
+      ],
+      "id": "45b6f08c-d2c3-4cb4-a1a5-ca1ca1310edf",
+      "name": "OpenAI Case Documents Processing",
+      "credentials": {
+        "openAiApi": {
+          "id": "Cw2fFTz1VBPuCSPE",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4o",
+          "mode": "list",
+          "cachedResultName": "GPT-4O"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "You are a professional legal assistant creating a findings email for a law firm. Generate a professional email that can be sent to the client with the legal analysis findings.\n\n**CASE INFORMATION:**\nClient: {{ $json.validatedUnifiedCaseFile.caseInfo.clientName }}\nAttorney: {{ $json.validatedUnifiedCaseFile.caseInfo.attorneyName }}\nCase Reference: {{ $json.validatedUnifiedCaseFile.caseInfo.caseReference }}\nDate: {{ $json.validatedUnifiedCaseFile.createdAt }}\n\n**INTAKE ANALYSIS:**\n{% if $json.validatedUnifiedCaseFile.intakeFormData.status === 'processed' %}\nClient Information: {{ $json.validatedUnifiedCaseFile.intakeFormData.data.clientInfo.clientName }}\nContact Details: {{ $json.validatedUnifiedCaseFile.intakeFormData.data.clientInfo.contactInfo }}\nCase Summary: {{ $json.validatedUnifiedCaseFile.intakeFormData.data.caseInfo.summary }}\n{% endif %}\n\n**CASE DOCUMENTS ANALYSIS:**\n{% if $json.validatedUnifiedCaseFile.caseDocumentsAnalysis.status === 'processed' %}\n{% set analysis = $json.validatedUnifiedCaseFile.caseDocumentsAnalysis.data %}\nKey Parties:\n- Plaintiffs: {{ analysis.keyEntities.plaintiffs | join(', ') }}\n- Defendants: {{ analysis.keyEntities.defendants | join(', ') }}\n- Other Parties: {{ analysis.keyEntities.other_parties | join(', ') }}\n\nKey Facts:\n{% for fact in analysis.keyFacts %}\n- {{ fact.fact }} (Source: {{ fact.source_document }})\n{% endfor %}\n\nTimeline of Events:\n{% for event in analysis.timelineOfEvents %}\n- {{ event.date }}: {{ event.event }} (Source: {{ event.source_document }})\n{% endfor %}\n\nLegal Claims: {{ analysis.legalContext.statedClaims | join('; ') }}\nDefenses: {{ analysis.legalContext.defenses | join('; ') }}\n{% endif %}\n\n**INSTRUCTIONS:**\nCreate a professional email findings letter with:\n\n**Subject Line:** Legal Analysis Findings - [Case Reference]\n\n**Email Body:**\n1. **Professional greeting**\n2. **Executive Summary** (2-3 paragraphs)\n3. **Key Findings** (bulleted list)\n4. **Legal Analysis** (strengths, risks, implications)\n5. **Recommended Actions** (specific next steps)\n6. **Timeline and Next Steps**\n7. **Professional closing**\n\nFormat as a ready-to-send email with proper business formatting. Use professional but accessible language. The email should be comprehensive yet readable.\n\nReturn the email in this exact format:\n```\nSubject: [Your subject line]\n\nDear [Client Name],\n\n[Email body content]\n\nSincerely,\n[Attorney Name]\n[Law Firm Name]\n```"
+            }
+          ]
+        },
+        "options": {
+          "maxTokens": 4000,
+          "temperature": 0.3
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.8,
+      "position": [
+        1760,
+        -208
+      ],
+      "id": "6809cf0d-55ff-442b-b0c3-e03067052bac",
+      "name": "Generate Email Findings Letter",
+      "credentials": {
+        "openAiApi": {
+          "id": "Cw2fFTz1VBPuCSPE",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Create Professional Email Findings Letter\n// Formats the OpenAI-generated email for download and use\n\n// Get the email content from OpenAI\nconst emailContent = $input.first().json.message.content;\n\n// Get case info from Merge Validator for metadata\nconst mergeValidatorData = $items(\"Merge Validator\")[0].json;\nconst caseFile = mergeValidatorData.validatedUnifiedCaseFile;\nconst processingInfo = caseFile.processingSummary;\n\n// Safe field extraction with defaults\nconst clientName = caseFile.caseInfo?.clientName || 'Client';\nconst attorneyName = caseFile.caseInfo?.attorneyName || 'Attorney';\nconst caseReference = caseFile.caseInfo?.caseReference || 'CASE-001';\nconst caseId = caseFile.caseId || 'CASE-ID-001';\n\n// Parse the email content to extract subject and body\nlet subject = `Legal Analysis Findings - ${caseReference}`;\nlet emailBody = emailContent;\n\n// Try to extract subject line from OpenAI response\nconst subjectMatch = emailContent.match(/Subject:\\s*(.+)/i);\nif (subjectMatch) {\n  subject = subjectMatch[1].trim();\n  // Remove the subject line from the body\n  emailBody = emailContent.replace(/Subject:\\s*.+\\n?/i, '').trim();\n}\n\n// Create proper email headers for .eml format\nconst currentDate = new Date();\nconst emailDate = currentDate.toUTCString();\nconst messageId = `<${Date.now()}.${Math.random().toString(36).substr(2, 9)}@legal.analysis>`;\n\n// Create safe email addresses\nconst attorneyEmail = attorneyName.replace(/[^a-zA-Z0-9]/g, '.').toLowerCase() + '@lawfirm.com';\nconst clientEmail = clientName.replace(/[^a-zA-Z0-9]/g, '.').toLowerCase() + '@client.com';\n\n// Format as proper EML email file\nconst emlContent = `From: ${attorneyName} <${attorneyEmail}>\nTo: ${clientName} <${clientEmail}>\nSubject: ${subject}\nDate: ${emailDate}\nMessage-ID: ${messageId}\nMIME-Version: 1.0\nContent-Type: text/plain; charset=utf-8\nContent-Transfer-Encoding: 8bit\n\n${emailBody}\n\n---\nGenerated by Legal Document Analysis Portal\nCase ID: ${caseId}\nProcessed: ${currentDate.toISOString()}\nDocuments Analyzed: ${processingInfo?.totalBranchesProcessed || 0} branches`;\n\n// Also create a plain text version for easy copy/paste\nconst plainTextContent = `${subject}\n${'='.repeat(subject.length)}\n\n${emailBody}`;\n\n// Create downloadable data URLs\nconst emlBase64 = Buffer.from(emlContent, 'utf8').toString('base64');\nconst txtBase64 = Buffer.from(plainTextContent, 'utf8').toString('base64');\n\nconst emlDataUrl = `data:message/rfc822;base64,${emlBase64}`;\nconst txtDataUrl = `data:text/plain;base64,${txtBase64}`;\n\n// Generate filenames\nconst baseFileName = `Findings_${caseReference}_${new Date().toISOString().split('T')[0]}`;\n\n// Create the final response object\nconst responseData = {\n  status: \"success\",\n  message: `✅ Legal Analysis Complete! Generated professional findings email for ${clientName}. Ready to send or customize.`,\n  \n  // Core results\n  documentsProcessed: processingInfo?.totalBranchesProcessed || 0,\n  successfulBranches: processingInfo?.successfulBranches || 0,\n  \n  // Download links for different formats\n  downloadLinks: {\n    findingsLetter: emlDataUrl,  // EML email file\n    caseAnalysis: txtDataUrl,    // Plain text version\n    executiveSummary: txtDataUrl // Same as text for now\n  },\n  \n  // Email-specific metadata\n  emailDetails: {\n    subject: subject,\n    from: `${attorneyName} <${attorneyEmail}>`,\n    to: `${clientName} <${clientEmail}>`,\n    bodyLength: emailBody.length,\n    emlFileName: `${baseFileName}.eml`,\n    txtFileName: `${baseFileName}.txt`\n  },\n  \n  // Case metadata\n  caseInfo: {\n    caseId: caseId,\n    clientName: clientName,\n    attorneyName: attorneyName,\n    caseReference: caseReference,\n    processingDate: caseFile.createdAt || new Date().toISOString()\n  },\n  \n  // Processing details\n  processingDetails: {\n    intakeFormProcessed: caseFile.intakeFormData?.status === 'processed',\n    caseDocumentsProcessed: caseFile.caseDocumentsAnalysis?.status === 'processed',\n    totalProcessingTime: new Date().toISOString(),\n    documentsAnalyzed: {\n      intakeForm: caseFile.intakeFormData?.status || 'unknown',\n      caseDocuments: caseFile.caseDocumentsAnalysis?.status || 'unknown'\n    }\n  },\n  \n  // Generated content info\n  generatedContent: {\n    emailGenerated: true,\n    emailLength: emailContent.length,\n    format: 'Email (.eml and .txt)',\n    deliveryMethod: 'Direct Download',\n    readyForEmail: true\n  },\n  \n  // Timestamp for tracking\n  completedAt: new Date().toISOString(),\n  \n  // Success indicators for frontend\n  analysisComplete: true,\n  documentsGenerated: true,\n  readyForDownload: true,\n  \n  // Instructions for user\n  instructions: \"Download the .eml file to import into your email client, or download the .txt file to copy/paste the content into any email.\"\n};\n\n// IMPORTANT: Return in proper n8n format - array of objects with json property\nreturn [{ json: responseData }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2160,
+        -208
+      ],
+      "id": "5d407815-85e1-4001-9a33-b665fdb36a75",
+      "name": "Format Email Response"
     }
   ],
+  "pinData": {},
   "connections": {
     "Webhook": {
       "main": [
@@ -346,14 +469,14 @@
       "main": [
         [
           {
-            "node": "Extract Intake Form Data",
+            "node": "OpenAI Extract Intake Data",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Extract Intake Form Data": {
+    "Parse Intake Extraction Response": {
       "main": [
         [
           {
@@ -401,14 +524,14 @@
       "main": [
         [
           {
-            "node": "Analyze Case Documents",
+            "node": "Prepare Case Docs Analysis Prompt",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Analyze Case Documents": {
+    "Parse Case Docs Analysis Response": {
       "main": [
         [
           {
@@ -436,7 +559,7 @@
           {
             "node": "Wait for Both Branches",
             "type": "main",
-            "index": 1
+            "index": 0
           }
         ]
       ]
@@ -467,6 +590,61 @@
       "main": [
         [
           {
+            "node": "Generate Email Findings Letter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Case Docs Analysis Prompt": {
+      "main": [
+        [
+          {
+            "node": "OpenAI Case Documents Processing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Extract Intake Data": {
+      "main": [
+        [
+          {
+            "node": "Parse Intake Extraction Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Case Documents Processing": {
+      "main": [
+        [
+          {
+            "node": "Parse Case Docs Analysis Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Email Findings Letter": {
+      "main": [
+        [
+          {
+            "node": "Format Email Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Email Response": {
+      "main": [
+        [
+          {
             "node": "Unified Response",
             "type": "main",
             "index": 0
@@ -475,9 +653,15 @@
       ]
     }
   },
-  "pinData": {},
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "dbe83f00-f496-45fe-92b2-a974c3cc0f38",
   "meta": {
     "templateCredsSetupCompleted": true,
     "instanceId": "caf5cb14368ca22f9a1df26d6f7341ec146b18cf99462801227bcf1262e8aef4"
-  }
+  },
+  "id": "QsSMlewbcELEU9md",
+  "tags": []
 }

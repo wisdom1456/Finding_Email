@@ -10,13 +10,32 @@ export interface FileData {
 
 export interface AnalysisResult {
   status: string;
-  message?: string;
-  documentsProcessed?: number;
-  downloadLinks?: {
-    findingsEmail: string;
-    summaryReport: string;
-    quickSummary: string;
+  message: string;
+  documentsProcessed: number;
+  successfulBranches: number;
+  downloadLinks: {
+    findingsLetter: string;
+    caseAnalysis: string;
+    executiveSummary: string;
   };
+  emailDetails: {
+    subject: string;
+    from: string;
+    to: string;
+    bodyLength: number;
+    emlFileName: string;
+    txtFileName: string;
+  };
+  caseInfo: {
+    caseId: string;
+    clientName: string;
+    attorneyName: string;
+    caseReference: string;
+  };
+  completedAt: string;
+  analysisComplete: boolean;
+  documentsGenerated: boolean;
+  readyForDownload: boolean;
 }
 
 export interface CaseFormData {

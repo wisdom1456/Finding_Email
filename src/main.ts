@@ -418,7 +418,7 @@ function initializeApp(): void {
   fileManager = document.getElementById('fileManager') as HTMLElement;
   fileListContainer = document.getElementById('fileListContainer') as HTMLElement;
   submitBtn = document.getElementById('submitBtn') as HTMLButtonElement;
-  statusElement = document.getElementById('statusDisplay') as HTMLElement;
+  statusElement = document.getElementById('status') as HTMLElement;
   sizeWarning = document.getElementById('sizeWarning') as HTMLElement;
   
   if (!intakeUploadSection || !documentsUploadSection || !intakeInput || !documentsInput || 

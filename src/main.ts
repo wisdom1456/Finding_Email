@@ -308,10 +308,27 @@ async function handleSubmit(e: Event): Promise<void> {
     
     if (response.ok) {
       try {
-        result = await response.json();
-        console.log('Full n8n response:', result); // DEBUG LINE
+        let rawResult = await response.json();
+        console.log('Full n8n response:', rawResult);
+
+        // Check for nested responseBody and parse if necessary
+        if (rawResult && typeof rawResult.responseBody === 'string') {
+          try {
+            // Attempt to parse the nested JSON string
+            result = JSON.parse(rawResult.responseBody);
+            console.log('Parsed nested responseBody:', result);
+          } catch (nestedJsonError) {
+            console.error('Failed to parse nested responseBody JSON:', nestedJsonError);
+            result = null; // Ensure result is null if parsing fails
+          }
+        } else if (rawResult && typeof rawResult === 'object') {
+          // Handle cases where the response is already the correct object
+          result = rawResult;
+        }
+        
       } catch (jsonError) {
         console.warn('Failed to parse JSON response:', jsonError);
+        result = null;
       }
       
       // Check if we got the expected response format
@@ -401,7 +418,7 @@ function initializeApp(): void {
   fileManager = document.getElementById('fileManager') as HTMLElement;
   fileListContainer = document.getElementById('fileListContainer') as HTMLElement;
   submitBtn = document.getElementById('submitBtn') as HTMLButtonElement;
-  statusElement = document.getElementById('status') as HTMLElement;
+  statusElement = document.getElementById('statusDisplay') as HTMLElement;
   sizeWarning = document.getElementById('sizeWarning') as HTMLElement;
   
   if (!intakeUploadSection || !documentsUploadSection || !intakeInput || !documentsInput || 

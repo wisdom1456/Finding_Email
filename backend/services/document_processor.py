@@ -1,24 +1,44 @@
-import os
-import requests
-from typing import List, Dict, Any
-from fastapi import UploadFile
+import asyncio
+from fastapi import UploadFile, HTTPException, status
+from typing import List, Dict, Callable, Awaitable
+from utils.data_models import FileType, DocumentType, ProcessedFile
+from utils.file_processors.pdf_processor import process_pdf
+from utils.file_processors.docx_processor import process_docx
+from utils.file_processors.eml_processor import process_eml
+from utils.file_processors.txt_processor import process_txt
+
+# Maps file content types to their respective processing functions
+from utils.file_processors import PROCESSORS
+PROCESSOR_MAP: Dict[str, Callable[[UploadFile, DocumentType], Awaitable[ProcessedFile]]] = PROCESSORS
 
 class DocumentProcessor:
-    def __init__(self):
-        self.pdfco_api_key = os.getenv("PDFCO_API_KEY")
-        self.pdfco_url = "https://api.pdf.co/v1/pdf/convert/to/text"
+    """
+    A service class for processing uploaded documents.
+    It identifies file types, categorizes them, and extracts content.
+    """
 
-    async def process_files(self, files: List[UploadFile]) -> List[Dict[str, Any]]:
-        # This will contain the logic to process uploaded files,
-        # distinguishing between intake forms and case documents,
-        # and using PDF.co for PDF processing.
-        processed_files = []
+    def _get_document_type(self, file: UploadFile) -> DocumentType:
+        """Determines if a file is an intake form or a general case document."""
+        if file.filename and "intake" in file.filename.lower():
+            return DocumentType.INTAKE_FORM
+        return DocumentType.CASE_DOCUMENT
+
+    async def process_documents(self, files: List[UploadFile]) -> List[ProcessedFile]:
+        """
+        Asynchronously processes a list of uploaded files.
+        """
+        processing_tasks = []
         for file in files:
-            content = await file.read()
-            # In a real implementation, we would call PDF.co or other services here.
-            processed_files.append({
-                "filename": file.filename,
-                "content_type": file.content_type,
-                "text": content.decode("utf-8", errors="ignore") # simple text extraction for now
-            })
+            doc_type = self._get_document_type(file)
+            processor = PROCESSOR_MAP.get(file.content_type)
+
+            if not processor:
+                raise HTTPException(
+                    status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+                    detail=f"No processor available for file type '{file.content_type}'",
+                )
+            
+            processing_tasks.append(processor(file, doc_type))
+
+        processed_files = await asyncio.gather(*processing_tasks)
         return processed_files

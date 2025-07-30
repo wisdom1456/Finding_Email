@@ -2,9 +2,37 @@
 
 ## Architecture Overview
 
-The Legal Document Analysis Portal follows a modern front-end architecture pattern with clear separation of concerns and modular organization.
+The Legal Document Analysis Portal has evolved from a TypeScript/n8n architecture to a modern Streamlit/FastAPI system, preserving functionality while improving maintainability and user experience.
 
-### Application Architecture
+### New Streamlit/FastAPI Architecture (Current Target)
+
+```
+┌─────────────────────────────────────────┐
+│              Browser (Client)            │
+├─────────────────────────────────────────┤
+│           Streamlit Frontend            │
+│  ┌─────────────┐  ┌─────────────────┐   │
+│  │ Streamlit   │  │   Session       │   │
+│  │ Components  │  │   State Mgmt    │   │
+│  │             │  │                 │   │
+│  └─────────────┘  └─────────────────┘   │
+└─────────────────────────────────────────┘
+            │
+            ▼
+┌─────────────────────────────────────────┐
+│           FastAPI Backend               │
+│  ┌─────────────┐  ┌─────────────────┐   │
+│  │ Document    │  │ AI Analyzer     │   │
+│  │ Processor   │  │ Service         │   │
+│  └─────────────┘  └─────────────────┘   │
+│  ┌─────────────┐  ┌─────────────────┐   │
+│  │ Email       │  │ File Handler    │   │
+│  │ Generator   │  │ Service         │   │
+│  └─────────────┘  └─────────────────┘   │
+└─────────────────────────────────────────┘
+```
+
+### Legacy TypeScript/n8n Architecture (Historical Reference)
 
 ```
 ┌─────────────────────────────────────────┐
@@ -29,18 +57,42 @@ The Legal Document Analysis Portal follows a modern front-end architecture patte
 
 ## File Organization Patterns
 
-### Source Directory Structure
+### New Streamlit/FastAPI Directory Structure
+```
+/
+├── app.py                    # Main Streamlit application
+├── backend/                  # FastAPI backend services
+│   ├── main.py              # FastAPI application entry point
+│   ├── services/            # Business logic services
+│   │   ├── document_processor.py  # PDF and document processing
+│   │   ├── ai_analyzer.py         # OpenAI integration and analysis
+│   │   └── email_generator.py     # Email findings generation
+│   ├── utils/               # Utility modules
+│   │   ├── validators.py    # Input validation
+│   │   ├── data_models.py   # Pydantic data models
+│   │   └── config.py        # Configuration management
+│   └── requirements.txt     # Python dependencies
+├── components/              # Streamlit component modules
+│   ├── file_uploader.py    # File upload interface
+│   ├── progress_tracker.py # Processing status
+│   └── results_display.py  # Results presentation
+└── assets/                 # Static assets and templates
+    ├── styles.css          # Custom styling
+    └── templates/          # Email templates
+```
+
+### Legacy TypeScript Directory Structure (Historical Reference)
 ```
 src/
 ├── index.html          # Main application entry point
 ├── main.ts            # TypeScript application bootstrap
-├── components/        # Reusable UI components (future)
+├── components/        # Reusable UI components
 │   ├── FileUpload/   # File upload component
 │   ├── CaseForm/     # Case information form
 │   └── StatusDisplay/ # Status and results display
 └── assets/           # Static assets
     ├── images/       # Images and icons
-    ├── styles/       # CSS files (future extraction)
+    ├── styles/       # CSS files
     └── fonts/        # Custom fonts
 ```
 
@@ -76,9 +128,57 @@ The application has been successfully refactored from a monolithic structure to 
 
 ## Key Technical Patterns
 
-### State Management Pattern
+### New Streamlit/FastAPI Patterns
+
+#### Streamlit Session State Management
+```python
+# Streamlit session state for maintaining application state
+if 'case_info' not in st.session_state:
+    st.session_state.case_info = {}
+if 'uploaded_files' not in st.session_state:
+    st.session_state.uploaded_files = {}
+if 'processing_status' not in st.session_state:
+    st.session_state.processing_status = {}
+```
+
+#### FastAPI Service Architecture Pattern
+```python
+# Microservice pattern with dedicated services
+class DocumentProcessor:
+    async def process_documents(self, files: List[UploadFile]) -> List[ProcessedFile]:
+        """Orchestrates file validation, format detection, and content extraction."""
+        # ...
+    
+class AIAnalyzer:
+    async def analyze_case(self, documents: List[ProcessedDocument]) -> CaseAnalysis:
+        # ...
+    
+class EmailGenerator:
+    async def generate_findings_letter(self, analysis: CaseAnalysis) -> EmailResponse:
+        # ...
+```
+
+#### Multi-Stage Processing Pipeline
+```python
+# Pipeline pattern for document processing workflow
+async def process_case_pipeline(case_data: CaseData) -> CaseResults:
+    # Stage 1: Document processing
+    processed_docs = await document_processor.process_documents(case_data.files)
+    
+    # Stage 2: AI analysis
+    analysis = await ai_analyzer.analyze_case(processed_docs)
+    
+    # Stage 3: Email generation
+    email_response = await email_generator.generate_findings(analysis)
+    
+    return CaseResults(analysis=analysis, email=email_response)
+```
+
+### Legacy TypeScript Patterns (Historical Reference)
+
+#### State Management Pattern
 ```typescript
-// Current: Global state with Map-based file storage
+// Legacy: Global state with Map-based file storage
 let uploadedFiles = new Map<string, FileData>();
 
 // Future: Consider state management library for complex interactions
@@ -95,14 +195,24 @@ function handleDragOver(e: DragEvent): void { /* ... */ }
 ```
 
 ### Error Handling Pattern
-```typescript
-// Consistent error handling with user feedback
-try {
-  // API operation
-} catch (error) {
-  const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-  showStatus(`❌ System Error: ${errorMessage}`, 'error');
-}
+```python
+# Robust retry logic for transient API errors
+@retry(
+    stop=stop_after_attempt(3),
+    wait=wait_fixed(2),
+    retry=retry_if_exception_type((RateLimitError, APIError, APITimeoutError)),
+)
+async def _make_openai_request(prompt: str, model: str):
+    try:
+        # OpenAI API call
+    except (RateLimitError, APIError, APITimeoutError) as e:
+        # Log and re-raise to trigger retry
+        print(f"OpenAI API Error: {e}. Retrying...")
+        raise
+    except Exception as e:
+        # Handle unexpected errors
+        raise HTTPException(status_code=500, detail="Internal error")
+
 ```
 
 ### File Processing Pattern
@@ -303,12 +413,13 @@ flowchart LR
 - **Error Recovery Patterns**: Graceful degradation with partial success handling and comprehensive error messaging
 
 ### OpenAI API Integration Patterns ✅ IMPLEMENTED
+- **Modern SDK Client**: Utilizes the `openai` Python package (>=1.0.0) with a structured `OpenAI` client.
 - **Dual Model Strategy**: Optimized AI model selection based on processing requirements
   - **GPT-4o-mini**: Efficient intake form processing (4000 tokens, lower cost)
   - **GPT-4o**: Comprehensive case document analysis (8000 tokens, higher capability)
-- **Structured Prompt Engineering**: JSON schema-enforced response formatting with validation
-- **Response Validation Pipeline**: Multi-stage parsing with error recovery and fallback handling
-- **Token Management**: Optimized prompt design for cost-effective processing and reliable results
+- **Structured Prompt Engineering**: JSON schema-enforced response formatting with `response_format={"type": "json_object"}`.
+- **Response Validation Pipeline**: Multi-stage parsing with Pydantic models for robust validation.
+- **Token Management**: Optimized prompt design for cost-effective processing and reliable results.
 
 ### Professional Output Generation Patterns ✅ IMPLEMENTED
 - **Email Template System**: Professional findings letter generation with business-appropriate formatting

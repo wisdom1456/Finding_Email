@@ -4,3 +4,13 @@ python-multipart
 requests
 openai
 python-dotenv
+python-docx
+docx2txt
+PyPDF2
+python-magic
+weasyprint
+PyMuPDF
+pydantic-settings
+pytesseract
+Pillow
+tenacity

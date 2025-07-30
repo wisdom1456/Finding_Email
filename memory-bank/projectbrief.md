@@ -8,8 +8,8 @@ The primary objective of this project is to develop and maintain a **Legal Docum
 
 - **Legal Document Processing**: Automated analysis of client intake forms and case documents using AI-powered extraction
 - **Professional Output Generation**: Creation of business-ready findings letters and case summaries for law firm client communications
-- **Workflow Integration**: Sophisticated n8n workflow orchestration with multi-branch processing and validation
-- **User Experience Optimization**: Intuitive interface design focused on legal professional workflows
+- **Modern Application Architecture**: Streamlit frontend with FastAPI backend, replacing n8n workflow orchestration
+- **User Experience Optimization**: Intuitive interface design focused on legal professional workflows with preserved existing UI patterns
 
 ## Key Goals
 
@@ -20,10 +20,11 @@ The primary objective of this project is to develop and maintain a **Legal Docum
 - **Production-Ready System**: Robust, scalable platform suitable for law firm operations
 
 ### Technical Excellence
-- **Component-Based Architecture**: Modern TypeScript frontend with modular, reusable components
-- **Advanced API Integration**: Sophisticated n8n workflow integration with OpenAI AI processing
+- **Modern Full-Stack Architecture**: Streamlit frontend with FastAPI backend, preserving existing UI design
+- **Advanced AI Integration**: Direct OpenAI integration with structured document processing pipeline
 - **Quality Assurance**: Multi-stage validation ensuring accuracy and professional output quality
-- **Deployment Optimization**: Static site deployment optimized for Kinsta hosting environment
+- **Deployment Optimization**: Containerized deployment with Railway hosting for backend services
+- **Legacy Preservation**: Existing TypeScript frontend preserved while migrating to Streamlit architecture
 
 ### Business Impact
 - **Operational Efficiency**: Significant reduction in manual document processing time for legal professionals
@@ -39,11 +40,12 @@ The primary objective of this project is to develop and maintain a **Legal Docum
 - **Professional Output**: Business-appropriate findings letters suitable for direct client delivery
 - **Download System**: Multiple format options with immediate browser download capability
 
-### Technical Requirements ✅ ACHIEVED
-- **Modern Frontend Stack**: TypeScript, Vite, component-based architecture
-- **Robust Backend Integration**: n8n workflow orchestration with comprehensive error handling
+### Technical Requirements 🚧 MIGRATING TO NEW ARCHITECTURE
+- **Legacy System**: TypeScript, Vite, component-based architecture (preserved for reference)
+- **New Architecture**: Streamlit frontend with FastAPI backend, replacing n8n workflow system
+- **Backend Services**: FastAPI with dedicated services for document processing, AI analysis, and email generation
 - **Security Compliance**: Secure document handling with appropriate validation and size limits
-- **Production Deployment**: Kinsta-compatible static site with optimized build process
+- **Production Deployment**: Railway hosting for FastAPI backend, with Streamlit frontend deployment
 
 ### Performance Requirements ✅ ACHIEVED
 - **Processing Efficiency**: Complete document analysis workflow in minutes rather than hours

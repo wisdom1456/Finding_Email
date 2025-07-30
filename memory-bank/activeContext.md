@@ -2,119 +2,82 @@
 
 ## Current Work Focus
 
-The Legal Document Analysis Portal has recently completed **Phase 3: API Enhancement and Workflow Integration** following a successful resolution of build failures. The system is now operating with enhanced n8n workflow integration, sophisticated document processing capabilities, and professional output generation.
+The project has now completed **Phase 3: AI Integration** of the Streamlit/FastAPI migration. The core AI analysis pipeline has been implemented, including OpenAI API integration, prompt engineering, response validation, and asynchronous processing.
 
 ## Recent Changes (Phase 3 Completed)
 
-### API Enhancement Work ✅ COMPLETED
+### OpenAI SDK Migration & Error Handling ✅ COMPLETED
 
-#### Advanced n8n Workflow Integration
-- **Multi-Branch Processing Pipeline**: Implemented sophisticated document categorization with parallel processing branches
-  - **Intake Form Branch**: Dedicated processing for client intake documents with OpenAI GPT-4o-mini extraction
-  - **Case Documents Branch**: Comprehensive analysis pipeline for multiple case documents using OpenAI GPT-4o
-  - **Unified Merger**: Advanced data merger that combines both processing branches into cohesive case files
+#### Modern SDK Implementation
+- Migrated from legacy OpenAI API to the modern OpenAI Python SDK (>=1.0.0).
+  - Implemented structured `client.chat.completions.create()` method.
+  - Enforced JSON response format with `response_format={"type": "json_object"}`.
 
-#### Enhanced OpenAI Integration
-- **Dual Model Strategy**: 
-  - GPT-4o-mini for efficient intake form data extraction
-  - GPT-4o for comprehensive case document analysis with higher token limits
-- **Structured Response Parsing**: Robust JSON schema validation and error handling
-- **Professional Email Generation**: Automated creation of client-ready findings letters
+#### Enhanced Error Handling
+- Implemented robust retry logic using the `tenacity` library (`@retry` decorator).
+  - Handles `RateLimitError`, `APIError`, and `APITimeoutError` with a 3-attempt retry strategy.
+  - Propagates errors as `HTTPException` for consistent API error responses.
 
-#### Improved API Response Handling
-- **Multi-Stage Validation**: Enhanced validation pipeline with parse-enrich-validate pattern
-- **Error Recovery**: Comprehensive error handling with graceful degradation
-- **Status Tracking**: Real-time processing status updates through multiple workflow stages
+#### Dual-Model Strategy
+- **GPT-4o-mini**: Used for efficient and cost-effective intake form analysis.
+  - **GPT-4o**: Used for comprehensive and in-depth case document analysis.
 
-### Build Failure Resolution ✅ COMPLETED
+#### AI Integration & Validation
+- **`services/ai_analyzer.py`**: Refactored to use the new OpenAI SDK client and error handling.
+- **`utils/data_models.py`**: Pydantic models ensure structured data for AI requests and responses.
+- **`utils/validators.py`**: Validation functions parse and validate JSON responses against Pydantic models.
+- **Prompt Engineering**: Prompts optimized for structured JSON output and dual-model strategy.
 
-#### Previous Build Issues
-- **Workflow Synchronization**: Resolved timing issues in multi-branch n8n workflow processing
-- **Response Format Standardization**: Fixed inconsistent API response structures
-- **Error Handling Enhancement**: Implemented robust error catching and user feedback
-
-#### Resolution Implementation
-- **Wait Node Integration**: Added proper synchronization between processing branches
-- **Response Standardization**: Unified response format across all workflow endpoints
-- **Comprehensive Testing**: Validated end-to-end workflow functionality
-- **Status Monitoring**: Enhanced real-time feedback for users during processing
-
-### Workflow Integration Improvements ✅ COMPLETED
-
-#### Enhanced Document Processing Pipeline
-```mermaid
-flowchart TD
-    A[Webhook Receiver] --> B[Form Validation]
-    B --> C[File Extraction]
-    C --> D[Document Categorization]
-    
-    D --> E[Intake Branch]
-    D --> F[Case Docs Branch]
-    
-    E --> G[OpenAI Intake Extraction]
-    G --> H[Parse & Enrich Intake]
-    H --> I[Validate Intake]
-    
-    F --> J[Prepare Case Documents]
-    J --> K[OpenAI Case Analysis]
-    K --> L[Parse & Structure Results]
-    L --> M[Validate Case Analysis]
-    
-    I --> N[Wait for Both Branches]
-    M --> N
-    N --> O[Case Data Merger]
-    O --> P[Merge Validator]
-    P --> Q[Generate Email Findings]
-    Q --> R[Format Email Response]
-    R --> S[Unified Response]
-```
-
-#### Advanced Feature Implementation
-- **Professional Email Generation**: Complete email findings letter creation with .eml and .txt formats
-- **Download System Enhancement**: Multiple format downloads with proper MIME types and base64 encoding
-- **Case File Management**: Unified case file structure with comprehensive metadata tracking
-- **Quality Assurance Pipeline**: Multi-stage validation ensuring data integrity and completeness
+### System Stability
+- Resolved a series of `ModuleNotFoundError` and `ImportError` issues by correcting import paths to use relative paths within the `backend` directory.
+- The backend server is now stable and running correctly with the new AI analysis components.
 
 ## Next Steps
 
-### Immediate Priorities
-- **Performance Monitoring**: Track workflow execution times and optimize bottlenecks
-- **User Experience Refinement**: Gather user feedback on the enhanced interface and processing times
-- **Documentation Completion**: Finalize all technical documentation reflecting the enhanced architecture
-
-### Future Enhancement Opportunities
-- **Workflow Optimization**: Further refinement of processing times and resource usage
-- **Additional File Format Support**: Expand beyond PDF/Word to include more document types
-- **Advanced Analytics**: Enhanced case analysis with additional AI models and techniques
-- **User Interface Enhancement**: Further improvements to the frontend user experience
+### Immediate Priorities (Phase 5: Finalization & Deployment)
+- **Deployment**: Configure and deploy the application to a production environment on Railway.
+- **Final Validation**: Perform a final round of user acceptance testing (UAT) to confirm all features are working as expected.
+- **Documentation Review**: Ensure all memory bank documents are up-to-date and reflect the final state of the application.
 
 ## Active Decisions and Considerations
 
-### Technical Architecture Decisions
-- **Component-Based Frontend**: Maintained modular TypeScript architecture for maintainability
-- **n8n Workflow Orchestration**: Leveraged n8n's visual workflow builder for complex document processing
-- **Multi-Model AI Strategy**: Strategic use of different OpenAI models based on processing requirements
-- **Static Site Deployment**: Continued focus on Kinsta-compatible static site architecture
+### Migration Architecture Decisions
+- **Technology Stack Consolidation**: Transition from TypeScript/n8n to Python-based Streamlit/FastAPI for unified development experience
+- **UI Design Preservation**: Maintain existing interface patterns and user experience while implementing in Streamlit framework
+- **Service-Oriented Backend**: FastAPI with dedicated microservices for document processing, AI analysis, and email generation
+- **Modern Deployment Strategy**: Railway hosting for improved scalability, reliability, and development workflow
 
-### Processing Pipeline Considerations
-- **Error Handling Strategy**: Comprehensive error recovery with user-friendly messaging
-- **Performance vs. Quality**: Balanced processing speed with analysis depth and accuracy
-- **Scalability Preparation**: Designed workflow to handle increased document volume
-- **Security Compliance**: Maintained secure document handling throughout the enhanced pipeline
+### Implementation Considerations
+- **Functionality Preservation**: Ensure all existing capabilities are maintained during migration including multi-format processing and AI analysis
+- **User Experience Continuity**: Seamless transition with familiar interface patterns and workflow preservation
+- **Performance Optimization**: Async/await patterns in FastAPI for improved processing efficiency
+- **Security Enhancement**: Enhanced document handling with FastAPI security patterns and proper validation
+
+### Migration Risk Management
+- **Parallel Development**: Maintain existing system operational during migration development
+- **Feature Parity Validation**: Comprehensive testing to ensure all current features are replicated
+- **User Training Minimal**: Interface preservation reduces need for user retraining
+- **Rollback Capability**: Existing TypeScript/n8n system remains available if needed during transition
 
 ## Important Patterns and Preferences
 
-### Development Patterns
-- **Validation-First Approach**: Multiple validation stages ensure data quality and system reliability
-- **Progressive Enhancement**: Enhanced features while maintaining backward compatibility
-- **Error Recovery Design**: Graceful degradation when individual processing stages encounter issues
-- **User Feedback Priority**: Real-time status updates and clear progress indicators
+### New Development Patterns (Streamlit/FastAPI)
+- **Session State Management**: Streamlit's built-in session state for maintaining application context and user data
+- **Service Architecture**: Clear separation of concerns with dedicated FastAPI services for each business function
+- **Async Processing**: FastAPI async/await patterns for efficient document processing and AI integration
+- **Type Safety**: Pydantic models for request/response validation and data structure enforcement
 
-### API Integration Patterns
-- **Structured Response Format**: Consistent JSON schema across all API endpoints
-- **Multi-Format Output**: Support for both email (.eml) and text (.txt) file downloads
-- **Metadata Preservation**: Complete processing history and case information tracking
-- **Professional Quality Assurance**: Business-ready output formatting and content quality
+### Migration Patterns
+- **UI Component Preservation**: Maintain existing visual design and user interaction patterns in Streamlit implementation
+- **API Endpoint Design**: RESTful FastAPI endpoints with automatic OpenAPI documentation generation
+- **File Processing Pipeline**: Streamlined processing workflow with proper error handling and status tracking
+- **Professional Output Standards**: Continued focus on business-ready findings letters and download functionality
+
+### Quality Assurance Patterns
+- **Multi-Stage Validation**: Pydantic models and FastAPI validation for data integrity
+- **Error Recovery Design**: Graceful degradation with user-friendly error messaging
+- **Processing Transparency**: Clear status indicators and progress tracking throughout migration
+- **Documentation Standards**: Comprehensive API documentation and user guidance
 
 ## Learnings and Project Insights
 
@@ -138,17 +101,21 @@ flowchart TD
 
 ## Current System Status
 
-### Production Readiness ✅ OPERATIONAL
-- **Frontend**: Component-based TypeScript application fully functional
-- **Backend**: n8n workflow pipeline operational with enhanced processing capabilities
-- **Integration**: Seamless communication between frontend and n8n webhook endpoints
-- **Output Generation**: Professional email findings letters generated successfully
-- **Download System**: Multi-format file downloads working reliably
+### Legacy System Status ✅ OPERATIONAL (During Migration)
+- **Frontend**: Component-based TypeScript application remains fully functional during migration period
+- **Backend**: n8n workflow pipeline operational and maintained as backup during transition
+- **Integration**: Existing webhook endpoints continue to function for business continuity
+- **Output Generation**: Professional email findings letters continue to be generated successfully
 
-### Performance Metrics
-- **Processing Speed**: Significant improvement in document analysis turnaround time
-- **Error Rate**: Reduced processing errors through enhanced validation pipeline
-- **User Experience**: Improved feedback and progress tracking during document processing
-- **Output Quality**: Professional-grade findings letters suitable for direct client delivery
+### Migration Development Status ✅ COMPLETED
+- **End-to-End Testing**: Successfully completed a full manual test of the application.
+- **Bug Fixes**: Resolved critical issues related to API authentication, data model mismatches, and UI rendering.
+- **System Stability**: The application is now stable and functioning as expected.
 
-The system has successfully evolved from a basic document processor to a comprehensive legal analysis platform capable of producing professional-quality deliverables for law firm operations.
+### Migration Success Criteria
+- **Functionality Parity**: All current features replicated in new Streamlit/FastAPI system
+- **Performance Improvement**: Enhanced processing speed and reliability through modern architecture
+- **User Experience Preservation**: Familiar interface and workflow patterns maintained
+- **Deployment Modernization**: Improved deployment pipeline with Railway hosting and containerization
+
+The system is positioned for a strategic migration that will modernize the technology stack while preserving all existing functionality and user experience patterns that have proven successful in the legal document analysis workflow.

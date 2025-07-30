@@ -1,501 +1,290 @@
-# n8n Workflow Redesign Plan: Generate Findings Email
+# Complete Streamlit Implementation Plan
+## Legal Document Analysis System
 
-## Executive Summary
+Based on your existing n8n workflow, here's a comprehensive plan to rebuild this as a Streamlit application.
 
-The current n8n workflow suffers from critical data flow issues that result in incomplete email generation. The primary problems are: (1) the Respond to Webhook node only returns the first item from merged branches, (2) missing branch synchronization, (3) inadequate data hydration with fallbacks, and (4) improper data flow to email generation nodes.
+## 📋 System Architecture Overview
 
-This plan addresses these issues using modern n8n best practices including proper Webhook response configuration, Wait node synchronization, enhanced merge logic, and restructured data flow patterns.
-
-## Root Cause Analysis
-
-### 🚫 Current Problems Identified
-
-1. **First Item Only Response Issue**
-   - **Node**: `Unified Response` (Respond to Webhook)
-   - **Problem**: Only returns first item when multiple branches merge
-   - **Impact**: Missing `validatedUnifiedCaseFile` and other merged data
-
-2. **Missing Branch Synchronization** 
-   - **Nodes**: `Parse Intake AI JSON1` and `Parse Case Docs AI JSON1`
-   - **Problem**: No Wait node ensures both branches complete before merging
-   - **Impact**: Case Data Merger may proceed with incomplete data
-
-3. **Inadequate Data Hydration**
-   - **Node**: `Case Data Merger1`
-   - **Problem**: Missing fallback logic for intake form data fields
-   - **Impact**: `clientName`, `attorneyName`, `caseReference` not properly populated
-
-4. **Incomplete Email Context**
-   - **Node**: `Prepare Email Prompt`
-   - **Problem**: Cannot access complete merged case file data
-   - **Impact**: Email generation with missing or default values
-
-## Detailed Fix Plan
-
-### 🔧 Fix 1: Restructure Webhook Response Configuration
-
-**Current Configuration**:
-- **Node**: `Webhook` (ID: 90f33678-92ff-423c-8168-cbfec37058d5)
-- **Issue**: `responseMode: "responseNode"` with `Unified Response` only returning first item
-
-**New Configuration**:
-- **Change**: Modify Webhook node's response mode
-- **Setting**: `responseMode: "whenLastNodeFinishes"`
-- **Rationale**: Ensures complete workflow execution before response, captures all data
-
-**Implementation**:
-```json
-{
-  "parameters": {
-    "httpMethod": "POST",
-    "path": "legal-analysis-upload",
-    "responseMode": "whenLastNodeFinishes",
-    "options": {
-      "allowedOrigins": "https://findingemail-0w07x.kinsta.page",
-      "responseHeaders": {
-        "entries": [
-          {
-            "name": "Access-Control-Allow-Origin",
-            "value": "https://findingemail-0w07x.kinsta.page"
-          },
-          {
-            "name": "Access-Control-Allow-Methods",
-            "value": "POST, OPTIONS"
-          },
-          {
-            "name": "Access-Control-Allow-Headers",
-            "value": "Content-Type"
-          }
-        ]
-      }
-    }
-  }
-}
+```
+Streamlit App Architecture:
+├── app.py (Main Streamlit interface)
+├── services/
+│   ├── document_processor.py (PDF.co + document parsing)
+│   ├── ai_analyzer.py (OpenAI integration)
+│   ├── case_merger.py (combines analysis results)
+│   ├── email_generator.py (findings letter generation)
+│   └── file_handler.py (multi-format file processing)
+├── utils/
+│   ├── validators.py (form + file validation)
+│   ├── data_models.py (Pydantic models for data structure)
+│   ├── file_processors/ (format-specific processors)
+│   │   ├── pdf_processor.py
+│   │   ├── docx_processor.py
+│   │   ├── eml_processor.py
+│   │   └── txt_processor.py
+│   └── config.py (API keys, constants)
+├── components/
+│   ├── file_uploader.py (custom upload component)
+│   ├── progress_tracker.py (processing status)
+│   └── results_display.py (findings presentation)
+└── assets/
+    ├── styles.css (custom styling)
+    └── templates/ (email templates)
 ```
 
-### 🔧 Fix 2: Add Wait Node for Branch Synchronization
+## 🎯 Core Workflow Implementation
 
-**Position**: Between `Route by Document Type1` and `Case Data Merger1`
+### Phase 1: Application Structure & State Management
 
-**New Node Details**:
-- **Type**: `n8n-nodes-base.wait`
-- **Name**: `Wait for Both Branches`
-- **Configuration**:
-  - **Resume On**: `On Webhook Call`
-  - **Response**: `When Last Node Finishes`
-
-**Rationale**: Ensures both intake and case document processing branches complete before merging
-
-**Implementation**:
-```json
-{
-  "parameters": {
-    "resume": "webhook",
-    "options": {
-      "responseMode": "whenLastNodeFinishes"
-    }
-  },
-  "type": "n8n-nodes-base.wait",
-  "typeVersion": 1.1,
-  "position": [900, 768],
-  "id": "wait-for-branches-node",
-  "name": "Wait for Both Branches"
-}
+**Session State Design:**
+```python
+st.session_state structure:
+├── case_info: {clientName, attorneyName, caseReference}
+├── uploaded_files: {intake_form: File, case_documents: [Files]}
+├── processing_status: {stage, progress, errors}
+├── extracted_content: {intake_data, documents_data}
+├── ai_analysis: {intake_analysis, documents_analysis}
+├── unified_case: {merged case file}
+└── final_results: {findings_letter, download_links}
 ```
 
-### 🔧 Fix 3: Enhanced Case Data Merger with Fallback Logic
+### Phase 2: File Processing Pipeline
 
-**Current Issue**: Missing fallback hydration in `Case Data Merger1`
-
-**Enhanced Code**:
-```javascript
-// Enhanced Case Data Merger Node with Robust Fallback Logic
-const allInputs = $input.all();
-
-const mergeResult = {
-  isValid: true,
-  errors: [],
-  unifiedCaseFile: null,
-  processingTimestamp: new Date().toISOString(),
-  mergeMetadata: {
-    nodeType: "case-data-merger",
-    branchesReceived: allInputs.length,
-    mergeStrategy: "unified-case-file",
-    mergeStatus: "processing"
-  }
-};
-
-if (!allInputs || allInputs.length === 0) {
-  mergeResult.isValid = false;
-  mergeResult.errors.push("No input data received from either branch");
-  return [{ json: mergeResult }];
-}
-
-let intakeBranchData = null;
-let caseDocumentsBranchData = null;
-
-// Find branch data
-for (const input of allInputs) {
-  const inputJson = input.json;
-  if (inputJson?.validationMetadata?.processingBranch === "intake-analysis") {
-    intakeBranchData = inputJson;
-  } else if (inputJson?.validationMetadata?.processingBranch === "case-documents-analysis") {
-    caseDocumentsBranchData = inputJson;
-  }
-}
-
-// Get structured data from upstream nodes for fallback
-const structuredItems = $items('Structure Intake Data');
-const promptItems = $items('Build AI Prompt');
-const structuredCtx = structuredItems && structuredItems[0] ? structuredItems[0].json.structuredData : {};
-const promptCtx = promptItems && promptItems[0] ? promptItems[0].json : {};
-
-// Fallback data from structured context
-const fallback = {
-  clientName: structuredCtx?.caseInfo?.clientName || 'Client',
-  attorneyName: structuredCtx?.caseInfo?.attorneyName || 'Attorney', 
-  caseReference: structuredCtx?.caseInfo?.caseReference || promptCtx?.usedFallbackCaseRef || `CASE-${new Date().toISOString().split('T')[0]}-UNKNOWN`
-};
-
-const caseId = `CASE-${new Date().toISOString().split('T')[0]}-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
-const unifiedCaseFile = {
-  caseId: caseId,
-  createdAt: new Date().toISOString(),
-  status: "completed",
-  caseInfo: {
-    clientName: null,
-    caseReference: null,
-    attorneyName: null,
-    processingDate: new Date().toISOString()
-  },
-  intakeFormData: {
-    status: "not_processed",
-    data: null,
-    processingDetails: null
-  },
-  caseDocumentsAnalysis: {
-    status: "not_processed", 
-    data: null,
-    processingDetails: null
-  },
-  processingSummary: {
-    totalBranchesProcessed: 0,
-    successfulBranches: 0,
-    failedBranches: 0,
-    branchResults: {
-      intakeAnalysis: "not_processed",
-      caseDocumentsAnalysis: "not_processed"
-    }
-  }
-};
-
-// ENHANCED: Process intake branch with robust fallback
-if (intakeBranchData && intakeBranchData.isValid && intakeBranchData.validatedData) {
-  const intakeData = intakeBranchData.validatedData;
-  
-  // Use intake data with fallbacks
-  unifiedCaseFile.caseInfo.clientName = intakeData.clientInfo?.clientName || fallback.clientName;
-  unifiedCaseFile.caseInfo.caseReference = intakeData.caseInfo?.caseReference || fallback.caseReference;
-  unifiedCaseFile.caseInfo.attorneyName = intakeData.attorneyInfo?.attorneyName || fallback.attorneyName;
-  
-  unifiedCaseFile.intakeFormData = {
-    status: "processed",
-    data: intakeData,
-    processingDetails: {
-      processingTimestamp: intakeBranchData.processingTimestamp,
-      validationMetadata: intakeBranchData.validationMetadata,
-      originalData: intakeBranchData.originalData || {}
-    }
-  };
-  unifiedCaseFile.processingSummary.branchResults.intakeAnalysis = "success";
-  unifiedCaseFile.processingSummary.successfulBranches++;
-} else {
-  // ENHANCED: Use fallback data when intake processing fails
-  unifiedCaseFile.caseInfo.clientName = fallback.clientName;
-  unifiedCaseFile.caseInfo.attorneyName = fallback.attorneyName;  
-  unifiedCaseFile.caseInfo.caseReference = fallback.caseReference;
-  
-  unifiedCaseFile.intakeFormData.status = "failed";
-  unifiedCaseFile.intakeFormData.processingDetails = {
-    error: intakeBranchData ? (intakeBranchData.errors || ["Unknown intake processing error"]) : ["No intake data received"],
-    processingTimestamp: intakeBranchData ? intakeBranchData.processingTimestamp : new Date().toISOString(),
-    fallbackUsed: true,
-    fallbackData: fallback
-  };
-  unifiedCaseFile.processingSummary.branchResults.intakeAnalysis = "failed";
-  unifiedCaseFile.processingSummary.failedBranches++;
-}
-
-// Process case documents branch (unchanged)
-if (caseDocumentsBranchData && caseDocumentsBranchData.isValid && caseDocumentsBranchData.validatedData) {
-  const caseDocsData = caseDocumentsBranchData.validatedData;
-  unifiedCaseFile.caseDocumentsAnalysis = {
-    status: "processed",
-    data: caseDocsData,
-    processingDetails: {
-      processingTimestamp: caseDocumentsBranchData.processingTimestamp,
-      validationMetadata: caseDocumentsBranchData.validationMetadata,
-      originalData: caseDocumentsBranchData.originalData || {}
-    }
-  };
-  unifiedCaseFile.processingSummary.branchResults.caseDocumentsAnalysis = "success";
-  unifiedCaseFile.processingSummary.successfulBranches++;
-} else {
-  unifiedCaseFile.caseDocumentsAnalysis.status = "failed";
-  unifiedCaseFile.caseDocumentsAnalysis.processingDetails = {
-    error: caseDocumentsBranchData ? (caseDocumentsBranchData.errors || ["Unknown case documents processing error"]) : ["No case documents data received"],
-    processingTimestamp: caseDocumentsBranchData ? caseDocumentsBranchData.processingTimestamp : new Date().toISOString()
-  };
-  unifiedCaseFile.processingSummary.branchResults.caseDocumentsAnalysis = "failed";
-  unifiedCaseFile.processingSummary.failedBranches++;
-}
-
-unifiedCaseFile.processingSummary.totalBranchesProcessed = unifiedCaseFile.processingSummary.successfulBranches + unifiedCaseFile.processingSummary.failedBranches;
-
-// ENHANCED: Ensure we always have valid caseInfo even with partial failures
-if (unifiedCaseFile.processingSummary.successfulBranches === 0) {
-  unifiedCaseFile.status = "partial_success"; // Changed from "failed" to allow email generation
-} else if (unifiedCaseFile.processingSummary.failedBranches > 0) {
-  unifiedCaseFile.status = "partial_success";
-} else {
-  unifiedCaseFile.status = "completed";
-}
-
-mergeResult.unifiedCaseFile = unifiedCaseFile;
-mergeResult.mergeMetadata.mergeStatus = "completed";
-mergeResult.mergeMetadata.totalDataSources = allInputs.length;
-mergeResult.mergeMetadata.successfulMerges = unifiedCaseFile.processingSummary.successfulBranches;
-mergeResult.message = `Case data successfully merged from ${unifiedCaseFile.processingSummary.successfulBranches} of ${unifiedCaseFile.processingSummary.totalBranchesProcessed} branches`;
-
-return [{ json: mergeResult }];
+**Multi-Format File Handler:**
+```
+File Processing Flow:
+1. Upload Validation → Check format, size, requirements
+2. Format Detection → PDF/DOCX/DOC/EML/TXT identification
+3. Content Extraction:
+   ├── PDF → PDF.co API (text + form fields)
+   ├── DOCX/DOC → python-docx / docx2txt
+   ├── EML → email library parsing
+   ├── TXT → direct text read
+   └── Future: Images → OCR, Videos → transcript
+4. Metadata Collection → file info, processing status
+5. Content Structuring → standardized format for AI
 ```
 
-### 🔧 Fix 4: Remove Unified Response Node
+**File Validation Requirements:**
+- **Intake Form**: Exactly 1 file required (PDF/DOCX/DOC preferred)
+- **Case Documents**: Multiple files allowed, 100MB total limit
+- **Supported Formats**: PDF, DOCX, DOC, EML, TXT
+- **Future Support**: JPG, PNG, MP4, MOV, etc.
 
-**Action**: Delete the `Unified Response` (Respond to Webhook) node completely
+### Phase 3: User Interface Design
 
-**Rationale**: With `responseMode: "whenLastNodeFinishes"` on the Webhook node, the separate Respond to Webhook node is unnecessary and causes the first-item-only issue.
-
-### 🔧 Fix 5: Enhanced Email Preparation with Data Access
-
-**Current Issue**: `Prepare Email Prompt` cannot access complete merged case file data
-
-**Enhanced Code**:
-```javascript
-// Enhanced Prepare Email Prompt with Complete Data Access
-const inputData = $input.first().json || {};
-const caseFile = inputData.validatedUnifiedCaseFile || {};
-
-// Access intake data with enhanced fallback logic
-let intake = {};
-let clientName = 'Client';
-let attorneyName = 'Attorney';  
-let caseReference = 'CASE-001';
-
-if (caseFile && typeof caseFile === 'object') {
-  // Primary: Try to get from processed intake data
-  if (caseFile.intakeFormData && caseFile.intakeFormData.data) {
-    intake = caseFile.intakeFormData.data;
-    clientName = intake.clientInfo?.clientName || clientName;
-    attorneyName = intake.attorneyInfo?.attorneyName || attorneyName;
-    caseReference = intake.caseInfo?.caseReference || caseReference;
-  }
-  
-  // Secondary: Try to get from caseInfo (fallback populated in merger)
-  if (caseFile.caseInfo) {
-    clientName = caseFile.caseInfo.clientName || clientName;
-    attorneyName = caseFile.caseInfo.attorneyName || attorneyName;
-    caseReference = caseFile.caseInfo.caseReference || caseReference;
-  }
-  
-  // Tertiary: Check if fallback was used in processing details
-  if (caseFile.intakeFormData?.processingDetails?.fallbackUsed && caseFile.intakeFormData?.processingDetails?.fallbackData) {
-    const fallbackData = caseFile.intakeFormData.processingDetails.fallbackData;
-    clientName = fallbackData.clientName || clientName;
-    attorneyName = fallbackData.attorneyName || attorneyName;
-    caseReference = fallbackData.caseReference || caseReference;
-  }
-}
-
-// Build comprehensive case details with both branches
-let caseDetails = `This case involves ${clientName}. Processing Results:\n`;
-
-// Intake processing status
-if (caseFile.intakeFormData) {
-  caseDetails += `- Intake form: ${caseFile.intakeFormData.status}`;
-  if (caseFile.intakeFormData.status === "failed" && caseFile.intakeFormData.processingDetails?.fallbackUsed) {
-    caseDetails += ` (using fallback data)`;
-  }
-  caseDetails += `\n`;
-}
-
-// Case documents processing status  
-if (caseFile.caseDocumentsAnalysis) {
-  caseDetails += `- Case documents: ${caseFile.caseDocumentsAnalysis.status}\n`;
-}
-
-// Add processing summary
-if (caseFile.processingSummary) {
-  caseDetails += `\nProcessing Summary: ${caseFile.processingSummary.successfulBranches} of ${caseFile.processingSummary.totalBranchesProcessed} branches completed successfully.`;
-}
-
-// Enhanced prompt with better context
-const emailPrompt = `Write a professional legal findings email using these EXACT values:
-
-CLIENT NAME: ${clientName}
-ATTORNEY NAME: ${attorneyName}  
-CASE REFERENCE: ${caseReference}
-
-IMPORTANT: Use the actual names above, NOT template variables.
-
-Case Processing Information:
-${caseDetails}
-
-Write a professional legal findings email that:
-1. Uses the EXACT names provided above
-2. Acknowledges the current processing status  
-3. Provides appropriate guidance based on available information
-4. Maintains professional tone regardless of processing completeness
-5. Indicates if additional documents may improve the analysis
-
-Format:
-Subject: Legal Analysis Findings - ${caseReference}
-
-Dear ${clientName},
-
-I have completed the initial analysis of your legal matter (Case Reference: ${caseReference}). 
-
-[Professional content based on available data]
-
-Please let me know if you have any questions or if additional documentation becomes available.
-
-Sincerely,
-${attorneyName}
-Bernhardt Riley Attorneys at Law`;
-
-return [{
-  json: {
-    emailPrompt,
-    clientName,
-    attorneyName,
-    caseReference,
-    originalData: inputData,
-    processingMetadata: {
-      caseStatus: caseFile.status || 'unknown',
-      intakeStatus: caseFile.intakeFormData?.status || 'unknown',
-      documentsStatus: caseFile.caseDocumentsAnalysis?.status || 'unknown'
-    }
-  }
-}];
+**Page Layout:**
+```
+Streamlit UI Structure:
+├── Header: Firm branding + page title
+├── Sidebar:
+│   ├── Case Information Form
+│   ├── Processing Status Indicator
+│   └── Download Results (when ready)
+├── Main Content:
+│   ├── Tab 1: File Upload Interface
+│   │   ├── Intake Form Upload (required first)
+│   │   └── Case Documents Upload
+│   ├── Tab 2: File Manager
+│   │   ├── Uploaded files overview
+│   │   ├── Processing status per file
+│   │   └── File removal options
+│   ├── Tab 3: Processing Monitor
+│   │   ├── Real-time progress tracking
+│   │   ├── Stage-by-stage status
+│   │   └── Error handling display
+│   └── Tab 4: Results & Download
+│       ├── Generated findings letter preview
+│       ├── Case analysis summary
+│       └── Download options (.eml, .txt, .pdf)
 ```
 
-### 🔧 Fix 6: Connection Updates
+### Phase 4: Processing Pipeline Implementation
 
-**Required Connection Changes**:
-
-1. **Remove**: `Final Response Formatter` → `Unified Response` connection
-2. **Update**: Webhook response mode (no separate response node needed)
-3. **Add**: Wait node between routing and merging:
-   - `Parse Intake AI JSON1` → `Wait for Both Branches`
-   - `Parse Case Docs AI JSON1` → `Wait for Both Branches`  
-   - `Wait for Both Branches` → `Case Data Merger1`
-
-## Updated Workflow Architecture
-
-```mermaid
-flowchart TD
-    A[Webhook] --> B[Validate Form Data]
-    B --> C[Structure Intake Data]
-    C --> D[Extract Binary Files]
-    D --> E[Filter PDFs]
-    E --> F[Upload File to PDF.co]
-    
-    F --> G[PDFco Form Fields]
-    F --> H[PDFco Api]
-    H --> I[HTTP Request - Fetch PDF Text]
-    
-    G --> J[Merge]
-    I --> J
-    J --> K[Build AI Prompt]
-    K --> L[OpenAI Dynamic]
-    L --> M[Route by Document Type]
-    
-    M --> N[Parse Intake AI JSON]
-    M --> O[Parse Case Docs AI JSON]
-    
-    N --> P[Wait for Both Branches]
-    O --> P
-    P --> Q[Enhanced Case Data Merger]
-    Q --> R[Merge Validator]
-    R --> S[Enhanced Prepare Email Prompt]
-    S --> T[Debug Prompt Data]
-    T --> U[Generate Email Findings Letter]
-    U --> V[Format Email Response]
-    V --> W[Final Response Formatter]
-    
-    style P fill:#f9f,stroke:#333,stroke-width:2px
-    style Q fill:#bbf,stroke:#333,stroke-width:2px
-    style S fill:#bbf,stroke:#333,stroke-width:2px
+**Stage 1: Data Validation & Structuring**
+```python
+Validation Flow (mirrors n8n Module 1):
+1. Form validation (clientName*, attorneyName*, caseReference)
+2. File validation (required intake form, supported formats)
+3. Data structuring (case_info object creation)
+4. File categorization (intake vs case documents)
 ```
 
-## Implementation Checklist
+**Stage 2: Content Extraction**
+```python
+Document Processing (mirrors n8n Module 1):
+1. For each uploaded file:
+   ├── Determine processing method by file type
+   ├── Extract text content + metadata
+   ├── For PDFs: Extract form fields via PDF.co
+   ├── For DOCX/DOC: Extract formatted text
+   ├── For EML: Parse email headers + body
+   └── For TXT: Direct content read
+2. Structure extracted data for AI consumption
+```
 
-### Phase 1: Webhook Configuration
-- [ ] Update Webhook node `responseMode` to `"whenLastNodeFinishes"`
-- [ ] Remove `Unified Response` node completely
-- [ ] Test basic webhook response without separate response node
+**Stage 3: AI Analysis**
+```python
+AI Processing (mirrors n8n Module 2):
+1. Build context-aware prompts:
+   ├── Include case information
+   ├── Add document type context
+   ├── Provide extracted content
+   └── Request structured JSON output
+2. Separate processing paths:
+   ├── Intake Form Analysis → client info, case summary
+   └── Case Documents Analysis → key facts, issues, parties
+3. Parse and validate AI responses
+```
 
-### Phase 2: Branch Synchronization  
-- [ ] Add `Wait for Both Branches` node after routing
-- [ ] Update connections: both parse nodes → wait node → merger
-- [ ] Configure wait node with webhook resume mode
+**Stage 4: Data Merging**
+```python
+Case File Assembly (mirrors n8n Module 3):
+1. Combine intake + documents analysis
+2. Create unified case file structure
+3. Validate data integrity
+4. Generate processing summary
+5. Handle partial success scenarios
+```
 
-### Phase 3: Enhanced Data Merger
-- [ ] Replace `Case Data Merger1` code with enhanced version
-- [ ] Add robust fallback logic for all critical fields
-- [ ] Ensure fallback data populates `caseInfo` structure
+**Stage 5: Findings Generation**
+```python
+Email Generation (mirrors n8n Module 4):
+1. Build comprehensive email prompt
+2. Generate professional findings letter
+3. Format for multiple output types
+4. Create downloadable files (.eml, .txt, .pdf)
+```
 
-### Phase 4: Email Generation Enhancement
-- [ ] Replace `Prepare Email Prompt` code with enhanced version
-- [ ] Add multi-level fallback data access
-- [ ] Include processing status in email context
+## 🔧 Technical Implementation Details
 
-### Phase 5: Testing & Validation
-- [ ] Test with complete intake + case documents
-- [ ] Test with failed intake branch (fallback scenario)
-- [ ] Test with failed case documents branch
-- [ ] Test with both branches failing (full fallback)
-- [ ] Verify email generation in all scenarios
+### File Processing Strategy
 
-## Expected Outcomes
+**PDF Processing:**
+- Primary: PDF.co API for text extraction + form fields
+- Fallback: PyPDF2 for basic text extraction
+- Handle fillable forms, scanned documents
 
-### ✅ Immediate Fixes
-1. **Complete Data Flow**: All branch data reaches email generation
-2. **Robust Fallback**: Email generation works even with partial failures  
-3. **Proper Synchronization**: Both branches complete before merging
-4. **Professional Output**: Complete, properly formatted findings emails
+**DOCX/DOC Processing:**
+- Use `python-docx` for .docx files
+- Use `docx2txt` for legacy .doc files
+- Preserve formatting context for AI analysis
 
-### ✅ Long-term Benefits
-1. **Reliability**: Workflow completes successfully in all scenarios
-2. **Data Integrity**: No missing client names, case references, or attorney names
-3. **User Experience**: Consistent, professional email output
-4. **Maintainability**: Clear error handling and fallback patterns
+**EML Processing:**
+- Parse email headers (From, To, Subject, Date)
+- Extract body content (plain text + HTML)
+- Handle attachments if present
+- Maintain email thread context
 
-## Risk Mitigation
+**TXT Processing:**
+- Direct file reading with encoding detection
+- Preserve line breaks and formatting
+- Handle large text files efficiently
 
-### Data Loss Prevention
-- Multiple fallback layers ensure critical data is never lost
-- Structured context preservation through all processing stages  
-- Enhanced logging for debugging incomplete data scenarios
+### Error Handling & Recovery
 
-### Backward Compatibility
-- All existing node configurations preserved except where specifically updated
-- Frontend integration remains unchanged
-- Download functionality continues to work as expected
+**File Processing Errors:**
+- Corrupted file detection
+- Unsupported format graceful handling
+- API failure fallback mechanisms
+- Partial processing completion
 
-### Performance Considerations
-- Wait node adds minimal latency for proper synchronization
-- Enhanced code is optimized for readability and maintainability
-- No additional external API calls required
+**AI Processing Errors:**
+- API timeout handling
+- Response parsing validation
+- Retry mechanisms for transient failures
+- Fallback to basic analysis if needed
 
-This comprehensive redesign addresses all identified root causes while maintaining the workflow's existing functionality and improving its reliability and professional output quality.
+### Performance Optimization
+
+**File Handling:**
+- Stream processing for large files
+- Temporary file cleanup
+- Memory-efficient content extraction
+- Progress indicators for long operations
+
+**AI Processing:**
+- Batch processing where possible
+- Async API calls for multiple documents
+- Response caching for similar content
+- Token usage optimization
+
+## 📊 Progress Tracking & User Experience
+
+**Real-time Status Updates:**
+```
+Processing Stages Display:
+├── 📋 Form Validation ✅
+├── 📄 File Upload ✅
+├── 🔍 Content Extraction ⏳
+├── 🤖 AI Analysis ⏳
+├── 🔀 Data Merging ⏳
+└── 📧 Findings Generation ⏳
+```
+
+**Professional UI Elements:**
+- Bernhardt Riley branding
+- Legal color scheme (navy, gold, white)
+- Professional typography
+- Clear progress indicators
+- Error messages in plain English
+
+## 🚀 Deployment & Configuration
+
+**Environment Setup:**
+```
+Required Dependencies:
+├── streamlit
+├── openai
+├── requests (PDF.co API)
+├── python-docx
+├── email (built-in)
+├── pydantic (data validation)
+├── python-magic (file type detection)
+└── streamlit-aggrid (enhanced file display)
+```
+
+**Configuration Management:**
+```python
+API Configuration:
+├── PDF.co API key
+├── OpenAI API key
+├── File size limits
+├── Processing timeouts
+└── Email templates
+```
+
+## 🔄 Migration Strategy
+
+**Phase 1: Core Structure (Week 1)**
+- Basic Streamlit app setup
+- File upload interface
+- Session state management
+
+**Phase 2: File Processing (Week 2)**
+- Multi-format file handlers
+- PDF.co integration
+- Content extraction pipeline
+
+**Phase 3: AI Integration (Week 3)**
+- OpenAI API integration
+- Prompt engineering
+- Response processing
+
+**Phase 4: Results Generation (Week 4)**
+- Email generation
+- Download functionality
+- Professional formatting
+
+**Phase 5: Testing & Refinement (Week 5)**
+- End-to-end testing
+- Error handling
+- Performance optimization
+
+## 📈 Future Enhancements
+
+**Phase 6: Extended File Support**
+- Image processing (OCR with Tesseract/AWS Textract)
+- Video processing (transcript generation)
+- Audio file support
+- Advanced document analysis

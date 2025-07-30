@@ -1,5 +1,5 @@
 // Configuration
-const WEBHOOK_URL = 'https://brflorida.app.n8n.cloud/webhook/legal-analysis-upload';
+const WEBHOOK_URL = 'http://localhost:8000/api/legal-analysis-upload'; // Will be replaced with Railway URL
 const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB in bytes
 
 import { AnalysisResult } from './components/types';
@@ -275,14 +275,10 @@ async function handleSubmit(e: Event): Promise<void> {
   formData.append('caseReference', (document.getElementById('caseReference') as HTMLInputElement).value);
   formData.append('attorneyName', (document.getElementById('attorneyName') as HTMLInputElement).value);
   
-  // Add intake form file with the exact name n8n expects
-  formData.append('intakeForm', intakeForm.file);
-  
-  // Add case documents
-  let fileIndex = 0;
+  // Add all files under the 'files' key
+  formData.append('files', intakeForm.file);
   caseDocuments.forEach((fileData) => {
-    formData.append(`caseDocument${fileIndex}`, fileData.file);
-    fileIndex++;
+    formData.append('files', fileData.file);
   });
   
   // Show processing status
@@ -311,20 +307,8 @@ async function handleSubmit(e: Event): Promise<void> {
         let rawResult = await response.json();
         console.log('Full n8n response:', rawResult);
 
-        // Check for nested responseBody and parse if necessary
-        if (rawResult && typeof rawResult.responseBody === 'string') {
-          try {
-            // Attempt to parse the nested JSON string
-            result = JSON.parse(rawResult.responseBody);
-            console.log('Parsed nested responseBody:', result);
-          } catch (nestedJsonError) {
-            console.error('Failed to parse nested responseBody JSON:', nestedJsonError);
-            result = null; // Ensure result is null if parsing fails
-          }
-        } else if (rawResult && typeof rawResult === 'object') {
-          // Handle cases where the response is already the correct object
-          result = rawResult;
-        }
+        // The new FastAPI backend returns the JSON directly
+        result = rawResult;
         
       } catch (jsonError) {
         console.warn('Failed to parse JSON response:', jsonError);

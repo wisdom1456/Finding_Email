@@ -1,0 +1,249 @@
+{
+  "name": "2_ai_processing",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "module-2-trigger",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -752,
+        368
+      ],
+      "id": "c7771233-8c8e-4c60-8707-56e3cb54ae12",
+      "name": "Webhook",
+      "webhookId": "f9d1b1e3-8d4a-4b1e-8e3c-2d5f1b1a4b1e"
+    },
+    {
+      "parameters": {
+        "jsCode": "const outputs = [];\n\nfor (const item of $input.all()) {\n  const structuredFromNode = item.json?.structuredData || {};\n  const data = item.json ?? {};\n  const documentType = data.documentType || 'intakeForm';\n\n  const formFields = Array.isArray(data.formFields) ? data.formFields : (Array.isArray(data?.body?.FieldsInfo?.Fields) ? data.body.FieldsInfo.Fields : []);\n  const text = typeof data.text === 'string' ? data.text : '';\n\n  const fieldMap = Object.fromEntries(formFields.map(f => [String(f.FieldName || '').trim(), f.Value ?? '']));\n\n  const sdCase = structuredFromNode.caseInfo || {};\n  const clientName = sdCase.clientName || '';\n  const attorneyName = sdCase.attorneyName || '';\n  const caseRef = sdCase.caseReference || '';\n\n  const clientNameFromFields = fieldMap['Client Name'] || fieldMap['clientName'] || clientName;\n  const attorneyNameFromFields = fieldMap['Attorney Name'] || fieldMap['attorneyName'] || attorneyName;\n  const caseRefFromFields = fieldMap['Case Reference'] || fieldMap['caseReference'] || caseRef;\n\n  const promptText = `Analyze the following legal document and extract key information.\\nDocument Type: ${documentType}\\nClient Name: ${clientNameFromFields}\\nAttorney Name: ${attorneyNameFromFields}\\nCase Reference: ${caseRefFromFields}\\n\\nDocument Content:\\n${text}\\n\\nForm Fields:\\n${JSON.stringify(fieldMap, null, 2)}\\n\\nPlease structure the output in JSON format with the following keys: 'summary', 'keyFacts', 'partiesInvolved', 'potentialIssues'.`;\n\n  outputs.push({\n    json: {\n      aiPrompt: promptText,\n      documentType: documentType,\n      structuredData: structuredFromNode\n    }\n  });\n}\n\nreturn outputs;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -528,
+        368
+      ],
+      "id": "c7771233-8c8e-4c60-8707-56e3cb54ae13",
+      "name": "Build AI Prompt"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4o-mini",
+          "mode": "list",
+          "cachedResultName": "GPT-4o-mini"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "={{$json.aiPrompt}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.8,
+      "position": [
+        -304,
+        368
+      ],
+      "id": "56a5c883-c7d8-483e-8ebb-11e790c8e7c5",
+      "name": "OpenAI Dynamic",
+      "credentials": {
+        "openAiApi": {
+          "id": "Cw2fFTz1VBPuCSPE",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// This node ensures 'documentType' and 'caseId' are preserved after the OpenAI call.\nconst openAIResult = $input.first().json;\nconst originalData = $items('Build AI Prompt')[0].json;\n\n// Re-structure the output to carry through essential data\nreturn [{\n  json: {\n    ...openAIResult,\n    documentType: originalData.documentType,\n    // Ensure structuredData (containing caseId) is passed through\n    structuredData: originalData.structuredData\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        96,
+        368
+      ],
+      "id": "5de2440f-c7dc-468f-8539-d7fcef17ba1f",
+      "name": "Add DocumentType"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "operator": "or",
+          "conditions": [
+            {
+              "value1": "={{$json.documentType}}",
+              "operation": "equal",
+              "value2": "intakeForm"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        320,
+        368
+      ],
+      "id": "0e3906f0-e93f-4959-9eea-7fe08342edca",
+      "name": "Route by Document Type"
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nreturn [{ json: { parsedData: item.message.content, documentType: 'intakeForm' } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        544,
+        272
+      ],
+      "id": "7850bc76-f757-4073-8755-3982cc0c3b33",
+      "name": "Parse Intake AI JSON"
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nreturn [{ json: { parsedData: item.message.content, documentType: 'caseDocument' } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        544,
+        464
+      ],
+      "id": "b03509bd-fb00-4c69-99e4-a23aaa354dd8",
+      "name": "Parse Case Docs AI JSON"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:5678/webhook/module-3-trigger",
+        "sendBody": true,
+        "body": "={{$json}}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        768,
+        272
+      ],
+      "id": "3e6f5fdf-c4e9-4a4a-b8e7-8f8f8f8f8f8f",
+      "name": "Send to Module 3 (Intake)"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:5678/webhook/module-3-trigger",
+        "sendBody": true,
+        "body": "={{$json}}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        768,
+        464
+      ],
+      "id": "3e6f5fdf-c4e9-4a4a-b8e7-8f8f8f8f8f8g",
+      "name": "Send to Module 3 (Case Docs)"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Build AI Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build AI Prompt": {
+      "main": [
+        [
+          {
+            "node": "OpenAI Dynamic",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Dynamic": {
+      "main": [
+        [
+          {
+            "node": "Add DocumentType",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Add DocumentType": {
+      "main": [
+        [
+          {
+            "node": "Route by Document Type",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route by Document Type": {
+      "main": [
+        [
+          {
+            "node": "Parse Intake AI JSON",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Parse Case Docs AI JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Intake AI JSON": {
+      "main": [
+        [
+          {
+            "node": "Send to Module 3 (Intake)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Case Docs AI JSON": {
+      "main": [
+        [
+          {
+            "node": "Send to Module 3 (Case Docs)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

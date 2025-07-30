@@ -1,0 +1,186 @@
+{
+  "name": "Part 3: Merge and Respond",
+  "nodes": [
+    {
+      "parameters": {
+        "jsCode": "// Merge Validator Node\n// This node validates the merged case data structure and adds final validation metadata\n// Ensures the unified case file meets all quality requirements\n\n// Get the input data from the Case Data Merger node\nconst inputData = $input.first().json;\n\n// Initialize validation result\nconst validationResult = {\n  isValid: true,\n  errors: [],\n  validatedUnifiedCaseFile: null,\n  processingTimestamp: new Date().toISOString(),\n  validationMetadata: {\n    nodeType: \"merge-validator\",\n    validationLevel: \"final\",\n    validationRules: [\n      \"unified_structure_check\",\n      \"required_fields_validation\",\n      \"data_integrity_check\",\n      \"processing_status_validation\"\n    ],\n    validationStatus: \"processing\"\n  }\n};\n\n// Validate that we received valid merge data\nif (!inputData || !inputData.isValid) {\n  validationResult.isValid = false;\n  validationResult.errors.push(\"Invalid input: Previous merge step failed\");\n  if (inputData && inputData.errors) {\n    validationResult.errors = validationResult.errors.concat(inputData.errors);\n  }\n  return [{ json: validationResult }];\n}\n\n// Extract the unified case file\nconst unifiedCaseFile = inputData.unifiedCaseFile;\nif (!unifiedCaseFile) {\n  validationResult.isValid = false;\n  validationResult.errors.push(\"No unified case file found in merge result\");\n  return [{ json: validationResult }];\n}\n\n// Validation Rule 1: Unified Structure Check\nconst requiredTopLevelFields = ['caseId', 'createdAt', 'status', 'caseInfo', 'intakeFormData', 'caseDocumentsAnalysis', 'processingSummary'];\nconst missingFields = [];\n\nfor (const field of requiredTopLevelFields) {\n  if (!unifiedCaseFile.hasOwnProperty(field)) {\n    missingFields.push(field);\n  }\n}\n\nif (missingFields.length > 0) {\n  validationResult.isValid = false;\n  validationResult.errors.push(`Missing required top-level fields: ${missingFields.join(', ')}`);\n}\n\n// Validation Rule 2: Required Fields Validation\nif (!unifiedCaseFile.caseId || typeof unifiedCaseFile.caseId !== 'string') {\n  validationResult.isValid = false;\n  validationResult.errors.push(\"caseId must be a non-empty string\");\n}\n\nif (!unifiedCaseFile.createdAt || typeof unifiedCaseFile.createdAt !== 'string') {\n  validationResult.isValid = false;\n  validationResult.errors.push(\"createdAt must be a valid timestamp string\");\n}\n\nif (!unifiedCaseFile.status || !['completed', 'partial_success', 'failed'].includes(unifiedCaseFile.status)) {\n  validationResult.isValid = false;\n  validationResult.errors.push(\"status must be one of: completed, partial_success, failed\");\n}\n\n// Validation Rule 3: Data Integrity Check\nif (!unifiedCaseFile.processingSummary || typeof unifiedCaseFile.processingSummary !== 'object') {\n  validationResult.isValid = false;\n  validationResult.errors.push(\"processingSummary must be an object\");\n} else {\n  const summary = unifiedCaseFile.processingSummary;\n  \n  if (typeof summary.totalBranchesProcessed !== 'number' || summary.totalBranchesProcessed < 0) {\n    validationResult.isValid = false;\n    validationResult.errors.push(\"processingSummary.totalBranchesProcessed must be a non-negative number\");\n  }\n  \n  if (typeof summary.successfulBranches !== 'number' || summary.successfulBranches < 0) {\n    validationResult.isValid = false;\n    validationResult.errors.push(\"processingSummary.successfulBranches must be a non-negative number\");\n  }\n  \n  if (typeof summary.failedBranches !== 'number' || summary.failedBranches < 0) {\n    validationResult.isValid = false;\n    validationResult.errors.push(\"processingSummary.failedBranches must be a non-negative number\");\n  }\n  \n  // Validate that the sum matches total\n  if (summary.successfulBranches + summary.failedBranches !== summary.totalBranchesProcessed) {\n    validationResult.isValid = false;\n    validationResult.errors.push(\"processingSummary branch counts do not add up correctly\");\n  }\n}\n\n// Validation Rule 4: Processing Status Validation\nif (!unifiedCaseFile.intakeFormData || typeof unifiedCaseFile.intakeFormData !== 'object') {\n  validationResult.isValid = false;\n  validationResult.errors.push(\"intakeFormData must be an object\");\n} else {\n  const intakeStatus = unifiedCaseFile.intakeFormData.status;\n  if (!['processed', 'failed', 'not_processed'].includes(intakeStatus)) {\n    validationResult.isValid = false;\n    validationResult.errors.push(\"intakeFormData.status must be one of: processed, failed, not_processed\");\n  }\n}\n\nif (!unifiedCaseFile.caseDocumentsAnalysis || typeof unifiedCaseFile.caseDocumentsAnalysis !== 'object') {\n  validationResult.isValid = false;\n  validationResult.errors.push(\"caseDocumentsAnalysis must be an object\");\n} else {\n  const caseDocsStatus = unifiedCaseFile.caseDocumentsAnalysis.status;\n  if (!['processed', 'failed', 'not_processed'].includes(caseDocsStatus)) {\n    validationResult.isValid = false;\n    validationResult.errors.push(\"caseDocumentsAnalysis.status must be one of: processed, failed, not_processed\");\n  }\n}\n\n// If validation passes, add final validation metadata\nif (validationResult.errors.length === 0) {\n  const finalValidatedCaseFile = {\n    ...unifiedCaseFile,\n    finalValidation: {\n      validatedAt: new Date().toISOString(),\n      validationLevel: \"final\",\n      validationStatus: \"passed\",\n      validatorVersion: \"1.0.0\",\n      originalMergeTimestamp: inputData.processingTimestamp,\n      mergeMetadata: inputData.mergeMetadata || {}\n    }\n  };\n  \n  validationResult.validatedUnifiedCaseFile = finalValidatedCaseFile;\n  validationResult.validationMetadata.validationStatus = \"completed\";\n  validationResult.message = \"Unified case file successfully validated and finalized\";\n} else {\n  validationResult.isValid = false;\n  validationResult.validationMetadata.validationStatus = \"failed\";\n}\n\n// Preserve original merge data for reference\nvalidationResult.originalMergeData = {\n  mergeResult: inputData,\n  mergeTimestamp: inputData.processingTimestamp\n};\n\n// Return the validation result\nreturn [{ json: validationResult }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1248,
+        768
+      ],
+      "id": "6348f32f-798a-4ee3-bb92-5f24ea705bea",
+      "name": "Merge Validator"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4o",
+          "mode": "list",
+          "cachedResultName": "GPT-4O"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "={{ $json.emailPrompt }}"
+            }
+          ]
+        },
+        "options": {
+          "maxTokens": 4000,
+          "temperature": 0.3
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.8,
+      "position": [
+        1920,
+        768
+      ],
+      "id": "0fce912e-966a-4839-aff8-0f5cd2c93ee9",
+      "name": "Generate Email Findings Letter",
+      "credentials": {
+        "openAiApi": {
+          "id": "Cw2fFTz1VBPuCSPE",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Format Email Response - Get case info from Prepare Email Prompt node\nconst emailContent = $input.first().json.message.content;\n\n// Get the case info from the Prepare Email Prompt node (not current input)\nconst prepareEmailData = $items(\"Prepare Email Prompt\")[0]?.json || {};\nconst clientName = prepareEmailData.clientName || \"Client\";\nconst attorneyName = prepareEmailData.attorneyName || \"Attorney\";\nconst caseReference = prepareEmailData.caseReference || \"CASE-UNKNOWN\";\n\n// Get case file for additional metadata, guarding against missing values\nconst mergeValidatorData = $items(\"Merge Validator\")[0]?.json || {};\nconst caseFile = mergeValidatorData.validatedUnifiedCaseFile || {};\nconst caseId = caseFile.caseId || \"UNKNOWN_CASE_ID\";\n\n// Clean up the email content\nlet emailBody = emailContent.replace(/^```\\\\s*|```\\\\s*$/g, '').trim();\n\n// Extract subject if present\nlet subject = `Legal Analysis Findings - ${caseReference}`;\nconst subjectMatch = emailBody.match(/Subject:\\\\s*(.+)/i);\nif (subjectMatch) {\n  subject = subjectMatch[1].trim();\n  emailBody = emailBody.replace(/Subject:\\\\s*.+\\\\n?/i, '').trim();\n}\n\n// Create email file content with ACTUAL values\nconst currentDate = new Date();\nconst attorneyEmail = attorneyName.toLowerCase().replace(/[^a-z]/g, '') + '@brflorida.com';\nconst clientEmail = clientName.toLowerCase().replace(/[^a-z]/g, '') + '@client.com';\n\nconst emlContent = `From: ${attorneyName} <${attorneyEmail}>\\nTo: ${clientName} <${clientEmail}>\\nSubject: ${subject}\\nDate: ${currentDate.toUTCString()}\\nMIME-Version: 1.0\\nContent-Type: text/plain; charset=utf-8\\n\\n${emailBody}\\n\\n---\\nGenerated by Legal Document Analysis Portal\\nCase ID: ${caseId}\\nProcessed: ${currentDate.toISOString()}`;\n\n// Create downloadable files\nconst emlBase64 = Buffer.from(emlContent, 'utf8').toString('base64');\nconst txtBase64 = Buffer.from(emailBody, 'utf8').toString('base64');\n\nconst cleanCaseRef = caseReference.replace(/[^a-zA-Z0-9]/g, '_');\nconst dateStr = currentDate.toISOString().split('T')[0];\n\nreturn [{\n  json: {\n    status: \"success\",\n    message: `✅ Legal Analysis Complete! Generated findings email for ${clientName}.`,\n    documentsProcessed: 2,\n    downloadLinks: {\n      findingsLetter: `data:message/rfc822;base64,${emlBase64}`,\n      caseAnalysis: `data:text/plain;base64,${txtBase64}`,\n      executiveSummary: `data:text/plain;base64,${txtBase64}`\n    },\n    emailDetails: {\n      subject: subject,\n      from: `${attorneyName} <${attorneyEmail}>`,\n      to: `${clientName} <${clientEmail}>`,\n      emlFileName: `Findings_${cleanCaseRef}_${dateStr}.eml`\n    },\n    caseInfo: {\n      caseId: caseId,\n      clientName: clientName,\n      attorneyName: attorneyName,\n      caseReference: caseReference\n    },\n    analysisComplete: true,\n    readyForDownload: true\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2320,
+        768
+      ],
+      "id": "dfd0d1ab-508b-45a8-9014-039f01bb5867",
+      "name": "Format Email Response"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Enhanced Prepare Email Prompt with Complete Data Access\nconst inputData = $input.first().json || {};\nconst caseFile = inputData.validatedUnifiedCaseFile || {};\n\n// Access intake data with enhanced fallback logic\nlet intake = {};\nlet clientName = 'Client';\nlet attorneyName = 'Attorney';  \nlet caseReference = 'CASE-001';\n\nif (caseFile && typeof caseFile === 'object') {\n  // Primary: Try to get from processed intake data\n  if (caseFile.intakeFormData && caseFile.intakeFormData.data) {\n    intake = caseFile.intakeFormData.data;\n    clientName = intake.clientInfo?.clientName || clientName;\n    attorneyName = intake.attorneyInfo?.attorneyName || attorneyName;\n    caseReference = intake.caseInfo?.caseReference || caseReference;\n  }\n  \n  // Secondary: Try to get from caseInfo (fallback populated in merger)\n  if (caseFile.caseInfo) {\n    clientName = caseFile.caseInfo.clientName || clientName;\n    attorneyName = caseFile.caseInfo.attorneyName || attorneyName;\n    caseReference = caseFile.caseInfo.caseReference || caseReference;\n  }\n  \n  // Tertiary: Check if fallback was used in processing details\n  if (caseFile.intakeFormData?.processingDetails?.fallbackUsed && caseFile.intakeFormData?.processingDetails?.fallbackData) {\n    const fallbackData = caseFile.intakeFormData.processingDetails.fallbackData;\n    clientName = fallbackData.clientName || clientName;\n    attorneyName = fallbackData.attorneyName || attorneyName;\n    caseReference = fallbackData.caseReference || caseReference;\n  }\n}\n\n// Build comprehensive case details with both branches\nlet caseDetails = `This case involves ${clientName}. Processing Results:\\\\n`;\n\n// Intake processing status\nif (caseFile.intakeFormData) {\n  caseDetails += `- Intake form: ${caseFile.intakeFormData.status}`;\n  if (caseFile.intakeFormData.status === \"failed\" && caseFile.intakeFormData.processingDetails?.fallbackUsed) {\n    caseDetails += ` (using fallback data)`;\n  }\n  caseDetails += `\\\\n`;\n}\n\n// Case documents processing status  \nif (caseFile.caseDocumentsAnalysis) {\n  caseDetails += `- Case documents: ${caseFile.caseDocumentsAnalysis.status}\\\\n`;\n}\n\n// Add processing summary\nif (caseFile.processingSummary) {\n  caseDetails += `\\\\nProcessing Summary: ${caseFile.processingSummary.successfulBranches} of ${caseFile.processingSummary.totalBranchesProcessed} branches completed successfully.`;\n}\n\n// Enhanced prompt with better context\nconst emailPrompt = `Write a professional legal findings email using these EXACT values:\\n\\nCLIENT NAME: ${clientName}\\nATTORNEY NAME: ${attorneyName}  \\nCASE REFERENCE: ${caseReference}\\n\\nIMPORTANT: Use the actual names above, NOT template variables.\\n\\nCase Processing Information:\\n${caseDetails}\\n\\nWrite a professional legal findings email that:\\n1. Uses the EXACT names provided above\\n2. Acknowledges the current processing status  \\n3. Provides appropriate guidance based on available information\\n4. Maintains professional tone regardless of processing completeness\\n5. Indicates if additional documents may improve the analysis\\n\\nFormat:\\nSubject: Legal Analysis Findings - ${caseReference}\\n\\nDear ${clientName},\\n\\nI have completed the initial analysis of your legal matter (Case Reference: ${caseReference}). \\n\\n[Professional content based on available data]\\n\\nPlease let me know if you have any questions or if additional documentation becomes available.\\n\\nSincerely,\\n${attorneyName}\\nBernhardt Riley Attorneys at Law`;\n\nreturn [{\n  json: {\n    emailPrompt,\n    clientName,\n    attorneyName,\n    caseReference,\n    originalData: inputData,\n    processingMetadata: {\n      caseStatus: caseFile.status || 'unknown',\n      intakeStatus: caseFile.intakeFormData?.status || 'unknown',\n      documentsStatus: caseFile.caseDocumentsAnalysis?.status || 'unknown'\n    }\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1472,
+        768
+      ],
+      "id": "82c27c03-f0ad-440e-90bb-602f3078bff3",
+      "name": "Prepare Email Prompt"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Final Response Formatter\n// Ensures clean JSON response for frontend\n\nconst responseData = $input.first().json;\n\n// Return the data in the exact format needed for the webhook response\nreturn [{ json: responseData }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2544,
+        768
+      ],
+      "id": "a299a0b2-3645-42a9-81cb-d78501ed912c",
+      "name": "Final Response Formatter"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Debug what data is being sent to OpenAI\nconst inputData = $input.first().json;\n\nconsole.log(\"=== PROMPT DEBUG ===\");\nconsole.log(\"Client Name:\", inputData.clientName);\nconsole.log(\"Attorney Name:\", inputData.attorneyName);\nconsole.log(\"Case Reference:\", inputData.caseReference);\nconsole.log(\"Email Prompt Length:\", inputData.emailPrompt ? inputData.emailPrompt.length : \"NO PROMPT\");\nconsole.log(\"Original Data Keys:\", Object.keys(inputData.originalData || {}));\n\n// Show first 500 chars of prompt\nif (inputData.emailPrompt) {\n  console.log(\"Prompt Preview:\", inputData.emailPrompt.substring(0, 500) + \"...\");\n}\n\n// Check if case file has actual document data\nconst caseFile = inputData.originalData?.validatedUnifiedCaseFile;\nif (caseFile) {\n  console.log(\"=== CASE FILE DEBUG ===\");\n  console.log(\"Intake Status:\", caseFile.intakeFormData?.status);\n  console.log(\"Documents Status:\", caseFile.caseDocumentsAnalysis?.status);\n  \n  if (caseFile.intakeFormData?.data) {\n    console.log(\"Intake Data:\", JSON.stringify(caseFile.intakeFormData.data, null, 2));\n  }\n  \n  if (caseFile.caseDocumentsAnalysis?.data) {\n    console.log(\"Document Analysis:\", JSON.stringify(caseFile.caseDocumentsAnalysis.data, null, 2));\n  }\n}\n\n// Pass through unchanged\nreturn [{ json: inputData }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1696,
+        768
+      ],
+      "id": "3a9d06fb-22e0-4660-a9b9-1a81f3ecc966",
+      "name": "Debug Prompt Data"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "3b9d06fb-22e0-4660-a9b9-1a81f3ecc967",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        2768,
+        768
+      ]
+    }
+  ],
+  "connections": {
+    "6348f32f-798a-4ee3-bb92-5f24ea705bea": {
+      "main": [
+        [
+          {
+            "id": "82c27c03-f0ad-440e-90bb-602f3078bff3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "82c27c03-f0ad-440e-90bb-602f3078bff3": {
+      "main": [
+        [
+          {
+            "id": "3a9d06fb-22e0-4660-a9b9-1a81f3ecc966",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "3a9d06fb-22e0-4660-a9b9-1a81f3ecc966": {
+      "main": [
+        [
+          {
+            "id": "0fce912e-966a-4839-aff8-0f5cd2c93ee9",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "0fce912e-966a-4839-aff8-0f5cd2c93ee9": {
+      "main": [
+        [
+          {
+            "id": "dfd0d1ab-508b-45a8-9014-039f01bb5867",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "dfd0d1ab-508b-45a8-9014-039f01bb5867": {
+      "main": [
+        [
+          {
+            "id": "a299a0b2-3645-42a9-81cb-d78501ed912c",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "a299a0b2-3645-42a9-81cb-d78501ed912c": {
+      "main": [
+        [
+          {
+            "id": "3b9d06fb-22e0-4660-a9b9-1a81f3ecc967",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

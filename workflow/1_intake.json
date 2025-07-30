@@ -1,0 +1,270 @@
+{
+  "name": "1_intake",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "legal-analysis-upload",
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "https://findingemail-0w07x.kinsta.page",
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "https://findingemail-0w07x.kinsta.page"
+              },
+              {
+                "name": "Access-Control-Allow-Methods",
+                "value": "POST, OPTIONS"
+              },
+              {
+                "name": "Access-Control-Allow-Headers",
+                "value": "Content-Type"
+              }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -2320,
+        368
+      ],
+      "id": "004fee53-a778-43f0-8367-8966f47170f7",
+      "name": "Webhook",
+      "webhookId": "6d7fe8eb-8786-4526-88ad-5cd8fbf1c6c6"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Step 2: Data Structure Validation for Legal Document Analysis\n// This code validates incoming form data and ensures it matches our expected schema\n\n// First, let's extract the incoming data from the webhook\n// Based on Step 1 findings, form data is nested in the 'body' property\nconst incomingData = $input.first().json;\n\n// Initialize our validation results object\nconst validationResult = {\n  isValid: false,\n  errors: [],\n  validatedData: null,\n  processingTimestamp: new Date().toISOString()\n};\n\n// Check if the basic structure exists\n// We expect data to be in incomingData.body based on Step 1 findings\nif (!incomingData.body) {\n  validationResult.errors.push(\"Missing form data structure. Expected 'body' property not found.\");\n  return [{ json: validationResult }];\n}\n\nconst formData = incomingData.body;\n\n// Validate required fields according to Form_Output_Documentation.md\n// Required fields: clientName and attorneyName\nconst requiredFields = ['clientName', 'attorneyName'];\n\nfor (const field of requiredFields) {\n  if (!formData[field]) {\n    validationResult.errors.push(`Missing required field: ${field}`);\n  } else if (typeof formData[field] !== 'string') {\n    validationResult.errors.push(`Field ${field} must be a string`);\n  } else if (formData[field].trim().length === 0) {\n    validationResult.errors.push(`Field ${field} cannot be empty`);\n  }\n}\n\n// Validate optional field (caseReference) if present\nif (formData.caseReference && typeof formData.caseReference !== 'string') {\n  validationResult.errors.push(\"Field caseReference must be a string\");\n}\n\n// If we have errors, return them immediately\nif (validationResult.errors.length > 0) {\n  validationResult.isValid = false;\n  return [{ json: validationResult }];\n}\n\n// If validation passes, prepare clean data structure\nconst cleanData = {\n  clientName: formData.clientName.trim(),\n  caseReference: formData.caseReference ? formData.caseReference.trim() : '',\n  attorneyName: formData.attorneyName.trim()\n};\n\n// Set success status and return validated data\nvalidationResult.isValid = true;\nvalidationResult.validatedData = cleanData;\nvalidationResult.message = \"Form data validation successful\";\n\nreturn [{ json: validationResult }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2096,
+        368
+      ],
+      "id": "ef9da563-774e-4049-8b75-f4ca01b0a402",
+      "name": "Validate Form Data"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Step 3: Intake Form Data Processing\n// This node structures the validated intake form data into a standardized format\n// Based on the established pattern from the proposed workflow's caseInfo structure\n\nconst validationData = $input.first().json;\n\n// Only process if validation was successful\nif (!validationData.isValid) {\n  // Pass through validation errors unchanged\n  return [{ json: validationData }];\n}\n\n// Extract the clean validated data\nconst validatedFields = validationData.validatedData;\n\n// Structure the intake form data into standardized JSON format\n// Following the caseInfo pattern from the proposed workflow\nconst structuredIntakeData = {\n  caseInfo: {\n    clientName: validatedFields.clientName,\n    caseReference: validatedFields.caseReference || `CASE-${new Date().toISOString().split('T')[0]}`,\n    attorneyName: validatedFields.attorneyName,\n    processingDate: new Date().toISOString()\n  },\n  dataProcessingStatus: {\n    intakeFormProcessed: true,\n    structuredAt: new Date().toISOString(),\n    dataQuality: 'validated'\n  },\n  nextStage: 'document-processing'\n};\n\n// Return the structured data with success metadata\nreturn [{\n  json: {\n    isValid: true,\n    structuredData: structuredIntakeData,\n    processingTimestamp: validationData.processingTimestamp,\n    message: 'Intake form data successfully structured for processing'\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1872,
+        368
+      ],
+      "id": "3755b04b-32ae-4cb6-81ab-0daecbb81986",
+      "name": "Structure Intake Data"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract all binary files (intakeForm + caseDocument*) from Webhook\nconst intakeResult = $input.first().json;\nconst structuredData = intakeResult.structuredData; // passed along\nconst webhookItems = $items('Webhook'); // get ALL files from Webhook node\n\nconst outputs = [];\ntry {\n  const intakeResult = $input.first().json;\n  const structuredData = intakeResult.structuredData;\n  const webhookItems = $items('Webhook');\n  \n  for (const item of webhookItems) {\n    const binary = item.binary || {};\n\n  for (const [key, bin] of Object.entries(binary)) {\n    if (!bin?.data) continue;\n\n    const isIntake = key === 'intakeForm';\n\n    outputs.push({\n      json: {\n        documentType: isIntake ? 'intakeForm' : 'caseDocument',\n        documentId: isIntake ? 'intake-form' : key,\n        meta: {\n          fileName: bin.fileName,\n          mimeType: bin.mimeType,\n          fileSize: bin.fileSize\n        },\n        structuredData\n      },\n      binary: {\n        data: bin\n      }\n    });\n  }\n  }\n  return outputs;\n} catch (error) {\n  console.error('Error processing binary files:', error);\n  return [{ json: { error: error.message } }];\n}"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1648,
+        368
+      ],
+      "id": "f2457798-309e-481a-a4c3-bf10a505e9db",
+      "name": "Extract Binary Files"
+    },
+    {
+      "parameters": {
+        "jsCode": "// In Filter PDFs\nconst inputItems = $input.all();\nconst pdfItems = inputItems.filter(item => {\n  const mimeType = item.json.meta?.mimeType;\n  if (!mimeType) {\n    console.warn('Item missing mimeType:', item.json);\n    return false;\n  }\n  return mimeType === 'application/pdf';\n});\n\nif (pdfItems.length === 0) {\n  throw new Error('No PDF files found to process');\n}\n\nreturn pdfItems;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1424,
+        368
+      ],
+      "id": "e545fc36-3f69-46ab-8643-2ad13422bace",
+      "name": "Filter PDFs"
+    },
+    {
+      "parameters": {
+        "operation": "Upload File to PDF.co",
+        "binaryData": true,
+        "name": "aFile"
+      },
+      "type": "n8n-nodes-pdfco.PDFco Api",
+      "typeVersion": 1,
+      "position": [
+        -1200,
+        368
+      ],
+      "id": "131f2766-8446-4612-9692-d01265bef940",
+      "name": "Upload File to PDF.co",
+      "credentials": {
+        "pdfcoApi": {
+          "id": "uUrPGbHmYX5odTS2",
+          "name": "PDF.co account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "PDF Information & Form Fields",
+        "url": "={{ $('Upload File to PDF.co').item.json.url }}",
+        "fields": true,
+        "advancedOptions": {}
+      },
+      "type": "n8n-nodes-pdfco.PDFco Api",
+      "typeVersion": 1,
+      "position": [
+        -976,
+        272
+      ],
+      "id": "2a07f85c-1483-4d73-8d3e-cd1afaac6cc8",
+      "name": "PDFco Form Fields",
+      "notesInFlow": false,
+      "credentials": {
+        "pdfcoApi": {
+          "id": "uUrPGbHmYX5odTS2",
+          "name": "PDF.co account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "Convert from PDF",
+        "url": "={{ $('Upload File to PDF.co').item.json.url }}",
+        "advancedOptions": {}
+      },
+      "type": "n8n-nodes-pdfco.PDFco Api",
+      "typeVersion": 1,
+      "position": [
+        -976,
+        464
+      ],
+      "id": "393e558f-35d4-4d36-b155-6ced5fb9592d",
+      "name": "PDFco Api",
+      "credentials": {
+        "pdfcoApi": {
+          "id": "uUrPGbHmYX5odTS2",
+          "name": "PDF.co account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:5678/webhook/module-2-trigger",
+        "sendBody": true,
+        "body": "={{$json}}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        -752,
+        368
+      ],
+      "id": "3e6f5fdf-c4e9-4a4a-b8e7-8f8f8f8f8f8e",
+      "name": "Send to Module 2"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Validate Form Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Form Data": {
+      "main": [
+        [
+          {
+            "node": "Structure Intake Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structure Intake Data": {
+      "main": [
+        [
+          {
+            "node": "Extract Binary Files",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Binary Files": {
+      "main": [
+        [
+          {
+            "node": "Filter PDFs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter PDFs": {
+      "main": [
+        [
+          {
+            "node": "Upload File to PDF.co",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload File to PDF.co": {
+      "main": [
+        [
+          {
+            "node": "PDFco Form Fields",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "PDFco Api",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PDFco Form Fields": {
+      "main": [
+        [
+          {
+            "node": "Send to Module 2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PDFco Api": {
+      "main": [
+        [
+          {
+            "node": "Send to Module 2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

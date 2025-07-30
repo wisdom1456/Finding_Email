@@ -1,0 +1,166 @@
+{
+  "name": "4_response",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "module-4-trigger",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        1216,
+        368
+      ],
+      "id": "654dd247-d667-4545-9a3c-cc32c139c31d",
+      "name": "Webhook",
+      "webhookId": "a1b2c3d4-e5f6-a7b8-c9d0-e1f2a3b4c5d6"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Enhanced Prepare Email Prompt with Complete Data Access\nconst inputData = $input.first().json || {};\nconst caseFile = inputData.validatedUnifiedCaseFile || {};\n\n// Access intake data with enhanced fallback logic\nlet intake = {};\nlet clientName = 'Client';\nlet attorneyName = 'Attorney';  \nlet caseReference = 'CASE-001';\n\nif (caseFile && typeof caseFile === 'object') {\n  // Primary: Try to get from processed intake data\n  if (caseFile.intakeFormData && caseFile.intakeFormData.data) {\n    intake = caseFile.intakeFormData.data;\n    clientName = intake.clientInfo?.clientName || clientName;\n    attorneyName = intake.attorneyInfo?.attorneyName || attorneyName;\n    caseReference = intake.caseInfo?.caseReference || caseReference;\n  }\n  \n  // Secondary: Try to get from caseInfo (fallback populated in merger)\n  if (caseFile.caseInfo) {\n    clientName = caseFile.caseInfo.clientName || clientName;\n    attorneyName = caseFile.caseInfo.attorneyName || attorneyName;\n    caseReference = caseFile.caseInfo.caseReference || caseReference;\n  }\n  \n  // Tertiary: Check if fallback was used in processing details\n  if (caseFile.intakeFormData?.processingDetails?.fallbackUsed && caseFile.intakeFormData?.processingDetails?.fallbackData) {\n    const fallbackData = caseFile.intakeFormData.processingDetails.fallbackData;\n    clientName = fallbackData.clientName || clientName;\n    attorneyName = fallbackData.attorneyName || attorneyName;\n    caseReference = fallbackData.caseReference || caseReference;\n  }\n}\n\n// Build comprehensive case details with both branches\nlet caseDetails = `This case involves ${clientName}. Processing Results:\\\\n`;\n\n// Intake processing status\nif (caseFile.intakeFormData) {\n  caseDetails += `- Intake form: ${caseFile.intakeFormData.status}`;\n  if (caseFile.intakeFormData.status === \"failed\" && caseFile.intakeFormData.processingDetails?.fallbackUsed) {\n    caseDetails += ` (using fallback data)`;\n  }\n  caseDetails += `\\\\n`;\n}\n\n// Case documents processing status  \nif (caseFile.caseDocumentsAnalysis) {\n  caseDetails += `- Case documents: ${caseFile.caseDocumentsAnalysis.status}\\\\n`;\n}\n\n// Add processing summary\nif (caseFile.processingSummary) {\n  caseDetails += `\\\\nProcessing Summary: ${caseFile.processingSummary.successfulBranches} of ${caseFile.processingSummary.totalBranchesProcessed} branches completed successfully.`;\n}\n\n// Enhanced prompt with better context\nconst emailPrompt = `Write a professional legal findings email using these EXACT values:\\n\\nCLIENT NAME: ${clientName}\\nATTORNEY NAME: ${attorneyName}  \\nCASE REFERENCE: ${caseReference}\\n\\nIMPORTANT: Use the actual names above, NOT template variables.\\n\\nCase Processing Information:\\n${caseDetails}\\n\\nWrite a professional legal findings email that:\\n1. Uses the EXACT names provided above\\n2. Acknowledges the current processing status  \\n3. Provides appropriate guidance based on available information\\n4. Maintains professional tone regardless of processing completeness\\n5. Indicates if additional documents may improve the analysis\\n\\nFormat:\\nSubject: Legal Analysis Findings - ${caseReference}\\n\\nDear ${clientName},\\n\\nI have completed the initial analysis of your legal matter (Case Reference: ${caseReference}). \\n\\n[Professional content based on available data]\\n\\nPlease let me know if you have any questions or if additional documentation becomes available.\\n\\nSincerely,\\n${attorneyName}\\nBernhardt Riley Attorneys at Law`;\n\nreturn [{\n  json: {\n    emailPrompt,\n    clientName,\n    attorneyName,\n    caseReference,\n    originalData: inputData,\n    processingMetadata: {\n      caseStatus: caseFile.status || 'unknown',\n      intakeStatus: caseFile.intakeFormData?.status || 'unknown',\n      documentsStatus: caseFile.caseDocumentsAnalysis?.status || 'unknown'\n    }\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1440,
+        368
+      ],
+      "id": "620ebf07-82c1-4d29-a162-e40e7c98f5de",
+      "name": "Prepare Email Prompt"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4o",
+          "mode": "list",
+          "cachedResultName": "GPT-4O"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "={{ $json.emailPrompt }}"
+            }
+          ]
+        },
+        "options": {
+          "maxTokens": 4000,
+          "temperature": 0.3
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.8,
+      "position": [
+        1664,
+        368
+      ],
+      "id": "67d00cbe-4de7-43cd-8bff-8fe0c2058e00",
+      "name": "Generate Email Findings Letter",
+      "credentials": {
+        "openAiApi": {
+          "id": "Cw2fFTz1VBPuCSPE",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Format Email Response - Get case info from Prepare Email Prompt node\nconst emailContent = $input.first().json.message.content;\n\n// Get the case info from the Prepare Email Prompt node (not current input)\nconst prepareEmailData = $items(\"Prepare Email Prompt\")[0]?.json || {};\nconst clientName = prepareEmailData.clientName || \"Client\";\nconst attorneyName = prepareEmailData.attorneyName || \"Attorney\";\nconst caseReference = prepareEmailData.caseReference || \"CASE-UNKNOWN\";\n\n// Get case file for additional metadata, guarding against missing values\nconst mergeValidatorData = $items(\"Merge Validator\")[0]?.json || {};\nconst caseFile = mergeValidatorData.validatedUnifiedCaseFile || {};\nconst caseId = caseFile.caseId || \"UNKNOWN_CASE_ID\";\n\n// Clean up the email content\nlet emailBody = emailContent.replace(/^```\\\\s*|```\\\\s*$/g, '').trim();\n\n// Extract subject if present\nlet subject = `Legal Analysis Findings - ${caseReference}`;\nconst subjectMatch = emailBody.match(/Subject:\\\\s*(.+)/i);\nif (subjectMatch) {\n  subject = subjectMatch[1].trim();\n  emailBody = emailBody.replace(/Subject:\\\\s*.+\\\\n?/i, '').trim();\n}\n\n// Create email file content with ACTUAL values\nconst currentDate = new Date();\nconst attorneyEmail = attorneyName.toLowerCase().replace(/[^a-z]/g, '') + '@brflorida.com';\nconst clientEmail = clientName.toLowerCase().replace(/[^a-z]/g, '') + '@client.com';\n\nconst emlContent = `From: ${attorneyName} <${attorneyEmail}>\\nTo: ${clientName} <${clientEmail}>\\nSubject: ${subject}\\nDate: ${currentDate.toUTCString()}\\nMIME-Version: 1.0\\nContent-Type: text/plain; charset=utf-8\\n\\n${emailBody}\\n\\n---\\nGenerated by Legal Document Analysis Portal\\nCase ID: ${caseId}\\nProcessed: ${currentDate.toISOString()}`;\n\n// Create downloadable files\nconst emlBase64 = Buffer.from(emlContent, 'utf8').toString('base64');\nconst txtBase64 = Buffer.from(emailBody, 'utf8').toString('base64');\n\nconst cleanCaseRef = caseReference.replace(/[^a-zA-Z0-9]/g, '_');\nconst dateStr = currentDate.toISOString().split('T')[0];\n\nreturn [{\n  json: {\n    status: \"success\",\n    message: `✅ Legal Analysis Complete! Generated findings email for ${clientName}.`,\n    documentsProcessed: 2,\n    downloadLinks: {\n      findingsLetter: `data:message/rfc822;base64,${emlBase64}`,\n      caseAnalysis: `data:text/plain;base64,${txtBase64}`,\n      executiveSummary: `data:text/plain;base64,${txtBase64}`\n    },\n    emailDetails: {\n      subject: subject,\n      from: `${attorneyName} <${attorneyEmail}>`,\n      to: `${clientName} <${clientEmail}>`,\n      emlFileName: `Findings_${cleanCaseRef}_${dateStr}.eml`\n    },\n    caseInfo: {\n      caseId: caseId,\n      clientName: clientName,\n      attorneyName: attorneyName,\n      caseReference: caseReference\n    },\n    analysisComplete: true,\n    readyForDownload: true\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2064,
+        368
+      ],
+      "id": "1afc258a-6f9d-49e1-b89d-47ef27a862f0",
+      "name": "Format Email Response"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Final Response Formatter\n// Ensures clean JSON response for frontend\n\nconst responseData = $input.first().json;\n\n// Return the data in the exact format needed for the webhook response\nreturn [{ json: responseData }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2288,
+        368
+      ],
+      "id": "bb446906-a8ab-49d3-b27e-032abb371807",
+      "name": "Final Response Formatter"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "f56925d6-83be-43ca-a981-994fe6ec06c9",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        2512,
+        368
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Prepare Email Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Email Prompt": {
+      "main": [
+        [
+          {
+            "node": "Generate Email Findings Letter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Email Findings Letter": {
+      "main": [
+        [
+          {
+            "node": "Format Email Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Email Response": {
+      "main": [
+        [
+          {
+            "node": "Final Response Formatter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Final Response Formatter": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

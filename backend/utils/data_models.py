@@ -1,105 +1,188 @@
-from pydantic import BaseModel, Field
-from typing import List, Optional, Dict, Any
+from pydantic import BaseModel, Field, field_validator, validator
+from typing import List, Optional, Dict, Any, Union
 from enum import Enum
+from backend.utils.validators import stringify_dict
+
+# --- Enums for Type Safety and Consistency ---
 
 class FileType(str, Enum):
-    """
-    Enum for supported file types.
-    """
+    """Enum for supported file types."""
     PDF = "pdf"
     DOCX = "docx"
     DOC = "doc"
     EML = "eml"
     TXT = "txt"
+    IMAGE = "image"
+    UNSUPPORTED = "unsupported"
 
 class DocumentType(str, Enum):
-    """
-    Enum for document categories.
-    """
+    """Enum for document categories."""
     INTAKE_FORM = "intake_form"
     CASE_DOCUMENT = "case_document"
+    UNKNOWN = "unknown"
+
+class CaseType(str, Enum):
+    """Enum for legal case types."""
+    LANDLORD_TENANT = "Landlord/Tenant Dispute"
+    CONTRACT = "Contract Dispute"
+    PERSONAL_INJURY = "Personal Injury"
+    FAMILY_LAW = "Family Law"
+    OTHER = "Other"
+
+class UrgencyLevel(str, Enum):
+    """Enum for case urgency levels."""
+    LOW = "Low"
+    MEDIUM = "Medium"
+    HIGH = "High"
+    CRITICAL = "Critical"
+
+class EvidenceStrength(str, Enum):
+    """Enum for evidence strength assessment."""
+    WEAK = "Weak"
+    MODERATE = "Moderate"
+    STRONG = "Strong"
+    CONCLUSIVE = "Conclusive"
+
+# --- Core Data Processing Models ---
 
 class FileMetadata(BaseModel):
-    """
-    Represents metadata about a file.
-    """
+    """Represents metadata about a file."""
     filename: Optional[str] = None
     content_type: Optional[str] = None
     size: Optional[int] = None
 
 class ProcessedDocument(BaseModel):
-    """
-    Represents a document that has been processed and is ready for AI analysis.
-    """
+    """Represents a document that has been processed and is ready for AI analysis."""
     file_name: str
     content: str
     file_type: FileType
-    document_type: DocumentType
+    document_type: DocumentType = DocumentType.UNKNOWN
     metadata: FileMetadata = Field(default_factory=FileMetadata)
 
-class ProcessedFile(ProcessedDocument):
-    """
-    Legacy alias for ProcessedDocument.
-    """
-    pass
+class AnalysisError(BaseModel):
+    """Data model for capturing errors during AI analysis."""
+    source: str = Field(..., description="The source of the error (e.g., 'IntakeAnalysis', 'doc_id:123').")
+    error_message: str = Field(..., description="The detailed error message.")
+    details: Optional[Any] = Field(None, description="Additional error details, can be a dict or a list of validation errors.")
 
-class IntakeAnalysis(BaseModel):
-    """
-    Data model for the structured analysis of an intake form.
-    """
+# --- Resilient Pydantic Models for AI Analysis ---
+
+class EnhancedIntakeAnalysis(BaseModel):
+    """Data model for the enhanced, structured analysis of an intake form."""
     client_name: Optional[str] = Field(None, description="The client's full name.")
     attorney_name: Optional[str] = Field(None, description="The attorney's full name.")
     case_summary: Optional[str] = Field(None, description="A brief summary of the case.")
-    key_facts: List[str] = Field(default_factory=list, description="A list of key facts from the intake form.")
+    case_type: Optional[str] = Field(None, description="The type of legal case.")
+    urgency_level: Optional[str] = Field(None, description="The urgency level of the case.")
+    client_priorities: List[str] = Field(default_factory=list, description="A list of the client's stated priorities.")
+    desired_outcomes: List[str] = Field(default_factory=list, description="A list of the client's desired outcomes.")
+    key_facts: Union[List[str], str] = Field(default_factory=list, description="A list of key facts from the intake form.")
+    parties_involved: List[Dict[str, str]] = Field(default_factory=list, description="A list of parties involved and their roles.")
+    financial_impact: Union[Optional[str], Dict[str, Any]] = Field(None, description="The estimated financial impact of the case.")
+    legal_claims: List[str] = Field(default_factory=list, description="Potential legal claims identified from the intake.")
 
-class CaseAnalysis(BaseModel):
-    """
-    Data model for the structured analysis of a case document.
-    """
-    document_title: str = Field(..., description="The title of the document.")
-    document_type: str = Field(..., description="The type of document (e.g., 'Lease Agreement', 'Email Correspondence').")
-    key_entities: List[str] = Field(default_factory=list, description="A list of key entities mentioned in the document.")
-    summary: str = Field(..., description="A summary of the document's content.")
+    @validator('key_facts', 'client_priorities', 'desired_outcomes', 'legal_claims', pre=True)
+    def ensure_list_of_strings(cls, v):
+        if isinstance(v, str):
+            # Handles simple comma-separated strings or a single string
+            return [item.strip() for item in v.split(',') if item.strip()] if ',' in v else [v]
+        if v is None:
+            return []
+        return v
+
+    @validator('financial_impact', pre=True)
+    def clean_financial_impact(cls, v):
+        return stringify_dict(v)
+
+
+class EnhancedCaseAnalysis(BaseModel):
+    """Data model for the enhanced, structured analysis of a single case document."""
+    document_title: Optional[str] = Field(None, description="The title of the document.")
+    document_type: Optional[str] = Field(None, description="The type of document (e.g., 'Lease Agreement', 'Email Correspondence').")
+    key_entities: List[Dict[str, str]] = Field(default_factory=list, description="A list of key entities mentioned in the document, including their name and role.")
+    summary: Optional[str] = Field(None, description="A summary of the document's content.")
     timeline_events: List[Dict[str, str]] = Field(default_factory=list, description="A list of timeline events, each with a date and description.")
+    evidence_strength: Optional[EvidenceStrength] = Field(None, description="Assessment of the evidence's strength.")
+    legal_significance: Optional[str] = Field(None, description="The legal significance of the document.")
+    relevance_to_intake: Optional[str] = Field(None, description="How the document relates to the priorities from the intake form.")
+    potential_challenges: List[str] = Field(default_factory=list, description="A list of potential challenges revealed by the document.")
 
-class CaseAnalysisRequest(BaseModel):
-    """
-    Request model for analyzing multiple case documents.
-    """
-    case_documents: List[ProcessedDocument]
+class ChallengeAssessment(BaseModel):
+    """Represents a single potential legal challenge."""
+    category: Optional[str] = Field(None, description="The category of the challenge.")
+    description: Optional[str] = Field(None, description="A detailed description of the challenge.")
+    mitigation_strategy: Optional[str] = Field(None, description="A potential strategy to mitigate the challenge.")
+    confidence_score: Optional[float] = Field(None, description="A score from 0.0 to 1.0 indicating the likelihood of this challenge impacting the case.")
+
+class LegalAssessment(BaseModel):
+    """Overall legal assessment combining insights from all documents."""
+    case_type: Optional[str] = Field(None, description="The overall determined case type.")
+    claim_viability: Optional[str] = Field(None, description="An assessment of the viability of the legal claim.")
+    overall_evidence_strength: Optional[EvidenceStrength] = Field(None, description="The combined strength of all evidence.")
+    potential_challenges: List[ChallengeAssessment] = Field(default_factory=list, description="A list of all identified potential challenges.")
+    recommended_actions: List[str] = Field(default_factory=list, description="A list of recommended next steps for the case.")
+    demand_letter_appropriate: Optional[bool] = Field(None, description="Whether sending a demand letter is appropriate.")
+    urgency_assessment: Optional[str] = Field(None, description="The overall assessment of the case's urgency.")
+
+class DemandLetterEvaluation(BaseModel):
+    """Evaluation of whether a demand letter should be sent."""
+    is_appropriate: Optional[bool] = Field(None, description="Indicates if a demand letter is recommended.")
+    reasoning: Optional[str] = Field(None, description="The reasoning behind the recommendation.")
+    potential_outcomes: List[str] = Field(default_factory=list, description="Potential outcomes of sending a demand letter.")
+    relevant_statutes: List[str] = Field(default_factory=list, description="A list of relevant statutes to cite in the demand letter.")
 
 class CombinedAnalysis(BaseModel):
-    """
-    Combined data model for intake and case analysis.
-    """
-    intake_analysis: IntakeAnalysis
-    case_analyses: List[CaseAnalysis]
+    """Combined data model for enhanced intake and case analysis, including error tracking."""
+    intake_analysis: Optional[EnhancedIntakeAnalysis] = None
+    case_analyses: List[EnhancedCaseAnalysis] = Field(default_factory=list)
+    legal_assessment: Optional[LegalAssessment] = None
+    demand_letter_evaluation: Optional[DemandLetterEvaluation] = None
+    errors: List[AnalysisError] = Field(default_factory=list, description="A list of errors encountered during analysis.")
 
-class FindingsLetter(BaseModel):
-    """
-    Data model for the generated findings letter.
-    """
-    subject: str = Field(..., description="The subject of the findings letter.")
-    body: str = Field(..., description="The body content of the findings letter.")
-    recipients: List[str] = Field(default_factory=list, description="A list of recipient email addresses.")
+# --- Email Generation Models ---
+
+class FindingsHeader(BaseModel):
+    """Structured data for the email header."""
+    date: Optional[str] = None
+    client_name: Optional[str] = None
+    client_address: Optional[str] = None
+    case_reference: Optional[str] = None
+
+class FindingsFooter(BaseModel):
+    """Structured data for the email footer."""
+    attorney_name: Optional[str] = None
+    firm_name: Optional[str] = None
+    firm_address: Optional[str] = None
+    contact_info: Optional[str] = None
+
+class EnhancedFindingsLetter(BaseModel):
+    """Represents a professionally structured findings letter with all required sections."""
+    header: FindingsHeader = Field(default_factory=FindingsHeader)
+    reviewed_documents: List[str] = Field(default_factory=list, description="A list of the document titles that were reviewed.")
+    background_summary: Optional[str] = Field(None, description="Context from intake analysis.")
+    review_summary: Optional[str] = Field(None, description="Legal analysis and case facts.")
+    assessment_challenges: List[ChallengeAssessment] = Field(default_factory=list)
+    next_steps_recommendations: List[str] = Field(default_factory=list)
+    demand_letter_section: Optional[DemandLetterEvaluation] = None
+    footer: FindingsFooter = Field(default_factory=FindingsFooter)
 
 class DownloadLink(BaseModel):
-    """
-    Represents a downloadable file link.
-    """
+    """Represents a download link for a generated file."""
     file_name: str
     url: str
 
 class EmailResponse(BaseModel):
-    """
-    Data model for the email generation response.
-    """
-    findings_letter: FindingsLetter
+    """Data model for the email generation response."""
+    findings_letter: Optional[EnhancedFindingsLetter] = None
     download_links: List[DownloadLink] = Field(default_factory=list)
+    case_analysis_text: Optional[str] = Field(None, description="The formatted text of the case analysis document.")
 
 class CaseResults(BaseModel):
-    """
-    Represents the final results of a case analysis, including the analysis itself and the generated email.
-    """
-    analysis: CaseAnalysis
-    email: EmailResponse
+    """Top-level model for returning the complete analysis results."""
+    analysis: CombinedAnalysis = Field(default_factory=CombinedAnalysis)
+    email: Optional[EmailResponse] = None
+    errors: List[AnalysisError] = Field(default_factory=list)
+
+    @field_validator('analysis', 'email', 'errors', mode='before')
+    def set_default(cls, v):
+        return v or {}

@@ -1,42 +1,7 @@
 INFO:     Will watch for changes in these directories: ['/Users/BRFlorida/Projects/Work/Finding_Emails/backend']
 INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
-INFO:     Started reloader process [95225] using WatchFiles
-INFO:     Started server process [95228]
-INFO:     Waiting for application startup.
-INFO:     Application startup complete.
-Processing PDF: Intake (General) - Balaji Badam.pdf
-INFO:     127.0.0.1:61854 - "POST /api/analyze-intake HTTP/1.1" 200 OK
-Processing PDF: Regions Mortgage Payment - May 2025.pdf
-Processing PDF: Property Deed.pdf
-Processing PDF: Gmail - Re_ MOVE OUT - email from Breanna and response from Balaji.pdf
-Processing PDF: Gmail - Eviction Notice - Email May 28.pdf
-Processing PDF: Badam - Eviction Notice.pdf
-Processing PDF: 3. Residential Lease_811_Gate Run Rd_Signed.pdf
-Processing PDF: 811-Gate-Run-Rd-Florida-Eviction-Notice-to-Quit-Form.pdf
-INFO:     127.0.0.1:61884 - "POST /api/analyze-case-documents HTTP/1.1" 200 OK
-INFO:     127.0.0.1:62059 - "POST /api/generate-findings-letter HTTP/1.1" 200 OK
-WARNING:  WatchFiles detected changes in 'utils/file_processors/image_processor.py'. Reloading...
-INFO:     Shutting down
-INFO:     Waiting for application shutdown.
-INFO:     Application shutdown complete.
-INFO:     Finished server process [95228]
-INFO:     Started server process [9231]
-INFO:     Waiting for application startup.
-INFO:     Application startup complete.
-WARNING:  WatchFiles detected changes in 'utils/file_processors/image_processor.py'. Reloading...
-INFO:     Shutting down
-INFO:     Waiting for application shutdown.
-INFO:     Application shutdown complete.
-INFO:     Finished server process [9231]
-INFO:     Started server process [9250]
-INFO:     Waiting for application startup.
-INFO:     Application startup complete.
-WARNING:  WatchFiles detected changes in 'utils/file_processors/__init__.py'. Reloading...
-INFO:     Shutting down
-INFO:     Waiting for application shutdown.
-INFO:     Application shutdown complete.
-INFO:     Finished server process [9250]
-Process SpawnProcess-4:
+INFO:     Started reloader process [55584] using WatchFiles
+Process SpawnProcess-1:
 Traceback (most recent call last):
   File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/multiprocessing/process.py", line 313, in _bootstrap
     self.run()
@@ -78,13 +43,6 @@ Traceback (most recent call last):
   File "<frozen importlib._bootstrap>", line 935, in _load_unlocked
   File "<frozen importlib._bootstrap_external>", line 1026, in exec_module
   File "<frozen importlib._bootstrap>", line 488, in _call_with_frames_removed
-  File "/Users/BRFlorida/Projects/Work/Finding_Emails/backend/main.py", line 8, in <module>
-    from services.document_processor import DocumentProcessor
-  File "/Users/BRFlorida/Projects/Work/Finding_Emails/backend/services/document_processor.py", line 5, in <module>
-    from utils.file_processors.pdf_processor import process_pdf
-  File "/Users/BRFlorida/Projects/Work/Finding_Emails/backend/utils/file_processors/__init__.py", line 5, in <module>
-    from .image_processor import process_image
-  File "/Users/BRFlorida/Projects/Work/Finding_Emails/backend/utils/file_processors/image_processor.py", line 1, in <module>
-    import pytesseract
-ModuleNotFoundError: No module named 'pytesseract'
-INFO:     Stopping reloader process [95225]
+  File "/Users/BRFlorida/Projects/Work/Finding_Emails/backend/main.py", line 7, in <module>
+    from backend.utils.config import settings
+ModuleNotFoundError: No module named 'backend'

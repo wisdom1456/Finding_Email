@@ -2,26 +2,31 @@ import pytesseract
 from PIL import Image
 from fastapi import UploadFile
 from typing import IO
-from utils.data_models import ProcessedFile, DocumentType, FileType
+from io import BytesIO
+from ..data_models import ProcessedDocument, DocumentType, FileType
 
-async def process_image(file: UploadFile, doc_type: DocumentType) -> ProcessedFile:
+async def process_image(file: UploadFile, document_type: DocumentType) -> ProcessedDocument:
     """
-    Processes an uploaded image file, extracting text using OCR.
+    Processes an image file by extracting text using OCR.
     """
+    print(f"Processing Image: {file.filename}")
+    
+    content = await file.read()
+    text_content = ""
+
     try:
-        image = Image.open(file.file)
+        image = Image.open(BytesIO(content))
         # Convert image to grayscale for better OCR results
         image = image.convert('L')
-        text = pytesseract.image_to_string(image)
+        text_content = pytesseract.image_to_string(image)
+        print(f"Successfully extracted text from {file.filename}")
     except Exception as e:
-        # Handle exceptions during image processing
-        text = f"Error processing image: {e}"
+        print(f"Error processing image {file.filename}: {e}")
+        text_content = f"Error extracting text from {file.filename}."
 
-    return ProcessedFile(
+    return ProcessedDocument(
         file_name=file.filename,
-        content_type=file.content_type,
-        document_type=doc_type,
+        content=text_content,
+        document_type=document_type,
         file_type=FileType.IMAGE,
-        text_content=text,
-        page_count=1  # Assuming single-page images for now
     )

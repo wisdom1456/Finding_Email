@@ -43,27 +43,16 @@ def process_files_button():
                 return
 
             try:
-                # 1. Analyze Intake Form
-                intake_files = {'intake_form': (intake_form.name, intake_form.getvalue(), intake_form.type)}
-                intake_response = requests.post(f"{BACKEND_URL}/analyze-intake", files=intake_files)
-                intake_response.raise_for_status()
-                intake_analysis = intake_response.json()
-
-                # 2. Analyze Case Documents
-                case_doc_files = [('case_documents', (doc.name, doc.getvalue(), doc.type)) for doc in case_documents]
-                case_docs_response = requests.post(f"{BACKEND_URL}/analyze-case-documents", files=case_doc_files)
-                case_docs_response.raise_for_status()
-                case_analyses = case_docs_response.json()
-
-                # 3. Generate Findings Letter
-                combined_analysis = {
-                    "intake_analysis": intake_analysis,
-                    "case_analyses": case_analyses
-                }
-                findings_response = requests.post(f"{BACKEND_URL}/generate-findings-letter", json=combined_analysis)
-                findings_response.raise_for_status()
+                files = [
+                    ('intake_form', (intake_form.name, intake_form.getvalue(), intake_form.type)),
+                ]
+                for doc in case_documents:
+                    files.append(('case_documents', (doc.name, doc.getvalue(), doc.type)))
                 
-                st.session_state.final_results = findings_response.json()
+                response = requests.post(f"{BACKEND_URL}/v1/analysis/full-pipeline", files=files)
+                response.raise_for_status()
+                
+                st.session_state.final_results = response.json()
                 st.success("Documents processed successfully!")
             except requests.exceptions.RequestException as e:
                 st.error(f"An error occurred: {e}")
@@ -73,13 +62,39 @@ def results_display_section():
     if st.session_state.final_results:
         st.header("Results")
         results = st.session_state.final_results
-        st.subheader("Findings Letter")
-        st.text_area("Subject", value=results['findings_letter']['subject'], height=70)
-        st.text_area("Body", value=results['findings_letter']['body'], height=300)
+        
+        # Check for and display errors
+        if results.get("errors"):
+            st.error("The following errors occurred during processing:")
+            for error in results["errors"]:
+                st.json(error) # Pretty-print the error details
+        
+        # Display analysis and email if they exist
+        if results.get("analysis"):
+            st.subheader("Case Analysis")
+            st.json(results["analysis"]) # Pretty-print the analysis
 
-        st.subheader("Downloads")
-        for link in results['download_links']:
-            st.markdown(f"[{link['file_name']}]({link['url']})", unsafe_allow_html=True)
+        if results.get("email") and results["email"].get("findings_letter"):
+            st.subheader("Findings Letter")
+            letter = results["email"]["findings_letter"]
+            st.text_area("Subject", value=letter.get("header", {}).get("case_reference", "N/A"), height=70)
+            
+            # Reconstruct the body for display
+            body_parts = [
+                letter.get("background_summary", ""),
+                letter.get("review_summary", ""),
+                "Potential Challenges:",
+                "\n".join([f"- {c.get('description', '')}" for c in letter.get("assessment_challenges", [])]),
+                "Recommended Next Steps:",
+                "\n".join([f"- {step}" for step in letter.get("next_steps_recommendations", [])])
+            ]
+            full_body = "\n\n".join(filter(None, body_parts))
+            st.text_area("Body", value=full_body, height=400)
+
+        if results.get("email") and results["email"].get("download_links"):
+            st.subheader("Downloads")
+            for link in results["email"]["download_links"]:
+                st.markdown(f"[{link['file_name']}]({link['url']})", unsafe_allow_html=True)
 
 # --- Main Application ---
 def main():

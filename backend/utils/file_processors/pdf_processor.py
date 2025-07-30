@@ -1,8 +1,8 @@
 import fitz  # PyMuPDF
 from fastapi import UploadFile
-from ..data_models import ProcessedFile, DocumentType, FileMetadata, FileType
+from ..data_models import ProcessedDocument, DocumentType, FileType
 
-async def process_pdf(file: UploadFile, document_type: DocumentType) -> ProcessedFile:
+async def process_pdf(file: UploadFile, document_type: DocumentType) -> ProcessedDocument:
     """
     Processes a PDF file by extracting its text content using PyMuPDF.
     """
@@ -20,16 +20,10 @@ async def process_pdf(file: UploadFile, document_type: DocumentType) -> Processe
         # Return a processed file with an error message in content
         text_content = f"Error extracting text from {file.filename}."
 
-    metadata = FileMetadata(
-        filename=file.filename,
-        content_type=file.content_type,
-        size=len(content)
-    )
-    
-    return ProcessedFile(
+    return ProcessedDocument(
         file_name=file.filename,
+        content_type=file.content_type,
         content=text_content,
-        file_type=FileType.PDF,
         document_type=document_type,
-        metadata=metadata
+        file_type=FileType.PDF,
     )

@@ -14,3 +14,4 @@ pydantic-settings
 pytesseract
 Pillow
 tenacity
+pytesseract>=0.3.10

@@ -1,10 +1,10 @@
 from fastapi import UploadFile
-from ..data_models import ProcessedFile, FileMetadata, DocumentType, FileType
+from ..data_models import ProcessedDocument, DocumentType, FileType
 import email
 from email import policy
 from email.parser import BytesParser
 
-async def process_eml(file: UploadFile, document_type: DocumentType) -> ProcessedFile:
+async def process_eml(file: UploadFile, document_type: DocumentType) -> ProcessedDocument:
     """
     Processes an EML file by extracting its headers and body content.
     """
@@ -26,14 +26,10 @@ async def process_eml(file: UploadFile, document_type: DocumentType) -> Processe
 
     full_text = f"Subject: {msg['subject']}\nFrom: {msg['from']}\nTo: {msg['to']}\nDate: {msg['date']}\n\n{body}"
 
-    metadata = FileMetadata(
-        filename=file.filename,
+    return ProcessedDocument(
+        file_name=file.filename,
         content_type=file.content_type,
-        size=len(content)
-    )
-    
-    return ProcessedFile(
-        metadata=metadata,
         content=full_text,
-        document_type=document_type
+        document_type=document_type,
+        file_type=FileType.EML
     )

@@ -1,9 +1,9 @@
 from fastapi import UploadFile
-from ..data_models import ProcessedFile, FileMetadata, DocumentType, FileType
+from ..data_models import ProcessedDocument, DocumentType, FileType
 import docx
 import io
 
-async def process_docx(file: UploadFile, document_type: DocumentType) -> ProcessedFile:
+async def process_docx(file: UploadFile, document_type: DocumentType) -> ProcessedDocument:
     """
     Processes a DOCX file by extracting its content.
     """
@@ -20,14 +20,10 @@ async def process_docx(file: UploadFile, document_type: DocumentType) -> Process
         print(f"Could not process {file.filename} with python-docx: {e}")
         full_text = f"Could not extract content from {file.filename}."
 
-    metadata = FileMetadata(
-        filename=file.filename,
+    return ProcessedDocument(
+        file_name=file.filename,
         content_type=file.content_type,
-        size=len(content)
-    )
-    
-    return ProcessedFile(
-        metadata=metadata,
         content=full_text,
-        document_type=document_type
+        document_type=document_type,
+        file_type=FileType.DOCX
     )

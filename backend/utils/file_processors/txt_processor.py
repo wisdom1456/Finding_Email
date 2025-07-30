@@ -1,7 +1,7 @@
 from fastapi import UploadFile
-from ..data_models import ProcessedFile, FileMetadata, DocumentType, FileType
+from ..data_models import ProcessedDocument, DocumentType, FileType
 
-async def process_txt(file: UploadFile, document_type: DocumentType) -> ProcessedFile:
+async def process_txt(file: UploadFile, document_type: DocumentType) -> ProcessedDocument:
     """
     Processes a TXT file by reading its content.
     """
@@ -9,14 +9,10 @@ async def process_txt(file: UploadFile, document_type: DocumentType) -> Processe
     
     content = await file.read()
     
-    metadata = FileMetadata(
-        filename=file.filename,
+    return ProcessedDocument(
+        file_name=file.filename,
         content_type=file.content_type,
-        size=len(content)
-    )
-    
-    return ProcessedFile(
-        metadata=metadata,
         content=content.decode('utf-8'),
-        document_type=document_type
+        document_type=document_type,
+        file_type=FileType.TXT
     )

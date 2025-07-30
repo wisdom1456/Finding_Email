@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Legal Findings Letter</title>
+    <style>
+        body {
+            font-family: 'Times New Roman', Times, serif;
+            line-height: 1.6;
+            color: #333;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .header, .footer {
+            text-align: left;
+            margin-bottom: 20px;
+        }
+        .footer {
+            margin-top: 40px;
+            font-style: italic;
+        }
+        h1, h2, h3 {
+            font-family: 'Georgia', serif;
+            color: #222;
+        }
+        ul {
+            list-style-type: disc;
+            margin-left: 20px;
+        }
+        .section {
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <p>{{ letter.header.date | default('Not Available') }}</p>
+            <p><strong>To:</strong> {{ letter.header.client_name | default('Not Available') }}</p>
+            <p><strong>Address:</strong> {{ letter.header.client_address | default('Not Available') }}</p>
+            <p><strong>Re:</strong> {{ letter.header.case_reference | default('Not Available') }}</p>
+        </div>
+
+        <div class="section">
+            <h2>I. Background</h2>
+            <p>{{ letter.background_summary | default('No background summary was provided.', true) }}</p>
+        </div>
+
+        <div class="section">
+            <h2>II. Review of Documents</h2>
+             {% if letter.reviewed_documents %}
+                <p>In our review, we have analyzed the following documents:</p>
+                <ul>
+                    {% for doc in letter.reviewed_documents %}
+                        <li>{{ doc }}</li>
+                    {% endfor %}
+                </ul>
+            {% endif %}
+            <p>{{ letter.review_summary | default('No document review summary was provided.', true) }}</p>
+        </div>
+
+        <div class="section">
+            <h2>III. Preliminary Assessment</h2>
+            <p>As we move forward in assessing your matter, it is important to recognize that legal proceedings can often present various obstacles that may impact the strength of your case. Below, you will find a list of potential challenges that we have identified so far in our preliminary assessment of your matter. Please note that this list is not exhaustive. As the case progresses and more information becomes available, other challenges may emerge or may become more evident. Our team is committed to navigating these complexities and adapting our strategies accordingly to best represent your interests. Your understanding and awareness of these potential challenges are essential as we work together towards a successful resolution.</p>
+            {% if letter.assessment_challenges %}
+                <h3>Potential Challenges</h3>
+                <ul>
+                    {% for challenge in letter.assessment_challenges %}
+                        <li>
+                            <strong>{{ challenge.category | default('Uncategorized') }}:</strong> {{ challenge.description | default('No description provided.') }}
+                            {% if challenge.mitigation_strategy %}
+                                <br><em>Mitigation: {{ challenge.mitigation_strategy }}</em>
+                            {% endif %}
+                        </li>
+                    {% endfor %}
+                </ul>
+            {% else %}
+                <p>No specific challenges were identified at this time.</p>
+            {% endif %}
+        </div>
+
+        <div class="section">
+            <h2>IV. Next Steps</h2>
+            <h3>A. Recommendations</h3>
+            {% if letter.next_steps_recommendations %}
+                <ul>
+                    {% for recommendation in letter.next_steps_recommendations %}
+                        <li>{{ recommendation }}</li>
+                    {% endfor %}
+                </ul>
+            {% else %}
+                <p>No specific next steps were recommended at this time.</p>
+            {% endif %}
+
+            {% if letter.demand_letter_section and letter.demand_letter_section.is_appropriate %}
+                <h3>B. Demand Letter Recommendation</h3>
+                <p>{{ letter.demand_letter_section.reasoning | default('A demand letter is considered appropriate based on our analysis.', true) }}</p>
+                {% if letter.demand_letter_section.potential_outcomes %}
+                    <p>Remember that demand letters are not guaranteed to produce desirable results, but they are an important step in demonstrating a serious intent to resolve a dispute and can serve as a crucial piece of evidence if the dispute escalates to court proceedings. There are the following potential outcomes that you can expect from a demand letter:</p>
+                    <ul>
+                        {% for outcome in letter.demand_letter_section.potential_outcomes %}
+                            <li>{{ outcome }}</li>
+                        {% endfor %}
+                    </ul>
+                {% endif %}
+            {% endif %}
+        </div>
+
+        <div class="footer">
+            <p>Sincerely,</p>
+            <p>{{ letter.footer.attorney_name | default('Not Available') }}</p>
+            <p>{{ letter.footer.firm_name | default('Not Available') }}</p>
+            <p>{{ letter.footer.firm_address | default('Not Available') }}</p>
+            <p>{{ letter.footer.contact_info | default('Not Available') }}</p>
+        </div>
+    </div>
+</body>
+</html>

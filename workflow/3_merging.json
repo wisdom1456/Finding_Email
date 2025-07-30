@@ -1,5 +1,4 @@
 {
-  "name": "3_merging",
   "nodes": [
     {
       "parameters": {
@@ -10,58 +9,74 @@
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
       "position": [
-        768,
-        368
+        -416,
+        112
       ],
-      "id": "b8bd8792-3485-44ed-9323-2768dafe1dd1",
+      "id": "252405c2-2aba-4765-9931-b7cf2c09cd0c",
       "name": "Webhook",
       "webhookId": "e85478bf-5958-4e2d-bfef-d482aae1210e"
     },
     {
       "parameters": {
-        "jsCode": "// Case Data Merger\n// This node merges outputs from the two AI processing branches into a unified case file.\n// It ensures data consistency and prepares a single, validated object for downstream processing.\n\n// Get all input items (from both branches)\nconst items = $items;\n\n// Default values for the merged data\nlet intakeFormData = { status: 'not_processed', processingDetails: { fallbackUsed: true, fallbackData: { clientName: 'Unknown', attorneyName: 'Unknown', caseReference: 'UNKNOWN' } }, data: null };\nlet caseDocumentsAnalysis = { status: 'not_processed', data: null };\nlet caseId = `CASE-${new Date().getTime()}`;\nlet caseInfo = { clientName: 'Unknown', attorneyName: 'Unknown', caseReference: 'UNKNOWN' };\nlet errors = [];\n\n// Identify which input comes from which branch based on a unique property\nconst intakeBranch = items.find(item => item.json.intakeFormData !== undefined);\nconst caseDocsBranch = items.find(item => item.json.caseDocumentsAnalysis !== undefined);\n\n// Process Intake Form branch\nif (intakeBranch) {\n  intakeFormData = intakeBranch.json.intakeFormData;\n  // Extract caseId and other info from the first valid source\n  if (intakeFormData.data && intakeFormData.data.caseInfo) {\n    caseId = intakeFormData.data.caseInfo.caseId || caseId;\n    caseInfo = {\n      clientName: intakeFormData.data.clientInfo?.clientName,\n      attorneyName: intakeFormData.data.attorneyInfo?.attorneyName,\n      caseReference: intakeFormData.data.caseInfo?.caseReference\n    };\n  }\n} else {\n  errors.push('Intake form data branch not found.');\n}\n\n// Process Case Documents Analysis branch\nif (caseDocsBranch) {\n  caseDocumentsAnalysis = caseDocsBranch.json.caseDocumentsAnalysis;\n  // If caseId hasn't been found, try this branch\n  if (caseId.startsWith('CASE-') && caseDocsBranch.json.caseId) {\n    caseId = caseDocsBranch.json.caseId;\n  }\n} else {\n  errors.push('Case documents analysis branch not found.');\n}\n\n// Determine overall status\nlet status = 'failed';\nconst successfulBranches = (intakeFormData.status === 'processed' ? 1 : 0) + (caseDocumentsAnalysis.status === 'processed' ? 1 : 0);\n\nif (successfulBranches === 2) {\n  status = 'completed';\n} else if (successfulBranches === 1) {\n  status = 'partial_success';\n}\n\n// Final unified case file\nconst unifiedCaseFile = {\n  caseId: caseId,\n  createdAt: new Date().toISOString(),\n  status: status,\n  caseInfo: caseInfo,\n  intakeFormData: intakeFormData,\n  caseDocumentsAnalysis: caseDocumentsAnalysis,\n  processingSummary: {\n    totalBranchesProcessed: items.length,\n    successfulBranches: successfulBranches,\n    failedBranches: items.length - successfulBranches,\n    errors: errors\n  }\n};\n\n// Construct the final output object for the next node\nconst result = {\n  isValid: errors.length === 0,\n  errors: errors,\n  unifiedCaseFile: unifiedCaseFile,\n  processingTimestamp: new Date().toISOString(),\n  mergeMetadata: {\n    nodeType: \"case-data-merger\",\n    sourceBranches: items.length,\n    detectedIntakeBranch: !!intakeBranch,\n    detectedCaseDocsBranch: !!caseDocsBranch\n  }\n};\n\nreturn [{ json: result }];"
+        "jsCode": "// Case Data Merger (Refactored)\n// This node merges outputs from the two AI processing branches into a unified case file.\n// It now expects a single input from Module 2 containing both branches.\n\n// Get the single input item which contains the merged data from Module 2\nconst item = $input.first();\n\nlet parsedItems = [];\ntry {\n  // Module 2 now sends a single item with a body.data string containing the array of results\n  const unparsedData = item.json.body.data; \n  parsedItems = JSON.parse(unparsedData).map(d => ({ json: d }));\n} catch (e) {\n  console.error('Error parsing item data:', e, 'Received item:', JSON.stringify(item));\n  return { json: { error: 'Failed to parse incoming data from Module 2.' } };\n}\n\n// Default values for the merged data\nlet intakeFormData = { status: 'not_processed', data: null };\nlet caseDocumentsAnalysis = { status: 'not_processed', data: null };\nlet caseId = `CASE-${new Date().getTime()}`;\nlet caseInfo = {};\nlet errors = [];\n\n// Identify which input comes from which branch based on 'documentType'\nconst intakeBranch = parsedItems.find(item => item.json.documentType === 'intakeForm');\nconst caseDocsBranch = parsedItems.find(item => item.json.documentType === 'caseDocument');\n\n// Process Intake Form branch\nif (intakeBranch) {\n    intakeFormData.status = 'processed';\n    intakeFormData.data = intakeBranch.json.parsedData;\n    caseInfo = intakeBranch.json.structuredData?.caseInfo || {};\n    caseId = caseInfo.caseReference || caseId;\n} else {\n  errors.push('Intake form data branch not found.');\n}\n\n// Process Case Documents Analysis branch\nif (caseDocsBranch) {\n    caseDocumentsAnalysis.status = 'processed';\n    caseDocumentsAnalysis.data = caseDocsBranch.json.parsedData;\n    // Ensure caseInfo is consistent if intake branch was missing\n    if (!caseInfo.caseReference) {\n        caseInfo = caseDocsBranch.json.structuredData?.caseInfo || {};\n        caseId = caseInfo.caseReference || caseId;\n    }\n} else {\n  errors.push('Case documents analysis branch not found.');\n}\n\n// Determine overall status\nlet status = 'failed';\nconst successfulBranches = (intakeFormData.status === 'processed' ? 1 : 0) + (caseDocumentsAnalysis.status === 'processed' ? 1 : 0);\n\nif (successfulBranches === 2) {\n  status = 'completed';\n} else if (successfulBranches === 1) {\n  status = 'partial_success';\n}\n\n// Final unified case file\nconst unifiedCaseFile = {\n  caseId: caseId,\n  createdAt: new Date().toISOString(),\n  status: status,\n  caseInfo: caseInfo,\n  intakeFormData: intakeFormData,\n  caseDocumentsAnalysis: caseDocumentsAnalysis,\n  processingSummary: {\n    totalBranchesProcessed: parsedItems.length,\n    successfulBranches: successfulBranches,\n    failedBranches: parsedItems.length - successfulBranches,\n    errors: errors\n  }\n};\n\n// Construct the final output object for the next node\nconst result = {\n  isValid: errors.length === 0,\n  errors: errors,\n  unifiedCaseFile: unifiedCaseFile,\n  processingTimestamp: new Date().toISOString(),\n  mergeMetadata: {\n    nodeType: \"case-data-merger\",\n    sourceBranches: parsedItems.length,\n    detectedIntakeBranch: !!intakeBranch,\n    detectedCaseDocsBranch: !!caseDocsBranch\n  }\n};\n\nreturn [{ json: result }];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        880,
-        368
+        32,
+        112
       ],
-      "id": "3e6f5fdf-c4e9-4a4a-b8e7-8f8f8f8f8f8f",
+      "id": "9848e10e-dabd-4710-b899-ceaf89962dd7",
       "name": "Case Data Merger"
     },
     {
       "parameters": {
-        "jsCode": "// Merge Validator Node\n// This node validates the merged case data structure and adds final validation metadata\n// Ensures the unified case file meets all quality requirements\n\n// Get the input data from the Case Data Merger node\nconst inputData = $input.first().json;\n\n// Initialize validation result\nconst validationResult = {\n  isValid: true,\n  errors: [],\n  validatedUnifiedCaseFile: null,\n  processingTimestamp: new Date().toISOString(),\n  validationMetadata: {\n    nodeType: \"merge-validator\",\n    validationLevel: \"final\",\n    validationRules: [\n      \"unified_structure_check\",\n      \"required_fields_validation\",\n      \"data_integrity_check\",\n      \"processing_status_validation\"\n    ],\n    validationStatus: \"processing\"\n  }\n};\n\n// Validate that we received valid merge data\nif (!inputData || !inputData.isValid) {\n  validationResult.isValid = false;\n  validationResult.errors.push(\"Invalid input: Previous merge step failed\");\n  if (inputData && inputData.errors) {\n    validationResult.errors = validationResult.errors.concat(inputData.errors);\n  }\n  return [{ json: validationResult }];\n}\n\n// Extract the unified case file\nconst unifiedCaseFile = inputData.unifiedCaseFile;\nif (!unifiedCaseFile) {\n  validationResult.isValid = false;\n  validationResult.errors.push(\"No unified case file found in merge result\");\n  return [{ json: validationResult }];\n}\n\n// Validation Rule 1: Unified Structure Check\nconst requiredTopLevelFields = ['caseId', 'createdAt', 'status', 'caseInfo', 'intakeFormData', 'caseDocumentsAnalysis', 'processingSummary'];\nconst missingFields = [];\n\nfor (const field of requiredTopLevelFields) {\n  if (!unifiedCaseFile.hasOwnProperty(field)) {\n    missingFields.push(field);\n  }\n}\n\nif (missingFields.length > 0) {\n  validationResult.isValid = false;\n  validationResult.errors.push(`Missing required top-level fields: ${missingFields.join(', ')}`);\n}\n\n// Validation Rule 2: Required Fields Validation\nif (!unifiedCaseFile.caseId || typeof unifiedCaseFile.caseId !== 'string') {\n  validationResult.isValid = false;\n  validationResult.errors.push(\"caseId must be a non-empty string\");\n}\n\nif (!unifiedCaseFile.createdAt || typeof unifiedCaseFile.createdAt !== 'string') {\n  validationResult.isValid = false;\n  validationResult.errors.push(\"createdAt must be a valid timestamp string\");\n}\n\nif (!unifiedCaseFile.status || !['completed', 'partial_success', 'failed'].includes(unifiedCaseFile.status)) {\n  validationResult.isValid = false;\n  validationResult.errors.push(\"status must be one of: completed, partial_success, failed\");\n}\n\n// Validation Rule 3: Data Integrity Check\nif (!unifiedCaseFile.processingSummary || typeof unifiedCaseFile.processingSummary !== 'object') {\n  validationResult.isValid = false;\n  validationResult.errors.push(\"processingSummary must be an object\");\n} else {\n  const summary = unifiedCaseFile.processingSummary;\n  \n  if (typeof summary.totalBranchesProcessed !== 'number' || summary.totalBranchesProcessed < 0) {\n    validationResult.isValid = false;\n    validationResult.errors.push(\"processingSummary.totalBranchesProcessed must be a non-negative number\");\n  }\n  \n  if (typeof summary.successfulBranches !== 'number' || summary.successfulBranches < 0) {\n    validationResult.isValid = false;\n    validationResult.errors.push(\"processingSummary.successfulBranches must be a non-negative number\");\n  }\n  \n  if (typeof summary.failedBranches !== 'number' || summary.failedBranches < 0) {\n    validationResult.isValid = false;\n    validationResult.errors.push(\"processingSummary.failedBranches must be a non-negative number\");\n  }\n  \n  // Validate that the sum matches total\n  if (summary.successfulBranches + summary.failedBranches !== summary.totalBranchesProcessed) {\n    validationResult.isValid = false;\n    validationResult.errors.push(\"processingSummary branch counts do not add up correctly\");\n  }\n}\n\n// Validation Rule 4: Processing Status Validation\nif (!unifiedCaseFile.intakeFormData || typeof unifiedCaseFile.intakeFormData !== 'object') {\n  validationResult.isValid = false;\n  validationResult.errors.push(\"intakeFormData must be an object\");\n} else {\n  const intakeStatus = unifiedCaseFile.intakeFormData.status;\n  if (!['processed', 'failed', 'not_processed'].includes(intakeStatus)) {\n    validationResult.isValid = false;\n    validationResult.errors.push(\"intakeFormData.status must be one of: processed, failed, not_processed\");\n  }\n}\n\nif (!unifiedCaseFile.caseDocumentsAnalysis || typeof unifiedCaseFile.caseDocumentsAnalysis !== 'object') {\n  validationResult.isValid = false;\n  validationResult.errors.push(\"caseDocumentsAnalysis must be an object\");\n} else {\n  const caseDocsStatus = unifiedCaseFile.caseDocumentsAnalysis.status;\n  if (!['processed', 'failed', 'not_processed'].includes(caseDocsStatus)) {\n    validationResult.isValid = false;\n    validationResult.errors.push(\"caseDocumentsAnalysis.status must be one of: processed, failed, not_processed\");\n  }\n}\n\n// If validation passes, add final validation metadata\nif (validationResult.errors.length === 0) {\n  const finalValidatedCaseFile = {\n    ...unifiedCaseFile,\n    finalValidation: {\n      validatedAt: new Date().toISOString(),\n      validationLevel: \"final\",\n      validationStatus: \"passed\",\n      validatorVersion: \"1.0.0\",\n      originalMergeTimestamp: inputData.processingTimestamp,\n      mergeMetadata: inputData.mergeMetadata || {}\n    }\n  };\n  \n  validationResult.validatedUnifiedCaseFile = finalValidatedCaseFile;\n  validationResult.validationMetadata.validationStatus = \"completed\";\n  validationResult.message = \"Unified case file successfully validated and finalized\";\n} else {\n  validationResult.isValid = false;\n  validationResult.validationMetadata.validationStatus = \"failed\";\n}\n\n// Preserve original merge data for reference\nvalidationResult.originalMergeData = {\n  mergeResult: inputData,\n  mergeTimestamp: inputData.processingTimestamp\n};\n\n// Return the validation result\nreturn [{ json: validationResult }];"
+        "jsCode": "// Merge Validator Node\n// This node validates the merged case data structure and adds final validation metadata\n// Ensures the unified case file meets all quality requirements\n\n// Get the input data from the Case Data Merger node\nconst inputData = $input.first().json;\n\n// Initialize validation result\nconst validationResult = {\n  isValid: true,\n  errors: [],\n  validatedUnifiedCaseFile: null,\n  processingTimestamp: new Date().toISOString(),\n  validationMetadata: {\n    nodeType: \"merge-validator\",\n    validationLevel: \"final\",\n    validationRules: [\n      \"unified_structure_check\",\n      \"required_fields_validation\",\n      \"data_integrity_check\",\n      \"processing_status_validation\"\n    ],\n    validationStatus: \"processing\"\n  }\n};\n\n// Validate that we received valid merge data\nif (!inputData || !inputData.isValid) {\n  validationResult.isValid = false;\n  validationResult.errors.push(\"Invalid input: Previous merge step failed\");\n  if (inputData && inputData.errors) {\n    validationResult.errors = validationResult.errors.concat(inputData.errors);\n  }\n  return [{ json: validationResult }];\n}\n\n// Extract the unified case file\nconst unifiedCaseFile = inputData.unifiedCaseFile;\nif (!unifiedCaseFile) {\n  validationResult.isValid = false;\n  validationResult.errors.push(\"No unified case file found in merge result\");\n  return [{ json: validationResult }];\n}\n\n// Validation Rule 1: Unified Structure Check\nconst requiredTopLevelFields = ['caseId', 'createdAt', 'status', 'caseInfo', 'intakeFormData', 'caseDocumentsAnalysis', 'processingSummary'];\nconst missingFields = [];\n\nfor (const field of requiredTopLevelFields) {\n  if (!unifiedCaseFile.hasOwnProperty(field)) {\n    missingFields.push(field);\n  }\n}\n\nif (missingFields.length > 0) {\n  validationResult.isValid = false;\n  validationResult.errors.push(`Missing required top-level fields: ${missingFields.join(', ')}`);\n}\n\n// Validation Rule 2: Required Fields Validation\nif (!unifiedCaseFile.caseId || typeof unifiedCaseFile.caseId !== 'string') {\n  validationResult.isValid = false;\n  validationResult.errors.push(\"caseId must be a non-empty string\");\n}\n\nif (!unifiedCaseFile.createdAt || typeof unifiedCaseFile.createdAt !== 'string') {\n  validationResult.isValid = false;\n  validationResult.errors.push(\"createdAt must be a valid timestamp string\");\n}\n\nif (!unifiedCaseFile.status || !['completed', 'partial_success', 'failed'].includes(unifiedCaseFile.status)) {\n  validationResult.isValid = false;\n  validationResult.errors.push(\"status must be one of: completed, partial_success, failed\");\n}\n\n// Validation Rule 3: Data Integrity Check\nif (!unifiedCaseFile.processingSummary || typeof unifiedCaseFile.processingSummary !== 'object') {\n  validationResult.isValid = false;\n  validationResult.errors.push(\"processingSummary must be an object\");\n} else {\n  const summary = unifiedCaseFile.processingSummary;\n  \n  if (typeof summary.totalBranchesProcessed !== 'number' || summary.totalBranchesProcessed < 0) {\n    validationResult.isValid = false;\n    validationResult.errors.push(\"processingSummary.totalBranchesProcessed must be a non-negative number\");\n  }\n  \n  if (typeof summary.successfulBranches !== 'number' || summary.successfulBranches < 0) {\n    validationResult.isValid = false;\n    validationResult.errors.push(\"processingSummary.successfulBranches must be a non-negative number\");\n  }\n  \n  if (typeof summary.failedBranches !== 'number' || summary.failedBranches < 0) {\n    validationResult.isValid = false;\n    validationResult.errors.push(\"processingSummary.failedBranches must be a non-negative number\");\n  }\n  \n  // Validate that the sum matches total\n  if (summary.successfulBranches + summary.failedBranches !== summary.totalBranchesProcessed) {\n    validationResult.isValid = false;\n    validationResult.errors.push(\"processingSummary branch counts do not add up correctly\");\n  }\n}\n\n// Validation Rule 4: Processing Status Validation\nif (!unifiedCaseFile.intakeFormData || typeof unifiedCaseFile.intakeFormData !== 'object') {\n  validationResult.isValid = false;\n  validationResult.errors.push(\"intakeFormData must be an object\");\n} else {\n  const intakeStatus = unifiedCaseFile.intakeFormData.status;\n  if (!['processed', 'failed', 'not_processed'].includes(intakeStatus)) {\n    validationResult.isValid = false;\n    validationResult.errors.push(\"intakeFormData.status must be one of: processed, failed, not_processed\");\n  }\n}\n\nif (!unifiedCaseFile.caseDocumentsAnalysis || typeof unifiedCaseFile.caseDocumentsAnalysis !== 'object') {\n  validationResult.isValid = false;\n  validationResult.errors.push(\"caseDocumentsAnalysis must be an object\");\n} else {\n  const caseDocsStatus = unifiedCaseFile.caseDocumentsAnalysis.status;\n  if (!['processed', 'failed', 'not_processed'].includes(caseDocsStatus)) {\n    validationResult.isValid = false;\n    validationResult.errors.push(\"caseDocumentsAnalysis.status must be one of: processed, failed, not_processed\");\n  }\n}\n\n// If validation passes, add final validation metadata\nif (validationResult.errors.length === 0) {\n  const finalValidatedCaseFile = {\n    ...unifiedCaseFile,\n    finalValidation: {\n      validatedAt: new Date().toISOString(),\n      validationLevel: \"final\",\n      validationStatus: \"passed\",\n      validatorVersion: \"1.0.0\",\n      originalMergeTimestamp: inputData.processingTimestamp,\n      mergeMetadata: inputData.mergeMetadata || {}\n    }\n  };\n  \n  validationResult.validatedUnifiedCaseFile = finalValidatedCaseFile;\n  validationResult.validationMetadata.validationStatus = \"completed\";\n  validationResult.message = \"Unified case file successfully validated and finalized\";\n} else {\n  validationResult.isValid = false;\n  validationResult.validationMetadata.validationStatus = \"failed\";\n}\n\n// Preserve original merge data for reference\nvalidationResult.originalMergeData = {\n  mergeResult: inputdata,\n  mergeTimestamp: inputData.processingTimestamp\n};\n\n// Return the validation result\nreturn [{ json: validationResult }];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        992,
-        368
+        256,
+        112
       ],
-      "id": "8009b43a-8b2e-49da-b386-b442f7f00ab5",
+      "id": "77374302-6d1c-4004-a741-0bf3e0974445",
       "name": "Merge Validator"
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "http://localhost:5678/webhook/module-4-trigger",
+        "url": "https://brflorida.app.n8n.cloud/webhook/module-4-trigger",
         "sendBody": true,
-        "body": "={{$json}}",
+        "bodyParameters": {
+          "parameters": [
+            {}
+          ]
+        },
         "options": {}
       },
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
       "position": [
-        1216,
-        368
+        704,
+        112
       ],
-      "id": "4e7f8g9h-c4e9-4a4a-b8e7-8f8f8f8f8f8h",
+      "id": "111f45df-8837-4366-8dc9-61e1a6f56323",
       "name": "Send to Module 4"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Generate debug package with workflow data for UI visibility\nconst debugPackage = {\n  timestamp: new Date().toISOString(),\n  workflow: '3_merging',\n  inputItemCount: $input.all().length,\n  nodeExecutionData: $input.all(),\n  executionInfo: {\n    nodeId: 'Generate & Send Debug Package',\n    processingTime: new Date().toISOString(),\n    dataTypes: $input.all().map(item => ({\n      hasJson: !!item.json,\n      hasBinary: !!item.binary,\n      jsonKeys: item.json ? Object.keys(item.json) : [],\n      binaryKeys: item.binary ? Object.keys(item.binary) : []\n    }))\n  }\n};\n\n// Return both debug output (visible in Node Output → JSON) and pass-through data\nreturn [\n  // First output: Debug data (visible in UI)\n  { \n    json: { \n      debug: debugPackage,\n      message: 'Debug package generated - check Node Output → JSON tab'\n    } \n  },\n  // Remaining outputs: Pass through original data for workflow continuation\n  ...$input.all()\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        480,
+        112
+      ],
+      "id": "eec01ce7-e141-4cf6-9e12-0bebe8f342bf",
+      "name": "Generate & Send Debug Package"
     }
   ],
-  "pinData": {},
   "connections": {
     "Webhook": {
       "main": [
@@ -89,6 +104,17 @@
       "main": [
         [
           {
+            "node": "Generate & Send Debug Package",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate & Send Debug Package": {
+      "main": [
+        [
+          {
             "node": "Send to Module 4",
             "type": "main",
             "index": 0
@@ -96,5 +122,9 @@
         ]
       ]
     }
+  },
+  "pinData": {},
+  "meta": {
+    "instanceId": "caf5cb14368ca22f9a1df26d6f7341ec146b18cf99462801227bcf1262e8aef4"
   }
 }

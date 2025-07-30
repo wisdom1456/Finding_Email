@@ -1,5 +1,4 @@
 {
-  "name": "4_response",
   "nodes": [
     {
       "parameters": {
@@ -10,10 +9,10 @@
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
       "position": [
-        1216,
-        368
+        -736,
+        160
       ],
-      "id": "654dd247-d667-4545-9a3c-cc32c139c31d",
+      "id": "3da7a405-37a5-46d2-a1b1-9e8fa4a2e299",
       "name": "Webhook",
       "webhookId": "a1b2c3d4-e5f6-a7b8-c9d0-e1f2a3b4c5d6"
     },
@@ -24,10 +23,10 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1440,
-        368
+        -512,
+        160
       ],
-      "id": "620ebf07-82c1-4d29-a162-e40e7c98f5de",
+      "id": "261f7868-a358-48b8-b0c7-858a9a51b85c",
       "name": "Prepare Email Prompt"
     },
     {
@@ -53,15 +52,15 @@
       "type": "@n8n/n8n-nodes-langchain.openAi",
       "typeVersion": 1.8,
       "position": [
-        1664,
-        368
+        -288,
+        160
       ],
-      "id": "67d00cbe-4de7-43cd-8bff-8fe0c2058e00",
+      "id": "4d208579-60c5-4c78-850e-bcd7ed34d2c0",
       "name": "Generate Email Findings Letter",
       "credentials": {
         "openAiApi": {
-          "id": "Cw2fFTz1VBPuCSPE",
-          "name": "OpenAi account"
+          "id": "EMcxqjdnGa4w4sdL",
+          "name": "OpenAi account 2"
         }
       }
     },
@@ -72,10 +71,10 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        2064,
-        368
+        112,
+        160
       ],
-      "id": "1afc258a-6f9d-49e1-b89d-47ef27a862f0",
+      "id": "06d62e77-25fb-4122-9637-1aa05a0b2983",
       "name": "Format Email Response"
     },
     {
@@ -85,27 +84,26 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        2288,
-        368
+        336,
+        160
       ],
-      "id": "bb446906-a8ab-49d3-b27e-032abb371807",
+      "id": "226a848d-a538-45e9-bef7-90ac2cf1906c",
       "name": "Final Response Formatter"
     },
     {
       "parameters": {
-        "options": {}
+        "jsCode": "// Generate debug package with workflow data for UI visibility\nconst debugPackage = {\n  timestamp: new Date().toISOString(),\n  workflow: '2_ai_processing',\n  inputItemCount: $input.all().length,\n  nodeExecutionData: $input.all(),\n  executionInfo: {\n    nodeId: 'Generate & Send Debug Package',\n    processingTime: new Date().toISOString(),\n    dataTypes: $input.all().map(item => ({\n      hasJson: !!item.json,\n      hasBinary: !!item.binary,\n      jsonKeys: item.json ? Object.keys(item.json) : [],\n      binaryKeys: item.binary ? Object.keys(item.binary) : []\n    }))\n  }\n};\n\n// Return both debug output (visible in Node Output → JSON) and pass-through data\nreturn [\n  // First output: Debug data (visible in UI)\n  { \n    json: { \n      debug: debugPackage,\n      message: 'Debug package generated - check Node Output → JSON tab'\n    } \n  },\n  // Remaining outputs: Pass through original data for workflow continuation\n  ...$input.all()\n];\n"
       },
-      "id": "f56925d6-83be-43ca-a981-994fe6ec06c9",
-      "name": "Respond to Webhook",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1,
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
       "position": [
-        2512,
-        368
-      ]
+        560,
+        160
+      ],
+      "id": "f66485bc-eccb-4423-a0bd-7ca9ce439a04",
+      "name": "Generate & Send Debug Package"
     }
   ],
-  "pinData": {},
   "connections": {
     "Webhook": {
       "main": [
@@ -155,12 +153,17 @@
       "main": [
         [
           {
-            "node": "Respond to Webhook",
+            "node": "Generate & Send Debug Package",
             "type": "main",
             "index": 0
           }
         ]
       ]
     }
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "caf5cb14368ca22f9a1df26d6f7341ec146b18cf99462801227bcf1262e8aef4"
   }
 }

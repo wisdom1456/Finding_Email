@@ -1,11 +1,9 @@
 {
-  "name": "1_intake",
   "nodes": [
     {
       "parameters": {
         "httpMethod": "POST",
         "path": "legal-analysis-upload",
-        "responseMode": "responseNode",
         "options": {
           "allowedOrigins": "https://findingemail-0w07x.kinsta.page",
           "responseHeaders": {
@@ -29,11 +27,11 @@
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
       "position": [
-        -2320,
-        368
+        -1488,
+        0
       ],
-      "id": "004fee53-a778-43f0-8367-8966f47170f7",
-      "name": "Webhook",
+      "id": "6dc6660b-c4d5-4688-8f5c-8ce6087ef24d",
+      "name": "Webhook1",
       "webhookId": "6d7fe8eb-8786-4526-88ad-5cd8fbf1c6c6"
     },
     {
@@ -43,11 +41,11 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -2096,
-        368
+        -1264,
+        0
       ],
-      "id": "ef9da563-774e-4049-8b75-f4ca01b0a402",
-      "name": "Validate Form Data"
+      "id": "7afd174b-ff71-4cf9-958e-ac0ccccfc298",
+      "name": "Validate Form Data1"
     },
     {
       "parameters": {
@@ -56,24 +54,24 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -1872,
-        368
+        -1040,
+        0
       ],
-      "id": "3755b04b-32ae-4cb6-81ab-0daecbb81986",
-      "name": "Structure Intake Data"
+      "id": "adae522d-2705-4ac6-94dd-40f285603594",
+      "name": "Structure Intake Data1"
     },
     {
       "parameters": {
-        "jsCode": "// Extract all binary files (intakeForm + caseDocument*) from Webhook\nconst intakeResult = $input.first().json;\nconst structuredData = intakeResult.structuredData; // passed along\nconst webhookItems = $items('Webhook'); // get ALL files from Webhook node\n\nconst outputs = [];\ntry {\n  const intakeResult = $input.first().json;\n  const structuredData = intakeResult.structuredData;\n  const webhookItems = $items('Webhook');\n  \n  for (const item of webhookItems) {\n    const binary = item.binary || {};\n\n  for (const [key, bin] of Object.entries(binary)) {\n    if (!bin?.data) continue;\n\n    const isIntake = key === 'intakeForm';\n\n    outputs.push({\n      json: {\n        documentType: isIntake ? 'intakeForm' : 'caseDocument',\n        documentId: isIntake ? 'intake-form' : key,\n        meta: {\n          fileName: bin.fileName,\n          mimeType: bin.mimeType,\n          fileSize: bin.fileSize\n        },\n        structuredData\n      },\n      binary: {\n        data: bin\n      }\n    });\n  }\n  }\n  return outputs;\n} catch (error) {\n  console.error('Error processing binary files:', error);\n  return [{ json: { error: error.message } }];\n}"
+        "jsCode": "// Extract all binary files (intakeForm + caseDocument*) from Webhook\nconst intakeResult = $input.first().json;\nconst structuredData = intakeResult.structuredData; // passed along\nconst webhookItems = $items('Webhook1'); // get ALL files from Webhook node\n\nconst outputs = [];\ntry {\n  const intakeResult = $input.first().json;\n  const structuredData = intakeResult.structuredData;\n  const webhookItems = $items('Webhook1');\n  \n  for (const item of webhookItems) {\n    const binary = item.binary || {};\n\n  for (const [key, bin] of Object.entries(binary)) {\n    if (!bin?.data) continue;\n\n    const isIntake = key === 'intakeForm';\n\n    outputs.push({\n      json: {\n        documentType: isIntake ? 'intakeForm' : 'caseDocument',\n        documentId: isIntake ? 'intake-form' : key,\n        meta: {\n          fileName: bin.fileName,\n          mimeType: bin.mimeType,\n          fileSize: bin.fileSize\n        },\n        structuredData\n      },\n      binary: {\n        data: bin\n      }\n    });\n  }\n  }\n  return outputs;\n} catch (error) {\n  console.error('Error processing binary files:', error);\n  return [{ json: { error: error.message } }];\n}"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -1648,
-        368
+        -816,
+        0
       ],
-      "id": "f2457798-309e-481a-a4c3-bf10a505e9db",
-      "name": "Extract Binary Files"
+      "id": "17a36670-3920-4860-9b00-bd05b5184673",
+      "name": "Extract Binary Files1"
     },
     {
       "parameters": {
@@ -82,11 +80,11 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -1424,
-        368
+        -592,
+        0
       ],
-      "id": "e545fc36-3f69-46ab-8643-2ad13422bace",
-      "name": "Filter PDFs"
+      "id": "dc7aee6c-50fb-4dbf-a1b6-0b4a48e961fb",
+      "name": "Filter PDFs1"
     },
     {
       "parameters": {
@@ -97,174 +95,230 @@
       "type": "n8n-nodes-pdfco.PDFco Api",
       "typeVersion": 1,
       "position": [
-        -1200,
-        368
+        -368,
+        0
       ],
-      "id": "131f2766-8446-4612-9692-d01265bef940",
-      "name": "Upload File to PDF.co",
+      "id": "053375ac-dad4-4d0d-8c14-8b22eda1ffb8",
+      "name": "Upload File to PDF.co1",
       "credentials": {
         "pdfcoApi": {
-          "id": "uUrPGbHmYX5odTS2",
-          "name": "PDF.co account"
+          "id": "V41iy1r0fdn2QLEb",
+          "name": "PDF.co account 2"
         }
       }
     },
     {
       "parameters": {
         "operation": "PDF Information & Form Fields",
-        "url": "={{ $('Upload File to PDF.co').item.json.url }}",
+        "url": "={{ $('Upload File to PDF.co1').item.json.url }}",
         "fields": true,
         "advancedOptions": {}
       },
       "type": "n8n-nodes-pdfco.PDFco Api",
       "typeVersion": 1,
       "position": [
-        -976,
-        272
+        -144,
+        -96
       ],
-      "id": "2a07f85c-1483-4d73-8d3e-cd1afaac6cc8",
-      "name": "PDFco Form Fields",
+      "id": "c5861047-50cf-4338-b401-a84769ffb7bb",
+      "name": "PDFco Form Fields1",
       "notesInFlow": false,
       "credentials": {
         "pdfcoApi": {
-          "id": "uUrPGbHmYX5odTS2",
-          "name": "PDF.co account"
+          "id": "V41iy1r0fdn2QLEb",
+          "name": "PDF.co account 2"
         }
       }
     },
     {
       "parameters": {
         "operation": "Convert from PDF",
-        "url": "={{ $('Upload File to PDF.co').item.json.url }}",
+        "url": "={{ $('Upload File to PDF.co1').item.json.url }}",
         "advancedOptions": {}
       },
       "type": "n8n-nodes-pdfco.PDFco Api",
       "typeVersion": 1,
       "position": [
-        -976,
-        464
+        -144,
+        96
       ],
-      "id": "393e558f-35d4-4d36-b155-6ced5fb9592d",
-      "name": "PDFco Api",
+      "id": "673e747b-710f-4510-bd10-a8107ae3a063",
+      "name": "PDFco Api1",
       "credentials": {
         "pdfcoApi": {
-          "id": "uUrPGbHmYX5odTS2",
-          "name": "PDF.co account"
+          "id": "V41iy1r0fdn2QLEb",
+          "name": "PDF.co account 2"
         }
       }
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "http://localhost:5678/webhook/module-2-trigger",
+        "url": "https://brflorida.app.n8n.cloud/webhook/module-2-trigger",
         "sendBody": true,
-        "body": "={{$json}}",
+        "bodyParameters": {
+          "parameters": [
+            {}
+          ]
+        },
         "options": {}
       },
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
       "position": [
-        -752,
-        368
+        528,
+        0
       ],
-      "id": "3e6f5fdf-c4e9-4a4a-b8e7-8f8f8f8f8f8e",
-      "name": "Send to Module 2"
+      "id": "2b21980e-a8b5-44e3-8f15-9a374923840f",
+      "name": "Send to Module "
+    },
+    {
+      "parameters": {
+        "jsCode": "// Generate debug package with workflow data for UI visibility\nconst debugPackage = {\n  timestamp: new Date().toISOString(),\n  workflow: '1_intake',\n  inputItemCount: $input.all().length,\n  nodeExecutionData: $input.all(),\n  executionInfo: {\n    nodeId: 'Generate & Send Debug Package',\n    processingTime: new Date().toISOString(),\n    dataTypes: $input.all().map(item => ({\n      hasJson: !!item.json,\n      hasBinary: !!item.binary,\n      jsonKeys: item.json ? Object.keys(item.json) : [],\n      binaryKeys: item.binary ? Object.keys(item.binary) : []\n    }))\n  }\n};\n\n// Return both debug output (visible in Node Output → JSON) and pass-through data\nreturn [\n  // First output: Debug data (visible in UI)\n  { \n    json: { \n      debug: debugPackage,\n      message: 'Debug package generated - check Node Output → JSON tab'\n    } \n  },\n  // Remaining outputs: Pass through original data for workflow continuation\n  ...$input.all()\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        304,
+        0
+      ],
+      "id": "5c56439a-ae51-4e80-bf81-4d1c11b951e1",
+      "name": "Generate & Send Debug Package"
+    },
+    {
+      "parameters": {
+        "mode": "combineByPosition"
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        80,
+        0
+      ],
+      "id": "33f0ad92-d73e-4362-b4d6-f596c300141a",
+      "name": "Merge"
     }
   ],
-  "pinData": {},
   "connections": {
-    "Webhook": {
+    "Webhook1": {
       "main": [
         [
           {
-            "node": "Validate Form Data",
+            "node": "Validate Form Data1",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Validate Form Data": {
+    "Validate Form Data1": {
       "main": [
         [
           {
-            "node": "Structure Intake Data",
+            "node": "Structure Intake Data1",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Structure Intake Data": {
+    "Structure Intake Data1": {
       "main": [
         [
           {
-            "node": "Extract Binary Files",
+            "node": "Extract Binary Files1",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Extract Binary Files": {
+    "Extract Binary Files1": {
       "main": [
         [
           {
-            "node": "Filter PDFs",
+            "node": "Filter PDFs1",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Filter PDFs": {
+    "Filter PDFs1": {
       "main": [
         [
           {
-            "node": "Upload File to PDF.co",
+            "node": "Upload File to PDF.co1",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Upload File to PDF.co": {
+    "Upload File to PDF.co1": {
       "main": [
         [
           {
-            "node": "PDFco Form Fields",
+            "node": "PDFco Form Fields1",
             "type": "main",
             "index": 0
           },
           {
-            "node": "PDFco Api",
+            "node": "PDFco Api1",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "PDFco Form Fields": {
+    "PDFco Form Fields1": {
       "main": [
         [
           {
-            "node": "Send to Module 2",
+            "node": "Merge",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "PDFco Api": {
+    "PDFco Api1": {
       "main": [
         [
           {
-            "node": "Send to Module 2",
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Generate & Send Debug Package": {
+      "main": [
+        [
+          {
+            "node": "Send to Module ",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Generate & Send Debug Package",
             "type": "main",
             "index": 0
           }
         ]
       ]
     }
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "caf5cb14368ca22f9a1df26d6f7341ec146b18cf99462801227bcf1262e8aef4"
   }
 }

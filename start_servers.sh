@@ -8,6 +8,11 @@ echo "Shutting down old server processes..."
 ./kill_server.sh 8000
 ./kill_server.sh 8501
 
+# Load environment variables from .env file
+if [ -f .env ]; then
+  export $(cat .env | xargs)
+fi
+
 # Start the FastAPI backend in the background
 echo "Starting FastAPI backend server..."
 cd backend

@@ -6,9 +6,9 @@ import os
 url = "http://127.0.0.1:8000/api/v1/analysis/full-pipeline"
 
 # Define the paths to the files to be uploaded
-intake_form_path = '../samples/Intake (General) - Balaji Badam.pdf'
+intake_form_path = '../../samples/Badam, Balaji [MetLife]/Client Docs/Intake (General) - Balaji Badam.pdf'
 case_document_paths = [
-    '../samples/Badam, Balaji [MetLife]/Client Docs/imessage - Breanna communication 1.jpg'
+    '../../samples/Badam, Balaji [MetLife]/Client Docs/imessage - Breanna communication 1.jpg'
 ]
 
 def read_file_content(file_path):

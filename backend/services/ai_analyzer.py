@@ -62,7 +62,7 @@ class AIAnalyzer:
             "• Do **NOT** change key names, add keys, or emit commentary.\n\n"
             "==========================\n"
             "SOURCE INTAKE FORM (read-only)\n"
-            f"{{content}}\n"
+            f"{content}\n"
             "==========================\n\n"
             "SCHEMA — EnhancedIntakeAnalysis\n"
             "{\n"
@@ -95,19 +95,29 @@ class AIAnalyzer:
 
     def _build_case_document_prompt(self, doc: ProcessedDocument, ctx: EnhancedIntakeAnalysis) -> str:
         """Builds a context-aware prompt for a case document."""
+        client_priorities_str = ", ".join(ctx.client_priorities) if ctx.client_priorities else "None specified"
+        desired_outcomes_str = ", ".join(ctx.desired_outcomes) if ctx.desired_outcomes else "None specified"
+        
         return (
             "SYSTEM\n"
-            "You are a litigation associate assessing a single case document.\n"
+            "You are a litigation associate performing intake-driven document analysis.\n"
             "Return **one—and only one—valid JSON object** that matches the\n"
             "`EnhancedCaseAnalysis` schema below.\n\n"
             "• JSON only—no markdown, no extra text.\n"
-            "• Preserve key order.\n\n"
+            "• Preserve key order.\n"
+            "• PRIORITIZE analysis elements that directly relate to client's stated priorities and desired outcomes.\n\n"
             "==========================\n"
             "DOCUMENT (read-only)\n"
-            f"{{doc.content}}\n"
+            f"{doc.content}\n"
             "==========================\n"
-            "INTAKE CONTEXT\n"
-            f"{{ctx.model_dump_json(indent=2)}}\n"
+            "CLIENT PRIORITIES FOR THIS ANALYSIS:\n"
+            f"• Priorities: {client_priorities_str}\n"
+            f"• Desired Outcomes: {desired_outcomes_str}\n"
+            f"• Case Type: {ctx.case_type or 'Not specified'}\n"
+            f"• Urgency Level: {ctx.urgency_level or 'Not specified'}\n"
+            "==========================\n"
+            "FULL INTAKE CONTEXT\n"
+            f"{ctx.model_dump_json(indent=2)}\n"
             "==========================\n\n"
             "SCHEMA — EnhancedCaseAnalysis\n"
             "{\n"
@@ -122,12 +132,20 @@ class AIAnalyzer:
             '  "potential_challenges": ["Challenge 1"]\n'
             "}\n"
             "==========================\n\n"
-            "CONSTRUCTION RULES\n"
+            "INTAKE-DRIVEN CONSTRUCTION RULES\n"
             "1. `document_title`: use true title; if none, craft a concise (<10 words) title.\n"
-            "2. `summary`: 100–150 words, objective.\n"
-            "3. `timeline_events`: chronological; date as `YYYY-MM-DD` or `\"Unknown\"`.\n"
-            "4. `evidence_strength`: choose “Strong”, “Moderate”, or “Weak”.\n"
-            "5. `potential_challenges`: short phrases (≤8 words) describing foreseeable hurdles.\n\n"
+            "2. `summary`: 100–150 words, objective, must reference specific details from the document content.\n"
+            "   • EMPHASIZE content that directly supports or challenges client's priorities\n"
+            "   • Highlight evidence relevant to desired outcomes\n"
+            "3. `timeline_events`: CRITICAL - Extract actual events, dates, and actions from document content. Each event must contain:\n"
+            "   • `date`: specific date in YYYY-MM-DD format or \"Unknown\" if no date found\n"
+            "   • `event`: descriptive action/occurrence from document (15-30 words), NEVER use \"N/A\", \"Not specified\", or generic placeholders\n"
+            "   • Example: {\"date\": \"2024-03-15\", \"event\": \"Property inspection revealed water damage in basement affecting electrical systems\"}\n"
+            "   • If no events found, return empty array []\n"
+            "4. `evidence_strength`: choose \"Strong\", \"Moderate\", or \"Weak\" based on how well this document supports client's case.\n"
+            "5. `legal_significance`: explain how this document impacts the case legally, with specific focus on client's legal claims and desired outcomes.\n"
+            "6. `relevance_to_intake`: CRITICAL - explicitly connect this document to client's stated priorities and explain how it advances their desired outcomes.\n"
+            "7. `potential_challenges`: short phrases (≤8 words) describing foreseeable hurdles that could impact client's goals.\n\n"
             "VALIDATION\n"
             "• Must parse as JSON.\n"
             "• All strings double-quoted.\n\n"
@@ -145,7 +163,7 @@ class AIAnalyzer:
             "• Do not alter key names.\n\n"
             "==========================\n"
             "COMBINED ANALYSIS (read-only)\n"
-            f"{{analysis.model_dump_json(indent=2)}}\n"
+            f"{analysis.model_dump_json(indent=2)}\n"
             "==========================\n\n"
             "SCHEMAS\n"
             "LegalAssessment:\n"
@@ -206,15 +224,75 @@ class AIAnalyzer:
         return analysis
 
     async def analyze_case_documents(self, documents: List[ProcessedDocument], intake_context: EnhancedIntakeAnalysis) -> List[Union[EnhancedCaseAnalysis, AnalysisError]]:
-        """Analyzes multiple case documents in parallel, returning either analysis or an error."""
-        tasks = [self._analyze_single_document(doc, intake_context) for doc in documents]
-        return await asyncio.gather(*tasks)
+        """Analyzes multiple case documents sequentially to avoid rate limiting."""
+        results = []
+        total_docs = len(documents)
+        
+        print(f"AI ANALYZER: Starting analysis of {total_docs} documents...")
+        
+        for i, doc in enumerate(documents, 1):
+            print(f"AI ANALYZER: Processing document {i}/{total_docs}: {doc.file_name}")
+            result = await self._analyze_single_document(doc, intake_context)
+            results.append(result)
+            
+            # Log the result type
+            if isinstance(result, AnalysisError):
+                print(f"AI ANALYZER: ❌ Failed to analyze {doc.file_name}: {result.error_message}")
+            else:
+                print(f"AI ANALYZER: ✅ Successfully analyzed {doc.file_name}")
+            
+            # Add delay between requests to respect rate limits
+            if i < total_docs:  # Don't delay after the last document
+                print(f"AI ANALYZER: Waiting 3 seconds before next document...")
+                await asyncio.sleep(3)
+        
+        print(f"AI ANALYZER: Completed analysis of all {total_docs} documents")
+        return results
+
+    def _estimate_tokens(self, text: str) -> int:
+        """Rough estimation of tokens (approximately 4 characters per token)."""
+        return len(text) // 4
+    
+    def _truncate_content_if_needed(self, content: str, max_tokens: int = 25000) -> str:
+        """Truncate content if it exceeds token limit."""
+        estimated_tokens = self._estimate_tokens(content)
+        if estimated_tokens > max_tokens:
+            # Keep first 80% and last 20% of content
+            chars_to_keep = max_tokens * 4
+            first_part_chars = int(chars_to_keep * 0.8)
+            last_part_chars = int(chars_to_keep * 0.2)
+            
+            first_part = content[:first_part_chars]
+            last_part = content[-last_part_chars:]
+            
+            truncated_content = f"{first_part}\n\n[... CONTENT TRUNCATED FOR SIZE ...]\n\n{last_part}"
+            print(f"AI ANALYZER: ⚠️  Content truncated from ~{estimated_tokens} to ~{max_tokens} tokens")
+            return truncated_content
+        return content
 
     async def _analyze_single_document(self, document: ProcessedDocument, intake_context: EnhancedIntakeAnalysis) -> Union[EnhancedCaseAnalysis, AnalysisError]:
         """Analyzes a single case document, returning structured data or an error."""
         try:
-            prompt = self._build_case_document_prompt(document, intake_context)
-            raw_analysis = await self._make_openai_request(prompt, model="gpt-4o")
+            # Check document size and truncate if necessary
+            truncated_content = self._truncate_content_if_needed(document.content)
+            
+            # Create a copy of the document with truncated content
+            doc_for_analysis = ProcessedDocument(
+                file_name=document.file_name,
+                content=truncated_content,
+                file_type=document.file_type
+            )
+            
+            prompt = self._build_case_document_prompt(doc_for_analysis, intake_context)
+            
+            # Estimate total prompt size and choose appropriate model
+            total_estimated_tokens = self._estimate_tokens(prompt)
+            model_to_use = "gpt-4o-mini" if total_estimated_tokens > 20000 else "gpt-4o"
+            
+            if model_to_use == "gpt-4o-mini":
+                print(f"AI ANALYZER: 🔄 Using gpt-4o-mini for large document: {document.file_name}")
+            
+            raw_analysis = await self._make_openai_request(prompt, model=model_to_use)
             return EnhancedCaseAnalysis.model_validate(raw_analysis)
         except (HTTPException, ValidationError) as e:
             return AnalysisError(

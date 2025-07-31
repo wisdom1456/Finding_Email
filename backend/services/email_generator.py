@@ -1,5 +1,6 @@
 import base64
 import re
+import os
 from typing import List, Optional, Dict, Any
 from openai import OpenAI, RateLimitError, APIError, APITimeoutError
 from jinja2 import Environment, FileSystemLoader, select_autoescape, TemplateError
@@ -16,15 +17,17 @@ from ..utils.data_models import (
     LegalAssessment,
     DemandLetterEvaluation,
     FindingsHeader,
-    FindingsFooter
+    FindingsFooter,
+    QualityScore,
 )
+from .quality_validator import QualityValidator
 
 # Constants
 SENIOR_ATTORNEY_PERSONA = """
-You are a seasoned litigation attorney with 15+ years of experience at a respected law firm. 
+You are a seasoned litigation attorney with 15+ years of experience at a respected law firm.
 Your specialty areas include:
 - Contract disputes and breach of contract claims
-- Landlord-tenant law and property disputes  
+- Landlord-tenant law and property disputes
 - Personal injury and negligence claims
 - Insurance coverage disputes
 
@@ -40,15 +43,22 @@ You draft findings letters that clients and opposing counsel respect for their t
 
 class EmailGenerator:
     """Service to generate a professional findings letter and format it for multiple outputs."""
+
     def __init__(self, client: OpenAI):
         """Initializes the EmailGenerator with an OpenAI client and Jinja2 environment."""
         if not client:
             raise ValueError("An OpenAI client is required for EmailGenerator.")
         self.client = client
+        
+        # Construct an absolute path to the templates directory
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        template_dir = os.path.join(script_dir, '..', 'assets', 'templates')
+        
         self.jinja_env = Environment(
-            loader=FileSystemLoader("backend/assets/templates"),
+            loader=FileSystemLoader(template_dir),
             autoescape=select_autoescape(['html', 'xml'])
         )
+        self.quality_validator = QualityValidator()
 
     def generate_email_and_analysis_docs(self, analysis: CombinedAnalysis) -> EmailResponse:
         """
@@ -75,14 +85,17 @@ class EmailGenerator:
                 # You might want to return a more informative error message here
                 return EmailResponse(findings_letter=None, download_links=[], case_analysis_text="Error: Could not generate findings letter.")
 
-            # Step 3: Render HTML from Jinja2 template
+            # Step 3: Validate the quality of the generated letter
+            quality_score = self.quality_validator.validate_findings_letter(findings_letter_model)
+
+            # Step 4: Render HTML from Jinja2 template
             template = self.jinja_env.get_template("findings_email.jinja2")
             html_content = template.render(letter=findings_letter_model)
 
-            # Step 4: Format the detailed case analysis text document
+            # Step 5: Format the detailed case analysis text document
             case_analysis_text = self._format_case_analysis(analysis)
 
-            # Step 5: Create downloadable files
+            # Step 6: Create downloadable files
             download_links = self._create_downloadable_files(
                 html_content=html_content,
                 case_analysis_text=case_analysis_text,
@@ -92,7 +105,8 @@ class EmailGenerator:
             return EmailResponse(
                 findings_letter=findings_letter_model,
                 download_links=download_links,
-                case_analysis_text=case_analysis_text
+                case_analysis_text=case_analysis_text,
+                quality_score=quality_score
             )
         except TemplateError as e:
             error_message = f"Jinja2 template error: {e}"
@@ -120,73 +134,71 @@ class EmailGenerator:
             return None
 
     def _generate_executive_summary(self, analysis: CombinedAnalysis) -> str:
-        """Generates the executive summary."""
+        """Generates a client-friendly executive summary."""
         prompt = f"""
-        Analyze the provided case data and draft a concise, authoritative executive summary (3-4 sentences) for a findings letter.
+        Analyze the provided case data and draft a concise, client-friendly executive summary (2-3 sentences) for a findings letter.
 
         Your summary must:
-        - Immediately establish the legal matter and your professional opinion.
-        - Highlight the strongest aspects of the case for the client.
-        - Convey confidence while maintaining professional objectivity.
-        - Use sophisticated legal language appropriate for the case type.
+        - Be professional, confident, and clear.
+        - Avoid legal jargon.
+        - Focus on the client's perspective and the case's potential.
+        - Use sophisticated but accessible language.
 
         Case Context:
         {analysis.model_dump_json(indent=2)}
-
-        Example Tone: "Our office has completed a comprehensive review of your potential claims arising from [specific incident]. Based on our analysis of the available evidence and applicable legal standards, we believe you have viable grounds for pursuing [specific legal action]. While certain challenges exist that we must address strategically, the strength of your position warrants moving forward with [recommended approach]."
 
         Generate only the text for the executive summary.
         """
         return self._make_openai_request(prompt) or "Executive summary could not be generated."
 
     def _generate_legal_framework(self, analysis: CombinedAnalysis) -> str:
-        """Generates the legal framework section, including relevant statutes and case law."""
+        """Generates a client-friendly legal framework section."""
         prompt = f"""
-        Based on the case type and summary, identify and articulate the relevant legal framework.
+        Based on the case type and summary, articulate the relevant legal framework in a client-friendly narrative.
 
         Your response should:
-        - Identify the key legal principles governing this case.
-        - Cite relevant statutes or case law (e.g., 'Clay Elec. Coop., Inc. v. Johnson, 873 So. 2d 1182 (Fla. 2003)').
-        - Explain the legal standard in clear, professional terms.
+        - Explain the core legal principles in simple, professional terms.
+        - Avoid overly technical jargon and case citations.
+        - Structure the output as a clean, readable paragraph.
 
         Case Context:
         {analysis.model_dump_json(indent=2)}
-
-        Example (Negligence): "To prove a claim of negligence, one must establish: (1) a duty of care, (2) a breach of that duty, (3) a causal connection between the breach and the injury, and (4) actual damages. See Clay Elec. Coop., Inc. v. Johnson, 873 So. 2d 1182 (Fla. 2003)."
         
         Generate only the text for the legal framework.
         """
         return self._make_openai_request(prompt) or "Legal framework could not be determined."
 
     def _generate_case_analysis_narrative(self, analysis: CombinedAnalysis, legal_framework: str) -> str:
-        """Generates a detailed narrative applying the legal framework to the case facts."""
+        """Generates a client-friendly case analysis narrative."""
         prompt = f"""
-        Synthesize the case facts and the established legal framework into a cohesive legal analysis.
+        Synthesize the case facts and legal framework into a clear, client-friendly narrative.
 
         Instructions:
-        - Apply the legal principles from the framework to the specific facts of the case.
-        - Analyze the strengths and weaknesses of the claims based on the evidence.
-        - Maintain a professional, analytical, and objective tone.
+        - Structure with headings for **Our Analysis**, **Strengths of Your Case**, and **Potential Challenges**.
+        - Explain the analysis in a way a non-lawyer can easily understand.
+        - Maintain a professional, confident, and client-focused tone.
+        - Ensure the output is a narrative, not a technical legal memo.
 
         Case Context:
         {analysis.model_dump_json(indent=2)}
 
         Established Legal Framework:
         {legal_framework}
-
+        
         Generate only the text for the case analysis narrative.
         """
         return self._make_openai_request(prompt) or "Case analysis could not be generated."
 
     def _generate_strategic_recommendations(self, analysis: CombinedAnalysis, case_analysis_narrative: str) -> str:
-        """Generates strategic recommendations based on the analysis."""
+        """Generates client-friendly strategic recommendations."""
         prompt = f"""
-        Based on the comprehensive analysis, formulate a set of clear, actionable strategic recommendations for the client.
+        Based on the analysis, formulate clear, scannable, and actionable strategic recommendations for the client.
 
         Instructions:
-        - Propose concrete next steps.
-        - Explain the strategic rationale behind each recommendation.
-        - Consider both immediate actions and long-term litigation posture.
+        - Present recommendations as a numbered list.
+        - Use clear, imperative language (e.g., "We recommend you take the following actions...").
+        - Keep each recommendation concise and easy to understand.
+        - DO NOT use bullet points.
 
         Case Analysis Narrative:
         {case_analysis_narrative}
@@ -194,7 +206,7 @@ class EmailGenerator:
         Case Context:
         {analysis.model_dump_json(indent=2)}
 
-        Generate only the text for the strategic recommendations.
+        Generate only the text for the strategic recommendations, formatted as a numbered list.
         """
         return self._make_openai_request(prompt) or "Strategic recommendations could not be formulated."
 
@@ -257,7 +269,7 @@ class EmailGenerator:
                 if doc_analysis.timeline_events:
                     doc_lines.append("**Key Events:**")
                     for event in doc_analysis.timeline_events:
-                        doc_lines.append(f"  - **{event.get('date', 'Date N/A')}:** {event.get('description', 'N/A')} (Source: {doc_analysis.document_title})")
+                        doc_lines.append(f"  - **{event.get('date', 'Date N/A')}:** {event.get('event', 'N/A')} (Source: {doc_analysis.document_title})")
         else:
             doc_lines.append("No individual documents were analyzed.")
 

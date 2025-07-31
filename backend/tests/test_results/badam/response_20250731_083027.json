@@ -1,0 +1,710 @@
+{
+  "analysis": {
+    "intake_analysis": {
+      "client_name": "Balaji Badam, Rajya Badam",
+      "attorney_name": "",
+      "case_summary": "Balaji and Rajya Badam own an investment property in Jacksonville, FL, leased to Breanna Herring. The tenant has consistently paid rent late and has failed to pay the full amount due for the current lease term. As of June 2025, the tenant owes a total of $5,505, including late fees and administrative costs. The landlords are seeking legal assistance to issue a demand letter to recover the owed amount.",
+      "case_type": "",
+      "urgency_level": "Very Important – severe hardship, personal or financial inconvenience if matter is not resolved quickly.",
+      "client_priorities": [
+        "Recover owed rent"
+      ],
+      "desired_outcomes": [
+        "Issue a demand letter for $5,505"
+      ],
+      "key_facts": [
+        "Property located at 811 Gate Run Rd, Jacksonville, FL.",
+        "Lease started in late 2022, ending June 30, 2025.",
+        "Tenant has paid only $6,895 of $11,400 due.",
+        "Tenant paid $1,300 in April and $500 in May.",
+        "No rent paid for June; tenant unresponsive."
+      ],
+      "parties_involved": [
+        {
+          "name": "Breanna Herring",
+          "role": "Tenant"
+        }
+      ],
+      "financial_impact": "The situation has caused severe financial stress and hardship for the landlords.",
+      "legal_claims": [
+        "Demand for payment of $5,505"
+      ]
+    },
+    "case_analyses": [
+      {
+        "document_title": "Demand for Rent Payment",
+        "document_type": "Legal Analysis",
+        "key_entities": [
+          {
+            "name": "Balaji Badam",
+            "role": "Landlord"
+          },
+          {
+            "name": "Rajya Badam",
+            "role": "Landlord"
+          },
+          {
+            "name": "Breanna Herring",
+            "role": "Tenant"
+          }
+        ],
+        "summary": "Balaji and Rajya Badam own a property in Jacksonville, FL, leased to Breanna Herring. The tenant has consistently paid rent late and owes $5,505 as of June 2025, including late fees and administrative costs. The landlords seek to issue a demand letter to recover this amount. The lease began in late 2022 and ends on June 30, 2025. The tenant has paid only $6,895 of the $11,400 due, with partial payments in April and May, and no payment for June. The tenant is unresponsive, causing severe financial stress for the landlords.",
+        "timeline_events": [
+          {
+            "date": "2022-10-01",
+            "event": "Lease started for property at 811 Gate Run Rd, Jacksonville, FL."
+          },
+          {
+            "date": "2025-06-01",
+            "event": "Tenant Breanna Herring failed to pay rent for June."
+          }
+        ],
+        "evidence_strength": "Strong",
+        "legal_significance": "This document supports the landlords' legal claim for the recovery of $5,505 in unpaid rent, justifying the issuance of a demand letter.",
+        "relevance_to_intake": "The document directly addresses the client's priority to recover owed rent and supports the desired outcome of issuing a demand letter for $5,505.",
+        "potential_challenges": [
+          "Tenant unresponsive to communications"
+        ]
+      },
+      {
+        "document_title": "Florida Eviction Notice",
+        "document_type": "Eviction Notice",
+        "key_entities": [
+          {
+            "name": "Breanna Herring",
+            "role": "Tenant"
+          },
+          {
+            "name": "Rajya Badam",
+            "role": "Landlord"
+          }
+        ],
+        "summary": "This eviction notice, dated May 28, 2025, is directed to tenant Breanna Herring for nonpayment of rent at 811 Gate Run Rd, Jacksonville, FL. The notice demands payment of $3,600, including $1,700 past rent for May 2025, $200 late fees, and $1,700 other fees. Payment must be made within 3 days to avoid eviction. The landlord, Rajya Badam, has provided payment instructions via Zelle. The notice serves as a legal warning that noncompliance will lead to legal proceedings to recover rent and possession of the property.",
+        "timeline_events": [
+          {
+            "date": "2025-05-28",
+            "event": "Eviction notice issued to Breanna Herring for nonpayment."
+          }
+        ],
+        "evidence_strength": "Strong",
+        "legal_significance": "The document serves as a formal demand for payment and a prerequisite for initiating eviction proceedings, supporting the client's legal claim for owed rent.",
+        "relevance_to_intake": "The notice directly aligns with the client's priority to recover owed rent by formally demanding payment and threatening eviction, advancing the desired outcome of issuing a demand letter for $5,505.",
+        "potential_challenges": [
+          "Tenant unresponsive to notice"
+        ]
+      },
+      {
+        "document_title": "Demand for Owed Rent - Badam vs. Herring",
+        "document_type": "Legal Demand Analysis",
+        "key_entities": [
+          {
+            "name": "Balaji Badam",
+            "role": "Landlord"
+          },
+          {
+            "name": "Rajya Badam",
+            "role": "Landlord"
+          },
+          {
+            "name": "Breanna Herring",
+            "role": "Tenant"
+          }
+        ],
+        "summary": "Balaji and Rajya Badam, landlords of a property in Jacksonville, FL, are seeking to recover $5,505 in owed rent from their tenant, Breanna Herring. The tenant has consistently paid rent late and has not paid the full amount due for the current lease term. As of June 2025, the tenant has paid only $6,895 of the $11,400 due, with no payment made for June and the tenant being unresponsive. The landlords are experiencing severe financial stress and are seeking legal assistance to issue a demand letter to recover the owed amount.",
+        "timeline_events": [
+          {
+            "date": "2022-11-01",
+            "event": "Lease started for property at 811 Gate Run Rd, Jacksonville, FL."
+          },
+          {
+            "date": "2025-06-01",
+            "event": "Tenant Breanna Herring owes $5,505 in rent and fees."
+          }
+        ],
+        "evidence_strength": "Strong",
+        "legal_significance": "This document provides a clear basis for issuing a demand letter to recover the owed rent, supporting the landlords' legal claim for payment.",
+        "relevance_to_intake": "The document directly addresses the client's priority to recover owed rent by detailing the amount due and supporting the issuance of a demand letter.",
+        "potential_challenges": [
+          "Tenant unresponsive",
+          "Potential legal delays"
+        ]
+      },
+      {
+        "document_title": "Checking Account Statement",
+        "document_type": "Bank Statement",
+        "key_entities": [
+          {
+            "name": "Breanna Herring",
+            "role": "Tenant"
+          }
+        ],
+        "summary": "The document is a checking account statement showing transactions from Breanna Herring. It includes multiple Zelle transfers to the account, totaling $6,895. Notably, $1,300 was transferred in April and $500 in May. The current available balance is $674.63, with a pending withdrawal of $1,788.99. No rent payment for June is evident, and the tenant is unresponsive. This financial activity is crucial for assessing the tenant's ability to pay the owed rent of $5,505.",
+        "timeline_events": [
+          {
+            "date": "2025-05-05",
+            "event": "Received $500 via Zelle from Breanna Herring."
+          },
+          {
+            "date": "2025-04-21",
+            "event": "Received $1,300 via Zelle from Breanna Herring."
+          }
+        ],
+        "evidence_strength": "Moderate",
+        "legal_significance": "The document provides evidence of partial rent payments but highlights the tenant's failure to meet full obligations, supporting the demand for $5,505.",
+        "relevance_to_intake": "The statement shows partial payments and supports the claim of unpaid rent, aligning with the client's priority to recover $5,505.",
+        "potential_challenges": [
+          "Tenant's financial instability"
+        ]
+      },
+      {
+        "document_title": "Demand for Rent Payment",
+        "document_type": "Legal Demand",
+        "key_entities": [
+          {
+            "name": "Balaji Badam",
+            "role": "Landlord"
+          },
+          {
+            "name": "Rajya Badam",
+            "role": "Landlord"
+          },
+          {
+            "name": "Breanna Herring",
+            "role": "Tenant"
+          }
+        ],
+        "summary": "Balaji and Rajya Badam, landlords of a property in Jacksonville, FL, are seeking to recover $5,505 in unpaid rent from their tenant, Breanna Herring. The tenant has consistently paid rent late and has not paid the full amount due for the current lease term. As of June 2025, the tenant owes $5,505, including late fees and administrative costs. The landlords are experiencing severe financial stress due to this situation and are requesting legal assistance to issue a demand letter to recover the owed amount.",
+        "timeline_events": [
+          {
+            "date": "2022-10-01",
+            "event": "Lease agreement started for property at 811 Gate Run Rd, Jacksonville, FL."
+          },
+          {
+            "date": "2025-06-01",
+            "event": "Tenant Breanna Herring failed to pay rent for June."
+          }
+        ],
+        "evidence_strength": "Strong",
+        "legal_significance": "This document serves as a basis for issuing a demand letter to recover the unpaid rent, supporting the landlords' legal claim for $5,505.",
+        "relevance_to_intake": "The document directly addresses the client's priority to recover owed rent and supports the desired outcome of issuing a demand letter.",
+        "potential_challenges": [
+          "Tenant unresponsive to communication"
+        ]
+      },
+      {
+        "document_title": "Eviction Notice - 811 Gate Run Rd - Non Payment of Rent",
+        "document_type": "Email",
+        "key_entities": [
+          {
+            "name": "Ravi Badam",
+            "role": "Landlord"
+          },
+          {
+            "name": "Breanna Herring",
+            "role": "Tenant"
+          }
+        ],
+        "summary": "The document is an email from Ravi Badam to Breanna Herring, serving an eviction notice for non-payment of rent for May 2025. Ravi emphasizes the financial burden caused by the tenant's failure to pay $1,700 rent and $2,000 in accumulated late fees. The email highlights the urgency of the situation, as Ravi is unable to meet mortgage and other property-related obligations. Ravi warns that eviction proceedings will commence if the tenant does not comply with the rental agreement. This document supports the client's priority to recover owed rent and issue a demand letter for $5,505.",
+        "timeline_events": [
+          {
+            "date": "2025-05-24",
+            "event": "Ravi Badam requests Breanna Herring to pay $1,700 rent by May 27, 2025."
+          },
+          {
+            "date": "2025-05-28",
+            "event": "Ravi Badam serves an eviction notice to Breanna Herring for non-payment of rent."
+          }
+        ],
+        "evidence_strength": "Strong",
+        "legal_significance": "The document legally supports the landlord's claim for unpaid rent and late fees, justifying the issuance of a demand letter for $5,505.",
+        "relevance_to_intake": "The document directly addresses the client's priority to recover owed rent and supports the desired outcome of issuing a demand letter.",
+        "potential_challenges": [
+          "Tenant may dispute late fees"
+        ]
+      },
+      {
+        "document_title": "Florida Eviction Notice",
+        "document_type": "Eviction Notice",
+        "key_entities": [
+          {
+            "name": "Breanna Herring",
+            "role": "Tenant"
+          },
+          {
+            "name": "Rajya Badam",
+            "role": "Landlord"
+          }
+        ],
+        "summary": "The document is a Florida eviction notice addressed to Breanna Herring, the tenant at 811 Gate Run Rd, Jacksonville, FL. It demands payment of $3,600 in past rent and late fees within 3 days, failing which the tenant must vacate the premises. The notice specifies a total amount due of $3,600, with payment instructions to a Zelle account. The document is signed by the landlord, Rajya Badam, and includes their contact information. This notice serves as a formal demand for payment and outlines the consequences of noncompliance, including potential legal action for possession of the premises.",
+        "timeline_events": [
+          {
+            "date": "2025-05-28",
+            "event": "Eviction notice issued to Breanna Herring for nonpayment."
+          }
+        ],
+        "evidence_strength": "Strong",
+        "legal_significance": "This document legally supports the landlord's claim for owed rent and provides grounds for eviction if the tenant fails to comply, aligning with the client's demand for payment.",
+        "relevance_to_intake": "The eviction notice directly addresses the client's priority to recover owed rent by formally demanding payment and threatening eviction, supporting their desired outcome of issuing a demand letter.",
+        "potential_challenges": [
+          "Tenant may contest eviction",
+          "Service of notice disputed"
+        ]
+      },
+      {
+        "document_title": "Residential Lease Agreement for 811 Gate Run Rd",
+        "document_type": "Lease Agreement",
+        "key_entities": [
+          {
+            "name": "Rajya Lakshmi Badam",
+            "role": "Landlord"
+          },
+          {
+            "name": "Breanna Deshae Herring",
+            "role": "Tenant"
+          }
+        ],
+        "summary": "This document is a residential lease agreement for a property located at 811 Gate Run Rd, Jacksonville, Florida, between Rajya Lakshmi Badam as the landlord and Breanna Deshae Herring as the tenant. The lease term is from January 1, 2025, to June 30, 2025, with a total rent of $10,200 payable in monthly installments of $1,700. The tenant is responsible for all utilities and must follow HOA guidelines. The lease includes provisions for late fees, maintenance responsibilities, and conditions for early termination. The tenant has not paid the full rent due, leading to a financial shortfall for the landlord.",
+        "timeline_events": [
+          {
+            "date": "2025-01-01",
+            "event": "Lease term begins for property at 811 Gate Run Rd"
+          },
+          {
+            "date": "2025-06-30",
+            "event": "Lease term scheduled to end"
+          }
+        ],
+        "evidence_strength": "Strong",
+        "legal_significance": "The lease agreement legally obligates the tenant to pay the specified rent, supporting the landlord's claim for the owed amount of $5,505.",
+        "relevance_to_intake": "The document outlines the tenant's financial obligations, directly supporting the client's priority to recover owed rent through a demand letter.",
+        "potential_challenges": [
+          "Tenant unresponsive to communications"
+        ]
+      },
+      {
+        "document_title": "Tenant Communication Regarding Rent Payment",
+        "document_type": "Email",
+        "key_entities": [
+          {
+            "name": "Breanna Herring",
+            "role": "Tenant"
+          }
+        ],
+        "summary": "The document is an email from Breanna Herring, the tenant of a property in Jacksonville, FL, expressing regret for not paying rent on time due to personal issues, including the loss of a child. Breanna acknowledges the debt and indicates a willingness to pay as funds become available. She requests understanding and mentions the possibility of providing screenshots of messages as evidence of her situation. This communication highlights the tenant's acknowledgment of the debt but also her financial struggles, which may impact the recovery of the owed rent.",
+        "timeline_events": [],
+        "evidence_strength": "Moderate",
+        "legal_significance": "The document serves as an acknowledgment of the debt by the tenant, which can be used to support the landlords' demand for payment of $5,505.",
+        "relevance_to_intake": "The email directly relates to the client's priority of recovering owed rent by confirming the tenant's acknowledgment of the debt.",
+        "potential_challenges": [
+          "Tenant's financial hardship"
+        ]
+      },
+      {
+        "document_title": "Residential Lease Agreement for 811 Gate Run Rd",
+        "document_type": "Lease Agreement",
+        "key_entities": [
+          {
+            "name": "Rajya Lakshmi Badam",
+            "role": "Landlord"
+          },
+          {
+            "name": "Breanna Deshae Herring",
+            "role": "Tenant"
+          }
+        ],
+        "summary": "This lease agreement outlines the rental terms for a property located at 811 Gate Run Rd, Jacksonville, FL, leased by Rajya Lakshmi Badam to Breanna Deshae Herring. The lease term is from January 1, 2025, to June 30, 2025, with a monthly rent of $1,700. The tenant is responsible for utilities and must adhere to HOA guidelines. Late fees apply for overdue rent payments. The document specifies that the tenant must maintain the premises and pay a security deposit. The lease includes provisions for early termination fees and landlord access to the property.",
+        "timeline_events": [
+          {
+            "date": "2025-01-01",
+            "event": "Lease term begins for property at 811 Gate Run Rd."
+          },
+          {
+            "date": "2025-06-30",
+            "event": "Lease term ends for property at 811 Gate Run Rd."
+          }
+        ],
+        "evidence_strength": "Moderate",
+        "legal_significance": "The lease agreement establishes the tenant's obligation to pay rent and late fees, supporting the landlord's claim for owed rent.",
+        "relevance_to_intake": "The document confirms the tenant's rental obligations, directly supporting the client's priority to recover owed rent of $5,505.",
+        "potential_challenges": [
+          "Tenant unresponsive to payment demands"
+        ]
+      },
+      {
+        "document_title": "Demand for Rent Payment - Badam vs. Herring",
+        "document_type": "Legal Analysis",
+        "key_entities": [
+          {
+            "name": "Balaji Badam",
+            "role": "Landlord"
+          },
+          {
+            "name": "Rajya Badam",
+            "role": "Landlord"
+          },
+          {
+            "name": "Breanna Herring",
+            "role": "Tenant"
+          }
+        ],
+        "summary": "Balaji and Rajya Badam own a property in Jacksonville, FL, leased to Breanna Herring. The tenant has consistently paid rent late and owes $5,505 as of June 2025, including late fees. The landlords seek to issue a demand letter to recover this amount. The lease began in late 2022 and ends on June 30, 2025. The tenant has paid only $6,895 of the $11,400 due, with partial payments in April and May, and no payment for June. The tenant is unresponsive, causing severe financial stress for the landlords.",
+        "timeline_events": [
+          {
+            "date": "2022-11-01",
+            "event": "Lease started for property at 811 Gate Run Rd, Jacksonville, FL."
+          },
+          {
+            "date": "2025-06-01",
+            "event": "Tenant failed to pay rent for June; became unresponsive."
+          }
+        ],
+        "evidence_strength": "Strong",
+        "legal_significance": "This document substantiates the landlords' claim for owed rent, supporting the issuance of a demand letter for $5,505.",
+        "relevance_to_intake": "The document directly addresses the client's priority to recover owed rent by detailing the tenant's payment failures and supporting the demand letter issuance.",
+        "potential_challenges": [
+          "Tenant unresponsiveness",
+          "Proof of delivery for demand letter"
+        ]
+      },
+      {
+        "document_title": "May 2025 Rent Payment Request",
+        "document_type": "Tenant Communication",
+        "key_entities": [
+          {
+            "name": "Breanna Herring",
+            "role": "Tenant"
+          }
+        ],
+        "summary": "The document is a communication to Breanna Herring regarding non-payment of rent for May 2025. It requests the tenant to pay $1,700 by May 27, 2025, and also mentions an outstanding late fee of $2,000 for current and past leasing terms. This communication highlights the tenant's failure to meet financial obligations, which directly supports the client's priority of recovering owed rent. The document serves as evidence of the tenant's ongoing payment issues, relevant to the client's desired outcome of issuing a demand letter for $5,505.",
+        "timeline_events": [
+          {
+            "date": "2025-05-24",
+            "event": "Tenant notified of non-payment for May 2025 rent and late fees."
+          }
+        ],
+        "evidence_strength": "Strong",
+        "legal_significance": "This document legally supports the client's claim for unpaid rent and late fees, forming a basis for a demand letter.",
+        "relevance_to_intake": "The document directly supports the client's priority to recover owed rent by evidencing the tenant's non-payment.",
+        "potential_challenges": [
+          "Tenant unresponsive to payment requests"
+        ]
+      },
+      {
+        "document_title": "April and May Rent Payment Discrepancies",
+        "document_type": "Email",
+        "key_entities": [
+          {
+            "name": "Breanna Herring",
+            "role": "Tenant"
+          }
+        ],
+        "summary": "The email highlights a payment issue where the tenant, Breanna Herring, paid only $1,300 in April and $500 in May, contrary to the agreed full payment by the 15th of each month. The landlord expresses concern over accumulating late fees and seeks to discuss the matter further. This document is crucial as it evidences the tenant's failure to meet payment obligations, supporting the client's priority to recover owed rent.",
+        "timeline_events": [
+          {
+            "date": "2023-05-22",
+            "event": "Landlord emailed tenant about April and May payment discrepancies and late fees."
+          },
+          {
+            "date": "2023-05-05",
+            "event": "Tenant made a partial payment of $500 for May."
+          }
+        ],
+        "evidence_strength": "Strong",
+        "legal_significance": "This document provides clear evidence of the tenant's failure to pay the agreed rent amount on time, supporting the legal claim for the owed $5,505.",
+        "relevance_to_intake": "The email directly supports the client's priority to recover owed rent by documenting the tenant's payment failures, which is crucial for issuing a demand letter.",
+        "potential_challenges": [
+          "Tenant unresponsive to communication"
+        ]
+      },
+      {
+        "document_title": "Re: MOVE OUT",
+        "document_type": "Email",
+        "key_entities": [
+          {
+            "name": "Ravi Badam",
+            "role": "Landlord"
+          },
+          {
+            "name": "Breanna Herring",
+            "role": "Tenant"
+          }
+        ],
+        "summary": "The email exchange between Ravi Badam and Breanna Herring discusses the tenant's move-out notice and the landlord's concerns about unpaid rent. Ravi acknowledges Breanna's notice to vacate by May 11th, with cleaning by May 13th, despite the lease ending on June 30th. Ravi expresses financial strain due to unpaid rent and requests any possible payment to avoid immediate eviction. Breanna mentions prior discussions about her employment status affecting rent payments and notes issues with air conditioning. The communication highlights the landlord's need to recover owed rent, aligning with the client's priorities.",
+        "timeline_events": [
+          {
+            "date": "2025-05-11",
+            "event": "Breanna Herring plans to move out of the condo."
+          },
+          {
+            "date": "2025-05-13",
+            "event": "Breanna Herring plans to complete cleaning of the unit."
+          },
+          {
+            "date": "2025-05-28",
+            "event": "Ravi Badam requests payment to avoid immediate eviction."
+          }
+        ],
+        "evidence_strength": "Moderate",
+        "legal_significance": "The document provides evidence of the tenant's intent to vacate early and the landlord's attempt to recover unpaid rent, supporting the demand for $5,505.",
+        "relevance_to_intake": "The email directly relates to the client's priority of recovering owed rent by documenting the landlord's request for payment and the tenant's acknowledgment of financial obligations.",
+        "potential_challenges": [
+          "Tenant's early move-out notice"
+        ]
+      },
+      {
+        "document_title": "Demand for Rent Payment",
+        "document_type": "Legal Demand",
+        "key_entities": [
+          {
+            "name": "Balaji Badam",
+            "role": "Landlord"
+          },
+          {
+            "name": "Rajya Badam",
+            "role": "Landlord"
+          },
+          {
+            "name": "Breanna Herring",
+            "role": "Tenant"
+          }
+        ],
+        "summary": "Balaji and Rajya Badam own a property in Jacksonville, FL, leased to Breanna Herring. The tenant has been consistently late with rent payments and currently owes $5,505, including late fees and administrative costs. The lease started in late 2022 and ends on June 30, 2025. As of June 2025, the tenant has paid only $6,895 of the $11,400 due. No rent was paid for June, and the tenant has been unresponsive. The landlords are seeking to issue a demand letter to recover the owed amount, emphasizing the financial hardship caused by the tenant's non-payment.",
+        "timeline_events": [
+          {
+            "date": "2022-11-01",
+            "event": "Lease agreement commenced for property at 811 Gate Run Rd, Jacksonville, FL."
+          },
+          {
+            "date": "2025-06-01",
+            "event": "Tenant failed to pay rent for June; total owed is $5,505."
+          }
+        ],
+        "evidence_strength": "Strong",
+        "legal_significance": "This document serves as a basis for issuing a demand letter, a critical step in legally recovering the owed rent of $5,505 from the tenant.",
+        "relevance_to_intake": "The document directly supports the client's priority to recover owed rent by detailing the tenant's payment failures and justifying the issuance of a demand letter.",
+        "potential_challenges": [
+          "Tenant unresponsive to communications"
+        ]
+      },
+      {
+        "document_title": "Tenant Rent Payment Issues",
+        "document_type": "iMessage Communication",
+        "key_entities": [
+          {
+            "name": "Breanna Herring",
+            "role": "Tenant"
+          }
+        ],
+        "summary": "The document outlines communication regarding rent payment issues between landlords Balaji and Rajya Badam and their tenant, Breanna Herring. The tenant has consistently paid rent late and has not paid the full amount due for the current lease term. As of June 2025, the tenant owes $5,505, including late fees and administrative costs. The landlords are experiencing severe financial stress due to this situation and seek to issue a demand letter to recover the owed amount.",
+        "timeline_events": [],
+        "evidence_strength": "Strong",
+        "legal_significance": "This document provides evidence of the tenant's failure to pay rent, supporting the landlords' legal claim for the owed amount of $5,505.",
+        "relevance_to_intake": "Directly supports the client's priority to recover owed rent and advances the desired outcome of issuing a demand letter.",
+        "potential_challenges": [
+          "Tenant unresponsive to communication"
+        ]
+      },
+      {
+        "document_title": "Tenant Rent Payment Discrepancy",
+        "document_type": "Communication Log",
+        "key_entities": [
+          {
+            "name": "Breanna Herring",
+            "role": "Tenant"
+          },
+          {
+            "name": "Balaji Badam",
+            "role": "Landlord"
+          },
+          {
+            "name": "Rajya Badam",
+            "role": "Landlord"
+          }
+        ],
+        "summary": "The document outlines a series of communications regarding rent payments for a property leased by Breanna Herring from Balaji and Rajya Badam. The tenant has consistently paid rent late and has not paid the full amount due for the current lease term. As of June 2025, the tenant owes $5,505, including late fees and administrative costs. The landlords are seeking to issue a demand letter to recover the owed amount, as the tenant has been unresponsive and no rent has been paid for June.",
+        "timeline_events": [
+          {
+            "date": "2025-06-01",
+            "event": "Landlords noted tenant owes $5,505, including late fees."
+          },
+          {
+            "date": "2025-06-03",
+            "event": "Tenant unresponsive to communication attempts regarding overdue rent."
+          }
+        ],
+        "evidence_strength": "Strong",
+        "legal_significance": "This document provides a clear record of the tenant's failure to pay rent, supporting the landlords' legal claim for the owed amount and justifying the issuance of a demand letter.",
+        "relevance_to_intake": "The document directly supports the client's priority to recover owed rent by detailing the tenant's payment failures and justifying the demand for $5,505.",
+        "potential_challenges": [
+          "Tenant's continued unresponsiveness"
+        ]
+      },
+      {
+        "document_title": "Demand for Rent Payment - Breanna Herring",
+        "document_type": "Legal Case Intake",
+        "key_entities": [
+          {
+            "name": "Balaji Badam",
+            "role": "Landlord"
+          },
+          {
+            "name": "Rajya Badam",
+            "role": "Landlord"
+          },
+          {
+            "name": "Breanna Herring",
+            "role": "Tenant"
+          }
+        ],
+        "summary": "Balaji and Rajya Badam, landlords of a property in Jacksonville, FL, are seeking to recover $5,505 in unpaid rent from their tenant, Breanna Herring. The tenant has consistently paid rent late and has not paid the full amount due for the current lease term. As of June 2025, the tenant has paid only $6,895 of the $11,400 owed. The landlords are experiencing severe financial stress and are requesting legal assistance to issue a demand letter to recover the owed amount.",
+        "timeline_events": [
+          {
+            "date": "2022-12-01",
+            "event": "Lease started for property at 811 Gate Run Rd, Jacksonville, FL."
+          },
+          {
+            "date": "2025-06-01",
+            "event": "Tenant Breanna Herring owes $5,505 in unpaid rent."
+          },
+          {
+            "date": "2025-06-30",
+            "event": "Lease term ends for the property."
+          }
+        ],
+        "evidence_strength": "Strong",
+        "legal_significance": "This document outlines the financial obligations of the tenant and supports the landlords' legal claim to recover $5,505 in unpaid rent through a demand letter.",
+        "relevance_to_intake": "The document directly addresses the client's priority to recover owed rent and supports the desired outcome of issuing a demand letter for $5,505.",
+        "potential_challenges": [
+          "Tenant unresponsive to communications"
+        ]
+      }
+    ],
+    "legal_assessment": {
+      "case_type": "Landlord-Tenant Dispute",
+      "claim_viability": "Strong",
+      "overall_evidence_strength": "Strong",
+      "potential_challenges": [
+        {
+          "category": "Tenant Unresponsiveness",
+          "description": "The tenant has been unresponsive to communications and payment requests.",
+          "mitigation_strategy": "Consider alternative communication methods and document all attempts.",
+          "confidence_score": 0.85
+        },
+        {
+          "category": "Tenant Financial Instability",
+          "description": "The tenant may lack the financial resources to pay the owed amount.",
+          "mitigation_strategy": "Assess tenant's financial situation and explore payment plans.",
+          "confidence_score": 0.6
+        }
+      ],
+      "recommended_actions": [
+        "Issue a demand letter for $5,505 immediately.",
+        "Document all communication attempts with the tenant.",
+        "Prepare for potential eviction proceedings if payment is not received."
+      ],
+      "demand_letter_appropriate": true,
+      "urgency_assessment": "Very Important – severe hardship, personal or financial inconvenience if matter is not resolved quickly."
+    },
+    "demand_letter_evaluation": {
+      "is_appropriate": true,
+      "reasoning": "The demand letter serves as a formal request for payment and may prompt tenant action.",
+      "potential_outcomes": [
+        "Tenant pays the owed amount.",
+        "Tenant responds with a payment plan proposal.",
+        "No response, leading to further legal action."
+      ],
+      "relevant_statutes": [
+        "Florida Statutes Chapter 83 - Landlord and Tenant"
+      ]
+    },
+    "errors": []
+  },
+  "email": {
+    "findings_letter": {
+      "header": {
+        "date": "2025-07-31",
+        "client_name": "Balaji Badam, Rajya Badam",
+        "client_address": null,
+        "case_reference": "BR-BBRB-20250731"
+      },
+      "reviewed_documents": [
+        "Demand for Rent Payment",
+        "Florida Eviction Notice",
+        "Demand for Owed Rent - Badam vs. Herring",
+        "Checking Account Statement",
+        "Demand for Rent Payment",
+        "Eviction Notice - 811 Gate Run Rd - Non Payment of Rent",
+        "Florida Eviction Notice",
+        "Residential Lease Agreement for 811 Gate Run Rd",
+        "Tenant Communication Regarding Rent Payment",
+        "Residential Lease Agreement for 811 Gate Run Rd",
+        "Demand for Rent Payment - Badam vs. Herring",
+        "May 2025 Rent Payment Request",
+        "April and May Rent Payment Discrepancies",
+        "Re: MOVE OUT",
+        "Demand for Rent Payment",
+        "Tenant Rent Payment Issues",
+        "Tenant Rent Payment Discrepancy",
+        "Demand for Rent Payment - Breanna Herring"
+      ],
+      "background_summary": "Balaji and Rajya Badam own an investment property in Jacksonville, FL, leased to Breanna Herring. The tenant has consistently paid rent late and has failed to pay the full amount due for the current lease term. As of June 2025, the tenant owes a total of $5,505, including late fees and administrative costs. The landlords are seeking legal assistance to issue a demand letter to recover the owed amount.",
+      "review_summary": "**Our Analysis**\n\nBalaji and Rajya Badam find themselves in a challenging situation due to their tenant, Breanna Herring's, failure to meet her rental obligations. According to the lease agreement, Ms. Herring is required to pay a set rent amount each month. Unfortunately, she has consistently been late with payments and, as of June 2025, has accumulated a debt of $5,505, inclusive of late fees and administrative costs. The unresponsiveness of the tenant has exacerbated the financial strain on the Badams, who are now compelled to seek a formal legal resolution.\n\nUnder Florida law, a lease agreement is a binding contract obligating the tenant to pay rent promptly. When a tenant fails to do so, the landlord is entitled to seek recovery of the owed amount. The first step in such legal proceedings is typically the issuance of a demand letter. This document serves as a formal request for the tenant to pay the overdue rent and serves as a precursor to more severe measures such as eviction. Given the tenant's current lack of communication, issuing a demand letter is an essential step in compelling either payment or the proposal of a viable solution from the tenant.\n\n**Strengths of Your Case**\n\nThe case's strength lies primarily in the robust documentation supporting your claim. The evidence includes the original lease agreement detailing the tenant's financial obligations, records of partial payments illustrating the tenant's inconsistent compliance, and documented communication attempts that show a clear pattern of unresponsiveness from the tenant.\n\nFurthermore, Florida law supports landlords in such scenarios by providing a clear legal pathway for recovering unpaid rent. The evidence demonstrates a solid legal basis for recovering the full $5,505 owed, providing you a significant advantage in any potential legal proceedings.\n\n**Potential Challenges**\n\nDespite the strength of the case, a few challenges might arise. The most pressing is the tenant’s financial instability, which may impair her ability to pay the arrears even if she acknowledges the debt. There's also the lingering issue of tenant unresponsiveness, which could hinder the efficiency of legal processes.\n\nAdditionally, should the situation escalate to eviction, there may be procedural challenges, such as proving the service of notices or contending with potential defenses the tenant might raise, such as disputes over late fees or claims of financial hardship.\n\nTo mitigate these challenges, we recommend documenting all communication attempts and exploring all possible avenues for dialogue with the tenant. If the tenant remains unresponsive post-demand letter, we will be well-prepared to initiate further legal action, including eviction if necessary, to resolve this matter swiftly and effectively.",
+      "assessment_challenges": [
+        {
+          "category": "Tenant Unresponsiveness",
+          "description": "The tenant has been unresponsive to communications and payment requests.",
+          "mitigation_strategy": "Consider alternative communication methods and document all attempts.",
+          "confidence_score": 0.85
+        },
+        {
+          "category": "Tenant Financial Instability",
+          "description": "The tenant may lack the financial resources to pay the owed amount.",
+          "mitigation_strategy": "Assess tenant's financial situation and explore payment plans.",
+          "confidence_score": 0.6
+        }
+      ],
+      "next_steps_recommendations": [
+        "Issue a demand letter for $5,505 immediately.",
+        "Document all communication attempts with the tenant.",
+        "Prepare for potential eviction proceedings if payment is not received."
+      ],
+      "demand_letter_section": {
+        "is_appropriate": true,
+        "reasoning": "The demand letter serves as a formal request for payment and may prompt tenant action.",
+        "potential_outcomes": [
+          "Tenant pays the owed amount.",
+          "Tenant responds with a payment plan proposal.",
+          "No response, leading to further legal action."
+        ],
+        "relevant_statutes": [
+          "Florida Statutes Chapter 83 - Landlord and Tenant"
+        ]
+      },
+      "footer": {
+        "attorney_name": "Assigned Attorney",
+        "firm_name": "Bernhardt Riley PLLC",
+        "firm_address": null,
+        "contact_info": "Tel: (000) 000-0000 | email@example.com"
+      }
+    },
+    "download_links": [
+      {
+        "file_name": "Findings_Balaji Badam Rajya Badam.eml",
+        "url": "data:message/rfc822;base64,U3ViamVjdDogTGVnYWwgRmluZGluZ3MgZm9yIEJhbGFqaSBCYWRhbSBSYWp5YSBCYWRhbQpDb250ZW50LVR5cGU6IHRleHQvaHRtbAoKPCFET0NUWVBFIGh0bWw+CjxodG1sIGxhbmc9ImVuIj4KPGhlYWQ+CiAgICA8bWV0YSBjaGFyc2V0PSJVVEYtOCI+CiAgICA8bWV0YSBuYW1lPSJ2aWV3cG9ydCIgY29udGVudD0id2lkdGg9ZGV2aWNlLXdpZHRoLCBpbml0aWFsLXNjYWxlPTEuMCI+CiAgICA8dGl0bGU+TGVnYWwgRmluZGluZ3MgTGV0dGVyPC90aXRsZT4KICAgIDxzdHlsZT4KICAgICAgICBib2R5IHsKICAgICAgICAgICAgZm9udC1mYW1pbHk6ICdUaW1lcyBOZXcgUm9tYW4nLCBUaW1lcywgc2VyaWY7CiAgICAgICAgICAgIGxpbmUtaGVpZ2h0OiAxLjY7CiAgICAgICAgICAgIGNvbG9yOiAjMzMzOwogICAgICAgIH0KICAgICAgICAuY29udGFpbmVyIHsKICAgICAgICAgICAgbWF4LXdpZHRoOiA4MDBweDsKICAgICAgICAgICAgbWFyZ2luOiAwIGF1dG87CiAgICAgICAgICAgIHBhZGRpbmc6IDIwcHg7CiAgICAgICAgfQogICAgICAgIC5oZWFkZXIsIC5mb290ZXIgewogICAgICAgICAgICB0ZXh0LWFsaWduOiBsZWZ0OwogICAgICAgICAgICBtYXJnaW4tYm90dG9tOiAyMHB4OwogICAgICAgIH0KICAgICAgICAuZm9vdGVyIHsKICAgICAgICAgICAgbWFyZ2luLXRvcDogNDBweDsKICAgICAgICAgICAgZm9udC1zdHlsZTogaXRhbGljOwogICAgICAgIH0KICAgICAgICBoMSwgaDIsIGgzIHsKICAgICAgICAgICAgZm9udC1mYW1pbHk6ICdHZW9yZ2lhJywgc2VyaWY7CiAgICAgICAgICAgIGNvbG9yOiAjMjIyOwogICAgICAgIH0KICAgICAgICB1bCB7CiAgICAgICAgICAgIGxpc3Qtc3R5bGUtdHlwZTogZGlzYzsKICAgICAgICAgICAgbWFyZ2luLWxlZnQ6IDIwcHg7CiAgICAgICAgfQogICAgICAgIC5zZWN0aW9uIHsKICAgICAgICAgICAgbWFyZ2luLWJvdHRvbTogMjBweDsKICAgICAgICB9CiAgICA8L3N0eWxlPgo8L2hlYWQ+Cjxib2R5PgogICAgPGRpdiBjbGFzcz0iY29udGFpbmVyIj4KICAgICAgICA8ZGl2IGNsYXNzPSJoZWFkZXIiPgogICAgICAgICAgICA8cD4yMDI1LTA3LTMxPC9wPgogICAgICAgICAgICA8cD48c3Ryb25nPlRvOjwvc3Ryb25nPiBCYWxhamkgQmFkYW0sIFJhanlhIEJhZGFtPC9wPgogICAgICAgICAgICA8cD48c3Ryb25nPkFkZHJlc3M6PC9zdHJvbmc+IE5vbmU8L3A+CiAgICAgICAgICAgIDxwPjxzdHJvbmc+UmU6PC9zdHJvbmc+IEJSLUJCUkItMjAyNTA3MzE8L3A+CiAgICAgICAgPC9kaXY+CgogICAgICAgIDxkaXYgY2xhc3M9InNlY3Rpb24iPgogICAgICAgICAgICA8aDI+SS4gQmFja2dyb3VuZDwvaDI+CiAgICAgICAgICAgIDxwPkJhbGFqaSBhbmQgUmFqeWEgQmFkYW0gb3duIGFuIGludmVzdG1lbnQgcHJvcGVydHkgaW4gSmFja3NvbnZpbGxlLCBGTCwgbGVhc2VkIHRvIEJyZWFubmEgSGVycmluZy4gVGhlIHRlbmFudCBoYXMgY29uc2lzdGVudGx5IHBhaWQgcmVudCBsYXRlIGFuZCBoYXMgZmFpbGVkIHRvIHBheSB0aGUgZnVsbCBhbW91bnQgZHVlIGZvciB0aGUgY3VycmVudCBsZWFzZSB0ZXJtLiBBcyBvZiBKdW5lIDIwMjUsIHRoZSB0ZW5hbnQgb3dlcyBhIHRvdGFsIG9mICQ1LDUwNSwgaW5jbHVkaW5nIGxhdGUgZmVlcyBhbmQgYWRtaW5pc3RyYXRpdmUgY29zdHMuIFRoZSBsYW5kbG9yZHMgYXJlIHNlZWtpbmcgbGVnYWwgYXNzaXN0YW5jZSB0byBpc3N1ZSBhIGRlbWFuZCBsZXR0ZXIgdG8gcmVjb3ZlciB0aGUgb3dlZCBhbW91bnQuPC9wPgogICAgICAgIDwvZGl2PgoKICAgICAgICA8ZGl2IGNsYXNzPSJzZWN0aW9uIj4KICAgICAgICAgICAgPGgyPklJLiBSZXZpZXcgb2YgRG9jdW1lbnRzPC9oMj4KICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgPHA+SW4gb3VyIHJldmlldywgd2UgaGF2ZSBhbmFseXplZCB0aGUgZm9sbG93aW5nIGRvY3VtZW50czo8L3A+CiAgICAgICAgICAgICAgICA8dWw+CiAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgIDxsaT5EZW1hbmQgZm9yIFJlbnQgUGF5bWVudDwvbGk+CiAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgIDxsaT5GbG9yaWRhIEV2aWN0aW9uIE5vdGljZTwvbGk+CiAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgIDxsaT5EZW1hbmQgZm9yIE93ZWQgUmVudCAtIEJhZGFtIHZzLiBIZXJyaW5nPC9saT4KICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgPGxpPkNoZWNraW5nIEFjY291bnQgU3RhdGVtZW50PC9saT4KICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgPGxpPkRlbWFuZCBmb3IgUmVudCBQYXltZW50PC9saT4KICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgPGxpPkV2aWN0aW9uIE5vdGljZSAtIDgxMSBHYXRlIFJ1biBSZCAtIE5vbiBQYXltZW50IG9mIFJlbnQ8L2xpPgogICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICA8bGk+RmxvcmlkYSBFdmljdGlvbiBOb3RpY2U8L2xpPgogICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICA8bGk+UmVzaWRlbnRpYWwgTGVhc2UgQWdyZWVtZW50IGZvciA4MTEgR2F0ZSBSdW4gUmQ8L2xpPgogICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICA8bGk+VGVuYW50IENvbW11bmljYXRpb24gUmVnYXJkaW5nIFJlbnQgUGF5bWVudDwvbGk+CiAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgIDxsaT5SZXNpZGVudGlhbCBMZWFzZSBBZ3JlZW1lbnQgZm9yIDgxMSBHYXRlIFJ1biBSZDwvbGk+CiAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgIDxsaT5EZW1hbmQgZm9yIFJlbnQgUGF5bWVudCAtIEJhZGFtIHZzLiBIZXJyaW5nPC9saT4KICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgPGxpPk1heSAyMDI1IFJlbnQgUGF5bWVudCBSZXF1ZXN0PC9saT4KICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgPGxpPkFwcmlsIGFuZCBNYXkgUmVudCBQYXltZW50IERpc2NyZXBhbmNpZXM8L2xpPgogICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICA8bGk+UmU6IE1PVkUgT1VUPC9saT4KICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgPGxpPkRlbWFuZCBmb3IgUmVudCBQYXltZW50PC9saT4KICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgPGxpPlRlbmFudCBSZW50IFBheW1lbnQgSXNzdWVzPC9saT4KICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgPGxpPlRlbmFudCBSZW50IFBheW1lbnQgRGlzY3JlcGFuY3k8L2xpPgogICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICA8bGk+RGVtYW5kIGZvciBSZW50IFBheW1lbnQgLSBCcmVhbm5hIEhlcnJpbmc8L2xpPgogICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgPC91bD4KICAgICAgICAgICAgCiAgICAgICAgICAgIDxwPioqT3VyIEFuYWx5c2lzKioKCkJhbGFqaSBhbmQgUmFqeWEgQmFkYW0gZmluZCB0aGVtc2VsdmVzIGluIGEgY2hhbGxlbmdpbmcgc2l0dWF0aW9uIGR1ZSB0byB0aGVpciB0ZW5hbnQsIEJyZWFubmEgSGVycmluZydzLCBmYWlsdXJlIHRvIG1lZXQgaGVyIHJlbnRhbCBvYmxpZ2F0aW9ucy4gQWNjb3JkaW5nIHRvIHRoZSBsZWFzZSBhZ3JlZW1lbnQsIE1zLiBIZXJyaW5nIGlzIHJlcXVpcmVkIHRvIHBheSBhIHNldCByZW50IGFtb3VudCBlYWNoIG1vbnRoLiBVbmZvcnR1bmF0ZWx5LCBzaGUgaGFzIGNvbnNpc3RlbnRseSBiZWVuIGxhdGUgd2l0aCBwYXltZW50cyBhbmQsIGFzIG9mIEp1bmUgMjAyNSwgaGFzIGFjY3VtdWxhdGVkIGEgZGVidCBvZiAkNSw1MDUsIGluY2x1c2l2ZSBvZiBsYXRlIGZlZXMgYW5kIGFkbWluaXN0cmF0aXZlIGNvc3RzLiBUaGUgdW5yZXNwb25zaXZlbmVzcyBvZiB0aGUgdGVuYW50IGhhcyBleGFjZXJiYXRlZCB0aGUgZmluYW5jaWFsIHN0cmFpbiBvbiB0aGUgQmFkYW1zLCB3aG8gYXJlIG5vdyBjb21wZWxsZWQgdG8gc2VlayBhIGZvcm1hbCBsZWdhbCByZXNvbHV0aW9uLgoKVW5kZXIgRmxvcmlkYSBsYXcsIGEgbGVhc2UgYWdyZWVtZW50IGlzIGEgYmluZGluZyBjb250cmFjdCBvYmxpZ2F0aW5nIHRoZSB0ZW5hbnQgdG8gcGF5IHJlbnQgcHJvbXB0bHkuIFdoZW4gYSB0ZW5hbnQgZmFpbHMgdG8gZG8gc28sIHRoZSBsYW5kbG9yZCBpcyBlbnRpdGxlZCB0byBzZWVrIHJlY292ZXJ5IG9mIHRoZSBvd2VkIGFtb3VudC4gVGhlIGZpcnN0IHN0ZXAgaW4gc3VjaCBsZWdhbCBwcm9jZWVkaW5ncyBpcyB0eXBpY2FsbHkgdGhlIGlzc3VhbmNlIG9mIGEgZGVtYW5kIGxldHRlci4gVGhpcyBkb2N1bWVudCBzZXJ2ZXMgYXMgYSBmb3JtYWwgcmVxdWVzdCBmb3IgdGhlIHRlbmFudCB0byBwYXkgdGhlIG92ZXJkdWUgcmVudCBhbmQgc2VydmVzIGFzIGEgcHJlY3Vyc29yIHRvIG1vcmUgc2V2ZXJlIG1lYXN1cmVzIHN1Y2ggYXMgZXZpY3Rpb24uIEdpdmVuIHRoZSB0ZW5hbnQncyBjdXJyZW50IGxhY2sgb2YgY29tbXVuaWNhdGlvbiwgaXNzdWluZyBhIGRlbWFuZCBsZXR0ZXIgaXMgYW4gZXNzZW50aWFsIHN0ZXAgaW4gY29tcGVsbGluZyBlaXRoZXIgcGF5bWVudCBvciB0aGUgcHJvcG9zYWwgb2YgYSB2aWFibGUgc29sdXRpb24gZnJvbSB0aGUgdGVuYW50LgoKKipTdHJlbmd0aHMgb2YgWW91ciBDYXNlKioKClRoZSBjYXNlJ3Mgc3RyZW5ndGggbGllcyBwcmltYXJpbHkgaW4gdGhlIHJvYnVzdCBkb2N1bWVudGF0aW9uIHN1cHBvcnRpbmcgeW91ciBjbGFpbS4gVGhlIGV2aWRlbmNlIGluY2x1ZGVzIHRoZSBvcmlnaW5hbCBsZWFzZSBhZ3JlZW1lbnQgZGV0YWlsaW5nIHRoZSB0ZW5hbnQncyBmaW5hbmNpYWwgb2JsaWdhdGlvbnMsIHJlY29yZHMgb2YgcGFydGlhbCBwYXltZW50cyBpbGx1c3RyYXRpbmcgdGhlIHRlbmFudCdzIGluY29uc2lzdGVudCBjb21wbGlhbmNlLCBhbmQgZG9jdW1lbnRlZCBjb21tdW5pY2F0aW9uIGF0dGVtcHRzIHRoYXQgc2hvdyBhIGNsZWFyIHBhdHRlcm4gb2YgdW5yZXNwb25zaXZlbmVzcyBmcm9tIHRoZSB0ZW5hbnQuCgpGdXJ0aGVybW9yZSwgRmxvcmlkYSBsYXcgc3VwcG9ydHMgbGFuZGxvcmRzIGluIHN1Y2ggc2NlbmFyaW9zIGJ5IHByb3ZpZGluZyBhIGNsZWFyIGxlZ2FsIHBhdGh3YXkgZm9yIHJlY292ZXJpbmcgdW5wYWlkIHJlbnQuIFRoZSBldmlkZW5jZSBkZW1vbnN0cmF0ZXMgYSBzb2xpZCBsZWdhbCBiYXNpcyBmb3IgcmVjb3ZlcmluZyB0aGUgZnVsbCAkNSw1MDUgb3dlZCwgcHJvdmlkaW5nIHlvdSBhIHNpZ25pZmljYW50IGFkdmFudGFnZSBpbiBhbnkgcG90ZW50aWFsIGxlZ2FsIHByb2NlZWRpbmdzLgoKKipQb3RlbnRpYWwgQ2hhbGxlbmdlcyoqCgpEZXNwaXRlIHRoZSBzdHJlbmd0aCBvZiB0aGUgY2FzZSwgYSBmZXcgY2hhbGxlbmdlcyBtaWdodCBhcmlzZS4gVGhlIG1vc3QgcHJlc3NpbmcgaXMgdGhlIHRlbmFudOKAmXMgZmluYW5jaWFsIGluc3RhYmlsaXR5LCB3aGljaCBtYXkgaW1wYWlyIGhlciBhYmlsaXR5IHRvIHBheSB0aGUgYXJyZWFycyBldmVuIGlmIHNoZSBhY2tub3dsZWRnZXMgdGhlIGRlYnQuIFRoZXJlJ3MgYWxzbyB0aGUgbGluZ2VyaW5nIGlzc3VlIG9mIHRlbmFudCB1bnJlc3BvbnNpdmVuZXNzLCB3aGljaCBjb3VsZCBoaW5kZXIgdGhlIGVmZmljaWVuY3kgb2YgbGVnYWwgcHJvY2Vzc2VzLgoKQWRkaXRpb25hbGx5LCBzaG91bGQgdGhlIHNpdHVhdGlvbiBlc2NhbGF0ZSB0byBldmljdGlvbiwgdGhlcmUgbWF5IGJlIHByb2NlZHVyYWwgY2hhbGxlbmdlcywgc3VjaCBhcyBwcm92aW5nIHRoZSBzZXJ2aWNlIG9mIG5vdGljZXMgb3IgY29udGVuZGluZyB3aXRoIHBvdGVudGlhbCBkZWZlbnNlcyB0aGUgdGVuYW50IG1pZ2h0IHJhaXNlLCBzdWNoIGFzIGRpc3B1dGVzIG92ZXIgbGF0ZSBmZWVzIG9yIGNsYWltcyBvZiBmaW5hbmNpYWwgaGFyZHNoaXAuCgpUbyBtaXRpZ2F0ZSB0aGVzZSBjaGFsbGVuZ2VzLCB3ZSByZWNvbW1lbmQgZG9jdW1lbnRpbmcgYWxsIGNvbW11bmljYXRpb24gYXR0ZW1wdHMgYW5kIGV4cGxvcmluZyBhbGwgcG9zc2libGUgYXZlbnVlcyBmb3IgZGlhbG9ndWUgd2l0aCB0aGUgdGVuYW50LiBJZiB0aGUgdGVuYW50IHJlbWFpbnMgdW5yZXNwb25zaXZlIHBvc3QtZGVtYW5kIGxldHRlciwgd2Ugd2lsbCBiZSB3ZWxsLXByZXBhcmVkIHRvIGluaXRpYXRlIGZ1cnRoZXIgbGVnYWwgYWN0aW9uLCBpbmNsdWRpbmcgZXZpY3Rpb24gaWYgbmVjZXNzYXJ5LCB0byByZXNvbHZlIHRoaXMgbWF0dGVyIHN3aWZ0bHkgYW5kIGVmZmVjdGl2ZWx5LjwvcD4KICAgICAgICA8L2Rpdj4KCiAgICAgICAgPGRpdiBjbGFzcz0ic2VjdGlvbiI+CiAgICAgICAgICAgIDxoMj5JSUkuIFByZWxpbWluYXJ5IEFzc2Vzc21lbnQ8L2gyPgogICAgICAgICAgICA8cD5BcyB3ZSBtb3ZlIGZvcndhcmQgaW4gYXNzZXNzaW5nIHlvdXIgbWF0dGVyLCBpdCBpcyBpbXBvcnRhbnQgdG8gcmVjb2duaXplIHRoYXQgbGVnYWwgcHJvY2VlZGluZ3MgY2FuIG9mdGVuIHByZXNlbnQgdmFyaW91cyBvYnN0YWNsZXMgdGhhdCBtYXkgaW1wYWN0IHRoZSBzdHJlbmd0aCBvZiB5b3VyIGNhc2UuIEJlbG93LCB5b3Ugd2lsbCBmaW5kIGEgbGlzdCBvZiBwb3RlbnRpYWwgY2hhbGxlbmdlcyB0aGF0IHdlIGhhdmUgaWRlbnRpZmllZCBzbyBmYXIgaW4gb3VyIHByZWxpbWluYXJ5IGFzc2Vzc21lbnQgb2YgeW91ciBtYXR0ZXIuIFBsZWFzZSBub3RlIHRoYXQgdGhpcyBsaXN0IGlzIG5vdCBleGhhdXN0aXZlLiBBcyB0aGUgY2FzZSBwcm9ncmVzc2VzIGFuZCBtb3JlIGluZm9ybWF0aW9uIGJlY29tZXMgYXZhaWxhYmxlLCBvdGhlciBjaGFsbGVuZ2VzIG1heSBlbWVyZ2Ugb3IgbWF5IGJlY29tZSBtb3JlIGV2aWRlbnQuIE91ciB0ZWFtIGlzIGNvbW1pdHRlZCB0byBuYXZpZ2F0aW5nIHRoZXNlIGNvbXBsZXhpdGllcyBhbmQgYWRhcHRpbmcgb3VyIHN0cmF0ZWdpZXMgYWNjb3JkaW5nbHkgdG8gYmVzdCByZXByZXNlbnQgeW91ciBpbnRlcmVzdHMuIFlvdXIgdW5kZXJzdGFuZGluZyBhbmQgYXdhcmVuZXNzIG9mIHRoZXNlIHBvdGVudGlhbCBjaGFsbGVuZ2VzIGFyZSBlc3NlbnRpYWwgYXMgd2Ugd29yayB0b2dldGhlciB0b3dhcmRzIGEgc3VjY2Vzc2Z1bCByZXNvbHV0aW9uLjwvcD4KICAgICAgICAgICAgCiAgICAgICAgICAgICAgICA8aDM+UG90ZW50aWFsIENoYWxsZW5nZXM8L2gzPgogICAgICAgICAgICAgICAgPHVsPgogICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICA8bGk+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8c3Ryb25nPlRlbmFudCBVbnJlc3BvbnNpdmVuZXNzOjwvc3Ryb25nPiBUaGUgdGVuYW50IGhhcyBiZWVuIHVucmVzcG9uc2l2ZSB0byBjb21tdW5pY2F0aW9ucyBhbmQgcGF5bWVudCByZXF1ZXN0cy4KICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxicj48ZW0+TWl0aWdhdGlvbjogQ29uc2lkZXIgYWx0ZXJuYXRpdmUgY29tbXVuaWNhdGlvbiBtZXRob2RzIGFuZCBkb2N1bWVudCBhbGwgYXR0ZW1wdHMuPC9lbT4KICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICA8L2xpPgogICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICA8bGk+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8c3Ryb25nPlRlbmFudCBGaW5hbmNpYWwgSW5zdGFiaWxpdHk6PC9zdHJvbmc+IFRoZSB0ZW5hbnQgbWF5IGxhY2sgdGhlIGZpbmFuY2lhbCByZXNvdXJjZXMgdG8gcGF5IHRoZSBvd2VkIGFtb3VudC4KICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxicj48ZW0+TWl0aWdhdGlvbjogQXNzZXNzIHRlbmFudCdzIGZpbmFuY2lhbCBzaXR1YXRpb24gYW5kIGV4cGxvcmUgcGF5bWVudCBwbGFucy48L2VtPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgIDwvbGk+CiAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICA8L3VsPgogICAgICAgICAgICAKICAgICAgICA8L2Rpdj4KCiAgICAgICAgPGRpdiBjbGFzcz0ic2VjdGlvbiI+CiAgICAgICAgICAgIDxoMj5JVi4gTmV4dCBTdGVwczwvaDI+CiAgICAgICAgICAgIDxoMz5BLiBSZWNvbW1lbmRhdGlvbnM8L2gzPgogICAgICAgICAgICAKICAgICAgICAgICAgICAgIDx1bD4KICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgPGxpPklzc3VlIGEgZGVtYW5kIGxldHRlciBmb3IgJDUsNTA1IGltbWVkaWF0ZWx5LjwvbGk+CiAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgIDxsaT5Eb2N1bWVudCBhbGwgY29tbXVuaWNhdGlvbiBhdHRlbXB0cyB3aXRoIHRoZSB0ZW5hbnQuPC9saT4KICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgPGxpPlByZXBhcmUgZm9yIHBvdGVudGlhbCBldmljdGlvbiBwcm9jZWVkaW5ncyBpZiBwYXltZW50IGlzIG5vdCByZWNlaXZlZC48L2xpPgogICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgPC91bD4KICAgICAgICAgICAgCgogICAgICAgICAgICAKICAgICAgICAgICAgICAgIDxoMz5CLiBEZW1hbmQgTGV0dGVyIFJlY29tbWVuZGF0aW9uPC9oMz4KICAgICAgICAgICAgICAgIDxwPlRoZSBkZW1hbmQgbGV0dGVyIHNlcnZlcyBhcyBhIGZvcm1hbCByZXF1ZXN0IGZvciBwYXltZW50IGFuZCBtYXkgcHJvbXB0IHRlbmFudCBhY3Rpb24uPC9wPgogICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgPHA+UmVtZW1iZXIgdGhhdCBkZW1hbmQgbGV0dGVycyBhcmUgbm90IGd1YXJhbnRlZWQgdG8gcHJvZHVjZSBkZXNpcmFibGUgcmVzdWx0cywgYnV0IHRoZXkgYXJlIGFuIGltcG9ydGFudCBzdGVwIGluIGRlbW9uc3RyYXRpbmcgYSBzZXJpb3VzIGludGVudCB0byByZXNvbHZlIGEgZGlzcHV0ZSBhbmQgY2FuIHNlcnZlIGFzIGEgY3J1Y2lhbCBwaWVjZSBvZiBldmlkZW5jZSBpZiB0aGUgZGlzcHV0ZSBlc2NhbGF0ZXMgdG8gY291cnQgcHJvY2VlZGluZ3MuIFRoZXJlIGFyZSB0aGUgZm9sbG93aW5nIHBvdGVudGlhbCBvdXRjb21lcyB0aGF0IHlvdSBjYW4gZXhwZWN0IGZyb20gYSBkZW1hbmQgbGV0dGVyOjwvcD4KICAgICAgICAgICAgICAgICAgICA8dWw+CiAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgPGxpPlRlbmFudCBwYXlzIHRoZSBvd2VkIGFtb3VudC48L2xpPgogICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxsaT5UZW5hbnQgcmVzcG9uZHMgd2l0aCBhIHBheW1lbnQgcGxhbiBwcm9wb3NhbC48L2xpPgogICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxsaT5ObyByZXNwb25zZSwgbGVhZGluZyB0byBmdXJ0aGVyIGxlZ2FsIGFjdGlvbi48L2xpPgogICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICA8L3VsPgogICAgICAgICAgICAgICAgCiAgICAgICAgICAgIAogICAgICAgIDwvZGl2PgoKICAgICAgICA8ZGl2IGNsYXNzPSJmb290ZXIiPgogICAgICAgICAgICA8cD5TaW5jZXJlbHksPC9wPgogICAgICAgICAgICA8cD5Bc3NpZ25lZCBBdHRvcm5leTwvcD4KICAgICAgICAgICAgPHA+QmVybmhhcmR0IFJpbGV5IFBMTEM8L3A+CiAgICAgICAgICAgIDxwPk5vbmU8L3A+CiAgICAgICAgICAgIDxwPlRlbDogKDAwMCkgMDAwLTAwMDAgfCBlbWFpbEBleGFtcGxlLmNvbTwvcD4KICAgICAgICA8L2Rpdj4KICAgIDwvZGl2Pgo8L2JvZHk+CjwvaHRtbD4="
+      },
+      {
+        "file_name": "Case Analysis.txt",
+        "url": "data:text/plain;base64,IyBDYXNlIEFuYWx5c2lzICYgQUktR2VuZXJhdGVkIEluc2lnaHRzCgojIyBJbnRha2UgQW5hbHlzaXMKLSAqKkNsaWVudCBOYW1lOioqIEJhbGFqaSBCYWRhbSwgUmFqeWEgQmFkYW0KLSAqKkF0dG9ybmV5IE5hbWU6KiogTi9BCi0gKipDYXNlIFR5cGU6KiogTi9BCi0gKipVcmdlbmN5OioqIFZlcnkgSW1wb3J0YW50IOKAkyBzZXZlcmUgaGFyZHNoaXAsIHBlcnNvbmFsIG9yIGZpbmFuY2lhbCBpbmNvbnZlbmllbmNlIGlmIG1hdHRlciBpcyBub3QgcmVzb2x2ZWQgcXVpY2tseS4KCioqQ2FzZSBTdW1tYXJ5OioqCkJhbGFqaSBhbmQgUmFqeWEgQmFkYW0gb3duIGFuIGludmVzdG1lbnQgcHJvcGVydHkgaW4gSmFja3NvbnZpbGxlLCBGTCwgbGVhc2VkIHRvIEJyZWFubmEgSGVycmluZy4gVGhlIHRlbmFudCBoYXMgY29uc2lzdGVudGx5IHBhaWQgcmVudCBsYXRlIGFuZCBoYXMgZmFpbGVkIHRvIHBheSB0aGUgZnVsbCBhbW91bnQgZHVlIGZvciB0aGUgY3VycmVudCBsZWFzZSB0ZXJtLiBBcyBvZiBKdW5lIDIwMjUsIHRoZSB0ZW5hbnQgb3dlcyBhIHRvdGFsIG9mICQ1LDUwNSwgaW5jbHVkaW5nIGxhdGUgZmVlcyBhbmQgYWRtaW5pc3RyYXRpdmUgY29zdHMuIFRoZSBsYW5kbG9yZHMgYXJlIHNlZWtpbmcgbGVnYWwgYXNzaXN0YW5jZSB0byBpc3N1ZSBhIGRlbWFuZCBsZXR0ZXIgdG8gcmVjb3ZlciB0aGUgb3dlZCBhbW91bnQuCgoqKlByaW9yaXRpZXM6KioKICAtIFJlY292ZXIgb3dlZCByZW50CgoqKkRlc2lyZWQgT3V0Y29tZXM6KioKICAtIElzc3VlIGEgZGVtYW5kIGxldHRlciBmb3IgJDUsNTA1CgojIyBJbmRpdmlkdWFsIERvY3VtZW50IEFuYWx5c2lzCgojIyMgMS4gRGVtYW5kIGZvciBSZW50IFBheW1lbnQKKipTb3VyY2UgRG9jdW1lbnQ6KiogRGVtYW5kIGZvciBSZW50IFBheW1lbnQKKipTdW1tYXJ5OioqIEJhbGFqaSBhbmQgUmFqeWEgQmFkYW0gb3duIGEgcHJvcGVydHkgaW4gSmFja3NvbnZpbGxlLCBGTCwgbGVhc2VkIHRvIEJyZWFubmEgSGVycmluZy4gVGhlIHRlbmFudCBoYXMgY29uc2lzdGVudGx5IHBhaWQgcmVudCBsYXRlIGFuZCBvd2VzICQ1LDUwNSBhcyBvZiBKdW5lIDIwMjUsIGluY2x1ZGluZyBsYXRlIGZlZXMgYW5kIGFkbWluaXN0cmF0aXZlIGNvc3RzLiBUaGUgbGFuZGxvcmRzIHNlZWsgdG8gaXNzdWUgYSBkZW1hbmQgbGV0dGVyIHRvIHJlY292ZXIgdGhpcyBhbW91bnQuIFRoZSBsZWFzZSBiZWdhbiBpbiBsYXRlIDIwMjIgYW5kIGVuZHMgb24gSnVuZSAzMCwgMjAyNS4gVGhlIHRlbmFudCBoYXMgcGFpZCBvbmx5ICQ2LDg5NSBvZiB0aGUgJDExLDQwMCBkdWUsIHdpdGggcGFydGlhbCBwYXltZW50cyBpbiBBcHJpbCBhbmQgTWF5LCBhbmQgbm8gcGF5bWVudCBmb3IgSnVuZS4gVGhlIHRlbmFudCBpcyB1bnJlc3BvbnNpdmUsIGNhdXNpbmcgc2V2ZXJlIGZpbmFuY2lhbCBzdHJlc3MgZm9yIHRoZSBsYW5kbG9yZHMuCioqS2V5IEV2ZW50czoqKgogIC0gKioyMDIyLTEwLTAxOioqIExlYXNlIHN0YXJ0ZWQgZm9yIHByb3BlcnR5IGF0IDgxMSBHYXRlIFJ1biBSZCwgSmFja3NvbnZpbGxlLCBGTC4gKFNvdXJjZTogRGVtYW5kIGZvciBSZW50IFBheW1lbnQpCiAgLSAqKjIwMjUtMDYtMDE6KiogVGVuYW50IEJyZWFubmEgSGVycmluZyBmYWlsZWQgdG8gcGF5IHJlbnQgZm9yIEp1bmUuIChTb3VyY2U6IERlbWFuZCBmb3IgUmVudCBQYXltZW50KQoKIyMjIDIuIEZsb3JpZGEgRXZpY3Rpb24gTm90aWNlCioqU291cmNlIERvY3VtZW50OioqIEZsb3JpZGEgRXZpY3Rpb24gTm90aWNlCioqU3VtbWFyeToqKiBUaGlzIGV2aWN0aW9uIG5vdGljZSwgZGF0ZWQgTWF5IDI4LCAyMDI1LCBpcyBkaXJlY3RlZCB0byB0ZW5hbnQgQnJlYW5uYSBIZXJyaW5nIGZvciBub25wYXltZW50IG9mIHJlbnQgYXQgODExIEdhdGUgUnVuIFJkLCBKYWNrc29udmlsbGUsIEZMLiBUaGUgbm90aWNlIGRlbWFuZHMgcGF5bWVudCBvZiAkMyw2MDAsIGluY2x1ZGluZyAkMSw3MDAgcGFzdCByZW50IGZvciBNYXkgMjAyNSwgJDIwMCBsYXRlIGZlZXMsIGFuZCAkMSw3MDAgb3RoZXIgZmVlcy4gUGF5bWVudCBtdXN0IGJlIG1hZGUgd2l0aGluIDMgZGF5cyB0byBhdm9pZCBldmljdGlvbi4gVGhlIGxhbmRsb3JkLCBSYWp5YSBCYWRhbSwgaGFzIHByb3ZpZGVkIHBheW1lbnQgaW5zdHJ1Y3Rpb25zIHZpYSBaZWxsZS4gVGhlIG5vdGljZSBzZXJ2ZXMgYXMgYSBsZWdhbCB3YXJuaW5nIHRoYXQgbm9uY29tcGxpYW5jZSB3aWxsIGxlYWQgdG8gbGVnYWwgcHJvY2VlZGluZ3MgdG8gcmVjb3ZlciByZW50IGFuZCBwb3NzZXNzaW9uIG9mIHRoZSBwcm9wZXJ0eS4KKipLZXkgRXZlbnRzOioqCiAgLSAqKjIwMjUtMDUtMjg6KiogRXZpY3Rpb24gbm90aWNlIGlzc3VlZCB0byBCcmVhbm5hIEhlcnJpbmcgZm9yIG5vbnBheW1lbnQuIChTb3VyY2U6IEZsb3JpZGEgRXZpY3Rpb24gTm90aWNlKQoKIyMjIDMuIERlbWFuZCBmb3IgT3dlZCBSZW50IC0gQmFkYW0gdnMuIEhlcnJpbmcKKipTb3VyY2UgRG9jdW1lbnQ6KiogRGVtYW5kIGZvciBPd2VkIFJlbnQgLSBCYWRhbSB2cy4gSGVycmluZwoqKlN1bW1hcnk6KiogQmFsYWppIGFuZCBSYWp5YSBCYWRhbSwgbGFuZGxvcmRzIG9mIGEgcHJvcGVydHkgaW4gSmFja3NvbnZpbGxlLCBGTCwgYXJlIHNlZWtpbmcgdG8gcmVjb3ZlciAkNSw1MDUgaW4gb3dlZCByZW50IGZyb20gdGhlaXIgdGVuYW50LCBCcmVhbm5hIEhlcnJpbmcuIFRoZSB0ZW5hbnQgaGFzIGNvbnNpc3RlbnRseSBwYWlkIHJlbnQgbGF0ZSBhbmQgaGFzIG5vdCBwYWlkIHRoZSBmdWxsIGFtb3VudCBkdWUgZm9yIHRoZSBjdXJyZW50IGxlYXNlIHRlcm0uIEFzIG9mIEp1bmUgMjAyNSwgdGhlIHRlbmFudCBoYXMgcGFpZCBvbmx5ICQ2LDg5NSBvZiB0aGUgJDExLDQwMCBkdWUsIHdpdGggbm8gcGF5bWVudCBtYWRlIGZvciBKdW5lIGFuZCB0aGUgdGVuYW50IGJlaW5nIHVucmVzcG9uc2l2ZS4gVGhlIGxhbmRsb3JkcyBhcmUgZXhwZXJpZW5jaW5nIHNldmVyZSBmaW5hbmNpYWwgc3RyZXNzIGFuZCBhcmUgc2Vla2luZyBsZWdhbCBhc3Npc3RhbmNlIHRvIGlzc3VlIGEgZGVtYW5kIGxldHRlciB0byByZWNvdmVyIHRoZSBvd2VkIGFtb3VudC4KKipLZXkgRXZlbnRzOioqCiAgLSAqKjIwMjItMTEtMDE6KiogTGVhc2Ugc3RhcnRlZCBmb3IgcHJvcGVydHkgYXQgODExIEdhdGUgUnVuIFJkLCBKYWNrc29udmlsbGUsIEZMLiAoU291cmNlOiBEZW1hbmQgZm9yIE93ZWQgUmVudCAtIEJhZGFtIHZzLiBIZXJyaW5nKQogIC0gKioyMDI1LTA2LTAxOioqIFRlbmFudCBCcmVhbm5hIEhlcnJpbmcgb3dlcyAkNSw1MDUgaW4gcmVudCBhbmQgZmVlcy4gKFNvdXJjZTogRGVtYW5kIGZvciBPd2VkIFJlbnQgLSBCYWRhbSB2cy4gSGVycmluZykKCiMjIyA0LiBDaGVja2luZyBBY2NvdW50IFN0YXRlbWVudAoqKlNvdXJjZSBEb2N1bWVudDoqKiBDaGVja2luZyBBY2NvdW50IFN0YXRlbWVudAoqKlN1bW1hcnk6KiogVGhlIGRvY3VtZW50IGlzIGEgY2hlY2tpbmcgYWNjb3VudCBzdGF0ZW1lbnQgc2hvd2luZyB0cmFuc2FjdGlvbnMgZnJvbSBCcmVhbm5hIEhlcnJpbmcuIEl0IGluY2x1ZGVzIG11bHRpcGxlIFplbGxlIHRyYW5zZmVycyB0byB0aGUgYWNjb3VudCwgdG90YWxpbmcgJDYsODk1LiBOb3RhYmx5LCAkMSwzMDAgd2FzIHRyYW5zZmVycmVkIGluIEFwcmlsIGFuZCAkNTAwIGluIE1heS4gVGhlIGN1cnJlbnQgYXZhaWxhYmxlIGJhbGFuY2UgaXMgJDY3NC42Mywgd2l0aCBhIHBlbmRpbmcgd2l0aGRyYXdhbCBvZiAkMSw3ODguOTkuIE5vIHJlbnQgcGF5bWVudCBmb3IgSnVuZSBpcyBldmlkZW50LCBhbmQgdGhlIHRlbmFudCBpcyB1bnJlc3BvbnNpdmUuIFRoaXMgZmluYW5jaWFsIGFjdGl2aXR5IGlzIGNydWNpYWwgZm9yIGFzc2Vzc2luZyB0aGUgdGVuYW50J3MgYWJpbGl0eSB0byBwYXkgdGhlIG93ZWQgcmVudCBvZiAkNSw1MDUuCioqS2V5IEV2ZW50czoqKgogIC0gKioyMDI1LTA1LTA1OioqIFJlY2VpdmVkICQ1MDAgdmlhIFplbGxlIGZyb20gQnJlYW5uYSBIZXJyaW5nLiAoU291cmNlOiBDaGVja2luZyBBY2NvdW50IFN0YXRlbWVudCkKICAtICoqMjAyNS0wNC0yMToqKiBSZWNlaXZlZCAkMSwzMDAgdmlhIFplbGxlIGZyb20gQnJlYW5uYSBIZXJyaW5nLiAoU291cmNlOiBDaGVja2luZyBBY2NvdW50IFN0YXRlbWVudCkKCiMjIyA1LiBEZW1hbmQgZm9yIFJlbnQgUGF5bWVudAoqKlNvdXJjZSBEb2N1bWVudDoqKiBEZW1hbmQgZm9yIFJlbnQgUGF5bWVudAoqKlN1bW1hcnk6KiogQmFsYWppIGFuZCBSYWp5YSBCYWRhbSwgbGFuZGxvcmRzIG9mIGEgcHJvcGVydHkgaW4gSmFja3NvbnZpbGxlLCBGTCwgYXJlIHNlZWtpbmcgdG8gcmVjb3ZlciAkNSw1MDUgaW4gdW5wYWlkIHJlbnQgZnJvbSB0aGVpciB0ZW5hbnQsIEJyZWFubmEgSGVycmluZy4gVGhlIHRlbmFudCBoYXMgY29uc2lzdGVudGx5IHBhaWQgcmVudCBsYXRlIGFuZCBoYXMgbm90IHBhaWQgdGhlIGZ1bGwgYW1vdW50IGR1ZSBmb3IgdGhlIGN1cnJlbnQgbGVhc2UgdGVybS4gQXMgb2YgSnVuZSAyMDI1LCB0aGUgdGVuYW50IG93ZXMgJDUsNTA1LCBpbmNsdWRpbmcgbGF0ZSBmZWVzIGFuZCBhZG1pbmlzdHJhdGl2ZSBjb3N0cy4gVGhlIGxhbmRsb3JkcyBhcmUgZXhwZXJpZW5jaW5nIHNldmVyZSBmaW5hbmNpYWwgc3RyZXNzIGR1ZSB0byB0aGlzIHNpdHVhdGlvbiBhbmQgYXJlIHJlcXVlc3RpbmcgbGVnYWwgYXNzaXN0YW5jZSB0byBpc3N1ZSBhIGRlbWFuZCBsZXR0ZXIgdG8gcmVjb3ZlciB0aGUgb3dlZCBhbW91bnQuCioqS2V5IEV2ZW50czoqKgogIC0gKioyMDIyLTEwLTAxOioqIExlYXNlIGFncmVlbWVudCBzdGFydGVkIGZvciBwcm9wZXJ0eSBhdCA4MTEgR2F0ZSBSdW4gUmQsIEphY2tzb252aWxsZSwgRkwuIChTb3VyY2U6IERlbWFuZCBmb3IgUmVudCBQYXltZW50KQogIC0gKioyMDI1LTA2LTAxOioqIFRlbmFudCBCcmVhbm5hIEhlcnJpbmcgZmFpbGVkIHRvIHBheSByZW50IGZvciBKdW5lLiAoU291cmNlOiBEZW1hbmQgZm9yIFJlbnQgUGF5bWVudCkKCiMjIyA2LiBFdmljdGlvbiBOb3RpY2UgLSA4MTEgR2F0ZSBSdW4gUmQgLSBOb24gUGF5bWVudCBvZiBSZW50CioqU291cmNlIERvY3VtZW50OioqIEV2aWN0aW9uIE5vdGljZSAtIDgxMSBHYXRlIFJ1biBSZCAtIE5vbiBQYXltZW50IG9mIFJlbnQKKipTdW1tYXJ5OioqIFRoZSBkb2N1bWVudCBpcyBhbiBlbWFpbCBmcm9tIFJhdmkgQmFkYW0gdG8gQnJlYW5uYSBIZXJyaW5nLCBzZXJ2aW5nIGFuIGV2aWN0aW9uIG5vdGljZSBmb3Igbm9uLXBheW1lbnQgb2YgcmVudCBmb3IgTWF5IDIwMjUuIFJhdmkgZW1waGFzaXplcyB0aGUgZmluYW5jaWFsIGJ1cmRlbiBjYXVzZWQgYnkgdGhlIHRlbmFudCdzIGZhaWx1cmUgdG8gcGF5ICQxLDcwMCByZW50IGFuZCAkMiwwMDAgaW4gYWNjdW11bGF0ZWQgbGF0ZSBmZWVzLiBUaGUgZW1haWwgaGlnaGxpZ2h0cyB0aGUgdXJnZW5jeSBvZiB0aGUgc2l0dWF0aW9uLCBhcyBSYXZpIGlzIHVuYWJsZSB0byBtZWV0IG1vcnRnYWdlIGFuZCBvdGhlciBwcm9wZXJ0eS1yZWxhdGVkIG9ibGlnYXRpb25zLiBSYXZpIHdhcm5zIHRoYXQgZXZpY3Rpb24gcHJvY2VlZGluZ3Mgd2lsbCBjb21tZW5jZSBpZiB0aGUgdGVuYW50IGRvZXMgbm90IGNvbXBseSB3aXRoIHRoZSByZW50YWwgYWdyZWVtZW50LiBUaGlzIGRvY3VtZW50IHN1cHBvcnRzIHRoZSBjbGllbnQncyBwcmlvcml0eSB0byByZWNvdmVyIG93ZWQgcmVudCBhbmQgaXNzdWUgYSBkZW1hbmQgbGV0dGVyIGZvciAkNSw1MDUuCioqS2V5IEV2ZW50czoqKgogIC0gKioyMDI1LTA1LTI0OioqIFJhdmkgQmFkYW0gcmVxdWVzdHMgQnJlYW5uYSBIZXJyaW5nIHRvIHBheSAkMSw3MDAgcmVudCBieSBNYXkgMjcsIDIwMjUuIChTb3VyY2U6IEV2aWN0aW9uIE5vdGljZSAtIDgxMSBHYXRlIFJ1biBSZCAtIE5vbiBQYXltZW50IG9mIFJlbnQpCiAgLSAqKjIwMjUtMDUtMjg6KiogUmF2aSBCYWRhbSBzZXJ2ZXMgYW4gZXZpY3Rpb24gbm90aWNlIHRvIEJyZWFubmEgSGVycmluZyBmb3Igbm9uLXBheW1lbnQgb2YgcmVudC4gKFNvdXJjZTogRXZpY3Rpb24gTm90aWNlIC0gODExIEdhdGUgUnVuIFJkIC0gTm9uIFBheW1lbnQgb2YgUmVudCkKCiMjIyA3LiBGbG9yaWRhIEV2aWN0aW9uIE5vdGljZQoqKlNvdXJjZSBEb2N1bWVudDoqKiBGbG9yaWRhIEV2aWN0aW9uIE5vdGljZQoqKlN1bW1hcnk6KiogVGhlIGRvY3VtZW50IGlzIGEgRmxvcmlkYSBldmljdGlvbiBub3RpY2UgYWRkcmVzc2VkIHRvIEJyZWFubmEgSGVycmluZywgdGhlIHRlbmFudCBhdCA4MTEgR2F0ZSBSdW4gUmQsIEphY2tzb252aWxsZSwgRkwuIEl0IGRlbWFuZHMgcGF5bWVudCBvZiAkMyw2MDAgaW4gcGFzdCByZW50IGFuZCBsYXRlIGZlZXMgd2l0aGluIDMgZGF5cywgZmFpbGluZyB3aGljaCB0aGUgdGVuYW50IG11c3QgdmFjYXRlIHRoZSBwcmVtaXNlcy4gVGhlIG5vdGljZSBzcGVjaWZpZXMgYSB0b3RhbCBhbW91bnQgZHVlIG9mICQzLDYwMCwgd2l0aCBwYXltZW50IGluc3RydWN0aW9ucyB0byBhIFplbGxlIGFjY291bnQuIFRoZSBkb2N1bWVudCBpcyBzaWduZWQgYnkgdGhlIGxhbmRsb3JkLCBSYWp5YSBCYWRhbSwgYW5kIGluY2x1ZGVzIHRoZWlyIGNvbnRhY3QgaW5mb3JtYXRpb24uIFRoaXMgbm90aWNlIHNlcnZlcyBhcyBhIGZvcm1hbCBkZW1hbmQgZm9yIHBheW1lbnQgYW5kIG91dGxpbmVzIHRoZSBjb25zZXF1ZW5jZXMgb2Ygbm9uY29tcGxpYW5jZSwgaW5jbHVkaW5nIHBvdGVudGlhbCBsZWdhbCBhY3Rpb24gZm9yIHBvc3Nlc3Npb24gb2YgdGhlIHByZW1pc2VzLgoqKktleSBFdmVudHM6KioKICAtICoqMjAyNS0wNS0yODoqKiBFdmljdGlvbiBub3RpY2UgaXNzdWVkIHRvIEJyZWFubmEgSGVycmluZyBmb3Igbm9ucGF5bWVudC4gKFNvdXJjZTogRmxvcmlkYSBFdmljdGlvbiBOb3RpY2UpCgojIyMgOC4gUmVzaWRlbnRpYWwgTGVhc2UgQWdyZWVtZW50IGZvciA4MTEgR2F0ZSBSdW4gUmQKKipTb3VyY2UgRG9jdW1lbnQ6KiogUmVzaWRlbnRpYWwgTGVhc2UgQWdyZWVtZW50IGZvciA4MTEgR2F0ZSBSdW4gUmQKKipTdW1tYXJ5OioqIFRoaXMgZG9jdW1lbnQgaXMgYSByZXNpZGVudGlhbCBsZWFzZSBhZ3JlZW1lbnQgZm9yIGEgcHJvcGVydHkgbG9jYXRlZCBhdCA4MTEgR2F0ZSBSdW4gUmQsIEphY2tzb252aWxsZSwgRmxvcmlkYSwgYmV0d2VlbiBSYWp5YSBMYWtzaG1pIEJhZGFtIGFzIHRoZSBsYW5kbG9yZCBhbmQgQnJlYW5uYSBEZXNoYWUgSGVycmluZyBhcyB0aGUgdGVuYW50LiBUaGUgbGVhc2UgdGVybSBpcyBmcm9tIEphbnVhcnkgMSwgMjAyNSwgdG8gSnVuZSAzMCwgMjAyNSwgd2l0aCBhIHRvdGFsIHJlbnQgb2YgJDEwLDIwMCBwYXlhYmxlIGluIG1vbnRobHkgaW5zdGFsbG1lbnRzIG9mICQxLDcwMC4gVGhlIHRlbmFudCBpcyByZXNwb25zaWJsZSBmb3IgYWxsIHV0aWxpdGllcyBhbmQgbXVzdCBmb2xsb3cgSE9BIGd1aWRlbGluZXMuIFRoZSBsZWFzZSBpbmNsdWRlcyBwcm92aXNpb25zIGZvciBsYXRlIGZlZXMsIG1haW50ZW5hbmNlIHJlc3BvbnNpYmlsaXRpZXMsIGFuZCBjb25kaXRpb25zIGZvciBlYXJseSB0ZXJtaW5hdGlvbi4gVGhlIHRlbmFudCBoYXMgbm90IHBhaWQgdGhlIGZ1bGwgcmVudCBkdWUsIGxlYWRpbmcgdG8gYSBmaW5hbmNpYWwgc2hvcnRmYWxsIGZvciB0aGUgbGFuZGxvcmQuCioqS2V5IEV2ZW50czoqKgogIC0gKioyMDI1LTAxLTAxOioqIExlYXNlIHRlcm0gYmVnaW5zIGZvciBwcm9wZXJ0eSBhdCA4MTEgR2F0ZSBSdW4gUmQgKFNvdXJjZTogUmVzaWRlbnRpYWwgTGVhc2UgQWdyZWVtZW50IGZvciA4MTEgR2F0ZSBSdW4gUmQpCiAgLSAqKjIwMjUtMDYtMzA6KiogTGVhc2UgdGVybSBzY2hlZHVsZWQgdG8gZW5kIChTb3VyY2U6IFJlc2lkZW50aWFsIExlYXNlIEFncmVlbWVudCBmb3IgODExIEdhdGUgUnVuIFJkKQoKIyMjIDkuIFRlbmFudCBDb21tdW5pY2F0aW9uIFJlZ2FyZGluZyBSZW50IFBheW1lbnQKKipTb3VyY2UgRG9jdW1lbnQ6KiogVGVuYW50IENvbW11bmljYXRpb24gUmVnYXJkaW5nIFJlbnQgUGF5bWVudAoqKlN1bW1hcnk6KiogVGhlIGRvY3VtZW50IGlzIGFuIGVtYWlsIGZyb20gQnJlYW5uYSBIZXJyaW5nLCB0aGUgdGVuYW50IG9mIGEgcHJvcGVydHkgaW4gSmFja3NvbnZpbGxlLCBGTCwgZXhwcmVzc2luZyByZWdyZXQgZm9yIG5vdCBwYXlpbmcgcmVudCBvbiB0aW1lIGR1ZSB0byBwZXJzb25hbCBpc3N1ZXMsIGluY2x1ZGluZyB0aGUgbG9zcyBvZiBhIGNoaWxkLiBCcmVhbm5hIGFja25vd2xlZGdlcyB0aGUgZGVidCBhbmQgaW5kaWNhdGVzIGEgd2lsbGluZ25lc3MgdG8gcGF5IGFzIGZ1bmRzIGJlY29tZSBhdmFpbGFibGUuIFNoZSByZXF1ZXN0cyB1bmRlcnN0YW5kaW5nIGFuZCBtZW50aW9ucyB0aGUgcG9zc2liaWxpdHkgb2YgcHJvdmlkaW5nIHNjcmVlbnNob3RzIG9mIG1lc3NhZ2VzIGFzIGV2aWRlbmNlIG9mIGhlciBzaXR1YXRpb24uIFRoaXMgY29tbXVuaWNhdGlvbiBoaWdobGlnaHRzIHRoZSB0ZW5hbnQncyBhY2tub3dsZWRnbWVudCBvZiB0aGUgZGVidCBidXQgYWxzbyBoZXIgZmluYW5jaWFsIHN0cnVnZ2xlcywgd2hpY2ggbWF5IGltcGFjdCB0aGUgcmVjb3Zlcnkgb2YgdGhlIG93ZWQgcmVudC4KCiMjIyAxMC4gUmVzaWRlbnRpYWwgTGVhc2UgQWdyZWVtZW50IGZvciA4MTEgR2F0ZSBSdW4gUmQKKipTb3VyY2UgRG9jdW1lbnQ6KiogUmVzaWRlbnRpYWwgTGVhc2UgQWdyZWVtZW50IGZvciA4MTEgR2F0ZSBSdW4gUmQKKipTdW1tYXJ5OioqIFRoaXMgbGVhc2UgYWdyZWVtZW50IG91dGxpbmVzIHRoZSByZW50YWwgdGVybXMgZm9yIGEgcHJvcGVydHkgbG9jYXRlZCBhdCA4MTEgR2F0ZSBSdW4gUmQsIEphY2tzb252aWxsZSwgRkwsIGxlYXNlZCBieSBSYWp5YSBMYWtzaG1pIEJhZGFtIHRvIEJyZWFubmEgRGVzaGFlIEhlcnJpbmcuIFRoZSBsZWFzZSB0ZXJtIGlzIGZyb20gSmFudWFyeSAxLCAyMDI1LCB0byBKdW5lIDMwLCAyMDI1LCB3aXRoIGEgbW9udGhseSByZW50IG9mICQxLDcwMC4gVGhlIHRlbmFudCBpcyByZXNwb25zaWJsZSBmb3IgdXRpbGl0aWVzIGFuZCBtdXN0IGFkaGVyZSB0byBIT0EgZ3VpZGVsaW5lcy4gTGF0ZSBmZWVzIGFwcGx5IGZvciBvdmVyZHVlIHJlbnQgcGF5bWVudHMuIFRoZSBkb2N1bWVudCBzcGVjaWZpZXMgdGhhdCB0aGUgdGVuYW50IG11c3QgbWFpbnRhaW4gdGhlIHByZW1pc2VzIGFuZCBwYXkgYSBzZWN1cml0eSBkZXBvc2l0LiBUaGUgbGVhc2UgaW5jbHVkZXMgcHJvdmlzaW9ucyBmb3IgZWFybHkgdGVybWluYXRpb24gZmVlcyBhbmQgbGFuZGxvcmQgYWNjZXNzIHRvIHRoZSBwcm9wZXJ0eS4KKipLZXkgRXZlbnRzOioqCiAgLSAqKjIwMjUtMDEtMDE6KiogTGVhc2UgdGVybSBiZWdpbnMgZm9yIHByb3BlcnR5IGF0IDgxMSBHYXRlIFJ1biBSZC4gKFNvdXJjZTogUmVzaWRlbnRpYWwgTGVhc2UgQWdyZWVtZW50IGZvciA4MTEgR2F0ZSBSdW4gUmQpCiAgLSAqKjIwMjUtMDYtMzA6KiogTGVhc2UgdGVybSBlbmRzIGZvciBwcm9wZXJ0eSBhdCA4MTEgR2F0ZSBSdW4gUmQuIChTb3VyY2U6IFJlc2lkZW50aWFsIExlYXNlIEFncmVlbWVudCBmb3IgODExIEdhdGUgUnVuIFJkKQoKIyMjIDExLiBEZW1hbmQgZm9yIFJlbnQgUGF5bWVudCAtIEJhZGFtIHZzLiBIZXJyaW5nCioqU291cmNlIERvY3VtZW50OioqIERlbWFuZCBmb3IgUmVudCBQYXltZW50IC0gQmFkYW0gdnMuIEhlcnJpbmcKKipTdW1tYXJ5OioqIEJhbGFqaSBhbmQgUmFqeWEgQmFkYW0gb3duIGEgcHJvcGVydHkgaW4gSmFja3NvbnZpbGxlLCBGTCwgbGVhc2VkIHRvIEJyZWFubmEgSGVycmluZy4gVGhlIHRlbmFudCBoYXMgY29uc2lzdGVudGx5IHBhaWQgcmVudCBsYXRlIGFuZCBvd2VzICQ1LDUwNSBhcyBvZiBKdW5lIDIwMjUsIGluY2x1ZGluZyBsYXRlIGZlZXMuIFRoZSBsYW5kbG9yZHMgc2VlayB0byBpc3N1ZSBhIGRlbWFuZCBsZXR0ZXIgdG8gcmVjb3ZlciB0aGlzIGFtb3VudC4gVGhlIGxlYXNlIGJlZ2FuIGluIGxhdGUgMjAyMiBhbmQgZW5kcyBvbiBKdW5lIDMwLCAyMDI1LiBUaGUgdGVuYW50IGhhcyBwYWlkIG9ubHkgJDYsODk1IG9mIHRoZSAkMTEsNDAwIGR1ZSwgd2l0aCBwYXJ0aWFsIHBheW1lbnRzIGluIEFwcmlsIGFuZCBNYXksIGFuZCBubyBwYXltZW50IGZvciBKdW5lLiBUaGUgdGVuYW50IGlzIHVucmVzcG9uc2l2ZSwgY2F1c2luZyBzZXZlcmUgZmluYW5jaWFsIHN0cmVzcyBmb3IgdGhlIGxhbmRsb3Jkcy4KKipLZXkgRXZlbnRzOioqCiAgLSAqKjIwMjItMTEtMDE6KiogTGVhc2Ugc3RhcnRlZCBmb3IgcHJvcGVydHkgYXQgODExIEdhdGUgUnVuIFJkLCBKYWNrc29udmlsbGUsIEZMLiAoU291cmNlOiBEZW1hbmQgZm9yIFJlbnQgUGF5bWVudCAtIEJhZGFtIHZzLiBIZXJyaW5nKQogIC0gKioyMDI1LTA2LTAxOioqIFRlbmFudCBmYWlsZWQgdG8gcGF5IHJlbnQgZm9yIEp1bmU7IGJlY2FtZSB1bnJlc3BvbnNpdmUuIChTb3VyY2U6IERlbWFuZCBmb3IgUmVudCBQYXltZW50IC0gQmFkYW0gdnMuIEhlcnJpbmcpCgojIyMgMTIuIE1heSAyMDI1IFJlbnQgUGF5bWVudCBSZXF1ZXN0CioqU291cmNlIERvY3VtZW50OioqIE1heSAyMDI1IFJlbnQgUGF5bWVudCBSZXF1ZXN0CioqU3VtbWFyeToqKiBUaGUgZG9jdW1lbnQgaXMgYSBjb21tdW5pY2F0aW9uIHRvIEJyZWFubmEgSGVycmluZyByZWdhcmRpbmcgbm9uLXBheW1lbnQgb2YgcmVudCBmb3IgTWF5IDIwMjUuIEl0IHJlcXVlc3RzIHRoZSB0ZW5hbnQgdG8gcGF5ICQxLDcwMCBieSBNYXkgMjcsIDIwMjUsIGFuZCBhbHNvIG1lbnRpb25zIGFuIG91dHN0YW5kaW5nIGxhdGUgZmVlIG9mICQyLDAwMCBmb3IgY3VycmVudCBhbmQgcGFzdCBsZWFzaW5nIHRlcm1zLiBUaGlzIGNvbW11bmljYXRpb24gaGlnaGxpZ2h0cyB0aGUgdGVuYW50J3MgZmFpbHVyZSB0byBtZWV0IGZpbmFuY2lhbCBvYmxpZ2F0aW9ucywgd2hpY2ggZGlyZWN0bHkgc3VwcG9ydHMgdGhlIGNsaWVudCdzIHByaW9yaXR5IG9mIHJlY292ZXJpbmcgb3dlZCByZW50LiBUaGUgZG9jdW1lbnQgc2VydmVzIGFzIGV2aWRlbmNlIG9mIHRoZSB0ZW5hbnQncyBvbmdvaW5nIHBheW1lbnQgaXNzdWVzLCByZWxldmFudCB0byB0aGUgY2xpZW50J3MgZGVzaXJlZCBvdXRjb21lIG9mIGlzc3VpbmcgYSBkZW1hbmQgbGV0dGVyIGZvciAkNSw1MDUuCioqS2V5IEV2ZW50czoqKgogIC0gKioyMDI1LTA1LTI0OioqIFRlbmFudCBub3RpZmllZCBvZiBub24tcGF5bWVudCBmb3IgTWF5IDIwMjUgcmVudCBhbmQgbGF0ZSBmZWVzLiAoU291cmNlOiBNYXkgMjAyNSBSZW50IFBheW1lbnQgUmVxdWVzdCkKCiMjIyAxMy4gQXByaWwgYW5kIE1heSBSZW50IFBheW1lbnQgRGlzY3JlcGFuY2llcwoqKlNvdXJjZSBEb2N1bWVudDoqKiBBcHJpbCBhbmQgTWF5IFJlbnQgUGF5bWVudCBEaXNjcmVwYW5jaWVzCioqU3VtbWFyeToqKiBUaGUgZW1haWwgaGlnaGxpZ2h0cyBhIHBheW1lbnQgaXNzdWUgd2hlcmUgdGhlIHRlbmFudCwgQnJlYW5uYSBIZXJyaW5nLCBwYWlkIG9ubHkgJDEsMzAwIGluIEFwcmlsIGFuZCAkNTAwIGluIE1heSwgY29udHJhcnkgdG8gdGhlIGFncmVlZCBmdWxsIHBheW1lbnQgYnkgdGhlIDE1dGggb2YgZWFjaCBtb250aC4gVGhlIGxhbmRsb3JkIGV4cHJlc3NlcyBjb25jZXJuIG92ZXIgYWNjdW11bGF0aW5nIGxhdGUgZmVlcyBhbmQgc2Vla3MgdG8gZGlzY3VzcyB0aGUgbWF0dGVyIGZ1cnRoZXIuIFRoaXMgZG9jdW1lbnQgaXMgY3J1Y2lhbCBhcyBpdCBldmlkZW5jZXMgdGhlIHRlbmFudCdzIGZhaWx1cmUgdG8gbWVldCBwYXltZW50IG9ibGlnYXRpb25zLCBzdXBwb3J0aW5nIHRoZSBjbGllbnQncyBwcmlvcml0eSB0byByZWNvdmVyIG93ZWQgcmVudC4KKipLZXkgRXZlbnRzOioqCiAgLSAqKjIwMjMtMDUtMjI6KiogTGFuZGxvcmQgZW1haWxlZCB0ZW5hbnQgYWJvdXQgQXByaWwgYW5kIE1heSBwYXltZW50IGRpc2NyZXBhbmNpZXMgYW5kIGxhdGUgZmVlcy4gKFNvdXJjZTogQXByaWwgYW5kIE1heSBSZW50IFBheW1lbnQgRGlzY3JlcGFuY2llcykKICAtICoqMjAyMy0wNS0wNToqKiBUZW5hbnQgbWFkZSBhIHBhcnRpYWwgcGF5bWVudCBvZiAkNTAwIGZvciBNYXkuIChTb3VyY2U6IEFwcmlsIGFuZCBNYXkgUmVudCBQYXltZW50IERpc2NyZXBhbmNpZXMpCgojIyMgMTQuIFJlOiBNT1ZFIE9VVAoqKlNvdXJjZSBEb2N1bWVudDoqKiBSZTogTU9WRSBPVVQKKipTdW1tYXJ5OioqIFRoZSBlbWFpbCBleGNoYW5nZSBiZXR3ZWVuIFJhdmkgQmFkYW0gYW5kIEJyZWFubmEgSGVycmluZyBkaXNjdXNzZXMgdGhlIHRlbmFudCdzIG1vdmUtb3V0IG5vdGljZSBhbmQgdGhlIGxhbmRsb3JkJ3MgY29uY2VybnMgYWJvdXQgdW5wYWlkIHJlbnQuIFJhdmkgYWNrbm93bGVkZ2VzIEJyZWFubmEncyBub3RpY2UgdG8gdmFjYXRlIGJ5IE1heSAxMXRoLCB3aXRoIGNsZWFuaW5nIGJ5IE1heSAxM3RoLCBkZXNwaXRlIHRoZSBsZWFzZSBlbmRpbmcgb24gSnVuZSAzMHRoLiBSYXZpIGV4cHJlc3NlcyBmaW5hbmNpYWwgc3RyYWluIGR1ZSB0byB1bnBhaWQgcmVudCBhbmQgcmVxdWVzdHMgYW55IHBvc3NpYmxlIHBheW1lbnQgdG8gYXZvaWQgaW1tZWRpYXRlIGV2aWN0aW9uLiBCcmVhbm5hIG1lbnRpb25zIHByaW9yIGRpc2N1c3Npb25zIGFib3V0IGhlciBlbXBsb3ltZW50IHN0YXR1cyBhZmZlY3RpbmcgcmVudCBwYXltZW50cyBhbmQgbm90ZXMgaXNzdWVzIHdpdGggYWlyIGNvbmRpdGlvbmluZy4gVGhlIGNvbW11bmljYXRpb24gaGlnaGxpZ2h0cyB0aGUgbGFuZGxvcmQncyBuZWVkIHRvIHJlY292ZXIgb3dlZCByZW50LCBhbGlnbmluZyB3aXRoIHRoZSBjbGllbnQncyBwcmlvcml0aWVzLgoqKktleSBFdmVudHM6KioKICAtICoqMjAyNS0wNS0xMToqKiBCcmVhbm5hIEhlcnJpbmcgcGxhbnMgdG8gbW92ZSBvdXQgb2YgdGhlIGNvbmRvLiAoU291cmNlOiBSZTogTU9WRSBPVVQpCiAgLSAqKjIwMjUtMDUtMTM6KiogQnJlYW5uYSBIZXJyaW5nIHBsYW5zIHRvIGNvbXBsZXRlIGNsZWFuaW5nIG9mIHRoZSB1bml0LiAoU291cmNlOiBSZTogTU9WRSBPVVQpCiAgLSAqKjIwMjUtMDUtMjg6KiogUmF2aSBCYWRhbSByZXF1ZXN0cyBwYXltZW50IHRvIGF2b2lkIGltbWVkaWF0ZSBldmljdGlvbi4gKFNvdXJjZTogUmU6IE1PVkUgT1VUKQoKIyMjIDE1LiBEZW1hbmQgZm9yIFJlbnQgUGF5bWVudAoqKlNvdXJjZSBEb2N1bWVudDoqKiBEZW1hbmQgZm9yIFJlbnQgUGF5bWVudAoqKlN1bW1hcnk6KiogQmFsYWppIGFuZCBSYWp5YSBCYWRhbSBvd24gYSBwcm9wZXJ0eSBpbiBKYWNrc29udmlsbGUsIEZMLCBsZWFzZWQgdG8gQnJlYW5uYSBIZXJyaW5nLiBUaGUgdGVuYW50IGhhcyBiZWVuIGNvbnNpc3RlbnRseSBsYXRlIHdpdGggcmVudCBwYXltZW50cyBhbmQgY3VycmVudGx5IG93ZXMgJDUsNTA1LCBpbmNsdWRpbmcgbGF0ZSBmZWVzIGFuZCBhZG1pbmlzdHJhdGl2ZSBjb3N0cy4gVGhlIGxlYXNlIHN0YXJ0ZWQgaW4gbGF0ZSAyMDIyIGFuZCBlbmRzIG9uIEp1bmUgMzAsIDIwMjUuIEFzIG9mIEp1bmUgMjAyNSwgdGhlIHRlbmFudCBoYXMgcGFpZCBvbmx5ICQ2LDg5NSBvZiB0aGUgJDExLDQwMCBkdWUuIE5vIHJlbnQgd2FzIHBhaWQgZm9yIEp1bmUsIGFuZCB0aGUgdGVuYW50IGhhcyBiZWVuIHVucmVzcG9uc2l2ZS4gVGhlIGxhbmRsb3JkcyBhcmUgc2Vla2luZyB0byBpc3N1ZSBhIGRlbWFuZCBsZXR0ZXIgdG8gcmVjb3ZlciB0aGUgb3dlZCBhbW91bnQsIGVtcGhhc2l6aW5nIHRoZSBmaW5hbmNpYWwgaGFyZHNoaXAgY2F1c2VkIGJ5IHRoZSB0ZW5hbnQncyBub24tcGF5bWVudC4KKipLZXkgRXZlbnRzOioqCiAgLSAqKjIwMjItMTEtMDE6KiogTGVhc2UgYWdyZWVtZW50IGNvbW1lbmNlZCBmb3IgcHJvcGVydHkgYXQgODExIEdhdGUgUnVuIFJkLCBKYWNrc29udmlsbGUsIEZMLiAoU291cmNlOiBEZW1hbmQgZm9yIFJlbnQgUGF5bWVudCkKICAtICoqMjAyNS0wNi0wMToqKiBUZW5hbnQgZmFpbGVkIHRvIHBheSByZW50IGZvciBKdW5lOyB0b3RhbCBvd2VkIGlzICQ1LDUwNS4gKFNvdXJjZTogRGVtYW5kIGZvciBSZW50IFBheW1lbnQpCgojIyMgMTYuIFRlbmFudCBSZW50IFBheW1lbnQgSXNzdWVzCioqU291cmNlIERvY3VtZW50OioqIFRlbmFudCBSZW50IFBheW1lbnQgSXNzdWVzCioqU3VtbWFyeToqKiBUaGUgZG9jdW1lbnQgb3V0bGluZXMgY29tbXVuaWNhdGlvbiByZWdhcmRpbmcgcmVudCBwYXltZW50IGlzc3VlcyBiZXR3ZWVuIGxhbmRsb3JkcyBCYWxhamkgYW5kIFJhanlhIEJhZGFtIGFuZCB0aGVpciB0ZW5hbnQsIEJyZWFubmEgSGVycmluZy4gVGhlIHRlbmFudCBoYXMgY29uc2lzdGVudGx5IHBhaWQgcmVudCBsYXRlIGFuZCBoYXMgbm90IHBhaWQgdGhlIGZ1bGwgYW1vdW50IGR1ZSBmb3IgdGhlIGN1cnJlbnQgbGVhc2UgdGVybS4gQXMgb2YgSnVuZSAyMDI1LCB0aGUgdGVuYW50IG93ZXMgJDUsNTA1LCBpbmNsdWRpbmcgbGF0ZSBmZWVzIGFuZCBhZG1pbmlzdHJhdGl2ZSBjb3N0cy4gVGhlIGxhbmRsb3JkcyBhcmUgZXhwZXJpZW5jaW5nIHNldmVyZSBmaW5hbmNpYWwgc3RyZXNzIGR1ZSB0byB0aGlzIHNpdHVhdGlvbiBhbmQgc2VlayB0byBpc3N1ZSBhIGRlbWFuZCBsZXR0ZXIgdG8gcmVjb3ZlciB0aGUgb3dlZCBhbW91bnQuCgojIyMgMTcuIFRlbmFudCBSZW50IFBheW1lbnQgRGlzY3JlcGFuY3kKKipTb3VyY2UgRG9jdW1lbnQ6KiogVGVuYW50IFJlbnQgUGF5bWVudCBEaXNjcmVwYW5jeQoqKlN1bW1hcnk6KiogVGhlIGRvY3VtZW50IG91dGxpbmVzIGEgc2VyaWVzIG9mIGNvbW11bmljYXRpb25zIHJlZ2FyZGluZyByZW50IHBheW1lbnRzIGZvciBhIHByb3BlcnR5IGxlYXNlZCBieSBCcmVhbm5hIEhlcnJpbmcgZnJvbSBCYWxhamkgYW5kIFJhanlhIEJhZGFtLiBUaGUgdGVuYW50IGhhcyBjb25zaXN0ZW50bHkgcGFpZCByZW50IGxhdGUgYW5kIGhhcyBub3QgcGFpZCB0aGUgZnVsbCBhbW91bnQgZHVlIGZvciB0aGUgY3VycmVudCBsZWFzZSB0ZXJtLiBBcyBvZiBKdW5lIDIwMjUsIHRoZSB0ZW5hbnQgb3dlcyAkNSw1MDUsIGluY2x1ZGluZyBsYXRlIGZlZXMgYW5kIGFkbWluaXN0cmF0aXZlIGNvc3RzLiBUaGUgbGFuZGxvcmRzIGFyZSBzZWVraW5nIHRvIGlzc3VlIGEgZGVtYW5kIGxldHRlciB0byByZWNvdmVyIHRoZSBvd2VkIGFtb3VudCwgYXMgdGhlIHRlbmFudCBoYXMgYmVlbiB1bnJlc3BvbnNpdmUgYW5kIG5vIHJlbnQgaGFzIGJlZW4gcGFpZCBmb3IgSnVuZS4KKipLZXkgRXZlbnRzOioqCiAgLSAqKjIwMjUtMDYtMDE6KiogTGFuZGxvcmRzIG5vdGVkIHRlbmFudCBvd2VzICQ1LDUwNSwgaW5jbHVkaW5nIGxhdGUgZmVlcy4gKFNvdXJjZTogVGVuYW50IFJlbnQgUGF5bWVudCBEaXNjcmVwYW5jeSkKICAtICoqMjAyNS0wNi0wMzoqKiBUZW5hbnQgdW5yZXNwb25zaXZlIHRvIGNvbW11bmljYXRpb24gYXR0ZW1wdHMgcmVnYXJkaW5nIG92ZXJkdWUgcmVudC4gKFNvdXJjZTogVGVuYW50IFJlbnQgUGF5bWVudCBEaXNjcmVwYW5jeSkKCiMjIyAxOC4gRGVtYW5kIGZvciBSZW50IFBheW1lbnQgLSBCcmVhbm5hIEhlcnJpbmcKKipTb3VyY2UgRG9jdW1lbnQ6KiogRGVtYW5kIGZvciBSZW50IFBheW1lbnQgLSBCcmVhbm5hIEhlcnJpbmcKKipTdW1tYXJ5OioqIEJhbGFqaSBhbmQgUmFqeWEgQmFkYW0sIGxhbmRsb3JkcyBvZiBhIHByb3BlcnR5IGluIEphY2tzb252aWxsZSwgRkwsIGFyZSBzZWVraW5nIHRvIHJlY292ZXIgJDUsNTA1IGluIHVucGFpZCByZW50IGZyb20gdGhlaXIgdGVuYW50LCBCcmVhbm5hIEhlcnJpbmcuIFRoZSB0ZW5hbnQgaGFzIGNvbnNpc3RlbnRseSBwYWlkIHJlbnQgbGF0ZSBhbmQgaGFzIG5vdCBwYWlkIHRoZSBmdWxsIGFtb3VudCBkdWUgZm9yIHRoZSBjdXJyZW50IGxlYXNlIHRlcm0uIEFzIG9mIEp1bmUgMjAyNSwgdGhlIHRlbmFudCBoYXMgcGFpZCBvbmx5ICQ2LDg5NSBvZiB0aGUgJDExLDQwMCBvd2VkLiBUaGUgbGFuZGxvcmRzIGFyZSBleHBlcmllbmNpbmcgc2V2ZXJlIGZpbmFuY2lhbCBzdHJlc3MgYW5kIGFyZSByZXF1ZXN0aW5nIGxlZ2FsIGFzc2lzdGFuY2UgdG8gaXNzdWUgYSBkZW1hbmQgbGV0dGVyIHRvIHJlY292ZXIgdGhlIG93ZWQgYW1vdW50LgoqKktleSBFdmVudHM6KioKICAtICoqMjAyMi0xMi0wMToqKiBMZWFzZSBzdGFydGVkIGZvciBwcm9wZXJ0eSBhdCA4MTEgR2F0ZSBSdW4gUmQsIEphY2tzb252aWxsZSwgRkwuIChTb3VyY2U6IERlbWFuZCBmb3IgUmVudCBQYXltZW50IC0gQnJlYW5uYSBIZXJyaW5nKQogIC0gKioyMDI1LTA2LTAxOioqIFRlbmFudCBCcmVhbm5hIEhlcnJpbmcgb3dlcyAkNSw1MDUgaW4gdW5wYWlkIHJlbnQuIChTb3VyY2U6IERlbWFuZCBmb3IgUmVudCBQYXltZW50IC0gQnJlYW5uYSBIZXJyaW5nKQogIC0gKioyMDI1LTA2LTMwOioqIExlYXNlIHRlcm0gZW5kcyBmb3IgdGhlIHByb3BlcnR5LiAoU291cmNlOiBEZW1hbmQgZm9yIFJlbnQgUGF5bWVudCAtIEJyZWFubmEgSGVycmluZykKCiMjIEZpbmFsIExlZ2FsIEFzc2Vzc21lbnQKLSAqKkNsYWltIFZpYWJpbGl0eToqKiBTdHJvbmcKLSAqKk92ZXJhbGwgRXZpZGVuY2UgU3RyZW5ndGg6KiogRXZpZGVuY2VTdHJlbmd0aC5TVFJPTkc="
+      }
+    ],
+    "case_analysis_text": "# Case Analysis & AI-Generated Insights\n\n## Intake Analysis\n- **Client Name:** Balaji Badam, Rajya Badam\n- **Attorney Name:** N/A\n- **Case Type:** N/A\n- **Urgency:** Very Important – severe hardship, personal or financial inconvenience if matter is not resolved quickly.\n\n**Case Summary:**\nBalaji and Rajya Badam own an investment property in Jacksonville, FL, leased to Breanna Herring. The tenant has consistently paid rent late and has failed to pay the full amount due for the current lease term. As of June 2025, the tenant owes a total of $5,505, including late fees and administrative costs. The landlords are seeking legal assistance to issue a demand letter to recover the owed amount.\n\n**Priorities:**\n  - Recover owed rent\n\n**Desired Outcomes:**\n  - Issue a demand letter for $5,505\n\n## Individual Document Analysis\n\n### 1. Demand for Rent Payment\n**Source Document:** Demand for Rent Payment\n**Summary:** Balaji and Rajya Badam own a property in Jacksonville, FL, leased to Breanna Herring. The tenant has consistently paid rent late and owes $5,505 as of June 2025, including late fees and administrative costs. The landlords seek to issue a demand letter to recover this amount. The lease began in late 2022 and ends on June 30, 2025. The tenant has paid only $6,895 of the $11,400 due, with partial payments in April and May, and no payment for June. The tenant is unresponsive, causing severe financial stress for the landlords.\n**Key Events:**\n  - **2022-10-01:** Lease started for property at 811 Gate Run Rd, Jacksonville, FL. (Source: Demand for Rent Payment)\n  - **2025-06-01:** Tenant Breanna Herring failed to pay rent for June. (Source: Demand for Rent Payment)\n\n### 2. Florida Eviction Notice\n**Source Document:** Florida Eviction Notice\n**Summary:** This eviction notice, dated May 28, 2025, is directed to tenant Breanna Herring for nonpayment of rent at 811 Gate Run Rd, Jacksonville, FL. The notice demands payment of $3,600, including $1,700 past rent for May 2025, $200 late fees, and $1,700 other fees. Payment must be made within 3 days to avoid eviction. The landlord, Rajya Badam, has provided payment instructions via Zelle. The notice serves as a legal warning that noncompliance will lead to legal proceedings to recover rent and possession of the property.\n**Key Events:**\n  - **2025-05-28:** Eviction notice issued to Breanna Herring for nonpayment. (Source: Florida Eviction Notice)\n\n### 3. Demand for Owed Rent - Badam vs. Herring\n**Source Document:** Demand for Owed Rent - Badam vs. Herring\n**Summary:** Balaji and Rajya Badam, landlords of a property in Jacksonville, FL, are seeking to recover $5,505 in owed rent from their tenant, Breanna Herring. The tenant has consistently paid rent late and has not paid the full amount due for the current lease term. As of June 2025, the tenant has paid only $6,895 of the $11,400 due, with no payment made for June and the tenant being unresponsive. The landlords are experiencing severe financial stress and are seeking legal assistance to issue a demand letter to recover the owed amount.\n**Key Events:**\n  - **2022-11-01:** Lease started for property at 811 Gate Run Rd, Jacksonville, FL. (Source: Demand for Owed Rent - Badam vs. Herring)\n  - **2025-06-01:** Tenant Breanna Herring owes $5,505 in rent and fees. (Source: Demand for Owed Rent - Badam vs. Herring)\n\n### 4. Checking Account Statement\n**Source Document:** Checking Account Statement\n**Summary:** The document is a checking account statement showing transactions from Breanna Herring. It includes multiple Zelle transfers to the account, totaling $6,895. Notably, $1,300 was transferred in April and $500 in May. The current available balance is $674.63, with a pending withdrawal of $1,788.99. No rent payment for June is evident, and the tenant is unresponsive. This financial activity is crucial for assessing the tenant's ability to pay the owed rent of $5,505.\n**Key Events:**\n  - **2025-05-05:** Received $500 via Zelle from Breanna Herring. (Source: Checking Account Statement)\n  - **2025-04-21:** Received $1,300 via Zelle from Breanna Herring. (Source: Checking Account Statement)\n\n### 5. Demand for Rent Payment\n**Source Document:** Demand for Rent Payment\n**Summary:** Balaji and Rajya Badam, landlords of a property in Jacksonville, FL, are seeking to recover $5,505 in unpaid rent from their tenant, Breanna Herring. The tenant has consistently paid rent late and has not paid the full amount due for the current lease term. As of June 2025, the tenant owes $5,505, including late fees and administrative costs. The landlords are experiencing severe financial stress due to this situation and are requesting legal assistance to issue a demand letter to recover the owed amount.\n**Key Events:**\n  - **2022-10-01:** Lease agreement started for property at 811 Gate Run Rd, Jacksonville, FL. (Source: Demand for Rent Payment)\n  - **2025-06-01:** Tenant Breanna Herring failed to pay rent for June. (Source: Demand for Rent Payment)\n\n### 6. Eviction Notice - 811 Gate Run Rd - Non Payment of Rent\n**Source Document:** Eviction Notice - 811 Gate Run Rd - Non Payment of Rent\n**Summary:** The document is an email from Ravi Badam to Breanna Herring, serving an eviction notice for non-payment of rent for May 2025. Ravi emphasizes the financial burden caused by the tenant's failure to pay $1,700 rent and $2,000 in accumulated late fees. The email highlights the urgency of the situation, as Ravi is unable to meet mortgage and other property-related obligations. Ravi warns that eviction proceedings will commence if the tenant does not comply with the rental agreement. This document supports the client's priority to recover owed rent and issue a demand letter for $5,505.\n**Key Events:**\n  - **2025-05-24:** Ravi Badam requests Breanna Herring to pay $1,700 rent by May 27, 2025. (Source: Eviction Notice - 811 Gate Run Rd - Non Payment of Rent)\n  - **2025-05-28:** Ravi Badam serves an eviction notice to Breanna Herring for non-payment of rent. (Source: Eviction Notice - 811 Gate Run Rd - Non Payment of Rent)\n\n### 7. Florida Eviction Notice\n**Source Document:** Florida Eviction Notice\n**Summary:** The document is a Florida eviction notice addressed to Breanna Herring, the tenant at 811 Gate Run Rd, Jacksonville, FL. It demands payment of $3,600 in past rent and late fees within 3 days, failing which the tenant must vacate the premises. The notice specifies a total amount due of $3,600, with payment instructions to a Zelle account. The document is signed by the landlord, Rajya Badam, and includes their contact information. This notice serves as a formal demand for payment and outlines the consequences of noncompliance, including potential legal action for possession of the premises.\n**Key Events:**\n  - **2025-05-28:** Eviction notice issued to Breanna Herring for nonpayment. (Source: Florida Eviction Notice)\n\n### 8. Residential Lease Agreement for 811 Gate Run Rd\n**Source Document:** Residential Lease Agreement for 811 Gate Run Rd\n**Summary:** This document is a residential lease agreement for a property located at 811 Gate Run Rd, Jacksonville, Florida, between Rajya Lakshmi Badam as the landlord and Breanna Deshae Herring as the tenant. The lease term is from January 1, 2025, to June 30, 2025, with a total rent of $10,200 payable in monthly installments of $1,700. The tenant is responsible for all utilities and must follow HOA guidelines. The lease includes provisions for late fees, maintenance responsibilities, and conditions for early termination. The tenant has not paid the full rent due, leading to a financial shortfall for the landlord.\n**Key Events:**\n  - **2025-01-01:** Lease term begins for property at 811 Gate Run Rd (Source: Residential Lease Agreement for 811 Gate Run Rd)\n  - **2025-06-30:** Lease term scheduled to end (Source: Residential Lease Agreement for 811 Gate Run Rd)\n\n### 9. Tenant Communication Regarding Rent Payment\n**Source Document:** Tenant Communication Regarding Rent Payment\n**Summary:** The document is an email from Breanna Herring, the tenant of a property in Jacksonville, FL, expressing regret for not paying rent on time due to personal issues, including the loss of a child. Breanna acknowledges the debt and indicates a willingness to pay as funds become available. She requests understanding and mentions the possibility of providing screenshots of messages as evidence of her situation. This communication highlights the tenant's acknowledgment of the debt but also her financial struggles, which may impact the recovery of the owed rent.\n\n### 10. Residential Lease Agreement for 811 Gate Run Rd\n**Source Document:** Residential Lease Agreement for 811 Gate Run Rd\n**Summary:** This lease agreement outlines the rental terms for a property located at 811 Gate Run Rd, Jacksonville, FL, leased by Rajya Lakshmi Badam to Breanna Deshae Herring. The lease term is from January 1, 2025, to June 30, 2025, with a monthly rent of $1,700. The tenant is responsible for utilities and must adhere to HOA guidelines. Late fees apply for overdue rent payments. The document specifies that the tenant must maintain the premises and pay a security deposit. The lease includes provisions for early termination fees and landlord access to the property.\n**Key Events:**\n  - **2025-01-01:** Lease term begins for property at 811 Gate Run Rd. (Source: Residential Lease Agreement for 811 Gate Run Rd)\n  - **2025-06-30:** Lease term ends for property at 811 Gate Run Rd. (Source: Residential Lease Agreement for 811 Gate Run Rd)\n\n### 11. Demand for Rent Payment - Badam vs. Herring\n**Source Document:** Demand for Rent Payment - Badam vs. Herring\n**Summary:** Balaji and Rajya Badam own a property in Jacksonville, FL, leased to Breanna Herring. The tenant has consistently paid rent late and owes $5,505 as of June 2025, including late fees. The landlords seek to issue a demand letter to recover this amount. The lease began in late 2022 and ends on June 30, 2025. The tenant has paid only $6,895 of the $11,400 due, with partial payments in April and May, and no payment for June. The tenant is unresponsive, causing severe financial stress for the landlords.\n**Key Events:**\n  - **2022-11-01:** Lease started for property at 811 Gate Run Rd, Jacksonville, FL. (Source: Demand for Rent Payment - Badam vs. Herring)\n  - **2025-06-01:** Tenant failed to pay rent for June; became unresponsive. (Source: Demand for Rent Payment - Badam vs. Herring)\n\n### 12. May 2025 Rent Payment Request\n**Source Document:** May 2025 Rent Payment Request\n**Summary:** The document is a communication to Breanna Herring regarding non-payment of rent for May 2025. It requests the tenant to pay $1,700 by May 27, 2025, and also mentions an outstanding late fee of $2,000 for current and past leasing terms. This communication highlights the tenant's failure to meet financial obligations, which directly supports the client's priority of recovering owed rent. The document serves as evidence of the tenant's ongoing payment issues, relevant to the client's desired outcome of issuing a demand letter for $5,505.\n**Key Events:**\n  - **2025-05-24:** Tenant notified of non-payment for May 2025 rent and late fees. (Source: May 2025 Rent Payment Request)\n\n### 13. April and May Rent Payment Discrepancies\n**Source Document:** April and May Rent Payment Discrepancies\n**Summary:** The email highlights a payment issue where the tenant, Breanna Herring, paid only $1,300 in April and $500 in May, contrary to the agreed full payment by the 15th of each month. The landlord expresses concern over accumulating late fees and seeks to discuss the matter further. This document is crucial as it evidences the tenant's failure to meet payment obligations, supporting the client's priority to recover owed rent.\n**Key Events:**\n  - **2023-05-22:** Landlord emailed tenant about April and May payment discrepancies and late fees. (Source: April and May Rent Payment Discrepancies)\n  - **2023-05-05:** Tenant made a partial payment of $500 for May. (Source: April and May Rent Payment Discrepancies)\n\n### 14. Re: MOVE OUT\n**Source Document:** Re: MOVE OUT\n**Summary:** The email exchange between Ravi Badam and Breanna Herring discusses the tenant's move-out notice and the landlord's concerns about unpaid rent. Ravi acknowledges Breanna's notice to vacate by May 11th, with cleaning by May 13th, despite the lease ending on June 30th. Ravi expresses financial strain due to unpaid rent and requests any possible payment to avoid immediate eviction. Breanna mentions prior discussions about her employment status affecting rent payments and notes issues with air conditioning. The communication highlights the landlord's need to recover owed rent, aligning with the client's priorities.\n**Key Events:**\n  - **2025-05-11:** Breanna Herring plans to move out of the condo. (Source: Re: MOVE OUT)\n  - **2025-05-13:** Breanna Herring plans to complete cleaning of the unit. (Source: Re: MOVE OUT)\n  - **2025-05-28:** Ravi Badam requests payment to avoid immediate eviction. (Source: Re: MOVE OUT)\n\n### 15. Demand for Rent Payment\n**Source Document:** Demand for Rent Payment\n**Summary:** Balaji and Rajya Badam own a property in Jacksonville, FL, leased to Breanna Herring. The tenant has been consistently late with rent payments and currently owes $5,505, including late fees and administrative costs. The lease started in late 2022 and ends on June 30, 2025. As of June 2025, the tenant has paid only $6,895 of the $11,400 due. No rent was paid for June, and the tenant has been unresponsive. The landlords are seeking to issue a demand letter to recover the owed amount, emphasizing the financial hardship caused by the tenant's non-payment.\n**Key Events:**\n  - **2022-11-01:** Lease agreement commenced for property at 811 Gate Run Rd, Jacksonville, FL. (Source: Demand for Rent Payment)\n  - **2025-06-01:** Tenant failed to pay rent for June; total owed is $5,505. (Source: Demand for Rent Payment)\n\n### 16. Tenant Rent Payment Issues\n**Source Document:** Tenant Rent Payment Issues\n**Summary:** The document outlines communication regarding rent payment issues between landlords Balaji and Rajya Badam and their tenant, Breanna Herring. The tenant has consistently paid rent late and has not paid the full amount due for the current lease term. As of June 2025, the tenant owes $5,505, including late fees and administrative costs. The landlords are experiencing severe financial stress due to this situation and seek to issue a demand letter to recover the owed amount.\n\n### 17. Tenant Rent Payment Discrepancy\n**Source Document:** Tenant Rent Payment Discrepancy\n**Summary:** The document outlines a series of communications regarding rent payments for a property leased by Breanna Herring from Balaji and Rajya Badam. The tenant has consistently paid rent late and has not paid the full amount due for the current lease term. As of June 2025, the tenant owes $5,505, including late fees and administrative costs. The landlords are seeking to issue a demand letter to recover the owed amount, as the tenant has been unresponsive and no rent has been paid for June.\n**Key Events:**\n  - **2025-06-01:** Landlords noted tenant owes $5,505, including late fees. (Source: Tenant Rent Payment Discrepancy)\n  - **2025-06-03:** Tenant unresponsive to communication attempts regarding overdue rent. (Source: Tenant Rent Payment Discrepancy)\n\n### 18. Demand for Rent Payment - Breanna Herring\n**Source Document:** Demand for Rent Payment - Breanna Herring\n**Summary:** Balaji and Rajya Badam, landlords of a property in Jacksonville, FL, are seeking to recover $5,505 in unpaid rent from their tenant, Breanna Herring. The tenant has consistently paid rent late and has not paid the full amount due for the current lease term. As of June 2025, the tenant has paid only $6,895 of the $11,400 owed. The landlords are experiencing severe financial stress and are requesting legal assistance to issue a demand letter to recover the owed amount.\n**Key Events:**\n  - **2022-12-01:** Lease started for property at 811 Gate Run Rd, Jacksonville, FL. (Source: Demand for Rent Payment - Breanna Herring)\n  - **2025-06-01:** Tenant Breanna Herring owes $5,505 in unpaid rent. (Source: Demand for Rent Payment - Breanna Herring)\n  - **2025-06-30:** Lease term ends for the property. (Source: Demand for Rent Payment - Breanna Herring)\n\n## Final Legal Assessment\n- **Claim Viability:** Strong\n- **Overall Evidence Strength:** EvidenceStrength.STRONG",
+    "quality_score": {
+      "overall_score": 1.0,
+      "professional_tone_score": 1.0,
+      "completeness_score": 1.0,
+      "clarity_score": 1.0,
+      "case_specificity_score": 1.0
+    }
+  },
+  "errors": []
+}

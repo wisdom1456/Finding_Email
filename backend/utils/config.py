@@ -1,4 +1,11 @@
 from pydantic_settings import BaseSettings
+import os
+
+# Determine the root directory of the project
+# This assumes the script is in backend/utils, so we go up two levels
+ROOT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Correct path to the .env file
+ENV_FILE_PATH = os.path.join(ROOT_DIR, '.env')
 
 class Settings(BaseSettings):
     """
@@ -10,12 +17,7 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:8501,http://localhost:3000"
 
     class Config:
-        env_file = ".env"
+        # Load the .env file from the project's root directory
+        env_file = ENV_FILE_PATH
 
-import os
-
-if os.getenv("TESTING"):
-    from tests.conftest import TestSettings
-    settings = TestSettings()
-else:
-    settings = Settings()
+settings = Settings()

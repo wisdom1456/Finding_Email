@@ -1,14 +1,18 @@
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from fastapi import FastAPI, UploadFile, File, Depends, HTTPException
 from typing import List, Optional
 from dotenv import load_dotenv
 from fastapi.middleware.cors import CORSMiddleware
 from openai import OpenAI
 
-from .utils.config import settings
-from .services.document_processor import DocumentProcessor
-from .services.ai_analyzer import AIAnalyzer
-from .services.email_generator import EmailGenerator
-from .utils.data_models import (
+from backend.utils.config import settings
+from backend.services.document_processor import DocumentProcessor
+from backend.services.ai_analyzer import AIAnalyzer
+from backend.services.email_generator import EmailGenerator
+from backend.utils.data_models import (
     CombinedAnalysis,
     CaseResults,
     AnalysisError,

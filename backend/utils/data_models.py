@@ -171,11 +171,20 @@ class DownloadLink(BaseModel):
     file_name: str
     url: str
 
+class QualityScore(BaseModel):
+    """Data model for the quality score of the findings letter."""
+    overall_score: float
+    professional_tone_score: float
+    completeness_score: float
+    clarity_score: float
+    case_specificity_score: float
+
 class EmailResponse(BaseModel):
     """Data model for the email generation response."""
     findings_letter: Optional[EnhancedFindingsLetter] = None
     download_links: List[DownloadLink] = Field(default_factory=list)
     case_analysis_text: Optional[str] = Field(None, description="The formatted text of the case analysis document.")
+    quality_score: Optional[QualityScore] = None
 
 class CaseResults(BaseModel):
     """Top-level model for returning the complete analysis results."""

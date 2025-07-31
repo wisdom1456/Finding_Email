@@ -1,0 +1,325 @@
+{
+  "analysis": {
+    "intake_analysis": {
+      "client_name": "Miguel Velasco, Rachael Taft",
+      "attorney_name": "",
+      "case_summary": "Miguel Velasco and Rachael Taft are seeking legal representation regarding a real estate dispute related to the purchase of their home at 142 Annwood Road, Palm Harbor, Florida. They believe that the seller, William Lichtenstein, provided false or misleading information in the seller disclosure forms. The couple is exploring their legal options, including a potential claim for misrepresentation or failure to disclose under Florida real estate law. They are concerned about the loss of usage, damages, and the overall value of their property due to these alleged misrepresentations.",
+      "case_type": "Real Estate Dispute",
+      "urgency_level": "Very Important – severe hardship, personal or financial inconvenience if matter is not resolved quickly.",
+      "client_priorities": [
+        "Explore legal options",
+        "Claim for misrepresentation"
+      ],
+      "desired_outcomes": [
+        "Claim for misrepresentation",
+        "Compensation for damages"
+      ],
+      "key_facts": [
+        "Home purchased on February 29, 2024.",
+        "Dispute involves seller disclosure forms.",
+        "Seller is William Lichtenstein.",
+        "Claim for loss of usage and damages."
+      ],
+      "parties_involved": [
+        {
+          "name": "William Lichtenstein",
+          "role": "Seller of Home"
+        }
+      ],
+      "financial_impact": "",
+      "legal_claims": [
+        "Misrepresentation",
+        "Failure to disclose"
+      ]
+    },
+    "case_analyses": [
+      {
+        "document_title": "FEMA Proof of Loss Form",
+        "document_type": "Insurance Claim Document",
+        "key_entities": [
+          {
+            "name": "Miguel Velasco",
+            "role": "Policyholder"
+          },
+          {
+            "name": "Rachel Taft",
+            "role": "Policyholder"
+          },
+          {
+            "name": "Jason Rogers",
+            "role": "Claim Representative"
+          },
+          {
+            "name": "William Lichtenstein",
+            "role": "Seller of Home"
+          }
+        ],
+        "summary": "This document is a FEMA Proof of Loss form for a flood insurance claim filed by Miguel Velasco and Rachel Taft. It details the damages to their property at 142 Annwood Road, Palm Harbor, Florida, due to a flood on October 9, 2024. The claim includes building and personal property damages, with a net claim amount of $30,387.19. The document outlines the replacement cost value, depreciation, and actual cash value for various items. It also mentions the involvement of Rocket Mortgage LLC as the mortgagee. The policyholders have the option to request additional payments if not all damages are covered in this estimate.",
+        "timeline_events": [
+          {
+            "date": "2024-10-09",
+            "event": "Flood occurred causing damage to property"
+          },
+          {
+            "date": "2024-10-11",
+            "event": "Claim received by insurance company"
+          },
+          {
+            "date": "2024-10-18",
+            "event": "Property inspection conducted by claim representative"
+          },
+          {
+            "date": "2024-12-05",
+            "event": "Estimate for damages completed"
+          }
+        ],
+        "evidence_strength": "Moderate",
+        "legal_significance": "The document provides evidence of the damages claimed by the policyholders, which may support their case for misrepresentation if the seller failed to disclose flood risks.",
+        "relevance_to_intake": "The document is relevant as it quantifies the damages and financial impact on the clients, supporting their claim for compensation due to alleged misrepresentation by the seller.",
+        "potential_challenges": [
+          "Proving seller's knowledge",
+          "Insurance coverage limits",
+          "Additional damages not covered"
+        ]
+      },
+      {
+        "document_title": "AS IS Residential Contract For Sale And Purchase",
+        "document_type": "Real Estate Contract",
+        "key_entities": [
+          {
+            "name": "William Lichtenstein",
+            "role": "Seller"
+          },
+          {
+            "name": "Laura J Price",
+            "role": "Buyer"
+          },
+          {
+            "name": "Miguel Velasco",
+            "role": "Buyer"
+          },
+          {
+            "name": "Rachael Taft",
+            "role": "Buyer"
+          }
+        ],
+        "summary": "The document is an 'AS IS' Residential Contract for the sale of a property located at 142 Annwood Road, Palm Harbor, Florida. The contract outlines the terms of sale, including a purchase price of $599,000, with a closing date set for February 29, 2024. The seller, William Lichtenstein, is responsible for certain disclosures, including the property's condition and any known defects. The buyers, Miguel Velasco and Rachael Taft, have the right to inspect the property and cancel the contract if unsatisfied. The contract includes an appraisal contingency and specifies that the seller will contribute 3% of the purchase price towards the buyers' closing costs. The document is crucial for assessing potential misrepresentation claims related to the seller's disclosures.",
+        "timeline_events": [
+          {
+            "date": "2024-01-23",
+            "event": "Contract signed by William Lichtenstein and Laura J Price"
+          },
+          {
+            "date": "2024-02-29",
+            "event": "Scheduled closing date for property purchase"
+          },
+          {
+            "date": "2024-02-09",
+            "event": "Deadline for obtaining property appraisal"
+          }
+        ],
+        "evidence_strength": "Moderate",
+        "legal_significance": "The contract's terms and disclosures are critical for evaluating potential misrepresentation claims. The 'AS IS' clause may limit the seller's liability, but the disclosure obligations and inspection rights provide a basis for legal action if material facts were misrepresented or omitted.",
+        "relevance_to_intake": "This document directly relates to the client's priorities by detailing the seller's disclosure obligations and the buyers' inspection rights, which are central to their misrepresentation claim and pursuit of damages.",
+        "potential_challenges": [
+          "AS IS clause limitations",
+          "Proving misrepresentation"
+        ]
+      },
+      {
+        "document_title": "Real Estate Non-Disclosure and Misrepresentation Case",
+        "document_type": "Client Correspondence",
+        "key_entities": [
+          {
+            "name": "Miguel Velasco",
+            "role": "Home Buyer"
+          },
+          {
+            "name": "Rachael Taft",
+            "role": "Home Buyer"
+          },
+          {
+            "name": "William F. Lichtenstein",
+            "role": "Seller"
+          }
+        ],
+        "summary": "Miguel Velasco and Rachael Taft purchased a home on February 29, 2024, from William F. Lichtenstein. They allege that Lichtenstein misrepresented the property's flood history in the seller disclosure forms by stating 'I don’t know' to questions about water intrusion and flooding. After purchasing, they discovered prior flood claims and a history of flooding through neighbors. The property flooded in October 2024, causing $32,000 in damages. They seek legal options for misrepresentation and compensation for damages, emphasizing the seller's failure to disclose material facts under Florida real estate law.",
+        "timeline_events": [
+          {
+            "date": "2024-02-29",
+            "event": "Miguel Velasco and Rachael Taft purchased the property."
+          },
+          {
+            "date": "2024-08",
+            "event": "Significant storms occurred, narrowly avoiding flooding."
+          },
+          {
+            "date": "2024-10",
+            "event": "Property flooded, causing $32,000 in damages."
+          }
+        ],
+        "evidence_strength": "Strong",
+        "legal_significance": "The document provides evidence of potential misrepresentation by the seller, supporting a legal claim under Florida real estate law for failure to disclose material facts, which is crucial for seeking compensation.",
+        "relevance_to_intake": "The document directly supports the client's priorities of exploring legal options and filing a claim for misrepresentation, aiming for compensation for damages incurred.",
+        "potential_challenges": [
+          "Proving seller's knowledge of flooding"
+        ]
+      },
+      {
+        "document_title": "Real Estate Disclosure Analysis",
+        "document_type": "Seller Disclosure Form",
+        "key_entities": [
+          {
+            "name": "William Lichtenstein",
+            "role": "Seller"
+          }
+        ],
+        "summary": "The document is a seller disclosure form detailing the condition of various property elements. It raises potential issues such as structural soundness, presence of pests, and water intrusion. Notably, the property requires flood insurance, and the current owner's policy is transferable. These disclosures are critical as they may indicate misrepresentation or failure to disclose by the seller, William Lichtenstein, which directly supports the client's claim for misrepresentation and compensation for damages.",
+        "timeline_events": [],
+        "evidence_strength": "Moderate",
+        "legal_significance": "The document is significant as it may demonstrate misrepresentation or failure to disclose material facts about the property's condition, supporting the client's legal claims.",
+        "relevance_to_intake": "The disclosure form is directly relevant to the client's priorities of exploring legal options and pursuing a claim for misrepresentation, as it contains potential inaccuracies or omissions.",
+        "potential_challenges": [
+          "Proving seller's knowledge of issues"
+        ]
+      },
+      {
+        "document_title": "Real Estate Misrepresentation Case Analysis",
+        "document_type": "Intake Analysis",
+        "key_entities": [
+          {
+            "name": "Miguel Velasco",
+            "role": "Client"
+          },
+          {
+            "name": "Rachael Taft",
+            "role": "Client"
+          },
+          {
+            "name": "William Lichtenstein",
+            "role": "Seller of Home"
+          }
+        ],
+        "summary": "Miguel Velasco and Rachael Taft are involved in a real estate dispute concerning their home purchase at 142 Annwood Road, Palm Harbor, Florida. They allege that the seller, William Lichtenstein, provided false information in the seller disclosure forms, impacting the property's value and usability. The clients are exploring legal options, focusing on claims for misrepresentation and failure to disclose under Florida law. They seek compensation for damages and loss of usage due to these alleged misrepresentations. The urgency of the matter is high due to severe personal and financial inconvenience.",
+        "timeline_events": [
+          {
+            "date": "2024-02-29",
+            "event": "Home purchased by Miguel Velasco and Rachael Taft."
+          }
+        ],
+        "evidence_strength": "Moderate",
+        "legal_significance": "The document outlines potential legal claims for misrepresentation and failure to disclose, which are critical under Florida real estate law. It supports the clients' pursuit of compensation for damages.",
+        "relevance_to_intake": "The document directly addresses the clients' priorities of exploring legal options and filing a claim for misrepresentation, aligning with their desired outcome of obtaining compensation.",
+        "potential_challenges": [
+          "Proving seller's intent",
+          "Establishing actual damages"
+        ]
+      }
+    ],
+    "legal_assessment": {
+      "case_type": "Real Estate Dispute",
+      "claim_viability": "Moderate",
+      "overall_evidence_strength": "Moderate",
+      "potential_challenges": [
+        {
+          "category": "Proving Seller's Knowledge",
+          "description": "Difficulty in establishing that the seller knew about the flooding risks.",
+          "mitigation_strategy": "Gather testimonies from neighbors and previous owners.",
+          "confidence_score": 0.6
+        },
+        {
+          "category": "AS IS Clause Limitations",
+          "description": "The 'AS IS' clause may limit liability for undisclosed defects.",
+          "mitigation_strategy": "Focus on misrepresentation and failure to disclose known issues.",
+          "confidence_score": 0.6
+        }
+      ],
+      "recommended_actions": [
+        "Collect additional evidence of seller's knowledge.",
+        "Consult with a real estate expert on disclosure obligations."
+      ],
+      "demand_letter_appropriate": true,
+      "urgency_assessment": "Very Important – severe hardship, personal or financial inconvenience if matter is not resolved quickly."
+    },
+    "demand_letter_evaluation": {
+      "is_appropriate": true,
+      "reasoning": "A demand letter may prompt a settlement by highlighting the seller's potential liability.",
+      "potential_outcomes": [
+        "Settlement negotiation",
+        "Pre-litigation resolution"
+      ],
+      "relevant_statutes": [
+        "Florida Statutes Section 475.278",
+        "Florida Statutes Section 689.25"
+      ]
+    },
+    "errors": []
+  },
+  "email": {
+    "findings_letter": {
+      "header": {
+        "date": "2025-07-31",
+        "client_name": "Miguel Velasco, Rachael Taft",
+        "client_address": null,
+        "case_reference": "BR-MVRT-20250731"
+      },
+      "reviewed_documents": [
+        "FEMA Proof of Loss Form",
+        "AS IS Residential Contract For Sale And Purchase",
+        "Real Estate Non-Disclosure and Misrepresentation Case",
+        "Real Estate Disclosure Analysis",
+        "Real Estate Misrepresentation Case Analysis"
+      ],
+      "background_summary": "Miguel Velasco and Rachael Taft are seeking legal representation regarding a real estate dispute related to the purchase of their home at 142 Annwood Road, Palm Harbor, Florida. They believe that the seller, William Lichtenstein, provided false or misleading information in the seller disclosure forms. The couple is exploring their legal options, including a potential claim for misrepresentation or failure to disclose under Florida real estate law. They are concerned about the loss of usage, damages, and the overall value of their property due to these alleged misrepresentations.",
+      "review_summary": "**Our Analysis**\n\nMiguel and Rachael, your case centers on a significant real estate dispute involving misrepresentation and failure to disclose material facts about your property at 142 Annwood Road, Palm Harbor, Florida. The crux of your concerns lies in the seller, William Lichtenstein's alleged failure to truthfully disclose the property's flood history, which you believe has directly impacted the property's usability and financial value. Under Florida law, sellers are obligated to disclose knowledge of significant defects or issues that can materially affect a property's value. These disclosures are vital, especially for aspects such as flood risk which clearly influence property desirability. Despite the “AS IS” clause in your contract, this does not negate the seller's duty to disclose known issues, which seems pertinent in your situation as evidenced by subsequent flooding resulting in considerable damages.\n\n**Strengths of Your Case**\n\nYour case is built on solid footing, with several elements favoring your legal claims. Notably, substantial evidence supports your allegations of misrepresentation. The apparent discrepancies between the seller disclosure forms and the actual flood history—corroborated by neighborhood accounts—reinforce your position. Documentation such as the FEMA Proof of Loss demonstrates the financial impact these misrepresentations have had on you, adding weight to your compensation claims. Florida's statutory framework under Sections 475.278 and 689.25 supports your right to pursue legal action for misrepresentation or failure to disclose, providing a well-defined pathway for obtaining redress. Furthermore, initiating a demand letter could be a strategic move, prompting a pre-litigation settlement which is often effective in situations with compelling evidence.\n\n**Potential Challenges**\n\nHowever, there are challenges to anticipate. Primarily, proving the seller's knowledge of flooding risks remains crucial. This will require building a comprehensive case with testimonies and documentation to establish that Lichtenstein had prior awareness of the flooding issue. Additionally, the presence of an “AS IS” clause may pose an obstacle as it typically limits claims relating to property condition post-sale. Yet, it does not protect against false disclosures, a critical distinction that will be central to your argument. The task will be to definitively demonstrate the seller's misrepresentation or knowledge omission despite this clause. Lastly, ensuring that any claim for compensation reflects actual, demonstrable damages will be key to overcoming potential defenses based on speculative or unproven claims.\n\nIn summary, while the path to resolution may present challenges, the strength of your evidence paired with a sound procedural approach could yield a successful legal outcome, potentially prompting an early settlement advantageous to you. We will navigate these complexities with diligence, endeavoring towards a resolution that acknowledges and rectifies the hardship you have faced.",
+      "assessment_challenges": [
+        {
+          "category": "Proving Seller's Knowledge",
+          "description": "Difficulty in establishing that the seller knew about the flooding risks.",
+          "mitigation_strategy": "Gather testimonies from neighbors and previous owners.",
+          "confidence_score": 0.6
+        },
+        {
+          "category": "AS IS Clause Limitations",
+          "description": "The 'AS IS' clause may limit liability for undisclosed defects.",
+          "mitigation_strategy": "Focus on misrepresentation and failure to disclose known issues.",
+          "confidence_score": 0.6
+        }
+      ],
+      "next_steps_recommendations": [
+        "Collect additional evidence of seller's knowledge.",
+        "Consult with a real estate expert on disclosure obligations."
+      ],
+      "demand_letter_section": {
+        "is_appropriate": true,
+        "reasoning": "A demand letter may prompt a settlement by highlighting the seller's potential liability.",
+        "potential_outcomes": [
+          "Settlement negotiation",
+          "Pre-litigation resolution"
+        ],
+        "relevant_statutes": [
+          "Florida Statutes Section 475.278",
+          "Florida Statutes Section 689.25"
+        ]
+      },
+      "footer": {
+        "attorney_name": "Assigned Attorney",
+        "firm_name": "Bernhardt Riley PLLC",
+        "firm_address": null,
+        "contact_info": "Tel: (000) 000-0000 | email@example.com"
+      }
+    },
+    "download_links": [
+      {
+        "file_name": "Findings_Miguel Velasco Rachael Taft.eml",
+        "url": "data:message/rfc822;base64,U3ViamVjdDogTGVnYWwgRmluZGluZ3MgZm9yIE1pZ3VlbCBWZWxhc2NvIFJhY2hhZWwgVGFmdApDb250ZW50LVR5cGU6IHRleHQvaHRtbAoKPCFET0NUWVBFIGh0bWw+CjxodG1sIGxhbmc9ImVuIj4KPGhlYWQ+CiAgICA8bWV0YSBjaGFyc2V0PSJVVEYtOCI+CiAgICA8bWV0YSBuYW1lPSJ2aWV3cG9ydCIgY29udGVudD0id2lkdGg9ZGV2aWNlLXdpZHRoLCBpbml0aWFsLXNjYWxlPTEuMCI+CiAgICA8dGl0bGU+TGVnYWwgRmluZGluZ3MgTGV0dGVyPC90aXRsZT4KICAgIDxzdHlsZT4KICAgICAgICBib2R5IHsKICAgICAgICAgICAgZm9udC1mYW1pbHk6ICdUaW1lcyBOZXcgUm9tYW4nLCBUaW1lcywgc2VyaWY7CiAgICAgICAgICAgIGxpbmUtaGVpZ2h0OiAxLjY7CiAgICAgICAgICAgIGNvbG9yOiAjMzMzOwogICAgICAgIH0KICAgICAgICAuY29udGFpbmVyIHsKICAgICAgICAgICAgbWF4LXdpZHRoOiA4MDBweDsKICAgICAgICAgICAgbWFyZ2luOiAwIGF1dG87CiAgICAgICAgICAgIHBhZGRpbmc6IDIwcHg7CiAgICAgICAgfQogICAgICAgIC5oZWFkZXIsIC5mb290ZXIgewogICAgICAgICAgICB0ZXh0LWFsaWduOiBsZWZ0OwogICAgICAgICAgICBtYXJnaW4tYm90dG9tOiAyMHB4OwogICAgICAgIH0KICAgICAgICAuZm9vdGVyIHsKICAgICAgICAgICAgbWFyZ2luLXRvcDogNDBweDsKICAgICAgICAgICAgZm9udC1zdHlsZTogaXRhbGljOwogICAgICAgIH0KICAgICAgICBoMSwgaDIsIGgzIHsKICAgICAgICAgICAgZm9udC1mYW1pbHk6ICdHZW9yZ2lhJywgc2VyaWY7CiAgICAgICAgICAgIGNvbG9yOiAjMjIyOwogICAgICAgIH0KICAgICAgICB1bCB7CiAgICAgICAgICAgIGxpc3Qtc3R5bGUtdHlwZTogZGlzYzsKICAgICAgICAgICAgbWFyZ2luLWxlZnQ6IDIwcHg7CiAgICAgICAgfQogICAgICAgIC5zZWN0aW9uIHsKICAgICAgICAgICAgbWFyZ2luLWJvdHRvbTogMjBweDsKICAgICAgICB9CiAgICA8L3N0eWxlPgo8L2hlYWQ+Cjxib2R5PgogICAgPGRpdiBjbGFzcz0iY29udGFpbmVyIj4KICAgICAgICA8ZGl2IGNsYXNzPSJoZWFkZXIiPgogICAgICAgICAgICA8cD4yMDI1LTA3LTMxPC9wPgogICAgICAgICAgICA8cD48c3Ryb25nPlRvOjwvc3Ryb25nPiBNaWd1ZWwgVmVsYXNjbywgUmFjaGFlbCBUYWZ0PC9wPgogICAgICAgICAgICA8cD48c3Ryb25nPkFkZHJlc3M6PC9zdHJvbmc+IE5vbmU8L3A+CiAgICAgICAgICAgIDxwPjxzdHJvbmc+UmU6PC9zdHJvbmc+IEJSLU1WUlQtMjAyNTA3MzE8L3A+CiAgICAgICAgPC9kaXY+CgogICAgICAgIDxkaXYgY2xhc3M9InNlY3Rpb24iPgogICAgICAgICAgICA8aDI+SS4gQmFja2dyb3VuZDwvaDI+CiAgICAgICAgICAgIDxwPk1pZ3VlbCBWZWxhc2NvIGFuZCBSYWNoYWVsIFRhZnQgYXJlIHNlZWtpbmcgbGVnYWwgcmVwcmVzZW50YXRpb24gcmVnYXJkaW5nIGEgcmVhbCBlc3RhdGUgZGlzcHV0ZSByZWxhdGVkIHRvIHRoZSBwdXJjaGFzZSBvZiB0aGVpciBob21lIGF0IDE0MiBBbm53b29kIFJvYWQsIFBhbG0gSGFyYm9yLCBGbG9yaWRhLiBUaGV5IGJlbGlldmUgdGhhdCB0aGUgc2VsbGVyLCBXaWxsaWFtIExpY2h0ZW5zdGVpbiwgcHJvdmlkZWQgZmFsc2Ugb3IgbWlzbGVhZGluZyBpbmZvcm1hdGlvbiBpbiB0aGUgc2VsbGVyIGRpc2Nsb3N1cmUgZm9ybXMuIFRoZSBjb3VwbGUgaXMgZXhwbG9yaW5nIHRoZWlyIGxlZ2FsIG9wdGlvbnMsIGluY2x1ZGluZyBhIHBvdGVudGlhbCBjbGFpbSBmb3IgbWlzcmVwcmVzZW50YXRpb24gb3IgZmFpbHVyZSB0byBkaXNjbG9zZSB1bmRlciBGbG9yaWRhIHJlYWwgZXN0YXRlIGxhdy4gVGhleSBhcmUgY29uY2VybmVkIGFib3V0IHRoZSBsb3NzIG9mIHVzYWdlLCBkYW1hZ2VzLCBhbmQgdGhlIG92ZXJhbGwgdmFsdWUgb2YgdGhlaXIgcHJvcGVydHkgZHVlIHRvIHRoZXNlIGFsbGVnZWQgbWlzcmVwcmVzZW50YXRpb25zLjwvcD4KICAgICAgICA8L2Rpdj4KCiAgICAgICAgPGRpdiBjbGFzcz0ic2VjdGlvbiI+CiAgICAgICAgICAgIDxoMj5JSS4gUmV2aWV3IG9mIERvY3VtZW50czwvaDI+CiAgICAgICAgICAgICAKICAgICAgICAgICAgICAgIDxwPkluIG91ciByZXZpZXcsIHdlIGhhdmUgYW5hbHl6ZWQgdGhlIGZvbGxvd2luZyBkb2N1bWVudHM6PC9wPgogICAgICAgICAgICAgICAgPHVsPgogICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICA8bGk+RkVNQSBQcm9vZiBvZiBMb3NzIEZvcm08L2xpPgogICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICA8bGk+QVMgSVMgUmVzaWRlbnRpYWwgQ29udHJhY3QgRm9yIFNhbGUgQW5kIFB1cmNoYXNlPC9saT4KICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgPGxpPlJlYWwgRXN0YXRlIE5vbi1EaXNjbG9zdXJlIGFuZCBNaXNyZXByZXNlbnRhdGlvbiBDYXNlPC9saT4KICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgPGxpPlJlYWwgRXN0YXRlIERpc2Nsb3N1cmUgQW5hbHlzaXM8L2xpPgogICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICA8bGk+UmVhbCBFc3RhdGUgTWlzcmVwcmVzZW50YXRpb24gQ2FzZSBBbmFseXNpczwvbGk+CiAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICA8L3VsPgogICAgICAgICAgICAKICAgICAgICAgICAgPHA+KipPdXIgQW5hbHlzaXMqKgoKTWlndWVsIGFuZCBSYWNoYWVsLCB5b3VyIGNhc2UgY2VudGVycyBvbiBhIHNpZ25pZmljYW50IHJlYWwgZXN0YXRlIGRpc3B1dGUgaW52b2x2aW5nIG1pc3JlcHJlc2VudGF0aW9uIGFuZCBmYWlsdXJlIHRvIGRpc2Nsb3NlIG1hdGVyaWFsIGZhY3RzIGFib3V0IHlvdXIgcHJvcGVydHkgYXQgMTQyIEFubndvb2QgUm9hZCwgUGFsbSBIYXJib3IsIEZsb3JpZGEuIFRoZSBjcnV4IG9mIHlvdXIgY29uY2VybnMgbGllcyBpbiB0aGUgc2VsbGVyLCBXaWxsaWFtIExpY2h0ZW5zdGVpbidzIGFsbGVnZWQgZmFpbHVyZSB0byB0cnV0aGZ1bGx5IGRpc2Nsb3NlIHRoZSBwcm9wZXJ0eSdzIGZsb29kIGhpc3RvcnksIHdoaWNoIHlvdSBiZWxpZXZlIGhhcyBkaXJlY3RseSBpbXBhY3RlZCB0aGUgcHJvcGVydHkncyB1c2FiaWxpdHkgYW5kIGZpbmFuY2lhbCB2YWx1ZS4gVW5kZXIgRmxvcmlkYSBsYXcsIHNlbGxlcnMgYXJlIG9ibGlnYXRlZCB0byBkaXNjbG9zZSBrbm93bGVkZ2Ugb2Ygc2lnbmlmaWNhbnQgZGVmZWN0cyBvciBpc3N1ZXMgdGhhdCBjYW4gbWF0ZXJpYWxseSBhZmZlY3QgYSBwcm9wZXJ0eSdzIHZhbHVlLiBUaGVzZSBkaXNjbG9zdXJlcyBhcmUgdml0YWwsIGVzcGVjaWFsbHkgZm9yIGFzcGVjdHMgc3VjaCBhcyBmbG9vZCByaXNrIHdoaWNoIGNsZWFybHkgaW5mbHVlbmNlIHByb3BlcnR5IGRlc2lyYWJpbGl0eS4gRGVzcGl0ZSB0aGUg4oCcQVMgSVPigJ0gY2xhdXNlIGluIHlvdXIgY29udHJhY3QsIHRoaXMgZG9lcyBub3QgbmVnYXRlIHRoZSBzZWxsZXIncyBkdXR5IHRvIGRpc2Nsb3NlIGtub3duIGlzc3Vlcywgd2hpY2ggc2VlbXMgcGVydGluZW50IGluIHlvdXIgc2l0dWF0aW9uIGFzIGV2aWRlbmNlZCBieSBzdWJzZXF1ZW50IGZsb29kaW5nIHJlc3VsdGluZyBpbiBjb25zaWRlcmFibGUgZGFtYWdlcy4KCioqU3RyZW5ndGhzIG9mIFlvdXIgQ2FzZSoqCgpZb3VyIGNhc2UgaXMgYnVpbHQgb24gc29saWQgZm9vdGluZywgd2l0aCBzZXZlcmFsIGVsZW1lbnRzIGZhdm9yaW5nIHlvdXIgbGVnYWwgY2xhaW1zLiBOb3RhYmx5LCBzdWJzdGFudGlhbCBldmlkZW5jZSBzdXBwb3J0cyB5b3VyIGFsbGVnYXRpb25zIG9mIG1pc3JlcHJlc2VudGF0aW9uLiBUaGUgYXBwYXJlbnQgZGlzY3JlcGFuY2llcyBiZXR3ZWVuIHRoZSBzZWxsZXIgZGlzY2xvc3VyZSBmb3JtcyBhbmQgdGhlIGFjdHVhbCBmbG9vZCBoaXN0b3J54oCUY29ycm9ib3JhdGVkIGJ5IG5laWdoYm9yaG9vZCBhY2NvdW50c+KAlHJlaW5mb3JjZSB5b3VyIHBvc2l0aW9uLiBEb2N1bWVudGF0aW9uIHN1Y2ggYXMgdGhlIEZFTUEgUHJvb2Ygb2YgTG9zcyBkZW1vbnN0cmF0ZXMgdGhlIGZpbmFuY2lhbCBpbXBhY3QgdGhlc2UgbWlzcmVwcmVzZW50YXRpb25zIGhhdmUgaGFkIG9uIHlvdSwgYWRkaW5nIHdlaWdodCB0byB5b3VyIGNvbXBlbnNhdGlvbiBjbGFpbXMuIEZsb3JpZGEncyBzdGF0dXRvcnkgZnJhbWV3b3JrIHVuZGVyIFNlY3Rpb25zIDQ3NS4yNzggYW5kIDY4OS4yNSBzdXBwb3J0cyB5b3VyIHJpZ2h0IHRvIHB1cnN1ZSBsZWdhbCBhY3Rpb24gZm9yIG1pc3JlcHJlc2VudGF0aW9uIG9yIGZhaWx1cmUgdG8gZGlzY2xvc2UsIHByb3ZpZGluZyBhIHdlbGwtZGVmaW5lZCBwYXRod2F5IGZvciBvYnRhaW5pbmcgcmVkcmVzcy4gRnVydGhlcm1vcmUsIGluaXRpYXRpbmcgYSBkZW1hbmQgbGV0dGVyIGNvdWxkIGJlIGEgc3RyYXRlZ2ljIG1vdmUsIHByb21wdGluZyBhIHByZS1saXRpZ2F0aW9uIHNldHRsZW1lbnQgd2hpY2ggaXMgb2Z0ZW4gZWZmZWN0aXZlIGluIHNpdHVhdGlvbnMgd2l0aCBjb21wZWxsaW5nIGV2aWRlbmNlLgoKKipQb3RlbnRpYWwgQ2hhbGxlbmdlcyoqCgpIb3dldmVyLCB0aGVyZSBhcmUgY2hhbGxlbmdlcyB0byBhbnRpY2lwYXRlLiBQcmltYXJpbHksIHByb3ZpbmcgdGhlIHNlbGxlcidzIGtub3dsZWRnZSBvZiBmbG9vZGluZyByaXNrcyByZW1haW5zIGNydWNpYWwuIFRoaXMgd2lsbCByZXF1aXJlIGJ1aWxkaW5nIGEgY29tcHJlaGVuc2l2ZSBjYXNlIHdpdGggdGVzdGltb25pZXMgYW5kIGRvY3VtZW50YXRpb24gdG8gZXN0YWJsaXNoIHRoYXQgTGljaHRlbnN0ZWluIGhhZCBwcmlvciBhd2FyZW5lc3Mgb2YgdGhlIGZsb29kaW5nIGlzc3VlLiBBZGRpdGlvbmFsbHksIHRoZSBwcmVzZW5jZSBvZiBhbiDigJxBUyBJU+KAnSBjbGF1c2UgbWF5IHBvc2UgYW4gb2JzdGFjbGUgYXMgaXQgdHlwaWNhbGx5IGxpbWl0cyBjbGFpbXMgcmVsYXRpbmcgdG8gcHJvcGVydHkgY29uZGl0aW9uIHBvc3Qtc2FsZS4gWWV0LCBpdCBkb2VzIG5vdCBwcm90ZWN0IGFnYWluc3QgZmFsc2UgZGlzY2xvc3VyZXMsIGEgY3JpdGljYWwgZGlzdGluY3Rpb24gdGhhdCB3aWxsIGJlIGNlbnRyYWwgdG8geW91ciBhcmd1bWVudC4gVGhlIHRhc2sgd2lsbCBiZSB0byBkZWZpbml0aXZlbHkgZGVtb25zdHJhdGUgdGhlIHNlbGxlcidzIG1pc3JlcHJlc2VudGF0aW9uIG9yIGtub3dsZWRnZSBvbWlzc2lvbiBkZXNwaXRlIHRoaXMgY2xhdXNlLiBMYXN0bHksIGVuc3VyaW5nIHRoYXQgYW55IGNsYWltIGZvciBjb21wZW5zYXRpb24gcmVmbGVjdHMgYWN0dWFsLCBkZW1vbnN0cmFibGUgZGFtYWdlcyB3aWxsIGJlIGtleSB0byBvdmVyY29taW5nIHBvdGVudGlhbCBkZWZlbnNlcyBiYXNlZCBvbiBzcGVjdWxhdGl2ZSBvciB1bnByb3ZlbiBjbGFpbXMuCgpJbiBzdW1tYXJ5LCB3aGlsZSB0aGUgcGF0aCB0byByZXNvbHV0aW9uIG1heSBwcmVzZW50IGNoYWxsZW5nZXMsIHRoZSBzdHJlbmd0aCBvZiB5b3VyIGV2aWRlbmNlIHBhaXJlZCB3aXRoIGEgc291bmQgcHJvY2VkdXJhbCBhcHByb2FjaCBjb3VsZCB5aWVsZCBhIHN1Y2Nlc3NmdWwgbGVnYWwgb3V0Y29tZSwgcG90ZW50aWFsbHkgcHJvbXB0aW5nIGFuIGVhcmx5IHNldHRsZW1lbnQgYWR2YW50YWdlb3VzIHRvIHlvdS4gV2Ugd2lsbCBuYXZpZ2F0ZSB0aGVzZSBjb21wbGV4aXRpZXMgd2l0aCBkaWxpZ2VuY2UsIGVuZGVhdm9yaW5nIHRvd2FyZHMgYSByZXNvbHV0aW9uIHRoYXQgYWNrbm93bGVkZ2VzIGFuZCByZWN0aWZpZXMgdGhlIGhhcmRzaGlwIHlvdSBoYXZlIGZhY2VkLjwvcD4KICAgICAgICA8L2Rpdj4KCiAgICAgICAgPGRpdiBjbGFzcz0ic2VjdGlvbiI+CiAgICAgICAgICAgIDxoMj5JSUkuIFByZWxpbWluYXJ5IEFzc2Vzc21lbnQ8L2gyPgogICAgICAgICAgICA8cD5BcyB3ZSBtb3ZlIGZvcndhcmQgaW4gYXNzZXNzaW5nIHlvdXIgbWF0dGVyLCBpdCBpcyBpbXBvcnRhbnQgdG8gcmVjb2duaXplIHRoYXQgbGVnYWwgcHJvY2VlZGluZ3MgY2FuIG9mdGVuIHByZXNlbnQgdmFyaW91cyBvYnN0YWNsZXMgdGhhdCBtYXkgaW1wYWN0IHRoZSBzdHJlbmd0aCBvZiB5b3VyIGNhc2UuIEJlbG93LCB5b3Ugd2lsbCBmaW5kIGEgbGlzdCBvZiBwb3RlbnRpYWwgY2hhbGxlbmdlcyB0aGF0IHdlIGhhdmUgaWRlbnRpZmllZCBzbyBmYXIgaW4gb3VyIHByZWxpbWluYXJ5IGFzc2Vzc21lbnQgb2YgeW91ciBtYXR0ZXIuIFBsZWFzZSBub3RlIHRoYXQgdGhpcyBsaXN0IGlzIG5vdCBleGhhdXN0aXZlLiBBcyB0aGUgY2FzZSBwcm9ncmVzc2VzIGFuZCBtb3JlIGluZm9ybWF0aW9uIGJlY29tZXMgYXZhaWxhYmxlLCBvdGhlciBjaGFsbGVuZ2VzIG1heSBlbWVyZ2Ugb3IgbWF5IGJlY29tZSBtb3JlIGV2aWRlbnQuIE91ciB0ZWFtIGlzIGNvbW1pdHRlZCB0byBuYXZpZ2F0aW5nIHRoZXNlIGNvbXBsZXhpdGllcyBhbmQgYWRhcHRpbmcgb3VyIHN0cmF0ZWdpZXMgYWNjb3JkaW5nbHkgdG8gYmVzdCByZXByZXNlbnQgeW91ciBpbnRlcmVzdHMuIFlvdXIgdW5kZXJzdGFuZGluZyBhbmQgYXdhcmVuZXNzIG9mIHRoZXNlIHBvdGVudGlhbCBjaGFsbGVuZ2VzIGFyZSBlc3NlbnRpYWwgYXMgd2Ugd29yayB0b2dldGhlciB0b3dhcmRzIGEgc3VjY2Vzc2Z1bCByZXNvbHV0aW9uLjwvcD4KICAgICAgICAgICAgCiAgICAgICAgICAgICAgICA8aDM+UG90ZW50aWFsIENoYWxsZW5nZXM8L2gzPgogICAgICAgICAgICAgICAgPHVsPgogICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICA8bGk+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8c3Ryb25nPlByb3ZpbmcgU2VsbGVyJ3MgS25vd2xlZGdlOjwvc3Ryb25nPiBEaWZmaWN1bHR5IGluIGVzdGFibGlzaGluZyB0aGF0IHRoZSBzZWxsZXIga25ldyBhYm91dCB0aGUgZmxvb2Rpbmcgcmlza3MuCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8YnI+PGVtPk1pdGlnYXRpb246IEdhdGhlciB0ZXN0aW1vbmllcyBmcm9tIG5laWdoYm9ycyBhbmQgcHJldmlvdXMgb3duZXJzLjwvZW0+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgPC9saT4KICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgPGxpPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPHN0cm9uZz5BUyBJUyBDbGF1c2UgTGltaXRhdGlvbnM6PC9zdHJvbmc+IFRoZSAnQVMgSVMnIGNsYXVzZSBtYXkgbGltaXQgbGlhYmlsaXR5IGZvciB1bmRpc2Nsb3NlZCBkZWZlY3RzLgogICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPGJyPjxlbT5NaXRpZ2F0aW9uOiBGb2N1cyBvbiBtaXNyZXByZXNlbnRhdGlvbiBhbmQgZmFpbHVyZSB0byBkaXNjbG9zZSBrbm93biBpc3N1ZXMuPC9lbT4KICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICA8L2xpPgogICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgPC91bD4KICAgICAgICAgICAgCiAgICAgICAgPC9kaXY+CgogICAgICAgIDxkaXYgY2xhc3M9InNlY3Rpb24iPgogICAgICAgICAgICA8aDI+SVYuIE5leHQgU3RlcHM8L2gyPgogICAgICAgICAgICA8aDM+QS4gUmVjb21tZW5kYXRpb25zPC9oMz4KICAgICAgICAgICAgCiAgICAgICAgICAgICAgICA8dWw+CiAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgIDxsaT5Db2xsZWN0IGFkZGl0aW9uYWwgZXZpZGVuY2Ugb2Ygc2VsbGVyJ3Mga25vd2xlZGdlLjwvbGk+CiAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgIDxsaT5Db25zdWx0IHdpdGggYSByZWFsIGVzdGF0ZSBleHBlcnQgb24gZGlzY2xvc3VyZSBvYmxpZ2F0aW9ucy48L2xpPgogICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgPC91bD4KICAgICAgICAgICAgCgogICAgICAgICAgICAKICAgICAgICAgICAgICAgIDxoMz5CLiBEZW1hbmQgTGV0dGVyIFJlY29tbWVuZGF0aW9uPC9oMz4KICAgICAgICAgICAgICAgIDxwPkEgZGVtYW5kIGxldHRlciBtYXkgcHJvbXB0IGEgc2V0dGxlbWVudCBieSBoaWdobGlnaHRpbmcgdGhlIHNlbGxlcidzIHBvdGVudGlhbCBsaWFiaWxpdHkuPC9wPgogICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgPHA+UmVtZW1iZXIgdGhhdCBkZW1hbmQgbGV0dGVycyBhcmUgbm90IGd1YXJhbnRlZWQgdG8gcHJvZHVjZSBkZXNpcmFibGUgcmVzdWx0cywgYnV0IHRoZXkgYXJlIGFuIGltcG9ydGFudCBzdGVwIGluIGRlbW9uc3RyYXRpbmcgYSBzZXJpb3VzIGludGVudCB0byByZXNvbHZlIGEgZGlzcHV0ZSBhbmQgY2FuIHNlcnZlIGFzIGEgY3J1Y2lhbCBwaWVjZSBvZiBldmlkZW5jZSBpZiB0aGUgZGlzcHV0ZSBlc2NhbGF0ZXMgdG8gY291cnQgcHJvY2VlZGluZ3MuIFRoZXJlIGFyZSB0aGUgZm9sbG93aW5nIHBvdGVudGlhbCBvdXRjb21lcyB0aGF0IHlvdSBjYW4gZXhwZWN0IGZyb20gYSBkZW1hbmQgbGV0dGVyOjwvcD4KICAgICAgICAgICAgICAgICAgICA8dWw+CiAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgPGxpPlNldHRsZW1lbnQgbmVnb3RpYXRpb248L2xpPgogICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxsaT5QcmUtbGl0aWdhdGlvbiByZXNvbHV0aW9uPC9saT4KICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgPC91bD4KICAgICAgICAgICAgICAgIAogICAgICAgICAgICAKICAgICAgICA8L2Rpdj4KCiAgICAgICAgPGRpdiBjbGFzcz0iZm9vdGVyIj4KICAgICAgICAgICAgPHA+U2luY2VyZWx5LDwvcD4KICAgICAgICAgICAgPHA+QXNzaWduZWQgQXR0b3JuZXk8L3A+CiAgICAgICAgICAgIDxwPkJlcm5oYXJkdCBSaWxleSBQTExDPC9wPgogICAgICAgICAgICA8cD5Ob25lPC9wPgogICAgICAgICAgICA8cD5UZWw6ICgwMDApIDAwMC0wMDAwIHwgZW1haWxAZXhhbXBsZS5jb208L3A+CiAgICAgICAgPC9kaXY+CiAgICA8L2Rpdj4KPC9ib2R5Pgo8L2h0bWw+"
+      },
+      {
+        "file_name": "Case Analysis.txt",
+        "url": "data:text/plain;base64,IyBDYXNlIEFuYWx5c2lzICYgQUktR2VuZXJhdGVkIEluc2lnaHRzCgojIyBJbnRha2UgQW5hbHlzaXMKLSAqKkNsaWVudCBOYW1lOioqIE1pZ3VlbCBWZWxhc2NvLCBSYWNoYWVsIFRhZnQKLSAqKkF0dG9ybmV5IE5hbWU6KiogTi9BCi0gKipDYXNlIFR5cGU6KiogUmVhbCBFc3RhdGUgRGlzcHV0ZQotICoqVXJnZW5jeToqKiBWZXJ5IEltcG9ydGFudCDigJMgc2V2ZXJlIGhhcmRzaGlwLCBwZXJzb25hbCBvciBmaW5hbmNpYWwgaW5jb252ZW5pZW5jZSBpZiBtYXR0ZXIgaXMgbm90IHJlc29sdmVkIHF1aWNrbHkuCgoqKkNhc2UgU3VtbWFyeToqKgpNaWd1ZWwgVmVsYXNjbyBhbmQgUmFjaGFlbCBUYWZ0IGFyZSBzZWVraW5nIGxlZ2FsIHJlcHJlc2VudGF0aW9uIHJlZ2FyZGluZyBhIHJlYWwgZXN0YXRlIGRpc3B1dGUgcmVsYXRlZCB0byB0aGUgcHVyY2hhc2Ugb2YgdGhlaXIgaG9tZSBhdCAxNDIgQW5ud29vZCBSb2FkLCBQYWxtIEhhcmJvciwgRmxvcmlkYS4gVGhleSBiZWxpZXZlIHRoYXQgdGhlIHNlbGxlciwgV2lsbGlhbSBMaWNodGVuc3RlaW4sIHByb3ZpZGVkIGZhbHNlIG9yIG1pc2xlYWRpbmcgaW5mb3JtYXRpb24gaW4gdGhlIHNlbGxlciBkaXNjbG9zdXJlIGZvcm1zLiBUaGUgY291cGxlIGlzIGV4cGxvcmluZyB0aGVpciBsZWdhbCBvcHRpb25zLCBpbmNsdWRpbmcgYSBwb3RlbnRpYWwgY2xhaW0gZm9yIG1pc3JlcHJlc2VudGF0aW9uIG9yIGZhaWx1cmUgdG8gZGlzY2xvc2UgdW5kZXIgRmxvcmlkYSByZWFsIGVzdGF0ZSBsYXcuIFRoZXkgYXJlIGNvbmNlcm5lZCBhYm91dCB0aGUgbG9zcyBvZiB1c2FnZSwgZGFtYWdlcywgYW5kIHRoZSBvdmVyYWxsIHZhbHVlIG9mIHRoZWlyIHByb3BlcnR5IGR1ZSB0byB0aGVzZSBhbGxlZ2VkIG1pc3JlcHJlc2VudGF0aW9ucy4KCioqUHJpb3JpdGllczoqKgogIC0gRXhwbG9yZSBsZWdhbCBvcHRpb25zCiAgLSBDbGFpbSBmb3IgbWlzcmVwcmVzZW50YXRpb24KCioqRGVzaXJlZCBPdXRjb21lczoqKgogIC0gQ2xhaW0gZm9yIG1pc3JlcHJlc2VudGF0aW9uCiAgLSBDb21wZW5zYXRpb24gZm9yIGRhbWFnZXMKCiMjIEluZGl2aWR1YWwgRG9jdW1lbnQgQW5hbHlzaXMKCiMjIyAxLiBGRU1BIFByb29mIG9mIExvc3MgRm9ybQoqKlNvdXJjZSBEb2N1bWVudDoqKiBGRU1BIFByb29mIG9mIExvc3MgRm9ybQoqKlN1bW1hcnk6KiogVGhpcyBkb2N1bWVudCBpcyBhIEZFTUEgUHJvb2Ygb2YgTG9zcyBmb3JtIGZvciBhIGZsb29kIGluc3VyYW5jZSBjbGFpbSBmaWxlZCBieSBNaWd1ZWwgVmVsYXNjbyBhbmQgUmFjaGVsIFRhZnQuIEl0IGRldGFpbHMgdGhlIGRhbWFnZXMgdG8gdGhlaXIgcHJvcGVydHkgYXQgMTQyIEFubndvb2QgUm9hZCwgUGFsbSBIYXJib3IsIEZsb3JpZGEsIGR1ZSB0byBhIGZsb29kIG9uIE9jdG9iZXIgOSwgMjAyNC4gVGhlIGNsYWltIGluY2x1ZGVzIGJ1aWxkaW5nIGFuZCBwZXJzb25hbCBwcm9wZXJ0eSBkYW1hZ2VzLCB3aXRoIGEgbmV0IGNsYWltIGFtb3VudCBvZiAkMzAsMzg3LjE5LiBUaGUgZG9jdW1lbnQgb3V0bGluZXMgdGhlIHJlcGxhY2VtZW50IGNvc3QgdmFsdWUsIGRlcHJlY2lhdGlvbiwgYW5kIGFjdHVhbCBjYXNoIHZhbHVlIGZvciB2YXJpb3VzIGl0ZW1zLiBJdCBhbHNvIG1lbnRpb25zIHRoZSBpbnZvbHZlbWVudCBvZiBSb2NrZXQgTW9ydGdhZ2UgTExDIGFzIHRoZSBtb3J0Z2FnZWUuIFRoZSBwb2xpY3lob2xkZXJzIGhhdmUgdGhlIG9wdGlvbiB0byByZXF1ZXN0IGFkZGl0aW9uYWwgcGF5bWVudHMgaWYgbm90IGFsbCBkYW1hZ2VzIGFyZSBjb3ZlcmVkIGluIHRoaXMgZXN0aW1hdGUuCioqS2V5IEV2ZW50czoqKgogIC0gKioyMDI0LTEwLTA5OioqIEZsb29kIG9jY3VycmVkIGNhdXNpbmcgZGFtYWdlIHRvIHByb3BlcnR5IChTb3VyY2U6IEZFTUEgUHJvb2Ygb2YgTG9zcyBGb3JtKQogIC0gKioyMDI0LTEwLTExOioqIENsYWltIHJlY2VpdmVkIGJ5IGluc3VyYW5jZSBjb21wYW55IChTb3VyY2U6IEZFTUEgUHJvb2Ygb2YgTG9zcyBGb3JtKQogIC0gKioyMDI0LTEwLTE4OioqIFByb3BlcnR5IGluc3BlY3Rpb24gY29uZHVjdGVkIGJ5IGNsYWltIHJlcHJlc2VudGF0aXZlIChTb3VyY2U6IEZFTUEgUHJvb2Ygb2YgTG9zcyBGb3JtKQogIC0gKioyMDI0LTEyLTA1OioqIEVzdGltYXRlIGZvciBkYW1hZ2VzIGNvbXBsZXRlZCAoU291cmNlOiBGRU1BIFByb29mIG9mIExvc3MgRm9ybSkKCiMjIyAyLiBBUyBJUyBSZXNpZGVudGlhbCBDb250cmFjdCBGb3IgU2FsZSBBbmQgUHVyY2hhc2UKKipTb3VyY2UgRG9jdW1lbnQ6KiogQVMgSVMgUmVzaWRlbnRpYWwgQ29udHJhY3QgRm9yIFNhbGUgQW5kIFB1cmNoYXNlCioqU3VtbWFyeToqKiBUaGUgZG9jdW1lbnQgaXMgYW4gJ0FTIElTJyBSZXNpZGVudGlhbCBDb250cmFjdCBmb3IgdGhlIHNhbGUgb2YgYSBwcm9wZXJ0eSBsb2NhdGVkIGF0IDE0MiBBbm53b29kIFJvYWQsIFBhbG0gSGFyYm9yLCBGbG9yaWRhLiBUaGUgY29udHJhY3Qgb3V0bGluZXMgdGhlIHRlcm1zIG9mIHNhbGUsIGluY2x1ZGluZyBhIHB1cmNoYXNlIHByaWNlIG9mICQ1OTksMDAwLCB3aXRoIGEgY2xvc2luZyBkYXRlIHNldCBmb3IgRmVicnVhcnkgMjksIDIwMjQuIFRoZSBzZWxsZXIsIFdpbGxpYW0gTGljaHRlbnN0ZWluLCBpcyByZXNwb25zaWJsZSBmb3IgY2VydGFpbiBkaXNjbG9zdXJlcywgaW5jbHVkaW5nIHRoZSBwcm9wZXJ0eSdzIGNvbmRpdGlvbiBhbmQgYW55IGtub3duIGRlZmVjdHMuIFRoZSBidXllcnMsIE1pZ3VlbCBWZWxhc2NvIGFuZCBSYWNoYWVsIFRhZnQsIGhhdmUgdGhlIHJpZ2h0IHRvIGluc3BlY3QgdGhlIHByb3BlcnR5IGFuZCBjYW5jZWwgdGhlIGNvbnRyYWN0IGlmIHVuc2F0aXNmaWVkLiBUaGUgY29udHJhY3QgaW5jbHVkZXMgYW4gYXBwcmFpc2FsIGNvbnRpbmdlbmN5IGFuZCBzcGVjaWZpZXMgdGhhdCB0aGUgc2VsbGVyIHdpbGwgY29udHJpYnV0ZSAzJSBvZiB0aGUgcHVyY2hhc2UgcHJpY2UgdG93YXJkcyB0aGUgYnV5ZXJzJyBjbG9zaW5nIGNvc3RzLiBUaGUgZG9jdW1lbnQgaXMgY3J1Y2lhbCBmb3IgYXNzZXNzaW5nIHBvdGVudGlhbCBtaXNyZXByZXNlbnRhdGlvbiBjbGFpbXMgcmVsYXRlZCB0byB0aGUgc2VsbGVyJ3MgZGlzY2xvc3VyZXMuCioqS2V5IEV2ZW50czoqKgogIC0gKioyMDI0LTAxLTIzOioqIENvbnRyYWN0IHNpZ25lZCBieSBXaWxsaWFtIExpY2h0ZW5zdGVpbiBhbmQgTGF1cmEgSiBQcmljZSAoU291cmNlOiBBUyBJUyBSZXNpZGVudGlhbCBDb250cmFjdCBGb3IgU2FsZSBBbmQgUHVyY2hhc2UpCiAgLSAqKjIwMjQtMDItMjk6KiogU2NoZWR1bGVkIGNsb3NpbmcgZGF0ZSBmb3IgcHJvcGVydHkgcHVyY2hhc2UgKFNvdXJjZTogQVMgSVMgUmVzaWRlbnRpYWwgQ29udHJhY3QgRm9yIFNhbGUgQW5kIFB1cmNoYXNlKQogIC0gKioyMDI0LTAyLTA5OioqIERlYWRsaW5lIGZvciBvYnRhaW5pbmcgcHJvcGVydHkgYXBwcmFpc2FsIChTb3VyY2U6IEFTIElTIFJlc2lkZW50aWFsIENvbnRyYWN0IEZvciBTYWxlIEFuZCBQdXJjaGFzZSkKCiMjIyAzLiBSZWFsIEVzdGF0ZSBOb24tRGlzY2xvc3VyZSBhbmQgTWlzcmVwcmVzZW50YXRpb24gQ2FzZQoqKlNvdXJjZSBEb2N1bWVudDoqKiBSZWFsIEVzdGF0ZSBOb24tRGlzY2xvc3VyZSBhbmQgTWlzcmVwcmVzZW50YXRpb24gQ2FzZQoqKlN1bW1hcnk6KiogTWlndWVsIFZlbGFzY28gYW5kIFJhY2hhZWwgVGFmdCBwdXJjaGFzZWQgYSBob21lIG9uIEZlYnJ1YXJ5IDI5LCAyMDI0LCBmcm9tIFdpbGxpYW0gRi4gTGljaHRlbnN0ZWluLiBUaGV5IGFsbGVnZSB0aGF0IExpY2h0ZW5zdGVpbiBtaXNyZXByZXNlbnRlZCB0aGUgcHJvcGVydHkncyBmbG9vZCBoaXN0b3J5IGluIHRoZSBzZWxsZXIgZGlzY2xvc3VyZSBmb3JtcyBieSBzdGF0aW5nICdJIGRvbuKAmXQga25vdycgdG8gcXVlc3Rpb25zIGFib3V0IHdhdGVyIGludHJ1c2lvbiBhbmQgZmxvb2RpbmcuIEFmdGVyIHB1cmNoYXNpbmcsIHRoZXkgZGlzY292ZXJlZCBwcmlvciBmbG9vZCBjbGFpbXMgYW5kIGEgaGlzdG9yeSBvZiBmbG9vZGluZyB0aHJvdWdoIG5laWdoYm9ycy4gVGhlIHByb3BlcnR5IGZsb29kZWQgaW4gT2N0b2JlciAyMDI0LCBjYXVzaW5nICQzMiwwMDAgaW4gZGFtYWdlcy4gVGhleSBzZWVrIGxlZ2FsIG9wdGlvbnMgZm9yIG1pc3JlcHJlc2VudGF0aW9uIGFuZCBjb21wZW5zYXRpb24gZm9yIGRhbWFnZXMsIGVtcGhhc2l6aW5nIHRoZSBzZWxsZXIncyBmYWlsdXJlIHRvIGRpc2Nsb3NlIG1hdGVyaWFsIGZhY3RzIHVuZGVyIEZsb3JpZGEgcmVhbCBlc3RhdGUgbGF3LgoqKktleSBFdmVudHM6KioKICAtICoqMjAyNC0wMi0yOToqKiBNaWd1ZWwgVmVsYXNjbyBhbmQgUmFjaGFlbCBUYWZ0IHB1cmNoYXNlZCB0aGUgcHJvcGVydHkuIChTb3VyY2U6IFJlYWwgRXN0YXRlIE5vbi1EaXNjbG9zdXJlIGFuZCBNaXNyZXByZXNlbnRhdGlvbiBDYXNlKQogIC0gKioyMDI0LTA4OioqIFNpZ25pZmljYW50IHN0b3JtcyBvY2N1cnJlZCwgbmFycm93bHkgYXZvaWRpbmcgZmxvb2RpbmcuIChTb3VyY2U6IFJlYWwgRXN0YXRlIE5vbi1EaXNjbG9zdXJlIGFuZCBNaXNyZXByZXNlbnRhdGlvbiBDYXNlKQogIC0gKioyMDI0LTEwOioqIFByb3BlcnR5IGZsb29kZWQsIGNhdXNpbmcgJDMyLDAwMCBpbiBkYW1hZ2VzLiAoU291cmNlOiBSZWFsIEVzdGF0ZSBOb24tRGlzY2xvc3VyZSBhbmQgTWlzcmVwcmVzZW50YXRpb24gQ2FzZSkKCiMjIyA0LiBSZWFsIEVzdGF0ZSBEaXNjbG9zdXJlIEFuYWx5c2lzCioqU291cmNlIERvY3VtZW50OioqIFJlYWwgRXN0YXRlIERpc2Nsb3N1cmUgQW5hbHlzaXMKKipTdW1tYXJ5OioqIFRoZSBkb2N1bWVudCBpcyBhIHNlbGxlciBkaXNjbG9zdXJlIGZvcm0gZGV0YWlsaW5nIHRoZSBjb25kaXRpb24gb2YgdmFyaW91cyBwcm9wZXJ0eSBlbGVtZW50cy4gSXQgcmFpc2VzIHBvdGVudGlhbCBpc3N1ZXMgc3VjaCBhcyBzdHJ1Y3R1cmFsIHNvdW5kbmVzcywgcHJlc2VuY2Ugb2YgcGVzdHMsIGFuZCB3YXRlciBpbnRydXNpb24uIE5vdGFibHksIHRoZSBwcm9wZXJ0eSByZXF1aXJlcyBmbG9vZCBpbnN1cmFuY2UsIGFuZCB0aGUgY3VycmVudCBvd25lcidzIHBvbGljeSBpcyB0cmFuc2ZlcmFibGUuIFRoZXNlIGRpc2Nsb3N1cmVzIGFyZSBjcml0aWNhbCBhcyB0aGV5IG1heSBpbmRpY2F0ZSBtaXNyZXByZXNlbnRhdGlvbiBvciBmYWlsdXJlIHRvIGRpc2Nsb3NlIGJ5IHRoZSBzZWxsZXIsIFdpbGxpYW0gTGljaHRlbnN0ZWluLCB3aGljaCBkaXJlY3RseSBzdXBwb3J0cyB0aGUgY2xpZW50J3MgY2xhaW0gZm9yIG1pc3JlcHJlc2VudGF0aW9uIGFuZCBjb21wZW5zYXRpb24gZm9yIGRhbWFnZXMuCgojIyMgNS4gUmVhbCBFc3RhdGUgTWlzcmVwcmVzZW50YXRpb24gQ2FzZSBBbmFseXNpcwoqKlNvdXJjZSBEb2N1bWVudDoqKiBSZWFsIEVzdGF0ZSBNaXNyZXByZXNlbnRhdGlvbiBDYXNlIEFuYWx5c2lzCioqU3VtbWFyeToqKiBNaWd1ZWwgVmVsYXNjbyBhbmQgUmFjaGFlbCBUYWZ0IGFyZSBpbnZvbHZlZCBpbiBhIHJlYWwgZXN0YXRlIGRpc3B1dGUgY29uY2VybmluZyB0aGVpciBob21lIHB1cmNoYXNlIGF0IDE0MiBBbm53b29kIFJvYWQsIFBhbG0gSGFyYm9yLCBGbG9yaWRhLiBUaGV5IGFsbGVnZSB0aGF0IHRoZSBzZWxsZXIsIFdpbGxpYW0gTGljaHRlbnN0ZWluLCBwcm92aWRlZCBmYWxzZSBpbmZvcm1hdGlvbiBpbiB0aGUgc2VsbGVyIGRpc2Nsb3N1cmUgZm9ybXMsIGltcGFjdGluZyB0aGUgcHJvcGVydHkncyB2YWx1ZSBhbmQgdXNhYmlsaXR5LiBUaGUgY2xpZW50cyBhcmUgZXhwbG9yaW5nIGxlZ2FsIG9wdGlvbnMsIGZvY3VzaW5nIG9uIGNsYWltcyBmb3IgbWlzcmVwcmVzZW50YXRpb24gYW5kIGZhaWx1cmUgdG8gZGlzY2xvc2UgdW5kZXIgRmxvcmlkYSBsYXcuIFRoZXkgc2VlayBjb21wZW5zYXRpb24gZm9yIGRhbWFnZXMgYW5kIGxvc3Mgb2YgdXNhZ2UgZHVlIHRvIHRoZXNlIGFsbGVnZWQgbWlzcmVwcmVzZW50YXRpb25zLiBUaGUgdXJnZW5jeSBvZiB0aGUgbWF0dGVyIGlzIGhpZ2ggZHVlIHRvIHNldmVyZSBwZXJzb25hbCBhbmQgZmluYW5jaWFsIGluY29udmVuaWVuY2UuCioqS2V5IEV2ZW50czoqKgogIC0gKioyMDI0LTAyLTI5OioqIEhvbWUgcHVyY2hhc2VkIGJ5IE1pZ3VlbCBWZWxhc2NvIGFuZCBSYWNoYWVsIFRhZnQuIChTb3VyY2U6IFJlYWwgRXN0YXRlIE1pc3JlcHJlc2VudGF0aW9uIENhc2UgQW5hbHlzaXMpCgojIyBGaW5hbCBMZWdhbCBBc3Nlc3NtZW50Ci0gKipDbGFpbSBWaWFiaWxpdHk6KiogTW9kZXJhdGUKLSAqKk92ZXJhbGwgRXZpZGVuY2UgU3RyZW5ndGg6KiogRXZpZGVuY2VTdHJlbmd0aC5NT0RFUkFURQ=="
+      }
+    ],
+    "case_analysis_text": "# Case Analysis & AI-Generated Insights\n\n## Intake Analysis\n- **Client Name:** Miguel Velasco, Rachael Taft\n- **Attorney Name:** N/A\n- **Case Type:** Real Estate Dispute\n- **Urgency:** Very Important – severe hardship, personal or financial inconvenience if matter is not resolved quickly.\n\n**Case Summary:**\nMiguel Velasco and Rachael Taft are seeking legal representation regarding a real estate dispute related to the purchase of their home at 142 Annwood Road, Palm Harbor, Florida. They believe that the seller, William Lichtenstein, provided false or misleading information in the seller disclosure forms. The couple is exploring their legal options, including a potential claim for misrepresentation or failure to disclose under Florida real estate law. They are concerned about the loss of usage, damages, and the overall value of their property due to these alleged misrepresentations.\n\n**Priorities:**\n  - Explore legal options\n  - Claim for misrepresentation\n\n**Desired Outcomes:**\n  - Claim for misrepresentation\n  - Compensation for damages\n\n## Individual Document Analysis\n\n### 1. FEMA Proof of Loss Form\n**Source Document:** FEMA Proof of Loss Form\n**Summary:** This document is a FEMA Proof of Loss form for a flood insurance claim filed by Miguel Velasco and Rachel Taft. It details the damages to their property at 142 Annwood Road, Palm Harbor, Florida, due to a flood on October 9, 2024. The claim includes building and personal property damages, with a net claim amount of $30,387.19. The document outlines the replacement cost value, depreciation, and actual cash value for various items. It also mentions the involvement of Rocket Mortgage LLC as the mortgagee. The policyholders have the option to request additional payments if not all damages are covered in this estimate.\n**Key Events:**\n  - **2024-10-09:** Flood occurred causing damage to property (Source: FEMA Proof of Loss Form)\n  - **2024-10-11:** Claim received by insurance company (Source: FEMA Proof of Loss Form)\n  - **2024-10-18:** Property inspection conducted by claim representative (Source: FEMA Proof of Loss Form)\n  - **2024-12-05:** Estimate for damages completed (Source: FEMA Proof of Loss Form)\n\n### 2. AS IS Residential Contract For Sale And Purchase\n**Source Document:** AS IS Residential Contract For Sale And Purchase\n**Summary:** The document is an 'AS IS' Residential Contract for the sale of a property located at 142 Annwood Road, Palm Harbor, Florida. The contract outlines the terms of sale, including a purchase price of $599,000, with a closing date set for February 29, 2024. The seller, William Lichtenstein, is responsible for certain disclosures, including the property's condition and any known defects. The buyers, Miguel Velasco and Rachael Taft, have the right to inspect the property and cancel the contract if unsatisfied. The contract includes an appraisal contingency and specifies that the seller will contribute 3% of the purchase price towards the buyers' closing costs. The document is crucial for assessing potential misrepresentation claims related to the seller's disclosures.\n**Key Events:**\n  - **2024-01-23:** Contract signed by William Lichtenstein and Laura J Price (Source: AS IS Residential Contract For Sale And Purchase)\n  - **2024-02-29:** Scheduled closing date for property purchase (Source: AS IS Residential Contract For Sale And Purchase)\n  - **2024-02-09:** Deadline for obtaining property appraisal (Source: AS IS Residential Contract For Sale And Purchase)\n\n### 3. Real Estate Non-Disclosure and Misrepresentation Case\n**Source Document:** Real Estate Non-Disclosure and Misrepresentation Case\n**Summary:** Miguel Velasco and Rachael Taft purchased a home on February 29, 2024, from William F. Lichtenstein. They allege that Lichtenstein misrepresented the property's flood history in the seller disclosure forms by stating 'I don’t know' to questions about water intrusion and flooding. After purchasing, they discovered prior flood claims and a history of flooding through neighbors. The property flooded in October 2024, causing $32,000 in damages. They seek legal options for misrepresentation and compensation for damages, emphasizing the seller's failure to disclose material facts under Florida real estate law.\n**Key Events:**\n  - **2024-02-29:** Miguel Velasco and Rachael Taft purchased the property. (Source: Real Estate Non-Disclosure and Misrepresentation Case)\n  - **2024-08:** Significant storms occurred, narrowly avoiding flooding. (Source: Real Estate Non-Disclosure and Misrepresentation Case)\n  - **2024-10:** Property flooded, causing $32,000 in damages. (Source: Real Estate Non-Disclosure and Misrepresentation Case)\n\n### 4. Real Estate Disclosure Analysis\n**Source Document:** Real Estate Disclosure Analysis\n**Summary:** The document is a seller disclosure form detailing the condition of various property elements. It raises potential issues such as structural soundness, presence of pests, and water intrusion. Notably, the property requires flood insurance, and the current owner's policy is transferable. These disclosures are critical as they may indicate misrepresentation or failure to disclose by the seller, William Lichtenstein, which directly supports the client's claim for misrepresentation and compensation for damages.\n\n### 5. Real Estate Misrepresentation Case Analysis\n**Source Document:** Real Estate Misrepresentation Case Analysis\n**Summary:** Miguel Velasco and Rachael Taft are involved in a real estate dispute concerning their home purchase at 142 Annwood Road, Palm Harbor, Florida. They allege that the seller, William Lichtenstein, provided false information in the seller disclosure forms, impacting the property's value and usability. The clients are exploring legal options, focusing on claims for misrepresentation and failure to disclose under Florida law. They seek compensation for damages and loss of usage due to these alleged misrepresentations. The urgency of the matter is high due to severe personal and financial inconvenience.\n**Key Events:**\n  - **2024-02-29:** Home purchased by Miguel Velasco and Rachael Taft. (Source: Real Estate Misrepresentation Case Analysis)\n\n## Final Legal Assessment\n- **Claim Viability:** Moderate\n- **Overall Evidence Strength:** EvidenceStrength.MODERATE"
+  },
+  "errors": []
+}

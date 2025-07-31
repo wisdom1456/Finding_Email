@@ -1,0 +1,82 @@
+{
+  "intake": {
+    "client_name": "Miguel Velasco and Rachael Taft",
+    "case_type": "Real Estate Dispute",
+    "urgency": "Very Important",
+    "key_facts_count": 4
+  },
+  "case_documents": [
+    {
+      "title": "FEMA Proof of Loss Form",
+      "type": "Insurance Claim Document",
+      "summary_length": 619,
+      "flooding_terms": {
+        "flood": 2,
+        "damage": 3,
+        "insurance": 1,
+        "estimate": 1
+      }
+    },
+    {
+      "title": "AS IS Residential Contract For Sale And Purchase",
+      "type": "Real Estate Contract",
+      "summary_length": 623,
+      "flooding_terms": {
+        "flood": 2,
+        "insurance": 1
+      }
+    },
+    {
+      "title": "Real Estate Non-Disclosure Case Inquiry",
+      "type": "Client Communication",
+      "summary_length": 555,
+      "flooding_terms": {
+        "flood": 5,
+        "water": 1,
+        "damage": 1
+      }
+    },
+    {
+      "title": "Property Condition Disclosure",
+      "type": "Seller Disclosure Form",
+      "summary_length": 586,
+      "flooding_terms": {
+        "flood": 2,
+        "water": 1,
+        "insurance": 1
+      }
+    },
+    {
+      "title": "Real Estate Dispute Analysis",
+      "type": "Intake Summary",
+      "summary_length": 537,
+      "flooding_terms": {
+        "damage": 1
+      }
+    }
+  ],
+  "legal_assessment": {
+    "claim_viability": "Moderate",
+    "evidence_strength": null,
+    "challenges_count": 2,
+    "recommendations_count": 3
+  },
+  "email": {
+    "download_links_count": 2,
+    "case_analysis_length": 5850,
+    "files": [
+      "Findings_Miguel Velasco and Rachael Taft.eml",
+      "Case Analysis.txt"
+    ],
+    "case_specific_terms": {
+      "flood": 14,
+      "water": 2,
+      "property": 15,
+      "damage": 9,
+      "insurance": 4,
+      "estimate": 2,
+      "disclosure": 13
+    }
+  },
+  "status": "success"
+}

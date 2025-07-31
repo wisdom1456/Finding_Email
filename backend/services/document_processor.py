@@ -1,14 +1,14 @@
 import asyncio
 from fastapi import UploadFile, HTTPException, status
 from typing import List, Dict, Callable, Awaitable
-from backend.utils.data_models import FileType, DocumentType, ProcessedDocument
-from backend.utils.file_processors.pdf_processor import process_pdf
-from backend.utils.file_processors.docx_processor import process_docx
-from backend.utils.file_processors.eml_processor import process_eml
-from backend.utils.file_processors.txt_processor import process_txt
+from ..utils.data_models import FileType, DocumentType, ProcessedDocument
+from ..utils.file_processors.pdf_processor import process_pdf
+from ..utils.file_processors.docx_processor import process_docx
+from ..utils.file_processors.eml_processor import process_eml
+from ..utils.file_processors.txt_processor import process_txt
 
 # Maps file content types to their respective processing functions
-from backend.utils.file_processors import PROCESSOR_MAP
+from ..utils.file_processors import PROCESSOR_MAP
 
 class DocumentProcessor:
     """

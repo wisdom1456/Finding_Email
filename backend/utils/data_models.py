@@ -1,7 +1,7 @@
 from pydantic import BaseModel, Field, field_validator, validator
 from typing import List, Optional, Dict, Any, Union
 from enum import Enum
-from backend.utils.validators import stringify_dict
+from .validators import stringify_dict
 
 # --- Enums for Type Safety and Consistency ---
 

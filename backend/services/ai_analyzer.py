@@ -5,7 +5,7 @@ from fastapi import UploadFile, HTTPException
 from tenacity import retry, stop_after_attempt, wait_fixed, retry_if_exception_type
 from openai import RateLimitError, APIError, APITimeoutError, OpenAI
 from pydantic import ValidationError
-from backend.utils.data_models import (
+from ..utils.data_models import (
     EnhancedIntakeAnalysis,
     EnhancedCaseAnalysis,
     LegalAssessment,
@@ -14,8 +14,8 @@ from backend.utils.data_models import (
     CombinedAnalysis,
     AnalysisError,
 )
-from backend.services.document_processor import DocumentProcessor
-from backend.utils.validators import preprocess_ai_output
+from .document_processor import DocumentProcessor
+from ..utils.validators import preprocess_ai_output
 
 
 class AIAnalyzer:

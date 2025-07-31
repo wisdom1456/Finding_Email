@@ -4,7 +4,7 @@
 
 The Legal Document Analysis Portal has evolved from a TypeScript/n8n architecture to a modern Streamlit/FastAPI system, preserving functionality while improving maintainability and user experience.
 
-### New Streamlit/FastAPI Architecture (Current Target)
+### Current Streamlit/FastAPI Architecture
 
 ```
 ┌─────────────────────────────────────────┐
@@ -12,13 +12,16 @@ The Legal Document Analysis Portal has evolved from a TypeScript/n8n architectur
 ├─────────────────────────────────────────┤
 │           Streamlit Frontend            │
 │  ┌─────────────┐  ┌─────────────────┐   │
-│  │ Streamlit   │  │   Session       │   │
-│  │ Components  │  │   State Mgmt    │   │
+│  │  File Upload│  │     Results     │   │
+│  │     Tab     │  │      Tab        │   │
 │  │             │  │                 │   │
 │  └─────────────┘  └─────────────────┘   │
+│  ┌─────────────────────────────────────┐   │
+│  │   Session State Management          │   │
+│  └─────────────────────────────────────┘   │
 └─────────────────────────────────────────┘
             │
-            ▼
+            ▼ Synchronous HTTP Request
 ┌─────────────────────────────────────────┐
 │           FastAPI Backend               │
 │  ┌─────────────┐  ┌─────────────────┐   │
@@ -28,6 +31,15 @@ The Legal Document Analysis Portal has evolved from a TypeScript/n8n architectur
 │  ┌─────────────┐  ┌─────────────────┐   │
 │  │ Email       │  │ File Handler    │   │
 │  │ Generator   │  │ Service         │   │
+│  └─────────────┘  └─────────────────┘   │
+└─────────────────────────────────────────┘
+            │
+            ▼ Complete JSON Response
+┌─────────────────────────────────────────┐
+│         Results Display                 │
+│  ┌─────────────┐  ┌─────────────────┐   │
+│  │ Case        │  │   Download      │   │
+│  │ Analysis    │  │   Links         │   │
 │  └─────────────┘  └─────────────────┘   │
 └─────────────────────────────────────────┘
 ```
@@ -174,6 +186,7 @@ async def process_case_pipeline(case_data: CaseData) -> CaseResults:
     return CaseResults(analysis=analysis, email=email_response)
 ```
 
+
 ### Legacy TypeScript Patterns (Historical Reference)
 
 #### State Management Pattern
@@ -230,187 +243,58 @@ interface FileData {
 
 ## Integration Patterns
 
-### Four-Part Modular n8n Workflow Architecture 🚧 IN DEVELOPMENT
+### Streamlit/FastAPI Integration ✅ IMPLEMENTED
 
-The n8n workflow is being evolved from a working three-part system into a four-part modular architecture for enhanced maintainability, scalability, and component isolation.
+The current architecture uses a clean, synchronous integration pattern between the Streamlit frontend and FastAPI backend for optimal stability and user experience.
 
-#### Current Status: Completion Required
-
-**✅ Working Three-Part System** ([`workflow/3_merge_and_respond.json`](workflow/3_merge_and_respond.json))
-- Complete functional workflow with intake, AI processing, and response generation
-- Proven working with proper caseId data flow and error handling
-- **Status**: Production ready, currently operational
-
-**🚧 Target Four-Part System** (Requires completion)
-- Enhanced modular separation with distinct responsibilities
-- Improved debugging and maintenance capabilities
-- Independent scaling and optimization potential
-- **Status**: Partially implemented, requires completion
-
-#### Four-Part System Architecture Design
-
-**Module 1: Intake Processing** ([`workflow/1_intake.json`](workflow/1_intake.json)) ✅ COMPLETED
-- **Purpose**: Data reception, validation, and document extraction
-- **Status**: Fully implemented and functional
-- **Key Components**:
-  - **Webhook Receiver**: Handles form data and binary file uploads with CORS configuration
-  - **Form Data Validation**: Validates required fields (clientName, attorneyName) with error handling
-  - **Data Structuring**: Creates standardized caseInfo format for downstream processing
-  - **Binary File Extraction**: Separates intake forms from case documents for specialized processing
-  - **PDF Processing Pipeline**: Uses PDF.co integration for form field extraction and text conversion
-- **Output**: Structured intake data + extracted PDF content → Module 2
-
-**Module 2: AI Processing** ([`workflow/2_ai_processing.json`](workflow/2_ai_processing.json)) ✅ COMPLETED
-- **Purpose**: AI-powered document analysis with intelligent routing
-- **Status**: Fully implemented, requires connection integration
-- **Key Components**:
-  - **Dynamic Prompt Builder**: Creates contextual AI prompts based on document type and extracted data
-  - **OpenAI Integration**: Uses GPT-4o-mini for efficient document analysis with JSON response formatting
-  - **Document Type Routing**: Intelligently routes between intake form and case document processing branches
-  - **Response Parsing**: Separates AI results by document type for specialized handling
-  - **Data Preservation**: Maintains caseId and structured data throughout processing
-- **Output**: Parsed AI results (intake + case documents) → Module 3
-
-**Module 3: Data Merging** ([`workflow/3_merging.json`](workflow/3_merging.json)) ❌ INCOMPLETE
-- **Purpose**: Branch synchronization, data consolidation, and validation
-- **Status**: Missing critical Case Data Merger component
-- **Implemented Components**:
-  - **Wait for Branches**: Synchronizes multiple processing branches ✅
-  - **Merge Validator**: Validates merged case data structure ✅
-- **Missing Components**:
-  - **❌ Case Data Merger**: Core logic to combine intake and case document analysis
-  - **❌ Input Connection**: No webhook to receive Module 2 output
-  - **❌ Output Connection**: No mechanism to send data to Module 4
-- **Required Output**: Validated unified case file → Module 4
-
-**Module 4: Response Generation** ([`workflow/4_response.json`](workflow/4_response.json)) ✅ COMPLETED
-- **Purpose**: Professional email generation and client response
-- **Status**: Fully implemented, requires connection integration
-- **Key Components**:
-  - **Enhanced Email Prompt Preparation**: Multi-level fallback data access with complete case context
-  - **GPT-4o Email Generation**: Creates client-ready findings letters with enhanced model capability
-  - **Debug and Validation**: Comprehensive data debugging and processing verification
-  - **Multi-Format Response**: Generates both .eml (email-ready) and .txt (plain text) downloads
-  - **Final Response**: Returns structured JSON with download links and processing metadata
-- **Output**: Complete client response with downloadable findings letters
-
-#### Required Components for Completion
-
-**1. Case Data Merger Node** (Module 3)
-- **Purpose**: Combine AI processing results from intake and case document branches
-- **Source**: Extract and adapt from working [`3_merge_and_respond.json`](workflow/3_merge_and_respond.json)
-- **Features Required**:
-  - Robust fallback logic for missing client/attorney names
-  - caseId generation and preservation throughout pipeline
-  - Processing status tracking for both branches (intake + case documents)
-  - Error recovery for partial failures with graceful degradation
-  - Structured data validation and integrity checks
-
-**2. Inter-Module HTTP Connections**
-- **Module 1 → Module 2**: HTTP POST after PDF processing completion
-- **Module 2 → Module 3**: HTTP POST for both AI processing branches (intake + case docs)
-- **Module 3 → Module 4**: HTTP POST after merge validation completion
-- **Payload Requirements**: Preserve caseId, structured data, and processing metadata
-
-**3. Enhanced Error Handling** (Module 2)
-- Add comprehensive fallback mechanisms similar to Module 4
-- Improve data preservation logic for failed processing scenarios
-- Enhanced debugging and validation capabilities
-
-#### Target Four-Part Data Flow Architecture
-
-```mermaid
-flowchart TD
-    Frontend[Frontend Form Submission] --> M1
+#### Request/Response Architecture
+```python
+# Streamlit Frontend -> FastAPI Backend Pattern
+async def process_documents():
+    """Synchronous processing with complete response."""
     
-    subgraph M1 [Module 1: Intake Processing]
-        W1[Webhook Receiver] --> V1[Form Validation]
-        V1 --> S1[Structure Data]
-        S1 --> E1[Extract Files]
-        E1 --> P1[PDF Processing]
-        P1 --> HTTP1[HTTP POST to Module 2]
-    end
+    # 1. Document Processing
+    processed_docs = await document_processor.process_documents(files)
     
-    subgraph M2 [Module 2: AI Processing]
-        HTTP1 --> B2[Build AI Prompt]
-        B2 --> AI2[OpenAI Analysis]
-        AI2 --> R2[Route by Document Type]
-        R2 --> P2A[Parse Intake Branch]
-        R2 --> P2B[Parse Case Docs Branch]
-        P2A --> HTTP2A[HTTP POST to Module 3]
-        P2B --> HTTP2B[HTTP POST to Module 3]
-    end
+    # 2. AI Analysis
+    analysis = await ai_analyzer.analyze_case(processed_docs)
     
-    subgraph M3 [Module 3: Data Merging]
-        HTTP2A --> W3[Wait for Both Branches]
-        HTTP2B --> W3
-        W3 --> CM3[🚧 NEW: Case Data Merger]
-        CM3 --> V3[Merge Validator]
-        V3 --> HTTP3[HTTP POST to Module 4]
-    end
+    # 3. Email Generation
+    email_response = await email_generator.generate_findings(analysis)
     
-    subgraph M4 [Module 4: Response Generation]
-        HTTP3 --> EP4[Prepare Email Prompt]
-        EP4 --> D4[Debug Prompt Data]
-        D4 --> AI4[Generate Email Findings]
-        AI4 --> F4[Format Email Response]
-        F4 --> FR4[Final Response]
-    end
-    
-    FR4 --> Client[Client Downloads]
-    
-    style CM3 fill:#ff6666,stroke:#333,stroke-width:2px
-    style HTTP1 fill:#ccffcc,stroke:#333,stroke-width:2px
-    style HTTP2A fill:#ccffcc,stroke:#333,stroke-width:2px
-    style HTTP2B fill:#ccffcc,stroke:#333,stroke-width:2px
-    style HTTP3 fill:#ccffcc,stroke:#333,stroke-width:2px
+    # 4. Complete JSON Response
+    return CaseResults(analysis=analysis, email=email_response)
 ```
 
-#### Current vs Target Architecture Comparison
-
-**✅ Working Three-Part System**:
-```mermaid
-flowchart LR
-    F1[Frontend] --> I1[Intake & Parsing]
-    I1 --> A1[AI Processing]
-    A1 --> M1[Merge & Respond]
-    M1 --> C1[Client Response]
-    
-    style I1 fill:#ccffcc
-    style A1 fill:#ccffcc
-    style M1 fill:#ccffcc
+#### Data Flow Pattern
+```
+Streamlit Frontend
+       │
+       ▼ HTTP POST /api/v1/analysis/full-pipeline
+FastAPI Backend
+   ┌─────────────────────────────────────┐
+   │ 1. Document Processing              │
+   │ 2. Intake Analysis (GPT-4o-mini)    │
+   │ 3. Case Document Analysis (GPT-4o)  │
+   │ 4. Final Assessment (GPT-4o)        │
+   │ 5. Email Generation (GPT-4o)        │
+   └─────────────────────────────────────┘
+       │
+       ▼ Complete JSON Response
+Streamlit Results Display
+   ┌─────────────────────────────────────┐
+   │ • Case Analysis                     │
+   │ • Download Links (.eml, .txt)       │
+   │ • Processing Summary                │
+   └─────────────────────────────────────┘
 ```
 
-**🚧 Target Four-Part System** (Requires Completion):
-```mermaid
-flowchart LR
-    F2[Frontend] --> I2[Module 1: Intake]
-    I2 -.->|Missing Connection| A2[Module 2: AI Processing]
-    A2 -.->|Missing Connection| M2[Module 3: Merging - Incomplete]
-    M2 -.->|Missing Connection| R2[Module 4: Response]
-    R2 --> C2[Client Response]
-    
-    style I2 fill:#ffffcc
-    style A2 fill:#ffffcc
-    style M2 fill:#ffcccc
-    style R2 fill:#ffffcc
-```
-
-#### Architectural Benefits
-
-- **Modularity**: Each part handles distinct responsibilities with clear interfaces
-- **Maintainability**: Individual workflows can be updated without affecting others
-- **Error Isolation**: Failures in one part don't cascade to others
-- **Scalability**: Parts can be independently optimized or scaled
-- **Debugging**: Easier to trace issues through specific workflow sections
-- **Reusability**: Individual parts can be reused in other workflow compositions
-
-#### Advanced Integration Patterns
-
-- **Multi-Branch Processing Pipeline**: Sophisticated document categorization with parallel processing
-- **Synchronization Patterns**: Wait node coordination for proper branch convergence
-- **Structured Data Flow**: Consistent JSON schema throughout processing pipeline with validation stages
-- **Error Recovery Patterns**: Graceful degradation with partial success handling and comprehensive error messaging
+#### Integration Benefits
+- **Simplicity**: Clean request/response cycle without complex state management
+- **Reliability**: Synchronous processing ensures complete results before display
+- **User Experience**: Clear loading states with definitive completion feedback
+- **Error Handling**: Comprehensive error responses with user-friendly messages
+- **Maintainability**: Straightforward debugging and system monitoring
 
 ### OpenAI API Integration Patterns ✅ IMPLEMENTED
 - **Modern SDK Client**: Utilizes the `openai` Python package (>=1.0.0) with a structured `OpenAI` client.
@@ -444,10 +328,10 @@ const downloadResponse = {
 ```
 
 ### External API Integration
-- **Enhanced Webhook Pattern**: Form data posted to n8n webhook endpoint with robust binary handling
-- **Async Processing**: Non-blocking file upload with real-time progress feedback and status updates
-- **Structured Response Handling**: Comprehensive response format with professional download links
-- **CORS Configuration**: Proper cross-origin handling for Kinsta deployment with specific domain allowlisting
+- **FastAPI Endpoints**: Direct HTTP API calls from Streamlit frontend to FastAPI backend services
+- **Synchronous Processing**: Complete document analysis pipeline with single response containing all results
+- **Structured Response Handling**: Comprehensive JSON response format with professional download links
+- **CORS Configuration**: Proper cross-origin handling for production deployment with domain allowlisting
 
 ### Build System Integration
 - **Vite Integration**: Modern build tooling with HMR and optimized production builds

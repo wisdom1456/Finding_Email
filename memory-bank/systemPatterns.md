@@ -305,6 +305,20 @@ Streamlit Results Display
 - **Response Validation Pipeline**: Multi-stage parsing with Pydantic models for robust validation.
 - **Token Management**: Optimized prompt design for cost-effective processing and reliable results.
 
+### Advanced Content Generation Patterns (EmailGenerator) ✅ IMPLEMENTED
+The `EmailGenerator` service uses a sophisticated, multi-stage process to ensure high-quality, client-ready output, addressing issues like repetitive greetings and incorrect formatting.
+
+#### Dual Persona Pattern
+- **`CLIENT_DIRECTED_PERSONA`**: Used once for the initial section (e.g., executive summary) to establish the client-facing tone and include the initial greeting.
+- **`CONTINUING_LETTER_PERSONA`**: Used for all subsequent sections to instruct the AI that it is continuing a letter, thereby preventing redundant greetings or closings.
+
+#### Narrative Enforcement Pattern
+- **`NARRATIVE_PARAGRAPH_ENFORCEMENT`**: A forceful prompt instruction used in specific sections (like recommendations) to mandate that the AI generates flowing, narrative paragraphs enclosed in `<p>` tags and strictly forbids the use of lists (`<ul>`, `<ol>`).
+
+#### Strict Formatting Pattern
+- **`STRICT_FORMAT_ENFORCEMENT`**: A constant instruction added to every AI call, requiring the model to use only HTML for formatting and to never output markdown code fences (`'''html'''`).
+- **`_clean_ai_response()`**: A failsafe function applied to every AI response to programmatically strip any residual code fences or markdown, ensuring clean HTML output.
+
 ### Rate Limiting and Token Management Patterns ✅ IMPLEMENTED
 
 #### Sequential Processing Architecture

@@ -26,6 +26,14 @@ The project has successfully completed comprehensive testing and production hard
 
 ## Recent Changes
 
+### Content Generation Engine Refactoring ✅ COMPLETED
+
+To address fundamental flaws in AI-generated content (repetitive greetings, improper formatting), the `EmailGenerator` service was aggressively refactored.
+
+- **Dual Persona System**: Implemented `CLIENT_DIRECTED_PERSONA` for the initial greeting and a `CONTINUING_LETTER_PERSONA` for all subsequent sections to eliminate redundant greetings.
+- **Forced Narrative Structure**: Added a `NARRATIVE_PARAGRAPH_ENFORCEMENT` prompt instruction to mandate flowing narrative paragraphs and forbid lists in key sections.
+- **Guaranteed Clean HTML**: Ensured the `_clean_ai_response()` function is called on all AI outputs and added a `STRICT_FORMAT_ENFORCEMENT` instruction to every prompt to prevent code fences.
+
 ### Architectural Rollback: Return to Synchronous Processing ✅ COMPLETED
 
 #### Strategic Decision: SSE Implementation Rollback

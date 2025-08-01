@@ -7,11 +7,11 @@ from openai import RateLimitError, APIError, APITimeoutError, OpenAI
 from pydantic import ValidationError
 from ..utils.data_models import (
     EnhancedIntakeAnalysis,
-    EnhancedCaseAnalysis,
+    AnalyzedDocument,
     LegalAssessment,
     DemandLetterEvaluation,
     ProcessedDocument,
-    CombinedAnalysis,
+    CaseAnalysisResult,
     AnalysisError,
 )
 from .document_processor import DocumentProcessor
@@ -100,15 +100,16 @@ class AIAnalyzer:
         
         return (
             "SYSTEM\n"
-            "You are a litigation associate performing intake-driven document analysis.\n"
+            "You are a senior litigation attorney with over 15 years of experience specializing in tenant and property disputes. Your analysis must be sharp, strategic, and framed in professional, legally appropriate language.\n"
             "Return **one—and only one—valid JSON object** that matches the\n"
-            "`EnhancedCaseAnalysis` schema below.\n\n"
+            "`AnalyzedDocument` schema below.\n\n"
             "• JSON only—no markdown, no extra text.\n"
             "• Preserve key order.\n"
             "• PRIORITIZE analysis elements that directly relate to client's stated priorities and desired outcomes.\n\n"
             "==========================\n"
             "DOCUMENT (read-only)\n"
-            f"{doc.content}\n"
+            f"Filename: {doc.file_name}\n"
+            f"Content: {doc.content}\n"
             "==========================\n"
             "CLIENT PRIORITIES FOR THIS ANALYSIS:\n"
             f"• Priorities: {client_priorities_str}\n"
@@ -119,46 +120,33 @@ class AIAnalyzer:
             "FULL INTAKE CONTEXT\n"
             f"{ctx.model_dump_json(indent=2)}\n"
             "==========================\n\n"
-            "SCHEMA — EnhancedCaseAnalysis\n"
+            "SCHEMA — AnalyzedDocument\n"
             "{\n"
-            '  "document_title": "Document Title",\n'
-            '  "document_type": "Document Type",\n'
-            '  "key_entities": [{"name": "Name", "role": "Role"}],\n'
-            '  "summary": "Document summary.",\n'
-            '  "timeline_events": [{"date": "Date", "event": "Event"}],\n'
-            '  "evidence_strength": "Strength",\n'
-            '  "legal_significance": "Legal significance.",\n'
-            '  "relevance_to_intake": "Relevance to intake.",\n'
-            '  "potential_challenges": ["Challenge 1"]\n'
+            '  "filename": "The original filename of the document.",\n'
+            '  "document_type": "The type of document (e.g., \'Contract\', \'Email\', \'Image\').",\n'
+            '  "inferred_title": "A meaningful, non-repetitive title for the document (less than 15 words).",\n'
+            '  "summary": "A concise, value-driven summary of the document\'s content (100-150 words).",\n'
+            '  "key_information": "A single consolidated string containing the most critical information. Format as a paragraph, NOT a list. If multiple points exist, separate them with semicolons within the string.",\n'
+            '  "relevance_to_case": "A clear explanation of how this document supports or undermines the client\'s position, referencing specific case priorities."\n'
             "}\n"
             "==========================\n\n"
-            "INTAKE-DRIVEN CONSTRUCTION RULES\n"
-            "1. `document_title`: use true title; if none, craft a concise (<10 words) title.\n"
-            "2. `summary`: 100–150 words, objective, must reference specific details from the document content.\n"
-            "   • EMPHASIZE content that directly supports or challenges client's priorities\n"
-            "   • Highlight evidence relevant to desired outcomes\n"
-            "3. `timeline_events`: CRITICAL - Extract actual events, dates, and actions from document content. Each event must contain:\n"
-            "   • `date`: specific date in YYYY-MM-DD format or \"Unknown\" if no date found\n"
-            "   • `event`: descriptive action/occurrence from document (15-30 words), NEVER use \"N/A\", \"Not specified\", or generic placeholders\n"
-            "   • Example: {\"date\": \"2024-03-15\", \"event\": \"Property inspection revealed water damage in basement affecting electrical systems\"}\n"
-            "   • If no events found, return empty array []\n"
-            "4. `evidence_strength`: choose \"Strong\", \"Moderate\", or \"Weak\" based on how well this document supports client's case.\n"
-            "5. `legal_significance`: explain how this document impacts the case legally, with specific focus on client's legal claims and desired outcomes.\n"
-            "6. `relevance_to_intake`: CRITICAL - explicitly connect this document to client's stated priorities and explain how it advances their desired outcomes.\n"
-            "7. `potential_challenges`: short phrases (≤8 words) describing foreseeable hurdles that could impact client's goals.\n\n"
+            "CONSTRUCTION RULES\n"
+            "1.  `filename`: Must be the exact filename provided.\n"
+            "2.  `inferred_title`: Create a meaningful and non-repetitive title. Do not just repeat the filename.\n"
+            "3.  `summary`: Must be concise and value-driven, focusing on the most important aspects of the document.\n"
+            "4.  `key_information`: Extract the most critical information as a bulleted list string.\n"
+            "5.  `relevance_to_case`: Clearly articulate the document's relevance to the overall case strategy and client goals.\n\n"
             "VALIDATION\n"
             "• Must parse as JSON.\n"
             "• All strings double-quoted.\n\n"
             "BEGIN."
         )
 
-    def _build_final_assessment_prompt(self, analysis: CombinedAnalysis) -> str:
+    def _build_final_assessment_prompt(self, analysis: CaseAnalysisResult) -> str:
         """Builds the prompt for the final legal assessment."""
         return (
             "SYSTEM\n"
-            "You are senior counsel delivering the final legal assessment.\n"
-            "Output a single JSON object with exactly two top-level keys:\n"
-            '`"legal_assessment"` and `"demand_letter_evaluation"`—nothing else.\n\n'
+            "You are a senior litigation attorney with over 15 years of experience specializing in tenant and property disputes. Your analysis must be sharp, strategic, and framed in professional, legally appropriate language. Output a single JSON object with exactly two top-level keys: `\"legal_assessment\"` and `\"demand_letter_evaluation\"`—nothing else.\n\n"
             "• JSON only—no markdown, no commentary.\n"
             "• Do not alter key names.\n\n"
             "==========================\n"
@@ -171,13 +159,8 @@ class AIAnalyzer:
             '  "case_type": "Case Type",\n'
             '  "claim_viability": "Claim Viability",\n'
             '  "overall_evidence_strength": "Strength",\n'
-            '  "potential_challenges": [{\n'
-            '    "category": "Challenge Category",\n'
-            '    "description": "Description",\n'
-            '    "mitigation_strategy": "Strategy",\n'
-            '    "confidence_score": 0.00\n'
-            "  }],\n"
-            '  "recommended_actions": ["Action 1"],\n'
+            '  "potential_challenges": "A narrative paragraph describing potential challenges. NO BULLET POINTS.",\n'
+            '  "recommended_actions": "A narrative paragraph detailing recommended next steps. NO BULLET POINTS.",\n'
             '  "demand_letter_appropriate": true,\n'
             '  "urgency_assessment": "Urgency"\n'
             "}\n"
@@ -190,14 +173,12 @@ class AIAnalyzer:
             "}\n"
             "==========================\n\n"
             "CONSTRUCTION RULES\n"
-            '1. `claim_viability`: pick “Strong”, “Moderate”, or “Weak”.\n'
-            "2. For each `potential_challenges` item:\n"
-            "   • `category` must be a string.\n"
-            "   • Map risk to `confidence_score`—High → 0.85, Medium → 0.60, Low → 0.30.\n"
-            "3. `recommended_actions`: imperative verb first, ≤20 words each.\n"
-            "4. `demand_letter_appropriate`: true if pre-suit demand adds leverage.\n"
-            '5. If `demand_letter_evaluation.is_appropriate` is **false**, set\n'
-            '   `"reasoning": ""`, `"potential_outcomes": []`, `"relevant_statutes": []`.\n\n'
+            "1.  **`potential_challenges` and `recommended_actions` must be full, narrative paragraphs.** Do not use bullet points or lists.\n"
+            "2.  The tone must be authoritative and advisory, consistent with a senior attorney persona.\n"
+            '3.  `claim_viability`: pick “Strong”, “Moderate”, or “Weak”.\n'
+            "4.  `demand_letter_appropriate`: true if pre-suit demand adds leverage.\n"
+            '5.  If `demand_letter_evaluation.is_appropriate` is **false**, set\n'
+            '    `"reasoning": ""`, `"potential_outcomes": []`, `"relevant_statutes": []`.\n\n'
             "VALIDATION\n"
             "• Must parse as JSON.\n"
             "• Floats with two decimals.\n"
@@ -205,9 +186,9 @@ class AIAnalyzer:
             "BEGIN."
         )
 
-    async def analyze_intake(self, intake_doc: ProcessedDocument) -> CombinedAnalysis:
-        """Analyzes a processed intake form and returns an initial CombinedAnalysis object."""
-        analysis = CombinedAnalysis()
+    async def analyze_intake(self, intake_doc: ProcessedDocument) -> CaseAnalysisResult:
+        """Analyzes a processed intake form and returns an initial CaseAnalysisResult object."""
+        analysis = CaseAnalysisResult()
         try:
             if not intake_doc or not intake_doc.content:
                 analysis.errors.append(AnalysisError(source="IntakeProcessing", error_message="No valid intake content to analyze."))
@@ -223,7 +204,7 @@ class AIAnalyzer:
             analysis.errors.append(AnalysisError(source="IntakeAnalysis", error_message=str(e), details=details))
         return analysis
 
-    async def analyze_case_documents(self, documents: List[ProcessedDocument], intake_context: EnhancedIntakeAnalysis) -> List[Union[EnhancedCaseAnalysis, AnalysisError]]:
+    async def analyze_case_documents(self, documents: List[ProcessedDocument], intake_context: EnhancedIntakeAnalysis) -> List[Union[AnalyzedDocument, AnalysisError]]:
         """Analyzes multiple case documents sequentially to avoid rate limiting."""
         results = []
         total_docs = len(documents)
@@ -270,7 +251,7 @@ class AIAnalyzer:
             return truncated_content
         return content
 
-    async def _analyze_single_document(self, document: ProcessedDocument, intake_context: EnhancedIntakeAnalysis) -> Union[EnhancedCaseAnalysis, AnalysisError]:
+    async def _analyze_single_document(self, document: ProcessedDocument, intake_context: EnhancedIntakeAnalysis) -> Union[AnalyzedDocument, AnalysisError]:
         """Analyzes a single case document, returning structured data or an error."""
         try:
             # Check document size and truncate if necessary
@@ -293,7 +274,7 @@ class AIAnalyzer:
                 print(f"AI ANALYZER: 🔄 Using gpt-4o-mini for large document: {document.file_name}")
             
             raw_analysis = await self._make_openai_request(prompt, model=model_to_use)
-            return EnhancedCaseAnalysis.model_validate(raw_analysis)
+            return AnalyzedDocument.model_validate(raw_analysis)
         except (HTTPException, ValidationError) as e:
             return AnalysisError(
                 source=f"doc:{document.file_name}",
@@ -301,9 +282,9 @@ class AIAnalyzer:
                 details=getattr(e, 'detail', None)
             )
 
-    async def perform_final_assessment(self, analysis: CombinedAnalysis) -> CombinedAnalysis:
+    async def perform_final_assessment(self, analysis: CaseAnalysisResult) -> CaseAnalysisResult:
         """Performs the final legal assessment and demand letter evaluation."""
-        if not analysis.intake_analysis or not analysis.case_analyses:
+        if not analysis.intake_analysis or not analysis.analyzed_documents:
             analysis.errors.append(AnalysisError(source="FinalAssessment", error_message="Cannot perform final assessment without intake and case analyses."))
             return analysis
 

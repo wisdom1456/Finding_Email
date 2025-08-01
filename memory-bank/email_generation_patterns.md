@@ -29,13 +29,23 @@ To make the analysis more relevant to the client's needs, the following prompt s
 
 ## 2. Email Generator Prompt Engineering
 
-### **Client-Friendly Narrative**
-To transform the output from a technical memo to a polished, client-facing letter, the following prompt refinements were successful:
+### **Advanced Content Generation Engine**
+To fix fundamental flaws in AI output quality, the engine was refactored with the following patterns:
 
-- **Tone and Language**: Instruct the AI to use a professional, confident, and client-focused tone, avoiding legal jargon where possible.
-- **Narrative Structure**: Request a narrative structure with clear headings like **Our Analysis**, **Strengths of Your Case**, and **Potential Challenges**, instead of a list of bullet points.
-- **Simple Explanations**: Ask for complex legal concepts to be explained in simple, professional language that a non-lawyer can easily understand.
-- **Actionable Recommendations**: For strategic recommendations, instruct the AI to use a numbered list with clear, imperative language.
+#### **Dual Persona System**
+- **Purpose**: To eliminate repetitive "Dear Client" greetings in every section of the letter.
+- **`CLIENT_DIRECTED_PERSONA`**: A persona used only for the *first* section of the letter (e.g., the introduction). It establishes the formal, client-facing tone and includes the initial greeting.
+- **`CONTINUING_LETTER_PERSONA`**: A concise persona used for all *subsequent* sections. It instructs the AI that it is continuing a letter already in progress and **must not** add any new greetings, closings, or signatures.
+
+#### **Narrative Paragraph Enforcement**
+- **Purpose**: To force the AI to produce flowing narrative paragraphs instead of bulleted or numbered lists, which it was previously ignoring.
+- **`NARRATIVE_PARAGRAPH_ENFORCEMENT`**: A mandatory, forceful prompt instruction that explicitly **forbids** the use of `<ul>`, `<ol>`, or `<li>` tags. It requires the AI to combine all points into a cohesive narrative using transitional phrases and `<p>` tags.
+- **Implementation**: This instruction is injected into the prompts for sections like `_generate_recommendations` and `_generate_next_steps`.
+
+#### **Guaranteed Clean HTML Output**
+- **Purpose**: To eliminate `'''html'''` code fences and ensure clean, client-ready HTML.
+- **`STRICT_FORMAT_ENFORCEMENT`**: A constant added to every AI prompt that reinforces the requirement for clean HTML output without code fences.
+- **`_clean_ai_response()` Function**: A robust failsafe function that is called on the string output of **every single AI generation call**. It uses regex to strip all variations of code fences and markdown, ensuring the final output is pure HTML.
 
 ## 3. Quality Validation
 

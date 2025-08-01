@@ -9,113 +9,234 @@
             font-family: 'Times New Roman', Times, serif;
             line-height: 1.6;
             color: #333;
+            margin: 0;
+            padding: 0;
         }
         .container {
-            max-width: 800px;
+            max-width: 900px;
             margin: 0 auto;
-            padding: 20px;
+            padding: 40px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
         }
-        .header, .footer {
+        .letterhead {
             text-align: left;
-            margin-bottom: 20px;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid #2c3e50;
         }
-        .footer {
-            margin-top: 40px;
-            font-style: italic;
-        }
-        h1, h2, h3 {
+        .letterhead h1 {
             font-family: 'Georgia', serif;
-            color: #222;
+            color: #2c3e50;
+            font-size: 24px;
+            margin: 0 0 10px 0;
         }
-        ul {
-            list-style-type: disc;
-            margin-left: 20px;
+        .header-info {
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+        .header-info p {
+            margin: 5px 0;
         }
         .section {
+            margin-bottom: 30px;
+            page-break-inside: avoid;
+        }
+        .section h2 {
+            font-family: 'Georgia', serif;
+            color: #2c3e50;
+            font-size: 18px;
+            margin-bottom: 15px;
+            padding-bottom: 5px;
+            border-bottom: 1px solid #bdc3c7;
+        }
+        .section h3 {
+            font-family: 'Georgia', serif;
+            color: #34495e;
+            font-size: 16px;
+            margin-bottom: 10px;
+            margin-top: 20px;
+        }
+        .executive-summary {
+            padding: 20px;
+            margin-bottom: 30px;
+        }
+        .executive-summary h2 {
+            color: #333;
+            margin-top: 0;
+        }
+        .strengths-section {
+            padding: 15px;
             margin-bottom: 20px;
+        }
+        .challenges-section {
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+        .recommendations-section {
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+        ul, ol {
+            margin-left: 25px;
+            margin-bottom: 15px;
+        }
+        li {
+            margin-bottom: 8px;
+            text-align: justify;
+        }
+        .footer {
+            margin-top: 50px;
+            padding-top: 20px;
+            border-top: 1px solid #bdc3c7;
+            font-style: italic;
+        }
+        .signature-block {
+            margin-top: 30px;
+        }
+        .signature-block p {
+            margin: 5px 0;
+        }
+        @media print {
+            .container {
+                box-shadow: none;
+                padding: 20px;
+            }
+            .section {
+                page-break-inside: avoid;
+            }
+        }
+        /* Professional formatting for legal content */
+        .legal-content p {
+            text-align: justify;
+            margin-bottom: 12px;
+        }
+        .legal-content ul {
+            list-style-type: disc;
+        }
+        .legal-content ol {
+            list-style-type: decimal;
+        }
+        .highlight {
+            padding: 2px 4px;
+            border-radius: 2px;
+            font-weight: bold;
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <div class="header">
-            <p>{{ letter.header.date | default('Not Available') }}</p>
-            <p><strong>To:</strong> {{ letter.header.client_name | default('Not Available') }}</p>
-            <p><strong>Address:</strong> {{ letter.header.client_address | default('Not Available') }}</p>
-            <p><strong>Re:</strong> {{ letter.header.case_reference | default('Not Available') }}</p>
+        <!-- Header Section -->
+        <div class="letterhead">
+            <h1>Legal Findings Letter</h1>
         </div>
 
+        <div class="header-info">
+            <p><strong>Date:</strong> {{ current_date | default('Not Available') }}</p>
+            <p><strong>To:</strong> {{ results.analysis.intake_analysis.client_name | default('Not Available') }}</p>
+            <p><strong>From:</strong> {{ results.analysis.intake_analysis.attorney_name | default('Not Available') }}</p>
+            <p><strong>Re:</strong> Case Analysis and Findings</p>
+        </div>
+
+        <!-- Executive Summary Section -->
+        {% if results.generated_letter and results.generated_letter.executive_summary %}
+        <div class="executive-summary">
+            <h2>Executive Summary</h2>
+            <div class="legal-content">
+                {{ results.generated_letter.executive_summary | safe }}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Background Summary Section -->
+        {% if results.generated_letter and results.generated_letter.background_summary %}
         <div class="section">
             <h2>I. Background</h2>
-            <p>{{ letter.background_summary | default('No background summary was provided.', true) }}</p>
+            <div class="legal-content">
+                {{ results.generated_letter.background_summary | safe }}
+            </div>
         </div>
+        {% endif %}
 
+        <!-- Analysis and Position Section -->
+        {% if results.generated_letter and results.generated_letter.analysis_and_position %}
         <div class="section">
-            <h2>II. Review of Documents</h2>
-             {% if letter.reviewed_documents %}
-                <p>In our review, we have analyzed the following documents:</p>
-                <ul>
-                    {% for doc in letter.reviewed_documents %}
-                        <li>{{ doc }}</li>
-                    {% endfor %}
-                </ul>
-            {% endif %}
-            <p>{{ letter.review_summary | default('No document review summary was provided.', true) }}</p>
+            <h2>II. Legal Analysis and Position</h2>
+            <div class="legal-content">
+                {{ results.generated_letter.analysis_and_position | safe }}
+            </div>
         </div>
+        {% endif %}
 
+        <!-- Case Strengths Section -->
+        {% if results.generated_letter and results.generated_letter.strengths %}
         <div class="section">
-            <h2>III. Preliminary Assessment</h2>
-            <p>As we move forward in assessing your matter, it is important to recognize that legal proceedings can often present various obstacles that may impact the strength of your case. Below, you will find a list of potential challenges that we have identified so far in our preliminary assessment of your matter. Please note that this list is not exhaustive. As the case progresses and more information becomes available, other challenges may emerge or may become more evident. Our team is committed to navigating these complexities and adapting our strategies accordingly to best represent your interests. Your understanding and awareness of these potential challenges are essential as we work together towards a successful resolution.</p>
-            {% if letter.assessment_challenges %}
-                <h3>Potential Challenges</h3>
-                <ul>
-                    {% for challenge in letter.assessment_challenges %}
-                        <li>
-                            <strong>{{ challenge.category | default('Uncategorized') }}:</strong> {{ challenge.description | default('No description provided.') }}
-                            {% if challenge.mitigation_strategy %}
-                                <br><em>Mitigation: {{ challenge.mitigation_strategy }}</em>
-                            {% endif %}
-                        </li>
-                    {% endfor %}
-                </ul>
-            {% else %}
-                <p>No specific challenges were identified at this time.</p>
-            {% endif %}
+            <h2>III. Case Strengths</h2>
+            <div class="strengths-section">
+                <div class="legal-content">
+                    {{ results.generated_letter.strengths | safe }}
+                </div>
+            </div>
         </div>
+        {% endif %}
 
+        <!-- Potential Challenges Section -->
+        {% if results.generated_letter and results.generated_letter.challenges %}
         <div class="section">
-            <h2>IV. Next Steps</h2>
-            <h3>A. Recommendations</h3>
-            {% if letter.next_steps_recommendations %}
-                <ul>
-                    {% for recommendation in letter.next_steps_recommendations %}
-                        <li>{{ recommendation }}</li>
-                    {% endfor %}
-                </ul>
-            {% else %}
-                <p>No specific next steps were recommended at this time.</p>
-            {% endif %}
-
-            {% if letter.demand_letter_section and letter.demand_letter_section.is_appropriate %}
-                <h3>B. Demand Letter Recommendation</h3>
-                <p>{{ letter.demand_letter_section.reasoning | default('A demand letter is considered appropriate based on our analysis.', true) }}</p>
-                {% if letter.demand_letter_section.potential_outcomes %}
-                    <p>Remember that demand letters are not guaranteed to produce desirable results, but they are an important step in demonstrating a serious intent to resolve a dispute and can serve as a crucial piece of evidence if the dispute escalates to court proceedings. There are the following potential outcomes that you can expect from a demand letter:</p>
-                    <ul>
-                        {% for outcome in letter.demand_letter_section.potential_outcomes %}
-                            <li>{{ outcome }}</li>
-                        {% endfor %}
-                    </ul>
-                {% endif %}
-            {% endif %}
+            <h2>IV. Potential Challenges and Risks</h2>
+            <div class="challenges-section">
+                <div class="legal-content">
+                    {{ results.generated_letter.challenges | safe }}
+                </div>
+            </div>
         </div>
+        {% endif %}
 
+        <!-- Recommendations Section -->
+        {% if results.generated_letter and results.generated_letter.recommendations %}
+        <div class="section">
+            <h2>V. Recommendations</h2>
+            <div class="recommendations-section">
+                <div class="legal-content">
+                    {{ results.generated_letter.recommendations | safe }}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Next Steps Section -->
+        {% if results.generated_letter and results.generated_letter.next_steps %}
+        <div class="section">
+            <h2>VI. Next Steps</h2>
+            <div class="legal-content">
+                {{ results.generated_letter.next_steps | safe }}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Closing Paragraph Section -->
+        {% if results.generated_letter and results.generated_letter.closing_paragraph %}
+        <div class="section">
+            <div class="legal-content">
+                {{ results.generated_letter.closing_paragraph | safe }}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Footer Section -->
         <div class="footer">
-            <p>Sincerely,</p>
-            <p>{{ letter.footer.attorney_name | default('Not Available') }}</p>
-            <p>{{ letter.footer.firm_name | default('Not Available') }}</p>
-            <p>{{ letter.footer.firm_address | default('Not Available') }}</p>
-            <p>{{ letter.footer.contact_info | default('Not Available') }}</p>
+            <div class="signature-block">
+                <p>Sincerely,</p>
+                <p>{{ results.analysis.intake_analysis.attorney_name | default('[Attorney Name]') }}</p>
+                <p>[Firm Name]</p>
+                <p>[Firm Address]</p>
+                <p>[Contact Information]</p>
+            </div>
+            
+            <p style="margin-top: 30px; font-size: 12px; color: #7f8c8d;">
+                <strong>Disclaimer:</strong> This analysis is based on the documents provided and represents a preliminary assessment. 
+                Additional facts may emerge that could materially affect this analysis. This communication is confidential and 
+                subject to attorney-client privilege.
+            </p>
         </div>
     </div>
 </body>

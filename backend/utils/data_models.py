@@ -95,17 +95,14 @@ class EnhancedIntakeAnalysis(BaseModel):
         return stringify_dict(v)
 
 
-class EnhancedCaseAnalysis(BaseModel):
-    """Data model for the enhanced, structured analysis of a single case document."""
-    document_title: Optional[str] = Field(None, description="The title of the document.")
-    document_type: Optional[str] = Field(None, description="The type of document (e.g., 'Lease Agreement', 'Email Correspondence').")
-    key_entities: List[Dict[str, str]] = Field(default_factory=list, description="A list of key entities mentioned in the document, including their name and role.")
-    summary: Optional[str] = Field(None, description="A summary of the document's content.")
-    timeline_events: List[Dict[str, str]] = Field(default_factory=list, description="A list of timeline events, each with a date and description.")
-    evidence_strength: Optional[EvidenceStrength] = Field(None, description="Assessment of the evidence's strength.")
-    legal_significance: Optional[str] = Field(None, description="The legal significance of the document.")
-    relevance_to_intake: Optional[str] = Field(None, description="How the document relates to the priorities from the intake form.")
-    potential_challenges: List[str] = Field(default_factory=list, description="A list of potential challenges revealed by the document.")
+class AnalyzedDocument(BaseModel):
+    """Represents a single document's AI-driven analysis."""
+    filename: str
+    document_type: str  # e.g., 'Contract', 'Email', 'Image'
+    inferred_title: str
+    summary: str
+    key_information: str
+    relevance_to_case: str
 
 class ChallengeAssessment(BaseModel):
     """Represents a single potential legal challenge."""
@@ -131,15 +128,29 @@ class DemandLetterEvaluation(BaseModel):
     potential_outcomes: List[str] = Field(default_factory=list, description="Potential outcomes of sending a demand letter.")
     relevant_statutes: List[str] = Field(default_factory=list, description="A list of relevant statutes to cite in the demand letter.")
 
-class CombinedAnalysis(BaseModel):
+class CaseAnalysisResult(BaseModel):
     """Combined data model for enhanced intake and case analysis, including error tracking."""
     intake_analysis: Optional[EnhancedIntakeAnalysis] = None
-    case_analyses: List[EnhancedCaseAnalysis] = Field(default_factory=list)
+    analyzed_documents: List[AnalyzedDocument] = Field(default_factory=list)
     legal_assessment: Optional[LegalAssessment] = None
     demand_letter_evaluation: Optional[DemandLetterEvaluation] = None
     errors: List[AnalysisError] = Field(default_factory=list, description="A list of errors encountered during analysis.")
 
 # --- Email Generation Models ---
+
+class GeneratedLetter(BaseModel):
+    """
+    Structured model for the final separated content for the Jinja2 template.
+    This holds the professional, well-formatted legal letter content.
+    """
+    executive_summary: str = Field(..., description="Executive summary of the case and recommendations")
+    background_summary: str = Field(..., description="Background context from intake analysis")
+    analysis_and_position: str = Field(..., description="Legal analysis and position in flowing prose")
+    strengths: str = Field(..., description="Strengths of the case in sophisticated legal prose")
+    challenges: str = Field(..., description="Potential challenges and risks in legal prose")
+    recommendations: str = Field(..., description="Numbered list of recommendations as HTML")
+    next_steps: str = Field(..., description="Numbered list of next steps as HTML")
+    closing_paragraph: str = Field(..., description="Professional closing paragraph for the findings letter")
 
 class FindingsHeader(BaseModel):
     """Structured data for the email header."""
@@ -188,11 +199,12 @@ class EmailResponse(BaseModel):
 
 class CaseResults(BaseModel):
     """Top-level model for returning the complete analysis results."""
-    analysis: CombinedAnalysis = Field(default_factory=CombinedAnalysis)
+    analysis: CaseAnalysisResult = Field(default_factory=CaseAnalysisResult)
     email: Optional[EmailResponse] = None
+    generated_letter: Optional[GeneratedLetter] = None
     errors: List[AnalysisError] = Field(default_factory=list)
 
-    @field_validator('analysis', 'email', 'errors', mode='before')
+    @field_validator('analysis', 'email', 'generated_letter', 'errors', mode='before')
     def set_default(cls, v):
         return v or {}
 

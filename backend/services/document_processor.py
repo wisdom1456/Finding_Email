@@ -7,6 +7,7 @@ from ..utils.file_processors.docx_processor import process_docx
 from ..utils.file_processors.eml_processor import process_eml
 from ..utils.file_processors.txt_processor import process_txt
 import mimetypes
+from ..services.pdf_compressor import PDFCompressor
 
 # Maps file content types to their respective processing functions
 from ..utils.file_processors import PROCESSOR_MAP
@@ -16,20 +17,27 @@ class DocumentProcessor:
     A service class for processing uploaded documents.
     It identifies file types, categorizes them, and extracts content.
     """
+    def __init__(self):
+        self.pdf_compressor = PDFCompressor()
 
-    def _get_document_type(self, filename: str, intake_filename: str) -> DocumentType:
+
+    def _get_document_type(self, filename: str, intake_filenames: List[str]) -> DocumentType:
         """Determines if a file is an intake form or a general case document."""
-        if filename == intake_filename:
+        if filename in intake_filenames:
             return DocumentType.INTAKE_FORM
         return DocumentType.CASE_DOCUMENT
 
-    async def process_documents(self, files: List[SavedDocument], intake_filename: str) -> List[ProcessedDocument]:
+    async def process_documents(self, files: List[SavedDocument], intake_filenames: List[str]) -> List[ProcessedDocument]:
         """
         Asynchronously processes a list of saved files from their temporary paths.
         """
         processing_tasks = []
         for file in files:
-            doc_type = self._get_document_type(file.filename, intake_filename)
+            # Compress PDF if it's large
+            if file.filename.lower().endswith('.pdf'):
+                file = await self.pdf_compressor.compress_pdf_if_needed(file)
+
+            doc_type = self._get_document_type(file.filename, intake_filenames)
             content_type, _ = mimetypes.guess_type(file.tmp_path)
             
             processor = PROCESSOR_MAP.get(content_type)

@@ -9,10 +9,10 @@ from backend.services.ai_analyzer import AIAnalyzer
 from backend.services.email_generator import EmailGenerator
 from backend.services.task_manager import TaskManager
 from backend.utils.data_models import (
-    CombinedAnalysis,
+    CaseAnalysisResult,
     CaseResults,
     AnalysisError,
-    EnhancedCaseAnalysis,
+    AnalyzedDocument,
     DocumentType,
     SavedDocument,
 )
@@ -70,8 +70,8 @@ async def process_documents_async(
             other_docs, analysis_result.intake_analysis
         )
         for res in case_analysis_results:
-            if isinstance(res, EnhancedCaseAnalysis):
-                analysis_result.case_analyses.append(res)
+            if isinstance(res, AnalyzedDocument):
+                analysis_result.analyzed_documents.append(res)
             elif isinstance(res, AnalysisError):
                 analysis_result.errors.append(res)
 

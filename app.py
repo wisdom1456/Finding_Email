@@ -30,6 +30,10 @@ def initialize_session_state():
         st.session_state.uploaded_files = {"intake_form": None, "case_documents": []}
     if 'final_results' not in st.session_state:
         st.session_state.final_results = None
+    if 'main_letter' not in st.session_state:
+        st.session_state.main_letter = None
+    if 'appendix' not in st.session_state:
+        st.session_state.appendix = None
     if 'processing_status' not in st.session_state:
         st.session_state.processing_status = 'idle'  # idle, active, completed, failed
     if 'task_id' not in st.session_state:
@@ -44,24 +48,66 @@ def case_information_form():
     st.session_state.case_info['caseReference'] = st.sidebar.text_input("Case Reference", value=st.session_state.case_info['caseReference'])
 
 def file_upload_section():
-    """Handles the file upload section."""
-    st.header("File Upload")
-    st.session_state.uploaded_files['intake_form'] = st.file_uploader("Upload Intake Form (PDF)", type=["pdf"])
-    st.session_state.uploaded_files['case_documents'] = st.file_uploader("Upload Case Documents (PDF, DOCX, EML, TXT, JPG, PNG)", type=["pdf", "docx", "eml", "txt", "jpg", "jpeg", "png"], accept_multiple_files=True)
+    """Handles the file upload section, allowing folder uploads."""
+    st.header("Upload Case Folder")
+    uploaded_files = st.file_uploader(
+        "Select a folder or multiple files (PDF, DOCX, EML, TXT, JPG, PNG)",
+        type=["pdf", "docx", "eml", "txt", "jpg", "jpeg", "png"],
+        accept_multiple_files=True
+    )
+    if uploaded_files:
+        st.session_state.uploaded_files = uploaded_files
+
+def handle_file_uploads():
+    """
+    Identifies intake documents from uploaded files and prompts for clarification if needed.
+    Returns True if analysis can proceed, False otherwise.
+    """
+    uploaded_files = st.session_state.get('uploaded_files', [])
+    if not uploaded_files:
+        st.error("Please upload at least one document.")
+        return False
+
+    intake_docs = [f for f in uploaded_files if "intake" in f.name.lower()]
+    
+    if len(intake_docs) == 1:
+        st.session_state.intake_form = intake_docs[0]
+        st.session_state.case_documents = [f for f in uploaded_files if f != intake_docs[0]]
+        st.info(f"Automatically detected '{intake_docs[0].name}' as the intake form.")
+        return True
+    elif len(intake_docs) > 1:
+        st.warning("Multiple possible intake forms found.")
+        selected_intake_name = st.selectbox(
+            "Please select the correct intake form:",
+            [f.name for f in intake_docs]
+        )
+        st.session_state.intake_form = next(f for f in intake_docs if f.name == selected_intake_name)
+        st.session_state.case_documents = [f for f in uploaded_files if f != st.session_state.intake_form]
+        return True
+    else: # No intake docs found
+        st.warning("No intake form automatically detected.")
+        selected_intake_name = st.selectbox(
+            "Please select the intake form from the uploaded documents:",
+            [f.name for f in uploaded_files]
+        )
+        if selected_intake_name:
+            st.session_state.intake_form = next(f for f in uploaded_files if f.name == selected_intake_name)
+            st.session_state.case_documents = [f for f in uploaded_files if f != st.session_state.intake_form]
+            return True
+    return False
+
 
 def start_analysis():
     """Handles file processing with asynchronous request."""
-    intake_form = st.session_state.uploaded_files.get('intake_form')
-    case_documents = st.session_state.uploaded_files.get('case_documents')
+    intake_form = st.session_state.get('intake_form')
+    case_documents = st.session_state.get('case_documents')
 
-    if not intake_form or not case_documents:
-        st.error("Please upload both an intake form and at least one case document.")
+    if not intake_form:
+        st.error("An intake form is required to start the analysis.")
         return
 
     # Prepare files for upload
-    files = [
-        ('intake_form', (intake_form.name, intake_form.getvalue(), intake_form.type)),
-    ]
+    files = [('intake_form', (intake_form.name, intake_form.getvalue(), intake_form.type))]
     for doc in case_documents:
         files.append(('case_documents', (doc.name, doc.getvalue(), doc.type)))
 
@@ -141,6 +187,16 @@ def retrieve_and_display_results():
             
             results = response.json()
             st.session_state.final_results = results
+            
+            # Parse new two-document format
+            if isinstance(results, dict) and "main_letter" in results and "appendix" in results:
+                st.session_state.main_letter = results["main_letter"]
+                st.session_state.appendix = results["appendix"]
+            else:
+                # Fallback for legacy format
+                st.session_state.main_letter = None
+                st.session_state.appendix = None
+            
             st.session_state.processing_status = 'completed'
 
         except requests.exceptions.RequestException as e:
@@ -154,41 +210,81 @@ def results_display_section():
     """Displays the final results and download links."""
     if st.session_state.final_results:
         st.header("Results")
-        results = st.session_state.final_results
         
-        # Display analysis findings
-        if results.get("analysis") and results["analysis"].get("findings_html"):
-            st.subheader("Findings")
-            st.markdown(results["analysis"]["findings_html"], unsafe_allow_html=True)
-
-        # Display case analysis text
-        if results.get("email") and results["email"].get("case_analysis_text"):
-            st.subheader("Case Analysis")
-            st.text_area("Analysis", value=results["email"]["case_analysis_text"], height=400)
-
-        # Display download options
-        if results.get("email") and results["email"].get("download_links"):
+        # Check if we have the new two-document format
+        if st.session_state.main_letter and st.session_state.appendix:
+            # Display the main findings letter inline
+            st.subheader("Findings Letter")
+            st.markdown(st.session_state.main_letter, unsafe_allow_html=True)
+            
+            # Provide separate download buttons for both documents
             st.subheader("Download Options")
-            for link in results["email"]["download_links"]:
-                file_name = link.get("file_name", "download")
-                data_url = link.get("url", "")
-                
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                # Download button for main findings letter
                 try:
-                    mime_type, base64_data = data_url.split(",", 1)
-                    file_content = base64.b64decode(base64_data)
-                    
-                    if file_name.endswith(".eml"):
-                        label = "Download Findings Letter (.eml)"
-                        mime = "message/rfc822"
-                    elif file_name.endswith(".txt"):
-                        label = "Download Case Analysis (.txt)"
-                        mime = "text/plain"
-                    else:
-                        label = f"Download {file_name}"
-                        mime = "application/octet-stream"
-                    st.download_button(label=label, data=file_content, file_name=file_name, mime=mime)
+                    main_letter_bytes = st.session_state.main_letter.encode('utf-8')
+                    st.download_button(
+                        label="Download Findings Letter",
+                        data=main_letter_bytes,
+                        file_name="Findings Letter.eml",
+                        mime="message/rfc822"
+                    )
                 except Exception as e:
-                    st.error(f"Error processing download link for {file_name}: {e}")
+                    st.error(f"Error creating findings letter download: {e}")
+            
+            with col2:
+                # Download button for document appendix
+                try:
+                    appendix_bytes = st.session_state.appendix.encode('utf-8')
+                    st.download_button(
+                        label="Download Document Appendix",
+                        data=appendix_bytes,
+                        file_name="Document Appendix.eml",
+                        mime="message/rfc822"
+                    )
+                except Exception as e:
+                    st.error(f"Error creating appendix download: {e}")
+                    
+        else:
+            # Fallback: Display legacy format if new format is not available
+            results = st.session_state.final_results
+            
+            # Display analysis findings
+            if results.get("analysis") and results["analysis"].get("findings_html"):
+                st.subheader("Findings")
+                st.markdown(results["analysis"]["findings_html"], unsafe_allow_html=True)
+
+            # Display case analysis text
+            if results.get("email") and results["email"].get("case_analysis_text"):
+                st.subheader("Case Analysis")
+                st.text_area("Analysis", value=results["email"]["case_analysis_text"], height=400)
+
+            # Display download options
+            if results.get("email") and results["email"].get("download_links"):
+                st.subheader("Download Options")
+                for link in results["email"]["download_links"]:
+                    file_name = link.get("file_name", "download")
+                    data_url = link.get("url", "")
+                    
+                    try:
+                        mime_type, base64_data = data_url.split(",", 1)
+                        file_content = base64.b64decode(base64_data)
+                        
+                        if file_name.endswith(".eml"):
+                            label = "Download Findings Letter (.eml)"
+                            mime = "message/rfc822"
+                        elif file_name.endswith(".txt"):
+                            label = "Download Case Analysis (.txt)"
+                            mime = "text/plain"
+                        else:
+                            label = f"Download {file_name}"
+                            mime = "application/octet-stream"
+                        st.download_button(label=label, data=file_content, file_name=file_name, mime=mime)
+                    except Exception as e:
+                        st.error(f"Error processing download link for {file_name}: {e}")
 
 # --- Main Application ---
 def main():
@@ -206,8 +302,11 @@ def main():
     with tab1:
         if st.session_state.processing_status in ['idle', 'failed', 'completed']:
             file_upload_section()
-            if st.button("Start Analysis"):
-                start_analysis()
+            
+            if st.session_state.get('uploaded_files'):
+                if handle_file_uploads():
+                    if st.button("Start Analysis"):
+                        start_analysis()
         
         if st.session_state.processing_status == 'active':
             monitor_progress()

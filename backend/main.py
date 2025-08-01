@@ -55,20 +55,22 @@ def get_doc_processor():
 )
 async def start_analysis(
     background_tasks: BackgroundTasks,
-    intake_form: UploadFile = File(...),
+    intake_form: List[UploadFile] = File(...),
     case_documents: List[UploadFile] = File(...),
     client: OpenAI = Depends(get_openai_client),
     doc_processor: DocumentProcessor = Depends(get_doc_processor),
 ):
     """
     Initializes a background task for document analysis and immediately returns a task ID.
+    Accepts multiple intake forms and case documents.
     """
     task_id = task_manager.create_task()
     temp_dir = tempfile.mkdtemp()
     
     saved_documents = []
-    all_files = [intake_form] + case_documents
-    
+    all_files = intake_form + case_documents
+    intake_filenames = [f.filename for f in intake_form]
+
     for upload_file in all_files:
         try:
             temp_file_path = os.path.join(temp_dir, upload_file.filename)
@@ -76,8 +78,6 @@ async def start_analysis(
                 buffer.write(await upload_file.read())
             
             saved_doc = SavedDocument(tmp_path=temp_file_path, filename=upload_file.filename)
-            document_type = DocumentType.INTAKE_FORM if upload_file == intake_form else DocumentType.CASE_DOCUMENT
-            # Logic to pass document_type might need adjustment based on final async_processor implementation
             saved_documents.append(saved_doc)
         finally:
             await upload_file.close()
@@ -90,7 +90,7 @@ async def start_analysis(
         doc_processor=doc_processor,
         task_manager=task_manager,
         temp_dir_path=temp_dir,
-        intake_filename=intake_form.filename
+        intake_filename=intake_filenames[0] if intake_filenames else None
     )
     return TaskInitResponse(task_id=task_id)
 
@@ -113,15 +113,15 @@ async def get_analysis_status(task_id: str):
 
 @app.get(
     "/api/v1/analysis/results/{task_id}",
-    response_model=CaseResults,
     tags=["Asynchronous Analysis"],
     summary="Get the results of a completed analysis task",
 )
-async def get_analysis_results(task_id: str):
+async def get_analysis_results(task_id: str, client: OpenAI = Depends(get_openai_client)):
     """
-    Retrieves the results of a completed analysis task.
+    Retrieves the results of a completed analysis task and returns two separate HTML documents.
     
     If the task is still processing or has failed, this will return an error.
+    Returns JSON response containing main_letter and appendix HTML content.
     """
     status = task_manager.get_task_status(task_id)
     if not status:
@@ -136,7 +136,15 @@ async def get_analysis_results(task_id: str):
         raise HTTPException(
             status_code=404, detail="Result not found for completed task"
         )
-    return result
+    
+    # Generate the two-document output
+    email_generator = EmailGenerator(client)
+    html_documents = email_generator.generate_email_and_analysis_docs(result.analysis)
+    
+    return {
+        "main_letter": html_documents["main_letter"],
+        "appendix": html_documents["appendix"]
+    }
 
 @app.post(
     "/api/v1/analysis/full-pipeline",
@@ -145,7 +153,7 @@ async def get_analysis_results(task_id: str):
     deprecated=True,
 )
 async def run_full_analysis_pipeline(
-    intake_form: UploadFile = File(...),
+    intake_form: List[UploadFile] = File(...),
     case_documents: List[UploadFile] = File(...),
     client: OpenAI = Depends(get_openai_client),
     doc_processor: DocumentProcessor = Depends(get_doc_processor)
@@ -182,8 +190,8 @@ async def run_full_analysis_pipeline(
     case_analysis_results = await ai_analyzer.analyze_case_documents(other_docs, analysis_result.intake_analysis)
     
     for res in case_analysis_results:
-        if isinstance(res, EnhancedCaseAnalysis):
-            analysis_result.case_analyses.append(res)
+        if isinstance(res, AnalyzedDocument):
+            analysis_result.analyzed_documents.append(res)
         elif isinstance(res, AnalysisError):
             analysis_result.errors.append(res)
 

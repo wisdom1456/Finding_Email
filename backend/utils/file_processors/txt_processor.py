@@ -1,18 +1,21 @@
-from fastapi import UploadFile
-from ..data_models import ProcessedDocument, DocumentType, FileType
+from ..data_models import ProcessedDocument, DocumentType, FileType, SavedDocument
+import mimetypes
 
-async def process_txt(file: UploadFile, document_type: DocumentType) -> ProcessedDocument:
+async def process_txt(file_path: str, document_type: DocumentType, original_filename: str) -> ProcessedDocument:
     """
-    Processes a TXT file by reading its content.
+    Processes a TXT file by reading its content from a given path.
     """
-    print(f"Processing TXT: {file.filename}")
+    print(f"Processing TXT: {original_filename}")
     
-    content = await file.read()
+    with open(file_path, "r", encoding="utf-8") as f:
+        content = f.read()
+        
+    content_type, _ = mimetypes.guess_type(file_path)
     
     return ProcessedDocument(
-        file_name=file.filename,
-        content_type=file.content_type,
-        content=content.decode('utf-8'),
+        file_name=original_filename,
+        content=content,
         document_type=document_type,
-        file_type=FileType.TXT
+        file_type=FileType.TXT,
+        metadata={'content_type': content_type}
     )

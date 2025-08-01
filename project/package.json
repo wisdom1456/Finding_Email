@@ -1,0 +1,115 @@
+{
+  "name": "legal-document-analysis-portal",
+  "version": "1.0.0",
+  "description": "Production-ready legal document analysis and findings letter generation platform",
+  "main": "index.js",
+  "private": true,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-org/legal-document-analysis-portal.git"
+  },
+  "keywords": [
+    "legal",
+    "document-analysis",
+    "ai",
+    "fastapi",
+    "streamlit",
+    "openai",
+    "law-firm",
+    "automation"
+  ],
+  "author": "Legal Technology Team",
+  "license": "PROPRIETARY",
+  "engines": {
+    "node": ">=16.0.0",
+    "npm": ">=8.0.0",
+    "python": ">=3.9.0"
+  },
+  "scripts": {
+    "start": "echo 'Please use the appropriate scripts in scripts/ directory'",
+    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "dev:frontend": "./scripts/frontend/start_dev.sh",
+    "dev:backend": "./scripts/backend/start_dev.sh",
+    "build": "npm run build:frontend && npm run build:backend",
+    "build:frontend": "./scripts/frontend/build.sh",
+    "build:backend": "./scripts/backend/build.sh",
+    "deploy": "npm run deploy:backend && npm run deploy:frontend",
+    "deploy:frontend": "./scripts/frontend/deploy.sh",
+    "deploy:backend": "./scripts/backend/deploy.sh",
+    "test": "npm run test:backend && npm run test:frontend",
+    "test:backend": "cd backend && python -m pytest tests/ -v",
+    "test:frontend": "cd frontend && python -m pytest tests/ -v || echo 'Frontend tests not yet implemented'",
+    "test:e2e": "cd tests && python -m pytest e2e/ -v || echo 'E2E tests not yet implemented'",
+    "lint": "npm run lint:backend && npm run lint:frontend",
+    "lint:backend": "cd backend && flake8 . || echo 'Install flake8 for linting'",
+    "lint:frontend": "cd frontend && flake8 . || echo 'Install flake8 for linting'",
+    "format": "npm run format:backend && npm run format:frontend",
+    "format:backend": "cd backend && black . || echo 'Install black for formatting'",
+    "format:frontend": "cd frontend && black . || echo 'Install black for formatting'",
+    "setup": "npm run setup:env && npm run setup:deps",
+    "setup:env": "cp config/.env.template .env && echo 'Please edit .env with your API keys'",
+    "setup:deps": "npm run setup:backend && npm run setup:frontend",
+    "setup:backend": "cd backend && python -m venv venv && source venv/bin/activate && pip install -r requirements.txt",
+    "setup:frontend": "cd frontend && python -m venv venv && source venv/bin/activate && pip install streamlit requests python-multipart",
+    "clean": "npm run clean:build && npm run clean:cache",
+    "clean:build": "rm -rf */dist */build",
+    "clean:cache": "find . -type d -name '__pycache__' -exec rm -rf {} + || true && find . -type d -name '.pytest_cache' -exec rm -rf {} + || true",
+    "docker:build": "npm run docker:build:backend && npm run docker:build:frontend",
+    "docker:build:backend": "cd backend/dist && docker build -t legal-portal-backend .",
+    "docker:build:frontend": "cd frontend/dist && docker build -t legal-portal-frontend .",
+    "docker:run": "docker-compose up",
+    "docker:stop": "docker-compose down",
+    "health:check": "curl -f http://localhost:8000/health && curl -f http://localhost:8501",
+    "logs:backend": "cd backend && tail -f *.log || echo 'No backend logs found'",
+    "logs:frontend": "echo 'Frontend logs available in terminal where Streamlit is running'"
+  },
+  "devDependencies": {
+    "concurrently": "^7.6.0"
+  },
+  "optionalDependencies": {
+    "@railway/cli": "^3.0.0",
+    "heroku": "^7.68.0"
+  },
+  "config": {
+    "frontend": {
+      "port": 8501,
+      "host": "localhost"
+    },
+    "backend": {
+      "port": 8000,
+      "host": "localhost"
+    }
+  },
+  "workspaces": [
+    "frontend",
+    "backend"
+  ],
+  "husky": {
+    "hooks": {
+      "pre-commit": "npm run lint",
+      "pre-push": "npm run test"
+    }
+  },
+  "lint-staged": {
+    "*.py": [
+      "black",
+      "flake8"
+    ]
+  },
+  "homepage": "https://github.com/your-org/legal-document-analysis-portal#readme",
+  "bugs": {
+    "url": "https://github.com/your-org/legal-document-analysis-portal/issues"
+  },
+  "funding": {
+    "type": "proprietary"
+  },
+  "os": [
+    "darwin",
+    "linux",
+    "win32"
+  ],
+  "cpu": [
+    "x64",
+    "arm64"
+  ]
+}

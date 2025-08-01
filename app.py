@@ -1,10 +1,25 @@
 import streamlit as st
 import requests
 import json
+import os
+import time
+import base64
 from typing import List, Dict, Any
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 # --- Configuration ---
-BACKEND_URL = "http://localhost:8000/api"
+BACKEND_URL = os.getenv('BACKEND_API_URL', 'http://localhost:8000')
+API_TIMEOUT = 600  # 10 minutes for large document processing
+POLLING_INTERVAL = 5 # 5 seconds
+
+# --- API Endpoints ---
+START_ANALYSIS_ENDPOINT = f"{BACKEND_URL}/api/v1/analysis/start-analysis"
+STATUS_ENDPOINT = f"{BACKEND_URL}/api/v1/analysis/status"
+RESULTS_ENDPOINT = f"{BACKEND_URL}/api/v1/analysis/results"
+
 
 # --- Session State Initialization ---
 def initialize_session_state():
@@ -15,6 +30,10 @@ def initialize_session_state():
         st.session_state.uploaded_files = {"intake_form": None, "case_documents": []}
     if 'final_results' not in st.session_state:
         st.session_state.final_results = None
+    if 'processing_status' not in st.session_state:
+        st.session_state.processing_status = 'idle'  # idle, active, completed, failed
+    if 'task_id' not in st.session_state:
+        st.session_state.task_id = None
 
 # --- UI Components ---
 def case_information_form():
@@ -30,8 +49,8 @@ def file_upload_section():
     st.session_state.uploaded_files['intake_form'] = st.file_uploader("Upload Intake Form (PDF)", type=["pdf"])
     st.session_state.uploaded_files['case_documents'] = st.file_uploader("Upload Case Documents (PDF, DOCX, EML, TXT, JPG, PNG)", type=["pdf", "docx", "eml", "txt", "jpg", "jpeg", "png"], accept_multiple_files=True)
 
-def process_documents():
-    """Handles file processing with synchronous request."""
+def start_analysis():
+    """Handles file processing with asynchronous request."""
     intake_form = st.session_state.uploaded_files.get('intake_form')
     case_documents = st.session_state.uploaded_files.get('case_documents')
 
@@ -45,29 +64,91 @@ def process_documents():
     ]
     for doc in case_documents:
         files.append(('case_documents', (doc.name, doc.getvalue(), doc.type)))
-    
-    # Show processing status
-    with st.spinner("Processing documents... This may take a few minutes."):
+
+    try:
+        response = requests.post(
+            START_ANALYSIS_ENDPOINT,
+            files=files,
+            timeout=API_TIMEOUT
+        )
+        response.raise_for_status()
+        
+        result = response.json()
+        st.session_state.task_id = result.get("task_id")
+        st.session_state.processing_status = 'active'
+        st.rerun()
+
+    except requests.exceptions.RequestException as e:
+        st.error(f"An error occurred during processing: {e}")
+    except json.JSONDecodeError as e:
+        st.error(f"Error parsing response: {e}")
+
+def monitor_progress():
+    """Polls for progress and updates the UI."""
+    if st.session_state.task_id:
+        st.info("Analysis in progress...")
+        
+        progress_bar = st.progress(0)
+        status_text = st.empty()
+        doc_progress_text = st.empty()
+
+        while st.session_state.processing_status == 'active':
+            try:
+                status_url = f"{STATUS_ENDPOINT}/{st.session_state.task_id}"
+                response = requests.get(status_url, timeout=API_TIMEOUT)
+                response.raise_for_status()
+                status_data = response.json()
+
+                progress = status_data.get("progress", 0)
+                status = status_data.get("status", "processing")
+                
+                progress_bar.progress(progress / 100.0)
+                status_text.text(f"Status: {status.capitalize()}")
+
+                if status in ["pending", "processing"]:
+                    total_docs = status_data.get("total_documents", 0)
+                    current_doc = status_data.get("current_document", 0)
+                    doc_name = status_data.get("current_document_name", "")
+                    if total_docs > 0:
+                        doc_progress_text.text(f"Processing document {current_doc}/{total_docs}: {doc_name}")
+                
+                elif status == "completed":
+                    st.session_state.processing_status = 'completed'
+                    st.success("Analysis complete!")
+                    retrieve_and_display_results()
+                    break
+
+                elif status == "failed":
+                    st.session_state.processing_status = 'failed'
+                    error_message = status_data.get("error_message", "An unknown error occurred.")
+                    st.error(f"Analysis failed: {error_message}")
+                    break
+                
+                time.sleep(POLLING_INTERVAL)
+
+            except requests.exceptions.RequestException as e:
+                st.error(f"Error checking status: {e}")
+                st.session_state.processing_status = 'failed'
+                break
+
+def retrieve_and_display_results():
+    """Retrieves and displays the final analysis results."""
+    if st.session_state.task_id:
         try:
-            response = requests.post(
-                f"{BACKEND_URL}/v1/analysis/full-pipeline", 
-                files=files
-            )
+            results_url = f"{RESULTS_ENDPOINT}/{st.session_state.task_id}"
+            response = requests.get(results_url, timeout=API_TIMEOUT)
             response.raise_for_status()
             
-            # Parse the response
-            result = response.json()
-            
-            # Store results in session state
-            st.session_state.final_results = result
-            
-            st.success("Documents processed successfully!")
-            st.rerun()
+            results = response.json()
+            st.session_state.final_results = results
+            st.session_state.processing_status = 'completed'
 
         except requests.exceptions.RequestException as e:
-            st.error(f"An error occurred during processing: {e}")
+            st.error(f"Failed to retrieve results: {e}")
+            st.session_state.processing_status = 'failed'
         except json.JSONDecodeError as e:
-            st.error(f"Error parsing response: {e}")
+            st.error(f"Error parsing results: {e}")
+
 
 def results_display_section():
     """Displays the final results and download links."""
@@ -85,28 +166,29 @@ def results_display_section():
             st.subheader("Case Analysis")
             st.text_area("Analysis", value=results["email"]["case_analysis_text"], height=400)
 
-        # Display download options if available
-        if results.get("email"):
-            email_data = results["email"]
-            if email_data.get("eml_content"):
-                st.subheader("Download Options")
+        # Display download options
+        if results.get("email") and results["email"].get("download_links"):
+            st.subheader("Download Options")
+            for link in results["email"]["download_links"]:
+                file_name = link.get("file_name", "download")
+                data_url = link.get("url", "")
                 
-                # Email file download
-                st.download_button(
-                    label="Download Findings Letter (.eml)",
-                    data=email_data["eml_content"],
-                    file_name=f"findings_letter_{results.get('case_id', 'case')}.eml",
-                    mime="message/rfc822"
-                )
-                
-                # Text file download
-                if email_data.get("case_analysis_text"):
-                    st.download_button(
-                        label="Download Case Analysis (.txt)",
-                        data=email_data["case_analysis_text"],
-                        file_name=f"case_analysis_{results.get('case_id', 'case')}.txt",
-                        mime="text/plain"
-                    )
+                try:
+                    mime_type, base64_data = data_url.split(",", 1)
+                    file_content = base64.b64decode(base64_data)
+                    
+                    if file_name.endswith(".eml"):
+                        label = "Download Findings Letter (.eml)"
+                        mime = "message/rfc822"
+                    elif file_name.endswith(".txt"):
+                        label = "Download Case Analysis (.txt)"
+                        mime = "text/plain"
+                    else:
+                        label = f"Download {file_name}"
+                        mime = "application/octet-stream"
+                    st.download_button(label=label, data=file_content, file_name=file_name, mime=mime)
+                except Exception as e:
+                    st.error(f"Error processing download link for {file_name}: {e}")
 
 # --- Main Application ---
 def main():
@@ -119,19 +201,22 @@ def main():
     
     case_information_form()
     
-    # Simple tab interface
-    tab1, tab2 = st.tabs(["File Upload", "Results"])
+    tab1, tab2 = st.tabs(["Upload & Process", "Results"])
     
     with tab1:
-        file_upload_section()
-        if st.button("Process Documents"):
-            process_documents()
+        if st.session_state.processing_status in ['idle', 'failed', 'completed']:
+            file_upload_section()
+            if st.button("Start Analysis"):
+                start_analysis()
+        
+        if st.session_state.processing_status == 'active':
+            monitor_progress()
 
     with tab2:
         if st.session_state.final_results:
             results_display_section()
         else:
-            st.info("No results available. Please upload and process documents first.")
+            st.info("No results available. Please upload documents and start the analysis first.")
 
 if __name__ == "__main__":
     main()

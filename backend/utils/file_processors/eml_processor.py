@@ -1,18 +1,17 @@
-from fastapi import UploadFile
-from ..data_models import ProcessedDocument, DocumentType, FileType
+from ..data_models import ProcessedDocument, DocumentType, FileType, SavedDocument
 import email
 from email import policy
 from email.parser import BytesParser
+import mimetypes
 
-async def process_eml(file: UploadFile, document_type: DocumentType) -> ProcessedDocument:
+async def process_eml(file_path: str, document_type: DocumentType, original_filename: str) -> ProcessedDocument:
     """
-    Processes an EML file by extracting its headers and body content.
+    Processes an EML file by extracting its headers and body content from a given path.
     """
-    print(f"Processing EML: {file.filename}")
+    print(f"Processing EML: {original_filename}")
     
-    content = await file.read()
-    
-    msg = BytesParser(policy=policy.default).parsebytes(content)
+    with open(file_path, "rb") as f:
+        msg = BytesParser(policy=policy.default).parse(f)
     
     body = ""
     if msg.is_multipart():
@@ -25,11 +24,13 @@ async def process_eml(file: UploadFile, document_type: DocumentType) -> Processe
         body = msg.get_payload(decode=True).decode(msg.get_content_charset() or 'utf-8')
 
     full_text = f"Subject: {msg['subject']}\nFrom: {msg['from']}\nTo: {msg['to']}\nDate: {msg['date']}\n\n{body}"
+    
+    content_type, _ = mimetypes.guess_type(file_path)
 
     return ProcessedDocument(
-        file_name=file.filename,
-        content_type=file.content_type,
+        file_name=original_filename,
         content=full_text,
         document_type=document_type,
-        file_type=FileType.EML
+        file_type=FileType.EML,
+        metadata={'content_type': content_type}
     )

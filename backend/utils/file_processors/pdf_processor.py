@@ -1,29 +1,29 @@
 import fitz  # PyMuPDF
-from fastapi import UploadFile
-from ..data_models import ProcessedDocument, DocumentType, FileType
+from ..data_models import ProcessedDocument, DocumentType, FileType, SavedDocument
+import mimetypes
 
-async def process_pdf(file: UploadFile, document_type: DocumentType) -> ProcessedDocument:
+async def process_pdf(file_path: str, document_type: DocumentType, original_filename: str) -> ProcessedDocument:
     """
-    Processes a PDF file by extracting its text content using PyMuPDF.
+    Processes a PDF file by extracting its text content using PyMuPDF from a given path.
     """
-    print(f"Processing PDF: {file.filename}")
+    print(f"Processing PDF: {original_filename}")
     
-    content = await file.read()
     text_content = ""
     
     try:
-        with fitz.open(stream=content, filetype="pdf") as doc:
+        with fitz.open(file_path) as doc:
             for page in doc:
                 text_content += page.get_text()
     except Exception as e:
-        print(f"Error processing PDF {file.filename}: {e}")
-        # Return a processed file with an error message in content
-        text_content = f"Error extracting text from {file.filename}."
+        print(f"Error processing PDF {original_filename}: {e}")
+        text_content = f"Error extracting text from {original_filename}."
+
+    content_type, _ = mimetypes.guess_type(file_path)
 
     return ProcessedDocument(
-        file_name=file.filename,
-        content_type=file.content_type,
+        file_name=original_filename,
         content=text_content,
         document_type=document_type,
         file_type=FileType.PDF,
+        metadata={'content_type': content_type}
     )

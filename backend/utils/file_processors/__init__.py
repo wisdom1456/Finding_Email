@@ -1,6 +1,5 @@
 from typing import Dict, Callable, Awaitable, Optional
-from fastapi import UploadFile
-from ..data_models import DocumentType, ProcessedDocument, FileType
+from ..data_models import DocumentType, ProcessedDocument, FileType, SavedDocument
 from .pdf_processor import process_pdf
 from .docx_processor import process_docx
 from .eml_processor import process_eml
@@ -8,7 +7,7 @@ from .txt_processor import process_txt
 from .image_processor import process_image
 
 # Type alias for processor functions
-Processor = Callable[[UploadFile, DocumentType], Awaitable[ProcessedDocument]]
+Processor = Callable[[str, DocumentType, str], Awaitable[ProcessedDocument]]
 
 # Map FileType enum to processor functions
 PROCESSOR_MAP: Dict[str, Processor] = {
@@ -19,10 +18,13 @@ PROCESSOR_MAP: Dict[str, Processor] = {
     "text/plain": process_txt,
     "image/jpeg": process_image,
     "image/png": process_image,
+    "image/gif": process_image,
+    "image/bmp": process_image,
+    "image/tiff": process_image,
 }
 
-def get_processor(file_type: FileType) -> Optional[Processor]:
+def get_processor(file_type: str) -> Optional[Processor]:
     """
-    Returns the appropriate processor for a given file type, or None if unsupported.
+    Returns the appropriate processor for a given file content type, or None if unsupported.
     """
     return PROCESSOR_MAP.get(file_type)

@@ -195,3 +195,7 @@ class CaseResults(BaseModel):
     @field_validator('analysis', 'email', 'errors', mode='before')
     def set_default(cls, v):
         return v or {}
+
+class SavedDocument(BaseModel):
+    tmp_path: str
+    filename: str

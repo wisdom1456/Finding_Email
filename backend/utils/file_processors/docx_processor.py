@@ -1,29 +1,28 @@
-from fastapi import UploadFile
-from ..data_models import ProcessedDocument, DocumentType, FileType
+from ..data_models import ProcessedDocument, DocumentType, FileType, SavedDocument
 import docx
 import io
+import mimetypes
 
-async def process_docx(file: UploadFile, document_type: DocumentType) -> ProcessedDocument:
+async def process_docx(file_path: str, document_type: DocumentType, original_filename: str) -> ProcessedDocument:
     """
-    Processes a DOCX file by extracting its content.
+    Processes a DOCX file by extracting its content from a given path.
     """
-    print(f"Processing DOCX: {file.filename}")
+    print(f"Processing DOCX: {original_filename}")
     
-    content = await file.read()
-    
-    # Use python-docx to read the content
     try:
-        document = docx.Document(io.BytesIO(content))
-        full_text = "\n".join([para.text for para in document.paragraphs])
+        with open(file_path, "rb") as f:
+            document = docx.Document(io.BytesIO(f.read()))
+            full_text = "\n".join([para.text for para in document.paragraphs])
     except Exception as e:
-        # Placeholder for docx2txt for .doc files or other fallbacks
-        print(f"Could not process {file.filename} with python-docx: {e}")
-        full_text = f"Could not extract content from {file.filename}."
+        print(f"Could not process {original_filename} with python-docx: {e}")
+        full_text = f"Could not extract content from {original_filename}."
+
+    content_type, _ = mimetypes.guess_type(file_path)
 
     return ProcessedDocument(
-        file_name=file.filename,
-        content_type=file.content_type,
+        file_name=original_filename,
         content=full_text,
         document_type=document_type,
-        file_type=FileType.DOCX
+        file_type=FileType.DOCX,
+        metadata={'content_type': content_type}
     )

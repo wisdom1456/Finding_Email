@@ -16,3 +16,5 @@ Pillow
 tenacity
 pytesseract>=0.3.10
 sseclient-py
+pyth
+PyYAML

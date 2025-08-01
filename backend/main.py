@@ -21,6 +21,7 @@ from backend.utils.data_models import (
     AnalysisError,
     DocumentType,
     SavedDocument,
+    AnalyzedDocument,
 )
 from backend.utils.async_models import TaskInitResponse, TaskStatusResponse
 
@@ -113,15 +114,16 @@ async def get_analysis_status(task_id: str):
 
 @app.get(
     "/api/v1/analysis/results/{task_id}",
+    response_model=CaseResults,
     tags=["Asynchronous Analysis"],
     summary="Get the results of a completed analysis task",
 )
 async def get_analysis_results(task_id: str, client: OpenAI = Depends(get_openai_client)):
     """
-    Retrieves the results of a completed analysis task and returns two separate HTML documents.
+    Retrieves the results of a completed analysis task.
     
     If the task is still processing or has failed, this will return an error.
-    Returns JSON response containing main_letter and appendix HTML content.
+    Returns the final `CaseResults` object.
     """
     status = task_manager.get_task_status(task_id)
     if not status:
@@ -136,15 +138,7 @@ async def get_analysis_results(task_id: str, client: OpenAI = Depends(get_openai
         raise HTTPException(
             status_code=404, detail="Result not found for completed task"
         )
-    
-    # Generate the two-document output
-    email_generator = EmailGenerator(client)
-    html_documents = email_generator.generate_email_and_analysis_docs(result.analysis)
-    
-    return {
-        "main_letter": html_documents["main_letter"],
-        "appendix": html_documents["appendix"]
-    }
+    return result
 
 @app.post(
     "/api/v1/analysis/full-pipeline",
@@ -170,9 +164,30 @@ async def run_full_analysis_pipeline(
     ai_analyzer = AIAnalyzer(client, doc_processor)
     email_generator = EmailGenerator(client)
     
-    # 1. Process all documents first
-    all_files = [intake_form] + case_documents
-    processed_docs = await doc_processor.process_documents(all_files)
+    # 1. Save all uploaded files to temp files and wrap as SavedDocument
+    import tempfile
+    import os
+    from backend.utils.data_models import SavedDocument
+
+    temp_dir = tempfile.mkdtemp()
+    saved_documents = []
+    all_files = intake_form + case_documents
+    intake_filenames = [f.filename for f in intake_form]
+
+    try:
+        for upload_file in all_files:
+            temp_file_path = os.path.join(temp_dir, upload_file.filename)
+            with open(temp_file_path, "wb") as buffer:
+                buffer.write(await upload_file.read())
+            saved_doc = SavedDocument(tmp_path=temp_file_path, filename=upload_file.filename)
+            saved_documents.append(saved_doc)
+            await upload_file.close()
+
+        processed_docs = await doc_processor.process_documents(saved_documents, intake_filenames)
+    finally:
+        # Optionally, clean up temp_dir after processing
+        import shutil
+        shutil.rmtree(temp_dir, ignore_errors=True)
 
     intake_doc = next((doc for doc in processed_docs if doc.document_type == DocumentType.INTAKE_FORM), None)
     other_docs = [doc for doc in processed_docs if doc.document_type == DocumentType.CASE_DOCUMENT]
@@ -199,6 +214,22 @@ async def run_full_analysis_pipeline(
     final_analysis = await ai_analyzer.perform_final_assessment(analysis_result)
 
     # 5. Generate email and analysis documents
-    email_response = email_generator.generate_email_and_analysis_docs(final_analysis)
+    # First generate the structured letter
+    generated_letter = email_generator.generate_findings(final_analysis)
+    print(f"DEBUG: generated_letter type: {type(generated_letter)}, value: {generated_letter}")
 
-    return CaseResults(analysis=final_analysis, email=email_response)
+    # Then use the legacy method to get EmailResponse with download links
+    email_response = email_generator.generate_email_and_analysis_docs_legacy(final_analysis)
+    print(f"DEBUG: email_response type: {type(email_response)}, value: {email_response}")
+
+    # Correctly populate the CaseResults object
+    final_results = CaseResults(
+        analysis=final_analysis,
+        email=email_response,
+        generated_letter=generated_letter,
+        errors=final_analysis.errors
+    )
+
+    print(f"DEBUG: final_results: {final_results}")
+
+    return final_results

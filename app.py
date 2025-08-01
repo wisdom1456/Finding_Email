@@ -27,7 +27,11 @@ def initialize_session_state():
     if 'case_info' not in st.session_state:
         st.session_state.case_info = {"clientName": "", "attorneyName": "", "caseReference": ""}
     if 'uploaded_files' not in st.session_state:
-        st.session_state.uploaded_files = {"intake_form": None, "case_documents": []}
+        st.session_state.uploaded_files = []
+    if 'intake_form' not in st.session_state:
+        st.session_state.intake_form = None
+    if 'case_documents' not in st.session_state:
+        st.session_state.case_documents = []
     if 'final_results' not in st.session_state:
         st.session_state.final_results = None
     if 'main_letter' not in st.session_state:
@@ -187,7 +191,14 @@ def retrieve_and_display_results():
             
             results = response.json()
             st.session_state.final_results = results
-            
+
+            # DEBUG LOGGING: Show raw API response and keys
+            st.info("DEBUG: Raw API response from backend:")
+            st.json(results)
+            st.write("Top-level keys:", list(results.keys()))
+            if "generated_letter" in results:
+                st.write("generated_letter keys:", list(results["generated_letter"].keys()) if isinstance(results["generated_letter"], dict) else type(results["generated_letter"]))
+
             # Parse new two-document format
             if isinstance(results, dict) and "main_letter" in results and "appendix" in results:
                 st.session_state.main_letter = results["main_letter"]
@@ -196,7 +207,7 @@ def retrieve_and_display_results():
                 # Fallback for legacy format
                 st.session_state.main_letter = None
                 st.session_state.appendix = None
-            
+
             st.session_state.processing_status = 'completed'
 
         except requests.exceptions.RequestException as e:

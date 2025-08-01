@@ -116,8 +116,8 @@ class LegalAssessment(BaseModel):
     case_type: Optional[str] = Field(None, description="The overall determined case type.")
     claim_viability: Optional[str] = Field(None, description="An assessment of the viability of the legal claim.")
     overall_evidence_strength: Optional[EvidenceStrength] = Field(None, description="The combined strength of all evidence.")
-    potential_challenges: List[ChallengeAssessment] = Field(default_factory=list, description="A list of all identified potential challenges.")
-    recommended_actions: List[str] = Field(default_factory=list, description="A list of recommended next steps for the case.")
+    potential_challenges: Union[List[ChallengeAssessment], str] = Field(default_factory=list, description="A list of all identified potential challenges.")
+    recommended_actions: Union[List[str], str] = Field(default_factory=list, description="A list of recommended next steps for the case.")
     demand_letter_appropriate: Optional[bool] = Field(None, description="Whether sending a demand letter is appropriate.")
     urgency_assessment: Optional[str] = Field(None, description="The overall assessment of the case's urgency.")
 

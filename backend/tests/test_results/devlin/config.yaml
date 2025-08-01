@@ -1,0 +1,47 @@
+# Configuration for Contractor Dispute Cases
+client_name: "Erik Devlin"
+case_type: "Contractor Dispute"
+api_url: "http://127.0.0.1:8000/api/v1/analysis/full-pipeline"
+
+# --- File Handling ---
+input_dir: "input"
+output_dir: "output"
+reference_dir: "reference"
+supported_extensions:
+  - ".pdf"
+  - ".docx"
+  - ".txt"
+  - ".eml"
+  - ".jpg"
+  - ".jpeg"
+  - ".png"
+video_extensions:
+  - ".mov"
+  - ".mp4"
+  - ".avi"
+intake_patterns:
+  - "Intake for Contractor Dispute"
+  - "intake"
+
+# --- Validation Rules ---
+validation:
+  document_intake:
+    enabled: true
+  email_comparison:
+    enabled: true
+    reference_file: "reference_email.rtf"
+    min_substance_score: 0.75
+    min_structure_score: 0.8
+  ai_analysis:
+    enabled: true
+    required_sections:
+      - "case_analyses"
+      - "legal_assessment"
+      - "recommendations"
+
+# --- Scoring Weights ---
+scoring:
+  substance: 0.5
+  structure: 0.3
+  style: 0.1
+  tone: 0.1

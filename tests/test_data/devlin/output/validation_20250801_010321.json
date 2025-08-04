@@ -1,0 +1,34 @@
+{
+  "overall_status": "FAIL",
+  "checks": [
+    {
+      "check": "Document Intake",
+      "status": "FAIL",
+      "details": [
+        "Missing 'intake_analysis' section."
+      ]
+    },
+    {
+      "check": "AI Analysis",
+      "status": "FAIL",
+      "details": [
+        "Missing 'analysis' section."
+      ]
+    },
+    {
+      "check": "File Generation",
+      "status": "FAIL",
+      "details": [
+        "Missing 'download_links'.",
+        "Missing 'case_analysis_text'."
+      ]
+    },
+    {
+      "check": "Email Comparison",
+      "status": "FAIL",
+      "details": [
+        "No generated email content to compare."
+      ]
+    }
+  ]
+}

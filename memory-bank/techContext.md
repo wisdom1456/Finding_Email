@@ -2,7 +2,7 @@
 
 ## Development Environment
 
-### New Streamlit/FastAPI Stack
+### Unified Streamlit-Python Stack
 
 #### Frontend Technology
 - **Framework**: Streamlit - Python-based web framework for rapid application development
@@ -11,30 +11,40 @@
 - **Session Management**: Built-in Streamlit session state management
 
 #### Backend Technology
-- **Framework**: FastAPI - Modern, fast web framework for building APIs with Python
-- **Language**: Python 3.12+ with async/await support
-- **API Documentation**: Automatic OpenAPI/Swagger documentation generation
-- **Validation**: Pydantic models for request/response validation
-- **ASGI Server**: Uvicorn for production-ready async server
+- **Architecture**: Direct Python modules integrated with Streamlit application
+- **Language**: Python 3.12+ with standard library and third-party modules
+- **Data Models**: Pydantic models for data validation and structure
+- **Processing**: Direct function calls for immediate processing and response
 
-#### Key Dependencies (New Stack)
+#### Key Dependencies (Unified Stack)
 ```python
-# Backend (FastAPI)
-fastapi>=0.104.1          # Modern web framework
-uvicorn[standard]>=0.24.0 # ASGI server
-pydantic>=2.5.0          # Data validation
-openai>=1.3.0            # AI integration
-tenacity>=8.2.3          # Retry logic for robust API calls
-python-multipart>=0.0.6  # File upload support
-python-docx>=1.1.0       # Word document processing
-docx2txt>=0.8            # .doc file processing
-PyPDF2>=3.0.1           # PDF processing
-python-magic>=0.4.27     # File type detection
-email>=6.0.0            # Email handling
-
-# Frontend (Streamlit)
+# Frontend Framework
 streamlit>=1.28.0        # Web application framework
-streamlit-aggrid>=0.3.4  # Enhanced data grids
+
+# HTTP Client and API Integration
+requests>=2.31.0         # HTTP client for external APIs
+openai>=1.3.0           # AI integration
+
+# Configuration Management
+python-dotenv>=1.0.0    # Environment variable loading
+pydantic-settings>=2.0.0 # Settings management
+PyYAML>=6.0             # YAML configuration files
+
+# Document Processing Libraries
+python-docx>=1.1.0      # Word document processing
+docx2txt>=0.8           # .doc file processing
+PyPDF2>=3.0.1          # PDF processing
+PyMuPDF>=1.23.0         # Advanced PDF processing
+python-magic>=0.4.27    # File type detection
+weasyprint>=60.0        # HTML to PDF conversion
+pyth>=0.7.0             # RTF processing
+
+# Image Processing and OCR
+Pillow>=10.0.0          # Image processing
+pytesseract>=0.3.10     # OCR capabilities
+
+# Utility Libraries
+tenacity>=8.2.3         # Retry logic for robust API calls
 ```
 
 ### Legacy TypeScript/n8n Stack (Historical Reference)
@@ -46,57 +56,58 @@ streamlit-aggrid>=0.3.4  # Enhanced data grids
 
 ## Python Path Configuration
 
-### ModuleNotFoundError Resolution
+### Import Resolution for Unified Architecture
 
-When running the FastAPI backend using `uvicorn` from the `backend` directory, Python encounters a `ModuleNotFoundError` because the application's root directory is not in Python's system path. This prevents Python from correctly importing the `backend` module and its sub-modules.
+With the unified Streamlit-Python architecture, all modules are imported directly within the same application context. The Streamlit application can import backend logic modules using standard Python import statements without complex path manipulation.
 
-### Solution Implementation
+### Current Import Pattern
 
-The issue is resolved in `backend/main.py` with the following code that must be executed before any other imports:
+Backend logic modules are imported directly in the Streamlit application:
 
 ```python
-import sys
-import os
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Direct imports from backend_logic modules
+from backend_logic.document_processor import DocumentProcessor
+from backend_logic.ai_analyzer import AIAnalyzer
+from backend_logic.email_generator import EmailGenerator
+from utils.data_models import CaseData, CaseResults
 ```
 
-### How It Works
+### Benefits of Unified Imports
 
-This code adds the project's root directory to Python's system path by:
-1. Getting the absolute path of the current file (`backend/main.py`)
-2. Getting the parent directory (`backend/`)
-3. Getting the parent of that directory (project root `/`)
-4. Appending this root directory to `sys.path`
-
-This ensures that when `uvicorn` runs from the `backend` directory, Python can correctly resolve imports like `from backend.services import email_generator` by finding the `backend` module in the project root.
+This approach provides:
+1. **Simplified Dependencies**: No complex path resolution needed
+2. **Direct Debugging**: Full stack traces and debugging capabilities
+3. **Standard Python Patterns**: Uses conventional Python module imports
+4. **Development Efficiency**: Single application context for all logic
 
 ## File Structure
 
-### New Streamlit/FastAPI Structure
+### Current Unified Streamlit-Python Structure
 ```
 /
 ├── app.py                 # Main Streamlit application entry point
-├── backend/               # FastAPI backend services
-│   ├── main.py           # FastAPI application entry point
-│   ├── services/         # Business logic services
-│   │   ├── document_processor.py
-│   │   ├── ai_analyzer.py
-│   │   └── email_generator.py
-│   ├── utils/            # Utility modules
-│   │   ├── validators.py
-│   │   ├── data_models.py
-│   │   └── config.py
-│   ├── requirements.txt  # Python dependencies
-│   └── .env             # Environment configuration
-├── components/           # Streamlit component modules
+├── backend_logic/         # Backend business logic modules
+│   ├── document_processor.py  # Document processing and validation
+│   ├── ai_analyzer.py         # OpenAI integration and analysis
+│   ├── email_generator.py     # Email findings generation
+│   ├── quality_validator.py   # Quality assurance
+│   └── task_manager.py        # Task coordination
+├── components/            # Streamlit component modules
 │   ├── file_uploader.py
 │   ├── progress_tracker.py
 │   └── results_display.py
+├── utils/                # Utility modules
+│   ├── data_models.py    # Pydantic data models
+│   ├── validators.py     # Input validation
+│   └── file_processors/  # Format-specific processors
+├── tests/                # Unified test framework
+│   ├── test_*.py         # Direct function tests
+│   └── utils/            # Testing utilities
 ├── assets/              # Static assets and templates
-│   ├── styles.css
-│   └── templates/
+│   └── templates/        # Email templates
 ├── memory-bank/         # Project documentation
-└── samples/            # Sample documents for testing
+├── samples/            # Sample documents for testing
+└── requirements.txt    # Consolidated Python dependencies
 ```
 
 ### Legacy TypeScript Structure (Historical Reference)
@@ -113,38 +124,31 @@ src/
 
 ## Deployment
 
-### New Streamlit/FastAPI Deployment
+### Unified Streamlit-Python Deployment
 
-#### Backend Deployment (Railway)
-- **Platform**: Railway - Modern cloud platform for backend services
-- **Runtime**: Python 3.12+ with FastAPI and Uvicorn
+#### Streamlit Cloud Deployment
+- **Platform**: Streamlit Cloud - Official Streamlit hosting platform
+- **Runtime**: Python 3.12+ with unified application stack
 - **Environment**: Production-ready with environment variable management
-- **Database**: Optional PostgreSQL integration for future enhancements
-- **API Documentation**: Automatic Swagger/OpenAPI documentation at `/docs`
+- **Simplicity**: Single application deployment with no backend separation
 
-#### Frontend Deployment Options
-- **Option 1**: Streamlit Cloud - Official Streamlit hosting platform
-- **Option 2**: Railway - Combined frontend/backend deployment
+#### Alternative Deployment Options
+- **Option 1**: Railway - Single application deployment
+- **Option 2**: Heroku - Streamlit application hosting
 - **Option 3**: Docker containerization for flexible deployment
 
 #### Development Environment
 ```bash
-# Backend development
-cd backend
+# Unified development
 pip install -r requirements.txt
-uvicorn main:app --reload --port 8000
-
-# Frontend development
 streamlit run app.py --server.port 8501
 ```
 
 #### Environment Configuration
 ```env
-# Backend (.env)
+# Application (.env)
 OPENAI_API_KEY=your_openai_key
 PDFCO_API_KEY=your_pdfco_key
-RAILWAY_STATIC_URL=your_backend_url
-CORS_ORIGINS=["http://localhost:8501", "https://your-streamlit-app.com"]
 ```
 
 ### Legacy Deployment (Historical Reference)
@@ -155,32 +159,38 @@ CORS_ORIGINS=["http://localhost:8501", "https://your-streamlit-app.com"]
 
 ## Environment Variable Management
 
-### Critical Requirement: Environment Variable Loading
+### Streamlined Environment Configuration
 
-The backend FastAPI server will fail to start with a `ValidationError` if environment variables from the `.env` file are not properly loaded before the application initializes. This is a critical technical requirement that must be addressed at the startup level.
+The unified Streamlit-Python application uses standard Python environment variable loading patterns with the `python-dotenv` library for simplified configuration management.
 
-### Start Script Implementation
+### Application Startup Pattern
 
-The `start_servers.sh` script is now responsible for explicitly loading environment variables **before** executing `uvicorn`. This ensures that all required configurations are available to the application at runtime:
+Environment variables are loaded directly within the Streamlit application:
 
-```bash
-# Load environment variables from .env file
-set -a  # automatically export all variables
-source .env
-set +a  # disable automatic export
+```python
+# Standard Python environment loading pattern
+from dotenv import load_dotenv
+import os
 
-# Start the backend server with environment variables loaded
-cd backend && uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+# Load environment variables at application startup
+load_dotenv()
+
+# Access environment variables throughout the application
+openai_api_key = os.getenv('OPENAI_API_KEY')
+pdfco_api_key = os.getenv('PDFCO_API_KEY')
 ```
 
-### Why This Approach is Required
+### Simplified Deployment
 
-- **API Key Availability**: Ensures that `OPENAI_API_KEY`, `PDFCO_API_KEY`, and other critical API keys are available when the FastAPI application initializes
-- **Configuration Loading**: Makes all environment-specific configurations accessible to Pydantic settings validation
-- **Validation Prevention**: Prevents `ValidationError` exceptions that occur when required environment variables are missing during application startup
-- **Runtime Reliability**: Guarantees that the application has access to all necessary configurations before processing any requests
+- **Single Application Context**: All environment variables loaded in one place
+- **Standard Python Patterns**: Uses conventional `python-dotenv` loading
+- **Streamlit Integration**: Environment variables available throughout the Streamlit session
+- **Development Simplicity**: No complex startup scripts or server coordination required
 
-### Technical Implementation Notes
+### Configuration Benefits
 
-This environment variable loading mechanism is the **required method** for ensuring proper application initialization. Alternative approaches (such as loading environment variables within the Python application itself) have proven insufficient for this particular deployment configuration.
-```
+This unified approach provides:
+1. **Simplified Setup**: Single `.env` file for all configuration
+2. **Development Efficiency**: Standard Python environment variable patterns
+3. **Deployment Simplicity**: No complex server startup coordination
+4. **Error Prevention**: Direct environment loading with clear error messages

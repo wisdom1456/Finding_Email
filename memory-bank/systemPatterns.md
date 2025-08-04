@@ -2,9 +2,9 @@
 
 ## Architecture Overview
 
-The Legal Document Analysis Portal has evolved from a TypeScript/n8n architecture to a modern Streamlit/FastAPI system, preserving functionality while improving maintainability and user experience.
+The Legal Document Analysis Portal has successfully evolved from a TypeScript/n8n architecture through a Streamlit/FastAPI hybrid to a unified Streamlit-Python system, achieving optimal simplicity and maintainability while preserving all functionality.
 
-### Current Streamlit/FastAPI Architecture
+### Current Unified Streamlit-Python Architecture
 
 ```
 ┌─────────────────────────────────────────┐
@@ -21,20 +21,20 @@ The Legal Document Analysis Portal has evolved from a TypeScript/n8n architectur
 │  └─────────────────────────────────────┘   │
 └─────────────────────────────────────────┘
             │
-            ▼ Synchronous HTTP Request
+            ▼ Direct Function Calls
 ┌─────────────────────────────────────────┐
-│           FastAPI Backend               │
+│        Backend Logic Modules           │
 │  ┌─────────────┐  ┌─────────────────┐   │
 │  │ Document    │  │ AI Analyzer     │   │
-│  │ Processor   │  │ Service         │   │
+│  │ Processor   │  │ Module          │   │
 │  └─────────────┘  └─────────────────┘   │
 │  ┌─────────────┐  ┌─────────────────┐   │
-│  │ Email       │  │ File Handler    │   │
-│  │ Generator   │  │ Service         │   │
+│  │ Email       │  │ Quality         │   │
+│  │ Generator   │  │ Validator       │   │
 │  └─────────────┘  └─────────────────┘   │
 └─────────────────────────────────────────┘
             │
-            ▼ Complete JSON Response
+            ▼ Direct Python Objects
 ┌─────────────────────────────────────────┐
 │         Results Display                 │
 │  ┌─────────────┐  ┌─────────────────┐   │
@@ -69,28 +69,30 @@ The Legal Document Analysis Portal has evolved from a TypeScript/n8n architectur
 
 ## File Organization Patterns
 
-### New Streamlit/FastAPI Directory Structure
+### Current Unified Streamlit-Python Directory Structure
 ```
 /
 ├── app.py                    # Main Streamlit application
-├── backend/                  # FastAPI backend services
-│   ├── main.py              # FastAPI application entry point
-│   ├── services/            # Business logic services
-│   │   ├── document_processor.py  # PDF and document processing
-│   │   ├── ai_analyzer.py         # OpenAI integration and analysis
-│   │   └── email_generator.py     # Email findings generation
-│   ├── utils/               # Utility modules
-│   │   ├── validators.py    # Input validation
-│   │   ├── data_models.py   # Pydantic data models
-│   │   └── config.py        # Configuration management
-│   └── requirements.txt     # Python dependencies
+├── backend_logic/            # Backend business logic modules
+│   ├── document_processor.py  # PDF and document processing
+│   ├── ai_analyzer.py         # OpenAI integration and analysis
+│   ├── email_generator.py     # Email findings generation
+│   ├── quality_validator.py   # Quality assurance
+│   └── task_manager.py        # Task coordination
 ├── components/              # Streamlit component modules
 │   ├── file_uploader.py    # File upload interface
 │   ├── progress_tracker.py # Processing status
 │   └── results_display.py  # Results presentation
-└── assets/                 # Static assets and templates
-    ├── styles.css          # Custom styling
-    └── templates/          # Email templates
+├── utils/                   # Utility modules
+│   ├── data_models.py      # Pydantic data models
+│   ├── validators.py       # Input validation
+│   └── file_processors/    # Format-specific processors
+├── tests/                   # Unified test framework
+│   ├── test_*.py           # Direct function tests
+│   └── utils/              # Testing utilities
+├── assets/                 # Static assets and templates
+│   └── templates/          # Email templates
+└── requirements.txt        # Consolidated Python dependencies
 ```
 
 ### Legacy TypeScript Directory Structure (Historical Reference)
@@ -140,7 +142,7 @@ The application has been successfully refactored from a monolithic structure to 
 
 ## Key Technical Patterns
 
-### New Streamlit/FastAPI Patterns
+### Current Unified Streamlit-Python Patterns
 
 #### Streamlit Session State Management
 ```python
@@ -153,35 +155,46 @@ if 'processing_status' not in st.session_state:
     st.session_state.processing_status = {}
 ```
 
-#### FastAPI Service Architecture Pattern
+#### Direct Function Call Architecture Pattern
 ```python
-# Microservice pattern with dedicated services
-class DocumentProcessor:
-    async def process_documents(self, files: List[UploadFile]) -> List[ProcessedFile]:
-        """Orchestrates file validation, format detection, and content extraction."""
-        # ...
+# Direct import pattern with backend logic modules
+from backend_logic.document_processor import DocumentProcessor
+from backend_logic.ai_analyzer import AIAnalyzer
+from backend_logic.email_generator import EmailGenerator
+
+class UnifiedProcessor:
+    def __init__(self):
+        self.doc_processor = DocumentProcessor()
+        self.ai_analyzer = AIAnalyzer()
+        self.email_generator = EmailGenerator()
     
-class AIAnalyzer:
-    async def analyze_case(self, documents: List[ProcessedDocument]) -> CaseAnalysis:
-        # ...
+    def process_documents(self, files: List[UploadedFile]) -> List[ProcessedFile]:
+        """Direct function call for document processing."""
+        return self.doc_processor.process_documents(files)
     
-class EmailGenerator:
-    async def generate_findings_letter(self, analysis: CaseAnalysis) -> EmailResponse:
-        # ...
+    def analyze_case(self, documents: List[ProcessedDocument]) -> CaseAnalysis:
+        """Direct function call for AI analysis."""
+        return self.ai_analyzer.analyze_case(documents)
+    
+    def generate_findings_letter(self, analysis: CaseAnalysis) -> EmailResponse:
+        """Direct function call for email generation."""
+        return self.email_generator.generate_findings(analysis)
 ```
 
-#### Multi-Stage Processing Pipeline
+#### Streamlined Processing Pipeline
 ```python
-# Pipeline pattern for document processing workflow
-async def process_case_pipeline(case_data: CaseData) -> CaseResults:
+# Simplified pipeline pattern for direct function calls
+def process_case_pipeline(case_data: CaseData) -> CaseResults:
+    processor = UnifiedProcessor()
+    
     # Stage 1: Document processing
-    processed_docs = await document_processor.process_documents(case_data.files)
+    processed_docs = processor.process_documents(case_data.files)
     
     # Stage 2: AI analysis
-    analysis = await ai_analyzer.analyze_case(processed_docs)
+    analysis = processor.analyze_case(processed_docs)
     
     # Stage 3: Email generation
-    email_response = await email_generator.generate_findings(analysis)
+    email_response = processor.generate_findings_letter(analysis)
     
     return CaseResults(analysis=analysis, email=email_response)
 ```
@@ -243,26 +256,28 @@ interface FileData {
 
 ## Integration Patterns
 
-### Streamlit/FastAPI Integration ✅ IMPLEMENTED
+### Unified Streamlit-Python Integration ✅ IMPLEMENTED
 
-The current architecture uses a clean, synchronous integration pattern between the Streamlit frontend and FastAPI backend for optimal stability and user experience.
+The current architecture uses direct function calls within the Streamlit application for optimal simplicity, performance, and maintainability.
 
-#### Request/Response Architecture
+#### Direct Function Call Architecture
 ```python
-# Streamlit Frontend -> FastAPI Backend Pattern
-async def process_documents():
-    """Synchronous processing with complete response."""
+# Streamlit Frontend -> Direct Python Function Calls
+def process_documents():
+    """Direct processing with immediate response."""
+    
+    processor = UnifiedProcessor()
     
     # 1. Document Processing
-    processed_docs = await document_processor.process_documents(files)
+    processed_docs = processor.process_documents(files)
     
     # 2. AI Analysis
-    analysis = await ai_analyzer.analyze_case(processed_docs)
+    analysis = processor.analyze_case(processed_docs)
     
     # 3. Email Generation
-    email_response = await email_generator.generate_findings(analysis)
+    email_response = processor.generate_findings_letter(analysis)
     
-    # 4. Complete JSON Response
+    # 4. Direct Python Objects
     return CaseResults(analysis=analysis, email=email_response)
 ```
 
@@ -270,8 +285,8 @@ async def process_documents():
 ```
 Streamlit Frontend
        │
-       ▼ HTTP POST /api/v1/analysis/full-pipeline
-FastAPI Backend
+       ▼ Direct Function Calls
+Backend Logic Modules
    ┌─────────────────────────────────────┐
    │ 1. Document Processing              │
    │ 2. Intake Analysis (GPT-4o-mini)    │
@@ -280,7 +295,7 @@ FastAPI Backend
    │ 5. Email Generation (GPT-4o)        │
    └─────────────────────────────────────┘
        │
-       ▼ Complete JSON Response
+       ▼ Direct Python Objects
 Streamlit Results Display
    ┌─────────────────────────────────────┐
    │ • Case Analysis                     │
@@ -290,11 +305,12 @@ Streamlit Results Display
 ```
 
 #### Integration Benefits
-- **Simplicity**: Clean request/response cycle without complex state management
-- **Reliability**: Synchronous processing ensures complete results before display
-- **User Experience**: Clear loading states with definitive completion feedback
-- **Error Handling**: Comprehensive error responses with user-friendly messages
-- **Maintainability**: Straightforward debugging and system monitoring
+- **Maximum Simplicity**: Direct function calls eliminate network overhead and complexity
+- **Enhanced Performance**: No HTTP serialization/deserialization overhead
+- **Superior User Experience**: Immediate processing feedback with native Python objects
+- **Simplified Error Handling**: Direct exception handling without HTTP error codes
+- **Streamlined Development**: Single-language development environment
+- **Optimal Maintainability**: Unified codebase with direct debugging capabilities
 
 ### OpenAI API Integration Patterns ✅ IMPLEMENTED
 - **Modern SDK Client**: Utilizes the `openai` Python package (>=1.0.0) with a structured `OpenAI` client.
@@ -430,10 +446,10 @@ const downloadResponse = {
 ```
 
 ### External API Integration
-- **FastAPI Endpoints**: Direct HTTP API calls from Streamlit frontend to FastAPI backend services
-- **Synchronous Processing**: Complete document analysis pipeline with single response containing all results
-- **Structured Response Handling**: Comprehensive JSON response format with professional download links
-- **CORS Configuration**: Proper cross-origin handling for production deployment with domain allowlisting
+- **OpenAI API Integration**: Direct API calls from backend logic modules with proper rate limiting and error handling
+- **Synchronous Processing**: Complete document analysis pipeline with direct Python object responses
+- **Structured Response Handling**: Native Python data structures with professional download capabilities
+- **Environment Configuration**: Secure API key management through environment variables
 
 ### Build System Integration
 - **Vite Integration**: Modern build tooling with HMR and optimized production builds

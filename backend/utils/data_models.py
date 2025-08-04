@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, field_validator, validator
+from pydantic import BaseModel, Field, field_validator, validator, model_validator
 from typing import List, Optional, Dict, Any, Union
 from enum import Enum
 from .validators import stringify_dict
@@ -65,6 +65,10 @@ class AnalysisError(BaseModel):
     error_message: str = Field(..., description="The detailed error message.")
     details: Optional[Any] = Field(None, description="Additional error details, can be a dict or a list of validation errors.")
 
+class AIAnalysisError(Exception):
+    """Custom exception for AI analysis errors."""
+    pass
+
 # --- Resilient Pydantic Models for AI Analysis ---
 
 class EnhancedIntakeAnalysis(BaseModel):
@@ -81,16 +85,29 @@ class EnhancedIntakeAnalysis(BaseModel):
     financial_impact: Union[Optional[str], Dict[str, Any]] = Field(None, description="The estimated financial impact of the case.")
     legal_claims: List[str] = Field(default_factory=list, description="Potential legal claims identified from the intake.")
 
-    @validator('key_facts', 'client_priorities', 'desired_outcomes', 'legal_claims', pre=True)
-    def ensure_list_of_strings(cls, v):
-        if isinstance(v, str):
-            # Handles simple comma-separated strings or a single string
-            return [item.strip() for item in v.split(',') if item.strip()] if ',' in v else [v]
+    @field_validator('key_facts', 'client_priorities', 'desired_outcomes', 'legal_claims', mode='before')
+    @classmethod
+    def ensure_list_of_strings(cls, v: Any) -> List[str]:
         if v is None:
             return []
-        return v
+        if isinstance(v, str):
+            stripped_v = v.strip()
+            if not stripped_v:
+                return []
+            # Use regex to split by comma or semicolon, handling whitespace
+            import re
+            items = [item.strip() for item in re.split(r'\s*[,;]\s*', stripped_v) if item.strip()]
+            # If splitting results in an empty list but the original string was not empty,
+            # it means no delimiters were found, so treat it as a single item.
+            return items if items else [stripped_v]
+        if isinstance(v, list):
+            # Ensure all list items are strings and strip whitespace
+            return [str(item).strip() for item in v if str(item).strip()]
+        # For other types, convert to string and wrap in list if not empty
+        return [str(v)] if v else []
 
-    @validator('financial_impact', pre=True)
+    @field_validator('financial_impact', mode='before')
+    @classmethod
     def clean_financial_impact(cls, v):
         return stringify_dict(v)
 
@@ -120,6 +137,166 @@ class LegalAssessment(BaseModel):
     recommended_actions: Union[List[str], str] = Field(default_factory=list, description="A list of recommended next steps for the case.")
     demand_letter_appropriate: Optional[bool] = Field(None, description="Whether sending a demand letter is appropriate.")
     urgency_assessment: Optional[str] = Field(None, description="The overall assessment of the case's urgency.")
+
+    @model_validator(mode='before')
+    @classmethod
+    def normalize_ai_output(cls, data: Any) -> Any:
+        """Normalize AI output to handle common validation issues."""
+        if not isinstance(data, dict):
+            return data
+            
+        # Create a copy to avoid modifying the original
+        normalized = data.copy()
+        
+        # Map variant enum values for overall_evidence_strength
+        if 'overall_evidence_strength' in normalized:
+            strength_value = normalized['overall_evidence_strength']
+            if isinstance(strength_value, str):
+                # Handle common AI variations
+                strength_mapping = {
+                    'High': 'Strong',
+                    'Very Strong': 'Strong',
+                    'Very High': 'Strong',
+                    'Low': 'Weak',
+                    'Very Low': 'Weak',
+                    'Medium': 'Moderate',
+                    'Average': 'Moderate',
+                    'Excellent': 'Conclusive',
+                    'Outstanding': 'Conclusive',
+                    'Definitive': 'Conclusive'
+                }
+                normalized['overall_evidence_strength'] = strength_mapping.get(
+                    strength_value, strength_value
+                )
+        
+        # Convert string fields to lists when appropriate
+        list_conversion_fields = ['potential_challenges', 'recommended_actions']
+        for field in list_conversion_fields:
+            if field in normalized:
+                value = normalized[field]
+                if isinstance(value, str) and value.strip():
+                    # Convert string to list by splitting on sentences or semicolons
+                    if ';' in value:
+                        normalized[field] = [item.strip() for item in value.split(';') if item.strip()]
+                    elif '.' in value and len(value) > 100:  # Likely multiple sentences
+                        sentences = value.split('.')
+                        normalized[field] = [f"{sentence.strip()}." for sentence in sentences[:-1] if sentence.strip()]
+                    else:
+                        normalized[field] = [value.strip()]
+                elif not value:  # Handle None, empty string, etc.
+                    normalized[field] = []
+        
+        return normalized
+
+    @field_validator('overall_evidence_strength', mode='before')
+    @classmethod
+    def validate_evidence_strength(cls, v):
+        """Validate and normalize evidence strength values."""
+        if v is None:
+            return None
+        if isinstance(v, str):
+            # Additional fallback validation in case model_validator doesn't catch everything
+            strength_mapping = {
+                'High': EvidenceStrength.STRONG,
+                'Very Strong': EvidenceStrength.STRONG,
+                'Very High': EvidenceStrength.STRONG,
+                'Low': EvidenceStrength.WEAK,
+                'Very Low': EvidenceStrength.WEAK,
+                'Medium': EvidenceStrength.MODERATE,
+                'Average': EvidenceStrength.MODERATE,
+                'Excellent': EvidenceStrength.CONCLUSIVE,
+                'Outstanding': EvidenceStrength.CONCLUSIVE,
+                'Definitive': EvidenceStrength.CONCLUSIVE
+            }
+            if v in strength_mapping:
+                return strength_mapping[v]
+            # Try to match to existing enum values
+            for strength in EvidenceStrength:
+                if v.lower() == strength.value.lower():
+                    return strength
+            # Default fallback
+            print(f"VALIDATION WARNING: Unknown evidence strength '{v}', defaulting to 'Moderate'")
+            return EvidenceStrength.MODERATE
+        return v
+
+    @field_validator('potential_challenges', mode='before')
+    @classmethod
+    def validate_potential_challenges(cls, v):
+        """Ensure potential_challenges is always a list or convertible to one."""
+        if v is None:
+            return []
+        if isinstance(v, str):
+            if not v.strip():
+                return []
+            # Convert string to list of challenge assessments
+            if ';' in v:
+                challenges = [item.strip() for item in v.split(';') if item.strip()]
+            elif '.' in v and len(v) > 100:
+                sentences = v.split('.')
+                challenges = [f"{sentence.strip()}." for sentence in sentences[:-1] if sentence.strip()]
+            else:
+                challenges = [v.strip()]
+            
+            # Convert to ChallengeAssessment objects
+            return [
+                ChallengeAssessment(
+                    category="General",
+                    description=challenge,
+                    mitigation_strategy="To be determined",
+                    confidence_score=0.7
+                ) for challenge in challenges
+            ]
+        if isinstance(v, list):
+            # If it's already a list, ensure all items are ChallengeAssessment objects
+            normalized_challenges = []
+            for item in v:
+                if isinstance(item, dict):
+                    try:
+                        normalized_challenges.append(ChallengeAssessment.model_validate(item))
+                    except Exception:
+                        # Create a basic ChallengeAssessment if validation fails
+                        normalized_challenges.append(
+                            ChallengeAssessment(
+                                category="General",
+                                description=str(item.get('description', item)),
+                                mitigation_strategy="To be determined",
+                                confidence_score=0.7
+                            )
+                        )
+                elif isinstance(item, str):
+                    normalized_challenges.append(
+                        ChallengeAssessment(
+                            category="General",
+                            description=item,
+                            mitigation_strategy="To be determined",
+                            confidence_score=0.7
+                        )
+                    )
+                else:
+                    normalized_challenges.append(item)  # Assume it's already a ChallengeAssessment
+            return normalized_challenges
+        return v
+
+    @field_validator('recommended_actions', mode='before')
+    @classmethod
+    def validate_recommended_actions(cls, v):
+        """Ensure recommended_actions is always a list."""
+        if v is None:
+            return []
+        if isinstance(v, str):
+            if not v.strip():
+                return []
+            # Convert string to list
+            if ';' in v:
+                return [item.strip() for item in v.split(';') if item.strip()]
+            elif '.' in v and len(v) > 100:
+                sentences = v.split('.')
+                return [f"{sentence.strip()}." for sentence in sentences[:-1] if sentence.strip()]
+            else:
+                return [v.strip()]
+        if isinstance(v, list):
+            return [str(item).strip() for item in v if str(item).strip()]
+        return [str(v)] if v else []
 
 class DemandLetterEvaluation(BaseModel):
     """Evaluation of whether a demand letter should be sent."""
@@ -202,11 +379,7 @@ class CaseResults(BaseModel):
     analysis: CaseAnalysisResult = Field(default_factory=CaseAnalysisResult)
     email: Optional[EmailResponse] = None
     generated_letter: Optional[GeneratedLetter] = None
-    errors: List[AnalysisError] = Field(default_factory=list)
-
-    @field_validator('analysis', 'email', 'generated_letter', 'errors', mode='before')
-    def set_default(cls, v):
-        return v or {}
+    errors: List[AnalysisError] = [] # Directly initialize as an empty list
 
 class SavedDocument(BaseModel):
     tmp_path: str

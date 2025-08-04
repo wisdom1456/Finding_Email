@@ -1,0 +1,36 @@
+from ..data_models import ProcessedDocument, DocumentType, FileType, SavedDocument
+import email
+from email import policy
+from email.parser import BytesParser
+import mimetypes
+
+async def process_eml(file_path: str, document_type: DocumentType, original_filename: str) -> ProcessedDocument:
+    """
+    Processes an EML file by extracting its headers and body content from a given path.
+    """
+    print(f"Processing EML: {original_filename}")
+    
+    with open(file_path, "rb") as f:
+        msg = BytesParser(policy=policy.default).parse(f)
+    
+    body = ""
+    if msg.is_multipart():
+        for part in msg.walk():
+            content_type = part.get_content_type()
+            if "text/plain" in content_type:
+                body = part.get_payload(decode=True).decode(part.get_content_charset() or 'utf-8')
+                break
+    else:
+        body = msg.get_payload(decode=True).decode(msg.get_content_charset() or 'utf-8')
+
+    full_text = f"Subject: {msg['subject']}\nFrom: {msg['from']}\nTo: {msg['to']}\nDate: {msg['date']}\n\n{body}"
+    
+    content_type, _ = mimetypes.guess_type(file_path)
+
+    return ProcessedDocument(
+        file_name=original_filename,
+        content=full_text,
+        document_type=document_type,
+        file_type=FileType.EML,
+        metadata={'content_type': content_type}
+    )

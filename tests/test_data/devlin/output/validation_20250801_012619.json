@@ -1,0 +1,33 @@
+{
+  "overall_status": "FAIL",
+  "checks": [
+    {
+      "check": "Document Intake",
+      "status": "PASS",
+      "details": [
+        "Intake analysis section is valid."
+      ]
+    },
+    {
+      "check": "AI Analysis",
+      "status": "FAIL",
+      "details": [
+        "Missing 'case_analyses' data."
+      ]
+    },
+    {
+      "check": "File Generation",
+      "status": "FAIL",
+      "details": [
+        "Missing 'download_links'."
+      ]
+    },
+    {
+      "check": "Email Comparison",
+      "status": "FAIL",
+      "details": [
+        "An error occurred during email comparison: module 'openai' has no attribute 'error'"
+      ]
+    }
+  ]
+}

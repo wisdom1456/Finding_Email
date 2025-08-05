@@ -1,0 +1,54 @@
+{
+  "timestamp": "2025-08-05T01:49:44.842397",
+  "total_time": 0.025356054306030273,
+  "results": {
+    "large_doc_estimation": {
+      "documents_processed": 100,
+      "processing_time": 0.00017189979553222656,
+      "total_estimated_cost": 0.7745,
+      "avg_time_per_doc": 1.7189979553222656e-06,
+      "status": "PASSED"
+    },
+    "concurrent_sessions": {
+      "total_sessions": 10,
+      "successful_sessions": 10,
+      "failed_sessions": 0,
+      "processing_time": 0.0011377334594726562,
+      "status": "PASSED"
+    },
+    "export_performance": {
+      "csv": {
+        "processing_time": 0.00015997886657714844,
+        "data_size": 8225,
+        "status": "PASSED"
+      },
+      "json": {
+        "processing_time": 0.00017499923706054688,
+        "data_size": 26843,
+        "status": "PASSED"
+      },
+      "html": {
+        "processing_time": 0.009869098663330078,
+        "data_size": 1698,
+        "status": "PASSED"
+      },
+      "text": {
+        "processing_time": 9.393692016601562e-05,
+        "data_size": 5847,
+        "status": "PASSED"
+      }
+    },
+    "memory_efficiency": {
+      "initial_memory_mb": 38.125,
+      "final_memory_mb": 38.25,
+      "memory_growth_mb": 0.125,
+      "memory_growth_per_session": 0.025,
+      "status": "PASSED"
+    }
+  },
+  "summary": {
+    "passed": 3,
+    "failed": 0,
+    "warnings": 0
+  }
+}

@@ -2,7 +2,8 @@ import streamlit as st
 import streamlit.components.v1 as components
 import asyncio
 import os
-from typing import Dict
+from typing import Dict, Optional
+from datetime import datetime
 from dotenv import load_dotenv
 from openai import OpenAI
 
@@ -15,14 +16,19 @@ from backend_logic.ai_analyzer import AIAnalyzer
 from backend_logic.email_generator import EmailGenerator
 from backend_logic.audio_processor import AudioProcessor
 from backend_logic.video_processor import VideoProcessor
+from backend_logic.cost_estimator import CostEstimator
+from backend_logic.cost_session_manager import CostSessionManager
 from backend.utils.data_models import (
     AnalysisError,
     AnalyzedDocument,
     DocumentType,
     TranscriptedMedia,
     VideoInsight,
-    MediaProcessingError
+    MediaProcessingError,
+    CostEstimate,
+    CostSummary
 )
+from components.budget_sheet import BudgetSheetComponent
 
 # --- Configuration ---
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
@@ -54,6 +60,16 @@ def initialize_session_state():
         st.session_state.processing_status = 'idle'  # idle, active, completed, failed
     if 'processing_error' not in st.session_state:
         st.session_state.processing_error = None
+    
+    # Cost tracking session state
+    if 'cost_estimate' not in st.session_state:
+        st.session_state.cost_estimate = None
+    if 'cost_summary' not in st.session_state:
+        st.session_state.cost_summary = None
+    if 'current_processing_cost' not in st.session_state:
+        st.session_state.current_processing_cost = 0.0
+    if 'cost_session_id' not in st.session_state:
+        st.session_state.cost_session_id = None
 
 # --- UI Components ---
 def case_information_form():
@@ -77,6 +93,7 @@ def file_upload_section():
 def handle_file_uploads():
     """
     Identifies intake documents from uploaded files and prompts for clarification if needed.
+    Shows cost estimation after file upload but before processing.
     Returns True if analysis can proceed, False otherwise.
     """
     uploaded_files = st.session_state.get('uploaded_files', [])
@@ -86,11 +103,13 @@ def handle_file_uploads():
 
     intake_docs = [f for f in uploaded_files if "intake" in f.name.lower()]
     
+    intake_selected = False
+    
     if len(intake_docs) == 1:
         st.session_state.intake_form = intake_docs[0]
         st.session_state.case_documents = [f for f in uploaded_files if f != intake_docs[0]]
         st.info(f"Automatically detected '{intake_docs[0].name}' as the intake form.")
-        return True
+        intake_selected = True
     elif len(intake_docs) > 1:
         st.warning("Multiple possible intake forms found.")
         selected_intake_name = st.selectbox(
@@ -99,7 +118,7 @@ def handle_file_uploads():
         )
         st.session_state.intake_form = next(f for f in intake_docs if f.name == selected_intake_name)
         st.session_state.case_documents = [f for f in uploaded_files if f != st.session_state.intake_form]
-        return True
+        intake_selected = True
     else: # No intake docs found
         st.warning("No intake form automatically detected.")
         selected_intake_name = st.selectbox(
@@ -109,7 +128,23 @@ def handle_file_uploads():
         if selected_intake_name:
             st.session_state.intake_form = next(f for f in uploaded_files if f.name == selected_intake_name)
             st.session_state.case_documents = [f for f in uploaded_files if f != st.session_state.intake_form]
-            return True
+            intake_selected = True
+    
+    # Show cost estimation after intake form is selected
+    if intake_selected and st.session_state.intake_form:
+        # Generate and display cost estimate
+        if st.session_state.cost_estimate is None:
+            with st.spinner("Generating cost estimate..."):
+                cost_estimate = generate_cost_estimate_for_files(uploaded_files)
+                if cost_estimate:
+                    st.session_state.cost_estimate = cost_estimate
+                    
+        # Display cost estimation if available
+        if st.session_state.cost_estimate:
+            display_cost_estimation(st.session_state.cost_estimate)
+        
+        return True
+    
     return False
 
 class ProgressTracker:
@@ -172,9 +207,135 @@ def calculate_document_sizes(files) -> Dict[str, int]:
             sizes[file.name] = 1024  # 1KB default
     return sizes
 
+# --- Cost Estimation Helper Functions ---
+def display_cost_estimation(cost_estimate: CostEstimate) -> None:
+    """Display cost estimation before processing begins."""
+    
+    st.subheader("📊 Estimated Processing Costs")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.metric(
+            label="Total Estimated Cost",
+            value=f"${float(cost_estimate.total_estimated_cost):.4f}",
+            help=f"Confidence: {cost_estimate.confidence_level:.0%}"
+        )
+    
+    with col2:
+        st.metric(
+            label="Confidence Level",
+            value=f"{cost_estimate.confidence_level:.0%}",
+            help="Based on file size analysis and processing patterns"
+        )
+    
+    # Detailed breakdown in expander
+    if st.expander("View Cost Breakdown"):
+        if cost_estimate.estimated_document_costs:
+            st.write("**Document Processing:**")
+            doc_data = []
+            for cost in cost_estimate.estimated_document_costs:
+                doc_data.append({
+                    "Service": cost.service_name,
+                    "Operation": cost.operation_type,
+                    "Units": f"{cost.units_consumed:,} {cost.unit_type}",
+                    "Rate": f"${float(cost.rate_per_unit):.6f}",
+                    "Cost": f"${float(cost.total_cost):.4f}",
+                    "File": cost.file_name or "N/A"
+                })
+            st.dataframe(doc_data, use_container_width=True)
+        
+        if cost_estimate.estimated_media_costs:
+            st.write("**Media Processing:**")
+            media_data = []
+            for cost in cost_estimate.estimated_media_costs:
+                media_data.append({
+                    "Service": cost.service_name,
+                    "Operation": cost.operation_type,
+                    "Units": f"{cost.units_consumed} {cost.unit_type}",
+                    "Rate": f"${float(cost.rate_per_unit):.3f}",
+                    "Cost": f"${float(cost.total_cost):.4f}",
+                    "File": cost.file_name or "N/A"
+                })
+            st.dataframe(media_data, use_container_width=True)
+
+def display_processing_cost_update(current_cost: float) -> None:
+    """Display real-time cost updates during processing."""
+    
+    if current_cost > 0:
+        st.sidebar.metric(
+            label="Processing Cost",
+            value=f"${current_cost:.4f}",
+            help="Real-time cost accumulation"
+        )
+
+def generate_cost_estimate_for_files(files) -> Optional[CostEstimate]:
+    """Generate cost estimate for uploaded files."""
+    try:
+        cost_estimator = CostEstimator()
+        doc_processor = DocumentProcessor()
+        
+        # Process files to get structured data for estimation
+        processed_docs = []
+        audio_files = []
+        video_files = []
+        
+        for file in files:
+            file_type = file.type.lower() if hasattr(file, 'type') else ''
+            file_name = file.name
+            file_size = getattr(file, 'size', 0)
+            
+            # Categorize files
+            if 'audio' in file_type:
+                audio_files.append({
+                    'filename': file_name,
+                    'size': file_size
+                })
+            elif 'video' in file_type:
+                video_files.append({
+                    'filename': file_name,
+                    'size': file_size
+                })
+            else:
+                # For documents, create minimal ProcessedDocument for estimation
+                content = ""
+                try:
+                    if hasattr(file, 'getvalue'):
+                        content_bytes = file.getvalue()
+                        if isinstance(content_bytes, bytes):
+                            content = content_bytes.decode('utf-8', errors='ignore')
+                        else:
+                            content = str(content_bytes)
+                except Exception:
+                    # Use file size as proxy for content length
+                    content = "x" * file_size  # Rough content estimation
+                
+                from backend.utils.data_models import ProcessedDocument, FileType, DocumentType, FileMetadata
+                processed_doc = ProcessedDocument(
+                    file_name=file_name,
+                    content=content,
+                    file_type=FileType.PDF if file_name.lower().endswith('.pdf') else FileType.TXT,
+                    document_type=DocumentType.CASE_DOCUMENT,
+                    metadata=FileMetadata(filename=file_name, size=file_size)
+                )
+                processed_docs.append(processed_doc)
+        
+        # Generate cost estimate
+        cost_estimate = cost_estimator.generate_cost_estimate(
+            documents=processed_docs,
+            audio_files=audio_files,
+            video_files=video_files
+        )
+        
+        return cost_estimate
+        
+    except Exception as e:
+        st.warning(f"Could not generate cost estimate: {str(e)}")
+        return None
+
 async def process_case_documents():
     """
-    Enhanced processing function with size-based progress tracking and detailed feedback.
+    Enhanced processing function with size-based progress tracking, detailed feedback, and cost tracking.
     """
     try:
         st.session_state.processing_status = 'active'
@@ -187,6 +348,26 @@ async def process_case_documents():
         video_processor = VideoProcessor()
         ai_analyzer = AIAnalyzer(openai_client, doc_processor)
         email_generator = EmailGenerator(openai_client)
+        
+        # Initialize cost tracking
+        cost_session_manager = CostSessionManager()
+        
+        # Generate case ID for cost tracking
+        case_id = st.session_state.case_info.get('caseReference', '') or f"case_{int(datetime.now().timestamp())}"
+        
+        # Initialize cost session if we have a cost estimate
+        if st.session_state.cost_estimate:
+            st.session_state.cost_session_id = cost_session_manager.initialize_cost_session(
+                case_id=case_id,
+                documents=[],  # Will be updated with processed documents
+                audio_files=[],
+                video_files=[]
+            )
+            # Update with our existing estimate
+            cost_summary = cost_session_manager.get_cost_summary(st.session_state.cost_session_id)
+            if cost_summary:
+                cost_summary.cost_estimate = st.session_state.cost_estimate
+                cost_session_manager.active_sessions[st.session_state.cost_session_id] = cost_summary
         
         # Enhanced progress tracking setup
         progress_container = st.container()
@@ -256,10 +437,32 @@ async def process_case_documents():
         # Phase 2: Intake Analysis
         tracker.set_phase('intake_analysis', f"Analyzing intake form: {intake_doc.file_name}")
         
+        # Update cost tracking before intake analysis
+        if st.session_state.cost_session_id:
+            try:
+                current_cost_summary = cost_session_manager.get_cost_summary(st.session_state.cost_session_id)
+                if current_cost_summary and current_cost_summary.actual_costs:
+                    current_cost = float(current_cost_summary.actual_costs.total_actual_cost)
+                    st.session_state.current_processing_cost = current_cost
+                    display_processing_cost_update(current_cost)
+            except Exception:
+                pass
+        
         analysis_result = await ai_analyzer.analyze_intake(intake_doc)
         
         if not analysis_result.intake_analysis:
             raise ValueError("Failed to analyze intake form.")
+        
+        # Update cost tracking after intake analysis
+        if st.session_state.cost_session_id:
+            try:
+                updated_cost_summary = cost_session_manager.get_cost_summary(st.session_state.cost_session_id)
+                if updated_cost_summary and updated_cost_summary.actual_costs:
+                    updated_cost = float(updated_cost_summary.actual_costs.total_actual_cost)
+                    st.session_state.current_processing_cost = updated_cost
+                    display_processing_cost_update(updated_cost)
+            except Exception:
+                pass
         
         tracker.complete_phase('intake_analysis', "Intake analysis completed")
         
@@ -269,7 +472,7 @@ async def process_case_documents():
             
             processed_size = 0
             
-            # Custom progress callback for document analysis
+            # Custom progress callback for document analysis with real-time cost tracking
             async def analyze_with_progress():
                 nonlocal processed_size
                 results = []
@@ -285,8 +488,37 @@ async def process_case_documents():
                         f"Processing {i+1}/{len(case_docs)}: {doc.file_name} ({doc_size/1024:.1f} KB)"
                     )
                     
+                    # Update real-time cost tracking before processing
+                    if st.session_state.cost_session_id:
+                        try:
+                            current_cost_summary = cost_session_manager.get_cost_summary(st.session_state.cost_session_id)
+                            if current_cost_summary and current_cost_summary.actual_costs:
+                                current_cost = float(current_cost_summary.actual_costs.total_actual_cost)
+                                st.session_state.current_processing_cost = current_cost
+                                display_processing_cost_update(current_cost)
+                        except Exception:
+                            pass  # Continue processing even if cost update fails
+                    
                     result = await ai_analyzer._analyze_single_document(doc, analysis_result.intake_analysis)
                     results.append(result)
+                    
+                    # Update cost tracking after processing document
+                    if st.session_state.cost_session_id and isinstance(result, AnalyzedDocument):
+                        try:
+                            # Update the cost session with the newly processed document
+                            cost_session_manager.update_document_costs(
+                                st.session_state.cost_session_id,
+                                [result]
+                            )
+                            
+                            # Get updated cost and display
+                            updated_cost_summary = cost_session_manager.get_cost_summary(st.session_state.cost_session_id)
+                            if updated_cost_summary and updated_cost_summary.actual_costs:
+                                updated_cost = float(updated_cost_summary.actual_costs.total_actual_cost)
+                                st.session_state.current_processing_cost = updated_cost
+                                display_processing_cost_update(updated_cost)
+                        except Exception:
+                            pass  # Continue processing even if cost update fails
                     
                     processed_size += doc_size
                     final_progress = processed_size / total_case_size if total_case_size > 0 else ((i+1) / len(case_docs))
@@ -332,16 +564,122 @@ async def process_case_documents():
         # Phase 4: Final Assessment
         tracker.set_phase('final_assessment', "Performing comprehensive legal assessment")
         
+        # Update cost tracking before final assessment
+        if st.session_state.cost_session_id:
+            try:
+                current_cost_summary = cost_session_manager.get_cost_summary(st.session_state.cost_session_id)
+                if current_cost_summary and current_cost_summary.actual_costs:
+                    current_cost = float(current_cost_summary.actual_costs.total_actual_cost)
+                    st.session_state.current_processing_cost = current_cost
+                    display_processing_cost_update(current_cost)
+            except Exception:
+                pass
+        
         final_analysis = await ai_analyzer.perform_final_assessment(analysis_result)
+        
+        # Update cost tracking after final assessment
+        if st.session_state.cost_session_id:
+            try:
+                updated_cost_summary = cost_session_manager.get_cost_summary(st.session_state.cost_session_id)
+                if updated_cost_summary and updated_cost_summary.actual_costs:
+                    updated_cost = float(updated_cost_summary.actual_costs.total_actual_cost)
+                    st.session_state.current_processing_cost = updated_cost
+                    display_processing_cost_update(updated_cost)
+            except Exception:
+                pass
         
         tracker.complete_phase('final_assessment', "Legal assessment completed")
         
         # Phase 5: Email Generation
         tracker.set_phase('email_generation', "Generating professional findings letter")
         
+        # Update cost tracking before email generation
+        if st.session_state.cost_session_id:
+            try:
+                current_cost_summary = cost_session_manager.get_cost_summary(st.session_state.cost_session_id)
+                if current_cost_summary and current_cost_summary.actual_costs:
+                    current_cost = float(current_cost_summary.actual_costs.total_actual_cost)
+                    st.session_state.current_processing_cost = current_cost
+                    display_processing_cost_update(current_cost)
+            except Exception:
+                pass
+        
         email_docs = email_generator.generate_email_and_analysis_docs(final_analysis)
         
+        # Update cost tracking after email generation
+        if st.session_state.cost_session_id:
+            try:
+                updated_cost_summary = cost_session_manager.get_cost_summary(st.session_state.cost_session_id)
+                if updated_cost_summary and updated_cost_summary.actual_costs:
+                    updated_cost = float(updated_cost_summary.actual_costs.total_actual_cost)
+                    st.session_state.current_processing_cost = updated_cost
+                    display_processing_cost_update(updated_cost)
+            except Exception:
+                pass
+        
         tracker.complete_phase('email_generation', "Findings letter generated successfully")
+        
+        # Finalize cost tracking
+        if st.session_state.cost_session_id:
+            try:
+                # Update cost session with actual results
+                cost_summary = cost_session_manager.update_actual_costs(
+                    st.session_state.cost_session_id,
+                    final_analysis
+                )
+                
+                # Finalize the session
+                st.session_state.cost_summary = cost_session_manager.finalize_cost_session(
+                    st.session_state.cost_session_id
+                )
+                
+                # Display final cost summary in sidebar
+                if st.session_state.cost_summary and st.session_state.cost_summary.actual_costs:
+                    final_cost = float(st.session_state.cost_summary.actual_costs.total_actual_cost)
+                    st.sidebar.success(f"✅ Final Processing Cost: ${final_cost:.4f}")
+                    
+                    if st.session_state.cost_summary.cost_variance is not None:
+                        variance = float(st.session_state.cost_summary.cost_variance)
+                        if abs(variance) <= 0.01:  # Within 1 cent
+                            st.sidebar.info("💰 Cost was exactly as estimated!")
+                        elif variance > 0:
+                            st.sidebar.warning(f"📈 Cost was ${variance:.4f} over estimate")
+                        else:
+                            st.sidebar.info(f"📉 Cost was ${abs(variance):.4f} under estimate")
+                            
+            except Exception as e:
+                st.warning(f"Could not finalize cost tracking: {str(e)}")
+        
+        # Finalize cost tracking
+        if st.session_state.cost_session_id:
+            try:
+                # Update cost session with actual results
+                cost_summary = cost_session_manager.update_actual_costs(
+                    st.session_state.cost_session_id,
+                    final_analysis
+                )
+                
+                # Finalize the session
+                st.session_state.cost_summary = cost_session_manager.finalize_cost_session(
+                    st.session_state.cost_session_id
+                )
+                
+                # Display final cost summary in sidebar
+                if st.session_state.cost_summary and st.session_state.cost_summary.actual_costs:
+                    final_cost = float(st.session_state.cost_summary.actual_costs.total_actual_cost)
+                    st.sidebar.success(f"✅ Final Processing Cost: ${final_cost:.4f}")
+                    
+                    if st.session_state.cost_summary.cost_variance is not None:
+                        variance = float(st.session_state.cost_summary.cost_variance)
+                        if abs(variance) <= 0.01:  # Within 1 cent
+                            st.sidebar.info("💰 Cost was exactly as estimated!")
+                        elif variance > 0:
+                            st.sidebar.warning(f"📈 Cost was ${variance:.4f} over estimate")
+                        else:
+                            st.sidebar.info(f"📉 Cost was ${abs(variance):.4f} under estimate")
+                            
+            except Exception as e:
+                st.warning(f"Could not finalize cost tracking: {str(e)}")
         
         # Store results
         st.session_state.final_results = final_analysis
@@ -623,92 +961,129 @@ def generate_case_analysis_html(analysis_result):
     
     return html_content
 
+def _display_download_buttons(col1, col2, col3):
+    """Helper function to display download buttons for the three document types."""
+    with col1:
+        # Download button for main findings letter as HTML
+        try:
+            main_letter_bytes = st.session_state.main_letter.encode('utf-8')
+            
+            # Get client name for filename
+            client_name = "Client"
+            if (st.session_state.final_results.intake_analysis and
+                st.session_state.final_results.intake_analysis.client_name):
+                client_name_raw = st.session_state.final_results.intake_analysis.client_name
+                client_name = "".join(c for c in client_name_raw if c.isalnum() or c in " _-").rstrip()
+            
+            st.download_button(
+                label="📧 Findings Letter",
+                data=main_letter_bytes,
+                file_name=f"Findings_Letter_{client_name}.html",
+                mime="text/html",
+                help="Professional findings letter in HTML format"
+            )
+        except Exception as e:
+            st.error(f"Error creating findings letter download: {e}")
+    
+    with col2:
+        # Download button for document appendix as HTML
+        try:
+            appendix_bytes = st.session_state.appendix.encode('utf-8')
+            
+            # Get client name for filename
+            client_name = "Client"
+            if (st.session_state.final_results.intake_analysis and
+                st.session_state.final_results.intake_analysis.client_name):
+                client_name_raw = st.session_state.final_results.intake_analysis.client_name
+                client_name = "".join(c for c in client_name_raw if c.isalnum() or c in " _-").rstrip()
+            
+            st.download_button(
+                label="📎 Document Appendix",
+                data=appendix_bytes,
+                file_name=f"Document_Appendix_{client_name}.html",
+                mime="text/html",
+                help="Supporting document analysis in HTML format"
+            )
+        except Exception as e:
+            st.error(f"Error creating appendix download: {e}")
+    
+    with col3:
+        # Download button for case analysis as HTML
+        try:
+            # Generate the HTML case analysis document
+            case_analysis_html = generate_case_analysis_html(st.session_state.final_results)
+            case_analysis_bytes = case_analysis_html.encode('utf-8')
+            
+            # Get client name for filename
+            client_name = "Client"
+            if (st.session_state.final_results.intake_analysis and
+                st.session_state.final_results.intake_analysis.client_name):
+                client_name_raw = st.session_state.final_results.intake_analysis.client_name
+                client_name = "".join(c for c in client_name_raw if c.isalnum() or c in " _-").rstrip()
+            
+            st.download_button(
+                label="📄 Case Analysis",
+                data=case_analysis_bytes,
+                file_name=f"Case_Analysis_{client_name}.html",
+                mime="text/html",
+                help="Comprehensive case analysis in HTML format"
+            )
+        except Exception as e:
+            st.error(f"Error creating case analysis download: {e}")
+
 def results_display_section():
     """Displays the final results and download links."""
     if st.session_state.final_results:
         st.header("Results")
         
-        # Check if we have the new two-document format
-        if st.session_state.main_letter and st.session_state.appendix:
-            # Display the main findings letter inline using components.html for complete HTML documents
-            st.subheader("Findings Letter")
-            components.html(st.session_state.main_letter, height=800, scrolling=True)
+        # Display cost summary first if available
+        if st.session_state.cost_summary:
+            budget_component = BudgetSheetComponent()
             
-            # Provide separate download buttons for all documents
-            st.subheader("Download Options")
+            # Create tabs for results organization
+            tab1, tab2, tab3 = st.tabs(["📄 Documents", "💰 Cost Analysis", "📊 Detailed Breakdown"])
             
-            col1, col2, col3 = st.columns(3)
+            with tab1:
+                # Check if we have the new two-document format
+                if st.session_state.main_letter and st.session_state.appendix:
+                    # Display the main findings letter inline using components.html for complete HTML documents
+                    st.subheader("Findings Letter")
+                    components.html(st.session_state.main_letter, height=800, scrolling=True)
+                    
+                    # Provide separate download buttons for all documents
+                    st.subheader("Download Options")
+                    
+                    col1, col2, col3 = st.columns(3)
+                    _display_download_buttons(col1, col2, col3)
+                else:
+                    st.info("Results are available but in an unexpected format.")
             
-            with col1:
-                # Download button for main findings letter as HTML
-                try:
-                    main_letter_bytes = st.session_state.main_letter.encode('utf-8')
-                    
-                    # Get client name for filename
-                    client_name = "Client"
-                    if (st.session_state.final_results.intake_analysis and
-                        st.session_state.final_results.intake_analysis.client_name):
-                        client_name_raw = st.session_state.final_results.intake_analysis.client_name
-                        client_name = "".join(c for c in client_name_raw if c.isalnum() or c in " _-").rstrip()
-                    
-                    st.download_button(
-                        label="📧 Findings Letter",
-                        data=main_letter_bytes,
-                        file_name=f"Findings_Letter_{client_name}.html",
-                        mime="text/html",
-                        help="Professional findings letter in HTML format"
-                    )
-                except Exception as e:
-                    st.error(f"Error creating findings letter download: {e}")
+            with tab2:
+                # Display budget summary and charts
+                budget_component.display_budget_summary(st.session_state.cost_summary)
+                budget_component.display_cost_breakdown_chart(st.session_state.cost_summary)
+                budget_component.display_variance_analysis(st.session_state.cost_summary)
             
-            with col2:
-                # Download button for document appendix as HTML
-                try:
-                    appendix_bytes = st.session_state.appendix.encode('utf-8')
-                    
-                    # Get client name for filename
-                    client_name = "Client"
-                    if (st.session_state.final_results.intake_analysis and
-                        st.session_state.final_results.intake_analysis.client_name):
-                        client_name_raw = st.session_state.final_results.intake_analysis.client_name
-                        client_name = "".join(c for c in client_name_raw if c.isalnum() or c in " _-").rstrip()
-                    
-                    st.download_button(
-                        label="📎 Document Appendix",
-                        data=appendix_bytes,
-                        file_name=f"Document_Appendix_{client_name}.html",
-                        mime="text/html",
-                        help="Supporting document analysis in HTML format"
-                    )
-                except Exception as e:
-                    st.error(f"Error creating appendix download: {e}")
-            
-            with col3:
-                # Download button for case analysis as HTML
-                try:
-                    # Generate the HTML case analysis document
-                    case_analysis_html = generate_case_analysis_html(st.session_state.final_results)
-                    case_analysis_bytes = case_analysis_html.encode('utf-8')
-                    
-                    # Get client name for filename
-                    client_name = "Client"
-                    if (st.session_state.final_results.intake_analysis and
-                        st.session_state.final_results.intake_analysis.client_name):
-                        client_name_raw = st.session_state.final_results.intake_analysis.client_name
-                        client_name = "".join(c for c in client_name_raw if c.isalnum() or c in " _-").rstrip()
-                    
-                    st.download_button(
-                        label="📄 Case Analysis",
-                        data=case_analysis_bytes,
-                        file_name=f"Case_Analysis_{client_name}.html",
-                        mime="text/html",
-                        help="Comprehensive case analysis in HTML format"
-                    )
-                except Exception as e:
-                    st.error(f"Error creating case analysis download: {e}")
-                    
+            with tab3:
+                # Display detailed cost tables and export options
+                budget_component.display_detailed_cost_tables(st.session_state.cost_summary)
+                budget_component.create_export_buttons(st.session_state.cost_summary)
+                
         else:
-            st.info("Results are available but in an unexpected format.")
+            # Original display without cost tracking
+            # Check if we have the new two-document format
+            if st.session_state.main_letter and st.session_state.appendix:
+                # Display the main findings letter inline using components.html for complete HTML documents
+                st.subheader("Findings Letter")
+                components.html(st.session_state.main_letter, height=800, scrolling=True)
+                
+                # Provide separate download buttons for all documents
+                st.subheader("Download Options")
+                
+                col1, col2, col3 = st.columns(3)
+                _display_download_buttons(col1, col2, col3)
+            else:
+                st.info("Results are available but in an unexpected format.")
             
         # Display any errors that occurred during processing
         if st.session_state.final_results.errors:

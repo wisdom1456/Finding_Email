@@ -444,8 +444,8 @@ class AIAnalyzer:
             '  "case_type": "Case Type",\n'
             '  "claim_viability": "Claim Viability",\n'
             '  "overall_evidence_strength": "Strength",\n'
-            '  "potential_challenges": "A narrative paragraph describing potential challenges. NO BULLET POINTS.",\n'
-            '  "recommended_actions": "A narrative paragraph detailing recommended next steps. NO BULLET POINTS.",\n'
+            '  "potential_challenges": "A clear description of potential challenges, using bullet points or narrative as appropriate for clarity.",\n'
+            '  "recommended_actions": "Recommended next steps, using bullet points or narrative as appropriate for clarity.",\n'
             '  "demand_letter_appropriate": true,\n'
             '  "urgency_assessment": "Urgency"\n'
             "}\n"
@@ -458,8 +458,8 @@ class AIAnalyzer:
             "}\n"
             "==========================\n\n"
             "CONSTRUCTION RULES\n"
-            "1.  **`potential_challenges` and `recommended_actions` must be full, narrative paragraphs.** Do not use bullet points or lists.\n"
-            "2.  The tone must be authoritative and advisory, consistent with a senior attorney persona.\n"
+            "1.  **`potential_challenges` and `recommended_actions` should use clear, accessible language.** Use bullet points or narrative format as appropriate for client understanding.\n"
+            "2.  The tone must be authoritative yet accessible, consistent with a client-focused attorney persona.\n"
             '3.  `claim_viability`: pick “Strong”, “Moderate”, or “Weak”.\n'
             "4.  `demand_letter_appropriate`: true if pre-suit demand adds leverage.\n"
             '5.  If `demand_letter_evaluation.is_appropriate` is **false**, set\n'

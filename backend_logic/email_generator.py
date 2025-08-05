@@ -21,29 +21,26 @@ from backend_logic.quality_validator import QualityValidator
 
 # Constants
 CLIENT_DIRECTED_PERSONA = """
-You are a senior litigation attorney at a prestigious law firm, writing a formal findings letter TO YOUR CLIENT.
+You are a senior litigation attorney at a prestigious law firm, writing a client-friendly findings letter TO YOUR CLIENT.
 
 MANDATORY INSTRUCTIONS:
 1.  **Direct Address:** Every sentence must be written in the second person ('you', 'your'). Start the letter with 'Dear [Client Name],' and maintain this direct address throughout.
 2.  **Client-Centric Language:** You MUST write as if speaking directly to the client.
     *   CORRECT: "You have a strong case because your evidence shows..."
     *   INCORRECT: "The client has a strong case because their evidence shows..."
-3.  **Professional Tone:** Maintain an authoritative, confident, and client-centered tone. Explain complex legal concepts clearly and provide actionable guidance. Your analysis should be comprehensive and accessible, demonstrating legal expertise while empowering your client's decision-making.
+3.  **Plain English Approach:** Use accessible language and avoid legal jargon. Explain complex legal concepts in terms your client can easily understand. Your tone should be professional yet approachable, demonstrating expertise while ensuring client comprehension and empowerment.
+4.  **Client-Friendly Format:** Use bullet points and lists where appropriate to make information clear and actionable for your client.
 """
 
 CONTINUING_LETTER_PERSONA = """
-MANDATORY INSTRUCTION: You are an attorney CONTINUING a findings letter that is already in progress. DO NOT add any greetings (like "Dear Client"), closings, or signatures. You must continue the letter seamlessly from the previous section. Your tone must remain consistent with a formal legal document directed to a client, using the second person ('you', 'your').
+MANDATORY INSTRUCTION: You are an attorney CONTINUING a findings letter that is already in progress. DO NOT add any greetings (like "Dear Client"), closings, or signatures. You must continue the letter seamlessly from the previous section. Your tone must remain consistent with a client-friendly legal document directed to a client, using the second person ('you', 'your'). Use plain English and bullet points or lists where appropriate to enhance clarity.
 """
 
 STRICT_FORMAT_ENFORCEMENT = """
 CRITICAL FORMATTING REQUIREMENTS:
 1.  **HTML Only:** Use ONLY HTML tags for all formatting. Never use Markdown (`**bold**`, `*italic*`).
 2.  **Clean Output:** Generate clean HTML suitable for direct client presentation. DO NOT include `'''html'''` or any other code fences in your response.
-3.  **Paragraphs, Not Lists:** Generate flowing, narrative paragraphs wrapped in `<p>` tags unless a list is explicitly requested.
-"""
-
-NARRATIVE_PARAGRAPH_ENFORCEMENT = """
-MANDATORY REQUIREMENT: The entire output for this section MUST be written as flowing narrative paragraphs, with each paragraph enclosed in `<p>` tags. You are FORBIDDEN from using numbered lists, bullet points, or `<ol>` and `<li>` tags. Combine all points into a cohesive narrative using transitional phrases. Failure to comply will result in an error.
+3.  **Lists Encouraged:** Use bullet points (`<ul>`, `<li>`) and numbered lists (`<ol>`, `<li>`) where appropriate to enhance readability and client understanding.
 """
 
 # Legacy constant maintained for backward compatibility
@@ -150,12 +147,12 @@ class EmailGenerator:
                 self._generate_executive_summary(analysis, persona=CLIENT_DIRECTED_PERSONA)
             )
             
-            # Step 2: Generate all subsequent sections with the continuing persona
+            # Step 2: Generate all subsequent sections with the continuing persona (6-section structure)
             background_summary = self._clean_ai_response(
                 self._generate_background_summary(analysis, persona=CONTINUING_LETTER_PERSONA)
             )
-            analysis_and_position = self._clean_ai_response(
-                self._generate_analysis_section(analysis, persona=CONTINUING_LETTER_PERSONA)
+            legal_concerns = self._clean_ai_response(
+                self._generate_legal_concerns(analysis, persona=CONTINUING_LETTER_PERSONA)
             )
             media_summary = self._clean_ai_response(
                 self._generate_media_summary(analysis, persona=CONTINUING_LETTER_PERSONA)
@@ -181,11 +178,11 @@ class EmailGenerator:
                 self._generate_video_analysis_appendix(analysis, persona=CONTINUING_LETTER_PERSONA)
             )
 
-            # Assemble the final GeneratedLetter
+            # Assemble the final GeneratedLetter (6-section structure)
             return GeneratedLetter(
                 executive_summary=executive_summary,
                 background_summary=background_summary,
-                analysis_and_position=analysis_and_position,
+                analysis_and_position=legal_concerns,  # Map legal_concerns to analysis_and_position field
                 media_summary=media_summary,
                 video_analysis_appendix=video_analysis_appendix,
                 strengths=strengths,
@@ -201,11 +198,11 @@ class EmailGenerator:
             return GeneratedLetter(
                 executive_summary="<p>Error generating executive summary.</p>",
                 background_summary="<p>Error generating background summary.</p>",
-                analysis_and_position="<p>Error generating analysis section.</p>",
+                analysis_and_position="<p>Error generating key legal concerns.</p>",
                 media_summary="<p>Error generating media summary.</p>",
                 video_analysis_appendix="",
-                strengths="<p>Error generating strengths assessment.</p>",
-                challenges="<p>Error generating challenges assessment.</p>",
+                strengths="<p>Error generating strengths of your case.</p>",
+                challenges="<p>Error generating potential challenges.</p>",
                 recommendations="<p>Error generating recommendations.</p>",
                 next_steps="<p>Error generating next steps.</p>",
                 closing_paragraph="<p>We remain committed to advancing your interests and achieving the best possible outcome for your case.</p>"
@@ -256,7 +253,8 @@ class EmailGenerator:
             template_context = {
                 'analysis': analysis,
                 'generated_letter': generated_letter,
-                'current_date': datetime.now().strftime('%B %d, %Y')
+                'current_date': datetime.now().strftime('%B %d, %Y'),
+                'format_video_analysis': self.format_video_analysis_for_appendix
             }
             print(f"EMAIL GENERATOR: Rendering main template with context keys: {list(template_context.keys())}")
             main_html_content = main_template.render(results=template_context, current_date=template_context['current_date'])
@@ -558,25 +556,26 @@ class EmailGenerator:
         result = self._make_openai_request(prompt, persona)
         return result or "<p>Background summary could not be generated.</p>"
 
-    def _generate_analysis_section(self, analysis: CaseAnalysisResult, persona: str) -> str:
-        """Generates comprehensive legal analysis and position with HTML formatting."""
+    def _generate_legal_concerns(self, analysis: CaseAnalysisResult, persona: str) -> str:
+        """Generates key legal concerns section with bullet points for clarity."""
         prompt = f"""
-        Convert the document analysis data into sophisticated, flowing legal prose that presents our analysis and legal position for your case.
+        Based on the document analysis, identify the key legal concerns in your case using clear, plain English.
 
-        Your analysis should:
-        - Transform the structured data into elegant, professional legal prose.
-        - Present a coherent legal analysis and your legal position.
-        - Demonstrate legal expertise and strategic thinking.
-        - Use sophisticated legal language while remaining accessible to you.
-        - Be formatted as multiple HTML paragraphs using `<p>` tags.
+        Your legal concerns section should:
+        - Use accessible language that you can easily understand
+        - List the main legal issues using bullet points for clarity
+        - Avoid legal jargon and explain concepts in simple terms
+        - Address you directly throughout
+        - Be formatted with `<ul>` and `<li>` tags for easy reading
+        - Focus on the most important legal matters affecting your case
 
         Case Context:
         {analysis.model_dump_json(indent=2)}
 
-        Generate only the HTML-formatted analysis and legal position text.
+        Generate the key legal concerns using bullet points for maximum clarity.
         """
         result = self._make_openai_request(prompt, persona)
-        return result or "<p>Legal analysis and position could not be generated.</p>"
+        return result or "<p>Key legal concerns could not be generated.</p>"
 
     def _generate_media_summary(self, analysis: CaseAnalysisResult, persona: str) -> str:
         """Generates a summary of media analysis with HTML formatting."""
@@ -599,6 +598,81 @@ class EmailGenerator:
         """
         result = self._make_openai_request(prompt, persona)
         return result or "<p>Media analysis summary could not be generated.</p>"
+
+    def format_video_analysis_for_appendix(self, video_insight) -> str:
+        """Format video analysis results into readable text for document appendix."""
+        
+        formatted_text = []
+        
+        # Handle both VideoInsight and EnhancedVideoInsight
+        if hasattr(video_insight, 'insights') and video_insight.insights:
+            insights = video_insight.insights
+            
+            # Handle case where insights is a string (preserved/summarized data)
+            if isinstance(insights, str):
+                return f'<p style="margin: 0; font-size: 13px; line-height: 1.5;">{insights}</p>'
+            
+            # Handle case where insights is a dictionary (normal Vertex AI response)
+            if isinstance(insights, dict):
+                # Add summary if available
+                if 'summary' in insights and insights['summary']:
+                    formatted_text.append(f'<div style="margin-bottom: 15px;"><div class="meta-label">Summary</div><p style="margin: 5px 0; font-size: 13px;">{insights["summary"]}</p></div>')
+                
+                # Add timeline if available
+                if 'timeline' in insights and insights['timeline']:
+                    timeline_items = insights['timeline']
+                    if isinstance(timeline_items, list) and timeline_items:
+                        formatted_text.append('<div style="margin-bottom: 15px;"><div class="meta-label">Timeline</div><ul style="margin: 5px 0; padding-left: 20px; list-style-type: disc;">')
+                        for event in timeline_items:
+                            if isinstance(event, dict):
+                                timestamp = event.get('timestamp', 'Unknown')
+                                description = event.get('event', 'No description')
+                                formatted_text.append(f'<li style="margin-bottom: 5px; font-size: 13px;">• {timestamp} - {description}</li>')
+                            elif isinstance(event, str):
+                                formatted_text.append(f'<li style="margin-bottom: 5px; font-size: 13px;">• {event}</li>')
+                        formatted_text.append('</ul></div>')
+                
+                # Add objects detected if available
+                if 'objects' in insights and insights['objects']:
+                    objects = insights['objects']
+                    if isinstance(objects, list) and objects:
+                        formatted_text.append('<div style="margin-bottom: 15px;"><div class="meta-label">Objects Detected</div><ul style="margin: 5px 0; padding-left: 20px; list-style-type: disc;">')
+                        for obj in objects:
+                            if isinstance(obj, dict):
+                                object_name = obj.get('object', 'Unknown object')
+                                timestamp = obj.get('timestamp', 'Unknown time')
+                                formatted_text.append(f'<li style="margin-bottom: 5px; font-size: 13px;">• {object_name} ({timestamp})</li>')
+                            elif isinstance(obj, str):
+                                formatted_text.append(f'<li style="margin-bottom: 5px; font-size: 13px;">• {obj}</li>')
+                        formatted_text.append('</ul></div>')
+                
+                # Add content moderation if available
+                if 'content_moderation' in insights and insights['content_moderation']:
+                    formatted_text.append(f'<div style="margin-bottom: 15px;"><div class="meta-label">Content Moderation</div><p style="margin: 5px 0; font-size: 13px;">{insights["content_moderation"]}</p></div>')
+                
+                # Handle any other fields that weren't specifically formatted
+                handled_keys = {'summary', 'timeline', 'objects', 'content_moderation'}
+                other_fields = []
+                for key, value in insights.items():
+                    if key not in handled_keys and value:
+                        # Format the key for display
+                        display_key = key.replace('_', ' ').title()
+                        if isinstance(value, (list, dict)):
+                            # Convert complex types to string representation
+                            value_str = str(value)
+                        else:
+                            value_str = str(value)
+                        other_fields.append(f'<div style="margin-bottom: 10px;"><div class="meta-label">{display_key}</div><p style="margin: 5px 0; font-size: 13px;">{value_str}</p></div>')
+                
+                if other_fields:
+                    formatted_text.extend(other_fields)
+                
+                # If we have formatted content, return it
+                if formatted_text:
+                    return ''.join(formatted_text)
+        
+        # Fallback for cases where no insights are available or formatting fails
+        return '<p style="margin: 0; font-size: 13px; line-height: 1.5;">Video analysis details not available.</p>'
 
     def _generate_video_analysis_appendix(self, analysis: CaseAnalysisResult, persona: str) -> str:
         """Generates a detailed video analysis appendix explaining the significance of video content to the case.
@@ -690,85 +764,85 @@ class EmailGenerator:
         return result or ""
 
     def _generate_strengths(self, analysis: CaseAnalysisResult, persona: str) -> str:
-        """Generates case strengths assessment with HTML formatting."""
+        """Generates strengths of your case section with bullet points for clarity."""
         prompt = f"""
-        Based on the case analysis, identify and articulate the key strengths of your position in sophisticated legal prose.
+        Based on the case analysis, identify the key strengths of your case using clear, plain English.
 
-        Your strengths assessment should:
-        - Identify the most compelling aspects of your case.
-        - Present each strength in sophisticated, flowing legal prose.
-        - Demonstrate confidence in your position.
-        - Use professional legal language, focusing on evidence, legal precedent, and strategic advantages.
-        - Be formatted as HTML paragraphs using `<p>` tags.
+        Your strengths section should:
+        - Use accessible language that you can easily understand
+        - List each strength using bullet points for clarity
+        - Avoid legal jargon and explain advantages in simple terms
+        - Address you directly throughout
+        - Be formatted with `<ul>` and `<li>` tags for easy reading
+        - Focus on the most compelling aspects that support your position
 
         Case Context:
         {analysis.model_dump_json(indent=2)}
 
-        Generate only the HTML-formatted strengths assessment text.
+        Generate the strengths of your case using bullet points for maximum clarity.
         """
         result = self._make_openai_request(prompt, persona)
-        return result or "<p>Case strengths assessment could not be generated.</p>"
+        return result or "<p>Strengths of your case could not be generated.</p>"
 
     def _generate_challenges(self, analysis: CaseAnalysisResult, persona: str) -> str:
-        """Generates potential challenges assessment with HTML formatting."""
+        """Generates potential challenges section with bullet points for clarity."""
         prompt = f"""
-        Based on the case analysis, identify and address potential challenges or risks to your position in sophisticated legal prose.
+        Based on the case analysis, identify potential challenges or obstacles in your case using clear, plain English.
 
-        Your challenges assessment should:
-        - Honestly assess potential weaknesses or risks.
-        - Present challenges in a balanced, professional manner.
-        - Demonstrate strategic awareness and preparedness.
-        - Suggest how challenges might be addressed or mitigated.
-        - Be formatted as HTML paragraphs using `<p>` tags.
+        Your potential challenges section should:
+        - Use accessible language that you can easily understand
+        - List each challenge using bullet points for clarity
+        - Avoid legal jargon and explain risks in simple terms
+        - Address you directly throughout
+        - Be formatted with `<ul>` and `<li>` tags for easy reading
+        - Honestly assess potential weaknesses while maintaining a balanced perspective
+        - Include how challenges might be addressed where appropriate
 
         Case Context:
         {analysis.model_dump_json(indent=2)}
 
-        Generate only the HTML-formatted challenges assessment text.
+        Generate the potential challenges using bullet points for maximum clarity.
         """
         result = self._make_openai_request(prompt, persona)
-        return result or "<p>Challenges assessment could not be generated.</p>"
+        return result or "<p>Potential challenges could not be generated.</p>"
 
     def _generate_recommendations(self, analysis: CaseAnalysisResult, persona: str) -> str:
-        """Generates strategic recommendations as flowing narrative paragraphs."""
+        """Generates strategic recommendations using bullet points for clarity."""
         prompt = f"""
-        {NARRATIVE_PARAGRAPH_ENFORCEMENT}
+        Based on the comprehensive case analysis, formulate clear, actionable strategic recommendations for YOUR case.
 
-        Based on the comprehensive case analysis, formulate clear, actionable strategic recommendations for YOUR case in flowing narrative prose.
-
-        Your recommendations must:
-        - Be written as continuous, flowing paragraphs that read like a professional letter.
-        - Connect ideas with transitional phrases to create a cohesive narrative.
-        - Address YOU directly throughout (e.g., "We recommend that you...", "Your best course of action...").
-        - Use sophisticated legal language while maintaining readability.
-        - Be formatted ONLY with `<p>` tags—absolutely NO list tags.
+        Your recommendations should:
+        - Be written in accessible, plain English that you can easily understand
+        - Use bullet points to clearly organize different recommendations
+        - Address YOU directly throughout (e.g., "We recommend that you...", "Your best course of action...")
+        - Avoid legal jargon and explain any necessary legal concepts in simple terms
+        - Be formatted with `<ul>` and `<li>` tags for easy reading
 
         Case Context:
         {analysis.model_dump_json(indent=2)}
 
-        Generate strategic recommendations as flowing, professional narrative paragraphs. NO LISTS.
+        Generate strategic recommendations using bullet points for maximum clarity and client understanding.
         """
         result = self._make_openai_request(prompt, persona)
         return result or "<p>Strategic recommendations could not be generated.</p>"
 
     def _generate_next_steps(self, analysis: CaseAnalysisResult, persona: str) -> str:
-        """Generates immediate next steps as flowing narrative paragraphs."""
+        """Generates immediate next steps using bullet points for clarity."""
         prompt = f"""
-        {NARRATIVE_PARAGRAPH_ENFORCEMENT}
+        Based on the case analysis and strategic recommendations, identify the immediate next steps for YOUR case.
 
-        Based on the case analysis and strategic recommendations, identify the immediate next steps for YOUR case in flowing narrative prose.
-
-        Your next steps must:
-        - Be written as continuous, flowing paragraphs addressing YOU directly.
-        - Connect actions with transitional phrases to create a coherent narrative.
-        - Include specific timelines woven naturally into the prose.
-        - Present a logical sequence of actions without using list formatting.
-        - Be formatted ONLY with `<p>` tags—absolutely NO list tags.
+        Your next steps should:
+        - Be written in clear, plain English that you can easily follow
+        - Use bullet points to organize different actions in priority order
+        - Address YOU directly throughout
+        - Include specific timelines where appropriate
+        - Avoid legal jargon and use accessible language
+        - Be formatted with `<ul>` and `<li>` tags for easy reading
 
         Case Context:
         {analysis.model_dump_json(indent=2)}
 
-        Generate immediate next steps as flowing, professional narrative paragraphs. NO LISTS.
+        Generate immediate next steps using bullet points for maximum clarity and actionability.
         """
         result = self._make_openai_request(prompt, persona)
         return result or "<p>Next steps could not be generated.</p>"

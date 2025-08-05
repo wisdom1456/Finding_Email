@@ -1,6 +1,8 @@
 from pydantic import BaseModel, Field, field_validator, validator, model_validator
 from typing import List, Optional, Dict, Any, Union
 from enum import Enum
+from datetime import datetime
+from decimal import Decimal
 from .validators import stringify_dict
 
 # --- Enums for Type Safety and Consistency ---
@@ -447,6 +449,41 @@ class MediaProcessingError(BaseModel):
     error_message: str = Field(..., description="The detailed error message.")
     error_type: str = Field(..., description="The type of error (e.g., 'TranscriptionError', 'UploadError').")
 
+# --- Cost Tracking Models ---
+
+class ServiceCost(BaseModel):
+    """Individual service cost breakdown."""
+    service_name: str = Field(..., description="Service name (e.g., 'OpenAI GPT-4o', 'Vertex AI')")
+    operation_type: str = Field(..., description="Type of operation (e.g., 'document_analysis', 'video_processing')")
+    units_consumed: int = Field(..., description="Units consumed (tokens, minutes, etc.)")
+    unit_type: str = Field(..., description="Unit type (tokens, minutes, requests)")
+    rate_per_unit: Decimal = Field(..., description="Cost per unit in USD")
+    total_cost: Decimal = Field(..., description="Total cost for this service")
+    file_name: Optional[str] = Field(None, description="Associated file name if applicable")
+
+class CostEstimate(BaseModel):
+    """Pre-processing cost estimation."""
+    estimated_document_costs: List[ServiceCost] = Field(default_factory=list)
+    estimated_media_costs: List[ServiceCost] = Field(default_factory=list)
+    total_estimated_cost: Decimal = Field(Decimal('0.00'), description="Total estimated cost")
+    confidence_level: float = Field(0.8, description="Estimation confidence (0.0-1.0)")
+    estimation_timestamp: datetime = Field(default_factory=datetime.now)
+
+class ActualCosts(BaseModel):
+    """Actual costs incurred during processing."""
+    document_analysis_costs: List[ServiceCost] = Field(default_factory=list)
+    media_processing_costs: List[ServiceCost] = Field(default_factory=list)
+    total_actual_cost: Decimal = Field(Decimal('0.00'), description="Total actual cost")
+    processing_timestamp: datetime = Field(default_factory=datetime.now)
+
+class CostSummary(BaseModel):
+    """Complete cost summary for a case."""
+    case_id: str = Field(..., description="Unique case identifier")
+    cost_estimate: Optional[CostEstimate] = None
+    actual_costs: Optional[ActualCosts] = None
+    cost_variance: Optional[Decimal] = Field(None, description="Difference between estimated and actual")
+    cost_variance_percentage: Optional[float] = Field(None, description="Variance as percentage")
+
 class CaseAnalysisResult(BaseModel):
     """
     Combined data model for enhanced intake and case analysis, including error tracking.
@@ -466,6 +503,7 @@ class CaseAnalysisResult(BaseModel):
     legal_assessment: Optional[LegalAssessment] = None
     demand_letter_evaluation: Optional[DemandLetterEvaluation] = None
     errors: List[AnalysisError] = Field(default_factory=list, description="A list of errors encountered during analysis.")
+    cost_summary: Optional[CostSummary] = Field(None, description="Cost tracking information")
 
 # --- Email Generation Models ---
 

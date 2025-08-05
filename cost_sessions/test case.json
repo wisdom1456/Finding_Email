@@ -1,0 +1,13 @@
+{
+  "case_id": "test case",
+  "cost_estimate": {
+    "estimated_document_costs": [],
+    "estimated_media_costs": [],
+    "total_estimated_cost": "0",
+    "confidence_level": 0.8,
+    "estimation_timestamp": "2025-08-05 02:17:56.132689"
+  },
+  "actual_costs": null,
+  "cost_variance": null,
+  "cost_variance_percentage": null
+}

@@ -137,82 +137,50 @@
             <p><strong>Re:</strong> Case Analysis and Findings</p>
         </div>
 
-        <!-- Executive Summary Section -->
-        {% if results.generated_letter and results.generated_letter.executive_summary %}
-        <div class="executive-summary">
-            <h2>Executive Summary</h2>
-            <div class="legal-content">
-                {{ results.generated_letter.executive_summary | safe }}
-            </div>
-        </div>
-        {% endif %}
-
         <!-- Background Summary Section -->
         {% if results.generated_letter and results.generated_letter.background_summary %}
         <div class="section">
-            <h2>I. Background</h2>
+            <h2>1. Background Summary</h2>
             <div class="legal-content">
                 {{ results.generated_letter.background_summary | safe }}
-            </div>
-        </div>
-        {% endif %}
-
-        <!-- Analysis and Position Section -->
-        {% if results.generated_letter and results.generated_letter.analysis_and_position %}
-        <div class="section">
-            <h2>II. Legal Analysis and Position</h2>
-            <div class="legal-content">
-                {{ results.generated_letter.analysis_and_position | safe }}
-            </div>
-        </div>
-        {% endif %}
-
-        <!-- Media Analysis Section -->
-        {% if results.generated_letter and results.generated_letter.media_summary %}
-        <div class="section">
-            <h2>III. Media Analysis</h2>
-            <div class="legal-content">
-                {{ results.generated_letter.media_summary | safe }}
                 
-                {# Enhanced video evidence integration for criminal cases #}
+                {# Integrate video evidence content into background when present #}
                 {% if results.analysis.video_insights %}
                     {% set criminal_evidence_found = false %}
                     {% for video in results.analysis.video_insights %}
                         {% if video.is_criminal_case and video.criminal_analysis and video.criminal_analysis.evidence_items %}
                             {% if not criminal_evidence_found %}
                                 {% set criminal_evidence_found = true %}
-                                <h3>Key Video Evidence</h3>
+                                <p><strong>Video Evidence Overview:</strong></p>
                             {% endif %}
                             
-                            <p><strong>{{ video.file_name }}:</strong></p>
-                            {% for evidence in video.criminal_analysis.evidence_items[:3] %}{# Limit to top 3 most significant #}
-                                {% if evidence.evidence_strength in ['strong', 'moderate'] and evidence.constitutional_issues %}
-                                <p>• <em>{{ evidence.time_range.start_time }} - {{ evidence.time_range.end_time }}</em>: {{ evidence.legal_significance }}
-                                {% if evidence.constitutional_issues %}
-                                    {% for issue in evidence.constitutional_issues[:2] %}{# Limit constitutional issues #}
-                                        Notable concern: {{ issue }}.
-                                    {% endfor %}
-                                {% endif %}
-                                </p>
-                                {% endif %}
-                            {% endfor %}
+                            <p><strong>{{ video.file_name }}:</strong> Video evidence contains timestamped documentation relevant to the case. Key evidence categories have been identified and analyzed for legal significance.</p>
                         {% endif %}
                     {% endfor %}
                     
                     {# Reference to document appendix for detailed analysis #}
                     {% if criminal_evidence_found or results.analysis.video_insights %}
-                    <p><em>For comprehensive video evidence analysis with detailed timestamps and procedural assessment, please refer to Document Appendix, Video Evidence Section.</em></p>
+                    <p><em>Complete video evidence analysis with detailed timestamps and procedural assessment is available in the Document Appendix, Video Evidence Section.</em></p>
                     {% endif %}
                 {% endif %}
             </div>
         </div>
         {% endif %}
 
+        <!-- Key Legal Concerns Section -->
+        {% if results.generated_letter and results.generated_letter.analysis_and_position %}
+        <div class="section">
+            <h2>2. Key Legal Concerns</h2>
+            <div class="legal-content">
+                {{ results.generated_letter.analysis_and_position | safe }}
+            </div>
+        </div>
+        {% endif %}
 
-        <!-- Case Strengths Section -->
+        <!-- Strengths of Your Case Section -->
         {% if results.generated_letter and results.generated_letter.strengths %}
         <div class="section">
-            <h2>IV. Case Strengths</h2>
+            <h2>3. Strengths of Your Case</h2>
             <div class="strengths-section">
                 <div class="legal-content">
                     {{ results.generated_letter.strengths | safe }}
@@ -224,7 +192,7 @@
         <!-- Potential Challenges Section -->
         {% if results.generated_letter and results.generated_letter.challenges %}
         <div class="section">
-            <h2>V. Potential Challenges and Risks</h2>
+            <h2>4. Potential Challenges</h2>
             <div class="challenges-section">
                 <div class="legal-content">
                     {{ results.generated_letter.challenges | safe }}
@@ -236,7 +204,7 @@
         <!-- Recommendations Section -->
         {% if results.generated_letter and results.generated_letter.recommendations %}
         <div class="section">
-            <h2>VI. Recommendations</h2>
+            <h2>5. Recommendations</h2>
             <div class="recommendations-section">
                 <div class="legal-content">
                     {{ results.generated_letter.recommendations | safe }}
@@ -248,7 +216,7 @@
         <!-- Next Steps Section -->
         {% if results.generated_letter and results.generated_letter.next_steps %}
         <div class="section">
-            <h2>VII. Next Steps</h2>
+            <h2>6. Next Steps</h2>
             <div class="legal-content">
                 {{ results.generated_letter.next_steps | safe }}
             </div>

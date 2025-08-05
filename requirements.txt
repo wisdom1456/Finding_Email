@@ -28,6 +28,9 @@ pytesseract>=0.3.10
 # Utility Libraries
 tenacity>=8.2.3
 
+# Data Visualization for Cost Tracking
+plotly>=5.17.0
+
 # Audio/Video Processing Dependencies
 google-cloud-storage>=2.10.0
 google-cloud-aiplatform>=1.1.0

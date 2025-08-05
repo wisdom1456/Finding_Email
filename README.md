@@ -8,11 +8,12 @@ The Legal Document Analysis Portal streamlines legal document processing by auto
 
 ## Features
 
-- **Automated Document Analysis**: AI-powered extraction of key legal information from intake forms and case documents
-- **Professional Communication**: Generation of client-ready findings letters in multiple formats (.eml, .txt)
-- **Multi-Format Support**: PDF, DOCX, DOC, TXT, and EML file processing
-- **Quality Assurance**: Multi-stage validation ensuring accuracy and professional output quality
-- **Production-Ready**: Robust system capable of handling complex cases with 40+ documents
+- **Automated Document Analysis**: AI-powered extraction of key legal information from intake forms and case documents.
+- **Media Processing**: Audio transcription via OpenAI Whisper and video analysis via Google Cloud Video AI.
+- **Professional Communication**: Generation of client-ready findings letters in multiple formats (.eml, .txt).
+- **Multi-Format Support**: PDF, DOCX, DOC, TXT, EML, MP3, WAV, M4A, MP4, MOV, and AVI file processing.
+- **Quality Assurance**: Multi-stage validation ensuring accuracy and professional output quality.
+- **Production-Ready**: Robust system capable of handling complex cases with 40+ documents.
 
 ## Architecture
 
@@ -50,6 +51,7 @@ The Legal Document Analysis Portal streamlines legal document processing by auto
 ### Prerequisites
 - Python 3.12 or higher
 - OpenAI API key
+- Google Cloud Platform project with billing enabled
 - PDF.co API key (optional, for enhanced PDF processing)
 
 ### Setup
@@ -68,9 +70,12 @@ The Legal Document Analysis Portal streamlines legal document processing by auto
 3. **Configure environment variables**:
    ```bash
    cp .env.template .env
-   # Edit .env with your API keys:
-   # OPENAI_API_KEY=your_openai_api_key
-   # PDFCO_API_KEY=your_pdfco_api_key (optional)
+      # Edit .env with your API keys and GCP configuration:
+      # OPENAI_API_KEY=your_openai_api_key
+      # PDFCO_API_KEY=your_pdfco_api_key (optional)
+      # GCP_PROJECT_ID=your-gcp-project-id
+      # GCP_BUCKET_NAME=your-gcp-bucket-name
+      # GOOGLE_APPLICATION_CREDENTIALS=/path/to/your/service-account-key.json
    ```
 
 ## Usage
@@ -84,20 +89,22 @@ The application will be available at `http://localhost:8501`
 
 ### Using the Portal
 
-1. **Upload Documents**:
-   - Navigate to the "File Upload" tab
-   - Upload client intake form and case documents
-   - Supported formats: PDF, DOCX, DOC, TXT, EML
+1. **Upload Documents & Media**:
+   - Navigate to the "File Upload" tab.
+   - Upload client intake form, case documents, and media files.
+   - Supported document formats: PDF, DOCX, DOC, TXT, EML.
+   - Supported audio formats: MP3, WAV, M4A.
+   - Supported video formats: MP4, MOV, AVI.
 
 2. **Process Documents**:
-   - Click "Process Documents" to begin analysis
-   - Monitor progress in the interface
-   - Processing time varies based on document count and size
+   - Click "Process Documents" to begin analysis.
+   - Monitor progress in the interface.
+   - Processing time varies based on document and media count/size.
 
 3. **Download Results**:
-   - Navigate to the "Results" tab after processing
-   - Download professional findings letter (.eml and .txt formats)
-   - Review case analysis and extracted information
+   - Navigate to the "Results" tab after processing.
+   - Download professional findings letter (.eml and .txt formats) which now includes insights from audio and video files.
+   - Review case analysis and extracted information.
 
 ## Development
 

@@ -1,13 +1,8 @@
+import sys
+from pathlib import Path
 import pytest
-from pydantic_settings import BaseSettings
-from typing import Optional
 
-class TestSettings(BaseSettings):
-    openai_api_key: str = "test_key"
-    pdfco_api_key: str = "test_key"
-    cors_origins: str = "*"
-    railway_static_url: Optional[str] = None
-
-@pytest.fixture
-def test_settings():
-    return TestSettings()
+# Add the project's root directory to the Python path
+# This allows tests to import modules from the 'backend' and 'backend_logic' directories
+root_dir = Path(__file__).resolve().parents[2]
+sys.path.append(str(root_dir))

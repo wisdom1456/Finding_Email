@@ -31,6 +31,8 @@ graph TB
     
     subgraph "Backend Logic Modules"
         DocProc[Document Processor]
+        AudioProc[Audio Processor]
+        VideoProc[Video Processor]
         AIAnalyzer[AI Analyzer]
         EmailGen[Email Generator]
         QualityVal[Quality Validator]
@@ -45,6 +47,7 @@ graph TB
     
     subgraph "External APIs"
         OpenAI[OpenAI API]
+        GoogleCloud[Google Cloud Platform]
         PDFco[PDF.co API]
     end
     
@@ -53,7 +56,10 @@ graph TB
     UI --> Session
     
     Upload --> DocProc
-    DocProc --> AIAnalyzer
+    DocProc --> AudioProc
+    DocProc --> VideoProc
+    AudioProc --> AIAnalyzer
+    VideoProc --> AIAnalyzer
     AIAnalyzer --> EmailGen
     EmailGen --> QualityVal
     QualityVal --> Results
@@ -62,6 +68,8 @@ graph TB
     AIAnalyzer --> DataModels
     EmailGen --> Validators
     
+    AudioProc --> OpenAI
+    VideoProc --> GoogleCloud
     AIAnalyzer --> OpenAI
     DocProc --> PDFco
 ```
@@ -74,6 +82,8 @@ graph TB
 ├── backend_logic/            # Backend business logic modules
 │   ├── __init__.py
 │   ├── document_processor.py  # Document processing and validation
+│   ├── audio_processor.py     # Audio transcription
+│   ├── video_processor.py     # Video analysis
 │   ├── ai_analyzer.py         # OpenAI integration and analysis
 │   ├── email_generator.py     # Email findings generation
 │   ├── quality_validator.py   # Quality assurance
@@ -190,15 +200,20 @@ sequenceDiagram
     participant User
     participant StreamlitUI
     participant DocProcessor
+    participant AudioProcessor
+    participant VideoProcessor
     participant AIAnalyzer
     participant EmailGen
     participant QualityVal
-    
-    User->>StreamlitUI: Upload Documents
+
+    User->>StreamlitUI: Upload Documents & Media
     StreamlitUI->>DocProcessor: Process Files
-    DocProcessor->>DocProcessor: Extract Content
+    DocProcessor->>AudioProcessor: Process Audio
+    DocProcessor->>VideoProcessor: Process Video
+    AudioProcessor->>AIAnalyzer: Analyze Transcript
+    VideoProcessor->>AIAnalyzer: Analyze Video Insights
     DocProcessor->>AIAnalyzer: Analyze Documents
-    AIAnalyzer->>AIAnalyzer: Generate Analysis
+    AIAnalyzer->>AIAnalyzer: Generate Consolidated Analysis
     AIAnalyzer->>EmailGen: Create Findings Letter
     EmailGen->>EmailGen: Format Professional Output
     EmailGen->>QualityVal: Validate Output
@@ -222,6 +237,15 @@ class ProcessedDocument(BaseModel):
     content: str
     file_type: str
     metadata: Dict[str, Any]
+
+class TranscriptedMedia(BaseModel):
+    file_name: str
+    transcript: str
+    confidence: float
+
+class VideoInsight(BaseModel):
+    file_name: str
+    insights: Dict[str, Any]
 
 class CaseAnalysis(BaseModel):
     intake_analysis: IntakeAnalysis

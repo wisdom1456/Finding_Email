@@ -7,6 +7,7 @@ streamlit>=1.28.0
 # API Integration
 requests>=2.31.0
 openai>=1.3.0
+tiktoken>=0.5.1
 
 # Configuration and Data Management
 python-dotenv>=1.0.0
@@ -26,6 +27,13 @@ pytesseract>=0.3.10
 
 # Utility Libraries
 tenacity>=8.2.3
+
+# Audio/Video Processing Dependencies
+google-cloud-storage>=2.10.0
+google-cloud-aiplatform>=1.1.0
+google-cloud-speech>=2.0.0
+pydub>=0.25.1
+ffmpeg-python>=0.2.0
 
 # Removed unnecessary dependencies:
 # - pydantic-settings (using pydantic directly)

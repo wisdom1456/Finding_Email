@@ -167,10 +167,29 @@
         </div>
         {% endif %}
 
+        <!-- Media Analysis Section -->
+        {% if results.generated_letter and results.generated_letter.media_summary %}
+        <div class="section">
+            <h2>III. Media Analysis</h2>
+            <div class="legal-content">
+                {{ results.generated_letter.media_summary | safe }}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Video Analysis Appendix Section -->
+        {% if results.generated_letter and results.generated_letter.video_analysis_appendix %}
+        <div class="section">
+            <div class="legal-content">
+                {{ results.generated_letter.video_analysis_appendix | safe }}
+            </div>
+        </div>
+        {% endif %}
+
         <!-- Case Strengths Section -->
         {% if results.generated_letter and results.generated_letter.strengths %}
         <div class="section">
-            <h2>III. Case Strengths</h2>
+            <h2>IV. Case Strengths</h2>
             <div class="strengths-section">
                 <div class="legal-content">
                     {{ results.generated_letter.strengths | safe }}
@@ -182,7 +201,7 @@
         <!-- Potential Challenges Section -->
         {% if results.generated_letter and results.generated_letter.challenges %}
         <div class="section">
-            <h2>IV. Potential Challenges and Risks</h2>
+            <h2>V. Potential Challenges and Risks</h2>
             <div class="challenges-section">
                 <div class="legal-content">
                     {{ results.generated_letter.challenges | safe }}
@@ -194,7 +213,7 @@
         <!-- Recommendations Section -->
         {% if results.generated_letter and results.generated_letter.recommendations %}
         <div class="section">
-            <h2>V. Recommendations</h2>
+            <h2>VI. Recommendations</h2>
             <div class="recommendations-section">
                 <div class="legal-content">
                     {{ results.generated_letter.recommendations | safe }}
@@ -206,7 +225,7 @@
         <!-- Next Steps Section -->
         {% if results.generated_letter and results.generated_letter.next_steps %}
         <div class="section">
-            <h2>VI. Next Steps</h2>
+            <h2>VII. Next Steps</h2>
             <div class="legal-content">
                 {{ results.generated_letter.next_steps | safe }}
             </div>

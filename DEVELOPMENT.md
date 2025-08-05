@@ -34,7 +34,12 @@ cp .env.example .env
 ```bash
 # Required API Keys
 OPENAI_API_KEY=your_openai_api_key
-PDFCO_API_KEY=your_pdfco_api_key
+PDFCO_API_KEY=your_pdfco_api_key # Optional
+
+# Google Cloud Configuration
+GCP_PROJECT_ID=your-gcp-project-id
+GCP_BUCKET_NAME=your-gcp-bucket-name
+GOOGLE_APPLICATION_CREDENTIALS=/path/to/your/service-account-key.json
 
 # Optional Configuration
 STREAMLIT_SERVER_PORT=8501
@@ -368,6 +373,32 @@ def main():
             # Process component result
             handle_new_component_result(result)
 ```
+
+### Google Cloud SDK Setup
+For local development, you will need to install and configure the Google Cloud SDK to authenticate with your service account.
+
+1. **Install the Google Cloud SDK**: Follow the instructions for your operating system [here](https://cloud.google.com/sdk/docs/install).
+2. **Authenticate**: Log in with your Google account:
+   ```bash
+   gcloud auth login
+   ```
+3. **Set Project**: Configure the SDK with your project ID:
+   ```bash
+   gcloud config set project your-gcp-project-id
+   ```
+4. **Application Default Credentials**: To authenticate the application locally, you can use Application Default Credentials (ADC).
+   ```bash
+   gcloud auth application-default login
+   ```
+   This will create a credential file on your local machine that the Google Cloud libraries will automatically use. You will not need to set the `GOOGLE_APPLICATION_CREDENTIALS` environment variable if you use this method.
+
+### Mocking Cloud Services for Development
+If you are developing without cloud credentials, you can mock the audio and video processing services.
+
+- **`backend_logic/audio_processor.py`**: Modify the `transcribe_audio` function to return a mock transcript.
+- **`backend_logic/video_processor.py`**: Modify the `analyze_video` function to return mock video insights.
+
+This will allow you to test the rest of the application's functionality without needing active cloud services.
 
 ## Testing Framework
 

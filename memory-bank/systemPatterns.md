@@ -4,6 +4,261 @@
 
 The Legal Document Analysis Portal has successfully evolved from a TypeScript/n8n architecture through a Streamlit/FastAPI hybrid to a unified Streamlit-Python system, achieving optimal simplicity and maintainability while preserving all functionality.
 
+### Vertex AI Video Processing Architecture
+
+The integration of Vertex AI for video analysis marks a significant architectural enhancement, shifting from a specific API to a flexible, multimodal, prompt-driven system.
+
+-   **Primary SDK**: `google-cloud-aiplatform`
+-   **Core Model**: `gemini-pro-vision` for multimodal analysis
+-   **Complementary Service**: `google-cloud-speech` for high-accuracy transcription
+-   **Pattern**: A unified, prompt-driven approach where a single request can perform multiple analysis tasks based on natural language instructions. The model's natural language text output requires a sophisticated parsing layer to extract structured information.
+
+```mermaid
+graph TD
+    subgraph "User Interaction"
+        A[Streamlit Frontend]
+    end
+
+    subgraph "Backend Logic"
+        B(Video Processor)
+        G(Response Parser)
+        H(VideoAnalysis Pydantic Model)
+        I(AI Analyzer)
+        J(Email Generator)
+    end
+
+    subgraph "Google Cloud Platform"
+        C[Cloud Storage Bucket]
+        D[Vertex AI: gemini-pro-vision]
+        F[Cloud Speech-to-Text]
+    end
+    
+    A -- Video File --> B;
+    B -- 1. Upload to GCS --> C;
+    B -- 2. GCS URI and Prompt --> D;
+    B -- 3. Extract Audio --> F;
+    D -- 4. NL Content Analysis --> G;
+    F -- 5. Transcription --> G;
+    G -- 6. Parsed Data --> H;
+    H -- 7. Video Insights --> I;
+    I -- 8. Enriched Analysis --> J;
+    J -- 9. Generate Report --> A;
+
+```
+
+### Integration with Legal Document Workflow
+
+The new Vertex AI-based video processor will integrate into the existing legal document workflow as follows:
+
+1.  **File Upload**: The Streamlit frontend will continue to handle video file uploads.
+2.  **Task Manager**: The `task_manager.py` will route video files to the updated `video_processor.py`.
+3.  **Video Processor**:
+    -   Receives the video file.
+    -   Uploads it to a temporary GCS bucket.
+    -   Constructs a detailed prompt based on the analysis required for legal cases.
+    -   Calls the `gemini-pro-vision` model.
+    -   Parses the unstructured response into a structured `VideoAnalysis` Pydantic model.
+4.  **AI Analyzer**: The `ai_analyzer.py` service will receive the structured `VideoAnalysis` object alongside other document analyses.
+5.  **Email Generator**: The `email_generator.py` will incorporate the video insights into the final findings letter, creating a new section for video evidence.
+
+This unified approach will provide richer, more context-aware analysis of video evidence, significantly enhancing the value of the Legal Document Analysis Portal.
+
+### Error Handling and Retry Mechanisms ✅ PRODUCTION-IMPLEMENTED
+
+#### Google Cloud Service Provisioning Retry Pattern ✅ IMPLEMENTED
+```python
+@retry(stop=stop_after_attempt(5), wait=wait_exponential(multiplier=2, min=10, max=300), retry=retry_if_exception_type((GoogleAPICallError, RetryError, Exception)))
+async def _analyze_with_vertex_ai(self, gcs_uri: str, file_name: str) -> Dict[str, Any]:
+    try:
+        # Vertex AI analysis implementation
+        response = self.vertex_model.generate_content([video_file, prompt])
+        return self._parse_json_response(response.text)
+    except (GoogleAPICallError, RetryError) as e:
+        error_message = str(e)
+        if "Service agents are being provisioned" in error_message:
+            print(f"VIDEO PROCESSOR: ⏳ Google Cloud service agents still provisioning for {file_name}. This is a one-time setup process.")
+            print(f"VIDEO PROCESSOR: 🔄 Will retry with exponential backoff (up to 5 minutes)...")
+            raise  # Let tenacity handle the retry
+        raise VideoProcessingError(f"Vertex AI API call failed for '{file_name}': {e}")
+```
+
+#### Graceful Video File Handling Pattern ✅ IMPLEMENTED
+```python
+async def _transcribe_with_speech_to_text(self, gcs_uri: str, file_name: str) -> str:
+    try:
+        # Check if this is a video file - Speech-to-Text API requires pure audio
+        file_extension = os.path.splitext(file_name)[1].lower()
+        if file_extension in ['.mov', '.mp4', '.avi', '.mkv', '.webm']:
+            print(f"VIDEO PROCESSOR: ⚠️  Skipping direct audio transcription for video file {file_name}")
+            print(f"VIDEO PROCESSOR: Note: Speech-to-Text API requires pure audio files, not video containers")
+            return "Audio transcription not available for video files. Consider using Vertex AI's video analysis capabilities."
+        
+        # Proceed with audio transcription for pure audio files
+        audio = speech.RecognitionAudio(uri=gcs_uri)
+        config = speech.RecognitionConfig(
+            encoding=speech.RecognitionConfig.AudioEncoding.ENCODING_UNSPECIFIED,
+            language_code="en-US",
+            enable_automatic_punctuation=True,
+            enable_word_time_offsets=True
+        )
+        operation = self.speech_client.long_running_recognize(config=config, audio=audio)
+        response = operation.result(timeout=600)
+        transcript = "".join(result.alternatives[0].transcript for result in response.results)
+        return transcript
+    except (GoogleAPICallError, RetryError) as e:
+        error_msg = str(e)
+        if "bad encoding" in error_msg or "Invalid recognition" in error_msg:
+            print(f"VIDEO PROCESSOR: ⚠️  Audio transcription not supported for this file format: {file_name}")
+            return "Audio transcription not supported for this file format. Video analysis available via Vertex AI."
+        raise VideoProcessingError(f"Speech-to-Text API call failed for '{file_name}': {e}")
+```
+
+#### Data Model Normalization Pattern ✅ IMPLEMENTED
+```python
+# Extract and normalize data from Vertex AI's structured object data
+objects = []
+if isinstance(raw_objects, list):
+    for obj in raw_objects:
+        if isinstance(obj, dict):
+            # Extract the object name from structured data
+            object_name = obj.get('object', str(obj))
+            timestamps = obj.get('timestamps', [])
+            if timestamps:
+                objects.append(f"{object_name} ({', '.join(timestamps)})")
+            else:
+                objects.append(object_name)
+        elif isinstance(obj, str):
+            objects.append(obj)
+        else:
+            objects.append(str(obj))
+
+# Ensure labels and text_annotations are string lists
+if not isinstance(labels, list):
+    labels = []
+labels = [str(label) for label in labels]
+
+if not isinstance(text_annotations, list):
+    text_annotations = []
+text_annotations = [str(annotation) for annotation in text_annotations]
+```
+
+#### Production-Grade Error Recovery Patterns
+-   **GCS Upload Failures**: Robust retry mechanism with exponential backoff for transient network errors during Google Cloud Storage uploads
+-   **Vertex AI API Errors**: Enhanced tenacity-based retry strategy with specific detection for "Service agents are being provisioned" errors
+-   **Response Parsing Errors**: Graceful handling when Vertex AI returns responses that cannot be parsed into expected JSON format
+-   **Speech-to-Text Limitations**: Intelligent file type detection with informative messaging for unsupported video container formats
+-   **Data Model Compatibility**: Automatic normalization of rich Vertex AI responses to match existing VideoInsight data model expectations
+
+### Scalability and Performance Considerations
+
+-   **Asynchronous Processing**: While the current implementation is synchronous, the architecture is designed to accommodate future migration to asynchronous processing for both the GCS upload and Vertex AI analysis to improve UI responsiveness.
+-   **Temporary Storage Lifecycle**: Implement a strict 24-hour lifecycle policy on the GCS bucket to manage storage costs and ensure data privacy.
+-   **Prompt Optimization**: Continuously refine the prompts sent to `gemini-pro-vision` to balance the richness of the analysis with the cost and latency of the API calls.
+-   **Model Selection**: The system can be enhanced to dynamically select the most appropriate model based on the complexity of the case or the user's requirements, allowing for a trade-off between cost, speed, and analytical depth.
+
+### Video Data Preservation and Token Management Pattern ✅ IMPLEMENTED
+
+The Legal Document Analysis Portal implements a sophisticated video data preservation architecture that ensures video appendices are never empty due to token limit violations. This pattern addresses the critical issue where detailed video insights from Vertex AI exceed OpenAI model token limits.
+
+#### Core Problem Solved
+- **Root Cause**: Detailed video insights exceeding OpenAI token limits during final assessment
+- **Previous Failure**: BadRequestError triggering aggressive data truncation, resulting in empty video appendices
+- **Solution**: Four-tier approach with proactive token checking, data persistence, and graceful degradation
+
+#### Architecture Components
+
+```mermaid
+flowchart TD
+    A[Video Processing] --> B{Pre-computation Token Check}
+    B -->|Within Limits| C[Standard Processing]
+    B -->|Exceeds Limits| D[Data Preservation Strategy]
+    
+    D --> E[Generate GCS URI Reference]
+    D --> F[Create Condensed Summary]
+    D --> G[Store Metadata]
+    
+    C --> H[Full Video Appendix]
+    G --> I[Summarized Video Appendix with Notice]
+    
+    H --> J[Professional Output]
+    I --> J
+```
+
+#### Implementation Details
+
+**1. Enhanced Data Models** [`backend/utils/data_models.py`](backend/utils/data_models.py:333-336)
+```python
+class VideoInsight(BaseModel):
+    # ... existing fields ...
+    
+    # Video preservation fields for handling token limit scenarios
+    insights_gcs_uri: Optional[str] = Field(None, description="GCS path for full serialized video insights")
+    insights_summary: Optional[str] = Field(None, description="Truncated summary for use in prompts")
+    original_insights: Optional[Dict[str, Any]] = Field(None, exclude=True, description="Full insights held temporarily in memory")
+```
+
+**2. Proactive Token Management** [`backend_logic/ai_analyzer.py`](backend_logic/ai_analyzer.py:238-323)
+- **Pre-computation Token Checking**: Uses tiktoken library for accurate token counting before prompt construction
+- **Threshold-based Processing**: 80% of model context window (120k tokens for GPT-4o)
+- **Intelligent Model Selection**: Dynamic switching between GPT-4o and GPT-4o-mini based on content size
+
+**3. Video Summarization Strategy** [`backend_logic/ai_analyzer.py`](backend_logic/ai_analyzer.py:285-322)
+```python
+def _apply_video_summarization_strategy(self, analysis: CaseAnalysisResult) -> CaseAnalysisResult:
+    """Apply summarization strategy when token threshold is exceeded."""
+    for video in analysis.video_insights:
+        # Create condensed summary preserving essential information
+        key_objects = video.objects[:5] if video.objects else []
+        key_labels = video.labels[:5] if video.labels else []
+        
+        # Generate insights_summary for prompt inclusion
+        video.insights_summary = condensed_summary
+        
+        # Replace full insights with minimal placeholder to reduce tokens
+        video.insights = {"status": "Video analyzed - full details preserved, summary applied for prompt"}
+```
+
+**4. Enhanced Error Recovery** [`backend_logic/ai_analyzer.py`](backend_logic/ai_analyzer.py:622-725)
+- **BadRequestError Handling**: Comprehensive recovery when token limits are exceeded
+- **Metadata Preservation**: Generates GCS URIs and maintains video references
+- **Graceful Degradation**: System continues processing with preserved data instead of failing
+
+**5. Video Appendix Generation** [`backend_logic/email_generator.py`](backend_logic/email_generator.py:603-690)
+- **Three Scenario Handling**: Full insights, persisted insights, and graceful failure
+- **Automatic Truncation Notices**: When data preservation was applied
+- **Professional Output**: Ensures video appendices always contain meaningful content
+
+#### Key Benefits Achieved
+
+**Functional Requirements ✅**
+- **Zero Data Loss**: Video appendices never empty due to token limits
+- **Graceful Degradation**: System continues processing when limits exceeded
+- **Data Preservation**: Essential video metadata always maintained
+- **Reference Integrity**: Video entry IDs enable comprehensive analysis
+
+**Performance Requirements ✅**
+- **Processing Efficiency**: Minimal performance impact for normal cases
+- **Intelligent Resource Usage**: Dynamic model selection optimizes cost and performance
+- **Scalability**: Handles up to 10 large videos per case with automatic summarization
+
+**Quality Requirements ✅**
+- **Appendix Completeness**: Video appendices contain meaningful analysis even when summarized
+- **Professional Standard**: Generated content meets legal documentation standards
+- **User Experience**: Clear messaging when data preservation applied
+- **Backward Compatibility**: Existing workflows unaffected
+
+#### Production Validation ✅
+
+**Comprehensive Testing** [`backend/tests/test_video_preservation.py`](backend/tests/test_video_preservation.py)
+- **Small Video Validation**: Confirms normal processing path for videos under token threshold
+- **Large Video Validation**: Tests summarization and preservation logic for oversized content
+- **Mixed Scenario Testing**: Validates handling of both small and large videos in single analysis
+
+**Key Dependencies**
+- **tiktoken>=0.5.1**: Accurate token counting for OpenAI models
+- **google-cloud-storage>=2.10.0**: GCS integration for data persistence
+- **google-cloud-aiplatform>=1.1.0**: Vertex AI integration for video analysis
+
 ### Current Unified Streamlit-Python Architecture
 
 ```
@@ -12,8 +267,8 @@ The Legal Document Analysis Portal has successfully evolved from a TypeScript/n8
 ├─────────────────────────────────────────┤
 │           Streamlit Frontend            │
 │  ┌─────────────┐  ┌─────────────────┐   │
-│  │  File Upload│  │     Results     │   │
-│  │     Tab     │  │      Tab        │   │
+│  │ File Upload │  │     Results     │   │
+│  │ (Audio/Video)│  │      Tab        │   │
 │  │             │  │                 │   │
 │  └─────────────┘  └─────────────────┘   │
 │  ┌─────────────────────────────────────┐   │
@@ -27,6 +282,10 @@ The Legal Document Analysis Portal has successfully evolved from a TypeScript/n8
 │  ┌─────────────┐  ┌─────────────────┐   │
 │  │ Document    │  │ AI Analyzer     │   │
 │  │ Processor   │  │ Module          │   │
+│  └─────────────┘  └─────────────────┘   │
+│  ┌─────────────┐  ┌─────────────────┐   │
+│  │ Audio       │  │ Video           │   │
+│  │ Processor   │  │ Processor       │   │
 │  └─────────────┘  └─────────────────┘   │
 │  ┌─────────────┐  ┌─────────────────┐   │
 │  │ Email       │  │ Quality         │   │
@@ -75,6 +334,8 @@ The Legal Document Analysis Portal has successfully evolved from a TypeScript/n8
 ├── app.py                    # Main Streamlit application
 ├── backend_logic/            # Backend business logic modules
 │   ├── document_processor.py  # PDF and document processing
+│   ├── audio_processor.py     # Audio transcription (OpenAI Whisper)
+│   ├── video_processor.py     # Video analysis (Vertex AI)
 │   ├── ai_analyzer.py         # OpenAI integration and analysis
 │   ├── email_generator.py     # Email findings generation
 │   ├── quality_validator.py   # Quality assurance
@@ -288,17 +549,21 @@ Streamlit Frontend
        ▼ Direct Function Calls
 Backend Logic Modules
    ┌─────────────────────────────────────┐
-   │ 1. Document Processing              │
+   │ 1. Document/Media Processing        │
+   │    - Document OCR/Text Extraction   │
+   │    - Audio Transcription (Whisper)  │
+   │    - Video Analysis (Vertex AI)     │
    │ 2. Intake Analysis (GPT-4o-mini)    │
    │ 3. Case Document Analysis (GPT-4o)  │
-   │ 4. Final Assessment (GPT-4o)        │
-   │ 5. Email Generation (GPT-4o)        │
+   │ 4. Media Content Analysis           │
+   │ 5. Final Assessment (GPT-4o)        │
+   │ 6. Email Generation (GPT-4o)        │
    └─────────────────────────────────────┘
        │
        ▼ Direct Python Objects
 Streamlit Results Display
    ┌─────────────────────────────────────┐
-   │ • Case Analysis                     │
+   │ • Case Analysis (Docs + Media)      │
    │ • Download Links (.eml, .txt)       │
    │ • Processing Summary                │
    └─────────────────────────────────────┘

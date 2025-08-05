@@ -13,10 +13,15 @@ load_dotenv()
 from backend_logic.document_processor import DocumentProcessor
 from backend_logic.ai_analyzer import AIAnalyzer
 from backend_logic.email_generator import EmailGenerator
+from backend_logic.audio_processor import AudioProcessor
+from backend_logic.video_processor import VideoProcessor
 from backend.utils.data_models import (
     AnalysisError,
     AnalyzedDocument,
-    DocumentType
+    DocumentType,
+    TranscriptedMedia,
+    VideoInsight,
+    MediaProcessingError
 )
 
 # --- Configuration ---
@@ -62,8 +67,8 @@ def file_upload_section():
     """Handles the file upload section, allowing folder uploads."""
     st.header("Upload Case Folder")
     uploaded_files = st.file_uploader(
-        "Select a folder or multiple files (PDF, DOCX, EML, TXT, JPG, PNG)",
-        type=["pdf", "docx", "eml", "txt", "jpg", "jpeg", "png"],
+        "Select a folder or multiple files (PDF, DOCX, EML, TXT, JPG, PNG, MP3, M4A, WAV, MP4, MOV, AVI)",
+        type=["pdf", "docx", "eml", "txt", "jpg", "jpeg", "png", "mp3", "m4a", "wav", "mp4", "mov", "avi"],
         accept_multiple_files=True
     )
     if uploaded_files:
@@ -177,6 +182,9 @@ async def process_case_documents():
         
         # Initialize processors
         doc_processor = DocumentProcessor()
+        audio_processor = AudioProcessor(openai_client)
+        # Securely retrieve and pass cloud credentials via environment variables
+        video_processor = VideoProcessor()
         ai_analyzer = AIAnalyzer(openai_client, doc_processor)
         email_generator = EmailGenerator(openai_client)
         
@@ -203,13 +211,33 @@ async def process_case_documents():
         
         # Phase 1: Document Processing
         tracker.set_phase('document_processing', f"Processing {len(all_files)} files ({total_size/1024:.1f} KB total)")
-        
+
+        # Separate files by type
+        doc_files = []
+        audio_files = []
+        video_files = []
+        for f in all_files:
+            file_type = f.type.lower()
+            if 'audio' in file_type:
+                audio_files.append(f)
+            elif 'video' in file_type:
+                video_files.append(f)
+            else:
+                doc_files.append(f)
+
         intake_filenames = [st.session_state.intake_form.name] if st.session_state.intake_form else []
         
-        processed_docs = await doc_processor.process_documents_from_streamlit(
-            all_files,
-            intake_filenames
+        # Process documents, audio, and video in parallel
+        doc_processing_task = doc_processor.process_documents_from_streamlit(doc_files, intake_filenames)
+        audio_processing_task = asyncio.gather(*[audio_processor.process_audio_from_streamlit(f, f.name) for f in audio_files])
+        video_processing_task = asyncio.gather(*[video_processor.process_video_from_streamlit(f, f.name) for f in video_files])
+
+        processed_docs, processed_audio, processed_video = await asyncio.gather(
+            doc_processing_task,
+            audio_processing_task,
+            video_processing_task
         )
+
         
         # Separate intake and case documents
         intake_doc = next(
@@ -217,13 +245,13 @@ async def process_case_documents():
             None
         )
         case_docs = [
-            doc for doc in processed_docs if doc.document_type == DocumentType.CASE_DOCUMENT
+            doc for doc in processed_docs if doc.document_type != DocumentType.INTAKE_FORM
         ]
         
         if not intake_doc:
             raise ValueError("Intake form is required but was not found after processing.")
         
-        tracker.complete_phase('document_processing', f"Successfully processed {len(processed_docs)} documents")
+        tracker.complete_phase('document_processing', f"Successfully processed {len(processed_docs) + len(processed_audio) + len(processed_video)} files")
         
         # Phase 2: Intake Analysis
         tracker.set_phase('intake_analysis', f"Analyzing intake form: {intake_doc.file_name}")
@@ -236,8 +264,8 @@ async def process_case_documents():
         tracker.complete_phase('intake_analysis', "Intake analysis completed")
         
         # Phase 3: Case Document Analysis (Size-based progress)
-        if case_docs:
-            tracker.set_phase('case_analysis', f"Starting analysis of {len(case_docs)} case documents")
+        if case_docs or processed_audio or processed_video:
+            tracker.set_phase('case_analysis', f"Starting analysis of {len(case_docs)} documents, {len(processed_audio)} audio files, and {len(processed_video)} video files")
             
             processed_size = 0
             
@@ -246,8 +274,8 @@ async def process_case_documents():
                 nonlocal processed_size
                 results = []
                 
+                # Analyze documents
                 for i, doc in enumerate(case_docs):
-                    # Update progress before processing each document
                     doc_size = case_doc_sizes.get(doc.file_name, 1024)
                     current_doc_progress = processed_size / total_case_size if total_case_size > 0 else (i / len(case_docs))
                     
@@ -257,11 +285,9 @@ async def process_case_documents():
                         f"Processing {i+1}/{len(case_docs)}: {doc.file_name} ({doc_size/1024:.1f} KB)"
                     )
                     
-                    # Analyze single document
                     result = await ai_analyzer._analyze_single_document(doc, analysis_result.intake_analysis)
                     results.append(result)
                     
-                    # Update progress after processing
                     processed_size += doc_size
                     final_progress = processed_size / total_case_size if total_case_size > 0 else ((i+1) / len(case_docs))
                     
@@ -271,11 +297,24 @@ async def process_case_documents():
                         f"Completed {i+1}/{len(case_docs)} documents"
                     )
                     
-                    # Add delay between requests (existing rate limiting)
                     if i < len(case_docs) - 1:
                         await asyncio.sleep(3)
                 
+                # Add media results to the final analysis
+                for item in processed_audio:
+                    if isinstance(item, TranscriptedMedia):
+                        analysis_result.transcripted_media.append(item)
+                    elif isinstance(item, MediaProcessingError):
+                        analysis_result.errors.append(AnalysisError(source=item.source, file_name=item.file_name, error_message=item.error_message))
+                
+                for item in processed_video:
+                    if isinstance(item, VideoInsight):
+                        analysis_result.video_insights.append(item)
+                    elif isinstance(item, MediaProcessingError):
+                        analysis_result.errors.append(AnalysisError(source=item.source, file_name=item.file_name, error_message=item.error_message))
+
                 return results
+
             
             case_analysis_results = await analyze_with_progress()
             
@@ -286,9 +325,9 @@ async def process_case_documents():
                 elif isinstance(res, AnalysisError):
                     analysis_result.errors.append(res)
             
-            tracker.complete_phase('case_analysis', f"Analyzed {len(case_docs)} documents successfully")
+            tracker.complete_phase('case_analysis', f"Analyzed {len(case_docs)} documents and {len(processed_audio) + len(processed_video)} media files successfully")
         else:
-            tracker.complete_phase('case_analysis', "No case documents to analyze")
+            tracker.complete_phase('case_analysis', "No case documents or media to analyze")
         
         # Phase 4: Final Assessment
         tracker.set_phase('final_assessment', "Performing comprehensive legal assessment")

@@ -43,6 +43,15 @@ pyth>=0.7.0             # RTF processing
 Pillow>=10.0.0          # Image processing
 pytesseract>=0.3.10     # OCR capabilities
 
+# Audio and Video Processing - Production Validated
+google-cloud-storage>=2.10.0        # Google Cloud Storage for temporary video file handling
+google-cloud-aiplatform>=1.38.0     # Vertex AI integration with Gemini-2.5-flash model
+google-cloud-speech>=2.21.0         # Speech-to-Text API for pure audio files
+vertexai>=0.0.1                     # Vertex AI Python SDK for generative models
+tenacity>=8.2.3                     # Enhanced retry logic for Google Cloud service provisioning
+python-magic>=0.4.27                # File type detection for video/audio processing
+pydub>=0.25.1                       # Audio manipulation and format conversion
+
 # Utility Libraries
 tenacity>=8.2.3         # Retry logic for robust API calls
 ```
@@ -88,6 +97,8 @@ This approach provides:
 ├── app.py                 # Main Streamlit application entry point
 ├── backend_logic/         # Backend business logic modules
 │   ├── document_processor.py  # Document processing and validation
+│   ├── audio_processor.py     # Audio transcription (OpenAI Whisper)
+│   ├── video_processor.py     # Video analysis (Vertex AI)
 │   ├── ai_analyzer.py         # OpenAI integration and analysis
 │   ├── email_generator.py     # Email findings generation
 │   ├── quality_validator.py   # Quality assurance
@@ -146,10 +157,31 @@ streamlit run app.py --server.port 8501
 
 #### Environment Configuration
 ```env
-# Application (.env)
+# Application (.env) - Production Validated
 OPENAI_API_KEY=your_openai_key
 PDFCO_API_KEY=your_pdfco_key
+
+# Google Cloud Configuration - Required for Video Processing
+GOOGLE_APPLICATION_CREDENTIALS=/path/to/your/service-account-file.json
+GCP_PROJECT_ID=your-gcp-project-id
+GCP_BUCKET_NAME=your-findings-videos-bucket
+
+# Google Cloud Service Setup Requirements (One-time)
+# 1. Enable Vertex AI API: https://console.developers.google.com/apis/api/aiplatform.googleapis.com
+# 2. Enable Speech-to-Text API: https://console.developers.google.com/apis/api/speech.googleapis.com
+# 3. Enable Cloud Storage API: https://console.developers.google.com/apis/api/storage.googleapis.com
+# 4. Create service account with roles:
+#    - Vertex AI User (roles/aiplatform.user)
+#    - Storage Object Admin (roles/storage.objectAdmin)
+#    - Speech Service Agent (roles/cloudspeech.serviceAgent)
 ```
+
+#### Google Cloud Integration Requirements ✅ PRODUCTION-VALIDATED
+- **Project Setup**: Google Cloud project with enabled APIs (Vertex AI, Speech-to-Text, Cloud Storage)
+- **Service Account**: Properly configured with required IAM roles for video processing
+- **Bucket Configuration**: Cloud Storage bucket for temporary video file handling with 24-hour lifecycle
+- **Regional Considerations**: Vertex AI initialized with us-central1 region for optimal performance
+- **One-time Setup**: Initial Google Cloud service agent provisioning may take 5-10 minutes
 
 ### Legacy Deployment (Historical Reference)
 - **Platform**: Kinsta - Static site hosting

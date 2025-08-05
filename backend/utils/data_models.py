@@ -13,6 +13,8 @@ class FileType(str, Enum):
     EML = "eml"
     TXT = "txt"
     IMAGE = "image"
+    AUDIO = "audio"
+    VIDEO = "video"
     UNSUPPORTED = "unsupported"
 
 class DocumentType(str, Enum):
@@ -305,10 +307,47 @@ class DemandLetterEvaluation(BaseModel):
     potential_outcomes: List[str] = Field(default_factory=list, description="Potential outcomes of sending a demand letter.")
     relevant_statutes: List[str] = Field(default_factory=list, description="A list of relevant statutes to cite in the demand letter.")
 
+# --- Media Processing Models ---
+
+class TranscriptedMedia(BaseModel):
+    """Represents a transcribed audio file."""
+    file_name: str
+    transcript: str
+    duration: Optional[float] = None  # Duration in seconds
+    language: Optional[str] = None
+    confidence: Optional[float] = None
+    metadata: FileMetadata = Field(default_factory=FileMetadata)
+
+class VideoInsight(BaseModel):
+    """Represents insights extracted from video analysis."""
+    file_name: str
+    insights: Dict[str, Any]
+    transcript: Optional[str] = None
+    labels: List[str] = Field(default_factory=list)
+    objects: List[str] = Field(default_factory=list)
+    text_annotations: List[str] = Field(default_factory=list)
+    duration: Optional[float] = None  # Duration in seconds
+    confidence: Optional[float] = None
+    metadata: FileMetadata = Field(default_factory=FileMetadata)
+    
+    # Video preservation fields for handling token limit scenarios
+    insights_gcs_uri: Optional[str] = Field(None, description="GCS path for full serialized video insights")
+    insights_summary: Optional[str] = Field(None, description="Truncated summary for use in prompts")
+    original_insights: Optional[Dict[str, Any]] = Field(None, exclude=True, description="Full insights held temporarily in memory")
+
+class MediaProcessingError(BaseModel):
+    """Data model for capturing errors during media processing."""
+    source: str = Field(..., description="The source of the error (e.g., 'AudioProcessor', 'VideoProcessor').")
+    file_name: str = Field(..., description="The name of the file that caused the error.")
+    error_message: str = Field(..., description="The detailed error message.")
+    error_type: str = Field(..., description="The type of error (e.g., 'TranscriptionError', 'UploadError').")
+
 class CaseAnalysisResult(BaseModel):
     """Combined data model for enhanced intake and case analysis, including error tracking."""
     intake_analysis: Optional[EnhancedIntakeAnalysis] = None
     analyzed_documents: List[AnalyzedDocument] = Field(default_factory=list)
+    transcripted_media: List[TranscriptedMedia] = Field(default_factory=list, description="A list of transcribed audio files.")
+    video_insights: List[VideoInsight] = Field(default_factory=list, description="A list of video analysis insights.")
     legal_assessment: Optional[LegalAssessment] = None
     demand_letter_evaluation: Optional[DemandLetterEvaluation] = None
     errors: List[AnalysisError] = Field(default_factory=list, description="A list of errors encountered during analysis.")
@@ -323,6 +362,8 @@ class GeneratedLetter(BaseModel):
     executive_summary: str = Field(..., description="Executive summary of the case and recommendations")
     background_summary: str = Field(..., description="Background context from intake analysis")
     analysis_and_position: str = Field(..., description="Legal analysis and position in flowing prose")
+    media_summary: str = Field(default="", description="Summary of media analysis findings from audio and video files")
+    video_analysis_appendix: str = Field(default="", description="Detailed video analysis appendix explaining significance of video content to the case")
     strengths: str = Field(..., description="Strengths of the case in sophisticated legal prose")
     challenges: str = Field(..., description="Potential challenges and risks in legal prose")
     recommendations: str = Field(..., description="Numbered list of recommendations as HTML")

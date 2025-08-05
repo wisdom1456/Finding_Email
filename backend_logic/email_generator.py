@@ -157,6 +157,9 @@ class EmailGenerator:
             analysis_and_position = self._clean_ai_response(
                 self._generate_analysis_section(analysis, persona=CONTINUING_LETTER_PERSONA)
             )
+            media_summary = self._clean_ai_response(
+                self._generate_media_summary(analysis, persona=CONTINUING_LETTER_PERSONA)
+            )
             strengths = self._clean_ai_response(
                 self._generate_strengths(analysis, persona=CONTINUING_LETTER_PERSONA)
             )
@@ -172,12 +175,19 @@ class EmailGenerator:
             closing_paragraph = self._clean_ai_response(
                 self._generate_closing_paragraph(analysis, persona=CONTINUING_LETTER_PERSONA)
             )
+            
+            # Step 9: Generate video analysis appendix if video data is available
+            video_analysis_appendix = self._clean_ai_response(
+                self._generate_video_analysis_appendix(analysis, persona=CONTINUING_LETTER_PERSONA)
+            )
 
             # Assemble the final GeneratedLetter
             return GeneratedLetter(
                 executive_summary=executive_summary,
                 background_summary=background_summary,
                 analysis_and_position=analysis_and_position,
+                media_summary=media_summary,
+                video_analysis_appendix=video_analysis_appendix,
                 strengths=strengths,
                 challenges=challenges,
                 recommendations=recommendations,
@@ -192,6 +202,8 @@ class EmailGenerator:
                 executive_summary="<p>Error generating executive summary.</p>",
                 background_summary="<p>Error generating background summary.</p>",
                 analysis_and_position="<p>Error generating analysis section.</p>",
+                media_summary="<p>Error generating media summary.</p>",
+                video_analysis_appendix="",
                 strengths="<p>Error generating strengths assessment.</p>",
                 challenges="<p>Error generating challenges assessment.</p>",
                 recommendations="<p>Error generating recommendations.</p>",
@@ -565,6 +577,117 @@ class EmailGenerator:
         """
         result = self._make_openai_request(prompt, persona)
         return result or "<p>Legal analysis and position could not be generated.</p>"
+
+    def _generate_media_summary(self, analysis: CaseAnalysisResult, persona: str) -> str:
+        """Generates a summary of media analysis with HTML formatting."""
+        if not analysis.transcripted_media and not analysis.video_insights:
+            return ""
+
+        prompt = f"""
+        Based on the media analysis provided, create a professional summary of the key findings from audio and video files.
+
+        Your summary should:
+        - Integrate findings from both audio and video into a cohesive narrative.
+        - Highlight crucial evidence, statements, or events from the media.
+        - Explain the relevance of the media to the case.
+        - Be formatted as HTML paragraphs using `<p>` tags.
+
+        Case Context:
+        {analysis.model_dump_json(indent=2)}
+
+        Generate only the HTML-formatted media analysis summary text.
+        """
+        result = self._make_openai_request(prompt, persona)
+        return result or "<p>Media analysis summary could not be generated.</p>"
+
+    def _generate_video_analysis_appendix(self, analysis: CaseAnalysisResult, persona: str) -> str:
+        """Generates a detailed video analysis appendix explaining the significance of video content to the case.
+        
+        Handles three scenarios as per video preservation plan:
+        1. Full Insights: Use complete video.insights data
+        2. Persisted Insights: Use video.insights_summary with truncation notice
+        3. No Data: Graceful failure
+        """
+        if not analysis.video_insights:
+            return ""
+
+        # Prepare video data for prompt, handling different data scenarios
+        video_data_for_prompt = []
+        has_preserved_data = False
+        
+        for video_insight in analysis.video_insights:
+            video_data = {
+                "file_name": video_insight.file_name,
+                "transcript": video_insight.transcript,
+                "labels": video_insight.labels,
+                "objects": video_insight.objects,
+                "text_annotations": video_insight.text_annotations,
+                "duration": video_insight.duration,
+                "confidence": video_insight.confidence
+            }
+            
+            # Check for persisted insights scenario (insights preserved due to token limits)
+            if hasattr(video_insight, 'insights_gcs_uri') and video_insight.insights_gcs_uri:
+                print(f"EMAIL GENERATOR: Using preserved insights summary for {video_insight.file_name}")
+                has_preserved_data = True
+                # Use the summary instead of full insights
+                if hasattr(video_insight, 'insights_summary') and video_insight.insights_summary:
+                    video_data["insights"] = video_insight.insights_summary
+                    video_data["_data_source"] = "summary"  # Mark for truncation notice
+                else:
+                    video_data["insights"] = "Video analysis summary not available"
+                    video_data["_data_source"] = "unavailable"
+            else:
+                # Full insights scenario - use complete data as before
+                video_data["insights"] = video_insight.insights
+                video_data["_data_source"] = "full"
+            
+            video_data_for_prompt.append(video_data)
+
+        # Build the prompt with appropriate data
+        prompt = f"""
+        Based on the video analysis data provided, create a comprehensive "Video Analysis Appendix" section that provides detailed analysis of video evidence and its significance to the case.
+
+        Your video analysis appendix must:
+        - Create a section titled "Video Analysis Appendix" using an `<h4>` tag.
+        - For each video file analyzed, provide a detailed summary of the video insights and any available transcript content.
+        - Critically explain the significance of each video's content as it relates to the overall case context, including how it supports or challenges the client's position.
+        - Connect video evidence to key facts, legal claims, and case strategy identified in the intake form and document analysis.
+        - Analyze specific objects, labels, text annotations, and visual evidence captured in the videos and their legal relevance.
+        - If transcripts are available, highlight key statements or dialogue and explain their importance to the case.
+        - Use professional legal language appropriate for client communications.
+        - Be formatted cleanly using HTML tags (`<p>`, `<h4>`, `<ul>`, `<li>`) for optimal presentation.
+        - Address the client directly using 'you' and 'your' throughout the analysis.
+        {
+            "- Include a note that some video analysis content is summarized due to data size limitations where applicable."
+            if has_preserved_data else ""
+        }
+
+        Available Video Analysis Data:
+        {video_data_for_prompt}
+
+        Overall Case Context for Relevance Analysis:
+        Client Name: {analysis.intake_analysis.client_name if analysis.intake_analysis else "Not provided"}
+        Case Type: {analysis.intake_analysis.case_type if analysis.intake_analysis else "Not provided"}
+        Case Summary: {analysis.intake_analysis.case_summary if analysis.intake_analysis else "Not provided"}
+        Legal Claims: {analysis.intake_analysis.legal_claims if analysis.intake_analysis else "Not provided"}
+
+        Generate only the HTML-formatted video analysis appendix content, including the section header.
+        """
+        
+        result = self._make_openai_request(prompt, persona)
+        
+        # If we have preserved data, add a notice to the result
+        if has_preserved_data and result:
+            truncation_notice = '<p><em>Note: Full analysis was truncated due to size. Summary is provided above.</em></p>'
+            # Insert the notice after the header but before the main content
+            if '<h4>' in result and '</h4>' in result:
+                header_end = result.find('</h4>') + 5
+                result = result[:header_end] + '\n' + truncation_notice + '\n' + result[header_end:]
+            else:
+                result = truncation_notice + '\n' + result
+        
+        return result or ""
 
     def _generate_strengths(self, analysis: CaseAnalysisResult, persona: str) -> str:
         """Generates case strengths assessment with HTML formatting."""

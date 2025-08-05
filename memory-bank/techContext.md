@@ -52,6 +52,10 @@ tenacity>=8.2.3                     # Enhanced retry logic for Google Cloud serv
 python-magic>=0.4.27                # File type detection for video/audio processing
 pydub>=0.25.1                       # Audio manipulation and format conversion
 
+# Criminal Law Video Processing Enhancement
+tiktoken>=0.5.1                     # Token counting for criminal video data preservation
+# Note: Criminal law capabilities built on existing video processing stack
+
 # Utility Libraries
 tenacity>=8.2.3         # Retry logic for robust API calls
 ```

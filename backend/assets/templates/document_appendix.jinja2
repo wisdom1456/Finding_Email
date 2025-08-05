@@ -129,6 +129,212 @@
             <p>No documents were analyzed for this case review.</p>
         </div>
         {% endif %}
+
+        <!-- Video Evidence Analysis Section -->
+        {% if results.analysis and results.analysis.video_insights %}
+        <div style="margin-top: 40px; padding-top: 30px; border-top: 2px solid #333;">
+            <div class="header">
+                <h1>Video Evidence Analysis</h1>
+                <p>The following video evidence was analyzed as part of this case review:</p>
+            </div>
+
+            {% for video in results.analysis.video_insights %}
+            <div class="document-item" style="margin-bottom: 30px;">
+                <div class="document-header">
+                    <h4>{{ video.file_name }}</h4>
+                </div>
+
+                <!-- Check if this is an enhanced video insight with criminal analysis -->
+                {% if video.is_criminal_case and video.criminal_analysis %}
+                <div style="margin-bottom: 20px;">
+                    <h5 style="color: #333; margin-bottom: 10px; font-family: 'Georgia', serif;">Criminal Law Evidence Analysis</h5>
+                    
+                    <!-- Timeline Summary -->
+                    <div style="background-color: #f8f9fa; padding: 15px; margin-bottom: 15px; border-left: 4px solid #333;">
+                        <div class="meta-label">Timeline Summary</div>
+                        <p style="margin: 5px 0;">{{ video.criminal_analysis.timeline_summary }}</p>
+                    </div>
+
+                    <!-- Constitutional Compliance Overview -->
+                    <div style="background-color: #f8f9fa; padding: 15px; margin-bottom: 20px; border-left: 4px solid #333;">
+                        <div class="meta-label">Constitutional Compliance Overview</div>
+                        <p style="margin: 5px 0;">{{ video.criminal_analysis.constitutional_compliance_overview }}</p>
+                    </div>
+
+                    <!-- Evidence Items by Category -->
+                    {% if video.criminal_analysis.evidence_items %}
+                    <h5 style="color: #333; margin-bottom: 15px; font-family: 'Georgia', serif;">Timestamped Evidence Categories</h5>
+                    
+                    {% for evidence in video.criminal_analysis.evidence_items %}
+                    <div style="border: 1px solid #ddd; margin-bottom: 15px; padding: 15px; background-color: #fdfdfd;">
+                        <h6 style="color: #333; margin: 0 0 10px 0; font-family: 'Georgia', serif; font-size: 14px;">
+                            {{ loop.index }}. {{ evidence.category }}
+                        </h6>
+                        
+                        <div class="document-meta" style="margin-bottom: 10px;">
+                            <div class="meta-item">
+                                <div class="meta-label">Timestamp</div>
+                                <div class="meta-value">{{ evidence.time_range.start_time }} - {{ evidence.time_range.end_time }}</div>
+                            </div>
+                            <div class="meta-item">
+                                <div class="meta-label">Evidence Strength</div>
+                                <div class="meta-value" style="text-transform: capitalize; font-weight: bold;">{{ evidence.evidence_strength }}</div>
+                            </div>
+                        </div>
+
+                        <div style="margin-bottom: 10px;">
+                            <div class="meta-label">Description</div>
+                            <p style="margin: 3px 0; font-size: 13px;">{{ evidence.description }}</p>
+                        </div>
+
+                        {% if evidence.key_observations %}
+                        <div style="margin-bottom: 10px;">
+                            <div class="meta-label">Key Observations</div>
+                            <ul style="margin: 3px 0; padding-left: 20px; font-size: 13px;">
+                                {% for observation in evidence.key_observations %}
+                                <li>{{ observation }}</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                        {% endif %}
+
+                        <div style="margin-bottom: 10px;">
+                            <div class="meta-label">Legal Significance</div>
+                            <p style="margin: 3px 0; font-size: 13px; font-style: italic;">{{ evidence.legal_significance }}</p>
+                        </div>
+
+                        {% if evidence.constitutional_issues %}
+                        <div style="margin-bottom: 10px;">
+                            <div class="meta-label">Constitutional Issues</div>
+                            <ul style="margin: 3px 0; padding-left: 20px; font-size: 13px; color: #d32f2f;">
+                                {% for issue in evidence.constitutional_issues %}
+                                <li>{{ issue }}</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                        {% endif %}
+
+                        <div style="margin-bottom: 5px;">
+                            <div class="meta-label">Confidence Score</div>
+                            <div class="meta-value">{{ "%.1f"|format(evidence.time_range.confidence * 100) }}%</div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                    {% endif %}
+
+                    <!-- Missing Categories -->
+                    {% if video.criminal_analysis.missing_categories %}
+                    <div style="background-color: #fff3cd; padding: 15px; margin-top: 20px; border-left: 4px solid #ffc107;">
+                        <div class="meta-label">Missing Evidence Categories</div>
+                        <p style="margin: 5px 0; font-size: 13px;">The following expected criminal evidence categories were not identified in this video:</p>
+                        <ul style="margin: 5px 0; padding-left: 20px; font-size: 13px;">
+                            {% for category in video.criminal_analysis.missing_categories %}
+                            <li>{{ category }}</li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                    {% endif %}
+                </div>
+
+                {% else %}
+                <!-- Standard Video Analysis for Non-Criminal Cases -->
+                <div style="margin-bottom: 20px;">
+                    <h5 style="color: #333; margin-bottom: 10px; font-family: 'Georgia', serif;">Video Analysis</h5>
+                    
+                    {% if video.transcript %}
+                    <div style="margin-bottom: 15px;">
+                        <div class="meta-label">Transcript</div>
+                        <p style="margin: 5px 0; font-size: 13px; background-color: #f8f9fa; padding: 10px; border-radius: 3px;">{{ video.transcript }}</p>
+                    </div>
+                    {% endif %}
+
+                    {% if video.labels %}
+                    <div style="margin-bottom: 15px;">
+                        <div class="meta-label">Detected Content Labels</div>
+                        <div style="margin: 5px 0;">
+                            {% for label in video.labels %}
+                            <span style="background-color: #e9ecef; padding: 3px 8px; margin: 2px; border-radius: 3px; font-size: 12px; display: inline-block;">{{ label }}</span>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    {% if video.objects %}
+                    <div style="margin-bottom: 15px;">
+                        <div class="meta-label">Detected Objects</div>
+                        <div style="margin: 5px 0;">
+                            {% for object in video.objects %}
+                            <span style="background-color: #d1ecf1; padding: 3px 8px; margin: 2px; border-radius: 3px; font-size: 12px; display: inline-block;">{{ object }}</span>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    {% if video.text_annotations %}
+                    <div style="margin-bottom: 15px;">
+                        <div class="meta-label">Text Detected in Video</div>
+                        <ul style="margin: 5px 0; padding-left: 20px; font-size: 13px;">
+                            {% for text in video.text_annotations %}
+                            <li>{{ text }}</li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                    {% endif %}
+
+                    {% if video.insights %}
+                    <div style="margin-bottom: 15px;">
+                        <div class="meta-label">General Analysis</div>
+                        <div style="margin: 5px 0; font-size: 13px; background-color: #f8f9fa; padding: 10px; border-radius: 3px;">
+                            {% if video.insights is mapping %}
+                                {% for key, value in video.insights.items() %}
+                                <div style="margin-bottom: 8px;"><strong>{{ key|title }}:</strong> {{ value }}</div>
+                                {% endfor %}
+                            {% else %}
+                                {{ video.insights }}
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    {% if video.duration %}
+                    <div style="margin-bottom: 10px;">
+                        <div class="meta-label">Duration</div>
+                        <div class="meta-value">{{ "%.1f"|format(video.duration) }} seconds</div>
+                    </div>
+                    {% endif %}
+                </div>
+                {% endif %}
+
+                <!-- Video File Metadata -->
+                <div class="document-meta">
+                    <div class="meta-item">
+                        <div class="meta-label">File Name</div>
+                        <div class="meta-value">{{ video.file_name }}</div>
+                    </div>
+                    <div class="meta-item">
+                        <div class="meta-label">Analysis Type</div>
+                        <div class="meta-value">{{ "Criminal Law Analysis" if video.is_criminal_case else "Standard Video Analysis" }}</div>
+                    </div>
+                </div>
+
+                <!-- Data Preservation Notice -->
+                {% if video.insights_gcs_uri or video.insights_summary %}
+                <div style="background-color: #e8f4fd; padding: 15px; margin-top: 15px; border-left: 4px solid #2196f3;">
+                    <div class="meta-label">Data Preservation Notice</div>
+                    <p style="margin: 5px 0; font-size: 12px;">
+                        {% if video.insights_summary %}
+                        Full video analysis data was preserved due to size limitations. Complete insights are available for detailed review.
+                        {% endif %}
+                        {% if video.insights_gcs_uri %}
+                        Reference ID: {{ video.insights_gcs_uri.split('/')[-1] if '/' in video.insights_gcs_uri else video.insights_gcs_uri }}
+                        {% endif %}
+                    </p>
+                </div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
     </div>
 </body>
 </html>

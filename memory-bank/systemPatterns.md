@@ -156,6 +156,187 @@ text_annotations = [str(annotation) for annotation in text_annotations]
 -   **Prompt Optimization**: Continuously refine the prompts sent to `gemini-pro-vision` to balance the richness of the analysis with the cost and latency of the API calls.
 -   **Model Selection**: The system can be enhanced to dynamically select the most appropriate model based on the complexity of the case or the user's requirements, allowing for a trade-off between cost, speed, and analytical depth.
 
+### Criminal Law Video Processing Architecture ✅ IMPLEMENTED
+
+The Legal Document Analysis Portal implements specialized criminal law video processing capabilities that provide comprehensive criminal case analysis while maintaining full backward compatibility with existing video processing workflows.
+
+#### Core Enhancement Overview
+- **Specialized Analysis**: 16 timestamped evidence categories following DUI arrest chronology patterns
+- **Constitutional Compliance**: Automated assessment of 4th, 5th, and 6th Amendment compliance
+- **Dual-Mode Processing**: Intelligent criminal case detection with enhanced analysis when appropriate
+- **Template Integration**: Selective evidence display in findings letters with comprehensive analysis in document appendix
+
+#### Criminal Case Detection Pattern
+```python
+def _detect_criminal_case(self, video_analysis_result: Dict[str, Any]) -> bool:
+    """Intelligent detection of criminal video content."""
+    criminal_indicators = [
+        "police", "officer", "arrest", "miranda", "breathalyzer",
+        "field sobriety", "traffic stop", "dui", "dwi",
+        "handcuffs", "patrol car", "booking", "custody"
+    ]
+    
+    # Check for criminal indicators in analysis content
+    content_text = str(video_analysis_result).lower()
+    indicator_count = sum(1 for indicator in criminal_indicators
+                         if indicator in content_text)
+    
+    return indicator_count >= 2
+```
+
+#### Enhanced Data Model Architecture
+```python
+class CriminalVideoAnalysis(BaseModel):
+    evidence_categories: List[CriminalEvidenceItem] = Field(default_factory=list)
+    constitutional_issues: Dict[str, Any] = Field(default_factory=dict)
+    timeline_summary: str = ""
+    missing_categories: List[str] = Field(default_factory=list)
+    overall_assessment: str = ""
+    legal_recommendations: List[str] = Field(default_factory=list)
+
+class CriminalEvidenceItem(BaseModel):
+    category: str = ""
+    category_number: int = 0
+    evidence_found: bool = False
+    timestamp: str = ""
+    description: str = ""
+    strength: str = ""  # "strong", "moderate", "weak"
+    constitutional_implications: str = ""
+    legal_significance: str = ""
+
+class EnhancedVideoInsight(VideoInsight):
+    criminal_analysis: Optional[CriminalVideoAnalysis] = None
+    is_criminal_case: bool = False
+```
+
+#### Dual-Mode Processing Pattern
+```python
+async def process_video(self, file_path: str, file_name: str) -> EnhancedVideoInsight:
+    """Process video with conditional criminal law enhancement."""
+    
+    # Standard video analysis (always performed)
+    standard_analysis = await self._analyze_with_vertex_ai(gcs_uri, file_name)
+    
+    # Criminal case detection
+    is_criminal = self._detect_criminal_case(standard_analysis)
+    
+    if is_criminal:
+        # Enhanced criminal analysis
+        criminal_analysis = await self._analyze_criminal_content(standard_analysis)
+        return EnhancedVideoInsight(
+            criminal_analysis=criminal_analysis,
+            is_criminal_case=True,
+            **standard_analysis
+        )
+    else:
+        # Standard video insight (existing functionality preserved)
+        return EnhancedVideoInsight(**standard_analysis)
+```
+
+#### Constitutional Compliance Assessment Pattern
+```python
+CRIMINAL_CONSTITUTIONAL_ANALYSIS = {
+    "4th_amendment": {
+        "focus": "Search and Seizure",
+        "indicators": ["traffic stop justification", "search procedures", "warrant requirements"],
+        "assessment": "reasonable suspicion and probable cause analysis"
+    },
+    "5th_amendment": {
+        "focus": "Self-Incrimination",
+        "indicators": ["miranda warnings", "custodial interrogation", "right to remain silent"],
+        "assessment": "statement admissibility and constitutional compliance"
+    },
+    "6th_amendment": {
+        "focus": "Right to Counsel",
+        "indicators": ["attorney request", "interrogation cessation", "legal representation"],
+        "assessment": "due process and counsel access compliance"
+    }
+}
+```
+
+#### Template Integration Architecture
+The criminal video processing integrates seamlessly with the existing template system:
+
+**Selective Findings Letter Display:**
+```jinja2
+{% if video.is_criminal_case and video.criminal_analysis %}
+    <h4>Criminal Video Evidence: {{ video.file_name }}</h4>
+    <p><strong>Case Type:</strong> Criminal Law Analysis</p>
+    <p><strong>Key Evidence Categories:</strong></p>
+    <ul>
+    {% for evidence in video.criminal_analysis.evidence_categories[:5] %}
+        {% if evidence.evidence_found %}
+            <li><strong>{{ evidence.category }}</strong> ({{ evidence.strength|title }}): {{ evidence.description[:100] }}...</li>
+        {% endif %}
+    {% endfor %}
+    </ul>
+    <p><em>Complete criminal evidence analysis available in document appendix.</em></p>
+{% endif %}
+```
+
+**Comprehensive Document Appendix:**
+```jinja2
+{% if video.is_criminal_case and video.criminal_analysis %}
+    <h3>Criminal Evidence Analysis: {{ video.file_name }}</h3>
+    
+    {% for evidence in video.criminal_analysis.evidence_categories %}
+        <div class="evidence-category">
+            <h5>{{ evidence.category_number }}. {{ evidence.category }}</h5>
+            <p><strong>Evidence Found:</strong> {{ "Yes" if evidence.evidence_found else "No" }}</p>
+            {% if evidence.evidence_found %}
+                <p><strong>Legal Strength:</strong> {{ evidence.strength|title }}</p>
+                <p><strong>Constitutional Implications:</strong> {{ evidence.constitutional_implications }}</p>
+            {% endif %}
+        </div>
+    {% endfor %}
+    
+    <h4>Constitutional Compliance Assessment</h4>
+    {{ video.criminal_analysis.constitutional_issues|safe }}
+{% endif %}
+```
+
+#### AI Integration Enhancement Pattern
+```python
+def _enhance_criminal_context(self, analysis: CaseAnalysisResult) -> CaseAnalysisResult:
+    """Enhance analysis with criminal law context when criminal videos present."""
+    
+    criminal_videos = [v for v in analysis.video_insights if v.is_criminal_case]
+    if criminal_videos:
+        # Add criminal law context to final assessment
+        criminal_context = self._generate_criminal_law_addendum(criminal_videos)
+        analysis.final_assessment += f"\n\n### Criminal Video Evidence Analysis\n{criminal_context}"
+    
+    return analysis
+
+CRIMINAL_VIDEO_ANALYSIS_PROMPT = """
+You are a criminal defense attorney analyzing video evidence. Focus on:
+
+1. Constitutional violations (4th, 5th, 6th Amendments)
+2. Procedural compliance with arrest protocols
+3. Evidence admissibility issues
+4. Timeline reconstruction for legal proceedings
+5. Witness credibility and officer testimony analysis
+
+Analyze each of the 16 criminal evidence categories:
+{categories_list}
+
+For each category found, provide:
+- Timestamp of occurrence
+- Detailed description
+- Legal strength assessment (strong/moderate/weak)
+- Constitutional implications
+- Legal significance for case strategy
+"""
+```
+
+#### Key Architecture Benefits
+- **Backward Compatibility**: All existing video processing functionality preserved
+- **Intelligent Detection**: Automatic criminal case identification without user input
+- **Specialized Analysis**: Criminal law expertise applied when appropriate
+- **Constitutional Focus**: Systematic evaluation of constitutional compliance
+- **Professional Documentation**: Legal-grade evidence documentation
+- **Scalable Framework**: Foundation for additional legal domain specializations
+
 ### Video Data Preservation and Token Management Pattern ✅ IMPLEMENTED
 
 The Legal Document Analysis Portal implements a sophisticated video data preservation architecture that ensures video appendices are never empty due to token limit violations. This pattern addresses the critical issue where detailed video insights from Vertex AI exceed OpenAI model token limits.

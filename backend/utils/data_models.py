@@ -45,6 +45,31 @@ class EvidenceStrength(str, Enum):
     STRONG = "Strong"
     CONCLUSIVE = "Conclusive"
 
+class CriminalEvidenceCategory(str, Enum):
+    """
+    Enum for specific criminal law evidence categories focused on DUI/arrest procedures.
+    
+    These categories follow the chronological flow of a typical DUI arrest and are designed
+    to help legal professionals identify constitutional issues, procedural violations, and
+    potential defense strategies in criminal cases.
+    """
+    DRIVING_PATTERN_REASON_FOR_STOP = "Driving Pattern & Reason for Stop"
+    EMERGENCY_LIGHTS_VEHICLE_PULLOVER = "Emergency Lights & Vehicle Pullover"
+    INITIAL_ROADSIDE_APPROACH_OBSERVATIONS = "Initial Roadside Approach & Observations"
+    PRELIMINARY_QUESTIONING_ADMISSIONS = "Preliminary Questioning & Admissions"
+    EXIT_ORDER_PRETEST_OBSERVATIONS = "Exit Order & Pre-Test Observations"
+    FIELD_SOBRIETY_TESTS = "Field Sobriety Tests"
+    PORTABLE_BREATH_TEST = "Portable Breath Test"
+    ARREST_DECISION_HANDCUFFING = "Arrest Decision & Handcuffing"
+    MIRANDA_WARNINGS_CUSTODIAL_INTERROGATION = "Miranda Warnings & Custodial Interrogation"
+    IMPLIED_CONSENT_CHEMICAL_TEST_REQUEST = "Implied Consent & Chemical Test Request"
+    CHEMICAL_TEST_ADMINISTRATION = "Chemical Test Administration"
+    TRANSPORT_TO_STATION_JAIL = "Transport to Station/Jail"
+    BOOKING_PROCESSING = "Booking & Processing"
+    RIGHT_TO_COUNSEL_PHONE_CALLS = "Right to Counsel & Phone Calls"
+    POST_BOOKING_OBSERVATION_MEDICAL = "Post-Booking Observation & Medical"
+    VEHICLE_TOW_INVENTORY_SEARCH = "Vehicle Tow & Inventory Search"
+
 # --- Core Data Processing Models ---
 
 class FileMetadata(BaseModel):
@@ -307,6 +332,60 @@ class DemandLetterEvaluation(BaseModel):
     potential_outcomes: List[str] = Field(default_factory=list, description="Potential outcomes of sending a demand letter.")
     relevant_statutes: List[str] = Field(default_factory=list, description="A list of relevant statutes to cite in the demand letter.")
 
+# --- Criminal Evidence Models ---
+
+class TimeRange(BaseModel):
+    """
+    Represents a time range within video evidence with confidence scoring.
+    
+    Used to pinpoint specific moments in criminal proceedings that are legally significant.
+    Time stamps help attorneys identify exactly when constitutional violations or
+    procedural errors occurred during arrests, interrogations, or evidence collection.
+    """
+    start_time: str = Field(..., description="Start timestamp in format 'MM:SS' or 'HH:MM:SS'")
+    end_time: str = Field(..., description="End timestamp in format 'MM:SS' or 'HH:MM:SS'")
+    confidence: float = Field(..., ge=0.0, le=1.0, description="Confidence score from 0.0 to 1.0 for timestamp accuracy")
+
+class CriminalEvidenceItem(BaseModel):
+    """
+    Represents a single piece of criminal evidence extracted from video analysis.
+    
+    This model structures evidence according to criminal law requirements, focusing on
+    constitutional compliance, procedural accuracy, and defense strategy considerations.
+    Each evidence item corresponds to specific moments in criminal proceedings that
+    could impact case outcomes.
+    """
+    category: CriminalEvidenceCategory = Field(..., description="The specific category of criminal evidence")
+    time_range: TimeRange = Field(..., description="When this evidence occurs in the video timeline")
+    description: str = Field(..., description="Detailed description of what occurs during this time period")
+    key_observations: List[str] = Field(default_factory=list, description="Specific observations relevant to legal analysis")
+    legal_significance: str = Field(..., description="Why this evidence matters for the case outcome")
+    constitutional_issues: List[str] = Field(default_factory=list, description="Potential constitutional violations or procedural concerns")
+    evidence_strength: str = Field(..., description="Assessment of evidence strength: 'strong', 'moderate', or 'weak'")
+
+    @field_validator('evidence_strength')
+    @classmethod
+    def validate_evidence_strength(cls, v: str) -> str:
+        """Validate evidence strength values."""
+        allowed_values = {'strong', 'moderate', 'weak'}
+        if v.lower() not in allowed_values:
+            raise ValueError(f"Evidence strength must be one of: {allowed_values}")
+        return v.lower()
+
+class CriminalVideoAnalysis(BaseModel):
+    """
+    Comprehensive analysis of video evidence for criminal law cases.
+    
+    This model structures video analysis specifically for criminal defense and prosecution,
+    identifying constitutional issues, procedural compliance, and strategic considerations.
+    The analysis follows chronological flow of criminal proceedings to help attorneys
+    build comprehensive case strategies.
+    """
+    evidence_items: List[CriminalEvidenceItem] = Field(default_factory=list, description="List of extracted criminal evidence items")
+    timeline_summary: str = Field(..., description="Chronological summary of events captured in the video")
+    constitutional_compliance_overview: str = Field(..., description="Overall assessment of constitutional compliance during proceedings")
+    missing_categories: List[CriminalEvidenceCategory] = Field(default_factory=list, description="Expected evidence categories not found in the video")
+
 # --- Media Processing Models ---
 
 class TranscriptedMedia(BaseModel):
@@ -335,6 +414,32 @@ class VideoInsight(BaseModel):
     insights_summary: Optional[str] = Field(None, description="Truncated summary for use in prompts")
     original_insights: Optional[Dict[str, Any]] = Field(None, exclude=True, description="Full insights held temporarily in memory")
 
+class EnhancedVideoInsight(VideoInsight):
+    """
+    Enhanced video insight model that extends VideoInsight with criminal law analysis capabilities.
+    
+    This model maintains full backward compatibility with the existing VideoInsight model while
+    adding specialized criminal analysis fields. When is_criminal_case is True, the criminal_analysis
+    field provides structured evidence extraction following criminal law procedures and constitutional
+    requirements for DUI arrests, interrogations, and evidence collection.
+    
+    The criminal analysis helps attorneys identify:
+    - Constitutional violations (4th, 5th, 6th Amendment issues)
+    - Procedural compliance with arrest protocols
+    - Field sobriety test administration quality
+    - Miranda warnings and custodial interrogation compliance
+    - Evidence chain of custody issues
+    - Potential suppression motion opportunities
+    """
+    criminal_analysis: Optional[CriminalVideoAnalysis] = Field(
+        None,
+        description="Specialized criminal law analysis when video contains arrest/interrogation footage"
+    )
+    is_criminal_case: bool = Field(
+        False,
+        description="Flag indicating whether this video contains criminal law proceedings"
+    )
+
 class MediaProcessingError(BaseModel):
     """Data model for capturing errors during media processing."""
     source: str = Field(..., description="The source of the error (e.g., 'AudioProcessor', 'VideoProcessor').")
@@ -343,11 +448,21 @@ class MediaProcessingError(BaseModel):
     error_type: str = Field(..., description="The type of error (e.g., 'TranscriptionError', 'UploadError').")
 
 class CaseAnalysisResult(BaseModel):
-    """Combined data model for enhanced intake and case analysis, including error tracking."""
+    """
+    Combined data model for enhanced intake and case analysis, including error tracking.
+    
+    Supports both regular video insights and enhanced criminal law video analysis.
+    The video_insights field accepts both VideoInsight and EnhancedVideoInsight objects,
+    allowing for seamless integration of criminal evidence analysis while maintaining
+    backward compatibility with existing workflows.
+    """
     intake_analysis: Optional[EnhancedIntakeAnalysis] = None
     analyzed_documents: List[AnalyzedDocument] = Field(default_factory=list)
     transcripted_media: List[TranscriptedMedia] = Field(default_factory=list, description="A list of transcribed audio files.")
-    video_insights: List[VideoInsight] = Field(default_factory=list, description="A list of video analysis insights.")
+    video_insights: List[Union[VideoInsight, EnhancedVideoInsight]] = Field(
+        default_factory=list,
+        description="A list of video analysis insights, supporting both regular and enhanced criminal law analysis."
+    )
     legal_assessment: Optional[LegalAssessment] = None
     demand_letter_evaluation: Optional[DemandLetterEvaluation] = None
     errors: List[AnalysisError] = Field(default_factory=list, description="A list of errors encountered during analysis.")

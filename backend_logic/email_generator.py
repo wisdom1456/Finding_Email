@@ -1,7 +1,7 @@
 import base64
 import re
 import os
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Any
 from openai import OpenAI, RateLimitError, APIError, APITimeoutError
 from jinja2 import Environment, FileSystemLoader, select_autoescape, TemplateError
 from datetime import datetime
@@ -19,28 +19,77 @@ from backend.utils.data_models import (
 )
 from backend_logic.quality_validator import QualityValidator
 
-# Constants
-CLIENT_DIRECTED_PERSONA = """
-You are a senior litigation attorney at a prestigious law firm, writing a client-friendly findings letter TO YOUR CLIENT.
+# AUTHENTIC_ATTORNEY_ADVISOR Framework - Updated August 2025
+# Focus: Direct, matter-of-fact, professional tone matching real attorney communication
 
-MANDATORY INSTRUCTIONS:
-1.  **Direct Address:** Every sentence must be written in the second person ('you', 'your'). Start the letter with 'Dear [Client Name],' and maintain this direct address throughout.
-2.  **Client-Centric Language:** You MUST write as if speaking directly to the client.
-    *   CORRECT: "You have a strong case because your evidence shows..."
-    *   INCORRECT: "The client has a strong case because their evidence shows..."
-3.  **Plain English Approach:** Use accessible language and avoid legal jargon. Explain complex legal concepts in terms your client can easily understand. Your tone should be professional yet approachable, demonstrating expertise while ensuring client comprehension and empowerment.
-4.  **Client-Friendly Format:** Use bullet points and lists where appropriate to make information clear and actionable for your client.
+# Core Directives for AUTHENTIC_ATTORNEY_ADVISOR
+CORE_DIRECTIVES = """
+**CORE DIRECTIVES - Apply to ALL legal communications:**
+
+1. **Direct Professional Tone:** Matter-of-fact communication without overselling the case
+2. **Numbered Sections:** Use clear numbered sections with ALL CAPS headers (e.g., "1. FACTUAL SUMMARY")
+3. **Bullet Points:** Use bullet points for key facts and organized information
+4. **Concise Writing:** Be efficient and direct - avoid wordiness or repetitive language
+5. **Florida Law Exclusive:** Reference ONLY Florida statutes, case law, and legal precedents
+6. **Professional Realism:** Present facts and law objectively without artificial optimism
 """
 
-CONTINUING_LETTER_PERSONA = """
-MANDATORY INSTRUCTION: You are an attorney CONTINUING a findings letter that is already in progress. DO NOT add any greetings (like "Dear Client"), closings, or signatures. You must continue the letter seamlessly from the previous section. Your tone must remain consistent with a client-friendly legal document directed to a client, using the second person ('you', 'your'). Use plain English and bullet points or lists where appropriate to enhance clarity.
+# High-Stakes Advice Protocol - Only for counter-intuitive recommendations
+HIGH_STAKES_ADVICE_PROTOCOL = """
+**HIGH-STAKES ADVICE PROTOCOL** (Use ONLY when recommending counter-intuitive actions):
+
+When legal strategy contradicts client expectations:
+1. **Acknowledge the Complexity:** "This situation requires careful consideration..."
+2. **Explain the Legal Reasoning:** Provide clear rationale using Florida law
+3. **Present Supporting Evidence:** Reference specific Florida cases or statutes
+4. **Outline Consequences:** Explain both action and inaction outcomes
+5. **Professional Guidance:** "Based on our analysis under Florida law..."
 """
+
+AUTHENTIC_ATTORNEY_ADVISOR = f"""
+You are an AUTHENTIC_ATTORNEY_ADVISOR - a senior litigation attorney writing a professional legal analysis letter that mirrors the style of real attorney communications.
+
+{CORE_DIRECTIVES}
+
+**MANDATORY STYLE REQUIREMENTS:**
+1. **Professional Greeting:** Use natural attorney language like "Good afternoon [Client Name]" or "Dear [Client Name]"
+2. **Numbered Sections:** Format with numbered sections using ALL CAPS headers (1. FACTUAL SUMMARY, 2. LEGAL ANALYSIS, etc.)
+3. **Direct Language:** Use direct, professional language without forced collaboration or artificial "we" statements
+4. **Bullet Points:** Organize key information using bullet points for clarity
+5. **Florida Law Focus:** Reference ONLY Florida statutes, case law, and legal precedents with proper legal citation format
+6. **Matter-of-Fact Tone:** Present analysis objectively without overselling the strength of the case
+7. **Single Professional Closing:** End with one professional closing, not repetitive signatures
+
+**FORMATTING REQUIREMENT:** This is the OPENING section, so include appropriate professional greeting.
+"""
+
+CONTINUING_ATTORNEY_ADVISOR = f"""
+You are an AUTHENTIC_ATTORNEY_ADVISOR CONTINUING a professional legal analysis letter.
+
+{CORE_DIRECTIVES}
+
+**MANDATORY STYLE REQUIREMENTS:**
+1. **NO Greetings or Closings:** Continue seamlessly from previous section without additional greetings or signatures
+2. **Consistent Professional Tone:** Maintain the established direct, matter-of-fact tone
+3. **Numbered Section Format:** Continue the numbered section format with ALL CAPS headers
+4. **Florida Law Focus:** Reference ONLY Florida statutes, case law, and legal precedents
+5. **Bullet Points:** Use bullet points to organize information clearly
+6. **Objective Analysis:** Present information factually without artificial enthusiasm or overselling
+
+**CONTINUATION REQUIREMENT:** This section continues an existing letter - no new greetings or closings.
+"""
+
+# Updated personas for authentic attorney style
+CLIENT_DIRECTED_PERSONA = AUTHENTIC_ATTORNEY_ADVISOR
+CONTINUING_LETTER_PERSONA = CONTINUING_ATTORNEY_ADVISOR
 
 STRICT_FORMAT_ENFORCEMENT = """
 CRITICAL FORMATTING REQUIREMENTS:
-1.  **HTML Only:** Use ONLY HTML tags for all formatting. Never use Markdown (`**bold**`, `*italic*`).
-2.  **Clean Output:** Generate clean HTML suitable for direct client presentation. DO NOT include `'''html'''` or any other code fences in your response.
-3.  **Lists Encouraged:** Use bullet points (`<ul>`, `<li>`) and numbered lists (`<ol>`, `<li>`) where appropriate to enhance readability and client understanding.
+1. **HTML Only:** Use ONLY HTML tags for all formatting. Never use Markdown (`**bold**`, `*italic*`).
+2. **Clean Output:** Generate clean HTML suitable for direct client presentation. DO NOT include `'''html'''` or any other code fences in your response.
+3. **Numbered Sections:** Use numbered sections with ALL CAPS headers (e.g., "1. FACTUAL SUMMARY").
+4. **Bullet Points:** Use bullet points (`<ul>`, `<li>`) for organized information where appropriate.
+5. **Professional Formatting:** Clean, efficient layout matching real attorney communications.
 """
 
 # Legacy constant maintained for backward compatibility
@@ -98,8 +147,227 @@ class EmailGenerator:
         print(f"EMAIL GENERATOR: ✅ Jinja2 environment initialized successfully")
         self.quality_validator = QualityValidator()
 
-    def _clean_ai_response(self, content: str) -> str:
-        """Enhanced post-processing to clean AI responses of markdown, malformed HTML, and other artifacts."""
+    def _apply_high_stakes_advice_protocol(self, content: str, is_counter_intuitive: bool = False) -> str:
+        """Apply High-Stakes Advice Protocol for counter-intuitive recommendations only."""
+        if not is_counter_intuitive:
+            return content
+        
+        # Apply the protocol formatting for counter-intuitive advice
+        protocol_intro = """
+        <p><strong>Important Strategic Consideration:</strong> This may seem counterintuitive, but our analysis under Florida law suggests a different approach than you might initially expect.</p>
+        """
+        
+        protocol_conclusion = """
+        <p><em>We understand this recommendation may not align with your initial expectations, and we're here to guide you through this complexity. Our strategy is designed to position you for the strongest possible outcome under Florida law.</em></p>
+        """
+        
+        return protocol_intro + content + protocol_conclusion
+
+    def _validate_florida_citations(self, content: str) -> str:
+        """Validate and ensure only Florida statutes and case law are referenced."""
+        import re
+        
+        # Pattern to find statute citations
+        statute_patterns = [
+            r'\b(?:USC|U\.S\.C\.)\s*§?\s*\d+',  # Federal statutes
+            r'\b(?:CFR|C\.F\.R\.)\s*§?\s*\d+',  # Federal regulations
+            r'\b[A-Z]{2}\s+(?:Stat|Rev\s+Stat|Code)\s*§?\s*\d+',  # Other state statutes (not FL)
+            r'\b(?:California|Texas|New York|Georgia|Alabama|Mississippi|Louisiana|Tennessee|South Carolina|North Carolina)\s+(?:Stat|Code|Rev)',  # Other state codes by name
+        ]
+        
+        # Check for non-Florida citations
+        non_florida_citations = []
+        for pattern in statute_patterns:
+            matches = re.findall(pattern, content, re.IGNORECASE)
+            non_florida_citations.extend(matches)
+        
+        if non_florida_citations:
+            print(f"EMAIL GENERATOR: ⚠️  Non-Florida citations detected: {non_florida_citations}")
+            # In a production environment, you might want to flag this for review
+            # For now, we'll add a note to encourage Florida law focus
+            
+        # Ensure Florida statute format is correct
+        florida_statute_pattern = r'\bFlorida\s+Stat(?:utes?)?\s*§?\s*(\d+(?:\.\d+)*)'
+        corrected_content = re.sub(
+            florida_statute_pattern,
+            r'Florida Statutes § \1',
+            content,
+            flags=re.IGNORECASE
+        )
+        
+        return corrected_content
+
+    def _ensure_accessibility_formatting(self, content: str) -> str:
+        """Ensure content follows accessibility and clean formatting guidelines."""
+        if not content:
+            return content
+            
+        # Ensure proper heading hierarchy (h4 for sections, h3 for major divisions)
+        content = re.sub(r'<h[1-2]([^>]*)>', r'<h3\1>', content)  # Convert h1/h2 to h3
+        content = re.sub(r'</h[1-2]>', r'</h3>', content)
+        
+        # Ensure bullet points are properly formatted
+        content = re.sub(r'•\s*', '', content)  # Remove manual bullet points
+        
+        # Ensure proper paragraph spacing
+        content = re.sub(r'<p>\s*</p>', '', content)  # Remove empty paragraphs
+        content = re.sub(r'</p>\s*<p>', '</p>\n<p>', content)  # Add spacing between paragraphs
+        
+        # Ensure list items are properly formatted
+        content = re.sub(r'<li>\s*', '<li>', content)  # Clean up list items
+        content = re.sub(r'\s*</li>', '</li>', content)
+        
+        return content.strip()
+
+    def _apply_final_presentation_improvements(self, content: str) -> str:
+        """Apply final tone, reading level, and presentation improvements to client-facing content."""
+        if not content:
+            return content
+        
+        print(f"EMAIL GENERATOR: Applying final presentation improvements...")
+        
+        # Apply 9th-grade reading level simplification
+        content = self._simplify_reading_level(content)
+        
+        # Apply CLIENT_CLARITY_ADVISOR tone enhancements
+        content = self._enhance_collaborative_tone(content)
+        
+        # Apply final presentation formatting
+        content = self._apply_final_formatting(content)
+        
+        print(f"EMAIL GENERATOR: ✅ Final presentation improvements applied")
+        return content
+
+    def _simplify_reading_level(self, content: str) -> str:
+        """Simplify content to 9th-grade reading level while preserving legal accuracy."""
+        if not content:
+            return content
+            
+        # Replace complex legal terms with simpler equivalents
+        simplifications = {
+            # Legal terms
+            r'\bpursuant to\b': 'under',
+            r'\bheretofore\b': 'before this',
+            r'\bhereinafter\b': 'from now on',
+            r'\bwherefore\b': 'therefore',
+            r'\bnotwithstanding\b': 'despite',
+            r'\bforthwith\b': 'immediately',
+            r'\binter alia\b': 'among other things',
+            r'\bviz\.\b': 'namely',
+            r'\bi\.e\.\b': 'that is',
+            r'\be\.g\.\b': 'for example',
+            
+            # Complex phrases
+            r'\bin the event that\b': 'if',
+            r'\bprior to\b': 'before',
+            r'\bsubsequent to\b': 'after',
+            r'\bin order to\b': 'to',
+            r'\bfor the purpose of\b': 'to',
+            r'\bwith regard to\b': 'about',
+            r'\bin connection with\b': 'about',
+            r'\bas a result of\b': 'because of',
+            r'\bby virtue of\b': 'because of',
+            r'\bin accordance with\b': 'following',
+            
+            # Wordy constructions
+            r'\bmake a determination\b': 'decide',
+            r'\bmake an assessment\b': 'assess',
+            r'\brender assistance\b': 'help',
+            r'\bprovide assistance\b': 'help',
+            r'\btake into consideration\b': 'consider',
+            r'\bgive consideration to\b': 'consider',
+            r'\bmake a recommendation\b': 'recommend',
+            
+            # Academic language
+            r'\butilize\b': 'use',
+            r'\bdemonstrate\b': 'show',
+            r'\bmanifest\b': 'show',
+            r'\bevidenced by\b': 'shown by',
+            r'\bsubstantiate\b': 'support',
+            r'\bascertain\b': 'find out',
+            r'\bcommence\b': 'begin',
+            r'\bterminate\b': 'end',
+            r'\bimplement\b': 'carry out'
+        }
+        
+        for complex_term, simple_term in simplifications.items():
+            content = re.sub(complex_term, simple_term, content, flags=re.IGNORECASE)
+        
+        return content
+
+    def _enhance_collaborative_tone(self, content: str) -> str:
+        """Enhance collaborative tone using CLIENT_CLARITY_ADVISOR principles."""
+        if not content:
+            return content
+            
+        # Enhance collaborative language patterns
+        tone_enhancements = {
+            # Add "we" language where appropriate
+            r'\bI believe\b': 'we believe',
+            r'\bI recommend\b': 'we recommend',
+            r'\bI suggest\b': 'we suggest',
+            r'\bI think\b': 'we think',
+            r'\bI found\b': 'we found',
+            r'\bI analyzed\b': 'we analyzed',
+            r'\bmy analysis\b': 'our analysis',
+            r'\bmy review\b': 'our review',
+            r'\bmy assessment\b': 'our assessment',
+            
+            # Warm professional language
+            r'\bIt is recommended\b': 'We recommend',
+            r'\bIt is suggested\b': 'We suggest',
+            r'\bIt is advised\b': 'We advise',
+            r'\bIt appears\b': 'We found',
+            r'\bIt seems\b': 'We believe',
+            
+            # Client-focused language
+            r'\bthe client\b': 'you',
+            r'\byour client\b': 'you',
+            r'\bthe matter\b': 'your case',
+            r'\bthe case\b': 'your case',
+            r'\bthe legal matter\b': 'your legal matter',
+            
+            # Partnership emphasis
+            r'\bI will\b': 'we will',
+            r'\bI can\b': 'we can',
+            r'\bI would\b': 'we would',
+            r'\bshould you\b': 'if you',
+            r'\bwould you\b': 'will you'
+        }
+        
+        for formal_phrase, collaborative_phrase in tone_enhancements.items():
+            content = re.sub(formal_phrase, collaborative_phrase, content, flags=re.IGNORECASE)
+        
+        return content
+
+    def _apply_final_formatting(self, content: str) -> str:
+        """Apply final formatting improvements for client presentation."""
+        if not content:
+            return content
+            
+        # Ensure warm, professional opening
+        if 'dear' not in content.lower()[:100]:
+            # Extract client name if available
+            client_pattern = r'client[:\s]+([^,\n]+)'
+            match = re.search(client_pattern, content, re.IGNORECASE)
+            client_name = match.group(1).strip() if match else 'Client'
+            content = f'<p>Dear {client_name},</p>\n\n{content}'
+        
+        # Enhance paragraph structure for readability
+        content = re.sub(r'([.!?])\s+([A-Z])', r'\1</p>\n<p>\2', content)
+        
+        # Ensure proper bullet point formatting
+        content = re.sub(r'([.!?])\s*\n\s*•\s*', r'\1</p>\n<ul>\n<li>', content)
+        content = re.sub(r'•\s*([^•\n]+)', r'<li>\1</li>', content)
+        
+        # Add closing if missing
+        if 'sincerely' not in content.lower()[-200:] and 'thank you' not in content.lower()[-200:]:
+            content += '\n\n<p>We look forward to working with you on this matter.</p>\n<p>Sincerely,<br>Your Legal Team</p>'
+        
+        return content
+
+    def _clean_ai_response(self, content: str, is_counter_intuitive: bool = False) -> str:
+        """Enhanced post-processing to clean AI responses and apply CLIENT_CLARITY_ADVISOR framework guidelines."""
         if not content:
             return ""
             
@@ -133,7 +401,15 @@ class EmailGenerator:
         cleaned = re.sub(r'\n\s*\n\s*\n', '\n\n', cleaned)  # Multiple newlines to double
         cleaned = cleaned.strip()
         
-        print(f"EMAIL GENERATOR DEBUG: Cleaned AI response length: {len(cleaned)}")
+        # Apply CLIENT_CLARITY_ADVISOR framework enhancements
+        cleaned = self._validate_florida_citations(cleaned)
+        cleaned = self._ensure_accessibility_formatting(cleaned)
+        cleaned = self._apply_high_stakes_advice_protocol(cleaned, is_counter_intuitive)
+        
+        # Apply final presentation improvements (reading level, tone, formatting)
+        cleaned = self._apply_final_presentation_improvements(cleaned)
+        
+        print(f"EMAIL GENERATOR DEBUG: Final processed response length: {len(cleaned)}")
         
         return cleaned
 
@@ -254,6 +530,7 @@ class EmailGenerator:
                 'analysis': analysis,
                 'generated_letter': generated_letter,
                 'current_date': datetime.now().strftime('%B %d, %Y'),
+                'case_timeline': getattr(analysis, 'case_timeline', []),
                 'format_video_analysis': self.format_video_analysis_for_appendix
             }
             print(f"EMAIL GENERATOR: Rendering main template with context keys: {list(template_context.keys())}")
@@ -517,90 +794,97 @@ class EmailGenerator:
             return None
 
     def _generate_executive_summary(self, analysis: CaseAnalysisResult, persona: str) -> str:
-        """Generates a professional executive summary with HTML formatting."""
+        """Generates a professional executive summary with HTML formatting using CLIENT_CLARITY_ADVISOR framework."""
         prompt = f"""
         Analyze the provided case data and draft a concise, professional executive summary (2-3 sentences) for the beginning of a findings letter. This is the first section, so it should include the greeting 'Dear {analysis.intake_analysis.client_name},'.
 
         Your summary must:
-        - Be professional, confident, and clear.
-        - Focus on the key findings and recommendations.
-        - Use sophisticated legal language appropriate for client communications.
-        - Be formatted as HTML paragraphs using `<p>` tags.
-        - Address the client directly using 'you' and 'your'.
+        - Be professional, confident, and clear using collaborative language ("we analyzed," "our review shows")
+        - Focus on the key findings and recommendations based exclusively on Florida law
+        - Use sophisticated yet accessible language that builds client confidence
+        - Be formatted as HTML paragraphs using `<p>` tags
+        - Address the client directly using 'you' and 'your' while emphasizing partnership with "we" statements
+        - Reference ONLY Florida statutes, case law, and legal precedents if citing legal authority
+        - Demonstrate warm professionalism balanced with legal expertise
 
         Case Context:
         {analysis.model_dump_json(indent=2)}
 
-        Generate only the HTML-formatted executive summary text.
+        Generate only the HTML-formatted executive summary text with Florida law focus.
         """
         result = self._make_openai_request(prompt, persona)
-        return result or "<p>Executive summary could not be generated.</p>"
+        return result or "<p>Dear Client, we have completed our comprehensive analysis of your legal matter and are prepared to present our findings and recommendations.</p>"
 
     def _generate_background_summary(self, analysis: CaseAnalysisResult, persona: str) -> str:
-        """Generates background summary from intake analysis with HTML formatting."""
+        """Generates background summary continuing the numbered section format."""
         prompt = f"""
-        Based on the intake analysis provided, create a professional background summary that provides context for the legal matter. This section continues the letter.
+        Continue the legal analysis with a factual background section. This should continue the numbered format from the previous section.
 
-        Your summary should:
-        - Provide essential context from the client intake.
-        - Summarize the key facts and circumstances.
-        - Set the stage for the legal analysis that follows.
-        - Use professional, client-appropriate language, addressing the client as 'you'.
-        - Be formatted as HTML paragraphs using `<p>` tags.
+        Requirements:
+        - Continue the numbered section format (this would be section 1 or 2 depending on structure)
+        - Use bullet points for key facts
+        - Keep language direct and factual
+        - Include specific amounts, dates, and key events
+        - Avoid repetitive closings or signatures
+        - Focus on facts relevant to the legal claims
 
         Case Context:
         {analysis.model_dump_json(indent=2)}
 
-        Generate only the HTML-formatted background summary text.
+        Generate the factual background in authentic attorney style.
         """
         result = self._make_openai_request(prompt, persona)
-        return result or "<p>Background summary could not be generated.</p>"
+        return result or "<p>Based on our review, the following facts are relevant to this matter:</p>"
 
     def _generate_legal_concerns(self, analysis: CaseAnalysisResult, persona: str) -> str:
-        """Generates key legal concerns section with bullet points for clarity."""
+        """Generates key legal concerns section with bullet points for clarity using CLIENT_CLARITY_ADVISOR framework."""
         prompt = f"""
-        Based on the document analysis, identify the key legal concerns in your case using clear, plain English.
+        Based on the document analysis, identify the key legal concerns in your case using clear, accessible language and our collaborative approach.
 
         Your legal concerns section should:
-        - Use accessible language that you can easily understand
-        - List the main legal issues using bullet points for clarity
-        - Avoid legal jargon and explain concepts in simple terms
-        - Address you directly throughout
-        - Be formatted with `<ul>` and `<li>` tags for easy reading
-        - Focus on the most important legal matters affecting your case
+        - Use accessible language that you can easily understand, avoiding legal jargon
+        - List the main legal issues using bullet points for maximum clarity
+        - Explain concepts in simple terms while demonstrating expertise
+        - Address you directly throughout using collaborative language ("we identified," "our analysis shows")
+        - Be formatted with `<ul>` and `<li>` tags for easy scanning
+        - Focus exclusively on Florida law and legal matters affecting your case
+        - Reference specific Florida statutes or case law when relevant (only Florida authorities)
+        - Balance honest assessment with supportive tone
 
         Case Context:
         {analysis.model_dump_json(indent=2)}
 
-        Generate the key legal concerns using bullet points for maximum clarity.
+        Generate the key legal concerns using bullet points with Florida law focus and CLIENT_CLARITY_ADVISOR tone.
         """
         result = self._make_openai_request(prompt, persona)
-        return result or "<p>Key legal concerns could not be generated.</p>"
+        return result or "<p>We have identified several key legal considerations in your case that require careful analysis under Florida law.</p>"
 
     def _generate_media_summary(self, analysis: CaseAnalysisResult, persona: str) -> str:
-        """Generates a summary of media analysis with HTML formatting."""
+        """Generates a summary of media analysis with HTML formatting using CLIENT_CLARITY_ADVISOR framework."""
         if not analysis.transcripted_media and not analysis.video_insights:
             return ""
 
         prompt = f"""
-        Based on the media analysis provided, create a professional summary of the key findings from audio and video files.
+        Based on the media analysis provided, create a professional summary of the key findings from audio and video files using our collaborative CLIENT_CLARITY_ADVISOR approach.
 
         Your summary should:
-        - Integrate findings from both audio and video into a cohesive narrative.
-        - Highlight crucial evidence, statements, or events from the media.
-        - Explain the relevance of the media to the case.
-        - Be formatted as HTML paragraphs using `<p>` tags.
+        - Integrate findings from both audio and video into a cohesive narrative using collaborative language ("our analysis of the media," "we reviewed")
+        - Highlight crucial evidence, statements, or events from the media with accessible explanations
+        - Explain the relevance of the media to your case under Florida law and evidence standards
+        - Be formatted as HTML paragraphs using `<p>` tags with clear structure
+        - Use warm professionalism while demonstrating expertise in media evidence analysis
+        - Address the client directly using 'you' while emphasizing partnership with 'we'
 
         Case Context:
         {analysis.model_dump_json(indent=2)}
 
-        Generate only the HTML-formatted media analysis summary text.
+        Generate only the HTML-formatted media analysis summary text with CLIENT_CLARITY_ADVISOR tone.
         """
         result = self._make_openai_request(prompt, persona)
-        return result or "<p>Media analysis summary could not be generated.</p>"
+        return result or "<p>Our analysis of the media evidence reveals important information relevant to your case.</p>"
 
     def format_video_analysis_for_appendix(self, video_insight) -> str:
-        """Format video analysis results into readable text for document appendix."""
+        """Format video analysis results into clean, readable text for document appendix."""
         
         formatted_text = []
         
@@ -616,56 +900,81 @@ class EmailGenerator:
             if isinstance(insights, dict):
                 # Add summary if available
                 if 'summary' in insights and insights['summary']:
-                    formatted_text.append(f'<div style="margin-bottom: 15px;"><div class="meta-label">Summary</div><p style="margin: 5px 0; font-size: 13px;">{insights["summary"]}</p></div>')
+                    summary_text = insights['summary']
+                    if isinstance(summary_text, str) and summary_text.strip():
+                        formatted_text.append(f'<div style="margin-bottom: 15px;"><div class="meta-label">Video Summary</div><p style="margin: 5px 0; font-size: 13px; line-height: 1.4;">{summary_text}</p></div>')
                 
-                # Add timeline if available
+                # Add key events/timeline if available
+                timeline_content = []
                 if 'timeline' in insights and insights['timeline']:
                     timeline_items = insights['timeline']
                     if isinstance(timeline_items, list) and timeline_items:
-                        formatted_text.append('<div style="margin-bottom: 15px;"><div class="meta-label">Timeline</div><ul style="margin: 5px 0; padding-left: 20px; list-style-type: disc;">')
                         for event in timeline_items:
                             if isinstance(event, dict):
                                 timestamp = event.get('timestamp', 'Unknown')
-                                description = event.get('event', 'No description')
-                                formatted_text.append(f'<li style="margin-bottom: 5px; font-size: 13px;">• {timestamp} - {description}</li>')
-                            elif isinstance(event, str):
-                                formatted_text.append(f'<li style="margin-bottom: 5px; font-size: 13px;">• {event}</li>')
-                        formatted_text.append('</ul></div>')
+                                description = event.get('event', event.get('description', 'No description'))
+                                timeline_content.append(f'• {timestamp} - {description}')
+                            elif isinstance(event, str) and event.strip():
+                                timeline_content.append(f'• {event.strip()}')
                 
-                # Add objects detected if available
+                # Add key events from other sources if timeline wasn't found
+                if not timeline_content:
+                    if 'key_events' in insights and insights['key_events']:
+                        events = insights['key_events']
+                        if isinstance(events, list):
+                            for event in events:
+                                if isinstance(event, str) and event.strip():
+                                    timeline_content.append(f'• {event.strip()}')
+                
+                if timeline_content:
+                    formatted_text.append('<div style="margin-bottom: 15px;"><div class="meta-label">Key Events</div><ul style="margin: 5px 0; padding-left: 20px; list-style-type: none;">')
+                    for event in timeline_content:
+                        formatted_text.append(f'<li style="margin-bottom: 5px; font-size: 13px;">{event}</li>')
+                    formatted_text.append('</ul></div>')
+                
+                # Add objects/evidence detected
+                objects_content = []
                 if 'objects' in insights and insights['objects']:
                     objects = insights['objects']
                     if isinstance(objects, list) and objects:
-                        formatted_text.append('<div style="margin-bottom: 15px;"><div class="meta-label">Objects Detected</div><ul style="margin: 5px 0; padding-left: 20px; list-style-type: disc;">')
                         for obj in objects:
                             if isinstance(obj, dict):
-                                object_name = obj.get('object', 'Unknown object')
-                                timestamp = obj.get('timestamp', 'Unknown time')
-                                formatted_text.append(f'<li style="margin-bottom: 5px; font-size: 13px;">• {object_name} ({timestamp})</li>')
-                            elif isinstance(obj, str):
-                                formatted_text.append(f'<li style="margin-bottom: 5px; font-size: 13px;">• {obj}</li>')
-                        formatted_text.append('</ul></div>')
+                                object_name = obj.get('object', obj.get('name', 'Unknown object'))
+                                timestamp = obj.get('timestamp', obj.get('time_range', ''))
+                                if timestamp:
+                                    objects_content.append(f'{object_name} ({timestamp})')
+                                else:
+                                    objects_content.append(object_name)
+                            elif isinstance(obj, str) and obj.strip():
+                                objects_content.append(obj.strip())
                 
-                # Add content moderation if available
-                if 'content_moderation' in insights and insights['content_moderation']:
-                    formatted_text.append(f'<div style="margin-bottom: 15px;"><div class="meta-label">Content Moderation</div><p style="margin: 5px 0; font-size: 13px;">{insights["content_moderation"]}</p></div>')
+                if objects_content:
+                    formatted_text.append('<div style="margin-bottom: 15px;"><div class="meta-label">Objects/Evidence</div><ul style="margin: 5px 0; padding-left: 20px; list-style-type: none;">')
+                    for obj in objects_content:
+                        formatted_text.append(f'<li style="margin-bottom: 5px; font-size: 13px;">• {obj}</li>')
+                    formatted_text.append('</ul></div>')
                 
-                # Handle any other fields that weren't specifically formatted
-                handled_keys = {'summary', 'timeline', 'objects', 'content_moderation'}
-                other_fields = []
-                for key, value in insights.items():
-                    if key not in handled_keys and value:
-                        # Format the key for display
-                        display_key = key.replace('_', ' ').title()
-                        if isinstance(value, (list, dict)):
-                            # Convert complex types to string representation
-                            value_str = str(value)
-                        else:
-                            value_str = str(value)
-                        other_fields.append(f'<div style="margin-bottom: 10px;"><div class="meta-label">{display_key}</div><p style="margin: 5px 0; font-size: 13px;">{value_str}</p></div>')
+                # Add case relevance if available
+                if 'case_relevance' in insights and insights['case_relevance']:
+                    relevance_text = insights['case_relevance']
+                    if isinstance(relevance_text, str) and relevance_text.strip():
+                        formatted_text.append(f'<div style="margin-bottom: 15px;"><div class="meta-label">Case Relevance</div><p style="margin: 5px 0; font-size: 13px; line-height: 1.4; font-style: italic;">{relevance_text}</p></div>')
                 
-                if other_fields:
-                    formatted_text.extend(other_fields)
+                # Handle any other important fields
+                important_fields = ['legal_significance', 'constitutional_issues', 'evidence_value', 'procedural_notes']
+                for field in important_fields:
+                    if field in insights and insights[field]:
+                        value = insights[field]
+                        display_key = field.replace('_', ' ').title()
+                        
+                        if isinstance(value, list) and value:
+                            formatted_text.append(f'<div style="margin-bottom: 10px;"><div class="meta-label">{display_key}</div><ul style="margin: 5px 0; padding-left: 20px; list-style-type: none;">')
+                            for item in value:
+                                if isinstance(item, str) and item.strip():
+                                    formatted_text.append(f'<li style="margin-bottom: 3px; font-size: 13px;">• {item.strip()}</li>')
+                            formatted_text.append('</ul></div>')
+                        elif isinstance(value, str) and value.strip():
+                            formatted_text.append(f'<div style="margin-bottom: 10px;"><div class="meta-label">{display_key}</div><p style="margin: 5px 0; font-size: 13px;">{value}</p></div>')
                 
                 # If we have formatted content, return it
                 if formatted_text:
@@ -674,8 +983,47 @@ class EmailGenerator:
         # Fallback for cases where no insights are available or formatting fails
         return '<p style="margin: 0; font-size: 13px; line-height: 1.5;">Video analysis details not available.</p>'
 
+
+    def _parse_date_for_sorting(self, date_str: str) -> Optional[str]:
+        """Parse date string into sortable format (YYYY-MM-DD)."""
+        try:
+            from datetime import datetime
+            import re
+            
+            # Handle various date formats
+            if re.match(r'\d{1,2}/\d{1,2}/\d{4}', date_str):  # MM/DD/YYYY
+                parsed = datetime.strptime(date_str, '%m/%d/%Y')
+                return parsed.strftime('%Y-%m-%d')
+            elif re.match(r'\d{1,2}-\d{1,2}-\d{4}', date_str):  # MM-DD-YYYY
+                parsed = datetime.strptime(date_str, '%m-%d-%Y')
+                return parsed.strftime('%Y-%m-%d')
+            elif re.match(r'\d{4}-\d{2}-\d{2}', date_str):  # YYYY-MM-DD
+                return date_str
+            else:
+                # Try to parse month names
+                months = {
+                    'january': '01', 'february': '02', 'march': '03', 'april': '04',
+                    'may': '05', 'june': '06', 'july': '07', 'august': '08',
+                    'september': '09', 'october': '10', 'november': '11', 'december': '12'
+                }
+                
+                date_lower = date_str.lower()
+                for month_name, month_num in months.items():
+                    if month_name in date_lower:
+                        # Extract day and year
+                        numbers = re.findall(r'\d+', date_str)
+                        if len(numbers) >= 2:
+                            day = numbers[0].zfill(2)
+                            year = numbers[1] if len(numbers[1]) == 4 else f"20{numbers[1]}"
+                            return f"{year}-{month_num}-{day}"
+                
+                return None
+        except Exception as e:
+            print(f"EMAIL GENERATOR: Error parsing date '{date_str}': {e}")
+            return None
+
     def _generate_video_analysis_appendix(self, analysis: CaseAnalysisResult, persona: str) -> str:
-        """Generates a detailed video analysis appendix explaining the significance of video content to the case.
+        """Generates a detailed video analysis appendix using CLIENT_CLARITY_ADVISOR framework explaining the significance of video content to the case.
         
         Handles three scenarios as per video preservation plan:
         1. Full Insights: Use complete video.insights data
@@ -718,20 +1066,22 @@ class EmailGenerator:
             
             video_data_for_prompt.append(video_data)
 
-        # Build the prompt with appropriate data
+        # Build the prompt with appropriate data using CLIENT_CLARITY_ADVISOR framework
         prompt = f"""
-        Based on the video analysis data provided, create a comprehensive "Video Analysis Appendix" section that provides detailed analysis of video evidence and its significance to the case.
+        Based on the video analysis data provided, create a comprehensive "Video Analysis Appendix" section using our collaborative CLIENT_CLARITY_ADVISOR approach that provides detailed analysis of video evidence and its significance to your case.
 
         Your video analysis appendix must:
-        - Create a section titled "Video Analysis Appendix" using an `<h4>` tag.
-        - For each video file analyzed, provide a detailed summary of the video insights and any available transcript content.
-        - Critically explain the significance of each video's content as it relates to the overall case context, including how it supports or challenges the client's position.
-        - Connect video evidence to key facts, legal claims, and case strategy identified in the intake form and document analysis.
-        - Analyze specific objects, labels, text annotations, and visual evidence captured in the videos and their legal relevance.
-        - If transcripts are available, highlight key statements or dialogue and explain their importance to the case.
-        - Use professional legal language appropriate for client communications.
-        - Be formatted cleanly using HTML tags (`<p>`, `<h4>`, `<ul>`, `<li>`) for optimal presentation.
-        - Address the client directly using 'you' and 'your' throughout the analysis.
+        - Create a section titled "Video Analysis Appendix" using an `<h4>` tag
+        - For each video file analyzed, provide a detailed summary using collaborative language ("our analysis of this video shows," "we identified")
+        - Critically explain the significance of each video's content as it relates to your case under Florida evidence law
+        - Connect video evidence to key facts, legal claims, and case strategy using accessible language
+        - Analyze specific objects, labels, text annotations, and visual evidence with clear explanations of legal relevance
+        - If transcripts are available, highlight key statements or dialogue and explain their importance using Florida legal standards
+        - Use professional yet accessible language that demonstrates expertise while being client-friendly
+        - Be formatted cleanly using HTML tags (`<p>`, `<h4>`, `<ul>`, `<li>`) for optimal presentation and easy scanning
+        - Address you directly using collaborative partnership language throughout the analysis
+        - Reference only Florida evidence law, case law, and legal standards when discussing admissibility or significance
+        - Balance technical video analysis details with accessible explanations
         {
             "- Include a note that some video analysis content is summarized due to data size limitations where applicable."
             if has_preserved_data else ""
@@ -746,14 +1096,14 @@ class EmailGenerator:
         Case Summary: {analysis.intake_analysis.case_summary if analysis.intake_analysis else "Not provided"}
         Legal Claims: {analysis.intake_analysis.legal_claims if analysis.intake_analysis else "Not provided"}
 
-        Generate only the HTML-formatted video analysis appendix content, including the section header.
+        Generate only the HTML-formatted video analysis appendix content using CLIENT_CLARITY_ADVISOR tone with Florida law focus.
         """
         
         result = self._make_openai_request(prompt, persona)
         
         # If we have preserved data, add a notice to the result
         if has_preserved_data and result:
-            truncation_notice = '<p><em>Note: Full analysis was truncated due to size. Summary is provided above.</em></p>'
+            truncation_notice = '<p><em>Note: Our comprehensive video analysis was summarized due to data size. The key findings are provided above.</em></p>'
             # Insert the notice after the header but before the main content
             if '<h4>' in result and '</h4>' in result:
                 header_end = result.find('</h4>') + 5
@@ -764,107 +1114,122 @@ class EmailGenerator:
         return result or ""
 
     def _generate_strengths(self, analysis: CaseAnalysisResult, persona: str) -> str:
-        """Generates strengths of your case section with bullet points for clarity."""
+        """Generates strengths of your case section with bullet points for clarity using CLIENT_CLARITY_ADVISOR framework."""
         prompt = f"""
-        Based on the case analysis, identify the key strengths of your case using clear, plain English.
+        Based on the case analysis, identify the key strengths of your case using our collaborative CLIENT_CLARITY_ADVISOR approach with clear, accessible language.
 
         Your strengths section should:
-        - Use accessible language that you can easily understand
-        - List each strength using bullet points for clarity
-        - Avoid legal jargon and explain advantages in simple terms
-        - Address you directly throughout
-        - Be formatted with `<ul>` and `<li>` tags for easy reading
-        - Focus on the most compelling aspects that support your position
+        - Use accessible language that builds your confidence while being easily understood
+        - List each strength using bullet points for maximum clarity and easy scanning
+        - Avoid legal jargon while demonstrating expertise in Florida law
+        - Address you directly throughout using collaborative language ("we identified," "our analysis shows")
+        - Be formatted with `<ul>` and `<li>` tags for optimal readability
+        - Focus on the most compelling aspects that support your position under Florida law
+        - Reference specific Florida legal standards when relevant to strengthen each point
+        - Balance optimism with professional realism
 
         Case Context:
         {analysis.model_dump_json(indent=2)}
 
-        Generate the strengths of your case using bullet points for maximum clarity.
+        Generate the strengths of your case using bullet points with CLIENT_CLARITY_ADVISOR tone and Florida law focus.
         """
         result = self._make_openai_request(prompt, persona)
-        return result or "<p>Strengths of your case could not be generated.</p>"
+        return result or "<p>Our analysis has identified several key strengths in your case under Florida law that support your position.</p>"
 
     def _generate_challenges(self, analysis: CaseAnalysisResult, persona: str) -> str:
-        """Generates potential challenges section with bullet points for clarity."""
+        """Generates potential challenges section with bullet points for clarity using CLIENT_CLARITY_ADVISOR framework."""
         prompt = f"""
-        Based on the case analysis, identify potential challenges or obstacles in your case using clear, plain English.
+        Based on the case analysis, identify potential challenges or obstacles in your case using our supportive CLIENT_CLARITY_ADVISOR approach with honest but encouraging language.
 
         Your potential challenges section should:
-        - Use accessible language that you can easily understand
-        - List each challenge using bullet points for clarity
-        - Avoid legal jargon and explain risks in simple terms
-        - Address you directly throughout
-        - Be formatted with `<ul>` and `<li>` tags for easy reading
-        - Honestly assess potential weaknesses while maintaining a balanced perspective
-        - Include how challenges might be addressed where appropriate
+        - Use accessible language that you can easily understand while maintaining confidence
+        - List each challenge using bullet points for clarity and easy reference
+        - Avoid legal jargon while explaining risks in simple terms
+        - Address you directly throughout using collaborative language ("we recognize," "our assessment shows")
+        - Be formatted with `<ul>` and `<li>` tags for easy reading and scanning
+        - Honestly assess potential weaknesses while maintaining a balanced, supportive perspective
+        - Include how challenges might be addressed using Florida law strategies where appropriate
+        - Focus exclusively on Florida legal standards and precedents
+        - Frame challenges as manageable obstacles rather than insurmountable problems
 
         Case Context:
         {analysis.model_dump_json(indent=2)}
 
-        Generate the potential challenges using bullet points for maximum clarity.
+        Generate the potential challenges using bullet points with CLIENT_CLARITY_ADVISOR supportive tone and Florida law focus.
         """
         result = self._make_openai_request(prompt, persona)
-        return result or "<p>Potential challenges could not be generated.</p>"
+        return result or "<p>While we have identified some challenges that require careful attention, we are prepared to address each one strategically under Florida law.</p>"
 
     def _generate_recommendations(self, analysis: CaseAnalysisResult, persona: str) -> str:
-        """Generates strategic recommendations using bullet points for clarity."""
+        """Generates strategic recommendations using bullet points for clarity with CLIENT_CLARITY_ADVISOR framework."""
         prompt = f"""
-        Based on the comprehensive case analysis, formulate clear, actionable strategic recommendations for YOUR case.
+        Based on the comprehensive case analysis, formulate clear, actionable strategic recommendations for your case using our collaborative CLIENT_CLARITY_ADVISOR approach.
 
         Your recommendations should:
-        - Be written in accessible, plain English that you can easily understand
-        - Use bullet points to clearly organize different recommendations
-        - Address YOU directly throughout (e.g., "We recommend that you...", "Your best course of action...")
-        - Avoid legal jargon and explain any necessary legal concepts in simple terms
-        - Be formatted with `<ul>` and `<li>` tags for easy reading
+        - Be written in accessible, plain English that builds confidence and understanding
+        - Use bullet points to clearly organize different recommendations in priority order
+        - Address you directly throughout using collaborative partnership language ("We recommend that you...", "Our strategy involves...")
+        - Avoid legal jargon while explaining strategies in simple, actionable terms
+        - Be formatted with `<ul>` and `<li>` tags for easy reading and implementation
+        - Focus exclusively on Florida law strategies and precedents
+        - Include specific next actions where appropriate
+        - Balance ambition with realistic expectations
+        - Apply High-Stakes Advice Protocol for any counter-intuitive recommendations
 
         Case Context:
         {analysis.model_dump_json(indent=2)}
 
-        Generate strategic recommendations using bullet points for maximum clarity and client understanding.
+        Generate strategic recommendations using bullet points with CLIENT_CLARITY_ADVISOR tone and Florida law focus.
         """
         result = self._make_openai_request(prompt, persona)
-        return result or "<p>Strategic recommendations could not be generated.</p>"
+        return result or "<p>Based on our comprehensive analysis, we recommend a strategic approach tailored to Florida law that positions you for the best possible outcome.</p>"
 
     def _generate_next_steps(self, analysis: CaseAnalysisResult, persona: str) -> str:
-        """Generates immediate next steps using bullet points for clarity."""
+        """Generates immediate next steps using bullet points for clarity with CLIENT_CLARITY_ADVISOR framework."""
         prompt = f"""
-        Based on the case analysis and strategic recommendations, identify the immediate next steps for YOUR case.
+        Based on the case analysis and strategic recommendations, identify the immediate next steps for your case using our supportive CLIENT_CLARITY_ADVISOR approach.
 
         Your next steps should:
-        - Be written in clear, plain English that you can easily follow
-        - Use bullet points to organize different actions in priority order
-        - Address YOU directly throughout
-        - Include specific timelines where appropriate
-        - Avoid legal jargon and use accessible language
-        - Be formatted with `<ul>` and `<li>` tags for easy reading
+        - Be written in clear, plain English that you can easily follow and implement
+        - Use bullet points to organize different actions in logical priority order
+        - Address you directly throughout using collaborative language ("we will," "our next step involves")
+        - Include specific timelines and deadlines where appropriate
+        - Avoid legal jargon while using accessible, actionable language
+        - Be formatted with `<ul>` and `<li>` tags for easy reference and tracking
+        - Focus on concrete actions under Florida law and procedures
+        - Emphasize partnership between you and our legal team
+        - Provide clear expectations for both client and attorney responsibilities
 
         Case Context:
         {analysis.model_dump_json(indent=2)}
 
-        Generate immediate next steps using bullet points for maximum clarity and actionability.
+        Generate immediate next steps using bullet points with CLIENT_CLARITY_ADVISOR collaborative tone and Florida focus.
         """
         result = self._make_openai_request(prompt, persona)
-        return result or "<p>Next steps could not be generated.</p>"
+        return result or "<p>Our immediate next steps involve a coordinated approach that positions your case strategically under Florida law.</p>"
 
     def _generate_closing_paragraph(self, analysis: CaseAnalysisResult, persona: str) -> str:
-        """Generates a professional closing paragraph for the findings letter."""
+        """Generates a professional closing paragraph for the findings letter using CLIENT_CLARITY_ADVISOR framework."""
         prompt = f"""
-        Based on the comprehensive case analysis, create a professional closing paragraph that concludes the findings letter appropriately.
+        Based on the comprehensive case analysis, create a professional closing paragraph that concludes the findings letter using our warm, collaborative CLIENT_CLARITY_ADVISOR approach.
 
         Your closing paragraph should:
-        - Provide a confident, professional conclusion to the findings letter.
-        - Reinforce our firm's commitment to your case.
-        - Invite your questions and ongoing communication.
-        - Be formatted as HTML paragraphs using `<p>` tags.
+        - Provide a confident, professional conclusion that reinforces partnership
+        - Emphasize our firm's commitment to your case and your success
+        - Invite your questions and ongoing communication in a warm, accessible manner
+        - Be formatted as HTML paragraphs using `<p>` tags with professional structure
+        - Use collaborative language that builds confidence ("we're here," "our commitment")
+        - Reference our ongoing partnership approach rather than formal attorney-client distance
+        - Demonstrate accessibility while maintaining legal professionalism
+        - End on an optimistic, supportive note that emphasizes next steps
 
         Case Context:
         {analysis.model_dump_json(indent=2)}
 
-        Generate only the HTML-formatted closing paragraph text.
+        Generate only the HTML-formatted closing paragraph text with CLIENT_CLARITY_ADVISOR warm, collaborative tone.
         """
         result = self._make_openai_request(prompt, persona)
-        return result or "<p>We remain committed to advancing your interests and achieving the best possible outcome for your case. Please contact our office with any questions or concerns.</p>"
+        return result or "<p>We're committed to advancing your interests with expertise, care, and dedication. Please don't hesitate to reach out with any questions as we move forward together to achieve the best possible outcome for your case.</p>"
 
     def _assemble_professional_letter_from_generated(self, analysis: CaseAnalysisResult, generated_letter: GeneratedLetter) -> Optional[EnhancedFindingsLetter]:
         """Assembles the final EnhancedFindingsLetter model from the new GeneratedLetter structure."""

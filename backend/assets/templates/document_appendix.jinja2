@@ -93,6 +93,35 @@
             <p>The following documents were analyzed as part of this case review:</p>
         </div>
 
+        <!-- Case Timeline Section -->
+        {% if results.case_timeline %}
+        <div style="margin-bottom: 40px; padding-bottom: 30px; border-bottom: 2px solid #333;">
+            <div class="header">
+                <h1>Case Timeline</h1>
+                <p>Key events extracted chronologically from all available sources:</p>
+            </div>
+            
+            {% for event in results.case_timeline %}
+            <div style="margin-bottom: 20px; padding: 15px; border-left: 4px solid #3498db; background-color: #f8f9fa; border-radius: 0 5px 5px 0;">
+                <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 15px; margin-bottom: 10px;">
+                    <div class="meta-item">
+                        <div class="meta-label">Date</div>
+                        <div class="meta-value" style="font-weight: bold; color: #2c3e50;">{{ event.date }}</div>
+                    </div>
+                    <div class="meta-item">
+                        <div class="meta-label">Source</div>
+                        <div class="meta-value">{{ event.source }}</div>
+                    </div>
+                </div>
+                <div style="margin-top: 10px;">
+                    <div class="meta-label">Event Description</div>
+                    <p style="margin: 5px 0; font-size: 14px; line-height: 1.4;">{{ event.event }}</p>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
         <!-- Document List -->
         {% if results.analysis and results.analysis.analyzed_documents %}
         {% for document in results.analysis.analyzed_documents %}
@@ -121,6 +150,11 @@
 
                 <h5>Relevance to Case</h5>
                 <p>{{ document.relevance_to_case | default('Relevance not determined.') }}</p>
+
+                {% if document.legal_significance %}
+                <h5>Legal Significance</h5>
+                <p>{{ document.legal_significance }}</p>
+                {% endif %}
             </div>
         </div>
         {% endfor %}
@@ -156,29 +190,54 @@
                     </div>
 
                     <!-- Constitutional Compliance Overview -->
+                    {% if video.criminal_analysis.constitutional_issues %}
                     <div style="background-color: #f8f9fa; padding: 15px; margin-bottom: 20px; border-left: 4px solid #333;">
                         <div class="meta-label">Constitutional Compliance Overview</div>
-                        <p style="margin: 5px 0;">{{ video.criminal_analysis.constitutional_compliance_overview }}</p>
+                        {% for amendment, issues in video.criminal_analysis.constitutional_issues.items() %}
+                            <div style="margin-bottom: 10px;">
+                                <strong style="color: #2c3e50;">{{ amendment | replace('_', ' ') | title }}:</strong>
+                                {% if issues is string %}
+                                    <p style="margin: 3px 0; font-size: 13px;">{{ issues }}</p>
+                                {% elif issues is mapping %}
+                                    {% for key, value in issues.items() %}
+                                        <p style="margin: 3px 0; font-size: 13px;"><strong>{{ key | replace('_', ' ') | title }}:</strong> {{ value }}</p>
+                                    {% endfor %}
+                                {% endif %}
+                            </div>
+                        {% endfor %}
                     </div>
+                    {% endif %}
 
                     <!-- Evidence Items by Category -->
-                    {% if video.criminal_analysis.evidence_items %}
+                    {% if video.criminal_analysis.evidence_categories %}
                     <h5 style="color: #333; margin-bottom: 15px; font-family: 'Georgia', serif;">Timestamped Evidence Categories</h5>
                     
-                    {% for evidence in video.criminal_analysis.evidence_items %}
+                    {% for evidence in video.criminal_analysis.evidence_categories %}
                     <div style="border: 1px solid #ddd; margin-bottom: 15px; padding: 15px; background-color: #fdfdfd;">
                         <h6 style="color: #333; margin: 0 0 10px 0; font-family: 'Georgia', serif; font-size: 14px;">
-                            {{ loop.index }}. {{ evidence.category }}
+                            {{ evidence.category_number }}. {{ evidence.category }}
                         </h6>
                         
                         <div class="document-meta" style="margin-bottom: 10px;">
                             <div class="meta-item">
-                                <div class="meta-label">Timestamp</div>
-                                <div class="meta-value">{{ evidence.time_range.start_time }} - {{ evidence.time_range.end_time }}</div>
+                                <div class="meta-label">Evidence Found</div>
+                                <div class="meta-value" style="font-weight: bold; color: {{ 'green' if evidence.evidence_found else 'red' }};">
+                                    {{ "Yes" if evidence.evidence_found else "No" }}
+                                </div>
                             </div>
+                            {% if evidence.evidence_found and evidence.timestamp %}
                             <div class="meta-item">
-                                <div class="meta-label">Evidence Strength</div>
-                                <div class="meta-value" style="text-transform: capitalize; font-weight: bold;">{{ evidence.evidence_strength }}</div>
+                                <div class="meta-label">Timestamp</div>
+                                <div class="meta-value">{{ evidence.timestamp }}</div>
+                            </div>
+                            {% endif %}
+                        </div>
+
+                        {% if evidence.evidence_found %}
+                        <div style="margin-bottom: 10px;">
+                            <div class="meta-label">Evidence Strength</div>
+                            <div class="meta-value" style="text-transform: capitalize; font-weight: bold; color: {{ '#27ae60' if evidence.strength == 'strong' else '#f39c12' if evidence.strength == 'moderate' else '#e74c3c' }};">
+                                {{ evidence.strength }}
                             </div>
                         </div>
 
@@ -187,37 +246,18 @@
                             <p style="margin: 3px 0; font-size: 13px;">{{ evidence.description }}</p>
                         </div>
 
-                        {% if evidence.key_observations %}
-                        <div style="margin-bottom: 10px;">
-                            <div class="meta-label">Key Observations</div>
-                            <ul style="margin: 3px 0; padding-left: 20px; font-size: 13px;">
-                                {% for observation in evidence.key_observations %}
-                                <li>{{ observation }}</li>
-                                {% endfor %}
-                            </ul>
-                        </div>
-                        {% endif %}
-
                         <div style="margin-bottom: 10px;">
                             <div class="meta-label">Legal Significance</div>
                             <p style="margin: 3px 0; font-size: 13px; font-style: italic;">{{ evidence.legal_significance }}</p>
                         </div>
 
-                        {% if evidence.constitutional_issues %}
+                        {% if evidence.constitutional_implications %}
                         <div style="margin-bottom: 10px;">
-                            <div class="meta-label">Constitutional Issues</div>
-                            <ul style="margin: 3px 0; padding-left: 20px; font-size: 13px; color: #d32f2f;">
-                                {% for issue in evidence.constitutional_issues %}
-                                <li>{{ issue }}</li>
-                                {% endfor %}
-                            </ul>
+                            <div class="meta-label">Constitutional Implications</div>
+                            <p style="margin: 3px 0; font-size: 13px; color: #d32f2f;">{{ evidence.constitutional_implications }}</p>
                         </div>
                         {% endif %}
-
-                        <div style="margin-bottom: 5px;">
-                            <div class="meta-label">Confidence Score</div>
-                            <div class="meta-value">{{ "%.1f"|format(evidence.time_range.confidence * 100) }}%</div>
-                        </div>
+                        {% endif %}
                     </div>
                     {% endfor %}
                     {% endif %}
@@ -239,13 +279,59 @@
                 {% else %}
                 <!-- Standard Video Analysis for Non-Criminal Cases -->
                 <div style="margin-bottom: 20px;">
-                    <h5 style="color: #333; margin-bottom: 10px; font-family: 'Georgia', serif;">Video Analysis</h5>
+                    <h5 style="color: #333; margin-bottom: 10px; font-family: 'Georgia', serif;">Comprehensive Video Analysis</h5>
                     
                     {% if video.transcript %}
                     <div style="margin-bottom: 15px;">
-                        <div class="meta-label">Transcript</div>
+                        <div class="meta-label">Audio Transcript</div>
                         <p style="margin: 5px 0; font-size: 13px; background-color: #f8f9fa; padding: 10px; border-radius: 3px;">{{ video.transcript }}</p>
                     </div>
+                    {% endif %}
+
+                    <!-- Enhanced Events Analysis with Timestamps and Relevance -->
+                    {% if video.insights %}
+                        {% if video.insights.events %}
+                        <div style="margin-bottom: 15px;">
+                            <div class="meta-label">Timestamped Events Analysis</div>
+                            {% for event in video.insights.events %}
+                            <div style="margin-bottom: 12px; padding: 12px; background-color: #ffffff; border: 1px solid #e0e0e0; border-left: 4px solid #3498db; border-radius: 3px;">
+                                {% if event.timestamp %}
+                                <div style="font-weight: bold; color: #2c3e50; margin-bottom: 5px;">⏱ {{ event.timestamp }}</div>
+                                {% endif %}
+                                <div style="margin-bottom: 8px; font-size: 13px;">{{ event.description | default(event.event | default('Event recorded')) }}</div>
+                                {% if event.relevance %}
+                                <div style="font-size: 12px; color: #7f8c8d; font-style: italic; border-top: 1px solid #ecf0f1; padding-top: 5px;">
+                                    <strong>Relevance:</strong> {{ event.relevance }}
+                                </div>
+                                {% endif %}
+                            </div>
+                            {% endfor %}
+                        </div>
+                        {% elif video.insights.timeline or video.insights.key_events %}
+                        <div style="margin-bottom: 15px;">
+                            <div class="meta-label">Key Events Timeline</div>
+                            <ul style="margin: 5px 0; padding-left: 20px; list-style-type: none;">
+                                {% if video.insights.timeline %}
+                                    {% for event in video.insights.timeline %}
+                                    <li style="margin-bottom: 8px; padding: 8px; background-color: #f8f9fa; border-left: 3px solid #3498db; border-radius: 3px;">
+                                        {% if event is mapping %}
+                                            {% if event.timestamp %}
+                                                <strong style="color: #2c3e50;">{{ event.timestamp }}</strong> -
+                                            {% endif %}
+                                            {{ event.event|default(event.description|default('Event recorded')) }}
+                                        {% else %}
+                                            {{ event }}
+                                        {% endif %}
+                                    </li>
+                                    {% endfor %}
+                                {% elif video.insights.key_events %}
+                                    {% for event in video.insights.key_events %}
+                                    <li style="margin-bottom: 8px; padding: 8px; background-color: #f8f9fa; border-left: 3px solid #3498db; border-radius: 3px;">{{ event }}</li>
+                                    {% endfor %}
+                                {% endif %}
+                            </ul>
+                        </div>
+                        {% endif %}
                     {% endif %}
 
                     {% if video.labels %}
@@ -261,7 +347,7 @@
 
                     {% if video.objects %}
                     <div style="margin-bottom: 15px;">
-                        <div class="meta-label">Detected Objects</div>
+                        <div class="meta-label">Detected Objects and Evidence</div>
                         <ul style="margin: 5px 0; padding-left: 20px; list-style-type: disc;">
                             {% for object in video.objects %}
                             <li style="margin-bottom: 5px; font-size: 13px;">{{ object }}</li>
@@ -275,7 +361,7 @@
                         <div class="meta-label">Text Detected in Video</div>
                         <ul style="margin: 5px 0; padding-left: 20px; font-size: 13px;">
                             {% for text in video.text_annotations %}
-                            <li>{{ text }}</li>
+                            <li style="margin-bottom: 5px; padding: 3px; background-color: #f8f9fa; border-radius: 2px;">{{ text }}</li>
                             {% endfor %}
                         </ul>
                     </div>
@@ -283,7 +369,7 @@
 
                     {% if video.insights %}
                     <div style="margin-bottom: 15px;">
-                        <div class="meta-label">General Analysis</div>
+                        <div class="meta-label">Comprehensive Analysis</div>
                         <div style="margin: 5px 0; background-color: #f8f9fa; padding: 15px; border-radius: 3px; border-left: 4px solid #333;">
                             {{ results.format_video_analysis(video)|safe }}
                         </div>
@@ -292,7 +378,7 @@
 
                     {% if video.duration %}
                     <div style="margin-bottom: 10px;">
-                        <div class="meta-label">Duration</div>
+                        <div class="meta-label">Video Duration</div>
                         <div class="meta-value">{{ "%.1f"|format(video.duration) }} seconds</div>
                     </div>
                     {% endif %}

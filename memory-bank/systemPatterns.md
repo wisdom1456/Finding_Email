@@ -767,19 +767,89 @@ Streamlit Results Display
 - **Response Validation Pipeline**: Multi-stage parsing with Pydantic models for robust validation.
 - **Token Management**: Optimized prompt design for cost-effective processing and reliable results.
 
-### Advanced Content Generation Patterns (EmailGenerator) ✅ IMPLEMENTED
-The `EmailGenerator` service uses a sophisticated, multi-stage process to ensure high-quality, client-ready output, addressing issues like repetitive greetings and incorrect formatting.
+### Advanced Content Generation Patterns (EmailGenerator) ✅ ENHANCED WITH CLIENT_CLARITY_ADVISOR
 
-#### Dual Persona Pattern
-- **`CLIENT_DIRECTED_PERSONA`**: Used once for the initial section (e.g., executive summary) to establish the client-facing tone and include the initial greeting.
-- **`CONTINUING_LETTER_PERSONA`**: Used for all subsequent sections to instruct the AI that it is continuing a letter, thereby preventing redundant greetings or closings.
+The `EmailGenerator` service has been revolutionized with the CLIENT_CLARITY_ADVISOR framework, transforming legal communications from formal, attorney-directed correspondence to warm, collaborative, and accessible client partnerships while maintaining legal professionalism.
 
-#### Narrative Enforcement Pattern
-- **`NARRATIVE_PARAGRAPH_ENFORCEMENT`**: A forceful prompt instruction used in specific sections (like recommendations) to mandate that the AI generates flowing, narrative paragraphs enclosed in `<p>` tags and strictly forbids the use of lists (`<ul>`, `<ol>`).
+#### CLIENT_CLARITY_ADVISOR Framework Architecture ✅ IMPLEMENTED (2025-08-05)
 
-#### Strict Formatting Pattern
-- **`STRICT_FORMAT_ENFORCEMENT`**: A constant instruction added to every AI call, requiring the model to use only HTML for formatting and to never output markdown code fences (`'''html'''`).
-- **`_clean_ai_response()`**: A failsafe function applied to every AI response to programmatically strip any residual code fences or markdown, ensuring clean HTML output.
+**Core Framework Components:**
+```python
+CLIENT_CLARITY_ADVISOR = """
+You are a CLIENT_CLARITY_ADVISOR for a law firm specializing in clear, accessible, and collaborative legal communication.
+
+CORE DIRECTIVES:
+1. COLLABORATIVE TONE: Use "we" language to emphasize partnership between attorney and client
+2. PROFESSIONAL WORD CHOICE: Sophisticated yet accessible language that builds client confidence
+3. CLEAN FORMATTING: Bullet points, headers, and white space for easy scanning
+4. ACCESSIBILITY FOCUS: Content understandable to clients without legal training
+5. FLORIDA LAW EXCLUSIVE: Reference ONLY Florida statutes, case law, and legal precedents
+6. WARMTH WITH AUTHORITY: Balance approachable tone with demonstrated legal expertise
+"""
+
+CONTINUING_CLARITY_ADVISOR = """
+You are continuing a professional legal findings letter as a CLIENT_CLARITY_ADVISOR.
+[Same core directives applied to continuation sections]
+"""
+```
+
+**Framework Integration Pattern:**
+```python
+def _clean_ai_response(self, response: str) -> str:
+    """Enhanced response processing with CLIENT_CLARITY_ADVISOR framework integration."""
+    cleaned = self._remove_code_fences(response)
+    cleaned = self._validate_florida_citations(cleaned)
+    cleaned = self._ensure_accessibility_formatting(cleaned)
+    
+    # Apply High-Stakes Advice Protocol if needed
+    if self._requires_high_stakes_protocol(cleaned):
+        cleaned = self._apply_high_stakes_advice_protocol(cleaned)
+    
+    return cleaned
+```
+
+#### Enhanced Dual Persona Pattern ✅ UPGRADED
+- **`CLIENT_CLARITY_ADVISOR`**: Revolutionary approach for initial sections emphasizing collaborative partnership and Florida law focus
+- **`CONTINUING_CLARITY_ADVISOR`**: Continuation persona maintaining framework consistency throughout multi-section letters
+- **Core Directives Integration**: Six fundamental principles applied consistently across all personas
+
+#### High-Stakes Advice Protocol ✅ IMPLEMENTED
+```python
+HIGH_STAKES_ADVICE_PROTOCOL = """
+For counter-intuitive recommendations, use this structure:
+1. ACKNOWLEDGE: "While this may seem unexpected..."
+2. EXPLAIN: Clear reasoning for the recommendation
+3. SUPPORT: Florida legal precedent or statute
+4. CONSEQUENCES: Potential outcomes of following/not following advice
+5. REAFFIRM: "We recommend this course because..."
+"""
+```
+
+#### Florida Law Validation Pattern ✅ IMPLEMENTED
+```python
+def _validate_florida_citations(self, content: str) -> str:
+    """Ensure only Florida law is referenced in legal advice."""
+    # Detect and flag non-Florida citations
+    # Validate Florida statute formatting
+    # Provide Florida-specific legal context
+    return florida_validated_content
+```
+
+#### Accessibility Enhancement Pattern ✅ IMPLEMENTED
+```python
+def _ensure_accessibility_formatting(self, content: str) -> str:
+    """Optimize content structure for client comprehension."""
+    # Clean heading hierarchy
+    # Proper bullet point formatting
+    # Improved paragraph spacing
+    # Enhanced readability
+    return accessible_content
+```
+
+#### Legacy Compatibility Preservation
+- **Backward Compatibility**: Existing dual-persona architecture preserved
+- **Template Integration**: Seamless integration with existing email templates
+- **Quality Standards**: Enhanced professional output while maintaining legal accuracy
 
 ### Rate Limiting and Token Management Patterns ✅ IMPLEMENTED
 

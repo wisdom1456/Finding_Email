@@ -1,5 +1,5 @@
 {
-  "case_id": "test",
+  "case_id": "case_1754418604",
   "cost_estimate": {
     "estimated_document_costs": [
       {
@@ -87,27 +87,45 @@
     "estimated_media_costs": [],
     "total_estimated_cost": "1.29337080",
     "confidence_level": 0.8,
-    "estimation_timestamp": "2025-08-05 23:16:18.080525"
+    "estimation_timestamp": "2025-08-05 13:30:01.459085"
   },
   "actual_costs": {
     "document_analysis_costs": [
       {
         "service_name": "OpenAI GPT-4o",
         "operation_type": "document_analysis",
-        "units_consumed": 468,
+        "units_consumed": 458,
         "unit_type": "tokens",
         "rate_per_unit": "0.000010",
-        "total_cost": "0.004680",
+        "total_cost": "0.004580",
         "file_name": "Notice to Owner.pdf"
       },
       {
         "service_name": "OpenAI GPT-4o",
         "operation_type": "document_analysis",
-        "units_consumed": 542,
+        "units_consumed": 514,
         "unit_type": "tokens",
         "rate_per_unit": "0.000010",
-        "total_cost": "0.005420",
+        "total_cost": "0.005140",
         "file_name": "Devlin-LLW Emails.pdf"
+      },
+      {
+        "service_name": "OpenAI GPT-4o",
+        "operation_type": "document_analysis",
+        "units_consumed": 394,
+        "unit_type": "tokens",
+        "rate_per_unit": "0.000010",
+        "total_cost": "0.003940",
+        "file_name": "Devlin - Rebuild Receipts - May & June.pdf"
+      },
+      {
+        "service_name": "OpenAI GPT-4o",
+        "operation_type": "document_analysis",
+        "units_consumed": 470,
+        "unit_type": "tokens",
+        "rate_per_unit": "0.000010",
+        "total_cost": "0.004700",
+        "file_name": "Devlin - Project Management Proposal - Hoffar Holdings LLC 6.25.25 (1).pdf"
       },
       {
         "service_name": "OpenAI GPT-4o",
@@ -116,58 +134,40 @@
         "unit_type": "tokens",
         "rate_per_unit": "0.000010",
         "total_cost": "0.003980",
-        "file_name": "Devlin - Rebuild Receipts - May & June.pdf"
-      },
-      {
-        "service_name": "OpenAI GPT-4o",
-        "operation_type": "document_analysis",
-        "units_consumed": 482,
-        "unit_type": "tokens",
-        "rate_per_unit": "0.000010",
-        "total_cost": "0.004820",
-        "file_name": "Devlin - Project Management Proposal - Hoffar Holdings LLC 6.25.25 (1).pdf"
-      },
-      {
-        "service_name": "OpenAI GPT-4o",
-        "operation_type": "document_analysis",
-        "units_consumed": 400,
-        "unit_type": "tokens",
-        "rate_per_unit": "0.000010",
-        "total_cost": "0.004000",
         "file_name": "Devlin - Pictures of How House was Left by Contractor.pdf"
       },
       {
         "service_name": "OpenAI GPT-4o",
         "operation_type": "document_analysis",
-        "units_consumed": 486,
+        "units_consumed": 454,
         "unit_type": "tokens",
         "rate_per_unit": "0.000010",
-        "total_cost": "0.004860",
+        "total_cost": "0.004540",
         "file_name": "Devlin - LLW Text Thread.pdf"
       },
       {
         "service_name": "OpenAI GPT-4o",
         "operation_type": "document_analysis",
-        "units_consumed": 566,
+        "units_consumed": 570,
         "unit_type": "tokens",
         "rate_per_unit": "0.000010",
-        "total_cost": "0.005660",
+        "total_cost": "0.005700",
         "file_name": "Devlin - Contract for Construction - Highlighted w Items not Completed 6.9.25.pdf"
       },
       {
         "service_name": "OpenAI GPT-4o",
         "operation_type": "document_analysis",
-        "units_consumed": 456,
+        "units_consumed": 466,
         "unit_type": "tokens",
         "rate_per_unit": "0.000010",
-        "total_cost": "0.004560",
+        "total_cost": "0.004660",
         "file_name": "Devlin - Certified Letter for Notice to Owner.pdf"
       }
     ],
     "media_processing_costs": [],
-    "total_actual_cost": "0.037980",
-    "processing_timestamp": "2025-08-05 23:19:30.627704"
+    "total_actual_cost": "0.037240",
+    "processing_timestamp": "2025-08-05 13:33:18.022327"
   },
-  "cost_variance": -1.2553908,
-  "cost_variance_percentage": -97.06348712990892
+  "cost_variance": -1.2561308,
+  "cost_variance_percentage": -97.12070196729353
 }

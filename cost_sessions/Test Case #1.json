@@ -1,0 +1,616 @@
+{
+  "case_id": "Test Case #1",
+  "cost_estimate": {
+    "estimated_document_costs": [
+      {
+        "service_name": "OpenAI GPT-4o",
+        "operation_type": "document_analysis",
+        "units_consumed": 18390,
+        "unit_type": "tokens",
+        "rate_per_unit": "0.000005",
+        "total_cost": "0.131950",
+        "file_name": "12-16-2024 Work Order 769159.pdf"
+      },
+      {
+        "service_name": "OpenAI GPT-4o",
+        "operation_type": "document_analysis",
+        "units_consumed": 18728,
+        "unit_type": "tokens",
+        "rate_per_unit": "0.000005",
+        "total_cost": "0.133640",
+        "file_name": "09-25-2024 Work Order 747424.pdf"
+      },
+      {
+        "service_name": "OpenAI GPT-4o-mini",
+        "operation_type": "document_analysis",
+        "units_consumed": 22680,
+        "unit_type": "tokens",
+        "rate_per_unit": "1.5E-7",
+        "total_cost": "0.00430200",
+        "file_name": "08-06-2024 Work Order 698907.pdf"
+      },
+      {
+        "service_name": "OpenAI GPT-4o-mini",
+        "operation_type": "document_analysis",
+        "units_consumed": 38906,
+        "unit_type": "tokens",
+        "rate_per_unit": "1.5E-7",
+        "total_cost": "0.00673590",
+        "file_name": "Texts 7.PNG"
+      },
+      {
+        "service_name": "OpenAI GPT-4o-mini",
+        "operation_type": "document_analysis",
+        "units_consumed": 38253,
+        "unit_type": "tokens",
+        "rate_per_unit": "1.5E-7",
+        "total_cost": "0.00663795",
+        "file_name": "Texts 6.PNG"
+      },
+      {
+        "service_name": "OpenAI GPT-4o-mini",
+        "operation_type": "document_analysis",
+        "units_consumed": 82142,
+        "unit_type": "tokens",
+        "rate_per_unit": "1.5E-7",
+        "total_cost": "0.01322130",
+        "file_name": "Texts 5.PNG"
+      },
+      {
+        "service_name": "OpenAI GPT-4o-mini",
+        "operation_type": "document_analysis",
+        "units_consumed": 88364,
+        "unit_type": "tokens",
+        "rate_per_unit": "1.5E-7",
+        "total_cost": "0.01415460",
+        "file_name": "Texts 4.PNG"
+      },
+      {
+        "service_name": "OpenAI GPT-4o-mini",
+        "operation_type": "document_analysis",
+        "units_consumed": 90414,
+        "unit_type": "tokens",
+        "rate_per_unit": "1.5E-7",
+        "total_cost": "0.01446210",
+        "file_name": "Texts 3.PNG"
+      },
+      {
+        "service_name": "OpenAI GPT-4o-mini",
+        "operation_type": "document_analysis",
+        "units_consumed": 86930,
+        "unit_type": "tokens",
+        "rate_per_unit": "1.5E-7",
+        "total_cost": "0.01393950",
+        "file_name": "Texts 2.PNG"
+      },
+      {
+        "service_name": "OpenAI GPT-4o-mini",
+        "operation_type": "document_analysis",
+        "units_consumed": 49330,
+        "unit_type": "tokens",
+        "rate_per_unit": "1.5E-7",
+        "total_cost": "0.00829950",
+        "file_name": "Texts 1.PNG"
+      },
+      {
+        "service_name": "OpenAI GPT-4o-mini",
+        "operation_type": "document_analysis",
+        "units_consumed": 271932,
+        "unit_type": "tokens",
+        "rate_per_unit": "1.5E-7",
+        "total_cost": "0.04168980",
+        "file_name": "2025-2026 Lease.pdf"
+      },
+      {
+        "service_name": "OpenAI GPT-4o-mini",
+        "operation_type": "document_analysis",
+        "units_consumed": 35940,
+        "unit_type": "tokens",
+        "rate_per_unit": "1.5E-7",
+        "total_cost": "0.00629100",
+        "file_name": "Timeline - Clifton Price.docx"
+      },
+      {
+        "service_name": "OpenAI GPT-4o-mini",
+        "operation_type": "document_analysis",
+        "units_consumed": 115989,
+        "unit_type": "tokens",
+        "rate_per_unit": "1.5E-7",
+        "total_cost": "0.01829835",
+        "file_name": "7-9-2025 Picture 2.jpg"
+      },
+      {
+        "service_name": "OpenAI GPT-4o-mini",
+        "operation_type": "document_analysis",
+        "units_consumed": 137602,
+        "unit_type": "tokens",
+        "rate_per_unit": "1.5E-7",
+        "total_cost": "0.02154030",
+        "file_name": "7-9-2025 Picture 1.jpg"
+      },
+      {
+        "service_name": "OpenAI GPT-4o-mini",
+        "operation_type": "document_analysis",
+        "units_consumed": 35882,
+        "unit_type": "tokens",
+        "rate_per_unit": "1.5E-7",
+        "total_cost": "0.00628230",
+        "file_name": "Timeline - Clifton Price-udpated.docx"
+      },
+      {
+        "service_name": "OpenAI GPT-4o-mini",
+        "operation_type": "document_analysis",
+        "units_consumed": 35817,
+        "unit_type": "tokens",
+        "rate_per_unit": "1.5E-7",
+        "total_cost": "0.00627255",
+        "file_name": "Timeline - Clifton Price.docx"
+      },
+      {
+        "service_name": "OpenAI GPT-4o-mini",
+        "operation_type": "document_analysis",
+        "units_consumed": 68594,
+        "unit_type": "tokens",
+        "rate_per_unit": "1.5E-7",
+        "total_cost": "0.01118910",
+        "file_name": "Intake (General) - Clifton Price.pdf"
+      },
+      {
+        "service_name": "OpenAI GPT-4o",
+        "operation_type": "document_analysis",
+        "units_consumed": 8014,
+        "unit_type": "tokens",
+        "rate_per_unit": "0.000005",
+        "total_cost": "0.060100",
+        "file_name": "6-24-2025 8 Water intrusion follow up.eml"
+      },
+      {
+        "service_name": "OpenAI GPT-4o",
+        "operation_type": "document_analysis",
+        "units_consumed": 2661,
+        "unit_type": "tokens",
+        "rate_per_unit": "0.000005",
+        "total_cost": "0.019955",
+        "file_name": "6-24-2025 7 Follow-Up Request Regarding Water Intrusion and Interior Repairs.eml"
+      },
+      {
+        "service_name": "OpenAI GPT-4o",
+        "operation_type": "document_analysis",
+        "units_consumed": 9657,
+        "unit_type": "tokens",
+        "rate_per_unit": "0.000005",
+        "total_cost": "0.072425",
+        "file_name": "6-24-2025 6 Water intrusion follow up.eml"
+      },
+      {
+        "service_name": "OpenAI GPT-4o",
+        "operation_type": "document_analysis",
+        "units_consumed": 3806,
+        "unit_type": "tokens",
+        "rate_per_unit": "0.000005",
+        "total_cost": "0.028540",
+        "file_name": "6-23-2025 5 Follow-Up Request Regarding Water Intrusion and Interior Repairs.eml"
+      },
+      {
+        "service_name": "OpenAI GPT-4o",
+        "operation_type": "document_analysis",
+        "units_consumed": 9453,
+        "unit_type": "tokens",
+        "rate_per_unit": "0.000005",
+        "total_cost": "0.070895",
+        "file_name": "6-23-2025 4 Water intrusion follow up.eml"
+      },
+      {
+        "service_name": "OpenAI GPT-4o",
+        "operation_type": "document_analysis",
+        "units_consumed": 2482,
+        "unit_type": "tokens",
+        "rate_per_unit": "0.000005",
+        "total_cost": "0.018610",
+        "file_name": "6-20-2025 3 Follow-Up Request Regarding Water Intrusion and Interior Repairs.eml"
+      },
+      {
+        "service_name": "OpenAI GPT-4o",
+        "operation_type": "document_analysis",
+        "units_consumed": 9394,
+        "unit_type": "tokens",
+        "rate_per_unit": "0.000005",
+        "total_cost": "0.070450",
+        "file_name": "6-20-2025 2 baseboards and walls concern.eml"
+      },
+      {
+        "service_name": "OpenAI GPT-4o-mini",
+        "operation_type": "document_analysis",
+        "units_consumed": 1269122,
+        "unit_type": "tokens",
+        "rate_per_unit": "1.5E-7",
+        "total_cost": "0.19126830",
+        "file_name": "6-20-2025 1 Follow-Up Request Regarding Water Intrusion and Interior Repairs.eml"
+      },
+      {
+        "service_name": "OpenAI GPT-4o-mini",
+        "operation_type": "document_analysis",
+        "units_consumed": 43843,
+        "unit_type": "tokens",
+        "rate_per_unit": "1.5E-7",
+        "total_cost": "0.00747645",
+        "file_name": "6-13-2025 Release.eml"
+      },
+      {
+        "service_name": "OpenAI GPT-4o-mini",
+        "operation_type": "document_analysis",
+        "units_consumed": 87518,
+        "unit_type": "tokens",
+        "rate_per_unit": "1.5E-7",
+        "total_cost": "0.01402770",
+        "file_name": "Concrobium Technical Data.pdf"
+      },
+      {
+        "service_name": "OpenAI GPT-4o-mini",
+        "operation_type": "document_analysis",
+        "units_consumed": 48039,
+        "unit_type": "tokens",
+        "rate_per_unit": "1.5E-7",
+        "total_cost": "0.00810585",
+        "file_name": "Concrobium Safety Data Sheet.pdf"
+      },
+      {
+        "service_name": "OpenAI GPT-4o-mini",
+        "operation_type": "document_analysis",
+        "units_consumed": 154024,
+        "unit_type": "tokens",
+        "rate_per_unit": "1.5E-7",
+        "total_cost": "0.02400360",
+        "file_name": "Concrobium 2.jpg"
+      },
+      {
+        "service_name": "OpenAI GPT-4o-mini",
+        "operation_type": "document_analysis",
+        "units_consumed": 109415,
+        "unit_type": "tokens",
+        "rate_per_unit": "1.5E-7",
+        "total_cost": "0.01731225",
+        "file_name": "Concrobium 1.jpg"
+      },
+      {
+        "service_name": "OpenAI GPT-4o-mini",
+        "operation_type": "document_analysis",
+        "units_consumed": 440302,
+        "unit_type": "tokens",
+        "rate_per_unit": "1.5E-7",
+        "total_cost": "0.06694530",
+        "file_name": "06-11-2025 Picture 7.jpg"
+      },
+      {
+        "service_name": "OpenAI GPT-4o-mini",
+        "operation_type": "document_analysis",
+        "units_consumed": 367227,
+        "unit_type": "tokens",
+        "rate_per_unit": "1.5E-7",
+        "total_cost": "0.05598405",
+        "file_name": "06-11-2025 Picture 6.jpg"
+      },
+      {
+        "service_name": "OpenAI GPT-4o-mini",
+        "operation_type": "document_analysis",
+        "units_consumed": 669657,
+        "unit_type": "tokens",
+        "rate_per_unit": "1.5E-7",
+        "total_cost": "0.10134855",
+        "file_name": "06-11-2025 Picture 5.jpg"
+      },
+      {
+        "service_name": "OpenAI GPT-4o-mini",
+        "operation_type": "document_analysis",
+        "units_consumed": 408195,
+        "unit_type": "tokens",
+        "rate_per_unit": "1.5E-7",
+        "total_cost": "0.06212925",
+        "file_name": "06-11-2025 Picture 4.jpg"
+      },
+      {
+        "service_name": "OpenAI GPT-4o-mini",
+        "operation_type": "document_analysis",
+        "units_consumed": 431301,
+        "unit_type": "tokens",
+        "rate_per_unit": "1.5E-7",
+        "total_cost": "0.06559515",
+        "file_name": "06-11-2025 Picture 3.jpg"
+      },
+      {
+        "service_name": "OpenAI GPT-4o-mini",
+        "operation_type": "document_analysis",
+        "units_consumed": 644337,
+        "unit_type": "tokens",
+        "rate_per_unit": "1.5E-7",
+        "total_cost": "0.09755055",
+        "file_name": "06-11-2025 Picture 2.jpg"
+      },
+      {
+        "service_name": "OpenAI GPT-4o-mini",
+        "operation_type": "document_analysis",
+        "units_consumed": 365973,
+        "unit_type": "tokens",
+        "rate_per_unit": "1.5E-7",
+        "total_cost": "0.05579595",
+        "file_name": "06-11-2025 Picture 1.jpg"
+      },
+      {
+        "service_name": "OpenAI GPT-4o-mini",
+        "operation_type": "document_analysis",
+        "units_consumed": 522476,
+        "unit_type": "tokens",
+        "rate_per_unit": "1.5E-7",
+        "total_cost": "0.07927140",
+        "file_name": "03-17-2025 Maintenance Request.jpg"
+      },
+      {
+        "service_name": "OpenAI GPT-4o-mini",
+        "operation_type": "document_analysis",
+        "units_consumed": 402227,
+        "unit_type": "tokens",
+        "rate_per_unit": "1.5E-7",
+        "total_cost": "0.06123405",
+        "file_name": "03-16-2025 Picture 2.jpg"
+      },
+      {
+        "service_name": "OpenAI GPT-4o-mini",
+        "operation_type": "document_analysis",
+        "units_consumed": 480956,
+        "unit_type": "tokens",
+        "rate_per_unit": "1.5E-7",
+        "total_cost": "0.07304340",
+        "file_name": "03-16-2025 Picture 1.jpg"
+      },
+      {
+        "service_name": "OpenAI GPT-4o-mini",
+        "operation_type": "document_analysis",
+        "units_consumed": 22931,
+        "unit_type": "tokens",
+        "rate_per_unit": "1.5E-7",
+        "total_cost": "0.00433965",
+        "file_name": "09-19-2024 Picture 1.jpg"
+      },
+      {
+        "service_name": "OpenAI GPT-4o",
+        "operation_type": "document_analysis",
+        "units_consumed": 12788,
+        "unit_type": "tokens",
+        "rate_per_unit": "0.000005",
+        "total_cost": "0.095910",
+        "file_name": "08-05-2024 Picture 3.jpg"
+      },
+      {
+        "service_name": "OpenAI GPT-4o-mini",
+        "operation_type": "document_analysis",
+        "units_consumed": 609069,
+        "unit_type": "tokens",
+        "rate_per_unit": "1.5E-7",
+        "total_cost": "0.09226035",
+        "file_name": "08-05-2024 Picture 2.png"
+      },
+      {
+        "service_name": "OpenAI GPT-4o-mini",
+        "operation_type": "document_analysis",
+        "units_consumed": 612842,
+        "unit_type": "tokens",
+        "rate_per_unit": "1.5E-7",
+        "total_cost": "0.09282630",
+        "file_name": "08-05-2024 Picture 1.png"
+      }
+    ],
+    "estimated_media_costs": [
+      {
+        "service_name": "Google Vertex AI Video",
+        "operation_type": "video_processing",
+        "units_consumed": 4,
+        "unit_type": "minutes",
+        "rate_per_unit": "0.10",
+        "total_cost": "0.46548220888773590",
+        "file_name": "06-11-2025 Video 3.MOV"
+      },
+      {
+        "service_name": "Google Vertex AI Gemini-2.5-flash",
+        "operation_type": "video_analysis",
+        "units_consumed": 4500,
+        "unit_type": "tokens",
+        "rate_per_unit": "7.5E-8",
+        "total_cost": "0.001012500",
+        "file_name": "06-11-2025 Video 3.MOV"
+      },
+      {
+        "service_name": "Google Vertex AI Video",
+        "operation_type": "video_processing",
+        "units_consumed": 1,
+        "unit_type": "minutes",
+        "rate_per_unit": "0.10",
+        "total_cost": "0.12624316151936850",
+        "file_name": "06-11-2025 Video 2.mov"
+      },
+      {
+        "service_name": "Google Vertex AI Gemini-2.5-flash",
+        "operation_type": "video_analysis",
+        "units_consumed": 4500,
+        "unit_type": "tokens",
+        "rate_per_unit": "7.5E-8",
+        "total_cost": "0.001012500",
+        "file_name": "06-11-2025 Video 2.mov"
+      },
+      {
+        "service_name": "Google Vertex AI Video",
+        "operation_type": "video_processing",
+        "units_consumed": 9,
+        "unit_type": "minutes",
+        "rate_per_unit": "0.10",
+        "total_cost": "0.96776338831583640",
+        "file_name": "06-11-2025 Video 1.MOV"
+      },
+      {
+        "service_name": "Google Vertex AI Gemini-2.5-flash",
+        "operation_type": "video_analysis",
+        "units_consumed": 4500,
+        "unit_type": "tokens",
+        "rate_per_unit": "7.5E-8",
+        "total_cost": "0.001012500",
+        "file_name": "06-11-2025 Video 1.MOV"
+      },
+      {
+        "service_name": "Google Vertex AI Video",
+        "operation_type": "video_processing",
+        "units_consumed": 1,
+        "unit_type": "minutes",
+        "rate_per_unit": "0.10",
+        "total_cost": "0.120826390584309880",
+        "file_name": "03-16-2025 Video 1.MOV"
+      },
+      {
+        "service_name": "Google Vertex AI Gemini-2.5-flash",
+        "operation_type": "video_analysis",
+        "units_consumed": 4500,
+        "unit_type": "tokens",
+        "rate_per_unit": "7.5E-8",
+        "total_cost": "0.001012500",
+        "file_name": "03-16-2025 Video 1.MOV"
+      },
+      {
+        "service_name": "Google Vertex AI Video",
+        "operation_type": "video_processing",
+        "units_consumed": 6,
+        "unit_type": "minutes",
+        "rate_per_unit": "0.10",
+        "total_cost": "0.69597972742716460",
+        "file_name": "09-19-2024 Video 2.MOV"
+      },
+      {
+        "service_name": "Google Vertex AI Gemini-2.5-flash",
+        "operation_type": "video_analysis",
+        "units_consumed": 4500,
+        "unit_type": "tokens",
+        "rate_per_unit": "7.5E-8",
+        "total_cost": "0.001012500",
+        "file_name": "09-19-2024 Video 2.MOV"
+      },
+      {
+        "service_name": "Google Vertex AI Video",
+        "operation_type": "video_processing",
+        "units_consumed": 5,
+        "unit_type": "minutes",
+        "rate_per_unit": "0.10",
+        "total_cost": "0.51441621271769190",
+        "file_name": "09-19-2024 Video 1.MOV"
+      },
+      {
+        "service_name": "Google Vertex AI Gemini-2.5-flash",
+        "operation_type": "video_analysis",
+        "units_consumed": 4500,
+        "unit_type": "tokens",
+        "rate_per_unit": "7.5E-8",
+        "total_cost": "0.001012500",
+        "file_name": "09-19-2024 Video 1.MOV"
+      },
+      {
+        "service_name": "Google Vertex AI Video",
+        "operation_type": "video_processing",
+        "units_consumed": 4,
+        "unit_type": "minutes",
+        "rate_per_unit": "0.10",
+        "total_cost": "0.45581378428141270",
+        "file_name": "08-05-2024 Video 2.MOV"
+      },
+      {
+        "service_name": "Google Vertex AI Gemini-2.5-flash",
+        "operation_type": "video_analysis",
+        "units_consumed": 4500,
+        "unit_type": "tokens",
+        "rate_per_unit": "7.5E-8",
+        "total_cost": "0.001012500",
+        "file_name": "08-05-2024 Video 2.MOV"
+      },
+      {
+        "service_name": "Google Vertex AI Video",
+        "operation_type": "video_processing",
+        "units_consumed": 10,
+        "unit_type": "minutes",
+        "rate_per_unit": "0.10",
+        "total_cost": "1.07147426668802890",
+        "file_name": "08-05-2024 Video 1.MOV"
+      },
+      {
+        "service_name": "Google Vertex AI Gemini-2.5-flash",
+        "operation_type": "video_analysis",
+        "units_consumed": 4500,
+        "unit_type": "tokens",
+        "rate_per_unit": "7.5E-8",
+        "total_cost": "0.001012500",
+        "file_name": "08-05-2024 Video 1.MOV"
+      }
+    ],
+    "total_estimated_cost": "6.492408490421548780",
+    "confidence_level": 0.8,
+    "estimation_timestamp": "2025-08-05 09:31:57.847212"
+  },
+  "actual_costs": {
+    "document_analysis_costs": [
+      {
+        "service_name": "OpenAI GPT-4o",
+        "operation_type": "document_analysis",
+        "units_consumed": 280,
+        "unit_type": "tokens",
+        "rate_per_unit": "0.000010",
+        "total_cost": "0.002800",
+        "file_name": "12-16-2024 Work Order 769159.pdf"
+      },
+      {
+        "service_name": "OpenAI GPT-4o",
+        "operation_type": "document_analysis",
+        "units_consumed": 404,
+        "unit_type": "tokens",
+        "rate_per_unit": "0.000010",
+        "total_cost": "0.004040",
+        "file_name": "Texts 7.PNG"
+      },
+      {
+        "service_name": "OpenAI GPT-4o",
+        "operation_type": "document_analysis",
+        "units_consumed": 582,
+        "unit_type": "tokens",
+        "rate_per_unit": "0.000010",
+        "total_cost": "0.005820",
+        "file_name": "Timeline - Clifton Price.docx"
+      },
+      {
+        "service_name": "OpenAI GPT-4o",
+        "operation_type": "document_analysis",
+        "units_consumed": 366,
+        "unit_type": "tokens",
+        "rate_per_unit": "0.000010",
+        "total_cost": "0.003660",
+        "file_name": "6-13-2025 Release.eml"
+      }
+    ],
+    "media_processing_costs": [
+      {
+        "service_name": "Google Vertex AI Video",
+        "operation_type": "video_processing",
+        "units_consumed": 8,
+        "unit_type": "minutes",
+        "rate_per_unit": "0.10",
+        "total_cost": "0.84153338114420570",
+        "file_name": "06-11-2025 Video 1.MOV"
+      },
+      {
+        "service_name": "Google Vertex AI Gemini-2.5-flash",
+        "operation_type": "video_analysis",
+        "units_consumed": 2500,
+        "unit_type": "tokens",
+        "rate_per_unit": "1.65E-7",
+        "total_cost": "0.000412500",
+        "file_name": "06-11-2025 Video 1.MOV"
+      }
+    ],
+    "total_actual_cost": "0.85826588114420570",
+    "processing_timestamp": "2025-08-05 09:40:42.808489"
+  },
+  "cost_variance": -5.634142609277343,
+  "cost_variance_percentage": -86.78047010735027
+}

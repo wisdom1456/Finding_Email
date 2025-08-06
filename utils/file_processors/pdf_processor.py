@@ -1,15 +1,22 @@
-import fitz  # PyMuPDF
-from ..data_models import ProcessedDocument, DocumentType, FileType
+from __future__ import annotations
+
 import mimetypes
 
-async def process_pdf(file_path: str, document_type: DocumentType, original_filename: str) -> ProcessedDocument:
+import fitz  # PyMuPDF
+
+from utils.data_models import DocumentType, FileType, ProcessedDocument
+
+
+async def process_pdf(
+    file_path: str, document_type: DocumentType, original_filename: str
+) -> ProcessedDocument:
     """
     Processes a PDF file by extracting its text content using PyMuPDF from a given path.
     """
     print(f"Processing PDF: {original_filename}")
-    
+
     text_content = ""
-    
+
     try:
         with fitz.open(file_path) as doc:
             for page in doc:
@@ -25,5 +32,5 @@ async def process_pdf(file_path: str, document_type: DocumentType, original_file
         content=text_content,
         document_type=document_type,
         file_type=FileType.PDF,
-        metadata={'content_type': content_type}
+        metadata={"content_type": content_type},
     )

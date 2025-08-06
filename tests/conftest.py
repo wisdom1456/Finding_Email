@@ -4,24 +4,29 @@ Shared test fixtures and configuration for unified testing framework.
 This file provides common fixtures, mock data, and utilities for testing
 the backend_logic modules directly without HTTP overhead.
 """
+from __future__ import annotations
 
-import pytest
 import asyncio
 import os
 import tempfile
-from unittest.mock import Mock, AsyncMock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
-# Import the modules we'll be testing directly
-from backend_logic.document_processor import DocumentProcessor
-from backend_logic.ai_analyzer import AIAnalyzer
-from backend_logic.email_generator import EmailGenerator
-from backend_logic.quality_validator import QualityValidator
+import pytest
 
 # Import data models
 from backend.utils.data_models import (
-    ProcessedDocument, DocumentType, FileType, 
-    EnhancedIntakeAnalysis, CaseAnalysisResult
+    CaseAnalysisResult,
+    DocumentType,
+    EnhancedIntakeAnalysis,
+    FileType,
+    ProcessedDocument,
 )
+from backend_logic.ai_analyzer import AIAnalyzer
+
+# Import the modules we'll be testing directly
+from backend_logic.document_processor import DocumentProcessor
+from backend_logic.email_generator import EmailGenerator
+from backend_logic.quality_validator import QualityValidator
 
 
 @pytest.fixture(scope="session")
@@ -67,13 +72,17 @@ def sample_intake_analysis():
         urgency_level="Medium",
         client_priorities=["Recover financial damages", "Complete the work"],
         desired_outcomes=["Compensation for damages", "Project completion"],
-        key_facts=["Contract signed in June 2025", "Work left incomplete", "Property damage occurred"],
+        key_facts=[
+            "Contract signed in June 2025",
+            "Work left incomplete",
+            "Property damage occurred",
+        ],
         parties_involved=[
             {"name": "Erik Devlin", "role": "Client"},
-            {"name": "LLW Construction", "role": "Contractor"}
+            {"name": "LLW Construction", "role": "Contractor"},
         ],
         financial_impact="Estimated $15,000 in damages",
-        legal_claims=["Breach of contract", "Property damage"]
+        legal_claims=["Breach of contract", "Property damage"],
     )
 
 
@@ -85,20 +94,20 @@ def sample_processed_documents():
             file_name="intake_form.pdf",
             content="This is a sample intake form content with client details...",
             file_type=FileType.PDF,
-            document_type=DocumentType.INTAKE_FORM
+            document_type=DocumentType.INTAKE_FORM,
         ),
         ProcessedDocument(
             file_name="contract.pdf",
             content="This is a sample contract document with terms and conditions...",
             file_type=FileType.PDF,
-            document_type=DocumentType.CASE_DOCUMENT
+            document_type=DocumentType.CASE_DOCUMENT,
         ),
         ProcessedDocument(
             file_name="correspondence.eml",
             content="Email correspondence between client and contractor...",
             file_type=FileType.EML,
-            document_type=DocumentType.CASE_DOCUMENT
-        )
+            document_type=DocumentType.CASE_DOCUMENT,
+        ),
     ]
 
 
@@ -109,18 +118,18 @@ def sample_case_analysis():
         intake_analysis=EnhancedIntakeAnalysis(
             client_name="Erik Devlin",
             case_type="Contractor Dispute",
-            case_summary="Contractor dispute case"
+            case_summary="Contractor dispute case",
         ),
         analyzed_documents=[
             {
                 "filename": "contract.pdf",
-                "document_type": "Contract", 
+                "document_type": "Contract",
                 "inferred_title": "Construction Contract",
                 "summary": "Standard construction contract",
                 "key_information": "Payment terms and scope of work",
-                "relevance_to_case": "Primary evidence of agreement"
+                "relevance_to_case": "Primary evidence of agreement",
             }
-        ]
+        ],
     )
 
 
@@ -134,7 +143,7 @@ def mock_openai_response():
         "urgency_level": "Medium",
         "client_priorities": ["Priority 1", "Priority 2"],
         "key_facts": ["Fact 1", "Fact 2"],
-        "legal_claims": ["Claim 1", "Claim 2"]
+        "legal_claims": ["Claim 1", "Claim 2"],
     }
 
 
@@ -144,9 +153,9 @@ def temp_file_path():
     with tempfile.NamedTemporaryFile(delete=False) as tmp_file:
         tmp_file.write(b"Sample file content for testing")
         temp_path = tmp_file.name
-    
+
     yield temp_path
-    
+
     # Cleanup
     if os.path.exists(temp_path):
         os.remove(temp_path)
@@ -174,15 +183,19 @@ def devlin_test_config():
         "reference_dir": "reference",
         "supported_extensions": [".pdf", ".docx", ".doc", ".txt", ".eml"],
         "video_extensions": [".mp4", ".avi", ".mov"],
-        "intake_patterns": ["Intake for Contractor Dispute", "Intake (General)", "Intake Form"],
+        "intake_patterns": [
+            "Intake for Contractor Dispute",
+            "Intake (General)",
+            "Intake Form",
+        ],
         "validation": {
             "document_intake": {"enabled": True},
             "email_comparison": {
                 "enabled": True,
                 "reference_file": "reference_email.rtf",
-                "min_substance_score": 0.75
-            }
-        }
+                "min_substance_score": 0.75,
+            },
+        },
     }
 
 
@@ -192,12 +205,21 @@ def badam_test_config():
     return {
         "client_name": "Balaji Badam",
         "case_type": "Landlord/Tenant Dispute",
-        "supported_extensions": [".pdf", ".docx", ".doc", ".txt", ".eml", ".jpg", ".jpeg", ".png"],
+        "supported_extensions": [
+            ".pdf",
+            ".docx",
+            ".doc",
+            ".txt",
+            ".eml",
+            ".jpg",
+            ".jpeg",
+            ".png",
+        ],
         "intake_patterns": ["Intake", "intake"],
         "validation": {
             "document_intake": {"enabled": True},
-            "ai_analysis": {"enabled": True}
-        }
+            "ai_analysis": {"enabled": True},
+        },
     }
 
 
@@ -205,14 +227,12 @@ def badam_test_config():
 async def mock_ai_analyzer():
     """Mock AI analyzer for testing without actual API calls."""
     mock_analyzer = AsyncMock(spec=AIAnalyzer)
-    
+
     # Mock the analyze_intake method
     mock_analyzer.analyze_intake.return_value = EnhancedIntakeAnalysis(
-        client_name="Test Client",
-        case_type="Test Case",
-        case_summary="Test summary"
+        client_name="Test Client", case_type="Test Case", case_summary="Test summary"
     )
-    
+
     # Mock the analyze_case_documents method
     mock_analyzer.analyze_case_documents.return_value = [
         {
@@ -221,10 +241,10 @@ async def mock_ai_analyzer():
             "inferred_title": "Test Document",
             "summary": "Test summary",
             "key_information": "Test info",
-            "relevance_to_case": "Test relevance"
+            "relevance_to_case": "Test relevance",
         }
     ]
-    
+
     return mock_analyzer
 
 
@@ -237,15 +257,15 @@ def preserved_test_data():
             "expected_client": "Erik Devlin",
             "expected_case_type": "Contractor Dispute",
             "document_count": 8,
-            "intake_form_name": "Devlin - Intake for Contractor Dispute.pdf"
+            "intake_form_name": "Devlin - Intake for Contractor Dispute.pdf",
         },
         "badam_case": {
-            "case_reference": "BADAM-001", 
+            "case_reference": "BADAM-001",
             "expected_client": "Balaji Badam",
             "expected_case_type": "Landlord/Tenant Dispute",
             "document_count": 15,
-            "intake_form_name": "Badam - Intake Form.pdf"
-        }
+            "intake_form_name": "Badam - Intake Form.pdf",
+        },
     }
 
 
@@ -256,7 +276,7 @@ def email_validation_thresholds():
         "min_substance_score": 0.75,
         "min_structure_score": 0.8,
         "min_completeness_score": 0.85,
-        "min_professional_tone_score": 0.9
+        "min_professional_tone_score": 0.9,
     }
 
 
@@ -264,43 +284,44 @@ def email_validation_thresholds():
 @pytest.fixture
 def mock_openai_client():
     """Mock OpenAI client to avoid actual API calls during testing."""
-    with patch('backend_logic.ai_analyzer.OpenAI') as mock_client:
+    with patch("backend_logic.ai_analyzer.OpenAI") as mock_client:
         mock_instance = Mock()
         mock_response = Mock()
         mock_response.choices = [Mock()]
         mock_response.choices[0].message = Mock()
         mock_response.choices[0].message.content = '{"test": "response"}'
-        
+
         mock_instance.chat.completions.create.return_value = mock_response
         mock_client.return_value = mock_instance
-        
+
         yield mock_instance
 
 
 @pytest.fixture
 def mock_file_processors():
     """Mock file processors to avoid file system dependencies."""
-    with patch('backend_logic.document_processor.PROCESSOR_MAP') as mock_processors:
+    with patch("backend_logic.document_processor.PROCESSOR_MAP") as mock_processors:
+
         async def mock_pdf_processor(file_path, doc_type, filename):
             return ProcessedDocument(
                 file_name=filename,
                 content="Mocked PDF content",
                 file_type=FileType.PDF,
-                document_type=doc_type
+                document_type=doc_type,
             )
-        
+
         async def mock_docx_processor(file_path, doc_type, filename):
             return ProcessedDocument(
                 file_name=filename,
                 content="Mocked DOCX content",
                 file_type=FileType.DOCX,
-                document_type=doc_type
+                document_type=doc_type,
             )
-        
+
         mock_processors.return_value = {
             "application/pdf": mock_pdf_processor,
             "application/vnd.openxmlformats-officedocument.wordprocessingml.document": mock_docx_processor,
             "text/plain": mock_docx_processor,  # Use same mock for simplicity
         }
-        
+
         yield mock_processors

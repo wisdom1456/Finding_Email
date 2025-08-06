@@ -1,16 +1,22 @@
-from typing import Dict, Callable, Awaitable, Optional
-from ..data_models import DocumentType, ProcessedDocument, FileType, SavedDocument
-from .pdf_processor import process_pdf
+from __future__ import annotations
+
+from collections.abc import Awaitable
+from typing import Callable, Dict, Optional
+
+from utils.data_models import DocumentType, FileType, ProcessedDocument, SavedDocument
+
 from .docx_processor import process_docx
 from .eml_processor import process_eml
-from .txt_processor import process_txt
 from .image_processor import process_image
+from .pdf_processor import process_pdf
+from .txt_processor import process_txt
+
 
 # Type alias for processor functions
 Processor = Callable[[str, DocumentType, str], Awaitable[ProcessedDocument]]
 
 # Map FileType enum to processor functions
-PROCESSOR_MAP: Dict[str, Processor] = {
+PROCESSOR_MAP: dict[str, Processor] = {
     "application/pdf": process_pdf,
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document": process_docx,
     "application/msword": process_docx,
@@ -23,7 +29,8 @@ PROCESSOR_MAP: Dict[str, Processor] = {
     "image/tiff": process_image,
 }
 
-def get_processor(file_type: str) -> Optional[Processor]:
+
+def get_processor(file_type: str) -> Processor | None:
     """
     Returns the appropriate processor for a given file content type, or None if unsupported.
     """

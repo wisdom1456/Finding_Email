@@ -6,7 +6,7 @@ to directly import and test the backend_logic modules without HTTP overhead.
 
 Test Structure:
 - test_document_processor.py: Tests for document processing logic
-- test_ai_analyzer.py: Tests for AI analysis services  
+- test_ai_analyzer.py: Tests for AI analysis services
 - test_email_generator.py: Tests for email generation
 - test_quality_validator.py: Tests for quality validation
 - conftest.py: Shared fixtures and configuration

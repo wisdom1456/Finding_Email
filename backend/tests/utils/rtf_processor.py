@@ -1,22 +1,26 @@
-from striprtf.striprtf import rtf_to_text as striprtf_to_text
+from __future__ import annotations
+
 import re
+
+from striprtf.striprtf import rtf_to_text as striprtf_to_text
+
 
 def rtf_to_text(rtf_content):
     """
     Converts RTF content to plain text using striprtf.
     """
     if isinstance(rtf_content, bytes):
-        rtf_content = rtf_content.decode('utf-8', errors='ignore')
-    text = striprtf_to_text(rtf_content)
-    return text
+        rtf_content = rtf_content.decode("utf-8", errors="ignore")
+    return striprtf_to_text(rtf_content)
+
 
 def normalize_text(text):
     """
     Normalizes text by removing extra whitespace and standardizing line breaks.
     """
-    text = re.sub(r'\s+', ' ', text)
-    text = text.strip()
-    return text
+    text = re.sub(r"\s+", " ", text)
+    return text.strip()
+
 
 def extract_structured_content(text):
     """
@@ -26,8 +30,8 @@ def extract_structured_content(text):
     sections = {}
     # Example: A simple way to split by presumed sections
     # This will need to be adapted to the actual email format
-    for line in text.split('\n'):
-        if ':' in line:
-            key, value = line.split(':', 1)
+    for line in text.split("\n"):
+        if ":" in line:
+            key, value = line.split(":", 1)
             sections[key.strip()] = value.strip()
     return sections

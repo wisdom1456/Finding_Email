@@ -1,14 +1,21 @@
-from ..data_models import ProcessedDocument, DocumentType, FileType
-import docx
+from __future__ import annotations
+
 import io
 import mimetypes
 
-async def process_docx(file_path: str, document_type: DocumentType, original_filename: str) -> ProcessedDocument:
+import docx
+
+from utils.data_models import DocumentType, FileType, ProcessedDocument
+
+
+async def process_docx(
+    file_path: str, document_type: DocumentType, original_filename: str
+) -> ProcessedDocument:
     """
     Processes a DOCX file by extracting its content from a given path.
     """
     print(f"Processing DOCX: {original_filename}")
-    
+
     try:
         with open(file_path, "rb") as f:
             document = docx.Document(io.BytesIO(f.read()))
@@ -24,5 +31,5 @@ async def process_docx(file_path: str, document_type: DocumentType, original_fil
         content=full_text,
         document_type=document_type,
         file_type=FileType.DOCX,
-        metadata={'content_type': content_type}
+        metadata={"content_type": content_type},
     )

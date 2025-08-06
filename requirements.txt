@@ -16,8 +16,6 @@ PyYAML>=6.0
 
 # Document Processing
 python-docx>=1.1.0
-docx2txt>=0.8
-PyPDF2>=3.0.1
 PyMuPDF>=1.23.0
 python-magic>=0.4.27
 
@@ -35,8 +33,6 @@ plotly>=5.17.0
 google-cloud-storage>=2.10.0
 google-cloud-aiplatform>=1.1.0
 google-cloud-speech>=2.0.0
-pydub>=0.25.1
-ffmpeg-python>=0.2.0
 
 # Removed unnecessary dependencies:
 # - pydantic-settings (using pydantic directly)

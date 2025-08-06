@@ -1,6 +1,7 @@
-
-
 # BACKUP OF ORIGINAL PERSONA CONSTANTS (before CLIENT_CLARITY_ADVISOR implementation)
+from __future__ import annotations
+
+
 ORIGINAL_CLIENT_DIRECTED_PERSONA = """
 You are a senior litigation attorney at a prestigious law firm, writing a client-friendly findings letter TO YOUR CLIENT.
 
@@ -25,7 +26,9 @@ CRITICAL FORMATTING REQUIREMENTS:
 """
 
 # Legacy constant maintained for backward compatibility
-ORIGINAL_SENIOR_ATTORNEY_PERSONA = ORIGINAL_CLIENT_DIRECTED_PERSONA + "\n\n" + ORIGINAL_STRICT_FORMAT_ENFORCEMENT
+ORIGINAL_SENIOR_ATTORNEY_PERSONA = (
+    ORIGINAL_CLIENT_DIRECTED_PERSONA + "\n\n" + ORIGINAL_STRICT_FORMAT_ENFORCEMENT
+)
 
 # This backup file preserves the original email generation logic before CLIENT_CLARITY_ADVISOR implementation
 # Original creation date: August 5, 2025

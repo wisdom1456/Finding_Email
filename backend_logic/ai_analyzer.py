@@ -1,33 +1,40 @@
-import json
+from __future__ import annotations
+
 import asyncio
-from typing import Dict, Any, List, Union, Optional
-from tenacity import retry, stop_after_attempt, wait_fixed, retry_if_exception_type
-from openai import RateLimitError, APIError, APITimeoutError, BadRequestError, OpenAI
-from pydantic import ValidationError
+import json
+from typing import TYPE_CHECKING, Any
+
 import tiktoken
+from openai import APIError, APITimeoutError, BadRequestError, OpenAI, RateLimitError
+from pydantic import ValidationError
+from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_fixed
+
 from backend.utils.data_models import (
-    EnhancedIntakeAnalysis,
-    AnalyzedDocument,
-    LegalAssessment,
-    DemandLetterEvaluation,
-    ProcessedDocument,
-    CaseAnalysisResult,
-    AnalysisError,
     AIAnalysisError,
+    AnalysisError,
+    AnalyzedDocument,
+    CaseAnalysisResult,
+    DemandLetterEvaluation,
+    EnhancedIntakeAnalysis,
+    LegalAssessment,
+    ProcessedDocument,
 )
-from .document_processor import DocumentProcessor
 from backend.utils.validators import (
+    create_fallback_demand_letter_evaluation,
+    create_fallback_legal_assessment,
     preprocess_ai_output,
     safe_model_validate,
-    create_fallback_legal_assessment,
-    create_fallback_demand_letter_evaluation
 )
+
+
+if TYPE_CHECKING:
+    from .document_processor import DocumentProcessor
 
 
 class AIAnalyzer:
     """Handles all interactions with the OpenAI API for document analysis."""
 
-    def __init__(self, client: OpenAI, doc_processor: DocumentProcessor):
+    def __init__(self, client: OpenAI, doc_processor: DocumentProcessor) -> None:
         self.client = client
         self.doc_processor = doc_processor
 
@@ -36,7 +43,9 @@ class AIAnalyzer:
         wait=wait_fixed(2),
         retry=retry_if_exception_type((RateLimitError, APIError, APITimeoutError)),
     )
-    async def _make_openai_request(self, prompt: str, model: str, use_json_format: bool = True) -> Dict[str, Any]:
+    async def _make_openai_request(
+        self, prompt: str, model: str, use_json_format: bool = True
+    ) -> dict[str, Any]:
         """Makes a request to the OpenAI API with robust retry logic."""
         try:
             request_params = {
@@ -44,32 +53,39 @@ class AIAnalyzer:
                 "messages": [{"role": "user", "content": prompt}],
                 "temperature": 0.2,
             }
-            
+
             # Only add JSON response format if requested and prompt contains 'json'
-            if use_json_format and 'json' in prompt.lower():
+            if use_json_format and "json" in prompt.lower():
                 request_params["response_format"] = {"type": "json_object"}
-            
+
             response = self.client.chat.completions.create(**request_params)
-            
+
             # Parse as JSON only if JSON format was requested
             if use_json_format:
                 return json.loads(response.choices[0].message.content)
-            else:
-                # Return the content wrapped in a dictionary for consistency
-                return {"content": response.choices[0].message.content}
+            # Return the content wrapped in a dictionary for consistency
+            return {"content": response.choices[0].message.content}
         except json.JSONDecodeError as e:
             print(f"AI ANALYZER: Failed to parse AI response as JSON: {e}")
             raw_response_content = "N/A"
-            if 'response' in locals() and hasattr(response, 'choices') and response.choices:
+            if (
+                "response" in locals()
+                and hasattr(response, "choices")
+                and response.choices
+            ):
                 raw_response_content = response.choices[0].message.content
             print(f"AI ANALYZER: Raw response: {raw_response_content}")
-            raise AIAnalysisError(f"Failed to parse AI response as JSON: {e}")
+            msg = f"Failed to parse AI response as JSON: {e}"
+            raise AIAnalysisError(msg)
         except (RateLimitError, APIError, APITimeoutError) as e:
             print(f"AI ANALYZER: OpenAI API Error: {e}. Retrying...")
             raise
         except Exception as e:
-            print(f"AI ANALYZER: An unexpected error occurred: {type(e).__name__} - {e}")
-            raise AIAnalysisError(f"Error communicating with OpenAI API: {e}")
+            print(
+                f"AI ANALYZER: An unexpected error occurred: {type(e).__name__} - {e}"
+            )
+            msg = f"Error communicating with OpenAI API: {e}"
+            raise AIAnalysisError(msg)
 
     def _build_intake_prompt(self, content: str) -> str:
         """Builds the prompt for analyzing an intake form using CLIENT_CLARITY_ADVISOR framework."""
@@ -110,10 +126,10 @@ class AIAnalyzer:
             "==========================\n\n"
             "CONSTRUCTION RULES\n"
             "1. Capture every field—even if absent in the form.\n"
-            "   • If data is missing, output an empty string `\"\"` or empty list `[]`.\n"
+            '   • If data is missing, output an empty string `""` or empty list `[]`.\n'
             "2. `case_summary`: 120–200 words, neutral tone.\n"
             "3. `key_facts`: bullet-style strings ≤25 words each.\n"
-            "4. `parties_involved`: each object **must** have `\"name\"` and `\"role\"` (e.g., Plaintiff, Contractor).\n"
+            '4. `parties_involved`: each object **must** have `"name"` and `"role"` (e.g., Plaintiff, Contractor).\n'
             "5. Keep every other string ≤40 words.\n\n"
             "VALIDATION\n"
             "• Must parse as JSON.\n"
@@ -122,11 +138,21 @@ class AIAnalyzer:
             "BEGIN."
         )
 
-    def _build_case_document_prompt(self, doc: ProcessedDocument, ctx: EnhancedIntakeAnalysis) -> str:
+    def _build_case_document_prompt(
+        self, doc: ProcessedDocument, ctx: EnhancedIntakeAnalysis
+    ) -> str:
         """Builds a context-aware prompt for a case document using CLIENT_CLARITY_ADVISOR framework."""
-        client_priorities_str = ", ".join(ctx.client_priorities) if ctx.client_priorities else "None specified"
-        desired_outcomes_str = ", ".join(ctx.desired_outcomes) if ctx.desired_outcomes else "None specified"
-        
+        client_priorities_str = (
+            ", ".join(ctx.client_priorities)
+            if ctx.client_priorities
+            else "None specified"
+        )
+        desired_outcomes_str = (
+            ", ".join(ctx.desired_outcomes)
+            if ctx.desired_outcomes
+            else "None specified"
+        )
+
         return (
             "SYSTEM\n"
             "You are a CLIENT_CLARITY_ADVISOR - a litigation attorney who specializes in clear, accessible, and collaborative legal communication while maintaining the highest standards of Florida legal expertise.\n\n"
@@ -161,7 +187,7 @@ class AIAnalyzer:
             "SCHEMA — AnalyzedDocument\n"
             "{\n"
             '  "filename": "The original filename of the document.",\n'
-            '  "document_type": "The type of document (e.g., \'Contract\', \'Email\', \'Image\').",\n'
+            "  \"document_type\": \"The type of document (e.g., 'Contract', 'Email', 'Image').\",\n"
             '  "inferred_title": "A meaningful, non-repetitive title for the document (less than 15 words).",\n'
             '  "summary": "A concise, value-driven summary of the document\'s content (100-150 words).",\n'
             '  "key_information": "A single consolidated string containing the most critical information. Format as a paragraph, NOT a list. If multiple points exist, separate them with semicolons within the string.",\n'
@@ -180,7 +206,9 @@ class AIAnalyzer:
             "BEGIN."
         )
 
-    async def _summarize_media_content(self, content: Union[Dict, str], media_type: str, file_name: str) -> str:
+    async def _summarize_media_content(
+        self, content: dict | str, media_type: str, file_name: str
+    ) -> str:
         """Summarizes media content using CLIENT_CLARITY_ADVISOR approach."""
         print(f"AI ANALYZER: Summarizing {media_type} for {file_name}")
         prompt = (
@@ -199,56 +227,72 @@ class AIAnalyzer:
         )
         try:
             # Use gpt-4o-mini for efficiency, with non-JSON format since prompt doesn't contain 'json'
-            response = await self._make_openai_request(prompt, model="gpt-4o-mini", use_json_format=False)
+            response = await self._make_openai_request(
+                prompt, model="gpt-4o-mini", use_json_format=False
+            )
             # Extract the content from the response wrapper
             summary = response.get("content", "Summary could not be generated.")
-            print(f"AI ANALYZER: ✅ Successfully summarized {media_type} for {file_name}")
+            print(
+                f"AI ANALYZER: ✅ Successfully summarized {media_type} for {file_name}"
+            )
             return summary
         except AIAnalysisError as e:
-            print(f"AI ANALYZER: ❌ Failed to summarize {media_type} for {file_name}: {e}")
+            print(
+                f"AI ANALYZER: ❌ Failed to summarize {media_type} for {file_name}: {e}"
+            )
             return f"[A {media_type} from {file_name} is available but could not be summarized.]"
 
     def _log_video_analysis_diagnostics(self, analysis: CaseAnalysisResult) -> None:
         """Log comprehensive diagnostics about video analysis content before final assessment."""
         print("AI ANALYZER: 🔍 === DIAGNOSTIC LOGGING - Video Analysis Content ===")
-        
+
         if not analysis.video_insights:
             print("AI ANALYZER: 🔍 No video insights to analyze")
             return
-            
+
         for i, video in enumerate(analysis.video_insights):
-            print(f"AI ANALYZER: 🔍 Video {i+1}: {video.file_name}")
+            print(f"AI ANALYZER: 🔍 Video {i + 1}: {video.file_name}")
             print(f"AI ANALYZER: 🔍   - Insights type: {type(video.insights)}")
-            print(f"AI ANALYZER: 🔍   - Insights size (chars): {len(str(video.insights))}")
-            print(f"AI ANALYZER: 🔍   - Insights estimated tokens: {len(str(video.insights)) // 4}")
-            
+            print(
+                f"AI ANALYZER: 🔍   - Insights size (chars): {len(str(video.insights))}"
+            )
+            print(
+                f"AI ANALYZER: 🔍   - Insights estimated tokens: {len(str(video.insights)) // 4}"
+            )
+
             if isinstance(video.insights, dict):
-                print(f"AI ANALYZER: 🔍   - Insights keys: {list(video.insights.keys())}")
+                print(
+                    f"AI ANALYZER: 🔍   - Insights keys: {list(video.insights.keys())}"
+                )
                 for key, value in video.insights.items():
                     if isinstance(value, (str, list)):
-                        print(f"AI ANALYZER: 🔍   - {key} size: {len(str(value))} chars")
-            
+                        print(
+                            f"AI ANALYZER: 🔍   - {key} size: {len(str(value))} chars"
+                        )
+
             print(f"AI ANALYZER: 🔍   - Transcript size: {len(video.transcript)} chars")
             print(f"AI ANALYZER: 🔍   - Labels count: {len(video.labels)}")
             print(f"AI ANALYZER: 🔍   - Objects count: {len(video.objects)}")
-            print(f"AI ANALYZER: 🔍   - Text annotations count: {len(video.text_annotations)}")
-        
+            print(
+                f"AI ANALYZER: 🔍   - Text annotations count: {len(video.text_annotations)}"
+            )
+
         print("AI ANALYZER: 🔍 === END DIAGNOSTIC LOGGING ===")
 
     def _estimate_prompt_tokens_detailed(self, prompt_content: str) -> int:
         """Enhanced token estimation with more accurate calculation."""
         # More accurate token estimation: ~3.5 characters per token for English text
         base_tokens = len(prompt_content) // 3.5
-        
+
         # Add overhead for JSON structure, special characters, etc.
         overhead_factor = 1.15
         estimated_tokens = int(base_tokens * overhead_factor)
-        
+
         print("AI ANALYZER: 🔍 Token estimation details:")
         print(f"AI ANALYZER: 🔍   - Content length: {len(prompt_content):,} characters")
         print(f"AI ANALYZER: 🔍   - Base tokens: {int(base_tokens):,}")
         print(f"AI ANALYZER: 🔍   - With overhead: {estimated_tokens:,}")
-        
+
         return estimated_tokens
 
     def _count_tokens_accurate(self, text: str, model: str = "gpt-4o") -> int:
@@ -259,11 +303,11 @@ class AIAnalyzer:
                 encoding_name = "cl100k_base"  # GPT-4 encoding
             else:
                 encoding_name = "cl100k_base"  # Default to GPT-4 encoding
-            
+
             encoding = tiktoken.get_encoding(encoding_name)
             tokens = encoding.encode(text)
             token_count = len(tokens)
-            
+
             print(f"AI ANALYZER: 🔢 Accurate token count ({model}): {token_count:,}")
             return token_count
         except Exception as e:
@@ -271,165 +315,215 @@ class AIAnalyzer:
             # Fallback to existing estimation method
             return self._estimate_prompt_tokens_detailed(text)
 
-    async def _check_token_threshold_precomputation(self, analysis: CaseAnalysisResult, model: str = "gpt-4o") -> bool:
+    async def _check_token_threshold_precomputation(
+        self, analysis: CaseAnalysisResult, model: str = "gpt-4o"
+    ) -> bool:
         """Check if video insights would exceed token threshold before building prompt."""
         print(f"AI ANALYZER: 🔍 Pre-computation token checking for model: {model}")
-        
+
         # Define thresholds (80% of context window)
         model_limits = {
-            "gpt-4o": 120000,      # 150k context window * 0.8
-            "gpt-4o-mini": 100000, # 125k context window * 0.8
-            "gpt-4": 25600,        # 32k context window * 0.8
+            "gpt-4o": 120000,  # 150k context window * 0.8
+            "gpt-4o-mini": 100000,  # 125k context window * 0.8
+            "gpt-4": 25600,  # 32k context window * 0.8
         }
-        
+
         threshold = model_limits.get(model, 96000)  # Default to 120k * 0.8
         print(f"AI ANALYZER: 🔍 Token threshold for {model}: {threshold:,}")
-        
+
         # Estimate token usage from video insights
         if not analysis.video_insights:
             print("AI ANALYZER: 🔍 No video insights, threshold check passed")
             return True
-        
+
         total_video_tokens = 0
         for video in analysis.video_insights:
             # Estimate tokens from video content
-            insights_content = json.dumps(video.insights, indent=2) if video.insights else ""
+            insights_content = (
+                json.dumps(video.insights, indent=2) if video.insights else ""
+            )
             transcript_content = video.transcript or ""
             labels_content = ", ".join(video.labels) if video.labels else ""
             objects_content = ", ".join(video.objects) if video.objects else ""
-            
+
             video_content = f"{insights_content}\n{transcript_content}\n{labels_content}\n{objects_content}"
             video_tokens = self._count_tokens_accurate(video_content, model)
             total_video_tokens += video_tokens
-            
+
             print(f"AI ANALYZER: 🔍   - {video.file_name}: {video_tokens:,} tokens")
-        
+
         # Add estimated tokens for other content (documents, intake, etc.)
         base_content_estimate = 10000  # Conservative estimate for non-video content
         total_estimated_tokens = total_video_tokens + base_content_estimate
-        
+
         print(f"AI ANALYZER: 🔍 Total estimated tokens: {total_estimated_tokens:,}")
         print(f"AI ANALYZER: 🔍 Threshold: {threshold:,}")
-        
-        if total_estimated_tokens > threshold:
-            print(f"AI ANALYZER: ⚠️  Token count exceeds threshold ({total_estimated_tokens:,} > {threshold:,})")
-            return False
-        else:
-            print("AI ANALYZER: ✅ Token count within threshold")
-            return True
 
-    def _apply_video_summarization_strategy(self, analysis: CaseAnalysisResult) -> CaseAnalysisResult:
+        if total_estimated_tokens > threshold:
+            print(
+                f"AI ANALYZER: ⚠️  Token count exceeds threshold ({total_estimated_tokens:,} > {threshold:,})"
+            )
+            return False
+        print("AI ANALYZER: ✅ Token count within threshold")
+        return True
+
+    def _apply_video_summarization_strategy(
+        self, analysis: CaseAnalysisResult
+    ) -> CaseAnalysisResult:
         """Apply summarization strategy when token threshold is exceeded."""
-        print("AI ANALYZER: 🔄 Token count exceeds threshold. Triggering summarization strategy.")
-        
+        print(
+            "AI ANALYZER: 🔄 Token count exceeds threshold. Triggering summarization strategy."
+        )
+
         analysis_copy = analysis.model_copy(deep=True)
-        
+
         for video in analysis_copy.video_insights:
             # Set the insights_summary field as specified in the video preservation plan
             if video.insights:
                 # Create a condensed summary for prompt inclusion
                 key_objects = video.objects[:5] if video.objects else []
                 key_labels = video.labels[:5] if video.labels else []
-                
+
                 summary_parts = []
                 if key_objects:
-                    summary_parts.append(f"Key objects detected: {', '.join(key_objects)}")
+                    summary_parts.append(
+                        f"Key objects detected: {', '.join(key_objects)}"
+                    )
                 if key_labels:
                     summary_parts.append(f"Content labels: {', '.join(key_labels)}")
                 if video.transcript and len(video.transcript) > 200:
-                    summary_parts.append(f"Transcript excerpt: {video.transcript[:200]}...")
+                    summary_parts.append(
+                        f"Transcript excerpt: {video.transcript[:200]}..."
+                    )
                 elif video.transcript:
                     summary_parts.append(f"Transcript: {video.transcript}")
-                
-                condensed_summary = "; ".join(summary_parts) if summary_parts else "Video content available but summarized due to token constraints."
-                
+
+                condensed_summary = (
+                    "; ".join(summary_parts)
+                    if summary_parts
+                    else "Video content available but summarized due to token constraints."
+                )
+
                 # Update the insights_summary field in the data model
                 video.insights_summary = condensed_summary
-                
+
                 # Replace the full insights with a minimal placeholder to reduce tokens
-                video.insights = {"status": "Video analyzed - full details preserved, summary applied for prompt"}
-                
-                print(f"AI ANALYZER: 🔄   - Summarized {video.file_name}: {len(condensed_summary)} chars")
+                video.insights = {
+                    "status": "Video analyzed - full details preserved, summary applied for prompt"
+                }
+
+                print(
+                    f"AI ANALYZER: 🔄   - Summarized {video.file_name}: {len(condensed_summary)} chars"
+                )
             else:
                 video.insights_summary = f"Video file {video.file_name} processed but content summarized due to size constraints."
-                print(f"AI ANALYZER: 🔄   - Applied default summary for {video.file_name}")
-        
-        print(f"AI ANALYZER: 🔄 Summarization strategy applied to {len(analysis_copy.video_insights)} video(s)")
+                print(
+                    f"AI ANALYZER: 🔄   - Applied default summary for {video.file_name}"
+                )
+
+        print(
+            f"AI ANALYZER: 🔄 Summarization strategy applied to {len(analysis_copy.video_insights)} video(s)"
+        )
         return analysis_copy
 
-    def _truncate_video_content_aggressively(self, analysis: CaseAnalysisResult, target_tokens: int = 100000) -> CaseAnalysisResult:
+    def _truncate_video_content_aggressively(
+        self, analysis: CaseAnalysisResult, target_tokens: int = 100000
+    ) -> CaseAnalysisResult:
         """Aggressively truncate video content to meet token limits."""
-        print(f"AI ANALYZER: 🔄 Aggressively truncating video content to target {target_tokens:,} tokens")
-        
+        print(
+            f"AI ANALYZER: 🔄 Aggressively truncating video content to target {target_tokens:,} tokens"
+        )
+
         analysis_copy = analysis.model_copy(deep=True)
-        
+
         for video in analysis_copy.video_insights:
             # Drastically simplify video insights
             video.insights = {
                 "summary": "Video analysis available but truncated due to size constraints.",
                 "key_objects": video.objects[:3] if video.objects else [],
-                "primary_labels": video.labels[:3] if video.labels else []
+                "primary_labels": video.labels[:3] if video.labels else [],
             }
-            
+
             # Truncate transcript severely
             if len(video.transcript) > 200:
                 video.transcript = video.transcript[:200] + "... [truncated]"
-            
+
             # Limit other arrays
             video.labels = video.labels[:5] if video.labels else []
             video.objects = video.objects[:5] if video.objects else []
-            video.text_annotations = video.text_annotations[:3] if video.text_annotations else []
-            
+            video.text_annotations = (
+                video.text_annotations[:3] if video.text_annotations else []
+            )
+
             print(f"AI ANALYZER: 🔄   - Truncated {video.file_name}")
-        
+
         return analysis_copy
 
     async def _build_final_assessment_prompt(self, analysis: CaseAnalysisResult) -> str:
         """Builds the prompt for the final legal assessment, including media summaries, timeline, and video relevance."""
         # Log comprehensive diagnostics about video content
         self._log_video_analysis_diagnostics(analysis)
-        
+
         analysis_for_prompt = analysis.model_copy(deep=True)
 
         # Generate timeline and video relevance analysis
         timeline_content = ""
         video_relevance_content = ""
-        
+
         try:
             # Generate case timeline
             print("AI ANALYZER: Generating case timeline...")
             timeline_content = generate_case_timeline(analysis_for_prompt)
-            print(f"AI ANALYZER: ✅ Timeline generated: {len(timeline_content)} characters")
-            
+            print(
+                f"AI ANALYZER: ✅ Timeline generated: {len(timeline_content)} characters"
+            )
+
             # Generate video relevance analysis if videos exist
             if analysis_for_prompt.video_insights:
                 print("AI ANALYZER: Generating video relevance analysis...")
-                video_relevance_content = analyze_video_relevance(analysis_for_prompt.video_insights[0], analysis_for_prompt.intake_analysis)
-                print(f"AI ANALYZER: ✅ Video relevance analysis generated: {len(str(video_relevance_content))} characters")
-            
+                video_relevance_content = analyze_video_relevance(
+                    analysis_for_prompt.video_insights[0],
+                    analysis_for_prompt.intake_analysis,
+                )
+                print(
+                    f"AI ANALYZER: ✅ Video relevance analysis generated: {len(str(video_relevance_content))} characters"
+                )
+
         except Exception as e:
             print(f"AI ANALYZER: ⚠️ Failed to generate timeline/video relevance: {e}")
-            timeline_content = "Timeline generation encountered an error and was skipped."
-            video_relevance_content = "Video relevance analysis encountered an error and was skipped."
+            timeline_content = (
+                "Timeline generation encountered an error and was skipped."
+            )
+            video_relevance_content = (
+                "Video relevance analysis encountered an error and was skipped."
+            )
 
         # Create summarization tasks for all media
         summarization_tasks = []
         for media in analysis_for_prompt.transcripted_media:
             summarization_tasks.append(
-                self._summarize_media_content(media.transcript, "audio transcript", media.file_name)
+                self._summarize_media_content(
+                    media.transcript, "audio transcript", media.file_name
+                )
             )
         for video in analysis_for_prompt.video_insights:
-            print(f"AI ANALYZER: 🔍 DEBUGGING - Video insights type for {video.file_name}: {type(video.insights)}")
-            print(f"AI ANALYZER: 🔍 DEBUGGING - Video insights keys: {list(video.insights.keys()) if isinstance(video.insights, dict) else 'Not a dict'}")
+            print(
+                f"AI ANALYZER: 🔍 DEBUGGING - Video insights type for {video.file_name}: {type(video.insights)}"
+            )
+            print(
+                f"AI ANALYZER: 🔍 DEBUGGING - Video insights keys: {list(video.insights.keys()) if isinstance(video.insights, dict) else 'Not a dict'}"
+            )
             summarization_tasks.append(
-                self._summarize_media_content(video.insights, "video analysis", video.file_name)
+                self._summarize_media_content(
+                    video.insights, "video analysis", video.file_name
+                )
             )
 
         # Run summarizations concurrently
         if summarization_tasks:
             print("AI ANALYZER: Starting media summarization...")
             summaries = await asyncio.gather(*summarization_tasks)
-            
+
             # Replace full content with summaries
             summary_idx = 0
             for media in analysis_for_prompt.transcripted_media:
@@ -437,9 +531,15 @@ class AIAnalyzer:
                 summary_idx += 1
             for video in analysis_for_prompt.video_insights:
                 # CRITICAL FIX: Store summary in a string field, not the Dict insights field
-                print(f"AI ANALYZER: 🔍 DEBUGGING - Original insights size: {len(str(video.insights))}")
-                video.insights = {"summary": summaries[summary_idx]}  # Wrap string in dict to maintain type
-                print(f"AI ANALYZER: 🔍 DEBUGGING - Summarized insights size: {len(str(video.insights))}")
+                print(
+                    f"AI ANALYZER: 🔍 DEBUGGING - Original insights size: {len(str(video.insights))}"
+                )
+                video.insights = {
+                    "summary": summaries[summary_idx]
+                }  # Wrap string in dict to maintain type
+                print(
+                    f"AI ANALYZER: 🔍 DEBUGGING - Summarized insights size: {len(str(video.insights))}"
+                )
                 summary_idx += 1
             print("AI ANALYZER: ✅ Media summarization completed")
 
@@ -447,33 +547,46 @@ class AIAnalyzer:
         try:
             prompt_data = analysis_for_prompt.model_dump_json(indent=2)
             estimated_tokens = self._estimate_prompt_tokens_detailed(prompt_data)
-            
+
             # Conservative safety limit for final assessment
             SAFE_TOKEN_LIMIT = 120000
-            
+
             if estimated_tokens > SAFE_TOKEN_LIMIT:
                 print("AI ANALYZER: ⚠️  PROMPT SIZE VALIDATION FAILED")
-                print(f"AI ANALYZER: ⚠️  Estimated tokens: {estimated_tokens:,} > limit: {SAFE_TOKEN_LIMIT:,}")
+                print(
+                    f"AI ANALYZER: ⚠️  Estimated tokens: {estimated_tokens:,} > limit: {SAFE_TOKEN_LIMIT:,}"
+                )
                 print("AI ANALYZER: 🔄 Applying aggressive video content truncation...")
-                
+
                 # Apply aggressive truncation
-                analysis_for_prompt = self._truncate_video_content_aggressively(analysis_for_prompt, SAFE_TOKEN_LIMIT)
-                
+                analysis_for_prompt = self._truncate_video_content_aggressively(
+                    analysis_for_prompt, SAFE_TOKEN_LIMIT
+                )
+
                 # Re-check size after truncation
                 prompt_data = analysis_for_prompt.model_dump_json(indent=2)
                 estimated_tokens = self._estimate_prompt_tokens_detailed(prompt_data)
-                
+
                 if estimated_tokens > SAFE_TOKEN_LIMIT:
-                    raise ValueError(f"Even after aggressive truncation, prompt is too large: {estimated_tokens:,} tokens")
-                else:
-                    print(f"AI ANALYZER: ✅ Truncation successful, final tokens: {estimated_tokens:,}")
+                    msg = f"Even after aggressive truncation, prompt is too large: {estimated_tokens:,} tokens"
+                    raise ValueError(
+                        msg
+                    )
+                print(
+                    f"AI ANALYZER: ✅ Truncation successful, final tokens: {estimated_tokens:,}"
+                )
             else:
-                print(f"AI ANALYZER: ✅ Prompt size validation passed: {estimated_tokens:,} tokens")
-                
+                print(
+                    f"AI ANALYZER: ✅ Prompt size validation passed: {estimated_tokens:,} tokens"
+                )
+
         except Exception as e:
             print(f"AI ANALYZER: ❌ PROMPT SIZE VALIDATION ERROR: {e}")
             print(f"AI ANALYZER: ❌ Error type: {type(e).__name__}")
-            raise ValueError(f"Cannot serialize analysis data for final assessment: {e}")
+            msg = f"Cannot serialize analysis data for final assessment: {e}"
+            raise ValueError(
+                msg
+            )
 
         return (
             "SYSTEM\n"
@@ -492,7 +605,7 @@ class AIAnalyzer:
             "• Consequences: Explain both action and inaction outcomes\n"
             "• Reaffirm: 'We're here to guide you through this complexity'\n\n"
             "CRITICAL: Reference ONLY Florida statutes (e.g., Florida Statutes § 83.51(1)). Do NOT cite laws from other states or federal law unless explicitly relevant to Florida jurisdiction.\n\n"
-            "Output a single JSON object with exactly two top-level keys: `\"legal_assessment\"` and `\"demand_letter_evaluation\"`—nothing else.\n\n"
+            'Output a single JSON object with exactly two top-level keys: `"legal_assessment"` and `"demand_letter_evaluation"`—nothing else.\n\n'
             "• JSON only—no markdown, no commentary.\n"
             "• Do not alter key names.\n\n"
             "==========================\n"
@@ -553,7 +666,7 @@ class AIAnalyzer:
             "4.  **Pay attention to jurisdiction** - cite only relevant local statutes (e.g., Florida Statutes § 83.51(1)). Do NOT invent or misapply laws from other states.\n"
             '5.  `claim_viability`: pick "Strong", "Moderate", or "Weak".\n'
             "6.  `demand_letter_appropriate`: true if pre-suit demand adds leverage.\n"
-            '7.  If `demand_letter_evaluation.is_appropriate` is **false**, set\n'
+            "7.  If `demand_letter_evaluation.is_appropriate` is **false**, set\n"
             '    `"reasoning": ""`, `"potential_outcomes": []`, `"relevant_statutes": []`.\n'
             "8.  **Timeline Integration**: Consider the chronological timeline of events when assessing case strength and recommended actions.\n"
             "9.  **Video Evidence Integration**: Factor in the video relevance analysis when evaluating evidence strength and case strategy.\n"
@@ -564,55 +677,73 @@ class AIAnalyzer:
             "• Key order per schema.\n\n"
             "BEGIN."
         )
+
     async def analyze_intake(self, intake_doc: ProcessedDocument) -> CaseAnalysisResult:
         """Analyzes a processed intake form and returns an initial CaseAnalysisResult object."""
         analysis = CaseAnalysisResult()
         if not intake_doc or not intake_doc.content:
-            analysis.errors.append(AnalysisError(source="IntakeProcessing", error_message="No valid intake content to analyze."))
+            analysis.errors.append(
+                AnalysisError(
+                    source="IntakeProcessing",
+                    error_message="No valid intake content to analyze.",
+                )
+            )
             return analysis
 
         try:
             prompt = self._build_intake_prompt(intake_doc.content)
             raw_analysis = await self._make_openai_request(prompt, model="gpt-4o-mini")
             processed_analysis = preprocess_ai_output(raw_analysis)
-            analysis.intake_analysis = EnhancedIntakeAnalysis.model_validate(processed_analysis)
+            analysis.intake_analysis = EnhancedIntakeAnalysis.model_validate(
+                processed_analysis
+            )
 
         except (AIAnalysisError, ValidationError) as e:
             details = str(e) if isinstance(e, AIAnalysisError) else e.errors()
-            analysis.errors.append(AnalysisError(source="IntakeAnalysis", error_message=f"Failed to validate AI response for intake: {e}", details=details))
-        
+            analysis.errors.append(
+                AnalysisError(
+                    source="IntakeAnalysis",
+                    error_message=f"Failed to validate AI response for intake: {e}",
+                    details=details,
+                )
+            )
+
         return analysis
 
-    async def analyze_case_documents(self, documents: List[ProcessedDocument], intake_context: EnhancedIntakeAnalysis) -> List[Union[AnalyzedDocument, AnalysisError]]:
+    async def analyze_case_documents(
+        self, documents: list[ProcessedDocument], intake_context: EnhancedIntakeAnalysis
+    ) -> list[AnalyzedDocument | AnalysisError]:
         """Analyzes multiple case documents sequentially to avoid rate limiting."""
         results = []
         total_docs = len(documents)
-        
+
         print(f"AI ANALYZER: Starting analysis of {total_docs} documents...")
-        
+
         for i, doc in enumerate(documents, 1):
             print(f"AI ANALYZER: Processing document {i}/{total_docs}: {doc.file_name}")
             result = await self._analyze_single_document(doc, intake_context)
             results.append(result)
-            
+
             # Log the result type
             if isinstance(result, AnalysisError):
-                print(f"AI ANALYZER: ❌ Failed to analyze {doc.file_name}: {result.error_message}")
+                print(
+                    f"AI ANALYZER: ❌ Failed to analyze {doc.file_name}: {result.error_message}"
+                )
             else:
                 print(f"AI ANALYZER: ✅ Successfully analyzed {doc.file_name}")
-            
+
             # Add delay between requests to respect rate limits
             if i < total_docs:  # Don't delay after the last document
                 print("AI ANALYZER: Waiting 3 seconds before next document...")
                 await asyncio.sleep(3)
-        
+
         print(f"AI ANALYZER: Completed analysis of all {total_docs} documents")
         return results
 
     def _estimate_tokens(self, text: str) -> int:
         """Rough estimation of tokens (approximately 4 characters per token)."""
         return len(text) // 4
-    
+
     def _truncate_content_if_needed(self, content: str, max_tokens: int = 25000) -> str:
         """Truncate content if it exceeds token limit."""
         estimated_tokens = self._estimate_tokens(content)
@@ -621,108 +752,141 @@ class AIAnalyzer:
             chars_to_keep = max_tokens * 4
             first_part_chars = int(chars_to_keep * 0.8)
             last_part_chars = int(chars_to_keep * 0.2)
-            
+
             first_part = content[:first_part_chars]
             last_part = content[-last_part_chars:]
-            
-            truncated_content = f"{first_part}\n\n[... CONTENT TRUNCATED FOR SIZE ...]\n\n{last_part}"
-            print(f"AI ANALYZER: ⚠️  Content truncated from ~{estimated_tokens} to ~{max_tokens} tokens")
+
+            truncated_content = (
+                f"{first_part}\n\n[... CONTENT TRUNCATED FOR SIZE ...]\n\n{last_part}"
+            )
+            print(
+                f"AI ANALYZER: ⚠️  Content truncated from ~{estimated_tokens} to ~{max_tokens} tokens"
+            )
             return truncated_content
         return content
 
-    async def _analyze_single_document(self, document: ProcessedDocument, intake_context: EnhancedIntakeAnalysis) -> Union[AnalyzedDocument, AnalysisError]:
+    async def _analyze_single_document(
+        self, document: ProcessedDocument, intake_context: EnhancedIntakeAnalysis
+    ) -> AnalyzedDocument | AnalysisError:
         """Analyzes a single case document, returning structured data or an error."""
         try:
             # Check document size and truncate if necessary
             truncated_content = self._truncate_content_if_needed(document.content)
-            
+
             # Create a copy of the document with truncated content
             doc_for_analysis = ProcessedDocument(
                 file_name=document.file_name,
                 content=truncated_content,
                 file_type=document.file_type,
-                document_type=document.document_type
+                document_type=document.document_type,
             )
-            
+
             prompt = self._build_case_document_prompt(doc_for_analysis, intake_context)
-            
+
             # Estimate total prompt size and choose appropriate model
             total_estimated_tokens = self._estimate_tokens(prompt)
             model_to_use = "gpt-4o-mini" if total_estimated_tokens > 20000 else "gpt-4o"
-            
+
             if model_to_use == "gpt-4o-mini":
-                print(f"AI ANALYZER: 🔄 Using gpt-4o-mini for large document: {document.file_name}")
-            
+                print(
+                    f"AI ANALYZER: 🔄 Using gpt-4o-mini for large document: {document.file_name}"
+                )
+
             raw_analysis = await self._make_openai_request(prompt, model=model_to_use)
             return AnalyzedDocument.model_validate(raw_analysis)
         except (AIAnalysisError, ValidationError) as e:
             return AnalysisError(
                 source=f"doc:{document.file_name}",
                 error_message=f"Failed to analyze document: {e}",
-                details=str(e)
+                details=str(e),
             )
 
-    async def perform_final_assessment(self, analysis: CaseAnalysisResult) -> CaseAnalysisResult:
+    async def perform_final_assessment(
+        self, analysis: CaseAnalysisResult
+    ) -> CaseAnalysisResult:
         """Performs the final legal assessment and demand letter evaluation with graceful degradation."""
-        if not analysis.intake_analysis or (not analysis.analyzed_documents and not analysis.transcripted_media and not analysis.video_insights):
+        if not analysis.intake_analysis or (
+            not analysis.analyzed_documents
+            and not analysis.transcripted_media
+            and not analysis.video_insights
+        ):
             error_msg = "Cannot perform final assessment without intake analysis and at least one document or media file."
             analysis.errors.append(
                 AnalysisError(
                     source="FinalAssessment",
                     error_message=error_msg,
-                    details="Missing required analysis inputs."
+                    details="Missing required analysis inputs.",
                 )
             )
-            
+
             print(f"AI ANALYZER: {error_msg} Providing fallback assessments...")
-            analysis.legal_assessment = LegalAssessment.model_validate(create_fallback_legal_assessment())
-            analysis.demand_letter_evaluation = DemandLetterEvaluation.model_validate(create_fallback_demand_letter_evaluation())
+            analysis.legal_assessment = LegalAssessment.model_validate(
+                create_fallback_legal_assessment()
+            )
+            analysis.demand_letter_evaluation = DemandLetterEvaluation.model_validate(
+                create_fallback_demand_letter_evaluation()
+            )
             return analysis
 
         try:
             print("AI ANALYZER: Starting final legal assessment...")
-            
+
             # PRE-COMPUTATION TOKEN CHECKING - Check before building prompt
             model_to_use = "gpt-4o"
-            token_check_passed = await self._check_token_threshold_precomputation(analysis, model_to_use)
-            
+            token_check_passed = await self._check_token_threshold_precomputation(
+                analysis, model_to_use
+            )
+
             # Apply conditional logic based on token threshold
             if token_check_passed:
-                print("AI ANALYZER: ✅ Token threshold check passed - proceeding with full data")
+                print(
+                    "AI ANALYZER: ✅ Token threshold check passed - proceeding with full data"
+                )
                 analysis_for_assessment = analysis
             else:
-                print("AI ANALYZER: ⚠️  Token threshold exceeded - applying summarization strategy")
-                analysis_for_assessment = self._apply_video_summarization_strategy(analysis)
-            
+                print(
+                    "AI ANALYZER: ⚠️  Token threshold exceeded - applying summarization strategy"
+                )
+                analysis_for_assessment = self._apply_video_summarization_strategy(
+                    analysis
+                )
+
             # Build prompt with potentially summarized data
             prompt = await self._build_final_assessment_prompt(analysis_for_assessment)
-            
+
             # Final validation of prompt size
             estimated_tokens = self._count_tokens_accurate(prompt, model_to_use)
             print(f"AI ANALYZER: Final assessment prompt tokens: {estimated_tokens:,}")
-            
+
             # Conservative safety check (should rarely trigger now due to pre-computation)
             if estimated_tokens > 120000:
                 error_msg = f"Final assessment prompt still too large ({estimated_tokens:,} tokens) after pre-computation check."
                 print(f"AI ANALYZER: ⚠️  {error_msg}")
-                
+
                 # Apply emergency fallback if pre-computation didn't catch the issue
                 emergency_analysis = analysis.model_copy(deep=True)
                 for video in emergency_analysis.video_insights:
                     video.insights = {"status": "Emergency summarization applied"}
-                    video.transcript = f"Video file: {video.file_name} [emergency abbreviation]"
+                    video.transcript = (
+                        f"Video file: {video.file_name} [emergency abbreviation]"
+                    )
                     video.labels = video.labels[:3] if video.labels else []
                     video.objects = video.objects[:3] if video.objects else []
                     video.text_annotations = []
-                
+
                 # Rebuild prompt with emergency simplification
                 prompt = await self._build_final_assessment_prompt(emergency_analysis)
                 estimated_tokens = self._count_tokens_accurate(prompt, model_to_use)
-                print(f"AI ANALYZER: Emergency reduced prompt tokens: {estimated_tokens:,}")
-                
+                print(
+                    f"AI ANALYZER: Emergency reduced prompt tokens: {estimated_tokens:,}"
+                )
+
                 if estimated_tokens > 120000:
-                    raise ValueError(f"Even after emergency reduction, prompt is too large ({estimated_tokens:,} tokens)")
-            
+                    msg = f"Even after emergency reduction, prompt is too large ({estimated_tokens:,} tokens)"
+                    raise ValueError(
+                        msg
+                    )
+
             try:
                 raw_assessment = await self._make_openai_request(prompt, model="gpt-4o")
             except BadRequestError as bad_request_error:
@@ -731,406 +895,589 @@ class AIAnalyzer:
                 print("AI ANALYZER: ❌ BADREQUEST ERROR DETECTED in final assessment")
                 print(f"AI ANALYZER: 🔍 Error details: {error_details}")
                 print(f"AI ANALYZER: 🔍 Prompt character count: {len(prompt):,}")
-                print(f"AI ANALYZER: 🔍 Video insights count: {len(analysis.video_insights)}")
-                
+                print(
+                    f"AI ANALYZER: 🔍 Video insights count: {len(analysis.video_insights)}"
+                )
+
                 # LOG THE ERROR WITH DETAILED CONTEXT
                 print("AI ANALYZER: 🔍 === BADREQUEST ERROR CONTEXT ===")
                 print(f"AI ANALYZER: 🔍 Model: {model_to_use}")
                 print(f"AI ANALYZER: 🔍 Estimated tokens: {estimated_tokens:,}")
-                print(f"AI ANALYZER: 🔍 Analysis has {len(analysis.analyzed_documents)} documents")
-                print(f"AI ANALYZER: 🔍 Analysis has {len(analysis.transcripted_media)} audio files")
-                print(f"AI ANALYZER: 🔍 Analysis has {len(analysis.video_insights)} video files")
-                
+                print(
+                    f"AI ANALYZER: 🔍 Analysis has {len(analysis.analyzed_documents)} documents"
+                )
+                print(
+                    f"AI ANALYZER: 🔍 Analysis has {len(analysis.transcripted_media)} audio files"
+                )
+                print(
+                    f"AI ANALYZER: 🔍 Analysis has {len(analysis.video_insights)} video files"
+                )
+
                 # Log video content sizes for debugging
                 for i, video in enumerate(analysis.video_insights):
                     insights_size = len(str(video.insights)) if video.insights else 0
                     transcript_size = len(video.transcript) if video.transcript else 0
-                    print(f"AI ANALYZER: 🔍   Video {i+1} ({video.file_name}): insights={insights_size} chars, transcript={transcript_size} chars")
-                
+                    print(
+                        f"AI ANALYZER: 🔍   Video {i + 1} ({video.file_name}): insights={insights_size} chars, transcript={transcript_size} chars"
+                    )
+
                 print("AI ANALYZER: 🔍 === END ERROR CONTEXT ===")
-                
+
                 # PRESERVE METADATA INSTEAD OF DISCARDING DATA
                 if analysis.video_insights:
-                    print("AI ANALYZER: 🔄 ENHANCED ERROR RECOVERY: Preserving video metadata...")
-                    
+                    print(
+                        "AI ANALYZER: 🔄 ENHANCED ERROR RECOVERY: Preserving video metadata..."
+                    )
+
                     retry_analysis = analysis.model_copy(deep=True)
                     for video in retry_analysis.video_insights:
                         # PRESERVE METADATA: Store reference to where full insights would be saved
                         if not video.insights_gcs_uri:
                             # Generate GCS path where full insights would be stored
                             import uuid
+
                             video_entry_id = str(uuid.uuid4())
                             video.insights_gcs_uri = f"gs://findings-video-analysis/{video_entry_id}/full_insights.json"
-                            print(f"AI ANALYZER: 💾 Generated GCS path for {video.file_name}: {video.insights_gcs_uri}")
-                        
+                            print(
+                                f"AI ANALYZER: 💾 Generated GCS path for {video.file_name}: {video.insights_gcs_uri}"
+                            )
+
                         # GENERATE INSIGHTS SUMMARY using existing summarization logic
                         if video.insights and not video.insights_summary:
                             # Create a condensed summary for prompt inclusion (same logic as _apply_video_summarization_strategy)
                             key_objects = video.objects[:5] if video.objects else []
                             key_labels = video.labels[:5] if video.labels else []
-                            
+
                             summary_parts = []
                             if key_objects:
-                                summary_parts.append(f"Key objects detected: {', '.join(key_objects)}")
+                                summary_parts.append(
+                                    f"Key objects detected: {', '.join(key_objects)}"
+                                )
                             if key_labels:
-                                summary_parts.append(f"Content labels: {', '.join(key_labels)}")
+                                summary_parts.append(
+                                    f"Content labels: {', '.join(key_labels)}"
+                                )
                             if video.transcript and len(video.transcript) > 200:
-                                summary_parts.append(f"Transcript excerpt: {video.transcript[:200]}...")
+                                summary_parts.append(
+                                    f"Transcript excerpt: {video.transcript[:200]}..."
+                                )
                             elif video.transcript:
                                 summary_parts.append(f"Transcript: {video.transcript}")
-                            
-                            video.insights_summary = "; ".join(summary_parts) if summary_parts else "Video content available but summarized due to token constraints."
-                            print(f"AI ANALYZER: 💾 Generated summary for {video.file_name}: {len(video.insights_summary)} chars")
-                        
+
+                            video.insights_summary = (
+                                "; ".join(summary_parts)
+                                if summary_parts
+                                else "Video content available but summarized due to token constraints."
+                            )
+                            print(
+                                f"AI ANALYZER: 💾 Generated summary for {video.file_name}: {len(video.insights_summary)} chars"
+                            )
+
                         # CLEAR INSIGHTS TO MINIMAL STATE for token management
                         # Store original insights temporarily (excluded from serialization)
                         if video.insights:
                             video.original_insights = video.insights.copy()
-                        
+
                         # Replace with minimal state that preserves reference to full data
                         video.insights = {
                             "status": "Video analyzed - full details preserved in GCS",
                             "preservation_applied": True,
                             "gcs_reference": video.insights_gcs_uri,
-                            "summary_available": bool(video.insights_summary)
+                            "summary_available": bool(video.insights_summary),
                         }
-                        
-                        print(f"AI ANALYZER: 💾 Preserved metadata for {video.file_name} - full data can be retrieved via {video.insights_gcs_uri}")
-                    
+
+                        print(
+                            f"AI ANALYZER: 💾 Preserved metadata for {video.file_name} - full data can be retrieved via {video.insights_gcs_uri}"
+                        )
+
                     try:
-                        print("AI ANALYZER: 🔄 Building recovery prompt with preserved metadata...")
-                        retry_prompt = await self._build_final_assessment_prompt(retry_analysis)
-                        retry_tokens = self._estimate_prompt_tokens_detailed(retry_prompt)
-                        print(f"AI ANALYZER: 🔄 Recovery prompt tokens: {retry_tokens:,}")
-                        
-                        print("AI ANALYZER: 🔄 Making recovery API call with preserved data...")
-                        raw_assessment = await self._make_openai_request(retry_prompt, model="gpt-4o")
-                        print("AI ANALYZER: ✅ RECOVERY SUCCESSFUL - BadRequestError resolved with metadata preservation")
-                        
+                        print(
+                            "AI ANALYZER: 🔄 Building recovery prompt with preserved metadata..."
+                        )
+                        retry_prompt = await self._build_final_assessment_prompt(
+                            retry_analysis
+                        )
+                        retry_tokens = self._estimate_prompt_tokens_detailed(
+                            retry_prompt
+                        )
+                        print(
+                            f"AI ANALYZER: 🔄 Recovery prompt tokens: {retry_tokens:,}"
+                        )
+
+                        print(
+                            "AI ANALYZER: 🔄 Making recovery API call with preserved data..."
+                        )
+                        raw_assessment = await self._make_openai_request(
+                            retry_prompt, model="gpt-4o"
+                        )
+                        print(
+                            "AI ANALYZER: ✅ RECOVERY SUCCESSFUL - BadRequestError resolved with metadata preservation"
+                        )
+
                         # Update the original analysis with preserved metadata for downstream use
                         for i, video in enumerate(analysis.video_insights):
                             if i < len(retry_analysis.video_insights):
                                 preserved_video = retry_analysis.video_insights[i]
-                                video.insights_gcs_uri = preserved_video.insights_gcs_uri
-                                video.insights_summary = preserved_video.insights_summary
-                                video.original_insights = preserved_video.original_insights
-                        
+                                video.insights_gcs_uri = (
+                                    preserved_video.insights_gcs_uri
+                                )
+                                video.insights_summary = (
+                                    preserved_video.insights_summary
+                                )
+                                video.original_insights = (
+                                    preserved_video.original_insights
+                                )
+
                     except Exception as retry_error:
                         print(f"AI ANALYZER: ❌ RECOVERY FAILED: {retry_error}")
                         print(f"AI ANALYZER: ❌ Original BadRequest: {error_details}")
-                        print(f"AI ANALYZER: ❌ Recovery error: {str(retry_error)}")
-                        raise AIAnalysisError(
+                        print(f"AI ANALYZER: ❌ Recovery error: {retry_error!s}")
+                        msg = (
                             f"Final assessment failed with BadRequestError. "
                             f"Original error: {error_details}. "
                             f"Recovery with metadata preservation also failed: {retry_error}"
                         )
+                        raise AIAnalysisError(
+                            msg
+                        )
                 else:
-                    print("AI ANALYZER: ❌ No video insights to preserve for BadRequestError recovery")
-                    raise AIAnalysisError(f"BadRequestError in final assessment without video data: {error_details}")
-                    
+                    print(
+                        "AI ANALYZER: ❌ No video insights to preserve for BadRequestError recovery"
+                    )
+                    msg = f"BadRequestError in final assessment without video data: {error_details}"
+                    raise AIAnalysisError(
+                        msg
+                    )
+
             except Exception as openai_error:
                 # Handle other OpenAI API errors
                 error_details = str(openai_error)
                 error_type = type(openai_error).__name__
-                print(f"AI ANALYZER: ❌ OpenAI API error ({error_type}) in final assessment: {error_details}")
-                
+                print(
+                    f"AI ANALYZER: ❌ OpenAI API error ({error_type}) in final assessment: {error_details}"
+                )
+
                 # Log prompt details for any API error
                 print(f"AI ANALYZER: 🔍 Prompt length: {len(prompt):,} characters")
-                print(f"AI ANALYZER: 🔍 Estimated tokens: {self._estimate_tokens(prompt):,}")
-                
-                raise AIAnalysisError(f"OpenAI API error ({error_type}) in final assessment: {error_details}")
-            
+                print(
+                    f"AI ANALYZER: 🔍 Estimated tokens: {self._estimate_tokens(prompt):,}"
+                )
+
+                msg = f"OpenAI API error ({error_type}) in final assessment: {error_details}"
+                raise AIAnalysisError(
+                    msg
+                )
+
             if not raw_assessment:
-                raise ValueError("No response received from OpenAI API")
-            
-            print(f"AI ANALYZER: Raw assessment keys: {list(raw_assessment.keys()) if isinstance(raw_assessment, dict) else 'Not a dict'}")
-            
+                msg = "No response received from OpenAI API"
+                raise ValueError(msg)
+
+            print(
+                f"AI ANALYZER: Raw assessment keys: {list(raw_assessment.keys()) if isinstance(raw_assessment, dict) else 'Not a dict'}"
+            )
+
             # Process legal assessment with graceful degradation
             if "legal_assessment" in raw_assessment:
                 print("AI ANALYZER: Processing legal assessment...")
                 legal_assessment_data = raw_assessment["legal_assessment"]
-                
+
                 # Use safe validation with fallback
                 validated_assessment = safe_model_validate(
                     LegalAssessment,
                     legal_assessment_data,
-                    create_fallback_legal_assessment
+                    create_fallback_legal_assessment,
                 )
-                
+
                 if validated_assessment:
                     analysis.legal_assessment = validated_assessment
                     print("AI ANALYZER: ✅ Legal assessment validated successfully")
                 else:
-                    print("AI ANALYZER: ⚠️  Legal assessment validation failed, using fallback")
-                    analysis.legal_assessment = LegalAssessment.model_validate(create_fallback_legal_assessment())
-                    analysis.errors.append(AnalysisError(
-                        source="FinalAssessment",
-                        error_message="Legal assessment validation failed, using fallback data",
-                        details=str(legal_assessment_data)
-                    ))
+                    print(
+                        "AI ANALYZER: ⚠️  Legal assessment validation failed, using fallback"
+                    )
+                    analysis.legal_assessment = LegalAssessment.model_validate(
+                        create_fallback_legal_assessment()
+                    )
+                    analysis.errors.append(
+                        AnalysisError(
+                            source="FinalAssessment",
+                            error_message="Legal assessment validation failed, using fallback data",
+                            details=str(legal_assessment_data),
+                        )
+                    )
             else:
                 print("AI ANALYZER: ⚠️  No legal_assessment in response, using fallback")
-                analysis.legal_assessment = LegalAssessment.model_validate(create_fallback_legal_assessment())
-                analysis.errors.append(AnalysisError(
-                    source="FinalAssessment",
-                    error_message="legal_assessment not found in AI response",
-                    details=str(raw_assessment)
-                ))
-            
+                analysis.legal_assessment = LegalAssessment.model_validate(
+                    create_fallback_legal_assessment()
+                )
+                analysis.errors.append(
+                    AnalysisError(
+                        source="FinalAssessment",
+                        error_message="legal_assessment not found in AI response",
+                        details=str(raw_assessment),
+                    )
+                )
+
             # Process demand letter evaluation with graceful degradation
             if "demand_letter_evaluation" in raw_assessment:
                 print("AI ANALYZER: Processing demand letter evaluation...")
                 demand_eval_data = raw_assessment["demand_letter_evaluation"]
-                
+
                 # Use safe validation with fallback
                 validated_evaluation = safe_model_validate(
                     DemandLetterEvaluation,
                     demand_eval_data,
-                    create_fallback_demand_letter_evaluation
+                    create_fallback_demand_letter_evaluation,
                 )
-                
+
                 if validated_evaluation:
                     analysis.demand_letter_evaluation = validated_evaluation
-                    print("AI ANALYZER: ✅ Demand letter evaluation validated successfully")
+                    print(
+                        "AI ANALYZER: ✅ Demand letter evaluation validated successfully"
+                    )
                 else:
-                    print("AI ANALYZER: ⚠️  Demand letter evaluation validation failed, using fallback")
-                    analysis.demand_letter_evaluation = DemandLetterEvaluation.model_validate(create_fallback_demand_letter_evaluation())
-                    analysis.errors.append(AnalysisError(
-                        source="FinalAssessment",
-                        error_message="Demand letter evaluation validation failed, using fallback data",
-                        details=str(demand_eval_data)
-                    ))
+                    print(
+                        "AI ANALYZER: ⚠️  Demand letter evaluation validation failed, using fallback"
+                    )
+                    analysis.demand_letter_evaluation = (
+                        DemandLetterEvaluation.model_validate(
+                            create_fallback_demand_letter_evaluation()
+                        )
+                    )
+                    analysis.errors.append(
+                        AnalysisError(
+                            source="FinalAssessment",
+                            error_message="Demand letter evaluation validation failed, using fallback data",
+                            details=str(demand_eval_data),
+                        )
+                    )
             else:
-                print("AI ANALYZER: ⚠️  No demand_letter_evaluation in response, using fallback")
-                analysis.demand_letter_evaluation = DemandLetterEvaluation.model_validate(create_fallback_demand_letter_evaluation())
-                analysis.errors.append(AnalysisError(
-                    source="FinalAssessment",
-                    error_message="demand_letter_evaluation not found in AI response",
-                    details=str(raw_assessment)
-                ))
-                
+                print(
+                    "AI ANALYZER: ⚠️  No demand_letter_evaluation in response, using fallback"
+                )
+                analysis.demand_letter_evaluation = (
+                    DemandLetterEvaluation.model_validate(
+                        create_fallback_demand_letter_evaluation()
+                    )
+                )
+                analysis.errors.append(
+                    AnalysisError(
+                        source="FinalAssessment",
+                        error_message="demand_letter_evaluation not found in AI response",
+                        details=str(raw_assessment),
+                    )
+                )
+
         except (AIAnalysisError, ValidationError, ValueError) as e:
             error_msg = f"Final assessment failed: {e}"
             print(f"AI ANALYZER: ❌ {error_msg}")
-            analysis.errors.append(AnalysisError(
-                source="FinalAssessment",
-                error_message=error_msg,
-                details=str(e)
-            ))
-            
+            analysis.errors.append(
+                AnalysisError(
+                    source="FinalAssessment", error_message=error_msg, details=str(e)
+                )
+            )
+
             # Always provide fallback assessments to ensure system continues working
             print("AI ANALYZER: Providing fallback assessments due to error...")
             if not analysis.legal_assessment:
-                analysis.legal_assessment = LegalAssessment.model_validate(create_fallback_legal_assessment())
+                analysis.legal_assessment = LegalAssessment.model_validate(
+                    create_fallback_legal_assessment()
+                )
             if not analysis.demand_letter_evaluation:
-                analysis.demand_letter_evaluation = DemandLetterEvaluation.model_validate(create_fallback_demand_letter_evaluation())
-        
+                analysis.demand_letter_evaluation = (
+                    DemandLetterEvaluation.model_validate(
+                        create_fallback_demand_letter_evaluation()
+                    )
+                )
+
         except Exception as e:
             error_msg = f"Unexpected error in final assessment: {e}"
             print(f"AI ANALYZER: ❌ {error_msg}")
-            analysis.errors.append(AnalysisError(
-                source="FinalAssessment",
-                error_message=error_msg,
-                details=str(e)
-            ))
-            
+            analysis.errors.append(
+                AnalysisError(
+                    source="FinalAssessment", error_message=error_msg, details=str(e)
+                )
+            )
+
             # Emergency fallback to ensure system keeps working
             print("AI ANALYZER: Emergency fallback due to unexpected error...")
-            analysis.legal_assessment = LegalAssessment.model_validate(create_fallback_legal_assessment())
-            analysis.demand_letter_evaluation = DemandLetterEvaluation.model_validate(create_fallback_demand_letter_evaluation())
-            
+            analysis.legal_assessment = LegalAssessment.model_validate(
+                create_fallback_legal_assessment()
+            )
+            analysis.demand_letter_evaluation = DemandLetterEvaluation.model_validate(
+                create_fallback_demand_letter_evaluation()
+            )
+
         print("AI ANALYZER: Final assessment completed")
         return analysis
 
 
-def analyze_video_relevance(video_insight, case_context) -> Dict[str, str]:
+def analyze_video_relevance(video_insight, case_context) -> dict[str, str]:
     """Analyze how video evidence relates to the case facts and legal strategy."""
     try:
         relevance_analysis = {
-            'case_connection': '',
-            'evidence_value': '',
-            'legal_impact': '',
-            'corroboration': ''
+            "case_connection": "",
+            "evidence_value": "",
+            "legal_impact": "",
+            "corroboration": "",
         }
-        
+
         # Extract case context information
-        case_type = getattr(case_context, 'case_type', '') if case_context else ''
-        case_summary = getattr(case_context, 'case_summary', '') if case_context else ''
-        legal_claims = getattr(case_context, 'legal_claims', []) if case_context else []
-        
+        case_type = getattr(case_context, "case_type", "") if case_context else ""
+        getattr(case_context, "case_summary", "") if case_context else ""
+        legal_claims = getattr(case_context, "legal_claims", []) if case_context else []
+
         # Analyze video content for relevance
         video_content = []
-        if hasattr(video_insight, 'insights') and video_insight.insights:
+        if hasattr(video_insight, "insights") and video_insight.insights:
             if isinstance(video_insight.insights, dict):
                 # Extract summary
-                if 'summary' in video_insight.insights:
-                    video_content.append(video_insight.insights['summary'])
-                
+                if "summary" in video_insight.insights:
+                    video_content.append(video_insight.insights["summary"])
+
                 # Extract key events
-                if 'timeline' in video_insight.insights:
-                    timeline = video_insight.insights['timeline']
+                if "timeline" in video_insight.insights:
+                    timeline = video_insight.insights["timeline"]
                     if isinstance(timeline, list):
                         for event in timeline[:3]:  # Limit to top 3 events
                             if isinstance(event, dict):
-                                desc = event.get('event', event.get('description', ''))
+                                desc = event.get("event", event.get("description", ""))
                                 if desc:
                                     video_content.append(desc)
                             elif isinstance(event, str):
                                 video_content.append(event)
-        
+
         # Add transcript content if available
-        if hasattr(video_insight, 'transcript') and video_insight.transcript:
+        if hasattr(video_insight, "transcript") and video_insight.transcript:
             # Use first 200 characters of transcript for analysis
-            transcript_excerpt = video_insight.transcript[:200] + "..." if len(video_insight.transcript) > 200 else video_insight.transcript
+            transcript_excerpt = (
+                video_insight.transcript[:200] + "..."
+                if len(video_insight.transcript) > 200
+                else video_insight.transcript
+            )
             video_content.append(f"Transcript: {transcript_excerpt}")
-        
+
         # Add detected objects/labels for context
         context_items = []
-        if hasattr(video_insight, 'labels') and video_insight.labels:
+        if hasattr(video_insight, "labels") and video_insight.labels:
             context_items.extend(video_insight.labels[:5])  # Top 5 labels
-        if hasattr(video_insight, 'objects') and video_insight.objects:
-            context_items.extend([str(obj) for obj in video_insight.objects[:5]])  # Top 5 objects
-        
+        if hasattr(video_insight, "objects") and video_insight.objects:
+            context_items.extend(
+                [str(obj) for obj in video_insight.objects[:5]]
+            )  # Top 5 objects
+
         # Generate relevance analysis based on content
-        video_summary = '; '.join(video_content[:3]) if video_content else "Video content analysis"
-        context_summary = ', '.join(context_items[:8]) if context_items else "visual evidence"
-        
+        (
+            "; ".join(video_content[:3]) if video_content else "Video content analysis"
+        )
+        context_summary = (
+            ", ".join(context_items[:8]) if context_items else "visual evidence"
+        )
+
         # Case connection analysis
-        if case_type and any(keyword in case_type.lower() for keyword in ['criminal', 'dui', 'arrest']):
-            relevance_analysis['case_connection'] = f"This video directly relates to the {case_type} proceedings, providing visual documentation of key events and interactions that are central to the case."
-        elif case_type and any(keyword in case_type.lower() for keyword in ['property', 'damage', 'inspection']):
-            relevance_analysis['case_connection'] = f"This video provides crucial visual evidence of property conditions and damage relevant to your {case_type} case."
-        elif case_type and any(keyword in case_type.lower() for keyword in ['contract', 'dispute', 'breach']):
-            relevance_analysis['case_connection'] = f"This video documents conditions or events that may support or contradict claims in your {case_type} matter."
+        if case_type and any(
+            keyword in case_type.lower() for keyword in ["criminal", "dui", "arrest"]
+        ):
+            relevance_analysis["case_connection"] = (
+                f"This video directly relates to the {case_type} proceedings, providing visual documentation of key events and interactions that are central to the case."
+            )
+        elif case_type and any(
+            keyword in case_type.lower()
+            for keyword in ["property", "damage", "inspection"]
+        ):
+            relevance_analysis["case_connection"] = (
+                f"This video provides crucial visual evidence of property conditions and damage relevant to your {case_type} case."
+            )
+        elif case_type and any(
+            keyword in case_type.lower()
+            for keyword in ["contract", "dispute", "breach"]
+        ):
+            relevance_analysis["case_connection"] = (
+                f"This video documents conditions or events that may support or contradict claims in your {case_type} matter."
+            )
         else:
-            relevance_analysis['case_connection'] = "This video provides documentary evidence that relates to key facts and circumstances in your legal matter."
-        
+            relevance_analysis["case_connection"] = (
+                "This video provides documentary evidence that relates to key facts and circumstances in your legal matter."
+            )
+
         # Evidence value analysis
         if context_items:
-            relevance_analysis['evidence_value'] = f"The video captures {context_summary}, which can serve as objective evidence to support your position. Video evidence is particularly valuable because it provides an unbiased record of events and conditions."
+            relevance_analysis["evidence_value"] = (
+                f"The video captures {context_summary}, which can serve as objective evidence to support your position. Video evidence is particularly valuable because it provides an unbiased record of events and conditions."
+            )
         else:
-            relevance_analysis['evidence_value'] = "This video provides objective documentation that can be used to establish facts, verify claims, or challenge opposing narratives in your case."
-        
+            relevance_analysis["evidence_value"] = (
+                "This video provides objective documentation that can be used to establish facts, verify claims, or challenge opposing narratives in your case."
+            )
+
         # Legal impact analysis
         if legal_claims:
-            claims_text = ', '.join(legal_claims[:2]) if len(legal_claims) > 2 else ', '.join(legal_claims)
-            relevance_analysis['legal_impact'] = f"This video evidence may strengthen your legal claims regarding {claims_text} by providing visual corroboration of key events. It could be instrumental in settlement negotiations or courtroom presentations."
+            claims_text = (
+                ", ".join(legal_claims[:2])
+                if len(legal_claims) > 2
+                else ", ".join(legal_claims)
+            )
+            relevance_analysis["legal_impact"] = (
+                f"This video evidence may strengthen your legal claims regarding {claims_text} by providing visual corroboration of key events. It could be instrumental in settlement negotiations or courtroom presentations."
+            )
         else:
-            relevance_analysis['legal_impact'] = "This video evidence could significantly impact case strategy by providing compelling visual support for your legal arguments and potentially influencing settlement discussions or jury decisions."
-        
+            relevance_analysis["legal_impact"] = (
+                "This video evidence could significantly impact case strategy by providing compelling visual support for your legal arguments and potentially influencing settlement discussions or jury decisions."
+            )
+
         # Corroboration analysis
         if video_content:
-            relevance_analysis['corroboration'] = "The video content aligns with and supports the factual narrative of your case. It provides independent verification that can corroborate witness testimony and documentary evidence, strengthening the overall evidentiary foundation."
+            relevance_analysis["corroboration"] = (
+                "The video content aligns with and supports the factual narrative of your case. It provides independent verification that can corroborate witness testimony and documentary evidence, strengthening the overall evidentiary foundation."
+            )
         else:
-            relevance_analysis['corroboration'] = "This video serves as independent corroboration that can support witness accounts and documentary evidence, enhancing the credibility and strength of your case presentation."
-        
+            relevance_analysis["corroboration"] = (
+                "This video serves as independent corroboration that can support witness accounts and documentary evidence, enhancing the credibility and strength of your case presentation."
+            )
+
         return relevance_analysis
-        
+
     except Exception as e:
         print(f"AI ANALYZER: Error in video relevance analysis: {e}")
         # Return fallback analysis
         return {
-            'case_connection': "This video provides relevant documentation for your legal matter.",
-            'evidence_value': "Video evidence offers objective documentation that can support your case.",
-            'legal_impact': "This visual evidence may be valuable for case strategy and legal arguments.",
-            'corroboration': "The video can serve as supporting evidence alongside other case materials."
+            "case_connection": "This video provides relevant documentation for your legal matter.",
+            "evidence_value": "Video evidence offers objective documentation that can support your case.",
+            "legal_impact": "This visual evidence may be valuable for case strategy and legal arguments.",
+            "corroboration": "The video can serve as supporting evidence alongside other case materials.",
         }
 
 
-def generate_case_timeline(analysis: CaseAnalysisResult) -> List[Dict[str, Any]]:
+def generate_case_timeline(analysis: CaseAnalysisResult) -> list[dict[str, Any]]:
     """Generate chronological timeline of events extracted from all sources."""
     try:
         timeline_events = []
-        
+
         # Extract events from documents
         if analysis.analyzed_documents:
             for doc in analysis.analyzed_documents:
                 # Look for date patterns in key information and summary
-                text_content = f"{doc.summary} {doc.key_information} {doc.relevance_to_case}"
-                
+                text_content = (
+                    f"{doc.summary} {doc.key_information} {doc.relevance_to_case}"
+                )
+
                 # Simple date extraction (can be enhanced with more sophisticated parsing)
                 import re
+
                 date_patterns = [
-                    r'\b(\d{1,2}/\d{1,2}/\d{4})\b',  # MM/DD/YYYY
-                    r'\b(\d{1,2}-\d{1,2}-\d{4})\b',  # MM-DD-YYYY
-                    r'\b(January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},?\s+\d{4}\b',  # Month DD, YYYY
-                    r'\b(\d{4}-\d{2}-\d{2})\b',  # YYYY-MM-DD
+                    r"\b(\d{1,2}/\d{1,2}/\d{4})\b",  # MM/DD/YYYY
+                    r"\b(\d{1,2}-\d{1,2}-\d{4})\b",  # MM-DD-YYYY
+                    r"\b(January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},?\s+\d{4}\b",  # Month DD, YYYY
+                    r"\b(\d{4}-\d{2}-\d{2})\b",  # YYYY-MM-DD
                 ]
-                
+
                 for pattern in date_patterns:
                     dates = re.findall(pattern, text_content, re.IGNORECASE)
                     for date_match in dates[:3]:  # Limit to 3 dates per document
                         # Extract surrounding context
-                        date_str = date_match if isinstance(date_match, str) else date_match[0] if isinstance(date_match, tuple) else str(date_match)
-                        context_start = max(0, text_content.lower().find(date_str.lower()) - 50)
-                        context_end = min(len(text_content), text_content.lower().find(date_str.lower()) + len(date_str) + 100)
+                        date_str = (
+                            date_match
+                            if isinstance(date_match, str)
+                            else date_match[0]
+                            if isinstance(date_match, tuple)
+                            else str(date_match)
+                        )
+                        context_start = max(
+                            0, text_content.lower().find(date_str.lower()) - 50
+                        )
+                        context_end = min(
+                            len(text_content),
+                            text_content.lower().find(date_str.lower())
+                            + len(date_str)
+                            + 100,
+                        )
                         context = text_content[context_start:context_end].strip()
-                        
-                        timeline_events.append({
-                            'date': date_str,
-                            'source': f"Document: {doc.filename}",
-                            'source_type': 'document',
-                            'event': context,
-                            'importance': 'medium',
-                            'sort_date': _parse_date_for_sorting(date_str)
-                        })
-        
+
+                        timeline_events.append(
+                            {
+                                "date": date_str,
+                                "source": f"Document: {doc.filename}",
+                                "source_type": "document",
+                                "event": context,
+                                "importance": "medium",
+                                "sort_date": _parse_date_for_sorting(date_str),
+                            }
+                        )
+
         # Extract events from video analysis
         if analysis.video_insights:
             for video in analysis.video_insights:
                 video_events = []
-                
+
                 # Extract from video insights
-                if hasattr(video, 'insights') and isinstance(video.insights, dict):
+                if hasattr(video, "insights") and isinstance(video.insights, dict):
                     # Timeline events
-                    if 'timeline' in video.insights and video.insights['timeline']:
-                        timeline_items = video.insights['timeline']
+                    if video.insights.get("timeline"):
+                        timeline_items = video.insights["timeline"]
                         if isinstance(timeline_items, list):
                             for event in timeline_items:
                                 if isinstance(event, dict):
-                                    timestamp = event.get('timestamp', 'Unknown time')
-                                    description = event.get('event', event.get('description', 'Video event'))
-                                    video_events.append({
-                                        'date': f"Video timestamp: {timestamp}",
-                                        'source': f"Video: {video.file_name}",
-                                        'source_type': 'video',
-                                        'event': description,
-                                        'importance': 'high',
-                                        'sort_date': None  # Video timestamps don't have absolute dates
-                                    })
-                    
+                                    timestamp = event.get("timestamp", "Unknown time")
+                                    description = event.get(
+                                        "event", event.get("description", "Video event")
+                                    )
+                                    video_events.append(
+                                        {
+                                            "date": f"Video timestamp: {timestamp}",
+                                            "source": f"Video: {video.file_name}",
+                                            "source_type": "video",
+                                            "event": description,
+                                            "importance": "high",
+                                            "sort_date": None,  # Video timestamps don't have absolute dates
+                                        }
+                                    )
+
                     # Key events
-                    if 'key_events' in video.insights and video.insights['key_events']:
-                        events = video.insights['key_events']
+                    if video.insights.get("key_events"):
+                        events = video.insights["key_events"]
                         if isinstance(events, list):
                             for event in events:
                                 if isinstance(event, str) and event.strip():
-                                    video_events.append({
-                                        'date': 'During video recording',
-                                        'source': f"Video: {video.file_name}",
-                                        'source_type': 'video',
-                                        'event': event.strip(),
-                                        'importance': 'high',
-                                        'sort_date': None
-                                    })
-                
+                                    video_events.append(
+                                        {
+                                            "date": "During video recording",
+                                            "source": f"Video: {video.file_name}",
+                                            "source_type": "video",
+                                            "event": event.strip(),
+                                            "importance": "high",
+                                            "sort_date": None,
+                                        }
+                                    )
+
                 # Criminal analysis events
-                if hasattr(video, 'is_criminal_case') and video.is_criminal_case and hasattr(video, 'criminal_analysis') and video.criminal_analysis:
-                    if hasattr(video.criminal_analysis, 'evidence_items') and video.criminal_analysis.evidence_items:
+                if (
+                    hasattr(video, "is_criminal_case")
+                    and video.is_criminal_case
+                    and hasattr(video, "criminal_analysis")
+                    and video.criminal_analysis
+                ):
+                    if (
+                        hasattr(video.criminal_analysis, "evidence_items")
+                        and video.criminal_analysis.evidence_items
+                    ):
                         for evidence in video.criminal_analysis.evidence_items:
-                            if hasattr(evidence, 'time_range') and hasattr(evidence, 'description'):
+                            if hasattr(evidence, "time_range") and hasattr(
+                                evidence, "description"
+                            ):
                                 timestamp = f"{evidence.time_range.start_time}-{evidence.time_range.end_time}"
-                                video_events.append({
-                                    'date': f"Video timestamp: {timestamp}",
-                                    'source': f"Criminal Video: {video.file_name}",
-                                    'source_type': 'criminal_video',
-                                    'event': f"{evidence.category}: {evidence.description}",
-                                    'importance': 'critical',
-                                    'sort_date': None
-                                })
-                
+                                video_events.append(
+                                    {
+                                        "date": f"Video timestamp: {timestamp}",
+                                        "source": f"Criminal Video: {video.file_name}",
+                                        "source_type": "criminal_video",
+                                        "event": f"{evidence.category}: {evidence.description}",
+                                        "importance": "critical",
+                                        "sort_date": None,
+                                    }
+                                )
+
                 timeline_events.extend(video_events[:5])  # Limit to 5 events per video
-        
+
         # Extract events from audio transcripts
         if analysis.transcripted_media:
             for audio in analysis.transcripted_media:
@@ -1138,87 +1485,108 @@ def generate_case_timeline(analysis: CaseAnalysisResult) -> List[Dict[str, Any]]
                     # Look for time-related phrases in transcript
                     transcript_text = audio.transcript
                     time_phrases = [
-                        'yesterday', 'today', 'tomorrow', 'last week', 'next week',
-                        'last month', 'next month', 'this morning', 'this afternoon',
-                        'this evening', 'last night', 'earlier today'
+                        "yesterday",
+                        "today",
+                        "tomorrow",
+                        "last week",
+                        "next week",
+                        "last month",
+                        "next month",
+                        "this morning",
+                        "this afternoon",
+                        "this evening",
+                        "last night",
+                        "earlier today",
                     ]
-                    
+
                     for phrase in time_phrases:
                         if phrase in transcript_text.lower():
                             # Extract context around the time phrase
                             phrase_index = transcript_text.lower().find(phrase)
                             context_start = max(0, phrase_index - 50)
-                            context_end = min(len(transcript_text), phrase_index + len(phrase) + 100)
+                            context_end = min(
+                                len(transcript_text), phrase_index + len(phrase) + 100
+                            )
                             context = transcript_text[context_start:context_end].strip()
-                            
-                            timeline_events.append({
-                                'date': phrase.title(),
-                                'source': f"Audio: {audio.file_name}",
-                                'source_type': 'audio',
-                                'event': context,
-                                'importance': 'medium',
-                                'sort_date': None
-                            })
+
+                            timeline_events.append(
+                                {
+                                    "date": phrase.title(),
+                                    "source": f"Audio: {audio.file_name}",
+                                    "source_type": "audio",
+                                    "event": context,
+                                    "importance": "medium",
+                                    "sort_date": None,
+                                }
+                            )
                             break  # Only one time reference per audio file
-        
+
         # Sort timeline events
         # First sort by actual dates, then by importance, then by source type
         def sort_key(event):
-            sort_date = event.get('sort_date')
-            importance_order = {'critical': 0, 'high': 1, 'medium': 2, 'low': 3}
-            source_order = {'criminal_video': 0, 'video': 1, 'document': 2, 'audio': 3}
-            
+            sort_date = event.get("sort_date")
+            importance_order = {"critical": 0, "high": 1, "medium": 2, "low": 3}
+            source_order = {"criminal_video": 0, "video": 1, "document": 2, "audio": 3}
+
             return (
                 sort_date is None,  # None dates go to end
-                sort_date or '',
-                importance_order.get(event.get('importance', 'medium'), 2),
-                source_order.get(event.get('source_type', 'document'), 2)
+                sort_date or "",
+                importance_order.get(event.get("importance", "medium"), 2),
+                source_order.get(event.get("source_type", "document"), 2),
             )
-        
+
         timeline_events.sort(key=sort_key)
-        
+
         # Limit to most relevant events
         return timeline_events[:15]  # Return top 15 timeline events
-        
+
     except Exception as e:
         print(f"AI ANALYZER: Error generating timeline: {e}")
         return []
 
 
-def _parse_date_for_sorting(date_str: str) -> Optional[str]:
+def _parse_date_for_sorting(date_str: str) -> str | None:
     """Parse date string into sortable format (YYYY-MM-DD)."""
     try:
-        from datetime import datetime
         import re
-        
+        from datetime import datetime
+
         # Handle various date formats
-        if re.match(r'\d{1,2}/\d{1,2}/\d{4}', date_str):  # MM/DD/YYYY
-            parsed = datetime.strptime(date_str, '%m/%d/%Y')
-            return parsed.strftime('%Y-%m-%d')
-        elif re.match(r'\d{1,2}-\d{1,2}-\d{4}', date_str):  # MM-DD-YYYY
-            parsed = datetime.strptime(date_str, '%m-%d-%Y')
-            return parsed.strftime('%Y-%m-%d')
-        elif re.match(r'\d{4}-\d{2}-\d{2}', date_str):  # YYYY-MM-DD
+        if re.match(r"\d{1,2}/\d{1,2}/\d{4}", date_str):  # MM/DD/YYYY
+            parsed = datetime.strptime(date_str, "%m/%d/%Y")
+            return parsed.strftime("%Y-%m-%d")
+        if re.match(r"\d{1,2}-\d{1,2}-\d{4}", date_str):  # MM-DD-YYYY
+            parsed = datetime.strptime(date_str, "%m-%d-%Y")
+            return parsed.strftime("%Y-%m-%d")
+        if re.match(r"\d{4}-\d{2}-\d{2}", date_str):  # YYYY-MM-DD
             return date_str
-        else:
-            # Try to parse month names
-            months = {
-                'january': '01', 'february': '02', 'march': '03', 'april': '04',
-                'may': '05', 'june': '06', 'july': '07', 'august': '08',
-                'september': '09', 'october': '10', 'november': '11', 'december': '12'
-            }
-            
-            date_lower = date_str.lower()
-            for month_name, month_num in months.items():
-                if month_name in date_lower:
-                    # Extract day and year
-                    numbers = re.findall(r'\d+', date_str)
-                    if len(numbers) >= 2:
-                        day = numbers[0].zfill(2)
-                        year = numbers[1] if len(numbers[1]) == 4 else f"20{numbers[1]}"
-                        return f"{year}-{month_num}-{day}"
-            
-            return None
+        # Try to parse month names
+        months = {
+            "january": "01",
+            "february": "02",
+            "march": "03",
+            "april": "04",
+            "may": "05",
+            "june": "06",
+            "july": "07",
+            "august": "08",
+            "september": "09",
+            "october": "10",
+            "november": "11",
+            "december": "12",
+        }
+
+        date_lower = date_str.lower()
+        for month_name, month_num in months.items():
+            if month_name in date_lower:
+                # Extract day and year
+                numbers = re.findall(r"\d+", date_str)
+                if len(numbers) >= 2:
+                    day = numbers[0].zfill(2)
+                    year = numbers[1] if len(numbers[1]) == 4 else f"20{numbers[1]}"
+                    return f"{year}-{month_num}-{day}"
+
+        return None
     except Exception as e:
         print(f"AI ANALYZER: Error parsing date '{date_str}': {e}")
         return None

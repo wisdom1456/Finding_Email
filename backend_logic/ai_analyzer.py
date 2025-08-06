@@ -1,6 +1,6 @@
 import json
 import asyncio
-from typing import Dict, Any, List, Union, Optional
+from typing import Dict, Any, List, Union
 from tenacity import retry, stop_after_attempt, wait_fixed, retry_if_exception_type
 from openai import RateLimitError, APIError, APITimeoutError, BadRequestError, OpenAI
 from pydantic import ValidationError
@@ -72,23 +72,14 @@ class AIAnalyzer:
             raise AIAnalysisError(f"Error communicating with OpenAI API: {e}")
 
     def _build_intake_prompt(self, content: str) -> str:
-        """Builds the prompt for analyzing an intake form using CLIENT_CLARITY_ADVISOR framework."""
+        """Builds the prompt for analyzing an intake form."""
         return (
             "SYSTEM\n"
-            "You are a CLIENT_CLARITY_ADVISOR - a litigation attorney who emphasizes collaborative, warm, and accessible client partnerships while maintaining legal professionalism.\n\n"
-            "CLIENT_CLARITY_ADVISOR CORE DIRECTIVES:\n"
-            "1. **Collaborative Tone:** Use 'we' language to emphasize partnership\n"
-            "2. **Professional Word Choice:** Select sophisticated yet accessible language\n"
-            "3. **Clean Formatting:** Employ clear structure for easy understanding\n"
-            "4. **Accessibility Focus:** Ensure content is understandable to clients without legal training\n"
-            "5. **Florida Law Exclusive:** Reference ONLY Florida statutes and legal precedents\n"
-            "6. **Warmth with Authority:** Balance approachable tone with demonstrated legal expertise\n\n"
+            "You are a senior litigation attorney performing intake triage.\n"
             "Return **one—and only one—valid JSON object** that matches the\n"
             "`EnhancedIntakeAnalysis` schema below.\n\n"
             "• Do **NOT** wrap the JSON in markdown fences.\n"
-            "• Do **NOT** change key names, add keys, or emit commentary.\n"
-            "• Write summaries and analysis in clear, accessible language (9th-grade reading level)\n"
-            "• Use collaborative language ('we will analyze' rather than 'I will analyze')\n\n"
+            "• Do **NOT** change key names, add keys, or emit commentary.\n\n"
             "==========================\n"
             "SOURCE INTAKE FORM (read-only)\n"
             f"{content}\n"
@@ -123,27 +114,18 @@ class AIAnalyzer:
         )
 
     def _build_case_document_prompt(self, doc: ProcessedDocument, ctx: EnhancedIntakeAnalysis) -> str:
-        """Builds a context-aware prompt for a case document using CLIENT_CLARITY_ADVISOR framework."""
+        """Builds a context-aware prompt for a case document."""
         client_priorities_str = ", ".join(ctx.client_priorities) if ctx.client_priorities else "None specified"
         desired_outcomes_str = ", ".join(ctx.desired_outcomes) if ctx.desired_outcomes else "None specified"
         
         return (
             "SYSTEM\n"
-            "You are a CLIENT_CLARITY_ADVISOR - a litigation attorney who specializes in clear, accessible, and collaborative legal communication while maintaining the highest standards of Florida legal expertise.\n\n"
-            "CLIENT_CLARITY_ADVISOR CORE DIRECTIVES:\n"
-            "1. **Collaborative Tone:** Use 'we' language to emphasize partnership ('we analyzed,' 'our review shows')\n"
-            "2. **Professional Word Choice:** Select sophisticated yet accessible language that builds confidence\n"
-            "3. **Clean Formatting:** Employ clear structure for easy scanning and understanding\n"
-            "4. **Accessibility Focus:** Ensure content is understandable to clients without legal training\n"
-            "5. **Florida Law Exclusive:** Reference ONLY Florida statutes and legal precedents\n"
-            "6. **Warmth with Authority:** Balance approachable tone with demonstrated legal expertise\n\n"
+            "You are a senior litigation attorney with over 15 years of experience specializing in tenant and property disputes. Your analysis must be sharp, strategic, and framed in professional, legally appropriate language.\n"
             "Return **one—and only one—valid JSON object** that matches the\n"
             "`AnalyzedDocument` schema below.\n\n"
             "• JSON only—no markdown, no extra text.\n"
             "• Preserve key order.\n"
-            "• PRIORITIZE analysis elements that directly relate to client's stated priorities and desired outcomes.\n"
-            "• Write all content in clear, accessible language (9th-grade reading level)\n"
-            "• Use collaborative language that emphasizes partnership\n\n"
+            "• PRIORITIZE analysis elements that directly relate to client's stated priorities and desired outcomes.\n\n"
             "==========================\n"
             "DOCUMENT (read-only)\n"
             f"Filename: {doc.file_name}\n"
@@ -181,20 +163,13 @@ class AIAnalyzer:
         )
 
     async def _summarize_media_content(self, content: Union[Dict, str], media_type: str, file_name: str) -> str:
-        """Summarizes media content using CLIENT_CLARITY_ADVISOR approach."""
+        """Summarizes media content using a dedicated AI call."""
         print(f"AI ANALYZER: Summarizing {media_type} for {file_name}")
         prompt = (
             "SYSTEM\n"
-            "You are a CLIENT_CLARITY_ADVISOR paralegal specializing in clear, accessible legal communication. Create a concise summary (100-150 words) of the provided media content that will be easily understood by clients without legal training.\n\n"
-            "CLIENT_CLARITY_ADVISOR PRINCIPLES:\n"
-            "• Use clear, accessible language (9th-grade reading level)\n"
-            "• Focus on actionable details and key facts\n"
-            "• Emphasize collaborative perspective ('we found,' 'our analysis shows')\n"
-            "• Maintain professional authority while being approachable\n"
-            "• Highlight evidence relevant to Florida legal matters\n\n"
+            "You are a paralegal tasked with summarizing media evidence. Create a concise, factual summary (100-150 words) of the provided content. Focus on actionable details, key statements, and visual evidence relevant to a legal case.\n\n"
             f"Provided {media_type} content for {file_name}:\n"
             f"```\n{json.dumps(content, indent=2) if isinstance(content, dict) else content}\n```\n\n"
-            "Create a clear, client-friendly summary that explains what we found in this evidence.\n"
             "BEGIN SUMMARY."
         )
         try:
@@ -385,32 +360,11 @@ class AIAnalyzer:
         return analysis_copy
 
     async def _build_final_assessment_prompt(self, analysis: CaseAnalysisResult) -> str:
-        """Builds the prompt for the final legal assessment, including media summaries, timeline, and video relevance."""
+        """Builds the prompt for the final legal assessment, including media summaries."""
         # Log comprehensive diagnostics about video content
         self._log_video_analysis_diagnostics(analysis)
         
         analysis_for_prompt = analysis.model_copy(deep=True)
-
-        # Generate timeline and video relevance analysis
-        timeline_content = ""
-        video_relevance_content = ""
-        
-        try:
-            # Generate case timeline
-            print("AI ANALYZER: Generating case timeline...")
-            timeline_content = generate_case_timeline(analysis_for_prompt)
-            print(f"AI ANALYZER: ✅ Timeline generated: {len(timeline_content)} characters")
-            
-            # Generate video relevance analysis if videos exist
-            if analysis_for_prompt.video_insights:
-                print("AI ANALYZER: Generating video relevance analysis...")
-                video_relevance_content = analyze_video_relevance(analysis_for_prompt.video_insights[0], analysis_for_prompt.intake_analysis)
-                print(f"AI ANALYZER: ✅ Video relevance analysis generated: {len(str(video_relevance_content))} characters")
-            
-        except Exception as e:
-            print(f"AI ANALYZER: ⚠️ Failed to generate timeline/video relevance: {e}")
-            timeline_content = "Timeline generation encountered an error and was skipped."
-            video_relevance_content = "Video relevance analysis encountered an error and was skipped."
 
         # Create summarization tasks for all media
         summarization_tasks = []
@@ -477,55 +431,12 @@ class AIAnalyzer:
 
         return (
             "SYSTEM\n"
-            "You are a CLIENT_CLARITY_ADVISOR - a senior Florida litigation attorney writing a findings letter to a client using collaborative, warm, and professional communication. Your analysis must be grounded exclusively in Florida law.\n\n"
-            "CLIENT_CLARITY_ADVISOR CORE DIRECTIVES:\n"
-            "1. **Collaborative Tone:** Use 'we' language to emphasize partnership ('we analyzed,' 'our review shows,' 'we recommend')\n"
-            "2. **Professional Word Choice:** Select sophisticated yet accessible language that builds confidence\n"
-            "3. **Clean Formatting:** Employ bullet points, headers, and white space for easy scanning\n"
-            "4. **Accessibility Focus:** Ensure content is understandable to clients without legal training\n"
-            "5. **Florida Law Exclusive:** Reference ONLY Florida statutes, Florida case law, and Florida legal precedents\n"
-            "6. **Warmth with Authority:** Balance approachable tone with demonstrated legal expertise\n\n"
-            "HIGH-STAKES ADVICE PROTOCOL: If recommending counter-intuitive actions, use this format:\n"
-            "• Acknowledge: 'This may seem counterintuitive, but...'\n"
-            "• Explain: Provide clear rationale using Florida law\n"
-            "• Support: Reference specific Florida cases or statutes\n"
-            "• Consequences: Explain both action and inaction outcomes\n"
-            "• Reaffirm: 'We're here to guide you through this complexity'\n\n"
-            "CRITICAL: Reference ONLY Florida statutes (e.g., Florida Statutes § 83.51(1)). Do NOT cite laws from other states or federal law unless explicitly relevant to Florida jurisdiction.\n\n"
-            "Output a single JSON object with exactly two top-level keys: `\"legal_assessment\"` and `\"demand_letter_evaluation\"`—nothing else.\n\n"
+            "You are a senior litigation attorney with over 15 years of experience specializing in tenant and property disputes. Your analysis must be sharp, strategic, and framed in professional, legally appropriate language. Output a single JSON object with exactly two top-level keys: `\"legal_assessment\"` and `\"demand_letter_evaluation\"`—nothing else.\n\n"
             "• JSON only—no markdown, no commentary.\n"
             "• Do not alter key names.\n\n"
             "==========================\n"
-            "CLIENT_CLARITY_ADVISOR EXAMPLE LETTER STYLE:\n\n"
-            "Dear Mr. Price:\n\n"
-            "We hope you are doing well. We wanted to follow up with a summary of our findings after completing our comprehensive review of the timeline and materials you submitted regarding the property located at 2260 Terra Cotta Cove, Apt. 110, Land O Lakes, Florida 34639, including the lease agreement, correspondence, invoices, videos and maintenance-related documentation.\n\n"
-            "As we discussed, your primary concern centers on the prolonged and recurring water intrusion, inadequate remediation efforts, and the resulting conditions that have potentially rendered the unit uninhabitable. The timeline you provided documents multiple reports of water damage and potential mold spanning several months, which we have carefully analyzed under Florida law.\n\n"
-            "You advised that you moved into the unit on or about August 1, 2024, and within days began experiencing issues involving water intrusion in the bedroom after rainfall. Maintenance initially attributed the flooding to improper grading and dug a temporary trench, but subsequent rains continued to result in pooling, wall saturation, and elevated moisture levels.\n\n"
-            "Over the following months, including September and October 2024, water continued to enter the unit. You explained that you submitted multiple maintenance requests and had professional services, such as ServPro, document unsafe moisture levels which could lead to mold development. You relayed that, despite ongoing communication and photographic evidence, the property management team delayed effective repairs, with contractors often failing to complete the necessary work or denying the severity of the problem.\n\n"
-            "Here are the key points of our analysis under Florida law:\n\n"
-            "• We believe the recurring water intrusion and subsequent mold exposure may rise to the level of a constructive eviction, which under Florida law arises when conditions are so intolerable that the tenant is forced to vacate.\n\n"
-            "• Pursuant to Florida Statutes § 83.51(1), landlords are required to maintain rental premises in compliance with building, housing, and health codes, and where no codes apply, in good repair and fit for human habitation.\n\n"
-            "• Our analysis of the evidence supports a potential breach of the implied warranty of habitability, as your timeline and third-party reports confirm the unit is likely unsafe and inadequately maintained under Florida standards.\n\n"
-            "• Your documented efforts to notify management and allow a reasonable opportunity to cure strengthen your position that the landlord could be in violation of lease agreement under Florida landlord-tenant law.\n\n"
-            "At this juncture, we believe the most appropriate course of action is to issue a formal demand letter requesting that the landlord take corrective measures to address the longstanding water intrusion and suspected mold conditions. Specifically, we recommend that you demand the landlord:\n\n"
-            "• Regrade the foundational land surrounding the apartment to prevent further flooding and water intrusion into the unit;\n\n"
-            "• Retain a licensed mold assessor to conduct a full indoor air quality and mold inspection of the premises, with a written assessment report issued to you promptly; and\n\n"
-            "• If the mold assessment confirms the presence of mold, the landlord must retain a licensed mold remediation specialist to perform remediation of all affected areas identified in the assessment report, with all remediation work to be completed no later than fifteen (15) days following the issuance of the mold assessment.\n\n"
-            "We believe this approach may lead to a joint resolution that includes mutual waivers and a clear release of future liability.\n\n"
-            "Please let us know if you would like us to proceed with a draft of the demand letter, or whether you would prefer that we first set a phone call to discuss our review and recommendations for next steps. For your consideration, we have attached a letter outlining the demand letter process, including a detailed explanation of its purpose and what to anticipate upon issuance.\n\n"
-            "We're committed to achieving the best possible outcome for your case.\n\n"
-            "Thank you,\n"
-            "Chevonne Christian, Esq.\n"
-            "Civil Division Attorney\n"
-            "==========================\n\n"
             "COMBINED ANALYSIS (read-only)\n"
             f"{analysis_for_prompt.model_dump_json(indent=2)}\n"
-            "==========================\n\n"
-            "CASE TIMELINE\n"
-            f"{timeline_content}\n"
-            "==========================\n\n"
-            "VIDEO RELEVANCE ANALYSIS\n"
-            f"{video_relevance_content}\n"
             "==========================\n\n"
             "SCHEMAS\n"
             "LegalAssessment:\n"
@@ -533,31 +444,26 @@ class AIAnalyzer:
             '  "case_type": "Case Type",\n'
             '  "claim_viability": "Claim Viability",\n'
             '  "overall_evidence_strength": "Strength",\n'
-            '  "potential_challenges": "A clear description of potential challenges, using bullet points or narrative as appropriate for clarity. Follow the style of the example letter above.",\n'
-            '  "recommended_actions": "Recommended next steps, using bullet points or narrative as appropriate for clarity. Follow the style of the example letter above.",\n'
+            '  "potential_challenges": "A clear description of potential challenges, using bullet points or narrative as appropriate for clarity.",\n'
+            '  "recommended_actions": "Recommended next steps, using bullet points or narrative as appropriate for clarity.",\n'
             '  "demand_letter_appropriate": true,\n'
             '  "urgency_assessment": "Urgency"\n'
             "}\n"
             "DemandLetterEvaluation:\n"
             "{\n"
             '  "is_appropriate": true,\n'
-            '  "reasoning": "Reasoning in the style of the example letter above",\n'
+            '  "reasoning": "Reasoning",\n'
             '  "potential_outcomes": ["Outcome 1"],\n'
-            '  "relevant_statutes": ["Statute 1 - cite only local jurisdiction statutes"]\n'
+            '  "relevant_statutes": ["Statute 1"]\n'
             "}\n"
             "==========================\n\n"
             "CONSTRUCTION RULES\n"
-            "1.  **Follow the example letter style exactly.** Your tone should be clear, concise, and professional like a real attorney communicating with a client.\n"
-            "2.  **Use simple language** that a non-lawyer can easily understand. Avoid overly academic or verbose language.\n"
-            "3.  **Use bullet points** for key findings and recommendations to improve readability, as shown in the example.\n"
-            "4.  **Pay attention to jurisdiction** - cite only relevant local statutes (e.g., Florida Statutes § 83.51(1)). Do NOT invent or misapply laws from other states.\n"
-            '5.  `claim_viability`: pick "Strong", "Moderate", or "Weak".\n'
-            "6.  `demand_letter_appropriate`: true if pre-suit demand adds leverage.\n"
-            '7.  If `demand_letter_evaluation.is_appropriate` is **false**, set\n'
-            '    `"reasoning": ""`, `"potential_outcomes": []`, `"relevant_statutes": []`.\n'
-            "8.  **Timeline Integration**: Consider the chronological timeline of events when assessing case strength and recommended actions.\n"
-            "9.  **Video Evidence Integration**: Factor in the video relevance analysis when evaluating evidence strength and case strategy.\n"
-            "10. **Write directly and to the point** following the professional but accessible style demonstrated in the example letter.\n\n"
+            "1.  **`potential_challenges` and `recommended_actions` should use clear, accessible language.** Use bullet points or narrative format as appropriate for client understanding.\n"
+            "2.  The tone must be authoritative yet accessible, consistent with a client-focused attorney persona.\n"
+            '3.  `claim_viability`: pick “Strong”, “Moderate”, or “Weak”.\n'
+            "4.  `demand_letter_appropriate`: true if pre-suit demand adds leverage.\n"
+            '5.  If `demand_letter_evaluation.is_appropriate` is **false**, set\n'
+            '    `"reasoning": ""`, `"potential_outcomes": []`, `"relevant_statutes": []`.\n\n'
             "VALIDATION\n"
             "• Must parse as JSON.\n"
             "• Floats with two decimals.\n"
@@ -941,284 +847,3 @@ class AIAnalyzer:
             
         print("AI ANALYZER: Final assessment completed")
         return analysis
-
-
-def analyze_video_relevance(video_insight, case_context) -> Dict[str, str]:
-    """Analyze how video evidence relates to the case facts and legal strategy."""
-    try:
-        relevance_analysis = {
-            'case_connection': '',
-            'evidence_value': '',
-            'legal_impact': '',
-            'corroboration': ''
-        }
-        
-        # Extract case context information
-        case_type = getattr(case_context, 'case_type', '') if case_context else ''
-        case_summary = getattr(case_context, 'case_summary', '') if case_context else ''
-        legal_claims = getattr(case_context, 'legal_claims', []) if case_context else []
-        
-        # Analyze video content for relevance
-        video_content = []
-        if hasattr(video_insight, 'insights') and video_insight.insights:
-            if isinstance(video_insight.insights, dict):
-                # Extract summary
-                if 'summary' in video_insight.insights:
-                    video_content.append(video_insight.insights['summary'])
-                
-                # Extract key events
-                if 'timeline' in video_insight.insights:
-                    timeline = video_insight.insights['timeline']
-                    if isinstance(timeline, list):
-                        for event in timeline[:3]:  # Limit to top 3 events
-                            if isinstance(event, dict):
-                                desc = event.get('event', event.get('description', ''))
-                                if desc:
-                                    video_content.append(desc)
-                            elif isinstance(event, str):
-                                video_content.append(event)
-        
-        # Add transcript content if available
-        if hasattr(video_insight, 'transcript') and video_insight.transcript:
-            # Use first 200 characters of transcript for analysis
-            transcript_excerpt = video_insight.transcript[:200] + "..." if len(video_insight.transcript) > 200 else video_insight.transcript
-            video_content.append(f"Transcript: {transcript_excerpt}")
-        
-        # Add detected objects/labels for context
-        context_items = []
-        if hasattr(video_insight, 'labels') and video_insight.labels:
-            context_items.extend(video_insight.labels[:5])  # Top 5 labels
-        if hasattr(video_insight, 'objects') and video_insight.objects:
-            context_items.extend([str(obj) for obj in video_insight.objects[:5]])  # Top 5 objects
-        
-        # Generate relevance analysis based on content
-        video_summary = '; '.join(video_content[:3]) if video_content else "Video content analysis"
-        context_summary = ', '.join(context_items[:8]) if context_items else "visual evidence"
-        
-        # Case connection analysis
-        if case_type and any(keyword in case_type.lower() for keyword in ['criminal', 'dui', 'arrest']):
-            relevance_analysis['case_connection'] = f"This video directly relates to the {case_type} proceedings, providing visual documentation of key events and interactions that are central to the case."
-        elif case_type and any(keyword in case_type.lower() for keyword in ['property', 'damage', 'inspection']):
-            relevance_analysis['case_connection'] = f"This video provides crucial visual evidence of property conditions and damage relevant to your {case_type} case."
-        elif case_type and any(keyword in case_type.lower() for keyword in ['contract', 'dispute', 'breach']):
-            relevance_analysis['case_connection'] = f"This video documents conditions or events that may support or contradict claims in your {case_type} matter."
-        else:
-            relevance_analysis['case_connection'] = f"This video provides documentary evidence that relates to key facts and circumstances in your legal matter."
-        
-        # Evidence value analysis
-        if context_items:
-            relevance_analysis['evidence_value'] = f"The video captures {context_summary}, which can serve as objective evidence to support your position. Video evidence is particularly valuable because it provides an unbiased record of events and conditions."
-        else:
-            relevance_analysis['evidence_value'] = "This video provides objective documentation that can be used to establish facts, verify claims, or challenge opposing narratives in your case."
-        
-        # Legal impact analysis
-        if legal_claims:
-            claims_text = ', '.join(legal_claims[:2]) if len(legal_claims) > 2 else ', '.join(legal_claims)
-            relevance_analysis['legal_impact'] = f"This video evidence may strengthen your legal claims regarding {claims_text} by providing visual corroboration of key events. It could be instrumental in settlement negotiations or courtroom presentations."
-        else:
-            relevance_analysis['legal_impact'] = "This video evidence could significantly impact case strategy by providing compelling visual support for your legal arguments and potentially influencing settlement discussions or jury decisions."
-        
-        # Corroboration analysis
-        if video_content:
-            relevance_analysis['corroboration'] = f"The video content aligns with and supports the factual narrative of your case. It provides independent verification that can corroborate witness testimony and documentary evidence, strengthening the overall evidentiary foundation."
-        else:
-            relevance_analysis['corroboration'] = "This video serves as independent corroboration that can support witness accounts and documentary evidence, enhancing the credibility and strength of your case presentation."
-        
-        return relevance_analysis
-        
-    except Exception as e:
-        print(f"AI ANALYZER: Error in video relevance analysis: {e}")
-        # Return fallback analysis
-        return {
-            'case_connection': "This video provides relevant documentation for your legal matter.",
-            'evidence_value': "Video evidence offers objective documentation that can support your case.",
-            'legal_impact': "This visual evidence may be valuable for case strategy and legal arguments.",
-            'corroboration': "The video can serve as supporting evidence alongside other case materials."
-        }
-
-
-def generate_case_timeline(analysis: CaseAnalysisResult) -> List[Dict[str, Any]]:
-    """Generate chronological timeline of events extracted from all sources."""
-    try:
-        timeline_events = []
-        
-        # Extract events from documents
-        if analysis.analyzed_documents:
-            for doc in analysis.analyzed_documents:
-                # Look for date patterns in key information and summary
-                text_content = f"{doc.summary} {doc.key_information} {doc.relevance_to_case}"
-                
-                # Simple date extraction (can be enhanced with more sophisticated parsing)
-                import re
-                date_patterns = [
-                    r'\b(\d{1,2}/\d{1,2}/\d{4})\b',  # MM/DD/YYYY
-                    r'\b(\d{1,2}-\d{1,2}-\d{4})\b',  # MM-DD-YYYY
-                    r'\b(January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},?\s+\d{4}\b',  # Month DD, YYYY
-                    r'\b(\d{4}-\d{2}-\d{2})\b',  # YYYY-MM-DD
-                ]
-                
-                for pattern in date_patterns:
-                    dates = re.findall(pattern, text_content, re.IGNORECASE)
-                    for date_match in dates[:3]:  # Limit to 3 dates per document
-                        # Extract surrounding context
-                        date_str = date_match if isinstance(date_match, str) else date_match[0] if isinstance(date_match, tuple) else str(date_match)
-                        context_start = max(0, text_content.lower().find(date_str.lower()) - 50)
-                        context_end = min(len(text_content), text_content.lower().find(date_str.lower()) + len(date_str) + 100)
-                        context = text_content[context_start:context_end].strip()
-                        
-                        timeline_events.append({
-                            'date': date_str,
-                            'source': f"Document: {doc.filename}",
-                            'source_type': 'document',
-                            'event': context,
-                            'importance': 'medium',
-                            'sort_date': _parse_date_for_sorting(date_str)
-                        })
-        
-        # Extract events from video analysis
-        if analysis.video_insights:
-            for video in analysis.video_insights:
-                video_events = []
-                
-                # Extract from video insights
-                if hasattr(video, 'insights') and isinstance(video.insights, dict):
-                    # Timeline events
-                    if 'timeline' in video.insights and video.insights['timeline']:
-                        timeline_items = video.insights['timeline']
-                        if isinstance(timeline_items, list):
-                            for event in timeline_items:
-                                if isinstance(event, dict):
-                                    timestamp = event.get('timestamp', 'Unknown time')
-                                    description = event.get('event', event.get('description', 'Video event'))
-                                    video_events.append({
-                                        'date': f"Video timestamp: {timestamp}",
-                                        'source': f"Video: {video.file_name}",
-                                        'source_type': 'video',
-                                        'event': description,
-                                        'importance': 'high',
-                                        'sort_date': None  # Video timestamps don't have absolute dates
-                                    })
-                    
-                    # Key events
-                    if 'key_events' in video.insights and video.insights['key_events']:
-                        events = video.insights['key_events']
-                        if isinstance(events, list):
-                            for event in events:
-                                if isinstance(event, str) and event.strip():
-                                    video_events.append({
-                                        'date': 'During video recording',
-                                        'source': f"Video: {video.file_name}",
-                                        'source_type': 'video',
-                                        'event': event.strip(),
-                                        'importance': 'high',
-                                        'sort_date': None
-                                    })
-                
-                # Criminal analysis events
-                if hasattr(video, 'is_criminal_case') and video.is_criminal_case and hasattr(video, 'criminal_analysis') and video.criminal_analysis:
-                    if hasattr(video.criminal_analysis, 'evidence_items') and video.criminal_analysis.evidence_items:
-                        for evidence in video.criminal_analysis.evidence_items:
-                            if hasattr(evidence, 'time_range') and hasattr(evidence, 'description'):
-                                timestamp = f"{evidence.time_range.start_time}-{evidence.time_range.end_time}"
-                                video_events.append({
-                                    'date': f"Video timestamp: {timestamp}",
-                                    'source': f"Criminal Video: {video.file_name}",
-                                    'source_type': 'criminal_video',
-                                    'event': f"{evidence.category}: {evidence.description}",
-                                    'importance': 'critical',
-                                    'sort_date': None
-                                })
-                
-                timeline_events.extend(video_events[:5])  # Limit to 5 events per video
-        
-        # Extract events from audio transcripts
-        if analysis.transcripted_media:
-            for audio in analysis.transcripted_media:
-                if audio.transcript:
-                    # Look for time-related phrases in transcript
-                    transcript_text = audio.transcript
-                    time_phrases = [
-                        'yesterday', 'today', 'tomorrow', 'last week', 'next week',
-                        'last month', 'next month', 'this morning', 'this afternoon',
-                        'this evening', 'last night', 'earlier today'
-                    ]
-                    
-                    for phrase in time_phrases:
-                        if phrase in transcript_text.lower():
-                            # Extract context around the time phrase
-                            phrase_index = transcript_text.lower().find(phrase)
-                            context_start = max(0, phrase_index - 50)
-                            context_end = min(len(transcript_text), phrase_index + len(phrase) + 100)
-                            context = transcript_text[context_start:context_end].strip()
-                            
-                            timeline_events.append({
-                                'date': phrase.title(),
-                                'source': f"Audio: {audio.file_name}",
-                                'source_type': 'audio',
-                                'event': context,
-                                'importance': 'medium',
-                                'sort_date': None
-                            })
-                            break  # Only one time reference per audio file
-        
-        # Sort timeline events
-        # First sort by actual dates, then by importance, then by source type
-        def sort_key(event):
-            sort_date = event.get('sort_date')
-            importance_order = {'critical': 0, 'high': 1, 'medium': 2, 'low': 3}
-            source_order = {'criminal_video': 0, 'video': 1, 'document': 2, 'audio': 3}
-            
-            return (
-                sort_date is None,  # None dates go to end
-                sort_date or '',
-                importance_order.get(event.get('importance', 'medium'), 2),
-                source_order.get(event.get('source_type', 'document'), 2)
-            )
-        
-        timeline_events.sort(key=sort_key)
-        
-        # Limit to most relevant events
-        return timeline_events[:15]  # Return top 15 timeline events
-        
-    except Exception as e:
-        print(f"AI ANALYZER: Error generating timeline: {e}")
-        return []
-
-
-def _parse_date_for_sorting(date_str: str) -> Optional[str]:
-    """Parse date string into sortable format (YYYY-MM-DD)."""
-    try:
-        from datetime import datetime
-        import re
-        
-        # Handle various date formats
-        if re.match(r'\d{1,2}/\d{1,2}/\d{4}', date_str):  # MM/DD/YYYY
-            parsed = datetime.strptime(date_str, '%m/%d/%Y')
-            return parsed.strftime('%Y-%m-%d')
-        elif re.match(r'\d{1,2}-\d{1,2}-\d{4}', date_str):  # MM-DD-YYYY
-            parsed = datetime.strptime(date_str, '%m-%d-%Y')
-            return parsed.strftime('%Y-%m-%d')
-        elif re.match(r'\d{4}-\d{2}-\d{2}', date_str):  # YYYY-MM-DD
-            return date_str
-        else:
-            # Try to parse month names
-            months = {
-                'january': '01', 'february': '02', 'march': '03', 'april': '04',
-                'may': '05', 'june': '06', 'july': '07', 'august': '08',
-                'september': '09', 'october': '10', 'november': '11', 'december': '12'
-            }
-            
-            date_lower = date_str.lower()
-            for month_name, month_num in months.items():
-                if month_name in date_lower:
-                    # Extract day and year
-                    numbers = re.findall(r'\d+', date_str)
-                    if len(numbers) >= 2:
-                        day = numbers[0].zfill(2)
-                        year = numbers[1] if len(numbers[1]) == 4 else f"20{numbers[1]}"
-                        return f"{year}-{month_num}-{day}"
-            
-            return None
-    except Exception as e:
-        print(f"AI ANALYZER: Error parsing date '{date_str}': {e}")
-        return None

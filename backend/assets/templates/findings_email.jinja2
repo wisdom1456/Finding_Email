@@ -133,7 +133,7 @@
         <div class="header-info">
             <p><strong>Date:</strong> {{ current_date | default('Not Available') }}</p>
             <p><strong>To:</strong> {{ results.analysis.intake_analysis.client_name | default('Not Available') }}</p>
-            <p><strong>From:</strong> {{ results.analysis.intake_analysis.attorney_name | default('Attorney') }}</p>
+            <p><strong>From:</strong> {{ results.analysis.intake_analysis.attorney_name | default('Not Available') }}</p>
             <p><strong>Re:</strong> Case Analysis and Findings</p>
         </div>
 
@@ -143,14 +143,34 @@
             <h2>1. Background Summary</h2>
             <div class="legal-content">
                 {{ results.generated_letter.background_summary | safe }}
+                
+                {# Integrate video evidence content into background when present #}
+                {% if results.analysis.video_insights %}
+                    {% set criminal_evidence_found = false %}
+                    {% for video in results.analysis.video_insights %}
+                        {% if video.is_criminal_case and video.criminal_analysis and video.criminal_analysis.evidence_items %}
+                            {% if not criminal_evidence_found %}
+                                {% set criminal_evidence_found = true %}
+                                <p><strong>Video Evidence Overview:</strong></p>
+                            {% endif %}
+                            
+                            <p><strong>{{ video.file_name }}:</strong> Video evidence contains timestamped documentation relevant to the case. Key evidence categories have been identified and analyzed for legal significance.</p>
+                        {% endif %}
+                    {% endfor %}
+                    
+                    {# Reference to document appendix for detailed analysis #}
+                    {% if criminal_evidence_found or results.analysis.video_insights %}
+                    <p><em>Complete video evidence analysis with detailed timestamps and procedural assessment is available in the Document Appendix, Video Evidence Section.</em></p>
+                    {% endif %}
+                {% endif %}
             </div>
         </div>
         {% endif %}
 
-        <!-- Legal Analysis Section -->
+        <!-- Key Legal Concerns Section -->
         {% if results.generated_letter and results.generated_letter.analysis_and_position %}
         <div class="section">
-            <h2>2. Legal Analysis</h2>
+            <h2>2. Key Legal Concerns</h2>
             <div class="legal-content">
                 {{ results.generated_letter.analysis_and_position | safe }}
             </div>

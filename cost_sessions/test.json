@@ -5,110 +5,75 @@
       {
         "service_name": "OpenAI GPT-4o-mini",
         "operation_type": "document_analysis",
-        "units_consumed": 1453912,
+        "units_consumed": 22680,
         "unit_type": "tokens",
         "rate_per_unit": "1.5E-7",
-        "total_cost": "0.21898680",
-        "file_name": "Notice to Owner.pdf"
+        "total_cost": "0.00430200",
+        "file_name": "08-06-2024 Work Order 698907.pdf"
       },
       {
         "service_name": "OpenAI GPT-4o-mini",
         "operation_type": "document_analysis",
-        "units_consumed": 599851,
+        "units_consumed": 109415,
         "unit_type": "tokens",
         "rate_per_unit": "1.5E-7",
-        "total_cost": "0.09087765",
-        "file_name": "Devlin-LLW Emails.pdf"
+        "total_cost": "0.01731225",
+        "file_name": "Concrobium 1.jpg"
+      },
+      {
+        "service_name": "OpenAI GPT-4o",
+        "operation_type": "document_analysis",
+        "units_consumed": 2661,
+        "unit_type": "tokens",
+        "rate_per_unit": "0.000005",
+        "total_cost": "0.019955",
+        "file_name": "6-24-2025 7 Follow-Up Request Regarding Water Intrusion and Interior Repairs.eml"
       },
       {
         "service_name": "OpenAI GPT-4o-mini",
         "operation_type": "document_analysis",
-        "units_consumed": 1428342,
+        "units_consumed": 68594,
         "unit_type": "tokens",
         "rate_per_unit": "1.5E-7",
-        "total_cost": "0.21515130",
-        "file_name": "Devlin - Rebuild Receipts - May & June.pdf"
+        "total_cost": "0.01118910",
+        "file_name": "Intake (General) - Clifton Price.pdf"
       },
       {
         "service_name": "OpenAI GPT-4o-mini",
         "operation_type": "document_analysis",
-        "units_consumed": 47754,
+        "units_consumed": 35817,
         "unit_type": "tokens",
         "rate_per_unit": "1.5E-7",
-        "total_cost": "0.00806310",
-        "file_name": "Devlin - Project Management Proposal - Hoffar Holdings LLC 6.25.25 (1).pdf"
-      },
-      {
-        "service_name": "OpenAI GPT-4o-mini",
-        "operation_type": "document_analysis",
-        "units_consumed": 660435,
-        "unit_type": "tokens",
-        "rate_per_unit": "1.5E-7",
-        "total_cost": "0.09996525",
-        "file_name": "Devlin - Pictures of How House was Left by Contractor.pdf"
-      },
-      {
-        "service_name": "OpenAI GPT-4o-mini",
-        "operation_type": "document_analysis",
-        "units_consumed": 4065664,
-        "unit_type": "tokens",
-        "rate_per_unit": "1.5E-7",
-        "total_cost": "0.61074960",
-        "file_name": "Devlin - LLW Text Thread.pdf"
-      },
-      {
-        "service_name": "OpenAI GPT-4o-mini",
-        "operation_type": "document_analysis",
-        "units_consumed": 129195,
-        "unit_type": "tokens",
-        "rate_per_unit": "1.5E-7",
-        "total_cost": "0.02027925",
-        "file_name": "Devlin - Intake for Contractor Dispute.pdf"
-      },
-      {
-        "service_name": "OpenAI GPT-4o-mini",
-        "operation_type": "document_analysis",
-        "units_consumed": 161270,
-        "unit_type": "tokens",
-        "rate_per_unit": "1.5E-7",
-        "total_cost": "0.02509050",
-        "file_name": "Devlin - Contract for Construction - Highlighted w Items not Completed 6.9.25.pdf"
-      },
-      {
-        "service_name": "OpenAI GPT-4o-mini",
-        "operation_type": "document_analysis",
-        "units_consumed": 22049,
-        "unit_type": "tokens",
-        "rate_per_unit": "1.5E-7",
-        "total_cost": "0.00420735",
-        "file_name": "Devlin - Certified Letter for Notice to Owner.pdf"
+        "total_cost": "0.00627255",
+        "file_name": "Timeline - Clifton Price.docx"
       }
     ],
-    "estimated_media_costs": [],
-    "total_estimated_cost": "1.29337080",
+    "estimated_media_costs": [
+      {
+        "service_name": "Google Vertex AI Video",
+        "operation_type": "video_processing",
+        "units_consumed": 4,
+        "unit_type": "minutes",
+        "rate_per_unit": "0.10",
+        "total_cost": "0.46548220888773590",
+        "file_name": "06-11-2025 Video 3.MOV"
+      },
+      {
+        "service_name": "Google Vertex AI Gemini-2.5-flash",
+        "operation_type": "video_analysis",
+        "units_consumed": 4500,
+        "unit_type": "tokens",
+        "rate_per_unit": "7.5E-8",
+        "total_cost": "0.001012500",
+        "file_name": "06-11-2025 Video 3.MOV"
+      }
+    ],
+    "total_estimated_cost": "0.52552560888773590",
     "confidence_level": 0.8,
-    "estimation_timestamp": "2025-08-05 23:16:18.080525"
+    "estimation_timestamp": "2025-08-05 02:06:44.625224"
   },
   "actual_costs": {
     "document_analysis_costs": [
-      {
-        "service_name": "OpenAI GPT-4o",
-        "operation_type": "document_analysis",
-        "units_consumed": 468,
-        "unit_type": "tokens",
-        "rate_per_unit": "0.000010",
-        "total_cost": "0.004680",
-        "file_name": "Notice to Owner.pdf"
-      },
-      {
-        "service_name": "OpenAI GPT-4o",
-        "operation_type": "document_analysis",
-        "units_consumed": 542,
-        "unit_type": "tokens",
-        "rate_per_unit": "0.000010",
-        "total_cost": "0.005420",
-        "file_name": "Devlin-LLW Emails.pdf"
-      },
       {
         "service_name": "OpenAI GPT-4o",
         "operation_type": "document_analysis",
@@ -116,25 +81,25 @@
         "unit_type": "tokens",
         "rate_per_unit": "0.000010",
         "total_cost": "0.003980",
-        "file_name": "Devlin - Rebuild Receipts - May & June.pdf"
+        "file_name": "08-06-2024 Work Order 698907.pdf"
       },
       {
         "service_name": "OpenAI GPT-4o",
         "operation_type": "document_analysis",
-        "units_consumed": 482,
+        "units_consumed": 344,
         "unit_type": "tokens",
         "rate_per_unit": "0.000010",
-        "total_cost": "0.004820",
-        "file_name": "Devlin - Project Management Proposal - Hoffar Holdings LLC 6.25.25 (1).pdf"
+        "total_cost": "0.003440",
+        "file_name": "Concrobium 1.jpg"
       },
       {
         "service_name": "OpenAI GPT-4o",
         "operation_type": "document_analysis",
-        "units_consumed": 400,
+        "units_consumed": 390,
         "unit_type": "tokens",
         "rate_per_unit": "0.000010",
-        "total_cost": "0.004000",
-        "file_name": "Devlin - Pictures of How House was Left by Contractor.pdf"
+        "total_cost": "0.003900",
+        "file_name": "6-24-2025 7 Follow-Up Request Regarding Water Intrusion and Interior Repairs.eml"
       },
       {
         "service_name": "OpenAI GPT-4o",
@@ -143,31 +108,32 @@
         "unit_type": "tokens",
         "rate_per_unit": "0.000010",
         "total_cost": "0.004860",
-        "file_name": "Devlin - LLW Text Thread.pdf"
-      },
-      {
-        "service_name": "OpenAI GPT-4o",
-        "operation_type": "document_analysis",
-        "units_consumed": 566,
-        "unit_type": "tokens",
-        "rate_per_unit": "0.000010",
-        "total_cost": "0.005660",
-        "file_name": "Devlin - Contract for Construction - Highlighted w Items not Completed 6.9.25.pdf"
-      },
-      {
-        "service_name": "OpenAI GPT-4o",
-        "operation_type": "document_analysis",
-        "units_consumed": 456,
-        "unit_type": "tokens",
-        "rate_per_unit": "0.000010",
-        "total_cost": "0.004560",
-        "file_name": "Devlin - Certified Letter for Notice to Owner.pdf"
+        "file_name": "Timeline - Clifton Price.docx"
       }
     ],
-    "media_processing_costs": [],
-    "total_actual_cost": "0.037980",
-    "processing_timestamp": "2025-08-05 23:19:30.627704"
+    "media_processing_costs": [
+      {
+        "service_name": "Google Vertex AI Video",
+        "operation_type": "video_processing",
+        "units_consumed": 4,
+        "unit_type": "minutes",
+        "rate_per_unit": "0.10",
+        "total_cost": "0.40476713816324870",
+        "file_name": "06-11-2025 Video 3.MOV"
+      },
+      {
+        "service_name": "Google Vertex AI Gemini-2.5-flash",
+        "operation_type": "video_analysis",
+        "units_consumed": 2500,
+        "unit_type": "tokens",
+        "rate_per_unit": "1.65E-7",
+        "total_cost": "0.000412500",
+        "file_name": "06-11-2025 Video 3.MOV"
+      }
+    ],
+    "total_actual_cost": "0.42135963816324870",
+    "processing_timestamp": "2025-08-05 02:09:50.978787"
   },
-  "cost_variance": -1.2553908,
-  "cost_variance_percentage": -97.06348712990892
+  "cost_variance": -0.1041659707244872,
+  "cost_variance_percentage": -19.821292999393947
 }

@@ -6,19 +6,16 @@ Now tests the backend_logic.email_generator module directly with mocked OpenAI A
 """
 
 import pytest
-import json
-import base64
-from unittest.mock import Mock, AsyncMock, patch, MagicMock
-from openai import RateLimitError, APIError, APITimeoutError
+from unittest.mock import Mock, patch
+from openai import RateLimitError
 from jinja2 import TemplateError
 
 from backend_logic.email_generator import EmailGenerator
-from backend_logic.quality_validator import QualityValidator
 from backend.utils.data_models import (
     CaseAnalysisResult, EmailResponse, EnhancedFindingsLetter,
-    DownloadLink, AnalysisError, GeneratedLetter, QualityScore,
+    DownloadLink, GeneratedLetter, QualityScore,
     EnhancedIntakeAnalysis, AnalyzedDocument, LegalAssessment,
-    DemandLetterEvaluation, FindingsHeader, FindingsFooter
+    DemandLetterEvaluation
 )
 
 

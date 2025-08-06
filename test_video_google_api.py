@@ -30,7 +30,7 @@ load_dotenv()
 project_root = Path(__file__).resolve().parent
 sys.path.append(str(project_root))
 
-from backend_logic.video_processor import VideoProcessor, VideoProcessingError
+from backend_logic.video_processor import VideoProcessor
 from backend.utils.data_models import VideoInsight, MediaProcessingError
 
 
@@ -151,7 +151,7 @@ async def test_single_video_processing(processor, video_file):
             return True
             
         elif isinstance(result, MediaProcessingError):
-            print(f"⚠️  Video processing failed gracefully:")
+            print("⚠️  Video processing failed gracefully:")
             print(f"   📝 Error: {result.error_message}")
             print(f"   🔧 Type: {result.error_type}")
             print(f"   📍 Source: {result.source}")
@@ -200,7 +200,7 @@ async def main():
         
         # Optionally test one more file if available
         if len(video_files) > 1:
-            print(f"\n🔄 Testing with one additional file...")
+            print("\n🔄 Testing with one additional file...")
             second_video = video_files[1] if video_files[1] != smallest_video else video_files[0]
             await test_single_video_processing(processor, second_video)
         

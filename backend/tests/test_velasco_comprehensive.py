@@ -7,7 +7,6 @@ Property flooding/damage case.
 
 import requests
 import json
-import os
 import time
 from datetime import datetime
 from pathlib import Path
@@ -78,12 +77,12 @@ def discover_documents() -> Tuple[str, List[str]]:
             skipped_files.append(f"{file_path.name} (unsupported)")
             print(f"  ❓ {file_path.name} (unsupported)")
     
-    print(f"\n📊 DISCOVERY SUMMARY:")
+    print("\n📊 DISCOVERY SUMMARY:")
     print(f"  ✅ Supported files: {len(supported_files)}")
     print(f"  ⏭️  Skipped files: {len(skipped_files)}")
     
     if skipped_files:
-        print(f"\n📋 Skipped Files:")
+        print("\n📋 Skipped Files:")
         for i, skipped in enumerate(skipped_files, 1):
             print(f"  {i:2d}. {skipped}")
     
@@ -112,7 +111,7 @@ def discover_documents() -> Tuple[str, List[str]]:
     
     # List case documents with descriptions based on names
     if case_documents:
-        print(f"\n📋 Case Documents:")
+        print("\n📋 Case Documents:")
         for i, doc_path in enumerate(case_documents, 1):
             doc_name = Path(doc_path).name
             file_size = Path(doc_path).stat().st_size
@@ -218,12 +217,12 @@ def prepare_test_data() -> List[Tuple[str, Tuple[str, bytes, str]]]:
         if any(term in filename.lower() for term in ['insurance', 'estimate', 'claim']):
             insurance_docs += 1
     
-    print(f"\n📊 File Type Breakdown:")
+    print("\n📊 File Type Breakdown:")
     for ext, info in file_types.items():
         size_mb = info["size"] / 1024 / 1024
         print(f"  {ext}: {info['count']} files ({size_mb:.1f} MB)")
     
-    print(f"\n🏠 Case-Specific Documents:")
+    print("\n🏠 Case-Specific Documents:")
     print(f"  💧 Flooding evidence: {flooding_docs} files")
     print(f"  🏢 Insurance documents: {insurance_docs} files")
     
@@ -237,7 +236,7 @@ def send_request(files_data: List[Tuple[str, Tuple[str, bytes, str]]]) -> Dict[s
     
     print(f"🌐 Endpoint: {API_URL}")
     print(f"📁 Files: {len(files_data)}")
-    print(f"⏱️  Timeout: 300 seconds")
+    print("⏱️  Timeout: 300 seconds")
     print(f"🎯 Case Type: {CASE_TYPE}")
     
     start_time = time.time()
@@ -258,7 +257,7 @@ def send_request(files_data: List[Tuple[str, Tuple[str, bytes, str]]]) -> Dict[s
             return {"error": f"HTTP {response.status_code}", "details": response.text}
             
     except requests.exceptions.Timeout:
-        print(f"⏰ Request timed out after 300 seconds")
+        print("⏰ Request timed out after 300 seconds")
         return {"error": "Timeout", "details": "Request exceeded 300 second timeout"}
     except requests.exceptions.RequestException as e:
         print(f"❌ Request error: {e}")
@@ -280,7 +279,7 @@ def analyze_response(result: Dict[str, Any]) -> Dict[str, Any]:
     has_analysis = "analysis" in result
     has_email = "email" in result
     
-    print(f"📋 Response Structure:")
+    print("📋 Response Structure:")
     print(f"  ✅ Analysis section: {'Yes' if has_analysis else 'No'}")
     print(f"  ✅ Email section: {'Yes' if has_email else 'No'}")
     
@@ -290,7 +289,7 @@ def analyze_response(result: Dict[str, Any]) -> Dict[str, Any]:
         # Intake analysis
         if "intake_analysis" in analysis:
             intake = analysis["intake_analysis"]
-            print(f"\n📄 Intake Analysis:")
+            print("\n📄 Intake Analysis:")
             print(f"  👥 Clients: {intake.get('client_name', 'N/A')}")
             print(f"  ⚖️  Case Type: {intake.get('case_type', 'N/A')}")
             print(f"  🚨 Urgency: {intake.get('urgency_level', 'N/A')}")
@@ -347,7 +346,7 @@ def analyze_response(result: Dict[str, Any]) -> Dict[str, Any]:
         # Legal assessment
         if "legal_assessment" in analysis:
             legal = analysis["legal_assessment"]
-            print(f"\n⚖️  Legal Assessment:")
+            print("\n⚖️  Legal Assessment:")
             print(f"  📊 Claim Viability: {legal.get('claim_viability', 'N/A')}")
             print(f"  📈 Evidence Strength: {legal.get('evidence_strength', 'N/A')}")
             
@@ -377,7 +376,7 @@ def analyze_response(result: Dict[str, Any]) -> Dict[str, Any]:
     if has_email:
         email_response = result["email"]
         
-        print(f"\n📧 Email Generation:")
+        print("\n📧 Email Generation:")
         
         # Download links
         download_links = email_response.get('download_links', [])
@@ -397,7 +396,7 @@ def analyze_response(result: Dict[str, Any]) -> Dict[str, Any]:
         relevant_terms = {term: count for term, count in term_counts.items() if count > 0}
         
         if relevant_terms:
-            print(f"  🔍 Case-Specific Terms Found:")
+            print("  🔍 Case-Specific Terms Found:")
             for term, count in relevant_terms.items():
                 print(f"    • '{term}': {count} mentions")
         
@@ -458,7 +457,7 @@ def main():
     print_banner(f"🧪 COMPREHENSIVE TEST SUITE - {CLIENT_NAME}")
     print(f"📅 Test Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"🎯 Case Type: {CASE_TYPE}")
-    print(f"👥 Multiple Clients: Miguel & Rachael Velasco")
+    print("👥 Multiple Clients: Miguel & Rachael Velasco")
     
     try:
         # Step 1: Prepare test data

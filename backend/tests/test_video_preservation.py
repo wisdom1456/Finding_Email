@@ -1,6 +1,4 @@
 import pytest
-from unittest.mock import MagicMock, AsyncMock, patch
-import json
 
 # Add the project root to the Python path
 import sys
@@ -10,10 +8,7 @@ sys.path.append(str(Path(__file__).resolve().parents[2]))
 from backend.utils.data_models import (
     CaseAnalysisResult,
     EnhancedIntakeAnalysis,
-    VideoInsight,
-    LegalAssessment,
-    DemandLetterEvaluation,
-    GeneratedLetter
+    VideoInsight
 )
 
 
@@ -172,11 +167,6 @@ class TestVideoPreservationStrategy:
             return estimated_tokens
         
         # Test with small video (should pass threshold)
-        small_analysis = CaseAnalysisResult(
-            intake_analysis=sample_intake_analysis,
-            video_insights=[small_video_insight]
-        )
-        
         # Simulate token check for small video
         small_video_content = str(small_video_insight.insights) + small_video_insight.transcript
         small_token_count = simulate_token_count(small_video_content)
@@ -185,11 +175,6 @@ class TestVideoPreservationStrategy:
         print(f"Small video token count: {small_token_count}")
         
         # Test with large video (should exceed threshold)
-        large_analysis = CaseAnalysisResult(
-            intake_analysis=sample_intake_analysis,
-            video_insights=[large_video_insight]
-        )
-        
         # Simulate token check for large video
         large_video_content = str(large_video_insight.insights) + large_video_insight.transcript
         large_token_count = simulate_token_count(large_video_content)

@@ -25,8 +25,7 @@ from backend.utils.data_models import (
     TranscriptedMedia,
     VideoInsight,
     MediaProcessingError,
-    CostEstimate,
-    CostSummary
+    CostEstimate
 )
 from components.budget_sheet import BudgetSheetComponent
 

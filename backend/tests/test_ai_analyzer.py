@@ -12,7 +12,6 @@ from backend.utils.data_models import (
     EnhancedIntakeAnalysis,
     TranscriptedMedia,
     VideoInsight,
-    AnalysisError,
     LegalAssessment,
     DemandLetterEvaluation
 )

@@ -3,7 +3,7 @@ import os
 import tempfile
 import uuid
 import json
-from typing import Optional, Union, List, Dict, Any
+from typing import Optional, Union, Dict, Any
 
 from google.api_core.exceptions import GoogleAPICallError, RetryError
 import vertexai
@@ -21,8 +21,7 @@ from backend.utils.data_models import (
     CriminalEvidenceCategory,
     TimeRange,
     MediaProcessingError,
-    FileMetadata,
-    FileType
+    FileMetadata
 )
 
 
@@ -71,7 +70,7 @@ class VideoProcessor:
             if not bucket.exists():
                 print(f"VIDEO PROCESSOR: 📝 Creating bucket: {self.bucket_name}")
                 self.storage_client.create_bucket(self.bucket_name)
-                print(f"VIDEO PROCESSOR: ✅ Bucket created successfully")
+                print("VIDEO PROCESSOR: ✅ Bucket created successfully")
             else:
                 print(f"VIDEO PROCESSOR: ✅ Using existing bucket: {self.bucket_name}")
         except Exception as e:
@@ -191,7 +190,7 @@ CONSTITUTIONAL FOCUS: Emphasize 4th Amendment (search/seizure), 5th Amendment (s
             # Handle Google Cloud service agent provisioning specifically
             if "Service agents are being provisioned" in error_message:
                 print(f"VIDEO PROCESSOR: ⏳ Google Cloud service agents still provisioning for {file_name}. This is a one-time setup process.")
-                print(f"VIDEO PROCESSOR: 🔄 Will retry with exponential backoff (up to 5 minutes)...")
+                print("VIDEO PROCESSOR: 🔄 Will retry with exponential backoff (up to 5 minutes)...")
                 raise  # Let tenacity handle the retry
             raise VideoProcessingError(f"Vertex AI API call failed for '{file_name}': {e}")
         except Exception as e:
@@ -199,7 +198,7 @@ CONSTITUTIONAL FOCUS: Emphasize 4th Amendment (search/seizure), 5th Amendment (s
             # Handle Google Cloud service agent provisioning for generic exceptions too
             if "Service agents are being provisioned" in error_message:
                 print(f"VIDEO PROCESSOR: ⏳ Google Cloud service agents still provisioning for {file_name}. This is a one-time setup process.")
-                print(f"VIDEO PROCESSOR: 🔄 Will retry with exponential backoff (up to 5 minutes)...")
+                print("VIDEO PROCESSOR: 🔄 Will retry with exponential backoff (up to 5 minutes)...")
                 raise  # Let tenacity handle the retry
             raise VideoProcessingError(f"Vertex AI analysis failed for '{file_name}': {e}")
 
@@ -212,7 +211,7 @@ CONSTITUTIONAL FOCUS: Emphasize 4th Amendment (search/seizure), 5th Amendment (s
             file_extension = os.path.splitext(file_name)[1].lower()
             if file_extension in ['.mov', '.mp4', '.avi', '.mkv', '.webm']:
                 print(f"VIDEO PROCESSOR: ⚠️  Skipping direct audio transcription for video file {file_name}")
-                print(f"VIDEO PROCESSOR: Note: Speech-to-Text API requires pure audio files, not video containers")
+                print("VIDEO PROCESSOR: Note: Speech-to-Text API requires pure audio files, not video containers")
                 return "Audio transcription not available for video files. Consider using Vertex AI's video analysis capabilities."
             
             audio = speech.RecognitionAudio(uri=gcs_uri)
@@ -247,14 +246,14 @@ CONSTITUTIONAL FOCUS: Emphasize 4th Amendment (search/seizure), 5th Amendment (s
         try:
             clean_response = response_text.strip().replace("```json", "").replace("```", "")
             return json.loads(clean_response)
-        except (json.JSONDecodeError, AttributeError) as e:
+        except (json.JSONDecodeError, AttributeError):
             return {"error": "Failed to parse JSON from model.", "raw_response": response_text}
 
     def _parse_criminal_analysis(self, analysis_result: Dict[str, Any]) -> Optional[CriminalVideoAnalysis]:
         """Parse criminal analysis response into structured CriminalVideoAnalysis model."""
         try:
             if "error" in analysis_result:
-                print(f"VIDEO PROCESSOR: ⚠️ Criminal analysis parsing skipped due to API error")
+                print("VIDEO PROCESSOR: ⚠️ Criminal analysis parsing skipped due to API error")
                 return None
 
             evidence_items = []

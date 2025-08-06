@@ -10,8 +10,7 @@ import time
 import asyncio
 import tempfile
 import traceback
-from typing import Dict, List, Any
-from io import BytesIO
+from typing import Dict, Any
 import logging
 
 # Setup logging for our tests
@@ -72,8 +71,6 @@ class ErrorHandlingValidator:
             try:
                 # Try to import and initialize components
                 from openai import OpenAI
-                from backend_logic.ai_analyzer import AIAnalyzer
-                from backend_logic.document_processor import DocumentProcessor
                 
                 # This should fail gracefully
                 try:
@@ -186,7 +183,7 @@ class ErrorHandlingValidator:
         
         start_time = time.time()
         try:
-            from backend_logic.document_processor import DocumentProcessor, DocumentProcessingError
+            from backend_logic.document_processor import DocumentProcessor
             from backend_logic.ai_analyzer import AIAnalyzer
             
             # Test 1: DocumentProcessor with invalid input

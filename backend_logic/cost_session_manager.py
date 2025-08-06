@@ -16,7 +16,6 @@ from backend.utils.data_models import (
     CostEstimate,
     ActualCosts, 
     CostSummary,
-    ServiceCost,
     CaseAnalysisResult,
     ProcessedDocument
 )

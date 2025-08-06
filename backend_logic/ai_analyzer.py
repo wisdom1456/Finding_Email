@@ -244,7 +244,7 @@ class AIAnalyzer:
         overhead_factor = 1.15
         estimated_tokens = int(base_tokens * overhead_factor)
         
-        print(f"AI ANALYZER: 🔍 Token estimation details:")
+        print("AI ANALYZER: 🔍 Token estimation details:")
         print(f"AI ANALYZER: 🔍   - Content length: {len(prompt_content):,} characters")
         print(f"AI ANALYZER: 🔍   - Base tokens: {int(base_tokens):,}")
         print(f"AI ANALYZER: 🔍   - With overhead: {estimated_tokens:,}")
@@ -287,7 +287,7 @@ class AIAnalyzer:
         
         # Estimate token usage from video insights
         if not analysis.video_insights:
-            print(f"AI ANALYZER: 🔍 No video insights, threshold check passed")
+            print("AI ANALYZER: 🔍 No video insights, threshold check passed")
             return True
         
         total_video_tokens = 0
@@ -315,12 +315,12 @@ class AIAnalyzer:
             print(f"AI ANALYZER: ⚠️  Token count exceeds threshold ({total_estimated_tokens:,} > {threshold:,})")
             return False
         else:
-            print(f"AI ANALYZER: ✅ Token count within threshold")
+            print("AI ANALYZER: ✅ Token count within threshold")
             return True
 
     def _apply_video_summarization_strategy(self, analysis: CaseAnalysisResult) -> CaseAnalysisResult:
         """Apply summarization strategy when token threshold is exceeded."""
-        print(f"AI ANALYZER: 🔄 Token count exceeds threshold. Triggering summarization strategy.")
+        print("AI ANALYZER: 🔄 Token count exceeds threshold. Triggering summarization strategy.")
         
         analysis_copy = analysis.model_copy(deep=True)
         
@@ -452,9 +452,9 @@ class AIAnalyzer:
             SAFE_TOKEN_LIMIT = 120000
             
             if estimated_tokens > SAFE_TOKEN_LIMIT:
-                print(f"AI ANALYZER: ⚠️  PROMPT SIZE VALIDATION FAILED")
+                print("AI ANALYZER: ⚠️  PROMPT SIZE VALIDATION FAILED")
                 print(f"AI ANALYZER: ⚠️  Estimated tokens: {estimated_tokens:,} > limit: {SAFE_TOKEN_LIMIT:,}")
-                print(f"AI ANALYZER: 🔄 Applying aggressive video content truncation...")
+                print("AI ANALYZER: 🔄 Applying aggressive video content truncation...")
                 
                 # Apply aggressive truncation
                 analysis_for_prompt = self._truncate_video_content_aggressively(analysis_for_prompt, SAFE_TOKEN_LIMIT)
@@ -603,7 +603,7 @@ class AIAnalyzer:
             
             # Add delay between requests to respect rate limits
             if i < total_docs:  # Don't delay after the last document
-                print(f"AI ANALYZER: Waiting 3 seconds before next document...")
+                print("AI ANALYZER: Waiting 3 seconds before next document...")
                 await asyncio.sleep(3)
         
         print(f"AI ANALYZER: Completed analysis of all {total_docs} documents")
@@ -728,13 +728,13 @@ class AIAnalyzer:
             except BadRequestError as bad_request_error:
                 # ENHANCED ERROR RECOVERY WITH METADATA PRESERVATION
                 error_details = str(bad_request_error)
-                print(f"AI ANALYZER: ❌ BADREQUEST ERROR DETECTED in final assessment")
+                print("AI ANALYZER: ❌ BADREQUEST ERROR DETECTED in final assessment")
                 print(f"AI ANALYZER: 🔍 Error details: {error_details}")
                 print(f"AI ANALYZER: 🔍 Prompt character count: {len(prompt):,}")
                 print(f"AI ANALYZER: 🔍 Video insights count: {len(analysis.video_insights)}")
                 
                 # LOG THE ERROR WITH DETAILED CONTEXT
-                print(f"AI ANALYZER: 🔍 === BADREQUEST ERROR CONTEXT ===")
+                print("AI ANALYZER: 🔍 === BADREQUEST ERROR CONTEXT ===")
                 print(f"AI ANALYZER: 🔍 Model: {model_to_use}")
                 print(f"AI ANALYZER: 🔍 Estimated tokens: {estimated_tokens:,}")
                 print(f"AI ANALYZER: 🔍 Analysis has {len(analysis.analyzed_documents)} documents")
@@ -747,11 +747,11 @@ class AIAnalyzer:
                     transcript_size = len(video.transcript) if video.transcript else 0
                     print(f"AI ANALYZER: 🔍   Video {i+1} ({video.file_name}): insights={insights_size} chars, transcript={transcript_size} chars")
                 
-                print(f"AI ANALYZER: 🔍 === END ERROR CONTEXT ===")
+                print("AI ANALYZER: 🔍 === END ERROR CONTEXT ===")
                 
                 # PRESERVE METADATA INSTEAD OF DISCARDING DATA
                 if analysis.video_insights:
-                    print(f"AI ANALYZER: 🔄 ENHANCED ERROR RECOVERY: Preserving video metadata...")
+                    print("AI ANALYZER: 🔄 ENHANCED ERROR RECOVERY: Preserving video metadata...")
                     
                     retry_analysis = analysis.model_copy(deep=True)
                     for video in retry_analysis.video_insights:
@@ -798,14 +798,14 @@ class AIAnalyzer:
                         print(f"AI ANALYZER: 💾 Preserved metadata for {video.file_name} - full data can be retrieved via {video.insights_gcs_uri}")
                     
                     try:
-                        print(f"AI ANALYZER: 🔄 Building recovery prompt with preserved metadata...")
+                        print("AI ANALYZER: 🔄 Building recovery prompt with preserved metadata...")
                         retry_prompt = await self._build_final_assessment_prompt(retry_analysis)
                         retry_tokens = self._estimate_prompt_tokens_detailed(retry_prompt)
                         print(f"AI ANALYZER: 🔄 Recovery prompt tokens: {retry_tokens:,}")
                         
-                        print(f"AI ANALYZER: 🔄 Making recovery API call with preserved data...")
+                        print("AI ANALYZER: 🔄 Making recovery API call with preserved data...")
                         raw_assessment = await self._make_openai_request(retry_prompt, model="gpt-4o")
-                        print(f"AI ANALYZER: ✅ RECOVERY SUCCESSFUL - BadRequestError resolved with metadata preservation")
+                        print("AI ANALYZER: ✅ RECOVERY SUCCESSFUL - BadRequestError resolved with metadata preservation")
                         
                         # Update the original analysis with preserved metadata for downstream use
                         for i, video in enumerate(analysis.video_insights):
@@ -825,7 +825,7 @@ class AIAnalyzer:
                             f"Recovery with metadata preservation also failed: {retry_error}"
                         )
                 else:
-                    print(f"AI ANALYZER: ❌ No video insights to preserve for BadRequestError recovery")
+                    print("AI ANALYZER: ❌ No video insights to preserve for BadRequestError recovery")
                     raise AIAnalysisError(f"BadRequestError in final assessment without video data: {error_details}")
                     
             except Exception as openai_error:
@@ -1003,7 +1003,7 @@ def analyze_video_relevance(video_insight, case_context) -> Dict[str, str]:
         elif case_type and any(keyword in case_type.lower() for keyword in ['contract', 'dispute', 'breach']):
             relevance_analysis['case_connection'] = f"This video documents conditions or events that may support or contradict claims in your {case_type} matter."
         else:
-            relevance_analysis['case_connection'] = f"This video provides documentary evidence that relates to key facts and circumstances in your legal matter."
+            relevance_analysis['case_connection'] = "This video provides documentary evidence that relates to key facts and circumstances in your legal matter."
         
         # Evidence value analysis
         if context_items:
@@ -1020,7 +1020,7 @@ def analyze_video_relevance(video_insight, case_context) -> Dict[str, str]:
         
         # Corroboration analysis
         if video_content:
-            relevance_analysis['corroboration'] = f"The video content aligns with and supports the factual narrative of your case. It provides independent verification that can corroborate witness testimony and documentary evidence, strengthening the overall evidentiary foundation."
+            relevance_analysis['corroboration'] = "The video content aligns with and supports the factual narrative of your case. It provides independent verification that can corroborate witness testimony and documentary evidence, strengthening the overall evidentiary foundation."
         else:
             relevance_analysis['corroboration'] = "This video serves as independent corroboration that can support witness accounts and documentary evidence, enhancing the credibility and strength of your case presentation."
         

@@ -1,5 +1,5 @@
 import fitz  # PyMuPDF
-from ..data_models import ProcessedDocument, DocumentType, FileType, SavedDocument
+from ..data_models import ProcessedDocument, DocumentType, FileType
 import mimetypes
 
 async def process_pdf(file_path: str, document_type: DocumentType, original_filename: str) -> ProcessedDocument:

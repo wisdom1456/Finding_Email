@@ -10,7 +10,6 @@ from pathlib import Path
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 import requests
 import json
-import os
 import time
 from datetime import datetime
 from pathlib import Path
@@ -211,7 +210,7 @@ def send_request(files_data: List[Tuple[str, Tuple[str, bytes, str]]]) -> Dict[s
     
     print(f"🌐 Endpoint: {API_URL}")
     print(f"📁 Files: {len(files_data)}")
-    print(f"⏱️  Timeout: 300 seconds")
+    print("⏱️  Timeout: 300 seconds")
     
     start_time = time.time()
     
@@ -231,7 +230,7 @@ def send_request(files_data: List[Tuple[str, Tuple[str, bytes, str]]]) -> Dict[s
             return {"error": f"HTTP {response.status_code}", "details": response.text}
             
     except requests.exceptions.Timeout:
-        print(f"⏰ Request timed out after 300 seconds")
+        print("⏰ Request timed out after 300 seconds")
         return {"error": "Timeout", "details": "Request exceeded 300 second timeout"}
     except requests.exceptions.RequestException as e:
         print(f"❌ Request error: {e}")
@@ -411,9 +410,9 @@ def analyze_and_save(result: Dict[str, Any]) -> None:
                 f.write(email_content)
             print(f"📧 Email content saved: {email_file.name}")
         except TypeError:
-            print(f"⚠️  Could not save email content because it is not a string.")
+            print("⚠️  Could not save email content because it is not a string.")
     
-    print(f"\n\n-LL-ANALYSIS-COMPLETE-\n")
+    print("\n\n-LL-ANALYSIS-COMPLETE-\n")
     
     if validation_results["overall_status"] == "FAIL":
         print("\n❌ VALIDATION FAILED")

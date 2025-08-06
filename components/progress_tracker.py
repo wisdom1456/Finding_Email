@@ -2,7 +2,6 @@
 Enhanced component for tracking processing status with detailed feedback.
 """
 import streamlit as st
-from typing import Dict, List, Optional
 import time
 
 class AdvancedProgressTracker:

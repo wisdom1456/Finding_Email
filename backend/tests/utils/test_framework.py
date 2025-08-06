@@ -4,7 +4,6 @@ Reusable Test Framework for Comprehensive Case Analysis
 """
 import requests
 import json
-import os
 import time
 import yaml
 from datetime import datetime

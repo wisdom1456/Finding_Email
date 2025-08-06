@@ -1,5 +1,4 @@
-from ..data_models import ProcessedDocument, DocumentType, FileType, SavedDocument
-import email
+from ..data_models import ProcessedDocument, DocumentType, FileType
 from email import policy
 from email.parser import BytesParser
 import mimetypes

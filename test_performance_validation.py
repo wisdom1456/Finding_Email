@@ -12,8 +12,7 @@ import tempfile
 import traceback
 import psutil
 import gc
-from typing import Dict, List, Any, Tuple
-from io import BytesIO
+from typing import Dict, Any
 import logging
 
 # Setup logging for our tests
@@ -485,7 +484,7 @@ def main():
             print(f"\n⚠️  Performance issues detected: {', '.join(critical_issues)}")
             sys.exit(1)
         else:
-            print(f"\n🎉 All performance tests completed successfully!")
+            print("\n🎉 All performance tests completed successfully!")
             sys.exit(0)
             
     except Exception as e:

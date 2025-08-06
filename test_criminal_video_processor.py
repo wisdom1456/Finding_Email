@@ -4,15 +4,12 @@ Test script for the enhanced criminal video processor functionality.
 Validates that the video processor correctly handles criminal case analysis.
 """
 
-import asyncio
 import os
 from backend_logic.video_processor import VideoProcessor
-from backend.utils.data_models import EnhancedVideoInsight, CriminalVideoAnalysis
 
 def test_criminal_prompt_generation():
     """Test that criminal analysis prompts are properly generated."""
     # Test the criminal prompt directly by accessing the method
-    from backend_logic.video_processor import VideoProcessor
     
     # Create a mock instance without calling __init__
     temp_instance = object.__new__(VideoProcessor)
@@ -27,7 +24,6 @@ def test_criminal_prompt_generation():
 def test_standard_prompt_generation():
     """Test that standard analysis prompts work as before."""
     # Test the standard prompt directly by accessing the method
-    from backend_logic.video_processor import VideoProcessor
     
     # Create a mock instance without calling __init__
     temp_instance = object.__new__(VideoProcessor)
@@ -40,7 +36,6 @@ def test_standard_prompt_generation():
 
 def test_criminal_analysis_parsing():
     """Test parsing of criminal analysis responses."""
-    from backend_logic.video_processor import VideoProcessor
     
     # Create a mock instance without calling __init__
     temp_instance = object.__new__(VideoProcessor)
@@ -77,7 +72,6 @@ def test_criminal_analysis_parsing():
 
 def test_error_handling():
     """Test error handling in criminal analysis parsing."""
-    from backend_logic.video_processor import VideoProcessor
     
     # Create a mock instance without calling __init__
     temp_instance = object.__new__(VideoProcessor)
@@ -92,7 +86,6 @@ def test_backward_compatibility():
     """Test that non-criminal processing remains unchanged."""
     # This test would require actual video processing, so we'll just verify
     # that the method signatures support backward compatibility
-    from backend_logic.video_processor import VideoProcessor
     import inspect
     
     # Check process_video_file signature without initializing

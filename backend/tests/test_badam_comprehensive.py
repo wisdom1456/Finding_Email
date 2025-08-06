@@ -6,7 +6,6 @@ Tests the full document analysis pipeline with all available client documents.
 
 import requests
 import json
-import os
 import time
 from datetime import datetime
 from pathlib import Path
@@ -192,7 +191,7 @@ def send_request(files_data: List[Tuple[str, Tuple[str, bytes, str]]]) -> Dict[s
     
     print(f"🌐 Endpoint: {API_URL}")
     print(f"📁 Files: {len(files_data)}")
-    print(f"⏱️  Timeout: 300 seconds")
+    print("⏱️  Timeout: 300 seconds")
     
     start_time = time.time()
     
@@ -212,7 +211,7 @@ def send_request(files_data: List[Tuple[str, Tuple[str, bytes, str]]]) -> Dict[s
             return {"error": f"HTTP {response.status_code}", "details": response.text}
             
     except requests.exceptions.Timeout:
-        print(f"⏰ Request timed out after 300 seconds")
+        print("⏰ Request timed out after 300 seconds")
         return {"error": "Timeout", "details": "Request exceeded 300 second timeout"}
     except requests.exceptions.RequestException as e:
         print(f"❌ Request error: {e}")
@@ -234,7 +233,7 @@ def analyze_response(result: Dict[str, Any]) -> Dict[str, Any]:
     has_analysis = "analysis" in result
     has_email = "email" in result
     
-    print(f"📋 Response Structure:")
+    print("📋 Response Structure:")
     print(f"  ✅ Analysis section: {'Yes' if has_analysis else 'No'}")
     print(f"  ✅ Email section: {'Yes' if has_email else 'No'}")
     
@@ -244,7 +243,7 @@ def analyze_response(result: Dict[str, Any]) -> Dict[str, Any]:
         # Intake analysis
         if "intake_analysis" in analysis:
             intake = analysis["intake_analysis"]
-            print(f"\n📄 Intake Analysis:")
+            print("\n📄 Intake Analysis:")
             print(f"  👤 Client: {intake.get('client_name', 'N/A')}")
             print(f"  ⚖️  Case Type: {intake.get('case_type', 'N/A')}")
             print(f"  🚨 Urgency: {intake.get('urgency_level', 'N/A')}")
@@ -279,7 +278,7 @@ def analyze_response(result: Dict[str, Any]) -> Dict[str, Any]:
         # Legal assessment
         if "legal_assessment" in analysis:
             legal = analysis["legal_assessment"]
-            print(f"\n⚖️  Legal Assessment:")
+            print("\n⚖️  Legal Assessment:")
             print(f"  📊 Claim Viability: {legal.get('claim_viability', 'N/A')}")
             print(f"  📈 Evidence Strength: {legal.get('evidence_strength', 'N/A')}")
             
@@ -300,7 +299,7 @@ def analyze_response(result: Dict[str, Any]) -> Dict[str, Any]:
     if has_email:
         email_response = result["email"]
         
-        print(f"\n📧 Email Generation:")
+        print("\n📧 Email Generation:")
         
         # Download links
         download_links = email_response.get('download_links', [])

@@ -6,19 +6,14 @@ audio transcription, and video processing based on current API pricing rates
 and file characteristics.
 """
 
-import os
-import math
 from decimal import Decimal
-from typing import List, Dict, Any, Optional, Tuple
+from typing import List, Dict, Any
 from datetime import datetime
 
 from backend.utils.data_models import (
     ProcessedDocument, 
-    TranscriptedMedia, 
-    VideoInsight,
     ServiceCost, 
-    CostEstimate,
-    FileType
+    CostEstimate
 )
 
 

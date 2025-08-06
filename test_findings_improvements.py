@@ -9,10 +9,8 @@ Tests all the major changes implemented:
 5. Email template integration
 """
 
-import asyncio
 import sys
 import os
-from typing import Dict, Any, List
 from unittest.mock import MagicMock
 
 # Add the project root to Python path
@@ -28,7 +26,6 @@ from backend.utils.data_models import (
     DemandLetterEvaluation
 )
 from backend_logic.email_generator import EmailGenerator
-from unittest.mock import MagicMock
 
 def create_mock_video_insight() -> VideoInsight:
     """Create a mock video insight for testing."""

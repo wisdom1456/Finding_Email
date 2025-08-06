@@ -1,23 +1,4 @@
-import base64
-import re
-import os
-from typing import List, Optional, Dict, Any
-from openai import OpenAI, RateLimitError, APIError, APITimeoutError
-from jinja2 import Environment, FileSystemLoader, select_autoescape, TemplateError
-from datetime import datetime
-from tenacity import retry, stop_after_attempt, wait_fixed, retry_if_exception_type
 
-from backend.utils.data_models import (
-    CaseAnalysisResult,
-    EmailResponse,
-    EnhancedFindingsLetter,
-    DownloadLink,
-    AnalysisError,
-    FindingsHeader,
-    FindingsFooter,
-    GeneratedLetter,
-)
-from backend_logic.quality_validator import QualityValidator
 
 # BACKUP OF ORIGINAL PERSONA CONSTANTS (before CLIENT_CLARITY_ADVISOR implementation)
 ORIGINAL_CLIENT_DIRECTED_PERSONA = """

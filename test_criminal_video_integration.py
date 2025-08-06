@@ -1,8 +1,6 @@
 import pytest
 import asyncio
-from unittest.mock import MagicMock, AsyncMock, patch
-import json
-from datetime import datetime
+from unittest.mock import MagicMock, patch
 from pathlib import Path
 import sys
 
@@ -19,13 +17,9 @@ from backend.utils.data_models import (
     CriminalEvidenceCategory,
     TimeRange,
     EvidenceStrength,
-    LegalAssessment,
-    DemandLetterEvaluation,
-    GeneratedLetter
+    LegalAssessment
 )
-from backend_logic.video_processor import VideoProcessor
 from backend_logic.email_generator import EmailGenerator
-from backend_logic.ai_analyzer import AIAnalyzer
 from openai import OpenAI
 
 

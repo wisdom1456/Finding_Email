@@ -6,7 +6,6 @@ for all data flowing through the legal document analysis system.
 """
 
 import pytest
-from typing import List, Dict, Any
 from pydantic import ValidationError
 
 from backend.utils.data_models import (
@@ -22,7 +21,7 @@ from backend.utils.data_models import (
     
     # Email models
     GeneratedLetter, FindingsHeader, FindingsFooter,
-    EnhancedFindingsLetter, DownloadLink, QualityScore, EmailResponse,
+    DownloadLink, QualityScore, EmailResponse,
     
     # Top-level models
     CaseResults, SavedDocument

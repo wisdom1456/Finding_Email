@@ -7,7 +7,6 @@ Water intrusion/property maintenance case.
 
 import requests
 import json
-import os
 import time
 from datetime import datetime
 from pathlib import Path
@@ -74,7 +73,7 @@ def discover_documents() -> Tuple[str, List[str]]:
         "Work Orders"
     ]
     
-    print(f"📂 Scanning client document folders...")
+    print("📂 Scanning client document folders...")
     
     total_files = 0
     supported_files = 0
@@ -103,13 +102,13 @@ def discover_documents() -> Tuple[str, List[str]]:
         else:
             print(f"⚠️  Folder not found: {folder_name}")
     
-    print(f"\n📊 DISCOVERY SUMMARY:")
+    print("\n📊 DISCOVERY SUMMARY:")
     print(f"  📁 Total files found: {total_files}")
     print(f"  ✅ Supported files: {supported_files}")
     print(f"  ⏭️  Skipped files: {len(skipped_files)}")
     
     if skipped_files:
-        print(f"\n📋 Skipped Files:")
+        print("\n📋 Skipped Files:")
         for i, skipped in enumerate(skipped_files[:10], 1):  # Show first 10
             print(f"  {i:2d}. {skipped}")
         if len(skipped_files) > 10:
@@ -126,7 +125,7 @@ def discover_documents() -> Tuple[str, List[str]]:
             doc_types[folder] = []
         doc_types[folder].append(Path(doc_path).name)
     
-    print(f"\n📋 Documents by Category:")
+    print("\n📋 Documents by Category:")
     for folder, files in doc_types.items():
         print(f"  📁 {folder}: {len(files)} files")
         for file in files[:3]:  # Show first 3 files
@@ -210,7 +209,7 @@ def prepare_test_data() -> List[Tuple[str, Tuple[str, bytes, str]]]:
         file_types[ext]["size"] += len(content)
         total_size += len(content)
     
-    print(f"\n📊 File Type Breakdown:")
+    print("\n📊 File Type Breakdown:")
     for ext, info in file_types.items():
         size_mb = info["size"] / 1024 / 1024
         print(f"  {ext}: {info['count']} files ({size_mb:.1f} MB)")
@@ -225,7 +224,7 @@ def send_request(files_data: List[Tuple[str, Tuple[str, bytes, str]]]) -> Dict[s
     
     print(f"🌐 Endpoint: {API_URL}")
     print(f"📁 Files: {len(files_data)}")
-    print(f"⏱️  Timeout: None (unlimited)")
+    print("⏱️  Timeout: None (unlimited)")
     print(f"🎯 Case Type: {CASE_TYPE}")
     
     start_time = time.time()
@@ -246,7 +245,7 @@ def send_request(files_data: List[Tuple[str, Tuple[str, bytes, str]]]) -> Dict[s
             return {"error": f"HTTP {response.status_code}", "details": response.text}
             
     except requests.exceptions.Timeout:
-        print(f"⏰ Request timed out (this should not happen with timeout=None)")
+        print("⏰ Request timed out (this should not happen with timeout=None)")
         return {"error": "Timeout", "details": "Unexpected timeout occurred"}
     except requests.exceptions.RequestException as e:
         print(f"❌ Request error: {e}")
@@ -268,7 +267,7 @@ def analyze_response(result: Dict[str, Any]) -> Dict[str, Any]:
     has_analysis = "analysis" in result
     has_email = "email" in result
     
-    print(f"📋 Response Structure:")
+    print("📋 Response Structure:")
     print(f"  ✅ Analysis section: {'Yes' if has_analysis else 'No'}")
     print(f"  ✅ Email section: {'Yes' if has_email else 'No'}")
     
@@ -278,7 +277,7 @@ def analyze_response(result: Dict[str, Any]) -> Dict[str, Any]:
         # Intake analysis
         if "intake_analysis" in analysis:
             intake = analysis["intake_analysis"]
-            print(f"\n📄 Intake Analysis:")
+            print("\n📄 Intake Analysis:")
             print(f"  👤 Client: {intake.get('client_name', 'N/A')}")
             print(f"  ⚖️  Case Type: {intake.get('case_type', 'N/A')}")
             print(f"  🚨 Urgency: {intake.get('urgency_level', 'N/A')}")
@@ -313,7 +312,7 @@ def analyze_response(result: Dict[str, Any]) -> Dict[str, Any]:
                 doc_types[doc_type].append(doc)
             
             analysis_data["case_documents"] = []
-            print(f"\n📊 Document Analysis by Type:")
+            print("\n📊 Document Analysis by Type:")
             
             for doc_type, docs in doc_types.items():
                 print(f"  📁 {doc_type}: {len(docs)} documents")
@@ -336,7 +335,7 @@ def analyze_response(result: Dict[str, Any]) -> Dict[str, Any]:
         # Legal assessment
         if "legal_assessment" in analysis:
             legal = analysis["legal_assessment"]
-            print(f"\n⚖️  Legal Assessment:")
+            print("\n⚖️  Legal Assessment:")
             print(f"  📊 Claim Viability: {legal.get('claim_viability', 'N/A')}")
             print(f"  📈 Evidence Strength: {legal.get('evidence_strength', 'N/A')}")
             
@@ -366,7 +365,7 @@ def analyze_response(result: Dict[str, Any]) -> Dict[str, Any]:
     if has_email:
         email_response = result["email"]
         
-        print(f"\n📧 Email Generation:")
+        print("\n📧 Email Generation:")
         
         # Download links
         download_links = email_response.get('download_links', [])
@@ -386,7 +385,7 @@ def analyze_response(result: Dict[str, Any]) -> Dict[str, Any]:
         relevant_terms = {term: count for term, count in term_counts.items() if count > 0}
         
         if relevant_terms:
-            print(f"  🔍 Case-Specific Terms Found:")
+            print("  🔍 Case-Specific Terms Found:")
             for term, count in relevant_terms.items():
                 print(f"    • '{term}': {count} mentions")
         

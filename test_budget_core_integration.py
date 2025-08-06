@@ -279,7 +279,7 @@ def test_cost_exporter_direct():
         
         # Test budget analysis
         analysis = exporter.create_budget_analysis(test_summary)
-        print(f"   ✅ Budget analysis created")
+        print("   ✅ Budget analysis created")
         print(f"      Cost efficiency score: {analysis['cost_efficiency_score']}")
         print(f"      Budget compliance: {analysis['budget_compliance']}")
         print(f"      Recommendations: {len(analysis['recommendations'])} items")

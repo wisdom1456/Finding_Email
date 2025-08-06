@@ -10,12 +10,10 @@ import plotly.express as px
 import plotly.graph_objects as go
 import pandas as pd
 from datetime import datetime
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, List
 from decimal import Decimal
-import base64
-import io
 
-from backend.utils.data_models import CostSummary, ServiceCost, ActualCosts, CostEstimate
+from backend.utils.data_models import CostSummary, ServiceCost, ActualCosts
 from backend_logic.cost_exporter import CostExporter
 
 

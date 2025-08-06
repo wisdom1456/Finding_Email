@@ -5,42 +5,6 @@
       {
         "service_name": "OpenAI GPT-4o-mini",
         "operation_type": "document_analysis",
-        "units_consumed": 1453912,
-        "unit_type": "tokens",
-        "rate_per_unit": "1.5E-7",
-        "total_cost": "0.21898680",
-        "file_name": "Notice to Owner.pdf"
-      },
-      {
-        "service_name": "OpenAI GPT-4o-mini",
-        "operation_type": "document_analysis",
-        "units_consumed": 599851,
-        "unit_type": "tokens",
-        "rate_per_unit": "1.5E-7",
-        "total_cost": "0.09087765",
-        "file_name": "Devlin-LLW Emails.pdf"
-      },
-      {
-        "service_name": "OpenAI GPT-4o-mini",
-        "operation_type": "document_analysis",
-        "units_consumed": 1428342,
-        "unit_type": "tokens",
-        "rate_per_unit": "1.5E-7",
-        "total_cost": "0.21515130",
-        "file_name": "Devlin - Rebuild Receipts - May & June.pdf"
-      },
-      {
-        "service_name": "OpenAI GPT-4o-mini",
-        "operation_type": "document_analysis",
-        "units_consumed": 47754,
-        "unit_type": "tokens",
-        "rate_per_unit": "1.5E-7",
-        "total_cost": "0.00806310",
-        "file_name": "Devlin - Project Management Proposal - Hoffar Holdings LLC 6.25.25 (1).pdf"
-      },
-      {
-        "service_name": "OpenAI GPT-4o-mini",
-        "operation_type": "document_analysis",
         "units_consumed": 660435,
         "unit_type": "tokens",
         "rate_per_unit": "1.5E-7",
@@ -85,89 +49,53 @@
       }
     ],
     "estimated_media_costs": [],
-    "total_estimated_cost": "1.29337080",
+    "total_estimated_cost": "0.76029195",
     "confidence_level": 0.8,
-    "estimation_timestamp": "2025-08-05 23:16:18.080525"
+    "estimation_timestamp": "2025-08-06 14:59:34.819015"
   },
   "actual_costs": {
     "document_analysis_costs": [
       {
         "service_name": "OpenAI GPT-4o",
         "operation_type": "document_analysis",
-        "units_consumed": 468,
+        "units_consumed": 424,
         "unit_type": "tokens",
         "rate_per_unit": "0.000010",
-        "total_cost": "0.004680",
-        "file_name": "Notice to Owner.pdf"
-      },
-      {
-        "service_name": "OpenAI GPT-4o",
-        "operation_type": "document_analysis",
-        "units_consumed": 542,
-        "unit_type": "tokens",
-        "rate_per_unit": "0.000010",
-        "total_cost": "0.005420",
-        "file_name": "Devlin-LLW Emails.pdf"
-      },
-      {
-        "service_name": "OpenAI GPT-4o",
-        "operation_type": "document_analysis",
-        "units_consumed": 398,
-        "unit_type": "tokens",
-        "rate_per_unit": "0.000010",
-        "total_cost": "0.003980",
-        "file_name": "Devlin - Rebuild Receipts - May & June.pdf"
-      },
-      {
-        "service_name": "OpenAI GPT-4o",
-        "operation_type": "document_analysis",
-        "units_consumed": 482,
-        "unit_type": "tokens",
-        "rate_per_unit": "0.000010",
-        "total_cost": "0.004820",
-        "file_name": "Devlin - Project Management Proposal - Hoffar Holdings LLC 6.25.25 (1).pdf"
-      },
-      {
-        "service_name": "OpenAI GPT-4o",
-        "operation_type": "document_analysis",
-        "units_consumed": 400,
-        "unit_type": "tokens",
-        "rate_per_unit": "0.000010",
-        "total_cost": "0.004000",
+        "total_cost": "0.004240",
         "file_name": "Devlin - Pictures of How House was Left by Contractor.pdf"
       },
       {
         "service_name": "OpenAI GPT-4o",
         "operation_type": "document_analysis",
-        "units_consumed": 486,
+        "units_consumed": 434,
         "unit_type": "tokens",
         "rate_per_unit": "0.000010",
-        "total_cost": "0.004860",
+        "total_cost": "0.004340",
         "file_name": "Devlin - LLW Text Thread.pdf"
       },
       {
         "service_name": "OpenAI GPT-4o",
         "operation_type": "document_analysis",
-        "units_consumed": 566,
+        "units_consumed": 570,
         "unit_type": "tokens",
         "rate_per_unit": "0.000010",
-        "total_cost": "0.005660",
+        "total_cost": "0.005700",
         "file_name": "Devlin - Contract for Construction - Highlighted w Items not Completed 6.9.25.pdf"
       },
       {
         "service_name": "OpenAI GPT-4o",
         "operation_type": "document_analysis",
-        "units_consumed": 456,
+        "units_consumed": 422,
         "unit_type": "tokens",
         "rate_per_unit": "0.000010",
-        "total_cost": "0.004560",
+        "total_cost": "0.004220",
         "file_name": "Devlin - Certified Letter for Notice to Owner.pdf"
       }
     ],
     "media_processing_costs": [],
-    "total_actual_cost": "0.037980",
-    "processing_timestamp": "2025-08-05 23:19:30.627704"
+    "total_actual_cost": "0.018500",
+    "processing_timestamp": "2025-08-06 15:01:17.771217"
   },
-  "cost_variance": -1.2553908,
-  "cost_variance_percentage": -97.06348712990892
+  "cost_variance": -0.74179195,
+  "cost_variance_percentage": -97.56672420377461
 }

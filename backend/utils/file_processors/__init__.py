@@ -1,5 +1,5 @@
 from typing import Dict, Callable, Awaitable, Optional
-from ..data_models import DocumentType, ProcessedDocument, FileType, SavedDocument
+from ..data_models import DocumentType, ProcessedDocument
 from .pdf_processor import process_pdf
 from .docx_processor import process_docx
 from .eml_processor import process_eml

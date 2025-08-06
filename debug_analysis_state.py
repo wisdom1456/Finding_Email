@@ -4,7 +4,6 @@ Diagnostic script to validate the current state of the media processing pipeline
 This script checks for the specific issues mentioned in the conversation summary.
 """
 
-import ast
 import re
 from pathlib import Path
 

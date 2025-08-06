@@ -1,7 +1,7 @@
 import pytesseract
 from PIL import Image
 from io import BytesIO
-from ..data_models import ProcessedDocument, DocumentType, FileType, SavedDocument
+from ..data_models import ProcessedDocument, DocumentType, FileType
 import mimetypes
 
 async def process_image(file_path: str, document_type: DocumentType, original_filename: str) -> ProcessedDocument:

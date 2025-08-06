@@ -13,7 +13,6 @@ import json
 from decimal import Decimal
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor
-import threading
 
 # Add the project root to the path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -399,7 +398,7 @@ class PerformanceTestSuite:
                 }
             }, f, indent=2, default=str)
         
-        print(f"\n📁 Detailed results saved to: performance_test_results.json")
+        print("\n📁 Detailed results saved to: performance_test_results.json")
 
 
 if __name__ == "__main__":

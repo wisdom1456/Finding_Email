@@ -1,7 +1,6 @@
-import asyncio
 import shutil
 from typing import List
-from fastapi import UploadFile, HTTPException
+from fastapi import HTTPException
 from openai import OpenAI
 
 from backend.services.document_processor import DocumentProcessor
@@ -9,7 +8,6 @@ from backend.services.ai_analyzer import AIAnalyzer
 from backend.services.email_generator import EmailGenerator
 from backend.services.task_manager import TaskManager
 from backend.utils.data_models import (
-    CaseAnalysisResult,
     CaseResults,
     AnalysisError,
     AnalyzedDocument,

@@ -1,4 +1,3 @@
-import asyncio
 import os
 import pytest
 from unittest.mock import MagicMock, patch, AsyncMock
@@ -10,8 +9,8 @@ import sys
 from pathlib import Path
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 
-from backend_logic.audio_processor import AudioProcessor, AudioProcessingError
-from backend.utils.data_models import TranscriptedMedia, MediaProcessingError, FileMetadata
+from backend_logic.audio_processor import AudioProcessor
+from backend.utils.data_models import TranscriptedMedia, MediaProcessingError
 
 @pytest.fixture
 def mock_openai_client():

@@ -222,13 +222,13 @@ def test_template_rendering():
         # Write test output files for manual inspection
         with open('test_main_letter.html', 'w') as f:
             f.write(main_html)
-        print(f"\n📄 Main letter test output written to: test_main_letter.html")
+        print("\n📄 Main letter test output written to: test_main_letter.html")
         
         with open('test_appendix.html', 'w') as f:
             f.write(appendix_html)
-        print(f"📄 Appendix test output written to: test_appendix.html")
+        print("📄 Appendix test output written to: test_appendix.html")
         
-        print(f"\n✅ Template rendering test completed successfully!")
+        print("\n✅ Template rendering test completed successfully!")
         return True
         
     except Exception as e:

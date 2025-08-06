@@ -1,4 +1,3 @@
-import asyncio
 import os
 import pytest
 from unittest.mock import MagicMock, patch, AsyncMock

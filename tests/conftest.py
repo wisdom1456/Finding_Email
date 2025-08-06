@@ -9,8 +9,6 @@ import pytest
 import asyncio
 import os
 import tempfile
-from pathlib import Path
-from typing import List, Dict, Any
 from unittest.mock import Mock, AsyncMock, patch
 
 # Import the modules we'll be testing directly
@@ -22,8 +20,7 @@ from backend_logic.quality_validator import QualityValidator
 # Import data models
 from backend.utils.data_models import (
     ProcessedDocument, DocumentType, FileType, 
-    EnhancedIntakeAnalysis, CaseAnalysisResult,
-    EmailResponse, CaseResults
+    EnhancedIntakeAnalysis, CaseAnalysisResult
 )
 
 

@@ -1,7 +1,6 @@
-import asyncio
 import os
 import tempfile
-from typing import Optional, Union
+from typing import Union
 from openai import OpenAI, RateLimitError, APIError, APITimeoutError
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 import magic
@@ -9,8 +8,7 @@ import magic
 from backend.utils.data_models import (
     TranscriptedMedia,
     MediaProcessingError,
-    FileMetadata,
-    FileType
+    FileMetadata
 )
 
 

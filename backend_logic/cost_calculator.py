@@ -5,9 +5,8 @@ This service calculates actual costs incurred during processing based on
 API usage logs, token counts, and processing durations from various services.
 """
 
-import json
 from decimal import Decimal
-from typing import List, Dict, Any, Optional, Tuple
+from typing import List, Dict, Any
 from datetime import datetime
 
 from backend.utils.data_models import (

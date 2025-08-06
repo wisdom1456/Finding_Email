@@ -6,14 +6,9 @@ via FastAPI endpoints. Now tests the backend_logic.document_processor module dir
 """
 
 import pytest
-import asyncio
-import tempfile
-import os
-from pathlib import Path
-from typing import List
-from unittest.mock import Mock, AsyncMock, patch
+from unittest.mock import Mock, patch
 
-from backend_logic.document_processor import DocumentProcessor, DocumentProcessingError
+from backend_logic.document_processor import DocumentProcessingError
 from backend.utils.data_models import ProcessedDocument, DocumentType, FileType
 
 

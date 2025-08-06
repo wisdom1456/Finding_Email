@@ -7,7 +7,7 @@ import sys
 # Add the project root to the Python path
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 
-from backend_logic.video_processor import VideoProcessor, VideoProcessingError
+from backend_logic.video_processor import VideoProcessor
 from backend.utils.data_models import VideoInsight, MediaProcessingError
 
 # This is an integration test that requires real Google Cloud credentials
@@ -72,7 +72,7 @@ class TestVideoProcessorIntegration:
             assert result.metadata.size > 0
             
             # Print results for manual verification
-            print(f"\n✅ Video processing successful!")
+            print("\n✅ Video processing successful!")
             print(f"📊 Insights keys: {list(result.insights.keys())}")
             if result.transcript:
                 print(f"🎤 Transcript length: {len(result.transcript)} characters")
@@ -188,7 +188,7 @@ def test_google_cloud_credentials():
     bucket_name = os.getenv("GCP_BUCKET_NAME")
     credentials_file = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
     
-    print(f"\n🔐 Google Cloud Configuration Check:")
+    print("\n🔐 Google Cloud Configuration Check:")
     print(f"📋 Project ID: {project_id}")
     print(f"🪣 Bucket Name: {bucket_name}")
     print(f"🔑 Credentials File: {credentials_file}")
@@ -198,7 +198,7 @@ def test_google_cloud_credentials():
     
     if credentials_file:
         assert os.path.exists(credentials_file), f"Credentials file not found: {credentials_file}"
-        print(f"✅ Credentials file exists and is accessible")
+        print("✅ Credentials file exists and is accessible")
     else:
         print("⚠️  GOOGLE_APPLICATION_CREDENTIALS not set, using default authentication")
 

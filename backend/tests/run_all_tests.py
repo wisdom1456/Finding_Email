@@ -125,7 +125,7 @@ def extract_metrics_from_output(output_lines: List[str]) -> Dict[str, Any]:
         if "Documents processed:" in line:
             try:
                 metrics["documents_processed"] = int(line.split(":")[-1].strip())
-            except:
+            except Exception:
                 pass
         
         # Extract email length
@@ -133,21 +133,21 @@ def extract_metrics_from_output(output_lines: List[str]) -> Dict[str, Any]:
             try:
                 text = line.split(":")[-1].strip()
                 metrics["email_length"] = int(text.split()[0].replace(",", ""))
-            except:
+            except Exception:
                 pass
         
         # Extract download files count
         if "Download files:" in line:
             try:
                 metrics["download_files"] = int(line.split(":")[-1].strip())
-            except:
+            except Exception:
                 pass
         
         # Extract error count
         if "Errors encountered:" in line:
             try:
                 metrics["errors"] = int(line.split(":")[-1].strip())
-            except:
+            except Exception:
                 pass
         
         # Extract payload size
@@ -155,7 +155,7 @@ def extract_metrics_from_output(output_lines: List[str]) -> Dict[str, Any]:
             try:
                 text = line.split("(")[-1].split("MB")[0].strip()
                 metrics["payload_mb"] = float(text)
-            except:
+            except Exception:
                 pass
     
     return metrics
@@ -175,7 +175,7 @@ def generate_summary_report(results: List[Dict[str, Any]]) -> None:
     print(f"📊 Success Rate: {(successful_tests/total_tests)*100:.1f}%")
     
     # Individual test results
-    print(f"\n📋 Individual Test Results:")
+    print("\n📋 Individual Test Results:")
     for i, result in enumerate(results, 1):
         status = "✅ PASS" if result["success"] else "❌ FAIL"
         duration = result["duration"]
@@ -202,7 +202,7 @@ def generate_summary_report(results: List[Dict[str, Any]]) -> None:
     # Aggregate metrics for successful tests
     successful_results = [r for r in results if r["success"]]
     if successful_results:
-        print(f"\n📊 Aggregate Metrics (Successful Tests):")
+        print("\n📊 Aggregate Metrics (Successful Tests):")
         
         total_docs = sum(r["metrics"].get("documents_processed", 0) for r in successful_results)
         total_email_chars = sum(r["metrics"].get("email_length", 0) for r in successful_results)
@@ -219,7 +219,7 @@ def generate_summary_report(results: List[Dict[str, Any]]) -> None:
             print(f"  📊 Average Email Length per Document: {avg_chars_per_doc:.0f} chars")
     
     # Quality indicators
-    print(f"\n🔍 Quality Indicators:")
+    print("\n🔍 Quality Indicators:")
     for result in successful_results:
         metrics = result["metrics"]
         test_name = result["test_name"]
@@ -237,16 +237,16 @@ def generate_summary_report(results: List[Dict[str, Any]]) -> None:
             print(f"  {test_name}: {quality} ({email_length:,} chars)")
     
     # Recommendations
-    print(f"\n💡 Recommendations:")
+    print("\n💡 Recommendations:")
     if failed_tests > 0:
         print(f"  🔧 Fix {failed_tests} failed test(s) before proceeding")
     
     if successful_tests > 0:
-        print(f"  📧 Review generated emails for quality and professional tone")
-        print(f"  📋 Verify all uploaded documents are properly referenced")
-        print(f"  🎯 Check case-specific analysis for accuracy")
+        print("  📧 Review generated emails for quality and professional tone")
+        print("  📋 Verify all uploaded documents are properly referenced")
+        print("  🎯 Check case-specific analysis for accuracy")
     
-    print(f"  📝 Save test results for quality analysis iteration")
+    print("  📝 Save test results for quality analysis iteration")
 
 def save_results_summary(results: List[Dict[str, Any]]) -> None:
     """Save test results summary to file."""
@@ -275,12 +275,12 @@ def main():
     print(f"🎯 Testing all {len(TESTS)} client cases with full document sets")
     
     # Check if backend is running
-    print(f"\n🔍 Pre-flight Checks:")
-    print(f"  📡 Backend API: Assuming running on http://127.0.0.1:8000")
+    print("\n🔍 Pre-flight Checks:")
+    print("  📡 Backend API: Assuming running on http://127.0.0.1:8000")
     print(f"  📁 Test Scripts: {len(TESTS)} test files prepared")
-    print(f"  ⏱️  Timeout: 10 minutes per test")
+    print("  ⏱️  Timeout: 10 minutes per test")
     
-    input(f"\n🚀 Press Enter to start comprehensive testing...")
+    input("\n🚀 Press Enter to start comprehensive testing...")
     
     results = []
     
@@ -292,7 +292,7 @@ def main():
         
         # Short pause between tests
         if i < len(TESTS):
-            print(f"\n⏸️  Pausing 5 seconds before next test...")
+            print("\n⏸️  Pausing 5 seconds before next test...")
             time.sleep(5)
     
     # Generate comprehensive report
@@ -310,8 +310,8 @@ def main():
         failed_count = len(TESTS) - successful_tests
         print(f"⚠️  {failed_count} test(s) failed. Review errors before proceeding.")
     
-    print(f"\n📂 Check test_results/ directories for detailed outputs")
-    print(f"📧 Review generated email content for quality assessment")
+    print("\n📂 Check test_results/ directories for detailed outputs")
+    print("📧 Review generated email content for quality assessment")
 
 if __name__ == "__main__":
     main()

@@ -17,7 +17,6 @@ from backend.utils.data_models import (
     EnhancedIntakeAnalysis,
     CaseAnalysisResult,
     DocumentType,
-    AnalysisError,
     MediaProcessingError,
     LegalAssessment,
     DemandLetterEvaluation,

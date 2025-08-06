@@ -1,6 +1,5 @@
 import sys
 from pathlib import Path
-import pytest
 
 # Add the project's root directory to the Python path
 # This allows tests to import modules from the 'backend' and 'backend_logic' directories

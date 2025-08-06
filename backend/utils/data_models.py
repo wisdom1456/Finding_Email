@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, field_validator, validator, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 from typing import List, Optional, Dict, Any, Union
 from enum import Enum
 from datetime import datetime
@@ -504,6 +504,43 @@ class CaseAnalysisResult(BaseModel):
     demand_letter_evaluation: Optional[DemandLetterEvaluation] = None
     errors: List[AnalysisError] = Field(default_factory=list, description="A list of errors encountered during analysis.")
     cost_summary: Optional[CostSummary] = Field(None, description="Cost tracking information")
+
+# --- Email Structure Planning Models ---
+
+class SectionPlan(BaseModel):
+    """
+    Plan for a single section in the email generation structure.
+    Designed to support the Master Email Orchestrator pattern for professional attorney communications.
+    """
+    number: int = Field(..., description="Section number in the email (1, 2, 3, etc.)")
+    header: str = Field(..., description="Section header text in ALL CAPS (e.g., 'FACTUAL SUMMARY')")
+    legal_citation: Optional[str] = Field(None, description="Florida statute citation if applicable (e.g., 'Fla. Stat. Chapter 558')")
+    key_points: List[str] = Field(default_factory=list, description="Key points that will become bullet points in the section")
+    emphasis_items: Dict[str, str] = Field(default_factory=dict, description="Items to bold with their values (e.g., {'contract_amount': '$128,355.77'})")
+    content_requirements: List[str] = Field(default_factory=list, description="Specific content requirements for this section")
+
+class EmailStructurePlan(BaseModel):
+    """
+    Master plan for the entire email structure before generation begins.
+    Implements the orchestrated approach outlined in the Email Style Refinement Plan.
+    """
+    subject_line: str = Field(..., description="Specific subject line for the case (e.g., 'Legal Review and Recommended Next Steps – Construction Dispute')")
+    greeting: str = Field(..., description="Personalized greeting (e.g., 'Good afternoon Mr. Devlin and Ms. Bell,')")
+    sections: List[SectionPlan] = Field(default_factory=list, description="List of planned sections in order")
+    closing: str = Field(..., description="Professional sign-off without repetitive elements")
+    case_context: Dict[str, Any] = Field(default_factory=dict, description="Context that needs to be tracked across sections")
+
+class GenerationContext(BaseModel):
+    """
+    Context tracker to prevent redundancy during email generation.
+    Maintains state across all sections to ensure consistency and avoid repetition.
+    """
+    greeting_given: bool = Field(False, description="Whether the greeting has been provided")
+    closing_given: bool = Field(False, description="Whether the closing has been provided")
+    mentioned_items: List[str] = Field(default_factory=list, description="Items already mentioned to prevent repetition")
+    section_numbers_used: List[int] = Field(default_factory=list, description="Section numbers already used")
+    client_name_mentioned: bool = Field(False, description="Whether client name has been mentioned")
+    case_details_mentioned: List[str] = Field(default_factory=list, description="Case details already covered")
 
 # --- Email Generation Models ---
 

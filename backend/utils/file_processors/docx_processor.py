@@ -1,4 +1,4 @@
-from ..data_models import ProcessedDocument, DocumentType, FileType, SavedDocument
+from ..data_models import ProcessedDocument, DocumentType, FileType
 import docx
 import io
 import mimetypes

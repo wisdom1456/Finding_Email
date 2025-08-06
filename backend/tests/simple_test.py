@@ -78,7 +78,7 @@ else:
                 # Check if analysis was completed
                 if result.get('analysis'):
                     analysis = result['analysis']
-                    print(f"✓ Analysis completed")
+                    print("✓ Analysis completed")
                     
                     # Check intake analysis
                     if analysis.get('intake_analysis'):
@@ -101,7 +101,7 @@ else:
                 # Check email generation
                 if result.get('email'):
                     email_response = result['email']
-                    print(f"✓ Email Generated")
+                    print("✓ Email Generated")
                     
                     # Check download links
                     if email_response.get('download_links'):

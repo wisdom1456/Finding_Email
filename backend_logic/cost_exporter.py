@@ -9,11 +9,11 @@ import csv
 import json
 import io
 from decimal import Decimal
-from typing import Dict, Any, List, Optional, Tuple
+from typing import Dict, Any, List, Optional
 from datetime import datetime
 from jinja2 import Environment, FileSystemLoader
 
-from backend.utils.data_models import CostSummary, ServiceCost, ActualCosts, CostEstimate
+from backend.utils.data_models import CostSummary, ActualCosts
 
 
 class CostExporter:
@@ -250,7 +250,7 @@ class CostExporter:
             
             return template.render(**context)
             
-        except Exception as e:
+        except Exception:
             # Fallback to basic HTML generation
             return self._generate_fallback_html_report(cost_summary)
     

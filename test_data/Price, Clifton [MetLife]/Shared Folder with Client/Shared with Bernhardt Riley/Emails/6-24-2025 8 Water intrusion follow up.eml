@@ -1,0 +1,356 @@
+Delivered-To: cprice90@gmail.com
+Received: by 2002:a05:651c:146a:b0:32b:6e03:8f5c with SMTP id r10csp3221652ljc;
+        Tue, 24 Jun 2025 09:31:53 -0700 (PDT)
+X-Google-Smtp-Source: AGHT+IHQ+jLAPFPr3i/eOSTFY/PaTWjce6ub0YdpTCQ92Nmf/pvJuNRw1dIDd0qA17vhrdLyZvkT
+X-Received: by 2002:a05:6808:1a04:b0:3f9:56ff:1468 with SMTP id 5614622812f47-40ac6fec714mr12576900b6e.24.1750782712714;
+        Tue, 24 Jun 2025 09:31:52 -0700 (PDT)
+ARC-Seal: i=1; a=rsa-sha256; t=1750782712; cv=none;
+        d=google.com; s=arc-20240605;
+        b=W8gt+snkGsdhjYp3F0CDv3JNpib9VE+G2fSmoj8J9dh4Zr3igmVFmbArBxAv4T5wFW
+         WnwTr4kX+FnztgfbFxSjPmwi3+IDUy1aS1Yg8rfAA1a+U+0UvLH53zVXAGzqWf7dlCf1
+         478qOg9KWPiHG84AN0JI9r9NdXZRSCJNWk8mv9cAspcx0TPCo5FMwbPxfSv6wMnlI5oR
+         KGCDyCzPoMg4m8rphOAJDza9V6g7Qdio6o7i1iISDMi4z1nILwu3ZLYFRaA8U7+MpKbD
+         1XehMmAEEap4qBsCyqhe7VDQ6d+/6i6Pu1n57k2fGZ64GqdCdQy4PgbpJ47nAaElx8yt
+         m/uQ==
+ARC-Message-Signature: i=1; a=rsa-sha256; c=relaxed/relaxed; d=google.com; s=arc-20240605;
+        h=message-id:content-transfer-encoding:subject:date:to:from
+         :dkim-signature:mime-version;
+        bh=vUTbaBhIp+wxAa0Tofyu80VfJFn5gZ8wx0Sak6mg0E8=;
+        fh=H2UiQlWgdPmx4JwhbWC8Hxs136TnNPOogBQ26+YZTaU=;
+        b=NwbPVWYwmyW/X6Q5bHzYjrUvWejeIy8MQI1nEpSvL4YGv7fVqam90yVUFDK6ecrGfv
+         enXU5gDCT3LVj0p74cM8Fs3CnJYYztBnNKI1yao5nqdUj2BYNlbEYhkzatTFq5hBTGf/
+         9ygA04NHnI5O3uHgSv50uJEPYIc9wjts3/IoCW1P7BBjyQ+QyRxG0WmVTuRuULhDtNZz
+         AnVLXFBF4aXmZzvFfhdhL7v5IGFoW/ja03gIyQ+SWclcgkFE7mMKd7XCEtILOM1wrJWq
+         sBLo13cOOL8mcmEnCTGmtpctjd6pC/lb/ECSfUo6lGVgXKsizNkgXMVA9qbH2Kg5dIgr
+         dySQ==;
+        dara=google.com
+ARC-Authentication-Results: i=1; mx.google.com;
+       dkim=pass header.i=@aptleasing.info header.s=yardi-asp-dkim2 header.b=Ew+pjHMl;
+       spf=pass (google.com: domain of villageatterrabella.reply.northland@aptleasing.info designates 104.156.175.236 as permitted sender) smtp.mailfrom=VillageatTerraBella.REPLY.Northland@aptleasing.info;
+       dmarc=pass (p=QUARANTINE sp=QUARANTINE dis=NONE) header.from=aptleasing.info
+Return-Path: <VillageatTerraBella.REPLY.Northland@aptleasing.info>
+Received: from smtp236us.rentcafe.com (smtp236us.rentcafe.com. [104.156.175.236])
+        by mx.google.com with ESMTPS id 46e09a7af769-73a90aefdd4si6931676a34.71.2025.06.24.09.31.52
+        for <cprice90@gmail.com>
+        (version=TLS1_3 cipher=TLS_AES_256_GCM_SHA384 bits=256/256);
+        Tue, 24 Jun 2025 09:31:52 -0700 (PDT)
+Received-SPF: pass (google.com: domain of villageatterrabella.reply.northland@aptleasing.info designates 104.156.175.236 as permitted sender) client-ip=104.156.175.236;
+Authentication-Results: mx.google.com;
+       dkim=pass header.i=@aptleasing.info header.s=yardi-asp-dkim2 header.b=Ew+pjHMl;
+       spf=pass (google.com: domain of villageatterrabella.reply.northland@aptleasing.info designates 104.156.175.236 as permitted sender) smtp.mailfrom=VillageatTerraBella.REPLY.Northland@aptleasing.info;
+       dmarc=pass (p=QUARANTINE sp=QUARANTINE dis=NONE) header.from=aptleasing.info
+MIME-Version: 1.0
+DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed; d=aptleasing.info;
+	s=yardi-asp-dkim2; t=1750782712;
+	bh=vUTbaBhIp+wxAa0Tofyu80VfJFn5gZ8wx0Sak6mg0E8=;
+	h=From:To:Date:Subject:From;
+	b=Ew+pjHMlGDE2ZNJn7DaRHao6lzEyW9ygc775xoR5oX9j5HtnDSbZAa78WoRouOECN
+	 hGpcSkvY+q09MrZawrg0zMAwrg/1Mmj7TgSvM/rJ/omoAyuCGbceuHwa2Ic0tgVYNm
+	 whz6hr8R+yhLaCOcFl+gYtC8YIV+eihRdgf/0dcWDwsMmjLUsrOemdmA3vmUJszhqE
+	 Rqu241Wfs5AUSgngQsvWMJ3yOV7zHS8G0oFkIPiXuj5oScxgFy3ym4mnbBILrrQo0z
+	 VsUVPs6Qnwhv38gFmwlJisfh3gcU+4qNjU/ATiR5qEuyFDepmjsw2EwG56uFz6oyNM
+	 zuM6wupa+e3Hg==
+From: "Village at Terra Bella"
+ <VillageatTerraBella.REPLY.Northland@aptleasing.info>
+To: cprice90@gmail.com
+Date: 24 Jun 2025 11:31:52 -0500
+Subject: Water intrusion follow up
+Content-Type: text/html; charset=us-ascii
+Content-Transfer-Encoding: quoted-printable
+Message-Id: <4bRVpJ2P3MzYrl7S@pca303smtpl152>
+X-YWM-PCA303MAIL-ID: 4bRVpJ2P3MzYrl7S@pca303smtpl152
+
+<title></title>=0D=0A<meta http-equiv=3D"Content-Type" content=3D=
+"text/html; charset=3DUTF-8" /><meta name=3D"viewport" content=3D=
+"width=3Ddevice-width, initial-scale=3D1.0, maximum-scale=3D1.0" =
+/>=0D=0A<style type=3D"text/css">html{width:100%;}=0D=0A ::-moz-s=
+election{background:#ffcf65;color:#ffffff;}=0D=0A ::selection{bac=
+kground:#ffcf65;color:#ffffff;}=0D=0A body{margin:0;padding:0; ba=
+ckground-color:#ececec;}=0D=0A .ReadMsgBody{width:100%;background=
+-color:#ffffff;}=0D=0A .ExternalClass{width:100%;background-color=
+:#ffffff;}=0D=0A a{color:#ffcf65;text-decoration:none;font-weight=
+:400;font-style:normal;}=0D=0A a:hover{color:#262626;text-decorat=
+ion:none;font-weight:400;font-style:normal;}=0D=0A p,div{margin:0=
+!important;}=0D=0A table{border-collapse:collapse;}=0D=0A @media =
+only screen and (max-width:640px){=0D=0A body{width:auto!importan=
+t; background-color:#ececec;}=0D=0A table table{width:100%!import=
+ant;}=0D=0A td[class=3Dfull_width]{width:100%!important;}=0D=0A .=
+reHideMedium { display:none !important;} =0D=0A .reShowMedium { d=
+isplay:block !important;} =0D=0A .reCenterMedium { text-align:cen=
+ter !important;}=0D=0A div[class=3Ddiv_scale]{width:440px!importa=
+nt;margin:0 auto!important;}=0D=0A table[class=3Dtable_scale]{wid=
+th:440px!important;margin:0 auto!important;}=0D=0A td[class=3Dtd_=
+scale]{width:440px!important;margin:0 auto!important;}=0D=0A img[=
+class=3Dimg_scale]{width:100%!important;height:auto!important;}=0D=0A=
+ td[class=3Dspacer]{display:none!important;}=0D=0A td[class=3Dspa=
+cer_spec]{display:none!important;}=0D=0A td[class=3Ddivider]{widt=
+h:100%!important;display:block!important;float:left;text-align:in=
+herit!important;}=0D=0A td[class=3Dcenter]{text-align:center!impo=
+rtant;}=0D=0A td[class=3Dsocial_left]{float:left;width:400px;disp=
+lay:block!important;text-align:center!important;padding:20px!impo=
+rtant;}=0D=0A td[class=3Dsocial_right]{float:left;width:400px;dis=
+play:block!important;text-align:center!important;padding:0 20px 2=
+0px!important;}=0D=0A td[class=3Done_one]{width:440px!important;d=
+isplay:block!important;float:left;text-align:inherit!important;}=0D=0A=
+ td[class=3Done_half]{width:440px!important;padding-bottom:0!impo=
+rtant;display:block!important;float:left;text-align:inherit!impor=
+tant;}=0D=0A td[class=3Done_half_last]{width:440px!important;marg=
+in-top:40px!important;display:block!important;float:left;text-ali=
+gn:inherit!important;padding:0!important;}=0D=0A td[class=3Done_h=
+alf_alt_last]{width:440px!important;margin-top:0!important;displa=
+y:block!important;float:left;text-align:inherit!important;padding=
+:0!important;}=0D=0A td[class=3Done_third]{width:440px!important;=
+display:block!important;float:left;text-align:inherit!important;}=
+=0D=0A td[class=3Dtwo_third]{width:440px!important;display:block!=
+important;float:left;text-align:inherit!important;}=0D=0A td[clas=
+s=3Dtwo_third_last]{width:440px!important;margin-top:40px!importa=
+nt;display:block!important;float:left;text-align:inherit!importan=
+t;}=0D=0A td[class=3Dtwo_third_alt_last]{width:440px!important;ma=
+rgin-top:0!important;display:block!important;float:left;text-alig=
+n:inherit!important;}=0D=0A td[class=3Done_third_last]{width:440p=
+x!important;margin-top:40px!important;display:block!important;flo=
+at:left;text-align:inherit!important;}=0D=0A td[class=3Done_third=
+_alt_last]{width:440px!important;margin-top:0!important;display:b=
+lock!important;float:left;text-align:inherit!important;}=0D=0A td=
+[class=3Done_fourth]{width:85px!important;display:block!important=
+;padding-left:20px!important;padding-bottom:0!important;float:lef=
+t;text-align:inherit!important}=0D=0A td[class=3Done_fourth_last]=
+{width:85px!important;margin-top:0!important;display:block!import=
+ant;padding-top:20px!important;padding-left:20px!important;float:=
+left;text-align:inherit!important;}=0D=0A }=0D=0A @media only scr=
+een and (max-width:479px){=0D=0A body{width:auto!important; backg=
+round-color:#ececec;}=0D=0A table table{width:100%!important;}=0D=0A=
+ td[class=3Dfull_width]{width:100%!important;}=0D=0A .reHideSmall=
+ { display:none !important;} =0D=0A div[class=3Ddiv_scale]{width:=
+280px!important;margin:0 auto!important;}=0D=0A table[class=3Dtab=
+le_scale]{width:280px!important;margin:0 auto!important;}=0D=0A t=
+d[class=3Dtd_scale]{width:280px!important;margin:0 auto!important=
+;}=0D=0A img[class=3Dimg_scale]{width:100%!important;height:auto!=
+important;}=0D=0A td[class=3Dspacer]{display:none!important;}=0D=0A=
+ td[class=3Dspacer_spec]{display:none!important;}=0D=0A td[class=3D=
+divider]{width:100%!important;display:block!important;float:left;=
+text-align:inherit!important;}=0D=0A td[class=3Dcenter]{text-alig=
+n:center!important;}=0D=0A td[class=3Dsocial_left]{float:left;wid=
+th:240px;display:block!important;text-align:center!important;padd=
+ing:20px!important;}=0D=0A td[class=3Dsocial_right]{float:left;wi=
+dth:240px;display:block!important;text-align:center!important;pad=
+ding:0 20px 20px!important;}=0D=0A td[class=3Done_one]{width:280p=
+x!important;display:block!important;float:left;text-align:inherit=
+!important;}=0D=0A td[class=3Done_half]{width:280px!important;pad=
+ding-bottom:0!important;display:block!important;float:left;text-a=
+lign:inherit!important;}=0D=0A td[class=3Done_half_last]{width:28=
+0px!important;margin-top:40px!important;display:block!important;f=
+loat:left;text-align:inherit!important;padding:0!important;}=0D=0A=
+ td[class=3Done_half_alt_last]{width:280px!important;margin-top:0=
+!important;display:block!important;float:left;text-align:inherit!=
+important;padding:0!important;}=0D=0A td[class=3Done_third]{width=
+:280px!important;display:block!important;float:left;text-align:in=
+herit!important;}=0D=0A td[class=3Dtwo_third]{width:280px!importa=
+nt;display:block!important;float:left;text-align:inherit!importan=
+t;}=0D=0A td[class=3Dtwo_third_last]{width:280px!important;margin=
+-top:40px!important;display:block!important;float:left;text-align=
+:inherit!important;}=0D=0A td[class=3Dtwo_third_alt_last]{width:2=
+80px!important;margin-top:0!important;display:block!important;flo=
+at:left;text-align:inherit!important;}=0D=0A td[class=3Done_third=
+_last]{width:280px!important;margin-top:40px!important;display:bl=
+ock!important;float:left;text-align:inherit!important;}=0D=0A td[=
+class=3Done_third_alt_last]{width:280px!important;margin-top:0!im=
+portant;display:block!important;float:left;text-align:inherit!imp=
+ortant;}=0D=0A td[class=3Done_fourth]{width:110px!important;displ=
+ay:block!important;padding-left:20px!important;padding-bottom:0!i=
+mportant;float:left;text-align:inherit!important;}=0D=0A td[class=
+=3Done_fourth_last]{width:110px!important;margin-top:0!important;=
+display:block!important;padding-top:20px!important;padding-left:2=
+0px!important;float:left;text-align:inherit!important;}=0D=0A }=0D=0A=
+</style>=0D=0A<table align=3D"center" bgcolor=3D"#ececec" border=3D=
+"0" cellpadding=3D"0" cellspacing=3D"0" style=3D"padding:0; margi=
+n:0;" width=3D"100%"><!-- START VERTICAL SPACER BLOCK-->=0D=0A	<t=
+body>=0D=0A		<tr>=0D=0A			<td align=3D"center" bgcolor=3D"#ececec=
+" class=3D"full_width" style=3D"" width=3D"100%">=0D=0A			<div cl=
+ass=3D"div_scale" style=3D"width:600px;">=0D=0A			<table align=3D=
+"center" bgcolor=3D"#ececec" border=3D"0" cellpadding=3D"0" cells=
+pacing=3D"0" class=3D"table_scale" style=3D"padding:0; margin: 0;=
+" width=3D"600">=0D=0A				<tbody>=0D=0A					<tr>=0D=0A						<td a=
+lign=3D"center" bgcolor=3D"#ececec" class=3D"td_scale" height=3D"=
+20" style=3D"height:20px; padding:0px; font-size:0 ; color:#68686=
+8; font-family:Helvetica, Arial, sans-serif; line-height:0;" vali=
+gn=3D"middle" width=3D"600"> </td>=0D=0A					</tr>=0D=0A				</tbo=
+dy>=0D=0A			</table>=0D=0A			</div>=0D=0A			</td>=0D=0A		</tr>=0D=0A=
+		<!-- END VERTICAL SPACER BLOCK--><!-- START HEADER FOR LOGO-->=0D=0A=
+		<tr>=0D=0A			<td align=3D"center" bgcolor=3D"#ececec" class=3D"=
+full_width" style=3D"" width=3D"100%">=0D=0A			<div class=3D"div_=
+scale" style=3D"width:600px;"><img alt=3D"" src=3D"http://www.ren=
+tcafe.com/dmslivecafe/2/143645/Village%20at%20Terra%20Bella%20-%2=
+0Grey.png?width=3D186&height=3D58&mode=3Dpad&" /></div>=0D=0A			<=
+/td>=0D=0A		</tr>=0D=0A		<!-- END HEADER FOR LOGO--><!-- START VE=
+RTICAL SPACER BLOCK-->=0D=0A		<tr>=0D=0A			<td align=3D"center" b=
+gcolor=3D"#ececec" class=3D"full_width" style=3D"" width=3D"100%"=
+>=0D=0A			<div class=3D"div_scale" style=3D"width:600px;">=0D=0A	=
+		<table align=3D"center" bgcolor=3D"#ececec" border=3D"0" cellpa=
+dding=3D"0" cellspacing=3D"0" class=3D"table_scale" style=3D"padd=
+ing:0; margin:0;" width=3D"600">=0D=0A				<tbody>=0D=0A					<tr>=0D=0A=
+						<td align=3D"center" bgcolor=3D"#ececec" class=3D"td_scale"=
+ height=3D"20" style=3D"height:20px; padding:0px; font-size:0 ; c=
+olor:#686868; font-family: Helvetica, Arial, sans-serif; line-hei=
+ght: 0;" valign=3D"middle" width=3D"600"> </td>=0D=0A					</tr>=0D=0A=
+				</tbody>=0D=0A			</table>=0D=0A			</div>=0D=0A			</td>=0D=0A	=
+	</tr>=0D=0A		<!-- END VERTICAL SPACER BLOCK--><!-- START 1/1 COL=
+UMN-->=0D=0A		<tr>=0D=0A			<td align=3D"center" bgcolor=3D"#ecece=
+c" class=3D"full_width" style=3D"" width=3D"100%">=0D=0A			<div c=
+lass=3D"div_scale" style=3D"width:600px;">=0D=0A			<table align=3D=
+"center" bgcolor=3D"#FFFFFF" border=3D"0" cellpadding=3D"0" cells=
+pacing=3D"0" class=3D"table_scale" style=3D"padding:0; margin: 0;=
+" width=3D"">=0D=0A				<tbody>=0D=0A					<tr>=0D=0A						<td alig=
+n=3D"left" bgcolor=3D"#FFFFFF" class=3D"full_width" style=3D"bord=
+er-top:4px solid #1fa9d6; border-bottom:3px solid #ddd;" valign=3D=
+"top" width=3D"600">=0D=0A						<table width=3D"100%"><!-- START =
+IMAGE-->=0D=0A							<tbody>=0D=0A								<tr>=0D=0A									<td =
+style=3D"padding:0px; font-size:13px; color:#727272; font-family:=
+Helvetica, Arial, sans-serif; line-height:24px; background-color:=
+2A303C;" valign=3D"top"> </td>=0D=0A								</tr>=0D=0A								<!=
+-- END IMAGE--><!-- START TEXT-->=0D=0A								<tr>=0D=0A								=
+	<td align=3D"left" style=3D"font-family: Helvetica, Arial, sans-=
+serif; color:#999999; line-height:24px; font-size:13px; padding:1=
+2px 30px 0px 30px;" valign=3D"top"><p>Hi Cliff, no problem, we ca=
+n hold off on repairs, please let me know when the good time for =
+you is and we will schedule. I will let you know which day Servpr=
+o is going to be by this week. thanks! Irina</p></td>=0D=0A						=
+		</tr>=0D=0A								<!-- END TEXT-->=0D=0A								<tr>=0D=0A				=
+					<td bgcolor=3D"#FFFFFF" height=3D"40" style=3D"padding:0; li=
+ne-height: 0;"> </td>=0D=0A								</tr>=0D=0A							</tbody>=0D=0A=
+						</table>=0D=0A						</td>=0D=0A					</tr>=0D=0A				</tbody>=
+=0D=0A			</table>=0D=0A			</div>=0D=0A			<!-- VERTICAL SPACER-->=0D=0A=
+=0D=0A			<div class=3D"div_scale" style=3D"width:600px; display:b=
+lock;">=0D=0A			<table align=3D"center" bgcolor=3D"#ececec" borde=
+r=3D"0" cellpadding=3D"0" cellspacing=3D"0" class=3D"table_scale"=
+ style=3D"padding:0; margin:0;" width=3D"600">=0D=0A				<tbody>=0D=0A=
+					<tr>=0D=0A						<td align=3D"center" bgcolor=3D"#ececec" cla=
+ss=3D"td_scale" height=3D"20" style=3D"height:20px; padding:0px; =
+font-size:0 ; color:#686868; font-family:Helvetica, Arial, sans-s=
+erif; line-height: 0;" valign=3D"middle" width=3D"600"> </td>=0D=0A=
+					</tr>=0D=0A				</tbody>=0D=0A			</table>=0D=0A			</div>=0D=0A=
+			<!-- END VERTICAL SPACER--></td>=0D=0A		</tr>=0D=0A		<!-- END =
+1/1 COLUMN-->=0D=0A		<tr>=0D=0A			<td class=3D"full_width" style=3D=
+"padding:4px 10px 0px 10px;">=0D=0A			<div align=3D"center">=0D=0A=
+			<table class=3D"Table" style=3D"width:6.25in; border-collapse:=
+collapse; border:undefined" width=3D"600">=0D=0A				<tbody>=0D=0A=
+					<tr>=0D=0A						<td>=0D=0A						<table align=3D"left" class=3D=
+"Table" style=3D"width:217.5pt; border-collapse:collapse; padding=
+:0in 0in 7.5pt 0in; border:undefined" width=3D"290">=0D=0A							=
+<tbody>=0D=0A								<tr>=0D=0A									<td>=0D=0A									<table=
+ class=3D"Table" style=3D"width:100.0%; background:white; border-=
+collapse:collapse; padding:0in 0in 10.5pt 0in; border:none" width=
+=3D"100%">=0D=0A										<tbody>=0D=0A											<tr>=0D=0A					=
+							<td style=3D"border:none; border-bottom:solid #dddddd 2.25=
+pt; background:white">=0D=0A												<table class=3D"Table" st=
+yle=3D"width:100.0%; border-collapse:collapse; padding:.25in 15.0=
+pt 15.0pt 22.5pt; border:undefined" width=3D"100%">=0D=0A								=
+					<tbody>=0D=0A														<tr>=0D=0A															<td>=0D=0A=
+															<p style=3D"margin-bottom:0in; padding:0in 0in 6.0=
+pt 0in"><span style=3D"line-height:normal"><b><span style=3D"font=
+-size:10.0pt"><span helvetica=3D"" style=3D"font-family:"><span s=
+tyle=3D"color:#999999">CONTACT INFO</span></span></span></b></spa=
+n></p>=0D=0A															</td>=0D=0A														</tr>=0D=0A		=
+												<tr>=0D=0A															<td>=0D=0A															<p =
+style=3D"margin-bottom:0in; padding:0in 0in 4.5pt 0in">Village at=
+ Terra Bella</p>=0D=0A=0D=0A															<p style=3D"margin-bot=
+tom:0in; padding:0in 0in 4.5pt 0in">23700 Viento Drive<br />=0D=0A=
+															Land O' Lakes,<span style=3D"line-height:13.5pt"><=
+span style=3D"font-size:10.0pt"><span helvetica=3D"" style=3D"fon=
+t-family:"><span style=3D"color:#524656"> </span></span></span></=
+span>FL<span style=3D"line-height:13.5pt"><span style=3D"font-siz=
+e:10.0pt"><span helvetica=3D"" style=3D"font-family:"><span style=
+=3D"color:#524656"> </span></span></span></span>34639</p>=0D=0A=0D=0A=
+															<p style=3D"margin-bottom:0in; padding:0in 0in 4.5=
+pt 0in">(813) 895-3960</p>=0D=0A															</td>=0D=0A							=
+							</tr>=0D=0A														<tr>=0D=0A															<td styl=
+e=3D"padding:0in 0in 0in 0in">www.thevillageatterrabella.com</td>=
+=0D=0A														</tr>=0D=0A													</tbody>=0D=0A							=
+					</table>=0D=0A												</td>=0D=0A											</tr>=0D=0A	=
+									</tbody>=0D=0A									</table>=0D=0A									</td>=0D=0A=
+								</tr>=0D=0A							</tbody>=0D=0A						</table>=0D=0A=0D=0A=
+						<table align=3D"right" class=3D"Table" style=3D"width:217.5=
+pt; border-collapse:collapse; padding:0in 0in 7.5pt 0in; border:u=
+ndefined" width=3D"290">=0D=0A							<tbody>=0D=0A								<tr>=0D=0A=
+									<td>=0D=0A									<table class=3D"Table" style=3D"width=
+:100.0%; background:white; border-collapse:collapse; padding:0in =
+0in 4.5pt 0in; border:none" width=3D"100%">=0D=0A										<tbody=
+>=0D=0A											<tr>=0D=0A												<td style=3D"border:none;=
+ border-bottom:solid #dddddd 2.25pt; background:white">=0D=0A				=
+								<table class=3D"Table" style=3D"width:100.0%; border-coll=
+apse:collapse; padding:.25in 15.0pt 16.5pt 22.5pt; border:undefin=
+ed" width=3D"100%">=0D=0A													<tbody>=0D=0A														=
+<tr>=0D=0A															<td>=0D=0A															<p style=3D"mar=
+gin-bottom: 0in; padding: 0in 0in 6pt; text-align: center;"><a hr=
+ef=3D"https://g.page/TheVillageAtTerraBella/review" target=3D"_bl=
+ank"><img alt=3D"" src=3D"https://cdngeneral.rentcafe.com/dmslive=
+cafe/2/143645/googlereviews.png" style=3D"width: 194px; height: 1=
+15px;" /></a></p>=0D=0A															</td>=0D=0A														</=
+tr>=0D=0A														<tr>=0D=0A															<td style=3D"padd=
+ing:0in 0in 0in 0in"> </td>=0D=0A														</tr>=0D=0A							=
+						</tbody>=0D=0A												</table>=0D=0A												</td>=0D=0A=
+											</tr>=0D=0A										</tbody>=0D=0A									</table>=0D=0A=
+									</td>=0D=0A								</tr>=0D=0A							</tbody>=0D=0A					=
+	</table>=0D=0A						</td>=0D=0A					</tr>=0D=0A				</tbody>=0D=0A=
+			</table>=0D=0A			</div>=0D=0A			</td>=0D=0A		</tr>=0D=0A		<!--=
+ START FOOTER AREA-->=0D=0A		<tr>=0D=0A			<td align=3D"center" bg=
+color=3D"#ececec" class=3D"full_width" style=3D"" width=3D"100%">=
+=0D=0A			<div class=3D"div_scale" style=3D"width:600px;">=0D=0A		=
+	<table align=3D"center" bgcolor=3D"#ececec" border=3D"0" cellpad=
+ding=3D"0" cellspacing=3D"0" class=3D"table_scale" style=3D"paddi=
+ng:0; margin:0;" width=3D"">=0D=0A				<tbody>=0D=0A					<tr>=0D=0A=
+						<td align=3D"left" bgcolor=3D"#ececec" class=3D"full_width"=
+ style=3D"" valign=3D"top" width=3D"600">=0D=0A						<table width=
+=3D"100%">=0D=0A							<tbody>=0D=0A								<tr>=0D=0A									<t=
+d bgcolor=3D"#ececec" height=3D"30" style=3D"padding:0; line-heig=
+ht:0;"> </td>=0D=0A								</tr>=0D=0A								<!-- START TEXT-->=0D=0A=
+								<tr>=0D=0A									<td align=3D"center" style=3D"padding:=
+0px 30px; font-style: italic; font-size:9px; color:#999b9e; font-=
+family:Helvetica, Arial, sans-serif; line-height:16px;" valign=3D=
+"top">THE INFORMATION CONTAINED IN THIS MESSAGE AND ANY ATTACHMEN=
+T MAY BE PRIVILEGED, CONFIDENTIAL, PROPRIETARY OR OTHERWISE PROTE=
+CTED FROM DISCLOSURE. If the reader of this message is not the in=
+tended recipient, you are hereby notified that any dissemination,=
+ distribution, copying or use of this message and any attachment =
+is strictly prohibited. If you have received this message in erro=
+r, please notify us immediately by replying to the message and pe=
+rmanently delete it from your computer and destroy any printout t=
+hereof.</td>=0D=0A								</tr>=0D=0A								<!-- END TEXT-->=0D=0A=
+								<tr>=0D=0A									<td bgcolor=3D"#ececec" height=3D"30" =
+style=3D"padding:0; line-height: 0;"> </td>=0D=0A								</tr>=0D=0A=
+							</tbody>=0D=0A						</table>=0D=0A						</td>=0D=0A					</=
+tr>=0D=0A				</tbody>=0D=0A			</table>=0D=0A			</div>=0D=0A			</t=
+d>=0D=0A		</tr>=0D=0A		<!-- END FOOTER AREA-->=0D=0A	</tbody>=0D=0A=
+</table> <table align=3D"center"> <tr> <td align=3D"center"> <tab=
+le> <tbody> <tr> <td align=3D"center" bgcolor=3D"#ffffff" colspan=
+=3D"3" style=3D"padding:15px;font: 10px Helvetica,Arial; color: #=
+696969;border-bottom:1px solid #ebebeb;" valign=3D"middle"> <p>23=
+700 Viento Drive, Land O' Lakes, FL 34639</p> </td> </tr> <tr> <t=
+d align=3D"center" bgcolor=3D"#ffffff" colspan=3D"3" style=3D"pad=
+ding:15px;font: 10px Helvetica,Arial; color: #696969" valign=3D"m=
+iddle">  <p>This email was sent to cprice90@gmail.com. To ensure =
+you continue receiving our emails, please add us to your address =
+book or safe list. You can opt out of email notifications from Vi=
+llage at Terra Bella by <a href=3D'https://www.rentcafe.com/resid=
+entservices/apartmentsforrent/emailnotifications.aspx?eh=3DNnSPEn=
+VEbAQUZJM3xnxmgDU%2bjqJ2cyQDGkkz2avOToQ%3d&RentcafeCompanyid=3D1E=
+sjv5MgwiKqdH6EWvtlrw%3d%3d&RentcafePropertyid=3DNuC%2fleFSGz6%2bT=
+L%2fR0ABADQ%3d%3d&VoyagerPropertyId=3DVoG0rn3qYJBoEWxxPwBCag%3d%3=
+d&ResCRMTemplateId=3Dr%2b73RFlJXfN8X27tekAlJg%3d%3d&VoyagerTempla=
+teId=3Dr%2b73RFlJXfN8X27tekAlJg%3d%3d&PersonId=3DtSIOuNyddfAo%2ff=
+t4cQPfjw%3d%3d&rType=3D1&prdc=3D1&iscompanyunsubscribe=3D0'>click=
+ing here</a>. You can opt out of all email notifications from Nor=
+thland Investment Corporation by <a href=3D'https://www.rentcafe.=
+com/residentservices/apartmentsforrent/emailnotifications.aspx?eh=
+=3DNnSPEnVEbAQUZJM3xnxmgDU%2bjqJ2cyQDGkkz2avOToQ%3d&RentcafeCompa=
+nyid=3D1Esjv5MgwiKqdH6EWvtlrw%3d%3d&RentcafePropertyid=3DNuC%2fle=
+FSGz6%2bTL%2fR0ABADQ%3d%3d&VoyagerPropertyId=3DVoG0rn3qYJBoEWxxPw=
+BCag%3d%3d&ResCRMTemplateId=3Dr%2b73RFlJXfN8X27tekAlJg%3d%3d&Voya=
+gerTemplateId=3Dr%2b73RFlJXfN8X27tekAlJg%3d%3d&PersonId=3DtSIOuNy=
+ddfAo%2fft4cQPfjw%3d%3d&rType=3D1&prdc=3D1&iscompanyunsubscribe=3D=
+1'>clicking here</a>.</p> </td> </tr> </tbody> </table> </td> </t=
+r> </table><img src=3D"https://popcard.rentcafe.com/emailtracking=
+.aspx?ref=3Dcb168292-ff65-41c2-a200-d1f829f7dc1e&emailId=3Da3d0cf=
+47-922c-4580-8baf-950d128067d1&propc=3Dm6120   &rcprop=3D1269248"=
+ width=3D"1" height=3D"1">
+

@@ -32,6 +32,7 @@ from backend.utils.data_models import (
     GenerationContext,
     SectionPlan,
 )
+from backend.utils.validators import validate_next_steps_formatting, validate_section_output
 from backend_logic.config import get_openai_config
 from backend_logic.quality_validator import QualityValidator
 
@@ -621,8 +622,47 @@ class EmailGeneratorV2:
             msg = f"Section '{section_plan.header}' generated empty content"
             raise SectionValidationError(msg)
 
+        # Apply section-level format validation
+        section_key = self._section_header_to_key(section_plan.header)
+        self._validate_section_format(content, section_key)
+
         # Return content only - template system handles headers and structure
         return self._clean_ai_response(content)
+
+    def _validate_section_format(self, content: str, section_key: str) -> None:
+        """
+        Validate section output format against YAML configuration specifications.
+        
+        Args:
+            content: The generated section content to validate
+            section_key: The section key to look up format specification
+            
+        Logs warnings for validation failures without stopping generation.
+        """
+        try:
+            # Get section configuration from YAML
+            sections_config = self.config.get('sections', {})
+            if not sections_config:
+                print(f"EMAIL GENERATOR V2: ⚠️ No sections configuration found in YAML")
+                return
+                
+            section_config = sections_config.get(section_key, {})
+            if not section_config:
+                print(f"EMAIL GENERATOR V2: ⚠️ No configuration found for section: {section_key}")
+                return
+                
+            # Extract output format (defaults to "html" if not specified)
+            output_format = section_config.get('output_format', 'html')
+            
+            # Validate the section output
+            validate_section_output(content, output_format)
+            
+            print(f"EMAIL GENERATOR V2: ✅ Section '{section_key}' format validation passed ({output_format})")
+            
+        except Exception as e:
+            # Log validation warning but don't stop generation
+            print(f"EMAIL GENERATOR V2: ⚠️ Section '{section_key}' format validation warning: {e}")
+            # Continue processing - validation failure shouldn't stop email generation
 
     # === STAGE 3: FORMAT - Field Mapping and Validation ===
 
@@ -1061,10 +1101,19 @@ class EmailGeneratorV2:
         # Get persona from configuration
         persona = self.config.get('personas', {}).get('CONTINUING_LEGAL_ADVISOR', '')
         result = self._make_openai_request(prompt, persona)
-        return (
+        final_result = (
             result
             or "<p>Based on our analysis, the following steps are recommended to advance your case.</p>"
         )
+        
+        # Validate next steps formatting for deadline emphasis
+        try:
+            validate_next_steps_formatting(final_result)
+        except ValueError as e:
+            print(f"EMAIL GENERATOR V2: ⚠️ Next steps validation warning: {e}")
+            # Log the warning but don't fail the generation process
+            
+        return final_result
 
     def _generate_generic_section_content(
         self,
@@ -1130,6 +1179,36 @@ class EmailGeneratorV2:
             return f"<h3>{number}. {header.upper()} ({citation})</h3>"
         return f"<h3>{number}. {header.upper()}</h3>"
 
+    def _apply_enhanced_sanitization(self, content: str) -> str:
+        """
+        Apply enhanced sanitization rules to clean AI response content.
+        
+        This method implements specific regex rules for:
+        - Normalizing punctuation spacing
+        - Removing duplicate intro phrases
+        - Eliminating leading commas from lines
+        """
+        if not content:
+            return content
+        
+        # Normalize punctuation spacing: Add space after punctuation if missing
+        content = re.sub(r'([.,])([A-Za-z])', r'\1 \2', content)
+        
+        # Remove duplicate intro phrases (case-insensitive)
+        # This removes repeated occurrences of "the path forward" within the same text
+        content = re.sub(r'(\bthe path forward\b).*?\1', r'\1', content, flags=re.IGNORECASE)
+        
+        # Eliminate leading commas from lines
+        lines = content.split('\n')
+        cleaned_lines = []
+        for line in lines:
+            # Remove leading commas and whitespace from each line
+            cleaned_line = re.sub(r'^\s*,\s*', '', line)
+            cleaned_lines.append(cleaned_line)
+        content = '\n'.join(cleaned_lines)
+        
+        return content
+
     def _clean_ai_response(
         self, content: str, is_counter_intuitive: bool = False
     ) -> str:
@@ -1148,7 +1227,10 @@ class EmailGeneratorV2:
         cleaned = re.sub(r"^```[a-zA-Z]*\n?", "", content, flags=re.MULTILINE)
         cleaned = re.sub(r"```$", "", cleaned, flags=re.MULTILINE)
 
-        # Step 2: Apply comprehensive content processing
+        # Step 2: Apply enhanced sanitization rules
+        cleaned = self._apply_enhanced_sanitization(cleaned)
+
+        # Step 3: Apply comprehensive content processing
         cleaned = self._format_legal_analysis(cleaned)
         cleaned = self._format_recommendations(cleaned)
         cleaned = self._format_subsections(cleaned)
@@ -1158,11 +1240,14 @@ class EmailGeneratorV2:
         cleaned = self._ensure_proper_whitespace(cleaned)
         cleaned = self._trim_wordiness(cleaned)
 
-        # Step 3: Convert markdown formatting
+        # Step 3.5: Apply grammar sanitization
+        cleaned = self._sanitize_output_grammar(cleaned)
+
+        # Step 4: Convert markdown formatting
         cleaned = re.sub(r"\*\*(.*?)\*\*", r"<strong>\1</strong>", cleaned)
         cleaned = re.sub(r"\*(.*?)\*", r"<em>\1</em>", cleaned)
 
-        # Step 4: Fix HTML formatting issues
+        # Step 5: Fix HTML formatting issues
         cleaned = re.sub(r"<p>\s*<p>", "<p>", cleaned)
         cleaned = re.sub(r"</p>\s*</p>", "</p>", cleaned)
         cleaned = re.sub(r"<p>\s*</p>", "", cleaned)
@@ -1175,7 +1260,7 @@ class EmailGeneratorV2:
             "input_length": len(content) if content else 0,
             "output_length": len(cleaned) if cleaned else 0,
             "processing_steps_applied": [
-                "format_legal_analysis", "format_recommendations", "format_subsections",
+                "apply_enhanced_sanitization", "format_legal_analysis", "format_recommendations", "format_subsections",
                 "format_statutory_citations", "format_bullet_points", "clean_section_numbering",
                 "ensure_proper_whitespace", "trim_wordiness"
             ],
@@ -2041,6 +2126,36 @@ class EmailGeneratorV2:
         content = re.sub(r"^\s+|\s+$", "", content, flags=re.MULTILINE)
         
         return content
+
+    @staticmethod
+    def _sanitize_output_grammar(text: str) -> str:
+        """
+        Sanitize output grammar with specific regex operations.
+        
+        Performs the following operations:
+        - Normalize punctuation spacing
+        - Remove duplicate introductory phrases (case-insensitive)
+        - Eliminate leading commas from each line
+        
+        Args:
+            text: The text string to sanitize
+            
+        Returns:
+            The processed text with grammar corrections applied
+        """
+        if not text:
+            return text
+        
+        # Normalize punctuation spacing: Add space after punctuation if missing
+        text = re.sub(r'([.,])([A-Za-z])', r'\1 \2', text)
+        
+        # Remove duplicate introductory phrases (case-insensitive)
+        text = re.sub(r'(\bthe path forward\b).*?\1', r'\1', text, flags=re.IGNORECASE | re.DOTALL)
+        
+        # Eliminate leading commas from each line
+        text = '\n'.join([re.sub(r'^\s*,\s*', '', line) for line in text.splitlines()])
+        
+        return text
 
     # === EXTRACTION METHODS (from original code) ===
 

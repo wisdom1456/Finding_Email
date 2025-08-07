@@ -70,7 +70,15 @@
         <div style="width: 100%;">
             <div style="font-weight: bold; font-size: 17px; color: #2c3e50; margin-bottom: 12px; padding-bottom: 6px; border-bottom: 1px solid #bdc3c7; text-transform: uppercase; letter-spacing: 0.5px; font-family: 'Times New Roman', 'Liberation Serif', 'DejaVu Serif', 'FreeSerif', Georgia, 'Nimbus Roman No9 L', serif;">{{ title }}</div>
             <div style="margin-left: 15px; text-align: justify; font-family: 'Times New Roman', 'Liberation Serif', 'DejaVu Serif', 'FreeSerif', Georgia, 'Nimbus Roman No9 L', serif;">
-                {{ content | replace('\\n', '<br>') | safe }}
+                {% if content is iterable and content is not string %}
+                <ul>
+                  {% for item in content %}
+                    <li>{{ item }}</li>
+                  {% endfor %}
+                </ul>
+                {% else %}
+                  {{ content | safe }}
+                {% endif %}
             </div>
         </div>
     </div>

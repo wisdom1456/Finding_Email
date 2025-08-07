@@ -5,9 +5,9 @@ This service provides pre-processing cost estimation for document analysis,
 audio transcription, and video processing based on current API pricing rates
 and file characteristics.
 """
+
 from __future__ import annotations
 
-from datetime import datetime
 from decimal import Decimal
 from typing import Any
 
@@ -105,11 +105,12 @@ class CostEstimator:
             document_costs.append(
                 ServiceCost(
                     service_name=model_name,
+                    cost=float(total_cost),
                     operation_type="document_analysis",
                     units_consumed=input_tokens + output_tokens,
                     unit_type="tokens",
-                    rate_per_unit=self.PRICING_RATES[model_key]["input_tokens"],
-                    total_cost=total_cost,
+                    rate_per_unit=float(self.PRICING_RATES[model_key]["input_tokens"]),
+                    total_cost=float(total_cost),
                     file_name=doc.file_name,
                 )
             )
@@ -146,11 +147,12 @@ class CostEstimator:
             audio_costs.append(
                 ServiceCost(
                     service_name="OpenAI Whisper",
+                    cost=float(whisper_cost),
                     operation_type="audio_transcription",
                     units_consumed=int(estimated_minutes),
                     unit_type="minutes",
-                    rate_per_unit=self.PRICING_RATES["openai_whisper"]["per_minute"],
-                    total_cost=whisper_cost,
+                    rate_per_unit=float(self.PRICING_RATES["openai_whisper"]["per_minute"]),
+                    total_cost=float(whisper_cost),
                     file_name=file_name,
                 )
             )
@@ -187,11 +189,12 @@ class CostEstimator:
             video_costs.append(
                 ServiceCost(
                     service_name="Google Vertex AI Video",
+                    cost=float(video_cost),
                     operation_type="video_processing",
                     units_consumed=int(estimated_minutes),
                     unit_type="minutes",
-                    rate_per_unit=self.PRICING_RATES["vertex_ai_video"]["per_minute"],
-                    total_cost=video_cost,
+                    rate_per_unit=float(self.PRICING_RATES["vertex_ai_video"]["per_minute"]),
+                    total_cost=float(video_cost),
                     file_name=file_name,
                 )
             )
@@ -210,16 +213,18 @@ class CostEstimator:
                 * self.PRICING_RATES["vertex_ai_gemini_flash"]["output_tokens"]
             )
 
+            gemini_total_cost = gemini_input_cost + gemini_output_cost
             video_costs.append(
                 ServiceCost(
                     service_name="Google Vertex AI Gemini-2.5-flash",
+                    cost=float(gemini_total_cost),
                     operation_type="video_analysis",
                     units_consumed=analysis_input_tokens + analysis_output_tokens,
                     unit_type="tokens",
-                    rate_per_unit=self.PRICING_RATES["vertex_ai_gemini_flash"][
+                    rate_per_unit=float(self.PRICING_RATES["vertex_ai_gemini_flash"][
                         "input_tokens"
-                    ],
-                    total_cost=gemini_input_cost + gemini_output_cost,
+                    ]),
+                    total_cost=float(gemini_total_cost),
                     file_name=file_name,
                 )
             )
@@ -262,17 +267,18 @@ class CostEstimator:
             video_costs = self.estimate_video_processing_costs(video_files)
             estimated_media_costs.extend(video_costs)
 
-        # Calculate total estimated cost
-        total_document_cost = sum(cost.total_cost for cost in estimated_document_costs)
-        total_media_cost = sum(cost.total_cost for cost in estimated_media_costs)
+        # Calculate total estimated cost - use cost field instead of total_cost
+        total_document_cost = sum(cost.cost for cost in estimated_document_costs)
+        total_media_cost = sum(cost.cost for cost in estimated_media_costs)
         total_estimated_cost = total_document_cost + total_media_cost
 
         return CostEstimate(
-            estimated_document_costs=estimated_document_costs,
-            estimated_media_costs=estimated_media_costs,
-            total_estimated_cost=total_estimated_cost,
-            confidence_level=self.confidence_level,
-            estimation_timestamp=datetime.now(),
+            estimated_cost=float(total_estimated_cost),
+            breakdown={
+                "documents": float(total_document_cost),
+                "media": float(total_media_cost),
+                "confidence": self.confidence_level,
+            },
         )
 
     def _estimate_tokens(self, text: str) -> int:

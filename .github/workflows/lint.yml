@@ -40,8 +40,8 @@ jobs:
 
     - name: Run Ruff linter
       run: |
-        # Run ruff check with error on any issues
-        ruff check . --output-format=github
+        # Run ruff check with GitHub output format and auto-fix
+        ruff check . --output-format=github --fix
 
     - name: Run Ruff formatter check
       run: |

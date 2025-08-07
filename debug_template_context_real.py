@@ -2,6 +2,7 @@
 """
 Debug script to test the exact Jinja2 template context issue as it occurs in the real application
 """
+
 from __future__ import annotations
 
 from jinja2 import DictLoader, Environment

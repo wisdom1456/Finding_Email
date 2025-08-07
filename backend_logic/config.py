@@ -4,6 +4,7 @@ Configuration Management Module
 This module provides a type-safe, centralized configuration system using Pydantic.
 All environment variables are defined here with proper validation and documentation.
 """
+
 from __future__ import annotations
 
 import os
@@ -58,6 +59,40 @@ class Settings(BaseSettings):
     )
 
     # ==================================================
+    # OPENAI CONFIGURATION
+    # ==================================================
+
+    openai_model: str = Field(
+        "gpt-4o",
+        alias="OPENAI_MODEL",
+        description="OpenAI model to use for content generation",
+    )
+
+    openai_timeout: float = Field(
+        30.0,
+        alias="OPENAI_TIMEOUT",
+        description="Timeout in seconds for OpenAI API requests",
+    )
+
+    openai_max_retries: int = Field(
+        2,
+        alias="OPENAI_MAX_RETRIES",
+        description="Maximum number of retries for OpenAI API requests",
+    )
+
+    openai_temperature: float = Field(
+        0.3,
+        alias="OPENAI_TEMPERATURE",
+        description="Temperature for OpenAI content generation (0.0-1.0)",
+    )
+
+    openai_max_tokens: int = Field(
+        4000,
+        alias="OPENAI_MAX_TOKENS",
+        description="Maximum tokens for OpenAI responses",
+    )
+
+    # ==================================================
     # OPTIONAL CONFIGURATION
     # ==================================================
 
@@ -79,6 +114,24 @@ class Settings(BaseSettings):
         """Validate that OpenAI API key has the correct format."""
         if not v.startswith(("sk-", "sk-proj-")):
             msg = "OpenAI API key must start with 'sk-' or 'sk-proj-'"
+            raise ValueError(msg)
+        return v
+
+    @field_validator("openai_temperature")
+    @classmethod
+    def validate_temperature(cls, v):
+        """Validate that temperature is in valid range."""
+        if not 0.0 <= v <= 2.0:
+            msg = "OpenAI temperature must be between 0.0 and 2.0"
+            raise ValueError(msg)
+        return v
+
+    @field_validator("openai_timeout")
+    @classmethod
+    def validate_timeout(cls, v):
+        """Validate that timeout is positive."""
+        if v <= 0:
+            msg = "OpenAI timeout must be positive"
             raise ValueError(msg)
         return v
 
@@ -146,9 +199,7 @@ def get_openai_api_key() -> str:
             "OPENAI_API_KEY is required but not set. "
             "Please check your .env file or environment variables."
         )
-        raise ValueError(
-            msg
-        )
+        raise ValueError(msg)
     return settings.openai_api_key
 
 
@@ -175,12 +226,26 @@ def get_google_cloud_config() -> tuple[str, str, str]:
             f"Incomplete Google Cloud configuration. Missing: {', '.join(missing)}. "
             "Video processing features will be disabled."
         )
-        raise ValueError(
-            msg
-        )
+        raise ValueError(msg)
 
     return (
         settings.gcp_project_id,
         settings.gcp_bucket_name,
         settings.google_application_credentials,
     )
+
+
+def get_openai_config() -> dict[str, float | int | str]:
+    """
+    Get OpenAI configuration for content generation.
+
+    Returns:
+        dict: OpenAI configuration parameters
+    """
+    return {
+        "model": settings.openai_model,
+        "timeout": settings.openai_timeout,
+        "max_retries": settings.openai_max_retries,
+        "temperature": settings.openai_temperature,
+        "max_tokens": settings.openai_max_tokens,
+    }

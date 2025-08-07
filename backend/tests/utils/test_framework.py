@@ -2,6 +2,7 @@
 """
 Reusable Test Framework for Comprehensive Case Analysis
 """
+
 from __future__ import annotations
 
 import json
@@ -112,9 +113,7 @@ class TestOrchestrator:
 
         if not self.input_path.exists():
             msg = f"Client documents directory not found: {self.input_path}"
-            raise FileNotFoundError(
-                msg
-            )
+            raise FileNotFoundError(msg)
 
         all_files = [f for f in self.input_path.iterdir() if f.is_file()]
         supported_files = [

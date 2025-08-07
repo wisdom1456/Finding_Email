@@ -8,6 +8,7 @@ Tests all the major changes implemented:
 4. Template restructuring
 5. Email template integration
 """
+
 from __future__ import annotations
 
 import os

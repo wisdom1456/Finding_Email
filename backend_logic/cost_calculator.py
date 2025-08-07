@@ -4,6 +4,7 @@ Cost Calculator Service for Legal Document Analysis Portal
 This service calculates actual costs incurred during processing based on
 API usage logs, token counts, and processing durations from various services.
 """
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -84,7 +85,7 @@ class CostCalculator:
 
         for doc in analyzed_documents:
             # Extract actual token usage from logs if available
-            doc_log = processing_logs.get(doc.filename, {})
+            doc_log = processing_logs.get(doc.file_name, {})
 
             if "token_usage" in doc_log:
                 # Use actual token counts from OpenAI response
@@ -93,8 +94,9 @@ class CostCalculator:
                 model_used = doc_log.get("model", "gpt-4o")
             else:
                 # Fallback to estimation if logs not available
-                input_tokens = self._estimate_tokens(doc.summary + doc.key_information)
-                output_tokens = len(doc.summary + doc.key_information) // 4
+                key_points_text = " ".join(doc.key_points) if doc.key_points else ""
+                input_tokens = self._estimate_tokens(doc.analysis + key_points_text)
+                output_tokens = len(doc.analysis + key_points_text) // 4
                 model_used = "gpt-4o"
 
             # Determine pricing rates based on model used
@@ -126,12 +128,13 @@ class CostCalculator:
             document_costs.append(
                 ServiceCost(
                     service_name=model_name,
+                    cost=float(total_cost),
                     operation_type="document_analysis",
                     units_consumed=total_tokens,
                     unit_type="tokens",
-                    rate_per_unit=weighted_rate,
-                    total_cost=total_cost,
-                    file_name=doc.filename,
+                    rate_per_unit=float(weighted_rate),
+                    total_cost=float(total_cost),
+                    file_name=doc.file_name,
                 )
             )
 
@@ -180,11 +183,12 @@ class CostCalculator:
             audio_costs.append(
                 ServiceCost(
                     service_name="OpenAI Whisper",
+                    cost=float(whisper_cost),
                     operation_type="audio_transcription",
                     units_consumed=int(actual_minutes),
                     unit_type="minutes",
-                    rate_per_unit=self.PRICING_RATES["openai_whisper"]["per_minute"],
-                    total_cost=whisper_cost,
+                    rate_per_unit=float(self.PRICING_RATES["openai_whisper"]["per_minute"]),
+                    total_cost=float(whisper_cost),
                     file_name=audio.file_name,
                 )
             )
@@ -192,7 +196,9 @@ class CostCalculator:
         return audio_costs
 
     def calculate_video_processing_costs(
-        self, video_insights: list[VideoInsight], processing_logs: dict[str, Any] | None = None
+        self,
+        video_insights: list[VideoInsight],
+        processing_logs: dict[str, Any] | None = None,
     ) -> list[ServiceCost]:
         """
         Calculate actual costs for video processing.
@@ -233,11 +239,12 @@ class CostCalculator:
             video_costs.append(
                 ServiceCost(
                     service_name="Google Vertex AI Video",
+                    cost=float(video_cost),
                     operation_type="video_processing",
                     units_consumed=int(actual_minutes),
                     unit_type="minutes",
-                    rate_per_unit=self.PRICING_RATES["vertex_ai_video"]["per_minute"],
-                    total_cost=video_cost,
+                    rate_per_unit=float(self.PRICING_RATES["vertex_ai_video"]["per_minute"]),
+                    total_cost=float(video_cost),
                     file_name=video.file_name,
                 )
             )
@@ -251,7 +258,7 @@ class CostCalculator:
             else:
                 # Estimate based on insights complexity
                 insight_text = (
-                    str(video.insights) + str(video.labels) + str(video.objects)
+                    str(video.insights or "") + str(video.labels or "") + str(video.objects or "")
                 )
                 input_tokens = 1500  # Standard prompt
                 output_tokens = max(1000, len(insight_text) // 4)
@@ -277,11 +284,12 @@ class CostCalculator:
             video_costs.append(
                 ServiceCost(
                     service_name="Google Vertex AI Gemini-2.5-flash",
+                    cost=float(total_gemini_cost),
                     operation_type="video_analysis",
                     units_consumed=total_tokens,
                     unit_type="tokens",
-                    rate_per_unit=weighted_rate,
-                    total_cost=total_gemini_cost,
+                    rate_per_unit=float(weighted_rate),
+                    total_cost=float(total_gemini_cost),
                     file_name=video.file_name,
                 )
             )
@@ -302,13 +310,14 @@ class CostCalculator:
                 video_costs.append(
                     ServiceCost(
                         service_name="Google Vertex AI Gemini-2.5-flash (Criminal Analysis)",
+                        cost=float(criminal_cost),
                         operation_type="criminal_video_analysis",
                         units_consumed=criminal_tokens,
                         unit_type="tokens",
-                        rate_per_unit=self.PRICING_RATES["vertex_ai_gemini_flash"][
+                        rate_per_unit=float(self.PRICING_RATES["vertex_ai_gemini_flash"][
                             "output_tokens"
-                        ],
-                        total_cost=criminal_cost,
+                        ]),
+                        total_cost=float(criminal_cost),
                         file_name=video.file_name,
                     )
                 )
@@ -360,16 +369,17 @@ class CostCalculator:
             )
             media_processing_costs.extend(video_costs)
 
-        # Calculate total
-        total_document_cost = sum(cost.total_cost for cost in document_analysis_costs)
-        total_media_cost = sum(cost.total_cost for cost in media_processing_costs)
+        # Calculate total - use cost field instead of total_cost
+        total_document_cost = sum(cost.cost for cost in document_analysis_costs)
+        total_media_cost = sum(cost.cost for cost in media_processing_costs)
         total_actual_cost = total_document_cost + total_media_cost
 
+        # Combine all service costs into a single list
+        all_service_costs = document_analysis_costs + media_processing_costs
+        
         return ActualCosts(
-            document_analysis_costs=document_analysis_costs,
-            media_processing_costs=media_processing_costs,
-            total_actual_cost=total_actual_cost,
-            processing_timestamp=datetime.now(),
+            total_actual_cost=float(total_actual_cost),
+            service_costs=all_service_costs,
         )
 
     def _estimate_tokens(self, text: str) -> int:

@@ -4,6 +4,7 @@ Cost Exporter Service for Legal Document Analysis Portal
 This service provides comprehensive cost export capabilities for operational analysis
 and budget reporting, building upon the existing cost tracking infrastructure.
 """
+
 from __future__ import annotations
 
 import csv
@@ -110,7 +111,7 @@ class CostExporter:
                     "",
                     "",
                     "TOTAL ESTIMATED:",
-                    f"${float(cost_summary.cost_estimate.total_estimated_cost):.4f}",
+                    f"${float(cost_summary.cost_estimate.estimated_cost):.4f}",
                 ]
             )
             writer.writerow([])
@@ -213,7 +214,7 @@ class CostExporter:
         if cost_summary.cost_estimate:
             export_data["cost_estimate"] = {
                 "total_estimated_cost": float(
-                    cost_summary.cost_estimate.total_estimated_cost
+                    cost_summary.cost_estimate.estimated_cost
                 ),
                 "confidence_level": cost_summary.cost_estimate.confidence_level,
                 "estimation_timestamp": cost_summary.cost_estimate.estimation_timestamp.isoformat(),
@@ -349,7 +350,7 @@ class CostExporter:
             lines.append("COST ESTIMATES")
             lines.append("-" * 20)
             lines.append(
-                f"Total Estimated Cost: ${float(cost_summary.cost_estimate.total_estimated_cost):.4f}"
+                f"Total Estimated Cost: ${float(cost_summary.cost_estimate.estimated_cost):.4f}"
             )
             lines.append(
                 f"Confidence Level: {cost_summary.cost_estimate.confidence_level * 100:.1f}%"
@@ -465,7 +466,7 @@ class CostExporter:
 
         # Calculate cost efficiency score
         if cost_summary.cost_estimate and cost_summary.actual_costs:
-            estimated = float(cost_summary.cost_estimate.total_estimated_cost)
+            estimated = float(cost_summary.cost_estimate.estimated_cost)
             actual = float(cost_summary.actual_costs.total_actual_cost)
 
             if estimated > 0:
@@ -707,7 +708,7 @@ class CostExporter:
             html += f"""
             <div class="section">
                 <h2>Cost Estimate</h2>
-                <p><strong>Total Estimated:</strong> ${float(cost_summary.cost_estimate.total_estimated_cost):.4f}</p>
+                <p><strong>Total Estimated:</strong> ${float(cost_summary.cost_estimate.estimated_cost):.4f}</p>
             </div>
             """
 

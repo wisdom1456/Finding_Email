@@ -5,6 +5,7 @@ This test demonstrates the core budget sheet functionality
 integrated with the existing cost tracking infrastructure.
 (Skips Streamlit component to avoid plotly dependency)
 """
+
 from __future__ import annotations
 
 import os

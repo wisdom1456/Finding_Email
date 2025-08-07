@@ -23,7 +23,6 @@ class AudioProcessingError(Exception):
     """Custom exception for audio processing errors."""
 
 
-
 class AudioProcessor:
     """
     Handles audio file processing and transcription using OpenAI Whisper.
@@ -70,9 +69,7 @@ class AudioProcessor:
                 f"Audio file '{file_name}' is too large ({file_size / 1024 / 1024:.1f}MB). "
                 f"Maximum size is {self.max_file_size / 1024 / 1024}MB."
             )
-            raise AudioProcessingError(
-                msg
-            )
+            raise AudioProcessingError(msg)
 
         # Check MIME type
         try:
@@ -85,9 +82,7 @@ class AudioProcessor:
                         f"Unsupported audio format for '{file_name}'. "
                         f"Supported formats: MP3, M4A, WAV, WEBM, FLAC, OGG"
                     )
-                    raise AudioProcessingError(
-                        msg
-                    )
+                    raise AudioProcessingError(msg)
         except Exception as e:
             print(
                 f"AUDIO PROCESSOR: Warning - Could not detect MIME type for {file_name}: {e}"
@@ -211,9 +206,7 @@ class AudioProcessor:
                 error_type="AudioProcessingError",
             )
         except Exception as e:
-            error_msg = (
-                f"Unexpected error processing audio file '{file_name}': {e!s}"
-            )
+            error_msg = f"Unexpected error processing audio file '{file_name}': {e!s}"
             print(f"AUDIO PROCESSOR: ❌ {error_msg}")
             return MediaProcessingError(
                 source="AudioProcessor",
@@ -248,9 +241,7 @@ class AudioProcessor:
             return await self.process_audio_file(temp_path, file_name)
 
         except Exception as e:
-            error_msg = (
-                f"Error processing Streamlit audio upload '{file_name}': {e!s}"
-            )
+            error_msg = f"Error processing Streamlit audio upload '{file_name}': {e!s}"
             print(f"AUDIO PROCESSOR: ❌ {error_msg}")
             return MediaProcessingError(
                 source="AudioProcessor",

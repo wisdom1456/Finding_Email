@@ -18,7 +18,7 @@ from backend.utils.data_models import (
     TranscriptedMedia,
     VideoInsight,
 )
-from backend_logic.ai_analyzer import AIAnalyzer
+from backend_logic.ai import AIAnalyzer
 
 
 @pytest.fixture

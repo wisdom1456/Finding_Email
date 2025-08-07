@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 
 from fastapi import HTTPException
 
-from backend.services.ai_analyzer import AIAnalyzer
+from backend_logic.ai import AIAnalyzer
 from backend.services.email_generator import EmailGenerator
 from backend.utils.data_models import (
     AnalysisError,
@@ -43,7 +43,7 @@ async def process_documents_async(
 
         # Determine which document is the intake form
         intake_docs_saved = [
-            doc for doc in saved_documents if doc.filename == intake_filename
+            doc for doc in saved_documents if doc.original_filename == intake_filename
         ]
         if not intake_docs_saved:
             raise HTTPException(
@@ -52,9 +52,7 @@ async def process_documents_async(
 
         intake_docs_saved[0]
 
-        [
-            doc for doc in saved_documents if doc.filename != intake_filename
-        ]
+        [doc for doc in saved_documents if doc.original_filename != intake_filename]
 
         processed_docs = await doc_processor.process_documents(
             saved_documents, intake_filename

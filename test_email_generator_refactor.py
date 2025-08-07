@@ -3,6 +3,7 @@
 Test script to validate the refactored EmailGeneratorV2 module.
 Verifies that the critical bug is fixed and all template fields are populated.
 """
+
 from __future__ import annotations
 
 import os
@@ -208,7 +209,6 @@ def create_test_analysis() -> CaseAnalysisResult:
     )
 
 
-
 def test_field_population(result: GenerationOutput) -> dict[str, bool]:
     """Test that all required template fields are properly populated."""
     letter = result.letter
@@ -235,7 +235,6 @@ def test_field_population(result: GenerationOutput) -> dict[str, bool]:
     }
 
 
-
 def test_debug_output(result: GenerationOutput) -> dict[str, bool]:
     """Test that debug output provides useful information."""
     debug_info = result.debug_info
@@ -249,7 +248,6 @@ def test_debug_output(result: GenerationOutput) -> dict[str, bool]:
         if result.generation_metadata
         else False,
     }
-
 
 
 def main():

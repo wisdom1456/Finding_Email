@@ -16,6 +16,7 @@ Prerequisites:
 Usage:
     python test_video_google_api.py
 """
+
 from __future__ import annotations
 
 import asyncio

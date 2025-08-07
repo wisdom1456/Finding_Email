@@ -5,6 +5,7 @@ Cost Tracking Performance Test
 Tests the cost tracking system under various load conditions
 to ensure scalability and reliability.
 """
+
 from __future__ import annotations
 
 import json

@@ -3,6 +3,7 @@
 Comprehensive Test Suite for Erik Devlin Case
 Tests the full document analysis pipeline with all available client documents.
 """
+
 from __future__ import annotations
 
 import sys
@@ -401,7 +402,9 @@ def validate_file_generation(response: dict[str, Any], results: dict[str, Any]) 
         results["overall_status"] = "FAIL"
 
 
-def validate_email_comparison(response: dict[str, Any], results: dict[str, Any]) -> None:
+def validate_email_comparison(
+    response: dict[str, Any], results: dict[str, Any]
+) -> None:
     """Compare the generated email with the reference email."""
     print("  - Validating Email Comparison...")
     comparison_check = {"check": "Email Comparison", "status": "PASS", "details": []}
@@ -412,9 +415,7 @@ def validate_email_comparison(response: dict[str, Any], results: dict[str, Any])
 
         if not reference_email_path.exists():
             msg = f"Reference email not found at {reference_email_path}"
-            raise FileNotFoundError(
-                msg
-            )
+            raise FileNotFoundError(msg)
 
         if not generated_email_content:
             comparison_check["status"] = "FAIL"

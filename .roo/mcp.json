@@ -5,6 +5,9 @@
       "args": [
         "-y",
         "@modelcontextprotocol/server-memory"
+      ],
+      "alwaysAllow": [
+        "create_entities"
       ]
     }
   }

@@ -3,6 +3,7 @@
 Comprehensive Test Suite for Balaji Badam Case
 Tests the full document analysis pipeline with all available client documents.
 """
+
 from __future__ import annotations
 
 import json

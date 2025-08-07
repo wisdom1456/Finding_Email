@@ -1,0 +1,14 @@
+{
+  "case_id": "Devlin v. LLW Construction - Contractor Dispute",
+  "cost_estimate": {
+    "estimated_cost": 0.0,
+    "breakdown": {
+      "documents": 0.0,
+      "media": 0.0,
+      "confidence": 0.8
+    }
+  },
+  "actual_costs": null,
+  "cost_variance": null,
+  "cost_variance_percentage": null
+}

@@ -2,6 +2,7 @@
 """
 Test script to verify the Jinja2 template changes for findings_email and document_appendix
 """
+
 from __future__ import annotations
 
 import os

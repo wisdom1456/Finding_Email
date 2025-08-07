@@ -104,9 +104,7 @@ def test_happy_path_devlin():
         letter.next_steps,
         letter.closing_paragraph,
     ]:
-        assert (
-            field.startswith(("<p>", "<h3>", "<"))
-        )
+        assert field.startswith(("<p>", "<h3>", "<"))
 
     # Assert debug_info contains structure_plan and generated_sections
     debug = output.debug_info

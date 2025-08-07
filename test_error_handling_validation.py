@@ -3,6 +3,7 @@
 Performance and Error Handling Validation Test Suite
 Tests the robustness, logging, and performance of the consolidated Legal Document Analysis Portal
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -203,16 +204,14 @@ class ErrorHandlingValidator:
 
         start_time = time.time()
         try:
-            from backend_logic.ai_analyzer import AIAnalyzer
+            from backend_logic.ai import AIAnalyzer
             from backend_logic.document_processor import DocumentProcessor
 
             # Test 1: DocumentProcessor with invalid input
             processor = DocumentProcessor()
             try:
                 # This should raise a proper exception
-                asyncio.run(
-                    processor.process_documents_from_streamlit(None, [])
-                )
+                asyncio.run(processor.process_documents_from_streamlit(None, []))
                 self.results.add_test(
                     "direct_call_null_input",
                     False,
@@ -270,7 +269,7 @@ class ErrorHandlingValidator:
                 # Test that modules produce logging output
                 from openai import OpenAI
 
-                from backend_logic.ai_analyzer import AIAnalyzer
+                from backend_logic.ai import AIAnalyzer
 
                 # Create a mock that will trigger logging
                 if os.environ.get("OPENAI_API_KEY"):
@@ -335,7 +334,7 @@ class ErrorHandlingValidator:
 
             from openai import OpenAI
 
-            from backend_logic.ai_analyzer import AIAnalyzer
+            from backend_logic.ai import AIAnalyzer
             from backend_logic.document_processor import DocumentProcessor
 
             # Test with invalid API key to simulate service unavailability

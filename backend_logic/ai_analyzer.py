@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 from typing import TYPE_CHECKING, Any
 
 import tiktoken
+import yaml
 from openai import APIError, APITimeoutError, BadRequestError, OpenAI, RateLimitError
 from pydantic import ValidationError
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_fixed
@@ -16,6 +18,7 @@ from backend.utils.data_models import (
     CaseAnalysisResult,
     DemandLetterEvaluation,
     EnhancedIntakeAnalysis,
+    FindingsLetterContent,
     LegalAssessment,
     ProcessedDocument,
 )
@@ -34,9 +37,49 @@ if TYPE_CHECKING:
 class AIAnalyzer:
     """Handles all interactions with the OpenAI API for document analysis."""
 
-    def __init__(self, client: OpenAI, doc_processor: DocumentProcessor) -> None:
+    def __init__(self, client: OpenAI, doc_processor: DocumentProcessor, config_path: str | None = None) -> None:
         self.client = client
         self.doc_processor = doc_processor
+        
+        # Load configuration
+        self.config = self._load_configuration(config_path)
+        
+        print(f"AI ANALYZER: ✅ Initialized with configuration: {config_path or 'default'}")
+
+    def _load_configuration(self, config_path: str | None = None) -> dict[str, Any]:
+        """Load configuration from YAML file."""
+        if config_path is None:
+            # Default to universal_legal_config.yaml for all case types
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            project_root = current_dir
+            
+            # Navigate up until we find the project root
+            while project_root != "/" and not (
+                os.path.exists(os.path.join(project_root, "app.py"))
+                and os.path.exists(os.path.join(project_root, "backend"))
+            ):
+                project_root = os.path.dirname(project_root)
+            
+            if project_root == "/":
+                project_root = os.getcwd()
+            
+            config_path = os.path.join(project_root, "backend", "config", "templates", "universal_legal_config.yaml")
+        
+        if not os.path.exists(config_path):
+            print(f"AI ANALYZER: ⚠️  Configuration file not found: {config_path}, using default prompts")
+            return {}
+        
+        try:
+            with open(config_path, 'r', encoding='utf-8') as f:
+                config = yaml.safe_load(f)
+            print(f"AI ANALYZER: Configuration loaded from: {config_path}")
+            return config
+        except yaml.YAMLError as e:
+            print(f"AI ANALYZER: ⚠️  Failed to parse YAML configuration: {e}, using default prompts")
+            return {}
+        except Exception as e:
+            print(f"AI ANALYZER: ⚠️  Failed to load configuration: {e}, using default prompts")
+            return {}
 
     @retry(
         stop=stop_after_attempt(3),
@@ -76,35 +119,44 @@ class AIAnalyzer:
                 raw_response_content = response.choices[0].message.content
             print(f"AI ANALYZER: Raw response: {raw_response_content}")
             msg = f"Failed to parse AI response as JSON: {e}"
-            raise AIAnalysisError(msg)
+            raise AIAnalysisError(msg) from e
         except (RateLimitError, APIError, APITimeoutError) as e:
             print(f"AI ANALYZER: OpenAI API Error: {e}. Retrying...")
             raise
-        except Exception as e:
+        except (AttributeError, KeyError, TypeError, OSError) as e:
             print(
                 f"AI ANALYZER: An unexpected error occurred: {type(e).__name__} - {e}"
             )
             msg = f"Error communicating with OpenAI API: {e}"
-            raise AIAnalysisError(msg)
+            raise AIAnalysisError(msg) from e
 
-    def _build_intake_prompt(self, content: str) -> str:
-        """Builds the prompt for analyzing an intake form using CLIENT_CLARITY_ADVISOR framework."""
+    def _build_intake_prompt(self, content: str, prompt_config: str = None) -> str:
+        """Builds the prompt for analyzing an intake form using configuration-driven prompts."""
+        if prompt_config:
+            # Use configuration-provided prompt
+            base_prompt = prompt_config
+        else:
+            # Fallback to default prompt if configuration is missing
+            base_prompt = (
+                "You are a seasoned Florida litigation attorney with 15+ years of experience analyzing case documents and extracting legally significant information. Your document analysis supports comprehensive legal findings letters.\n\n"
+                "DOCUMENT ANALYSIS EXPERTISE:\n"
+                "1. **Legal Relevance Assessment:** Identify information directly relevant to potential legal claims and defenses under Florida law\n"
+                "2. **Strategic Document Review:** Extract facts that will be critical for case development, settlement negotiations, or litigation\n"
+                "3. **Evidence Identification:** Recognize documentary evidence that supports or undermines legal positions\n"
+                "4. **Professional Synthesis:** Organize findings to support detailed attorney analysis and client communication\n"
+                "5. **Florida Practice Focus:** Consider how document contents relate to Florida legal standards and procedural requirements\n"
+                "6. **Case Development Support:** Structure analysis to facilitate comprehensive legal strategy and client counseling"
+            )
+        
         return (
             "SYSTEM\n"
-            "You are a CLIENT_CLARITY_ADVISOR - a litigation attorney who emphasizes collaborative, warm, and accessible client partnerships while maintaining legal professionalism.\n\n"
-            "CLIENT_CLARITY_ADVISOR CORE DIRECTIVES:\n"
-            "1. **Collaborative Tone:** Use 'we' language to emphasize partnership\n"
-            "2. **Professional Word Choice:** Select sophisticated yet accessible language\n"
-            "3. **Clean Formatting:** Employ clear structure for easy understanding\n"
-            "4. **Accessibility Focus:** Ensure content is understandable to clients without legal training\n"
-            "5. **Florida Law Exclusive:** Reference ONLY Florida statutes and legal precedents\n"
-            "6. **Warmth with Authority:** Balance approachable tone with demonstrated legal expertise\n\n"
+            f"{base_prompt}\n\n"
             "Return **one—and only one—valid JSON object** that matches the\n"
             "`EnhancedIntakeAnalysis` schema below.\n\n"
             "• Do **NOT** wrap the JSON in markdown fences.\n"
             "• Do **NOT** change key names, add keys, or emit commentary.\n"
             "• Write summaries and analysis in clear, accessible language (9th-grade reading level)\n"
-            "• Use collaborative language ('we will analyze' rather than 'I will analyze')\n\n"
+            "• Use professional partnership language ('we have analyzed' rather than 'I analyzed')\n\n"
             "==========================\n"
             "SOURCE INTAKE FORM (read-only)\n"
             f"{content}\n"
@@ -139,9 +191,9 @@ class AIAnalyzer:
         )
 
     def _build_case_document_prompt(
-        self, doc: ProcessedDocument, ctx: EnhancedIntakeAnalysis
+        self, doc: ProcessedDocument, ctx: EnhancedIntakeAnalysis, prompt_config: str = None
     ) -> str:
-        """Builds a context-aware prompt for a case document using CLIENT_CLARITY_ADVISOR framework."""
+        """Builds a context-aware prompt for a case document using configuration-driven prompts."""
         client_priorities_str = (
             ", ".join(ctx.client_priorities)
             if ctx.client_priorities
@@ -153,23 +205,32 @@ class AIAnalyzer:
             else "None specified"
         )
 
+        if prompt_config:
+            # Use configuration-provided prompt
+            base_prompt = prompt_config
+        else:
+            # Fallback to default prompt if configuration is missing
+            base_prompt = (
+                "You are a seasoned Florida litigation attorney with 15+ years of experience analyzing legal documents and extracting case-critical information. Your analysis forms the foundation for professional legal findings letters.\n\n"
+                "PROFESSIONAL ANALYSIS STANDARDS:\n"
+                "1. **Attorney-Level Precision:** Extract and organize information with the thoroughness expected from an experienced litigator\n"
+                "2. **Case-Building Focus:** Identify facts, parties, and circumstances that will be essential for legal strategy and client communication\n"
+                "3. **Florida Law Context:** Consider how extracted information relates to Florida legal standards and procedural requirements\n"
+                "4. **Professional Documentation:** Structure analysis to support detailed attorney findings letters and case development\n"
+                "5. **Client-Ready Foundation:** Organize information for clear presentation to clients while maintaining legal precision\n"
+                "6. **Strategic Awareness:** Recognize and prioritize information based on its litigation and settlement value"
+            )
+
         return (
             "SYSTEM\n"
-            "You are a CLIENT_CLARITY_ADVISOR - a litigation attorney who specializes in clear, accessible, and collaborative legal communication while maintaining the highest standards of Florida legal expertise.\n\n"
-            "CLIENT_CLARITY_ADVISOR CORE DIRECTIVES:\n"
-            "1. **Collaborative Tone:** Use 'we' language to emphasize partnership ('we analyzed,' 'our review shows')\n"
-            "2. **Professional Word Choice:** Select sophisticated yet accessible language that builds confidence\n"
-            "3. **Clean Formatting:** Employ clear structure for easy scanning and understanding\n"
-            "4. **Accessibility Focus:** Ensure content is understandable to clients without legal training\n"
-            "5. **Florida Law Exclusive:** Reference ONLY Florida statutes and legal precedents\n"
-            "6. **Warmth with Authority:** Balance approachable tone with demonstrated legal expertise\n\n"
+            f"{base_prompt}\n\n"
             "Return **one—and only one—valid JSON object** that matches the\n"
             "`AnalyzedDocument` schema below.\n\n"
             "• JSON only—no markdown, no extra text.\n"
             "• Preserve key order.\n"
             "• PRIORITIZE analysis elements that directly relate to client's stated priorities and desired outcomes.\n"
             "• Write all content in clear, accessible language (9th-grade reading level)\n"
-            "• Use collaborative language that emphasizes partnership\n\n"
+            "• Use professional partnership language that emphasizes collaboration\n\n"
             "==========================\n"
             "DOCUMENT (read-only)\n"
             f"Filename: {doc.file_name}\n"
@@ -186,7 +247,7 @@ class AIAnalyzer:
             "==========================\n\n"
             "SCHEMA — AnalyzedDocument\n"
             "{\n"
-            '  "filename": "The original filename of the document.",\n'
+            '  "file_name": "The original filename of the document.",\n'
             "  \"document_type\": \"The type of document (e.g., 'Contract', 'Email', 'Image').\",\n"
             '  "inferred_title": "A meaningful, non-repetitive title for the document (less than 15 words).",\n'
             '  "summary": "A concise, value-driven summary of the document\'s content (100-150 words).",\n'
@@ -195,7 +256,7 @@ class AIAnalyzer:
             "}\n"
             "==========================\n\n"
             "CONSTRUCTION RULES\n"
-            "1.  `filename`: Must be the exact filename provided.\n"
+            "1.  `file_name`: Must be the exact filename provided.\n"
             "2.  `inferred_title`: Create a meaningful and non-repetitive title. Do not just repeat the filename.\n"
             "3.  `summary`: Must be concise and value-driven, focusing on the most important aspects of the document.\n"
             "4.  `key_information`: Extract the most critical information as a bulleted list string.\n"
@@ -207,19 +268,29 @@ class AIAnalyzer:
         )
 
     async def _summarize_media_content(
-        self, content: dict | str, media_type: str, file_name: str
+        self, content: dict | str, media_type: str, file_name: str, prompt_config: str = None
     ) -> str:
-        """Summarizes media content using CLIENT_CLARITY_ADVISOR approach."""
+        """Summarizes media content using configuration-driven prompts."""
         print(f"AI ANALYZER: Summarizing {media_type} for {file_name}")
+        
+        if prompt_config:
+            # Use configuration-provided prompt
+            base_prompt = prompt_config
+        else:
+            # Fallback to default prompt if configuration is missing
+            base_prompt = (
+                "You are a UNIFIED_LEGAL_ADVISOR paralegal specializing in clear, accessible legal communication. Create a concise summary (100-150 words) of the provided media content that will be easily understood by clients without legal training.\n\n"
+                "UNIFIED_LEGAL_ADVISOR PRINCIPLES:\n"
+                "• Use clear, accessible language (9th-grade reading level)\n"
+                "• Focus on actionable details and key facts\n"
+                "• Emphasize professional partnership perspective ('we found,' 'our analysis shows')\n"
+                "• Maintain professional authority while being accessible\n"
+                "• Highlight evidence relevant to Florida legal matters"
+            )
+        
         prompt = (
             "SYSTEM\n"
-            "You are a CLIENT_CLARITY_ADVISOR paralegal specializing in clear, accessible legal communication. Create a concise summary (100-150 words) of the provided media content that will be easily understood by clients without legal training.\n\n"
-            "CLIENT_CLARITY_ADVISOR PRINCIPLES:\n"
-            "• Use clear, accessible language (9th-grade reading level)\n"
-            "• Focus on actionable details and key facts\n"
-            "• Emphasize collaborative perspective ('we found,' 'our analysis shows')\n"
-            "• Maintain professional authority while being approachable\n"
-            "• Highlight evidence relevant to Florida legal matters\n\n"
+            f"{base_prompt}\n\n"
             f"Provided {media_type} content for {file_name}:\n"
             f"```\n{json.dumps(content, indent=2) if isinstance(content, dict) else content}\n```\n\n"
             "Create a clear, client-friendly summary that explains what we found in this evidence.\n"
@@ -310,7 +381,7 @@ class AIAnalyzer:
 
             print(f"AI ANALYZER: 🔢 Accurate token count ({model}): {token_count:,}")
             return token_count
-        except Exception as e:
+        except (ImportError, AttributeError, ValueError, TypeError) as e:
             print(f"AI ANALYZER: ⚠️  tiktoken error, falling back to estimation: {e}")
             # Fallback to existing estimation method
             return self._estimate_prompt_tokens_detailed(text)
@@ -459,8 +530,38 @@ class AIAnalyzer:
 
         return analysis_copy
 
-    async def _build_final_assessment_prompt(self, analysis: CaseAnalysisResult) -> str:
+    async def _build_final_assessment_prompt(self, analysis: CaseAnalysisResult, prompt_config: str = None) -> str:
         """Builds the prompt for the final legal assessment, including media summaries, timeline, and video relevance."""
+
+        # DIAGNOSTIC LOGGING: Check what document content is available
+        print("AI ANALYZER: 🔍 === DIAGNOSTIC LOGGING - Final Assessment Input ===")
+        print(
+            f"AI ANALYZER: 🔍 Analyzed documents count: {len(analysis.analyzed_documents) if analysis.analyzed_documents else 0}"
+        )
+        if analysis.analyzed_documents:
+            for i, doc in enumerate(
+                analysis.analyzed_documents[:3]
+            ):  # Log first 3 docs
+                print(f"AI ANALYZER: 🔍   Document {i + 1}: {doc.file_name}")
+                print(
+                    f"AI ANALYZER: 🔍   Summary: {doc.summary[:150] if doc.summary else 'No summary'}..."
+                )
+                print(
+                    f"AI ANALYZER: 🔍   Key info: {doc.key_information[:150] if doc.key_information else 'No key info'}..."
+                )
+                print(
+                    f"AI ANALYZER: 🔍   Relevance: {doc.relevance_to_case[:100] if doc.relevance_to_case else 'No relevance'}..."
+                )
+
+        if analysis.intake_analysis:
+            print(
+                f"AI ANALYZER: 🔍 Client name: {analysis.intake_analysis.client_name}"
+            )
+            print(f"AI ANALYZER: 🔍 Case type: {analysis.intake_analysis.case_type}")
+            print(
+                f"AI ANALYZER: 🔍 Key facts count: {len(analysis.intake_analysis.key_facts) if analysis.intake_analysis.key_facts else 0}"
+            )
+
         # Log comprehensive diagnostics about video content
         self._log_video_analysis_diagnostics(analysis)
 
@@ -489,7 +590,7 @@ class AIAnalyzer:
                     f"AI ANALYZER: ✅ Video relevance analysis generated: {len(str(video_relevance_content))} characters"
                 )
 
-        except Exception as e:
+        except (ValueError, TypeError, AttributeError, KeyError) as e:
             print(f"AI ANALYZER: ⚠️ Failed to generate timeline/video relevance: {e}")
             timeline_content = (
                 "Timeline generation encountered an error and was skipped."
@@ -503,7 +604,7 @@ class AIAnalyzer:
         for media in analysis_for_prompt.transcripted_media:
             summarization_tasks.append(
                 self._summarize_media_content(
-                    media.transcript, "audio transcript", media.file_name
+                    media.transcript, "audio transcript", media.file_name, prompt_config=None
                 )
             )
         for video in analysis_for_prompt.video_insights:
@@ -515,7 +616,7 @@ class AIAnalyzer:
             )
             summarization_tasks.append(
                 self._summarize_media_content(
-                    video.insights, "video analysis", video.file_name
+                    video.insights, "video analysis", video.file_name, prompt_config=None
                 )
             )
 
@@ -569,9 +670,7 @@ class AIAnalyzer:
 
                 if estimated_tokens > SAFE_TOKEN_LIMIT:
                     msg = f"Even after aggressive truncation, prompt is too large: {estimated_tokens:,} tokens"
-                    raise ValueError(
-                        msg
-                    )
+                    raise ValueError(msg)
                 print(
                     f"AI ANALYZER: ✅ Truncation successful, final tokens: {estimated_tokens:,}"
                 )
@@ -580,36 +679,43 @@ class AIAnalyzer:
                     f"AI ANALYZER: ✅ Prompt size validation passed: {estimated_tokens:,} tokens"
                 )
 
-        except Exception as e:
+        except (ValueError, TypeError, AttributeError, KeyError, OSError) as e:
             print(f"AI ANALYZER: ❌ PROMPT SIZE VALIDATION ERROR: {e}")
             print(f"AI ANALYZER: ❌ Error type: {type(e).__name__}")
             msg = f"Cannot serialize analysis data for final assessment: {e}"
-            raise ValueError(
-                msg
+            raise ValueError(msg) from e
+
+        # Use configuration-provided prompt or fallback
+        if prompt_config:
+            base_prompt = prompt_config
+        else:
+            # Fallback to default prompt if configuration is missing
+            base_prompt = (
+                "You are a seasoned Florida litigation attorney with 15+ years of experience conducting comprehensive case assessments and providing strategic legal analysis. You are preparing the legal analysis foundation that will support a detailed findings letter to your client.\n\n"
+                "ATTORNEY ANALYSIS STANDARDS:\n"
+                "1. **Professional Legal Authority:** Provide analysis with the depth and expertise expected from a senior litigation attorney\n"
+                "2. **Florida Law Mastery:** Reference specific Florida statutes with proper citations (e.g., Florida Statutes § 83.51(1)) and demonstrate deep knowledge of Florida jurisprudence\n"
+                "3. **Strategic Legal Assessment:** Evaluate claim viability, evidence strength, and litigation prospects with the judgment of an experienced practitioner\n"
+                "4. **Client-Focused Analysis:** Structure findings to support clear, authoritative client communication while maintaining legal precision\n"
+                "5. **Professional Objectivity:** Provide balanced assessment of strengths and challenges based on Florida law and litigation realities\n"
+                "6. **Case Development Strategy:** Consider both immediate legal remedies and long-term strategic options under Florida law\n\n"
+                "PROFESSIONAL ASSESSMENT PROTOCOL: When addressing complex or counterintuitive legal strategies:\n"
+                "• **Professional Context:** \"Based on my experience with Florida [relevant area] law...\"\n"
+                "• **Legal Foundation:** Cite specific Florida statutes, case law, or procedural requirements\n"
+                "• **Strategic Rationale:** Explain the legal and practical reasoning behind the recommendation\n"
+                "• **Risk Assessment:** Address potential outcomes and strategic considerations\n"
+                "• **Professional Guidance:** \"This analysis reflects Florida law standards and litigation experience\"\n\n"
+                "CRITICAL: Reference ONLY Florida statutes, case law, and legal precedents (e.g., Florida Statutes § 83.51(1), Florida case citations). Do NOT cite laws from other jurisdictions unless they have specific relevance to Florida legal standards."
             )
 
         return (
             "SYSTEM\n"
-            "You are a CLIENT_CLARITY_ADVISOR - a senior Florida litigation attorney writing a findings letter to a client using collaborative, warm, and professional communication. Your analysis must be grounded exclusively in Florida law.\n\n"
-            "CLIENT_CLARITY_ADVISOR CORE DIRECTIVES:\n"
-            "1. **Collaborative Tone:** Use 'we' language to emphasize partnership ('we analyzed,' 'our review shows,' 'we recommend')\n"
-            "2. **Professional Word Choice:** Select sophisticated yet accessible language that builds confidence\n"
-            "3. **Clean Formatting:** Employ bullet points, headers, and white space for easy scanning\n"
-            "4. **Accessibility Focus:** Ensure content is understandable to clients without legal training\n"
-            "5. **Florida Law Exclusive:** Reference ONLY Florida statutes, Florida case law, and Florida legal precedents\n"
-            "6. **Warmth with Authority:** Balance approachable tone with demonstrated legal expertise\n\n"
-            "HIGH-STAKES ADVICE PROTOCOL: If recommending counter-intuitive actions, use this format:\n"
-            "• Acknowledge: 'This may seem counterintuitive, but...'\n"
-            "• Explain: Provide clear rationale using Florida law\n"
-            "• Support: Reference specific Florida cases or statutes\n"
-            "• Consequences: Explain both action and inaction outcomes\n"
-            "• Reaffirm: 'We're here to guide you through this complexity'\n\n"
-            "CRITICAL: Reference ONLY Florida statutes (e.g., Florida Statutes § 83.51(1)). Do NOT cite laws from other states or federal law unless explicitly relevant to Florida jurisdiction.\n\n"
+            f"{base_prompt}\n\n"
             'Output a single JSON object with exactly two top-level keys: `"legal_assessment"` and `"demand_letter_evaluation"`—nothing else.\n\n'
             "• JSON only—no markdown, no commentary.\n"
             "• Do not alter key names.\n\n"
             "==========================\n"
-            "CLIENT_CLARITY_ADVISOR EXAMPLE LETTER STYLE:\n\n"
+            "UNIFIED_LEGAL_ADVISOR EXAMPLE LETTER STYLE:\n\n"
             "Dear Mr. Price:\n\n"
             "We hope you are doing well. We wanted to follow up with a summary of our findings after completing our comprehensive review of the timeline and materials you submitted regarding the property located at 2260 Terra Cotta Cove, Apt. 110, Land O Lakes, Florida 34639, including the lease agreement, correspondence, invoices, videos and maintenance-related documentation.\n\n"
             "As we discussed, your primary concern centers on the prolonged and recurring water intrusion, inadequate remediation efforts, and the resulting conditions that have potentially rendered the unit uninhabitable. The timeline you provided documents multiple reports of water damage and potential mold spanning several months, which we have carefully analyzed under Florida law.\n\n"
@@ -680,8 +786,10 @@ class AIAnalyzer:
 
     async def analyze_intake(self, intake_doc: ProcessedDocument) -> CaseAnalysisResult:
         """Analyzes a processed intake form and returns an initial CaseAnalysisResult object."""
+        print("AI ANALYZER: 🔍 === DIAGNOSTIC LOGGING - Starting intake analysis ===")
         analysis = CaseAnalysisResult()
         if not intake_doc or not intake_doc.content:
+            print("AI ANALYZER: ❌ No intake document or content provided")
             analysis.errors.append(
                 AnalysisError(
                     source="IntakeProcessing",
@@ -691,23 +799,96 @@ class AIAnalyzer:
             return analysis
 
         try:
-            prompt = self._build_intake_prompt(intake_doc.content)
+            print(
+                f"AI ANALYZER: 🔍 Building prompt for intake document: {intake_doc.file_name}"
+            )
+            print(
+                f"AI ANALYZER: 🔍 Intake content length: {len(intake_doc.content)} characters"
+            )
+            # For now, use None to maintain compatibility - prompts will be passed from EmailGeneratorV2
+            prompt = self._build_intake_prompt(intake_doc.content, prompt_config=None)
+            print(
+                f"AI ANALYZER: 🔍 Prompt built successfully, length: {len(prompt)} characters"
+            )
+
+            print("AI ANALYZER: 🔍 Making OpenAI request with gpt-4o-mini...")
             raw_analysis = await self._make_openai_request(prompt, model="gpt-4o-mini")
+            print(
+                f"AI ANALYZER: 🔍 OpenAI response received, type: {type(raw_analysis)}"
+            )
+            print(
+                f"AI ANALYZER: 🔍 Raw analysis keys: {list(raw_analysis.keys()) if isinstance(raw_analysis, dict) else 'Not a dict'}"
+            )
+
+            print("AI ANALYZER: 🔍 Preprocessing AI output...")
             processed_analysis = preprocess_ai_output(raw_analysis)
+            print(
+                f"AI ANALYZER: 🔍 Processed analysis type: {type(processed_analysis)}"
+            )
+            print(
+                f"AI ANALYZER: 🔍 Processed analysis keys: {list(processed_analysis.keys()) if isinstance(processed_analysis, dict) else 'Not a dict'}"
+            )
+
+            print("AI ANALYZER: 🔍 Validating with EnhancedIntakeAnalysis schema...")
             analysis.intake_analysis = EnhancedIntakeAnalysis.model_validate(
                 processed_analysis
             )
+            print("AI ANALYZER: ✅ Intake analysis validation successful!")
 
-        except (AIAnalysisError, ValidationError) as e:
-            details = str(e) if isinstance(e, AIAnalysisError) else e.errors()
+        except AIAnalysisError as e:
+            print(f"AI ANALYZER: ❌ AIAnalysisError during intake analysis: {e}")
             analysis.errors.append(
                 AnalysisError(
                     source="IntakeAnalysis",
-                    error_message=f"Failed to validate AI response for intake: {e}",
-                    details=details,
+                    error_message=f"AI analysis failed for intake: {e}",
+                    details=str(e),
                 )
             )
+        except ValidationError as e:
+            print(f"AI ANALYZER: ❌ ValidationError during intake analysis: {e}")
+            print(f"AI ANALYZER: 🔍 Validation error details: {e.errors()}")
+            analysis.errors.append(
+                AnalysisError(
+                    source="IntakeAnalysis",
+                    error_message=f"Failed to validate AI response for intake - schema mismatch: {e}",
+                    details=str(e.errors()),
+                )
+            )
+        except (AttributeError, TypeError, KeyError) as data_error:
+            print(
+                f"AI ANALYZER: ❌ Data structure error during intake analysis: {type(data_error).__name__} - {data_error}"
+            )
+            analysis.errors.append(
+                AnalysisError(
+                    source="IntakeAnalysis",
+                    error_message=f"Data structure error during intake analysis: {data_error}",
+                    details=f"Error type: {type(data_error).__name__}",
+                )
+            )
+        except Exception as unexpected_error:
+            print(
+                f"AI ANALYZER: ❌ UNEXPECTED ERROR during intake analysis: {type(unexpected_error).__name__} - {unexpected_error}"
+            )
+            print(f"AI ANALYZER: 🔍 Error context: intake_doc={intake_doc.file_name if intake_doc else 'None'}")
+            analysis.errors.append(
+                AnalysisError(
+                    source="IntakeAnalysis",
+                    error_message=f"Unexpected error during intake analysis: {unexpected_error}",
+                    details=f"Error type: {type(unexpected_error).__name__}, Context: {intake_doc.file_name if intake_doc else 'None'}",
+                )
+            )
+            # Re-raise as AIAnalysisError for upstream handling
+            error_msg = f"Critical intake analysis failure: {unexpected_error}"
+            raise AIAnalysisError(error_msg) from unexpected_error
 
+        print(
+            f"AI ANALYZER: 🔍 Intake analysis complete. Has intake_analysis: {analysis.intake_analysis is not None}"
+        )
+        print(f"AI ANALYZER: 🔍 Error count: {len(analysis.errors)}")
+        if analysis.errors:
+            for i, error in enumerate(analysis.errors):
+                print(f"AI ANALYZER: 🔍   Error {i + 1}: {error.error_message}")
+        print("AI ANALYZER: 🔍 === END DIAGNOSTIC LOGGING ===")
         return analysis
 
     async def analyze_case_documents(
@@ -781,7 +962,7 @@ class AIAnalyzer:
                 document_type=document.document_type,
             )
 
-            prompt = self._build_case_document_prompt(doc_for_analysis, intake_context)
+            prompt = self._build_case_document_prompt(doc_for_analysis, intake_context, prompt_config=None)
 
             # Estimate total prompt size and choose appropriate model
             total_estimated_tokens = self._estimate_tokens(prompt)
@@ -795,10 +976,11 @@ class AIAnalyzer:
             raw_analysis = await self._make_openai_request(prompt, model=model_to_use)
             return AnalyzedDocument.model_validate(raw_analysis)
         except (AIAnalysisError, ValidationError) as e:
+            details = str(e) if isinstance(e, AIAnalysisError) else str(e.errors())
             return AnalysisError(
                 source=f"doc:{document.file_name}",
                 error_message=f"Failed to analyze document: {e}",
-                details=str(e),
+                details=details,
             )
 
     async def perform_final_assessment(
@@ -852,7 +1034,7 @@ class AIAnalyzer:
                 )
 
             # Build prompt with potentially summarized data
-            prompt = await self._build_final_assessment_prompt(analysis_for_assessment)
+            prompt = await self._build_final_assessment_prompt(analysis_for_assessment, prompt_config=None)
 
             # Final validation of prompt size
             estimated_tokens = self._count_tokens_accurate(prompt, model_to_use)
@@ -875,7 +1057,7 @@ class AIAnalyzer:
                     video.text_annotations = []
 
                 # Rebuild prompt with emergency simplification
-                prompt = await self._build_final_assessment_prompt(emergency_analysis)
+                prompt = await self._build_final_assessment_prompt(emergency_analysis, prompt_config=None)
                 estimated_tokens = self._count_tokens_accurate(prompt, model_to_use)
                 print(
                     f"AI ANALYZER: Emergency reduced prompt tokens: {estimated_tokens:,}"
@@ -883,9 +1065,7 @@ class AIAnalyzer:
 
                 if estimated_tokens > 120000:
                     msg = f"Even after emergency reduction, prompt is too large ({estimated_tokens:,} tokens)"
-                    raise ValueError(
-                        msg
-                    )
+                    raise ValueError(msg)
 
             try:
                 raw_assessment = await self._make_openai_request(prompt, model="gpt-4o")
@@ -995,7 +1175,7 @@ class AIAnalyzer:
                             "AI ANALYZER: 🔄 Building recovery prompt with preserved metadata..."
                         )
                         retry_prompt = await self._build_final_assessment_prompt(
-                            retry_analysis
+                            retry_analysis, prompt_config=None
                         )
                         retry_tokens = self._estimate_prompt_tokens_detailed(
                             retry_prompt
@@ -1028,31 +1208,45 @@ class AIAnalyzer:
                                     preserved_video.original_insights
                                 )
 
-                    except Exception as retry_error:
-                        print(f"AI ANALYZER: ❌ RECOVERY FAILED: {retry_error}")
+                    except (ValidationError, ValueError, TypeError) as data_error:
+                        print(f"AI ANALYZER: ❌ DATA ERROR in recovery: {type(data_error).__name__} - {data_error}")
                         print(f"AI ANALYZER: ❌ Original BadRequest: {error_details}")
-                        print(f"AI ANALYZER: ❌ Recovery error: {retry_error!s}")
                         msg = (
                             f"Final assessment failed with BadRequestError. "
                             f"Original error: {error_details}. "
-                            f"Recovery with metadata preservation also failed: {retry_error}"
+                            f"Recovery failed due to data error: {data_error}"
                         )
-                        raise AIAnalysisError(
-                            msg
+                        raise AIAnalysisError(msg) from data_error
+                    except (APIError, APITimeoutError, RateLimitError) as api_error:
+                        print(f"AI ANALYZER: ❌ API ERROR in recovery: {type(api_error).__name__} - {api_error}")
+                        print(f"AI ANALYZER: ❌ Original BadRequest: {error_details}")
+                        msg = (
+                            f"Final assessment failed with BadRequestError. "
+                            f"Original error: {error_details}. "
+                            f"Recovery failed due to API error: {api_error}"
                         )
+                        raise AIAnalysisError(msg) from api_error
+                    except Exception as unexpected_error:
+                        print(f"AI ANALYZER: ❌ UNEXPECTED ERROR in recovery: {type(unexpected_error).__name__} - {unexpected_error}")
+                        print(f"AI ANALYZER: ❌ Original BadRequest: {error_details}")
+                        print(f"AI ANALYZER: 🔍 Recovery context: video_count={len(analysis.video_insights) if analysis.video_insights else 0}")
+                        msg = (
+                            f"Final assessment failed with BadRequestError. "
+                            f"Original error: {error_details}. "
+                            f"Recovery with metadata preservation also failed: {unexpected_error}"
+                        )
+                        raise AIAnalysisError(msg) from unexpected_error
                 else:
                     print(
                         "AI ANALYZER: ❌ No video insights to preserve for BadRequestError recovery"
                     )
                     msg = f"BadRequestError in final assessment without video data: {error_details}"
-                    raise AIAnalysisError(
-                        msg
-                    )
+                    raise AIAnalysisError(msg)
 
-            except Exception as openai_error:
-                # Handle other OpenAI API errors
-                error_details = str(openai_error)
-                error_type = type(openai_error).__name__
+            except (APIError, APITimeoutError, RateLimitError) as api_error:
+                # Handle specific OpenAI API errors
+                error_details = str(api_error)
+                error_type = type(api_error).__name__
                 print(
                     f"AI ANALYZER: ❌ OpenAI API error ({error_type}) in final assessment: {error_details}"
                 )
@@ -1064,9 +1258,33 @@ class AIAnalyzer:
                 )
 
                 msg = f"OpenAI API error ({error_type}) in final assessment: {error_details}"
-                raise AIAnalysisError(
-                    msg
+                raise AIAnalysisError(msg) from api_error
+            except (ValidationError, ValueError, TypeError) as data_error:
+                # Handle data processing errors
+                error_details = str(data_error)
+                error_type = type(data_error).__name__
+                print(
+                    f"AI ANALYZER: ❌ Data processing error ({error_type}) in final assessment: {error_details}"
                 )
+                print(f"AI ANALYZER: 🔍 Analysis context: {len(analysis.analyzed_documents)} docs, {len(analysis.video_insights)} videos")
+
+                msg = f"Data processing error ({error_type}) in final assessment: {error_details}"
+                raise AIAnalysisError(msg) from data_error
+            except Exception as unexpected_error:
+                # Handle truly unexpected errors with detailed logging
+                error_details = str(unexpected_error)
+                error_type = type(unexpected_error).__name__
+                print(
+                    f"AI ANALYZER: ❌ UNEXPECTED ERROR ({error_type}) in final assessment: {error_details}"
+                )
+
+                # Enhanced logging for debugging
+                print(f"AI ANALYZER: 🔍 Prompt length: {len(prompt):,} characters")
+                print(f"AI ANALYZER: 🔍 Analysis state: docs={len(analysis.analyzed_documents)}, videos={len(analysis.video_insights)}")
+                print("AI ANALYZER: 🔍 Model used: gpt-4o")
+
+                msg = f"Unexpected error ({error_type}) in final assessment: {error_details}"
+                raise AIAnalysisError(msg) from unexpected_error
 
             if not raw_assessment:
                 msg = "No response received from OpenAI API"
@@ -1171,9 +1389,10 @@ class AIAnalyzer:
         except (AIAnalysisError, ValidationError, ValueError) as e:
             error_msg = f"Final assessment failed: {e}"
             print(f"AI ANALYZER: ❌ {error_msg}")
+            details = str(e) if not isinstance(e, ValidationError) else str(e.errors())
             analysis.errors.append(
                 AnalysisError(
-                    source="FinalAssessment", error_message=error_msg, details=str(e)
+                    source="FinalAssessment", error_message=error_msg, details=details
                 )
             )
 
@@ -1190,23 +1409,51 @@ class AIAnalyzer:
                     )
                 )
 
-        except Exception as e:
-            error_msg = f"Unexpected error in final assessment: {e}"
-            print(f"AI ANALYZER: ❌ {error_msg}")
+        except (ImportError, AttributeError, TypeError) as system_error:
+            error_msg = f"System error in final assessment: {system_error}"
+            print(f"AI ANALYZER: ❌ SYSTEM ERROR: {error_msg}")
+            print(f"AI ANALYZER: 🔍 Error type: {type(system_error).__name__}")
             analysis.errors.append(
                 AnalysisError(
-                    source="FinalAssessment", error_message=error_msg, details=str(e)
+                    source="FinalAssessment",
+                    error_message=error_msg,
+                    details=f"Error type: {type(system_error).__name__}, Details: {system_error!s}"
                 )
             )
 
             # Emergency fallback to ensure system keeps working
-            print("AI ANALYZER: Emergency fallback due to unexpected error...")
+            print("AI ANALYZER: Emergency fallback due to system error...")
             analysis.legal_assessment = LegalAssessment.model_validate(
                 create_fallback_legal_assessment()
             )
             analysis.demand_letter_evaluation = DemandLetterEvaluation.model_validate(
                 create_fallback_demand_letter_evaluation()
             )
+        except Exception as critical_error:
+            error_msg = f"CRITICAL ERROR in final assessment: {critical_error}"
+            print(f"AI ANALYZER: ❌ {error_msg}")
+            print(f"AI ANALYZER: 🔍 Error type: {type(critical_error).__name__}")
+            print(f"AI ANALYZER: 🔍 Assessment state: has_intake={analysis.intake_analysis is not None}")
+            analysis.errors.append(
+                AnalysisError(
+                    source="FinalAssessment",
+                    error_message=error_msg,
+                    details=f"CRITICAL - Error type: {type(critical_error).__name__}, Context: Assessment pipeline failure"
+                )
+            )
+
+            # Emergency fallback to ensure system keeps working
+            print("AI ANALYZER: CRITICAL emergency fallback...")
+            analysis.legal_assessment = LegalAssessment.model_validate(
+                create_fallback_legal_assessment()
+            )
+            analysis.demand_letter_evaluation = DemandLetterEvaluation.model_validate(
+                create_fallback_demand_letter_evaluation()
+            )
+            
+            # Re-raise critical errors for upstream handling
+            error_message = f"Critical final assessment failure: {critical_error}"
+            raise AIAnalysisError(error_message) from critical_error
 
         print("AI ANALYZER: Final assessment completed")
         return analysis
@@ -1267,9 +1514,7 @@ def analyze_video_relevance(video_insight, case_context) -> dict[str, str]:
             )  # Top 5 objects
 
         # Generate relevance analysis based on content
-        (
-            "; ".join(video_content[:3]) if video_content else "Video content analysis"
-        )
+        ("; ".join(video_content[:3]) if video_content else "Video content analysis")
         context_summary = (
             ", ".join(context_items[:8]) if context_items else "visual evidence"
         )
@@ -1337,7 +1582,7 @@ def analyze_video_relevance(video_insight, case_context) -> dict[str, str]:
 
         return relevance_analysis
 
-    except Exception as e:
+    except (ValueError, TypeError, AttributeError, KeyError) as e:
         print(f"AI ANALYZER: Error in video relevance analysis: {e}")
         # Return fallback analysis
         return {
@@ -1358,7 +1603,7 @@ def generate_case_timeline(analysis: CaseAnalysisResult) -> list[dict[str, Any]]
             for doc in analysis.analyzed_documents:
                 # Look for date patterns in key information and summary
                 text_content = (
-                    f"{doc.summary} {doc.key_information} {doc.relevance_to_case}"
+                    f"{doc.summary or ''} {getattr(doc, 'key_information', '') or ''} {getattr(doc, 'relevance_to_case', '') or ''}"
                 )
 
                 # Simple date extraction (can be enhanced with more sophisticated parsing)
@@ -1396,7 +1641,7 @@ def generate_case_timeline(analysis: CaseAnalysisResult) -> list[dict[str, Any]]
                         timeline_events.append(
                             {
                                 "date": date_str,
-                                "source": f"Document: {doc.filename}",
+                                "source": f"Document: {doc.file_name}",
                                 "source_type": "document",
                                 "event": context,
                                 "importance": "medium",
@@ -1540,7 +1785,7 @@ def generate_case_timeline(analysis: CaseAnalysisResult) -> list[dict[str, Any]]
         # Limit to most relevant events
         return timeline_events[:15]  # Return top 15 timeline events
 
-    except Exception as e:
+    except (ValueError, TypeError, AttributeError, KeyError, ImportError) as e:
         print(f"AI ANALYZER: Error generating timeline: {e}")
         return []
 
@@ -1587,6 +1832,6 @@ def _parse_date_for_sorting(date_str: str) -> str | None:
                     return f"{year}-{month_num}-{day}"
 
         return None
-    except Exception as e:
+    except (ValueError, TypeError, ImportError) as e:
         print(f"AI ANALYZER: Error parsing date '{date_str}': {e}")
         return None

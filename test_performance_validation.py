@@ -3,6 +3,7 @@
 Performance Validation Test Suite
 Tests memory usage, processing efficiency, and performance characteristics of the consolidated architecture
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -41,7 +42,9 @@ class PerformanceMetrics:
             "start_cpu_percent": self.process.cpu_percent(),
         }
 
-    def end_measurement(self, test_name: str, success: bool = True, details: str = "") -> None:
+    def end_measurement(
+        self, test_name: str, success: bool = True, details: str = ""
+    ) -> None:
         """End measurement and record results"""
         if test_name not in self.metrics:
             return
@@ -160,9 +163,7 @@ class PerformanceValidator:
             pre_processing_memory = self.metrics.process.memory_info().rss / 1024 / 1024
 
             # Process documents
-            asyncio.run(
-                processor.process_documents_from_streamlit(mock_files, [])
-            )
+            asyncio.run(processor.process_documents_from_streamlit(mock_files, []))
 
             # Record memory after processing
             post_processing_memory = (
@@ -244,9 +245,7 @@ class PerformanceValidator:
             start_time = time.time()
 
             # Process large file
-            asyncio.run(
-                processor.process_documents_from_streamlit([mock_file], [])
-            )
+            asyncio.run(processor.process_documents_from_streamlit([mock_file], []))
 
             # Record end metrics
             end_time = time.time()
@@ -303,9 +302,7 @@ class PerformanceValidator:
 
             # Test sequential processing (current architecture)
             start_time = time.time()
-            asyncio.run(
-                processor.process_documents_from_streamlit(mock_files, [])
-            )
+            asyncio.run(processor.process_documents_from_streamlit(mock_files, []))
             sequential_time = time.time() - start_time
 
             total_size_mb = len(files) * 2
@@ -357,9 +354,7 @@ class PerformanceValidator:
                 mock_file = MockUploadedFile(test_file, f"test_{iteration}.txt")
 
                 # Process file
-                asyncio.run(
-                    processor.process_documents_from_streamlit([mock_file], [])
-                )
+                asyncio.run(processor.process_documents_from_streamlit([mock_file], []))
 
                 # Clean up
                 os.remove(test_file)
@@ -425,9 +420,7 @@ class PerformanceValidator:
             # Test error recovery performance
             start_time = time.time()
             try:
-                asyncio.run(
-                    processor.process_documents_from_streamlit(mock_files, [])
-                )
+                asyncio.run(processor.process_documents_from_streamlit(mock_files, []))
                 recovery_time = time.time() - start_time
 
                 self.metrics.end_measurement(

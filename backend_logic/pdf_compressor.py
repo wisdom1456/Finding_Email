@@ -24,7 +24,7 @@ class PDFCompressor:
             file_size = os.path.getsize(document.tmp_path)
             if file_size > self.size_threshold_bytes:
                 print(
-                    f"PDF '{document.filename}' exceeds size threshold. Compressing..."
+                    f"PDF '{document.original_filename}' exceeds size threshold. Compressing..."
                 )
 
                 # Define a new path for the compressed file
@@ -43,12 +43,15 @@ class PDFCompressor:
 
                 # Return a new SavedDocument pointing to the compressed file
                 return SavedDocument(
-                    tmp_path=compressed_path, filename=document.filename
+                    file_path=compressed_path,
+                    original_filename=document.original_filename,
+                    document_type=document.document_type,
+                    metadata=document.metadata
                 )
 
         except Exception as e:
             print(
-                f"Could not compress PDF {document.filename}. Error: {e}. Using original file."
+                f"Could not compress PDF {document.original_filename}. Error: {e}. Using original file."
             )
             # If compression fails, return the original document to proceed without interruption
 

@@ -35,7 +35,6 @@ class VideoProcessingError(Exception):
     """Custom exception for video processing errors."""
 
 
-
 class VideoProcessor:
     """
     Handles video file processing and analysis using Google Cloud Vertex AI
@@ -57,9 +56,7 @@ class VideoProcessor:
 
         if not self.project_id or not self.bucket_name:
             msg = "GCP_PROJECT_ID and GCP_BUCKET_NAME must be set in environment variables."
-            raise VideoProcessingError(
-                msg
-            )
+            raise VideoProcessingError(msg)
 
         self.temp_folder = temp_folder
 
@@ -73,9 +70,7 @@ class VideoProcessor:
             )
         except Exception as e:
             msg = f"Failed to initialize Google Cloud clients: {e}"
-            raise VideoProcessingError(
-                msg
-            )
+            raise VideoProcessingError(msg)
 
         self.supported_formats = {
             "video/mp4",
@@ -102,9 +97,7 @@ class VideoProcessor:
                 print(f"VIDEO PROCESSOR: ✅ Using existing bucket: {self.bucket_name}")
         except Exception as e:
             msg = f"Could not access or create storage bucket: {e}"
-            raise VideoProcessingError(
-                msg
-            )
+            raise VideoProcessingError(msg)
 
     def _validate_video_file(self, file_path: str, file_name: str) -> None:
         if not os.path.exists(file_path):
@@ -113,23 +106,17 @@ class VideoProcessor:
 
         if os.path.getsize(file_path) > self.max_file_size:
             msg = f"Video file '{file_name}' exceeds 2GB size limit."
-            raise VideoProcessingError(
-                msg
-            )
+            raise VideoProcessingError(msg)
 
         try:
             mime_type = magic.from_file(file_path, mime=True)
         except Exception as e:
             msg = f"Could not determine MIME type for {file_name}: {e}"
-            raise VideoProcessingError(
-                msg
-            )
+            raise VideoProcessingError(msg)
 
         if mime_type not in self.supported_formats:
             msg = f"Unsupported video format for '{file_name}'. Detected: {mime_type}"
-            raise VideoProcessingError(
-                msg
-            )
+            raise VideoProcessingError(msg)
 
     def _upload_to_cloud_storage(self, file_path: str, file_name: str) -> str:
         try:
@@ -256,9 +243,7 @@ CONSTITUTIONAL FOCUS: Emphasize 4th Amendment (search/seizure), 5th Amendment (s
                 )
                 raise  # Let tenacity handle the retry
             msg = f"Vertex AI API call failed for '{file_name}': {e}"
-            raise VideoProcessingError(
-                msg
-            )
+            raise VideoProcessingError(msg)
         except Exception as e:
             error_message = str(e)
             # Handle Google Cloud service agent provisioning for generic exceptions too
@@ -271,9 +256,7 @@ CONSTITUTIONAL FOCUS: Emphasize 4th Amendment (search/seizure), 5th Amendment (s
                 )
                 raise  # Let tenacity handle the retry
             msg = f"Vertex AI analysis failed for '{file_name}': {e}"
-            raise VideoProcessingError(
-                msg
-            )
+            raise VideoProcessingError(msg)
 
     @retry(
         stop=stop_after_attempt(3),
@@ -326,9 +309,7 @@ CONSTITUTIONAL FOCUS: Emphasize 4th Amendment (search/seizure), 5th Amendment (s
                 )
                 return "Audio transcription not supported for this file format. Video analysis available via Vertex AI."
             msg = f"Speech-to-Text API call failed for '{file_name}': {e}"
-            raise VideoProcessingError(
-                msg
-            )
+            raise VideoProcessingError(msg)
         except Exception as e:
             error_msg = str(e)
             if "bad encoding" in error_msg or "Invalid recognition" in error_msg:
@@ -574,9 +555,7 @@ async def process_video(
 ) -> VideoInsight | EnhancedVideoInsight:
     if not project_id or not bucket_name:
         msg = "Google Cloud project_id and bucket_name are required."
-        raise VideoProcessingError(
-            msg
-        )
+        raise VideoProcessingError(msg)
     processor = VideoProcessor(project_id=project_id, bucket_name=bucket_name)
     result = await processor.process_video_file(file_path, file_name, is_criminal_case)
     if isinstance(result, MediaProcessingError):

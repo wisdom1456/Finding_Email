@@ -4,6 +4,7 @@ Budget Sheet Component for Legal Document Analysis Portal
 This component provides Streamlit UI elements for displaying cost summaries,
 budget analysis, and export functionality for operational analysis.
 """
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -15,11 +16,12 @@ import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 
+from backend.utils.data_models import ServiceCost
 from backend_logic.cost_exporter import CostExporter
 
 
 if TYPE_CHECKING:
-    from backend.utils.data_models import ActualCosts, CostSummary, ServiceCost
+    from backend.utils.data_models import ActualCosts, CostSummary
 
 
 class BudgetSheetComponent:
@@ -50,7 +52,7 @@ class BudgetSheetComponent:
             with col1:
                 st.metric(
                     label="Estimated Cost",
-                    value=f"${float(cost_summary.cost_estimate.total_estimated_cost):.4f}",
+                    value=f"${float(cost_summary.cost_estimate.estimated_cost):.4f}",
                     help="Pre-processing cost estimate based on file analysis",
                 )
 
@@ -82,7 +84,7 @@ class BudgetSheetComponent:
             with col1:
                 st.metric(
                     label="Estimated Cost",
-                    value=f"${float(cost_summary.cost_estimate.total_estimated_cost):.4f}",
+                    value=f"${float(cost_summary.cost_estimate.estimated_cost):.4f}",
                     help="Pre-processing cost estimate",
                 )
 
@@ -266,28 +268,26 @@ class BudgetSheetComponent:
         st.header("📋 Detailed Cost Breakdown")
 
         # Cost estimates
-        if cost_summary.cost_estimate:
+        if cost_summary.cost_estimate and cost_summary.cost_estimate.breakdown:
             st.subheader("Cost Estimates")
 
-            tab1, tab2 = st.tabs(["Document Processing", "Media Processing"])
+            # Create a list of ServiceCost-like objects from the breakdown for display
+            estimated_costs = [
+                ServiceCost(
+                    service_name=item,
+                    cost=cost,
+                    total_cost=cost,
+                    operation_type="estimate",
+                    units_consumed=0,
+                    unit_type="N/A",
+                    rate_per_unit=0,
+                )
+                for item, cost in cost_summary.cost_estimate.breakdown.items()
+            ]
+            self._display_cost_table("Estimated Costs", estimated_costs)
 
-            with tab1:
-                if cost_summary.cost_estimate.estimated_document_costs:
-                    self._display_cost_table(
-                        "Document Processing Estimates",
-                        cost_summary.cost_estimate.estimated_document_costs,
-                    )
-                else:
-                    st.info("No document processing costs estimated.")
-
-            with tab2:
-                if cost_summary.cost_estimate.estimated_media_costs:
-                    self._display_cost_table(
-                        "Media Processing Estimates",
-                        cost_summary.cost_estimate.estimated_media_costs,
-                    )
-                else:
-                    st.info("No media processing costs estimated.")
+        else:
+            st.info("No cost estimates available.")
 
         # Actual costs
         if cost_summary.actual_costs:
@@ -413,7 +413,7 @@ class BudgetSheetComponent:
         """Display estimated vs actual cost comparison."""
         st.subheader("Estimated vs Actual Cost Comparison")
 
-        estimated = float(cost_summary.cost_estimate.total_estimated_cost)
+        estimated = float(cost_summary.cost_estimate.estimated_cost)
         actual = float(cost_summary.actual_costs.total_actual_cost)
 
         fig_comparison = go.Figure(

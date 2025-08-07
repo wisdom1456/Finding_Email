@@ -4,6 +4,7 @@ Comprehensive Test Suite for Miguel Velasco Case
 Tests the full document analysis pipeline with all available client documents.
 Property flooding/damage case.
 """
+
 from __future__ import annotations
 
 import json
@@ -78,9 +79,7 @@ def discover_documents() -> tuple[str, list[str]]:
 
     if not DOCUMENTS_PATH.exists():
         msg = f"Client documents directory not found: {DOCUMENTS_PATH}"
-        raise FileNotFoundError(
-            msg
-        )
+        raise FileNotFoundError(msg)
 
     print(f"📂 Scanning: {DOCUMENTS_PATH.name}")
 

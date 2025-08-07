@@ -2,6 +2,7 @@
 """
 Test to verify the Jinja2 template fix for format_video_analysis function access
 """
+
 from __future__ import annotations
 
 import os

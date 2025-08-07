@@ -4,6 +4,7 @@ Budget Sheet Integration Test
 This test demonstrates the complete budget sheet functionality
 integrated with the existing cost tracking infrastructure.
 """
+
 from __future__ import annotations
 
 import os

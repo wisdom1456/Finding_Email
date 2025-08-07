@@ -8,6 +8,7 @@ This test validates:
 3. Video analysis formatting improvements
 4. Data model compatibility with template expectations
 """
+
 from __future__ import annotations
 
 import os

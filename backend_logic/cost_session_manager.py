@@ -4,6 +4,7 @@ Cost Session Manager for Legal Document Analysis Portal
 This service manages session-based cost tracking throughout the case processing
 lifecycle, including estimates, actual costs, and variance analysis.
 """
+
 from __future__ import annotations
 
 import json
@@ -19,6 +20,7 @@ from backend.utils.data_models import (
     CostEstimate,
     CostSummary,
     ProcessedDocument,
+    ServiceCost,
 )
 from backend_logic.cost_calculator import CostCalculator
 from backend_logic.cost_estimator import CostEstimator
@@ -129,6 +131,21 @@ class CostSessionManager:
             processing_logs=processing_logs,
         )
 
+        # Populate the new categorized cost fields by aggregating from service_costs
+        document_analysis_costs = []
+        media_processing_costs = []
+        
+        for cost in actual_costs.service_costs:
+            # Categorize costs based on service type or operation
+            if self._is_document_analysis_cost(cost):
+                document_analysis_costs.append(cost)
+            elif self._is_media_processing_cost(cost):
+                media_processing_costs.append(cost)
+        
+        # Update the ActualCosts object with categorized costs
+        actual_costs.document_analysis_costs = document_analysis_costs
+        actual_costs.media_processing_costs = media_processing_costs
+
         # Update cost summary
         cost_summary.actual_costs = actual_costs
 
@@ -136,14 +153,14 @@ class CostSessionManager:
         if cost_summary.cost_estimate:
             cost_summary.cost_variance = (
                 actual_costs.total_actual_cost
-                - cost_summary.cost_estimate.total_estimated_cost
+                - cost_summary.cost_estimate.estimated_cost
             )
 
-            if cost_summary.cost_estimate.total_estimated_cost > 0:
+            if cost_summary.cost_estimate.estimated_cost > 0:
                 cost_summary.cost_variance_percentage = float(
                     (
                         cost_summary.cost_variance
-                        / cost_summary.cost_estimate.total_estimated_cost
+                        / cost_summary.cost_estimate.estimated_cost
                     )
                     * 100
                 )
@@ -225,7 +242,7 @@ class CostSessionManager:
         if cost_summary.cost_estimate:
             report["cost_estimate"] = {
                 "total_estimated_cost": float(
-                    cost_summary.cost_estimate.total_estimated_cost
+                    cost_summary.cost_estimate.estimated_cost
                 ),
                 "confidence_level": cost_summary.cost_estimate.confidence_level,
                 "estimation_timestamp": cost_summary.cost_estimate.estimation_timestamp.isoformat(),
@@ -335,7 +352,7 @@ class CostSessionManager:
 
             case_data = {
                 "case_id": case_id,
-                "estimated_cost": float(cost_summary.cost_estimate.total_estimated_cost)
+                "estimated_cost": float(cost_summary.cost_estimate.estimated_cost)
                 if cost_summary.cost_estimate
                 else 0.0,
                 "actual_cost": float(cost_summary.actual_costs.total_actual_cost)
@@ -352,7 +369,7 @@ class CostSessionManager:
             export_data["cases"].append(case_data)
 
             if cost_summary.cost_estimate:
-                total_estimated += cost_summary.cost_estimate.total_estimated_cost
+                total_estimated += cost_summary.cost_estimate.estimated_cost
             if cost_summary.actual_costs:
                 total_actual += cost_summary.actual_costs.total_actual_cost
             if cost_summary.cost_variance_percentage is not None:
@@ -443,7 +460,6 @@ class CostSessionManager:
             if f.endswith(".json")
         ]
 
-
     def _classify_variance(self, variance_percentage: float | None) -> str:
         """Classify cost variance into categories."""
         if variance_percentage is None:
@@ -510,6 +526,70 @@ class CostSessionManager:
 
         return breakdown
 
+    def _is_document_analysis_cost(self, cost: ServiceCost) -> bool:
+        """
+        Determine if a service cost is related to document analysis.
+        
+        Args:
+            cost: ServiceCost object to categorize
+            
+        Returns:
+            True if cost is document analysis related, False otherwise
+        """
+        # Check service name for document-related services
+        document_services = {"openai", "azure_openai", "anthropic", "document_processing"}
+        if cost.service_name.lower() in document_services:
+            return True
+            
+        # Check operation type for document analysis operations
+        document_operations = {
+            "text_analysis", "document_analysis", "content_extraction",
+            "legal_analysis", "intake_analysis", "case_analysis"
+        }
+        if cost.operation_type and cost.operation_type.lower() in document_operations:
+            return True
+            
+        # Check file extensions for document types
+        if cost.file_name:
+            doc_extensions = {".pdf", ".docx", ".txt", ".eml"}
+            file_ext = "." + cost.file_name.split(".")[-1].lower() if "." in cost.file_name else ""
+            if file_ext in doc_extensions:
+                return True
+                
+        return False
+
+    def _is_media_processing_cost(self, cost: ServiceCost) -> bool:
+        """
+        Determine if a service cost is related to media processing.
+        
+        Args:
+            cost: ServiceCost object to categorize
+            
+        Returns:
+            True if cost is media processing related, False otherwise
+        """
+        # Check service name for media-related services
+        media_services = {"google_cloud", "vertex_ai", "speech_to_text", "video_processing"}
+        if cost.service_name.lower() in media_services:
+            return True
+            
+        # Check operation type for media processing operations
+        media_operations = {
+            "video_analysis", "audio_transcription", "speech_to_text",
+            "video_insights", "media_processing", "object_detection"
+        }
+        if cost.operation_type and cost.operation_type.lower() in media_operations:
+            return True
+            
+        # Check file extensions for media types
+        if cost.file_name:
+            media_extensions = {".mp4", ".mov", ".avi", ".mp3", ".wav", ".m4a"}
+            file_ext = "." + cost.file_name.split(".")[-1].lower() if "." in cost.file_name else ""
+            if file_ext in media_extensions:
+                return True
+                
+        return False
+
     def export_session_budget(self, session_id: str, format: str = "csv") -> str:
         """
         Export complete session budget in specified format.
@@ -540,9 +620,7 @@ class CostSessionManager:
         if format_lower == "text":
             return self.cost_exporter.generate_cost_report_text(cost_summary)
         msg = f"Unsupported export format: {format}. Supported formats: csv, json, html, text"
-        raise ValueError(
-            msg
-        )
+        raise ValueError(msg)
 
     def get_budget_insights(self, session_id: str) -> dict[str, Any]:
         """
@@ -584,10 +662,10 @@ class CostSessionManager:
             return self._export_multiple_sessions_csv(session_ids)
         if format.lower() == "json":
             return self._export_multiple_sessions_json(session_ids)
-        msg = f"Unsupported format for multiple sessions: {format}. Supported: csv, json"
-        raise ValueError(
-            msg
+        msg = (
+            f"Unsupported format for multiple sessions: {format}. Supported: csv, json"
         )
+        raise ValueError(msg)
 
     def get_session_budget_summary(self, session_id: str) -> dict[str, Any]:
         """
@@ -609,7 +687,7 @@ class CostSessionManager:
 
         return {
             "case_id": cost_summary.case_id,
-            "estimated_cost": float(cost_summary.cost_estimate.total_estimated_cost)
+            "estimated_cost": float(cost_summary.cost_estimate.estimated_cost)
             if cost_summary.cost_estimate
             else None,
             "actual_cost": float(cost_summary.actual_costs.total_actual_cost)
@@ -623,7 +701,6 @@ class CostSessionManager:
             if cost_summary.cost_variance_percentage is not None
             else "pending",
         }
-
 
     def _export_multiple_sessions_csv(self, session_ids: list[str]) -> str:
         """Export multiple sessions to consolidated CSV format."""
@@ -653,7 +730,7 @@ class CostSessionManager:
                 continue
 
             estimated = (
-                float(cost_summary.cost_estimate.total_estimated_cost)
+                float(cost_summary.cost_estimate.estimated_cost)
                 if cost_summary.cost_estimate
                 else 0.0
             )
@@ -744,7 +821,7 @@ class CostSessionManager:
             session_count += 1
 
             if cost_summary.cost_estimate:
-                total_estimated += cost_summary.cost_estimate.total_estimated_cost
+                total_estimated += cost_summary.cost_estimate.estimated_cost
             if cost_summary.actual_costs:
                 total_actual += cost_summary.actual_costs.total_actual_cost
             if cost_summary.cost_variance_percentage is not None:

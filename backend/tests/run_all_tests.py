@@ -3,6 +3,7 @@
 Master Test Runner for Legal Document Analysis
 Runs comprehensive tests for all three client cases and generates a summary report.
 """
+
 from __future__ import annotations
 
 import contextlib
@@ -70,7 +71,8 @@ def run_single_test(test_info: dict[str, str]) -> dict[str, Any]:
             [sys.executable, str(script_path)],
             capture_output=True,
             text=True,
-            timeout=600, check=False,  # 10 minute timeout
+            timeout=600,
+            check=False,  # 10 minute timeout
         )
 
         duration = time.time() - start_time

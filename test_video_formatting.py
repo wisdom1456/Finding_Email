@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Test script to verify video analysis formatting functionality."""
+
 from __future__ import annotations
 
 import os

@@ -1,10 +1,27 @@
 """
 Main processing module for the Legal Document Analysis Portal.
 """
+
 from __future__ import annotations
 
+import argparse
 import asyncio
+import os
+import re
+import sys
 from datetime import datetime, timezone
+from pathlib import Path
+
+
+# Add project root to Python path for standalone execution
+if __name__ == "__main__":
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    project_root = os.path.dirname(current_dir)
+    sys.path.insert(0, project_root)
+
+# Additional imports for file output functionality
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 
 import streamlit as st
 from openai import OpenAI
@@ -17,22 +34,200 @@ from backend.utils.data_models import (
     TranscriptedMedia,
     VideoInsight,
 )
-from backend_logic.ai_analyzer import AIAnalyzer
+from backend_logic.ai import AIAnalyzer
 from backend_logic.audio_processor import AudioProcessor
 from backend_logic.config import get_openai_api_key
 from backend_logic.cost_session_manager import CostSessionManager
 from backend_logic.document_processor import DocumentProcessor
-from backend_logic.email_generator import EmailGenerator
-from backend_logic.video_processor import VideoProcessor
+from backend_logic.email_generator import EmailGeneratorV2
 from backend_logic.utils import (
     ProgressTracker,
     calculate_document_sizes,
     display_processing_cost_update,
 )
+from backend_logic.video_processor import VideoProcessor
 
-async def process_case_documents():
+
+# Optional imports with fallbacks for testing
+try:
+    import html2text
+
+    HTML2TEXT_AVAILABLE = True
+except ImportError:
+    HTML2TEXT_AVAILABLE = False
+
+try:
+    import docx
+    from docx.shared import Inches
+
+    DOCX_AVAILABLE = True
+except ImportError:
+    DOCX_AVAILABLE = False
+
+# Don't import weasyprint at module level to avoid dependency issues
+WEASYPRINT_AVAILABLE = None  # Will be checked when needed
+
+
+def html_to_plain_text(html_content: str) -> str:
+    """Convert HTML content to plain text."""
+    if HTML2TEXT_AVAILABLE:
+        h = html2text.HTML2Text()
+        h.ignore_links = True
+        h.ignore_images = True
+        return h.handle(html_content)
+    # Simple fallback HTML stripping
+    import re
+
+    # Remove HTML tags
+    text = re.sub(r"<[^>]+>", "", html_content)
+    # Replace HTML entities
+    text = text.replace("&nbsp;", " ")
+    text = text.replace("&amp;", "&")
+    text = text.replace("&lt;", "<")
+    text = text.replace("&gt;", ">")
+    text = text.replace("&quot;", '"')
+    # Clean up whitespace
+    text = re.sub(r"\s+", " ", text)
+    return text.strip()
+
+
+def create_eml_file(
+    content: str, subject: str, recipient: str = "client@example.com"
+) -> str:
+    """Create EML file content from HTML."""
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = subject
+    msg["From"] = "attorney@bernhardtriley.com"
+    msg["To"] = recipient
+
+    # Create both text and HTML parts
+    text_content = html_to_plain_text(content)
+    text_part = MIMEText(text_content, "plain")
+    html_part = MIMEText(content, "html")
+
+    msg.attach(text_part)
+    msg.attach(html_part)
+
+    return msg.as_string()
+
+
+def create_docx_file(content: str, output_path: str) -> None:
+    """Create DOCX file from HTML content."""
+    if not DOCX_AVAILABLE:
+        print(f"⚠️  python-docx not available, skipping DOCX creation for {output_path}")
+        return
+
+    # Convert HTML to plain text for DOCX
+    text_content = html_to_plain_text(content)
+
+    doc = docx.Document()
+
+    # Add title
+    title = doc.add_heading("Legal Findings Letter", 0)
+    title.alignment = 1  # Center alignment
+
+    # Add content
+    for paragraph in text_content.split("\n\n"):
+        if paragraph.strip():
+            doc.add_paragraph(paragraph.strip())
+
+    doc.save(output_path)
+
+
+def create_pdf_file(content: str, output_path: str) -> None:
+    """Create PDF file from HTML content."""
+    global WEASYPRINT_AVAILABLE
+
+    # Check weasyprint availability on first use
+    if WEASYPRINT_AVAILABLE is None:
+        try:
+            import weasyprint
+
+            WEASYPRINT_AVAILABLE = True
+        except ImportError:
+            WEASYPRINT_AVAILABLE = False
+
+    if not WEASYPRINT_AVAILABLE:
+        print(f"⚠️  weasyprint not available, skipping PDF creation for {output_path}")
+        return
+
+    # Import weasyprint here to avoid module-level import issues
+    import weasyprint
+
+    # Add basic CSS for better PDF formatting
+    css = """
+    <style>
+    body {
+        font-family: Times, serif;
+        margin: 40px;
+        line-height: 1.6;
+    }
+    h1, h2, h3 {
+        color: #2c3e50;
+    }
+    h2 {
+        border-bottom: 1px solid #bdc3c7;
+        padding-bottom: 5px;
+    }
+    </style>
+    """
+
+    html_with_css = (
+        f"<!DOCTYPE html><html><head>{css}</head><body>{content}</body></html>"
+    )
+    weasyprint.HTML(string=html_with_css).write_pdf(output_path)
+
+
+def extract_case_name(analysis_result) -> str:
+    """Extract case name from analysis result."""
+    if hasattr(analysis_result, "intake_analysis") and analysis_result.intake_analysis:
+        if (
+            hasattr(analysis_result.intake_analysis, "client_name")
+            and analysis_result.intake_analysis.client_name
+        ):
+            # Clean the client name for use as filename
+            case_name = analysis_result.intake_analysis.client_name
+            # Remove special characters and spaces
+            case_name = re.sub(r"[^\w\s-]", "", case_name)
+            case_name = re.sub(r"[-\s]+", "_", case_name)
+            return case_name.lower()
+
+    # Fallback to timestamp-based name
+    return f"case_{int(datetime.now(timezone.utc).timestamp())}"
+
+
+def save_output_files(
+    output_dir: str, main_letter: str, appendix: str, analysis_result
+) -> None:
+    """Save HTML output files to the specified directory."""
+    output_path = Path(output_dir)
+    output_path.mkdir(parents=True, exist_ok=True)
+
+    case_name = extract_case_name(analysis_result)
+
+    # Save main findings letter as HTML
+    letter_html_path = output_path / f"{case_name}_findings_letter.html"
+    with open(letter_html_path, "w", encoding="utf-8") as f:
+        f.write(main_letter)
+
+    # Save analysis appendix as HTML
+    appendix_html_path = output_path / f"{case_name}_analysis_appendix.html"
+    with open(appendix_html_path, "w", encoding="utf-8") as f:
+        f.write(appendix)
+
+    print(f"HTML output files saved to: {output_path}")
+    print("Files created:")
+    print(f"  - {case_name}_findings_letter.html")
+    print(f"  - {case_name}_analysis_appendix.html")
+
+
+async def process_case_documents(output_dir: str | None = None, config_path: str | None = None) -> bool | None:
     """
     Enhanced processing function with size-based progress tracking and cost tracking.
+    
+    Args:
+        output_dir: Directory to save output files
+        config_path: Path to configuration YAML file for legal practice area-specific prompts
     """
     try:
         st.session_state.processing_status = "active"
@@ -43,8 +238,8 @@ async def process_case_documents():
         doc_processor = DocumentProcessor()
         audio_processor = AudioProcessor(openai_client)
         video_processor = VideoProcessor()
-        ai_analyzer = AIAnalyzer(openai_client, doc_processor)
-        email_generator = EmailGenerator(openai_client)
+        ai_analyzer = AIAnalyzer(openai_client, doc_processor, config_path=config_path)
+        email_generator = EmailGeneratorV2(openai_client, config_path=config_path)
 
         # Initialize cost tracking
         cost_session_manager = CostSessionManager()
@@ -167,7 +362,9 @@ async def process_case_documents():
             msg = "Intake form is required but was not found after processing."
             raise ValueError(msg)
 
-        total_processed = len(processed_docs) + len(processed_audio) + len(processed_video)
+        total_processed = (
+            len(processed_docs) + len(processed_audio) + len(processed_video)
+        )
         tracker.complete_phase(
             "document_processing",
             f"Successfully processed {total_processed} files",
@@ -493,6 +690,15 @@ async def process_case_documents():
         st.session_state.appendix = email_docs.get("appendix", "")
         st.session_state.processing_status = "completed"
 
+        # Save output files if output_dir is specified
+        if output_dir:
+            save_output_files(
+                output_dir,
+                email_docs.get("main_letter", ""),
+                email_docs.get("appendix", ""),
+                final_analysis,
+            )
+
         # Final success message
         status_text.text("**Analysis Complete!** (100.0%)")
         detail_text.text(
@@ -503,7 +709,216 @@ async def process_case_documents():
         return True
 
     except Exception as e:
+        print(f"🔍 MAIN_PROCESSOR: Exception caught: {e}")
+        print(f"🔍 MAIN_PROCESSOR: Exception type: {type(e)}")
+        import traceback
+
+        print(f"🔍 MAIN_PROCESSOR: Full traceback: {traceback.format_exc()}")
         st.session_state.processing_status = "failed"
         st.session_state.processing_error = str(e)
         st.error(f"An error occurred during processing: {e}")
         return False
+
+
+async def process_case_documents_cli(
+    intake_form_path: str, case_documents_paths: list, output_dir: str, config_path: str | None = None
+) -> bool | None:
+    """
+    Command-line version of the case processing function.
+
+    Args:
+        intake_form_path: Path to the intake form file
+        case_documents_paths: List of paths to case document files
+        output_dir: Directory to save output files
+        config_path: Path to configuration YAML file for legal practice area-specific prompts
+    """
+    try:
+        print("Initializing processors...")
+
+        # Initialize processors
+        from backend_logic.config import get_openai_api_key
+
+        openai_client = OpenAI(api_key=get_openai_api_key())
+        doc_processor = DocumentProcessor()
+        AudioProcessor(openai_client)
+        VideoProcessor()
+        ai_analyzer = AIAnalyzer(openai_client, doc_processor, config_path=config_path)
+        email_generator = EmailGeneratorV2(openai_client, config_path=config_path)
+
+        print(f"Processing {len(case_documents_paths) + 1} files...")
+
+        # Process documents
+        all_file_paths = [intake_form_path, *case_documents_paths]
+        intake_filenames = [Path(intake_form_path).name]
+
+        processed_docs = await doc_processor.process_documents_from_paths(
+            all_file_paths, intake_filenames
+        )
+
+        # Separate intake and case documents
+        intake_doc = next(
+            (
+                doc
+                for doc in processed_docs
+                if doc.document_type == DocumentType.INTAKE_FORM
+            ),
+            None,
+        )
+        case_docs = [
+            doc
+            for doc in processed_docs
+            if doc.document_type != DocumentType.INTAKE_FORM
+        ]
+
+        if not intake_doc:
+            msg = "Intake form is required but was not found after processing."
+            raise ValueError(
+                msg
+            )
+
+        print("Analyzing intake form...")
+        analysis_result = await ai_analyzer.analyze_intake(intake_doc)
+
+        if not analysis_result.intake_analysis:
+            msg = "Failed to analyze intake form."
+            raise ValueError(msg)
+
+        print(f"Analyzing {len(case_docs)} case documents...")
+        if case_docs:
+            for doc in case_docs:
+                result = await ai_analyzer._analyze_single_document(
+                    doc, analysis_result.intake_analysis
+                )
+                # Add the analyzed document to the results
+                if isinstance(result, AnalyzedDocument):
+                    analysis_result.analyzed_documents.append(result)
+                elif isinstance(result, AnalysisError):
+                    analysis_result.errors.append(result)
+
+        print("Performing final assessment...")
+        final_analysis = await ai_analyzer.perform_final_assessment(analysis_result)
+
+        print("Generating findings letter...")
+        email_docs = email_generator.generate_email_and_analysis_docs(final_analysis)
+
+        print("Saving output files...")
+        save_output_files(
+            output_dir,
+            email_docs.get("main_letter", ""),
+            email_docs.get("appendix", ""),
+            final_analysis,
+        )
+
+        print("✅ Case processing completed successfully!")
+        return True
+
+    except Exception as e:
+        print(f"❌ Error occurred during processing: {e}")
+        return False
+
+
+def main():
+    """Command-line interface for the main processor."""
+    parser = argparse.ArgumentParser(
+        description="Legal Document Analysis Portal - Case Processing Tool"
+    )
+    parser.add_argument(
+        "--output_dir",
+        type=str,
+        required=True,
+        help="Directory where output files should be saved",
+    )
+    parser.add_argument(
+        "--intake_form", type=str, required=True, help="Path to the intake form file"
+    )
+    parser.add_argument(
+        "--case_documents",
+        type=str,
+        nargs="+",
+        default=[],
+        help="Paths to case document files or directories containing case documents",
+    )
+    parser.add_argument(
+        "--config_path",
+        type=str,
+        help="Path to configuration YAML file for legal practice area-specific prompts",
+    )
+
+    args = parser.parse_args()
+
+    # Validate input files exist
+    if not os.path.exists(args.intake_form):
+        print(f"❌ Intake form not found: {args.intake_form}")
+        sys.exit(1)
+
+    # Expand directories to include all files within them
+    expanded_case_documents = []
+    for doc_path in args.case_documents:
+        if not os.path.exists(doc_path):
+            print(f"❌ Case document path not found: {doc_path}")
+            sys.exit(1)
+
+        if os.path.isfile(doc_path):
+            # It's a file, add it directly
+            expanded_case_documents.append(doc_path)
+        elif os.path.isdir(doc_path):
+            # It's a directory, find all supported files within it
+            print(f"📁 Scanning directory for case documents: {doc_path}")
+            supported_extensions = [
+                ".pdf",
+                ".docx",
+                ".doc",
+                ".txt",
+                ".eml",
+                ".jpg",
+                ".jpeg",
+                ".png",
+            ]
+
+            for root, _dirs, files in os.walk(doc_path):
+                for file in files:
+                    file_path = os.path.join(root, file)
+                    file_ext = os.path.splitext(file)[1].lower()
+
+                    if file_ext in supported_extensions:
+                        expanded_case_documents.append(file_path)
+                        print(f"  ✓ Found: {file}")
+
+            if not any(
+                os.path.join(doc_path, f) in expanded_case_documents
+                for f in os.listdir(doc_path)
+                if os.path.isfile(os.path.join(doc_path, f))
+            ):
+                print(f"⚠️  No supported files found in directory: {doc_path}")
+        else:
+            print(f"❌ Path is neither file nor directory: {doc_path}")
+            sys.exit(1)
+
+    # Update the case documents list with expanded paths
+    args.case_documents = expanded_case_documents
+
+    # Create output directory if it doesn't exist
+    os.makedirs(args.output_dir, exist_ok=True)
+
+    print("🚀 Starting Legal Document Analysis...")
+    print(f"📁 Output directory: {args.output_dir}")
+    print(f"📄 Intake form: {args.intake_form}")
+    print(f"📋 Case documents: {len(args.case_documents)} files")
+
+    # Run the async processing function
+    success = asyncio.run(
+        process_case_documents_cli(
+            args.intake_form, args.case_documents, args.output_dir, args.config_path
+        )
+    )
+
+    if success:
+        print("🎉 Processing completed successfully!")
+        sys.exit(0)
+    else:
+        print("💥 Processing failed!")
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()

@@ -4,6 +4,7 @@ Comprehensive Test Suite for Clifton Price Case
 Tests the full document analysis pipeline with all available client documents.
 Water intrusion/property maintenance case.
 """
+
 from __future__ import annotations
 
 import json

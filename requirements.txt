@@ -34,9 +34,12 @@ google-cloud-storage>=2.10.0
 google-cloud-aiplatform>=1.1.0
 google-cloud-speech>=2.0.0
 
+# Additional dependencies for file output functionality
+html2text>=2020.1.16
+weasyprint>=60.0
+
 # Removed unnecessary dependencies:
 # - pydantic-settings (using pydantic directly)
-# - weasyprint (not used in current implementation)
 # - pyth (not used in current implementation)
 # - sseclient-py (async/SSE not needed)
 # - fastapi, uvicorn, python-multipart (FastAPI removed)

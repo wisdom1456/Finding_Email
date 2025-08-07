@@ -1,0 +1,75 @@
+# Pre-commit configuration for automated code quality checks
+# Install with: pip install pre-commit && pre-commit install
+
+repos:
+  # Ruff - Fast Python linter and formatter
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.12.4
+    hooks:
+      # Run ruff linter
+      - id: ruff
+        args: [--fix, --exit-non-zero-on-fix]
+        types_or: [python, pyi]
+      # Run ruff formatter (replaces black)
+      - id: ruff-format
+        types_or: [python, pyi]
+
+  # Additional pre-commit hooks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      # Basic file checks
+      - id: trailing-whitespace
+        exclude: ^test-results/
+      - id: end-of-file-fixer
+        exclude: ^test-results/
+      - id: check-yaml
+        exclude: ^test-results/
+      - id: check-json
+        exclude: ^test-results/
+      - id: check-toml
+        exclude: ^test-results/
+      - id: check-added-large-files
+        args: ['--maxkb=1000']  # 1MB limit
+      - id: check-merge-conflict
+      - id: debug-statements
+      - id: check-docstring-first
+      - id: check-case-conflict
+
+  # Security scanning with bandit
+  - repo: https://github.com/PyCQA/bandit
+    rev: 1.7.5
+    hooks:
+      - id: bandit
+        args: ['-c', 'pyproject.toml']
+        additional_dependencies: ['bandit[toml]']
+        exclude: ^(test_|tests/)
+
+  # Type checking with mypy (optional - can be slow)
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.7.1
+    hooks:
+      - id: mypy
+        args: [--config-file=pyproject.toml]
+        additional_dependencies: 
+          - types-requests
+          - types-PyYAML
+          - types-python-dateutil
+        exclude: ^(test_|tests/|docs/)
+
+# Global settings
+default_language_version:
+  python: python3.11
+
+# CI configuration
+ci:
+  autofix_commit_msg: |
+    [pre-commit.ci] auto fixes from pre-commit.com hooks
+
+    for more information, see https://pre-commit.ci
+  autofix_prs: true
+  autoupdate_branch: ''
+  autoupdate_commit_msg: '[pre-commit.ci] pre-commit autoupdate'
+  autoupdate_schedule: weekly
+  skip: [bandit, mypy]  # Skip slow hooks in CI
+  submodules: false

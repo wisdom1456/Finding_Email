@@ -3,231 +3,91 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Legal Findings Letter</title>
+    <title>Legal Review and Recommended Next Steps – {% raw %}{{ case_name | default('Your Case') }}{% endraw %}</title>
     <style>
+        /* Fallback styles for email clients that support <style> tags */
         body {
-            font-family: 'Times New Roman', Times, serif;
-            line-height: 1.6;
-            color: #333;
-            margin: 0;
-            padding: 0;
-        }
-        .container {
-            max-width: 900px;
-            margin: 0 auto;
-            padding: 40px;
-            box-shadow: 0 0 10px rgba(0,0,0,0.1);
-        }
-        .letterhead {
-            text-align: left;
-            margin-bottom: 30px;
-            padding-bottom: 20px;
-            border-bottom: 2px solid #2c3e50;
-        }
-        .letterhead h1 {
-            font-family: 'Georgia', serif;
-            color: #2c3e50;
-            font-size: 24px;
-            margin: 0 0 10px 0;
-        }
-        .header-info {
-            margin-bottom: 30px;
-            font-size: 14px;
-        }
-        .header-info p {
-            margin: 5px 0;
-        }
-        .section {
-            margin-bottom: 30px;
-            page-break-inside: avoid;
-        }
-        .section h2 {
-            font-family: 'Georgia', serif;
-            color: #2c3e50;
-            font-size: 18px;
-            margin-bottom: 15px;
-            padding-bottom: 5px;
-            border-bottom: 1px solid #bdc3c7;
-        }
-        .section h3 {
-            font-family: 'Georgia', serif;
-            color: #34495e;
+            font-family: 'Times New Roman', 'Liberation Serif', 'DejaVu Serif', 'FreeSerif', Georgia, 'Nimbus Roman No9 L', serif;
             font-size: 16px;
-            margin-bottom: 10px;
-            margin-top: 20px;
+            line-height: 1.6;
+            color: #333333;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 40px 20px;
+            background-color: #ffffff;
         }
-        .executive-summary {
-            padding: 20px;
-            margin-bottom: 30px;
-        }
-        .executive-summary h2 {
-            color: #333;
-            margin-top: 0;
-        }
-        .strengths-section {
-            padding: 15px;
-            margin-bottom: 20px;
-        }
-        .challenges-section {
-            padding: 15px;
-            margin-bottom: 20px;
-        }
-        .recommendations-section {
-            padding: 15px;
-            margin-bottom: 20px;
-        }
-        ul, ol {
-            margin-left: 25px;
-            margin-bottom: 15px;
-        }
-        li {
-            margin-bottom: 8px;
-            text-align: justify;
-        }
-        .footer {
-            margin-top: 50px;
-            padding-top: 20px;
-            border-top: 1px solid #bdc3c7;
-            font-style: italic;
-        }
-        .signature-block {
-            margin-top: 30px;
-        }
-        .signature-block p {
-            margin: 5px 0;
-        }
-        @media print {
-            .container {
-                box-shadow: none;
-                padding: 20px;
+        
+        @media only screen and (max-width: 600px) {
+            body {
+                font-size: 14px !important;
+                padding: 20px 10px !important;
             }
-            .section {
-                page-break-inside: avoid;
+            .subject-line {
+                font-size: 18px !important;
+            }
+            .section-title {
+                font-size: 16px !important;
             }
         }
-        /* Professional formatting for legal content */
-        .legal-content p {
-            text-align: justify;
-            margin-bottom: 12px;
+        
+        /* Email client compatibility */
+        table {
+            border-collapse: collapse;
         }
-        .legal-content ul {
-            list-style-type: disc;
-        }
-        .legal-content ol {
-            list-style-type: decimal;
-        }
-        .highlight {
-            padding: 2px 4px;
-            border-radius: 2px;
-            font-weight: bold;
+        
+        /* Ensure proper spacing in Outlook */
+        .outlook-spacing {
+            mso-line-height-rule: exactly;
         }
     </style>
 </head>
-<body>
-    <div class="container">
-        <!-- Header Section -->
-        <div class="letterhead">
-            <h1>Legal Findings Letter</h1>
+<body style="font-family: 'Times New Roman', 'Liberation Serif', 'DejaVu Serif', 'FreeSerif', Georgia, 'Nimbus Roman No9 L', serif; font-size: 16px; line-height: 1.6; color: #333333; max-width: 800px; margin: 0 auto; padding: 40px 20px; background-color: #ffffff; -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%;">
+    <div style="margin-bottom: 30px;">
+        <div style="font-weight: bold; font-size: 18px; margin-bottom: 20px; color: #2c3e50; border-bottom: 2px solid #34495e; padding-bottom: 8px; font-family: 'Times New Roman', 'Liberation Serif', 'DejaVu Serif', 'FreeSerif', Georgia, 'Nimbus Roman No9 L', serif;">
+            Legal Review and Recommended Next Steps – {% raw %}{{ case_name | default('Your Case') }}{% endraw %}
         </div>
+    </div>
+    
+    <div style="margin-bottom: 20px; font-size: 16px; font-family: 'Times New Roman', 'Liberation Serif', 'DejaVu Serif', 'FreeSerif', Georgia, 'Nimbus Roman No9 L', serif;">
+        Good afternoon {% raw %}{{ client_name | default('Client') }}{% endraw %},
+    </div>
+    
+    <div style="margin-bottom: 30px; text-align: justify; font-family: 'Times New Roman', 'Liberation Serif', 'DejaVu Serif', 'FreeSerif', Georgia, 'Nimbus Roman No9 L', serif;">
+        Following our review of your documents and our recent discussion, I am providing a summary of the situation involving your case, along with legal considerations and our recommendations for moving forward.
+    </div>
 
-        <div class="header-info">
-            <p><strong>Date:</strong> {{ current_date | default('Not Available') }}</p>
-            <p><strong>To:</strong> {{ results.analysis.intake_analysis.client_name | default('Not Available') }}</p>
-            <p><strong>From:</strong> {{ results.analysis.intake_analysis.attorney_name | default('Attorney') }}</p>
-            <p><strong>Re:</strong> Case Analysis and Findings</p>
-        </div>
+    {% set sections = [
+        ("FACTUAL SUMMARY", results.generated_letter.background_summary),
+        ("LEGAL ANALYSIS", results.generated_letter.analysis_and_position),
+        ("STRENGTHS OF YOUR CASE", results.generated_letter.strengths),
+        ("POTENTIAL CHALLENGES", results.generated_letter.weaknesses),
+        ("RECOMMENDED NEXT STEPS", results.generated_letter.next_steps)
+    ] -%}
 
-        <!-- Background Summary Section -->
-        {% if results.generated_letter and results.generated_letter.background_summary %}
-        <div class="section">
-            <h2>1. Background Summary</h2>
-            <div class="legal-content">
-                {{ results.generated_letter.background_summary | safe }}
+    {% for title, content in sections %}
+    {% if content %}
+    <div style="margin-bottom: 25px;">
+        <div style="width: 100%;">
+            <div style="font-weight: bold; font-size: 17px; color: #2c3e50; margin-bottom: 12px; padding-bottom: 6px; border-bottom: 1px solid #bdc3c7; text-transform: uppercase; letter-spacing: 0.5px; font-family: 'Times New Roman', 'Liberation Serif', 'DejaVu Serif', 'FreeSerif', Georgia, 'Nimbus Roman No9 L', serif;">{{ title }}</div>
+            <div style="margin-left: 15px; text-align: justify; font-family: 'Times New Roman', 'Liberation Serif', 'DejaVu Serif', 'FreeSerif', Georgia, 'Nimbus Roman No9 L', serif;">
+                {{ content | replace('\\n', '<br>') | safe }}
             </div>
         </div>
-        {% endif %}
+    </div>
+    {% endif %}
+    {% endfor %}
 
-        <!-- Legal Analysis Section -->
-        {% if results.generated_letter and results.generated_letter.analysis_and_position %}
-        <div class="section">
-            <h2>2. Legal Analysis</h2>
-            <div class="legal-content">
-                {{ results.generated_letter.analysis_and_position | safe }}
-            </div>
-        </div>
-        {% endif %}
+    <div style="margin-top: 30px; margin-bottom: 20px; font-family: 'Times New Roman', 'Liberation Serif', 'DejaVu Serif', 'FreeSerif', Georgia, 'Nimbus Roman No9 L', serif;">
+        Thank you, and we remain committed to protecting your interests throughout this process.
+    </div>
 
-        <!-- Strengths of Your Case Section -->
-        {% if results.generated_letter and results.generated_letter.strengths %}
-        <div class="section">
-            <h2>3. Strengths of Your Case</h2>
-            <div class="strengths-section">
-                <div class="legal-content">
-                    {{ results.generated_letter.strengths | safe }}
-                </div>
-            </div>
-        </div>
-        {% endif %}
+    <div style="margin-top: 25px; margin-bottom: 30px; font-family: 'Times New Roman', 'Liberation Serif', 'DejaVu Serif', 'FreeSerif', Georgia, 'Nimbus Roman No9 L', serif;">
+        <div style="font-weight: bold; margin-bottom: 5px;">{{ attorney_signature | default('Bernhardt Riley') }}</div>
+        <div style="font-style: italic; color: #34495e;">{{ firm_name | default('Bernhardt Riley PLLC') }}</div>
+    </div>
 
-        <!-- Potential Challenges Section -->
-        {% if results.generated_letter and results.generated_letter.challenges %}
-        <div class="section">
-            <h2>4. Potential Challenges</h2>
-            <div class="challenges-section">
-                <div class="legal-content">
-                    {{ results.generated_letter.challenges | safe }}
-                </div>
-            </div>
-        </div>
-        {% endif %}
-
-        <!-- Recommendations Section -->
-        {% if results.generated_letter and results.generated_letter.recommendations %}
-        <div class="section">
-            <h2>5. Recommendations</h2>
-            <div class="recommendations-section">
-                <div class="legal-content">
-                    {{ results.generated_letter.recommendations | safe }}
-                </div>
-            </div>
-        </div>
-        {% endif %}
-
-        <!-- Next Steps Section -->
-        {% if results.generated_letter and results.generated_letter.next_steps %}
-        <div class="section">
-            <h2>6. Next Steps</h2>
-            <div class="legal-content">
-                {{ results.generated_letter.next_steps | safe }}
-            </div>
-        </div>
-        {% endif %}
-
-        <!-- Closing Paragraph Section -->
-        {% if results.generated_letter and results.generated_letter.closing_paragraph %}
-        <div class="section">
-            <div class="legal-content">
-                {{ results.generated_letter.closing_paragraph | safe }}
-            </div>
-        </div>
-        {% endif %}
-
-        <!-- Footer Section -->
-        <div class="footer">
-            <div class="signature-block">
-                <p>Sincerely,</p>
-                <p>{{ results.analysis.intake_analysis.attorney_name | default('[Attorney Name]') }}</p>
-                <p>[Firm Name]</p>
-                <p>[Firm Address]</p>
-                <p>[Contact Information]</p>
-            </div>
-            
-            <p style="margin-top: 30px; font-size: 12px; color: #7f8c8d;">
-                <strong>Disclaimer:</strong> This analysis is based on the documents provided and represents a preliminary assessment. 
-                Additional facts may emerge that could materially affect this analysis. This communication is confidential and 
-                subject to attorney-client privilege.
-            </p>
-        </div>
+    <div style="border-top: 1px solid #bdc3c7; padding-top: 15px; margin-top: 30px; font-size: 14px; color: #7f8c8d; font-style: italic; text-align: justify; font-family: 'Times New Roman', 'Liberation Serif', 'DejaVu Serif', 'FreeSerif', Georgia, 'Nimbus Roman No9 L', serif;">
+        <strong>Disclaimer:</strong> This analysis is based on the documents provided and represents a preliminary assessment. Additional facts may emerge that could materially affect this analysis. This communication is confidential and subject to attorney-client privilege.
     </div>
 </body>
 </html>

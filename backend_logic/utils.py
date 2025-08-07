@@ -1,11 +1,19 @@
 """
 Utility functions for the Legal Document Analysis Portal.
 """
+
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import streamlit as st
+
 from backend_logic.cost_estimator import CostEstimator
-from backend.utils.data_models import CostEstimate
+
+
+if TYPE_CHECKING:
+    from backend.utils.data_models import CostEstimate
+
 
 class ProgressTracker:
     """Enhanced progress tracking with size-based calculations and detailed feedback."""
@@ -15,6 +23,14 @@ class ProgressTracker:
         self.status_text = status_text
         self.detail_text = detail_text
         self.current_progress = 0.0
+        
+        # Enhanced tracking attributes
+        import time
+        self.start_time = time.time()
+        self.current_phase = None
+        self.phase_start_time = None
+        self.estimated_total_time = None
+        self.phase_history = []
 
         # Progress allocation for different phases
         self.PHASE_ALLOCATIONS = {
@@ -24,34 +40,152 @@ class ProgressTracker:
             "final_assessment": (75, 85),  # 10% - Final legal assessment
             "email_generation": (85, 100),  # 15% - Email generation
         }
+        
+        # Enhanced phase descriptions
+        self.PHASE_DESCRIPTIONS = {
+            "document_processing": {
+                "title": "📄 Processing Documents",
+                "description": "Extracting content and preparing files for analysis",
+                "estimated_duration": 30  # seconds
+            },
+            "intake_analysis": {
+                "title": "📋 Analyzing Intake Form",
+                "description": "Extracting client information and case details",
+                "estimated_duration": 45
+            },
+            "case_analysis": {
+                "title": "🔍 Analyzing Case Documents",
+                "description": "AI analysis of legal documents and evidence",
+                "estimated_duration": 180  # Most time-consuming phase
+            },
+            "final_assessment": {
+                "title": "⚖️ Legal Assessment",
+                "description": "Generating comprehensive legal evaluation",
+                "estimated_duration": 60
+            },
+            "email_generation": {
+                "title": "📧 Generating Findings Letter",
+                "description": "Creating professional findings letter",
+                "estimated_duration": 45
+            }
+        }
 
     def set_phase(self, phase_name: str, detail: str = "") -> None:
-        """Set the current processing phase."""
+        """Set the current processing phase with enhanced tracking."""
+        import time
+        
+        # Record phase transition
+        if self.current_phase:
+            phase_duration = time.time() - self.phase_start_time
+            self.phase_history.append({
+                "phase": self.current_phase,
+                "duration": phase_duration,
+                "completed": True
+            })
+        
+        self.current_phase = phase_name
+        self.phase_start_time = time.time()
         start_pct, _ = self.PHASE_ALLOCATIONS[phase_name]
         self.current_progress = start_pct
-        self.update_display(phase_name.replace("_", " ").title(), detail)
+        
+        # Calculate estimated total time if this is first phase
+        if not self.estimated_total_time:
+            self.estimated_total_time = sum(
+                desc["estimated_duration"] for desc in self.PHASE_DESCRIPTIONS.values()
+            )
+        
+        phase_info = self.PHASE_DESCRIPTIONS.get(phase_name, {})
+        title = phase_info.get("title", phase_name.replace("_", " ").title())
+        description = phase_info.get("description", detail)
+        
+        self.update_display(title, description, show_time_estimate=True)
 
     def update_progress(
         self, phase_name: str, progress_within_phase: float, detail: str = ""
     ) -> None:
-        """Update progress within a specific phase (0.0 to 1.0)."""
+        """Update progress within a specific phase (0.0 to 1.0) with enhanced feedback."""
         start_pct, end_pct = self.PHASE_ALLOCATIONS[phase_name]
         phase_range = end_pct - start_pct
         self.current_progress = start_pct + (progress_within_phase * phase_range)
-        self.update_display(phase_name.replace("_", " ").title(), detail)
+        
+        phase_info = self.PHASE_DESCRIPTIONS.get(phase_name, {})
+        title = phase_info.get("title", phase_name.replace("_", " ").title())
+        
+        # Enhanced detail with sub-progress
+        if progress_within_phase > 0:
+            enhanced_detail = f"{detail} ({progress_within_phase:.1%} of phase)"
+        else:
+            enhanced_detail = detail or phase_info.get("description", "")
+        
+        self.update_display(title, enhanced_detail, show_time_estimate=True)
 
     def complete_phase(self, phase_name: str, detail: str = "") -> None:
-        """Mark a phase as complete."""
+        """Mark a phase as complete with timing information."""
+        import time
+        
+        if self.current_phase == phase_name and self.phase_start_time:
+            phase_duration = time.time() - self.phase_start_time
+            self.phase_history.append({
+                "phase": phase_name,
+                "duration": phase_duration,
+                "completed": True
+            })
+        
         _, end_pct = self.PHASE_ALLOCATIONS[phase_name]
         self.current_progress = end_pct
-        self.update_display(phase_name.replace("_", " ").title() + " Complete", detail)
+        
+        phase_info = self.PHASE_DESCRIPTIONS.get(phase_name, {})
+        title = phase_info.get("title", phase_name.replace("_", " ").title())
+        completion_detail = f"✅ {detail}" if detail else "✅ Phase completed successfully"
+        
+        self.update_display(f"{title} - Complete", completion_detail, show_time_estimate=True)
 
-    def update_display(self, status: str, detail: str = "") -> None:
-        """Update the UI display elements."""
+    def update_display(self, status: str, detail: str = "", show_time_estimate: bool = False) -> None:
+        """Update the UI display elements with enhanced information."""
+        import time
+        
+        # Update progress bar
         self.progress_bar.progress(self.current_progress / 100.0)
-        self.status_text.text(f"**{status}** ({self.current_progress:.1f}%)")
+        
+        # Enhanced status with time estimation
+        elapsed_time = time.time() - self.start_time
+        status_text = f"**{status}** ({self.current_progress:.1f}%)"
+        
+        if show_time_estimate and self.estimated_total_time:
+            if self.current_progress > 5:  # Only show estimates after some progress
+                estimated_remaining = (elapsed_time / (self.current_progress / 100)) - elapsed_time
+                if estimated_remaining > 0:
+                    if estimated_remaining < 60:
+                        time_str = f"{int(estimated_remaining)}s remaining"
+                    else:
+                        time_str = f"{int(estimated_remaining / 60)}m {int(estimated_remaining % 60)}s remaining"
+                    status_text += f" • {time_str}"
+        
+        self.status_text.text(status_text)
+        
+        # Enhanced detail text with helpful information
         if detail:
+            # Add processing tips for long phases
+            if self.current_phase == "case_analysis" and "Analyzing" in detail:
+                detail += "\n💡 Tip: Analysis time depends on document complexity and length"
+            elif self.current_phase == "final_assessment":
+                detail += "\n💡 Generating comprehensive legal recommendations..."
+                
             self.detail_text.text(detail)
+    
+    def get_progress_summary(self) -> dict:
+        """Get comprehensive progress summary for debugging or logging."""
+        import time
+        
+        return {
+            "current_progress": self.current_progress,
+            "current_phase": self.current_phase,
+            "elapsed_time": time.time() - self.start_time,
+            "estimated_total_time": self.estimated_total_time,
+            "phase_history": self.phase_history,
+            "phases_completed": len([p for p in self.phase_history if p["completed"]]),
+            "total_phases": len(self.PHASE_ALLOCATIONS)
+        }
 
 
 def calculate_document_sizes(files: list) -> dict[str, int]:
@@ -81,50 +215,32 @@ def display_cost_estimation(cost_estimate: CostEstimate) -> None:
     with col1:
         st.metric(
             label="Total Estimated Cost",
-            value=f"${float(cost_estimate.total_estimated_cost):.4f}",
-            help=f"Confidence: {cost_estimate.confidence_level:.0%}",
+            value=f"${float(cost_estimate.estimated_cost):.4f}",
+            help=f"Confidence: {cost_estimate.breakdown.get('confidence', 0.8):.0%}",
         )
 
     with col2:
         st.metric(
             label="Confidence Level",
-            value=f"{cost_estimate.confidence_level:.0%}",
+            value=f"{cost_estimate.breakdown.get('confidence', 0.8):.0%}",
             help="Based on file size analysis and processing patterns",
         )
 
     # Detailed breakdown in expander
     if st.expander("View Cost Breakdown"):
-        if cost_estimate.estimated_document_costs:
-            st.write("**Document Processing:**")
-            doc_data = []
-            for cost in cost_estimate.estimated_document_costs:
-                doc_data.append(
-                    {
-                        "Service": cost.service_name,
-                        "Operation": cost.operation_type,
-                        "Units": f"{cost.units_consumed:,} {cost.unit_type}",
-                        "Rate": f"${float(cost.rate_per_unit):.6f}",
-                        "Cost": f"${float(cost.total_cost):.4f}",
-                        "File": cost.file_name or "N/A",
-                    }
-                )
-            st.dataframe(doc_data, use_container_width=True)
-
-        if cost_estimate.estimated_media_costs:
-            st.write("**Media Processing:**")
-            media_data = []
-            for cost in cost_estimate.estimated_media_costs:
-                media_data.append(
-                    {
-                        "Service": cost.service_name,
-                        "Operation": cost.operation_type,
-                        "Units": f"{cost.units_consumed} {cost.unit_type}",
-                        "Rate": f"${float(cost.rate_per_unit):.3f}",
-                        "Cost": f"${float(cost.total_cost):.4f}",
-                        "File": cost.file_name or "N/A",
-                    }
-                )
-            st.dataframe(media_data, use_container_width=True)
+        st.write("**Cost Breakdown:**")
+        breakdown_data = []
+        for category, cost in cost_estimate.breakdown.items():
+            if category != 'confidence':  # Skip confidence, it's not a cost
+                breakdown_data.append({
+                    "Category": category.replace('_', ' ').title(),
+                    "Estimated Cost": f"${float(cost):.4f}"
+                })
+        
+        if breakdown_data:
+            st.dataframe(breakdown_data, use_container_width=True)
+        else:
+            st.info("No detailed breakdown available")
 
 
 def display_processing_cost_update(current_cost: float) -> None:
@@ -143,7 +259,8 @@ def generate_cost_estimate_for_files(files: list) -> CostEstimate | None:
     try:
         cost_estimator = CostEstimator()
         from backend_logic.document_processor import DocumentProcessor
-        doc_processor = DocumentProcessor()
+
+        DocumentProcessor()
 
         # Process files to get structured data for estimation
         processed_docs = []
@@ -197,10 +314,10 @@ def generate_cost_estimate_for_files(files: list) -> CostEstimate | None:
             documents=processed_docs, audio_files=audio_files, video_files=video_files
         )
 
-
     except (ValueError, TypeError, AttributeError) as e:
         st.warning(f"Could not generate cost estimate: {e!s}")
         return None
+
 
 def generate_case_analysis_html(analysis_result):
     """Generate a professionally formatted HTML case analysis document."""
@@ -377,10 +494,10 @@ def generate_case_analysis_html(analysis_result):
             html_content += f"""
             <div class="document-item">
                 <h4>{i}. {doc.inferred_title or "Untitled Document"}</h4>
-                <p><strong>Source File:</strong> {doc.filename}</p>
+                <p><strong>Source File:</strong> {doc.file_name}</p>
                 <p><strong>Document Type:</strong> {doc.document_type}</p>
                 <p><strong>Summary:</strong> {doc.summary}</p>
-                <p><strong>Key Information:</strong> {doc.key_information}</p>
+                <p><strong>Key Information:</strong> {getattr(doc, 'key_information', 'Not available')}</p>
                 <p><strong>Relevance to Case:</strong> {doc.relevance_to_case}</p>
             </div>
             """
@@ -447,6 +564,7 @@ def generate_case_analysis_html(analysis_result):
     """
 
     return html_content
+
 
 def handle_file_uploads():
     """

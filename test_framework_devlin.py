@@ -2,6 +2,7 @@
 """
 Quick test of the updated AUTHENTIC_ATTORNEY_ADVISOR framework with Devlin case documents.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -16,7 +17,7 @@ sys.path.insert(0, str(project_root))
 
 from openai import OpenAI
 
-from backend_logic.ai_analyzer import AIAnalyzer
+from backend_logic.ai import AIAnalyzer
 from backend_logic.email_generator import EmailGenerator
 
 

@@ -24,9 +24,7 @@ class SemanticAnalyzer:
                     api_key = None
             if not api_key:
                 msg = "OpenAI API key not found. Please set the OPENAI_API_KEY environment variable."
-                raise ValueError(
-                    msg
-                )
+                raise ValueError(msg)
             self.client = OpenAI(api_key=api_key)
 
     def get_semantic_similarity(self, text1, text2):

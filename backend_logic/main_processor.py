@@ -39,7 +39,7 @@ from backend_logic.audio_processor import AudioProcessor
 from backend_logic.config import get_openai_api_key
 from backend_logic.cost_session_manager import CostSessionManager
 from backend_logic.document_processor import DocumentProcessor
-from backend_logic.email_generator import EmailGeneratorV2
+from backend_logic.email_generator import EmailGeneratorV2, EmailReadabilityError
 from backend_logic.utils import (
     ProgressTracker,
     calculate_document_sizes,
@@ -662,6 +662,7 @@ async def process_case_documents(output_dir: str | None = None, config_path: str
                 if (
                     st.session_state.cost_summary
                     and st.session_state.cost_summary.actual_costs
+                    and st.session_state.cost_summary.actual_costs.total_actual_cost is not None
                 ):
                     final_cost = float(
                         st.session_state.cost_summary.actual_costs.total_actual_cost
@@ -680,6 +681,9 @@ async def process_case_documents(output_dir: str | None = None, config_path: str
                             st.sidebar.info(
                                 f"📉 Cost was ${abs(variance):.4f} under estimate"
                             )
+                elif st.session_state.cost_summary:
+                    # Handle case where cost_summary exists but actual_costs is None or incomplete
+                    st.sidebar.info("💰 Cost tracking initialized but processing not yet completed")
 
             except Exception as e:
                 st.warning(f"Could not finalize cost tracking: {e!s}")
@@ -707,6 +711,13 @@ async def process_case_documents(output_dir: str | None = None, config_path: str
         st.success("Document analysis completed successfully!")
 
         return True
+
+    except EmailReadabilityError as e:
+        print(f"🔍 MAIN_PROCESSOR: EmailReadabilityError caught: {e}")
+        st.session_state.processing_status = "failed"
+        st.session_state.processing_error = str(e)
+        st.error(f"Failed to generate a readable document after multiple attempts: {e}")
+        return False
 
     except Exception as e:
         print(f"🔍 MAIN_PROCESSOR: Exception caught: {e}")
@@ -811,6 +822,10 @@ async def process_case_documents_cli(
 
         print("✅ Case processing completed successfully!")
         return True
+
+    except EmailReadabilityError as e:
+        print(f"❌ EmailReadabilityError: Failed to generate a readable document after multiple attempts: {e}")
+        return False
 
     except Exception as e:
         print(f"❌ Error occurred during processing: {e}")

@@ -1,11 +1,10 @@
 #!/bin/bash
 
 # ==============================================================================
-# Legal Document Analysis Portal - Comprehensive Startup Script
+# Legal Document Analysis Portal - Streamlit Application Startup Script
 # ==============================================================================
-# This script provides coordinated startup of both Streamlit frontend and 
-# FastAPI backend services with proper environment validation and dual terminal
-# management for macOS development workflow.
+# This script provides startup of the Streamlit application with proper
+# environment validation for the Legal Document Analysis Portal.
 #
 # Usage: ./start_app.sh [options]
 # Options:
@@ -15,17 +14,13 @@
 #   --verbose, -v  Enable verbose output
 #
 # Architecture:
-#   Frontend (Streamlit): http://localhost:8501
-#   Backend (FastAPI):    http://localhost:8000
+#   Streamlit Application: http://localhost:8501
 # ==============================================================================
 
 set -e  # Exit on any error
 
 # --- Configuration ---
 FRONTEND_PORT=8501
-BACKEND_PORT=8000
-BACKEND_STARTUP_TIMEOUT=30
-HEALTH_CHECK_INTERVAL=2
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VERBOSE=false
 
@@ -80,16 +75,14 @@ OPTIONS:
     --verbose, -v   Enable verbose output
 
 DESCRIPTION:
-    This script coordinates the startup of both the Streamlit frontend and FastAPI
-    backend services required for the Legal Document Analysis Portal.
+    This script starts the Legal Document Analysis Portal Streamlit application
+    with proper environment validation.
 
     The script performs the following operations:
     1. Validates environment variables from .env file
     2. Checks system dependencies (Python, pip, required packages)
-    3. Terminates any existing processes on ports 8000 and 8501
-    4. Starts the FastAPI backend server in a new terminal window
-    5. Waits for backend health check to pass
-    6. Starts the Streamlit frontend in another terminal window
+    3. Terminates any existing processes on port 8501
+    4. Starts the Streamlit application
 
 ENVIRONMENT VARIABLES:
     Required:
@@ -97,19 +90,15 @@ ENVIRONMENT VARIABLES:
     
     Optional:
         PDFCO_API_KEY      PDF.co API key for document processing
-        BACKEND_API_URL    Backend URL (default: http://localhost:8000)
-        CORS_ORIGINS       Allowed CORS origins
 
 PORTS:
-    Frontend (Streamlit): http://localhost:8501
-    Backend (FastAPI):    http://localhost:8000
+    Streamlit Application: http://localhost:8501
 
 STOPPING SERVICES:
-    To stop the services, use:
-        ./kill_server.sh 8000    # Stop backend
-        ./kill_server.sh 8501    # Stop frontend
+    To stop the application, use:
+        ./kill_server.sh 8501    # Stop Streamlit app
     
-    Or close the terminal windows manually.
+    Or close the terminal window manually.
 
 EXAMPLES:
     ./start_app.sh                    # Normal startup
@@ -234,9 +223,9 @@ check_dependencies() {
         log_verbose "Streamlit is installed"
     fi
     
-    # Check for FastAPI dependencies in backend directory
-    if [ -f "backend/requirements.txt" ]; then
-        log_verbose "Checking backend dependencies..."
+    # Check for application dependencies in requirements.txt
+    if [ -f "requirements.txt" ]; then
+        log_verbose "Checking application dependencies..."
         local missing_packages=()
         
         while IFS= read -r package; do
@@ -268,20 +257,20 @@ check_dependencies() {
             else
                 log_verbose "✅ Successfully imported: $pkg_name"
             fi
-        done < "backend/requirements.txt"
+        done < "requirements.txt"
         
         if [ ${#missing_packages[@]} -gt 0 ]; then
-            log_warning "Missing backend dependencies:"
+            log_warning "Missing application dependencies:"
             for missing_pkg in "${missing_packages[@]}"; do
                 log_warning "  - $missing_pkg"
             done
-            log_info "Install with: cd backend && pip3 install -r requirements.txt"
+            log_info "Install with: pip3 install -r requirements.txt"
             failed=true
         else
-            log_verbose "All backend dependencies are installed"
+            log_verbose "All application dependencies are installed"
         fi
     else
-        log_warning "backend/requirements.txt not found"
+        log_warning "requirements.txt not found"
     fi
     
     if [ "$failed" = true ]; then
@@ -395,22 +384,21 @@ EOF
 }
 
 start_frontend() {
-    log_step "Starting Streamlit frontend application..."
+    log_step "Starting Streamlit application..."
     
     # Verify app.py exists
     if [ ! -f "app.py" ]; then
-        log_error "Frontend app.py not found"
+        log_error "Application app.py not found"
         return 1
     fi
     
-    # Create frontend startup script
-    local frontend_script=$(cat << 'EOF'
+    # Create application startup script
+    local app_script=$(cat << 'EOF'
 #!/bin/bash
-echo "🎨 Starting Streamlit Frontend Application"
+echo "🎨 Starting Legal Document Analysis Portal"
 echo "=========================================="
 echo "Port: 8501"
 echo "Application URL: http://localhost:8501"
-echo "Backend API: http://localhost:8000"
 echo ""
 
 # Load environment variables
@@ -440,14 +428,14 @@ EOF
     
     # Check if we're on macOS for Terminal.app integration
     if check_macos; then
-        log_verbose "Using macOS Terminal.app for frontend"
+        log_verbose "Using macOS Terminal.app for application"
         
         # Create temporary script file
-        local temp_script="/tmp/start_frontend_$$"
-        echo "$frontend_script" > "$temp_script"
+        local temp_script="/tmp/start_app_$$"
+        echo "$app_script" > "$temp_script"
         chmod +x "$temp_script"
         
-        # Open new Terminal window with the frontend script
+        # Open new Terminal window with the application script
         osascript << EOF
 tell application "Terminal"
     do script "cd '$SCRIPT_DIR' && $temp_script; rm -f $temp_script"
@@ -457,16 +445,16 @@ EOF
     else
         log_verbose "Using generic terminal approach"
         # Fallback for non-macOS systems
-        echo "$frontend_script" | bash &
+        echo "$app_script" | bash &
     fi
     
-    log_success "Frontend started successfully"
+    log_success "Application started successfully"
     return 0
 }
 
 cleanup() {
     log_step "Cleaning up temporary files..."
-    rm -f "/tmp/start_backend_$$" "/tmp/start_frontend_$$" 2>/dev/null || true
+    rm -f "/tmp/start_app_$$" 2>/dev/null || true
 }
 
 # --- Main Script Logic ---
@@ -508,16 +496,15 @@ main() {
     echo ""
     echo "🏛️  Legal Document Analysis Portal"
     echo "=================================="
-    echo "Streamlit/FastAPI Development Environment"
+    echo "Streamlit Application Environment"
     echo ""
     
     # Kill existing processes if requested or as part of normal startup
     if [ "$kill_only" = true ] || [ "$check_only" = false ]; then
-        kill_process_on_port $BACKEND_PORT || exit 1
         kill_process_on_port $FRONTEND_PORT || exit 1
         
         if [ "$kill_only" = true ]; then
-            log_success "All processes terminated"
+            log_success "Application processes terminated"
             exit 0
         fi
     fi
@@ -531,47 +518,35 @@ main() {
         exit 0
     fi
     
-    # Start services
+    # Start application
     echo ""
-    log_info "🚀 Starting Legal Document Analysis Portal services..."
+    log_info "🚀 Starting Legal Document Analysis Portal..."
     echo ""
     
-    # Start backend first
-    start_backend || {
-        log_error "Failed to start backend. Aborting startup."
-        exit 1
-    }
-    
-    # Small delay to ensure backend is fully initialized
-    sleep 2
-    
-    # Start frontend
-    start_frontend || {
-        log_error "Failed to start frontend. Backend may still be running."
+    # Start the Streamlit application
+    start_application || {
+        log_error "Failed to start application."
         exit 1
     }
     
     echo ""
     log_success "🎉 Startup complete!"
     echo ""
-    echo "📋 Service Information:"
-    echo "  📱 Frontend: http://localhost:$FRONTEND_PORT"
-    echo "  🔧 Backend:  http://localhost:$BACKEND_PORT"
-    echo "  📖 API Docs: http://localhost:$BACKEND_PORT/docs"
+    echo "📋 Application Information:"
+    echo "  📱 Application: http://localhost:$FRONTEND_PORT"
     echo ""
     echo "💡 Usage Instructions:"
-    echo "  • Two new terminal windows have opened for backend and frontend"
+    echo "  • A new terminal window has opened for the application"
     echo "  • The Streamlit app should open in your browser automatically"
-    echo "  • Both services will reload automatically when you make changes"
-    echo "  • Press Ctrl+C in either terminal to stop that service"
+    echo "  • The application will reload automatically when you make changes"
+    echo "  • Press Ctrl+C in the terminal to stop the application"
     echo ""
-    echo "🛑 To stop all services:"
-    echo "  ./kill_server.sh $BACKEND_PORT    # Stop backend"
-    echo "  ./kill_server.sh $FRONTEND_PORT   # Stop frontend"
+    echo "🛑 To stop the application:"
+    echo "  ./kill_server.sh $FRONTEND_PORT   # Stop application"
     echo ""
     
     # Give final instructions
-    log_info "✨ Ready for development! Check the terminal windows for service output."
+    log_info "✨ Ready for development! Check the terminal window for application output."
 }
 
 # Execute main function with all arguments

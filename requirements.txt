@@ -25,6 +25,7 @@ pytesseract>=0.3.10
 
 # Utility Libraries
 tenacity>=8.2.3
+textstat>=0.7.8
 
 # Data Visualization for Cost Tracking
 plotly>=5.17.0

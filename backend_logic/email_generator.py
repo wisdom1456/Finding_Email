@@ -8,6 +8,7 @@ from datetime import datetime
 from typing import Any
 
 import yaml
+from bs4 import BeautifulSoup
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from openai import (
     APIConnectionError,
@@ -35,6 +36,7 @@ from backend.utils.data_models import (
 from backend.utils.validators import validate_next_steps_formatting, validate_section_output
 from backend_logic.config import get_openai_config
 from backend_logic.quality_validator import QualityValidator
+from backend.quality_validator import polish_and_sanitize
 
 
 # === ENHANCED DATA MODELS FOR REFACTORED ARCHITECTURE ===
@@ -287,6 +289,11 @@ class EmailGeneratorV2:
             letter = self._map_sections_to_template_fields(
                 generated_sections, structure_plan, analysis
             )
+            
+            # STAGE 3.5: POLISH AND SANITIZE
+            print("EMAIL GENERATOR V2: STAGE 3.5 - POLISH AND SANITIZE")
+            letter = self._apply_polish_and_sanitize(letter)
+            
             self._validate_generated_letter(letter)
 
             debug_info.generation_time = datetime.now().timestamp() - start_time
@@ -751,6 +758,443 @@ class EmailGeneratorV2:
 
         return letter
 
+    def _apply_polish_and_sanitize(self, letter: GeneratedLetter) -> GeneratedLetter:
+        """
+        Apply polish and sanitize processing to all letter fields.
+        
+        This method processes each field of the generated letter through the
+        polish_and_sanitize function to ensure content quality and compliance.
+        """
+        try:
+            print("EMAIL GENERATOR V2: Applying polish and sanitize to letter fields...")
+            
+            # Process each field that contains substantial content
+            fields_to_process = [
+                'executive_summary',
+                'background_summary',
+                'analysis_and_position',
+                'media_summary',
+                'strengths',
+                'challenges',
+                'recommendations',
+                'next_steps',
+                'closing_paragraph'
+            ]
+            
+            for field_name in fields_to_process:
+                field_content = getattr(letter, field_name, "")
+                if field_content and field_content.strip():
+                    try:
+                        # Get appropriate word limit for this field from configuration
+                        word_counts = self.config.get('word_counts', {})
+                        field_word_limit = word_counts.get(field_name, 200)  # Default to 200 if not specified
+                        
+                        # Apply polish and sanitize with proper word limit per field
+                        processed_content = polish_and_sanitize(
+                            email_draft=field_content,
+                            apply_polishing=False,  # Skip AI polishing for individual fields
+                            client=self.client,
+                            word_limit=field_word_limit
+                        )
+                        setattr(letter, field_name, processed_content)
+                        print(f"EMAIL GENERATOR V2: ✅ Processed {field_name}")
+                        
+                    except Exception as e:
+                        print(f"EMAIL GENERATOR V2: ⚠️ Failed to process {field_name}: {e}")
+                        # Continue with original content if processing fails
+            
+            # Apply overall email polish and sanitize to the complete email
+            try:
+                # Combine all content for full email processing
+                full_email_content = self._combine_letter_content(letter)
+                
+                # Apply full email polish and sanitize with STRICT 850-word limit
+                polished_email = polish_and_sanitize(
+                    email_draft=full_email_content,
+                    apply_polishing=True,  # Enable AI polishing for full email
+                    client=self.client,
+                    word_limit=850  # CRITICAL: Full email MUST be under 850 words
+                )
+                
+                # If full processing succeeds, update the primary content field
+                letter.executive_summary = polished_email[:1000] + "..." if len(polished_email) > 1000 else polished_email
+                print("EMAIL GENERATOR V2: ✅ Applied full email polish and sanitize")
+                
+            except Exception as e:
+                print(f"EMAIL GENERATOR V2: ⚠️ Full email processing failed: {e}")
+                # Continue with field-level processing results
+            
+            return letter
+            
+        except Exception as e:
+            print(f"EMAIL GENERATOR V2: ❌ Polish and sanitize processing failed: {e}")
+            # Return original letter if all processing fails
+            return letter
+
+    def _combine_letter_content(self, letter: GeneratedLetter) -> str:
+        """Combine all letter content into a single email draft for processing."""
+        content_parts = []
+        
+        # Add each field with proper spacing
+        fields_with_content = [
+            ('Executive Summary', letter.executive_summary),
+            ('Background Summary', letter.background_summary),
+            ('Legal Analysis', letter.analysis_and_position),
+            ('Evidence Review', letter.media_summary),
+            ('Case Strengths', letter.strengths),
+            ('Challenges', letter.challenges),
+            ('Recommendations', letter.recommendations),
+            ('Next Steps', letter.next_steps),
+            ('Closing', letter.closing_paragraph)
+        ]
+        
+        for section_name, content in fields_with_content:
+            if content and content.strip():
+                content_parts.append(f"<h3>{section_name}</h3>")
+                content_parts.append(content)
+                content_parts.append("")  # Add spacing
+        
+        return "\n".join(content_parts)
+
+    def _enforce_850_word_limit(self, html_content: str, generated_letter: GeneratedLetter, analysis: CaseAnalysisResult) -> str:
+        """
+        Enforce the 850-word limit by iteratively reducing the longest section until under the limit.
+        
+        Args:
+            html_content: The fully assembled HTML content
+            generated_letter: The generated letter object with individual sections
+            analysis: The case analysis result for regeneration context
+            
+        Returns:
+            HTML content that is at or below 850 words
+        """
+        max_iterations = 5
+        iteration = 0
+        
+        print(f"EMAIL GENERATOR V2: Starting 850-word limit enforcement")
+        
+        while iteration < max_iterations:
+            # Strip HTML tags and count words
+            plain_text = self._strip_html_tags(html_content)
+            word_count = len(plain_text.split())
+            
+            print(f"EMAIL GENERATOR V2: Iteration {iteration + 1}, current word count: {word_count}")
+            
+            if word_count <= 850:
+                print(f"EMAIL GENERATOR V2: ✅ Word count within limit: {word_count} words")
+                return html_content
+            
+            # Find the longest section
+            longest_section_key = self._identify_longest_section(generated_letter)
+            if not longest_section_key:
+                print("EMAIL GENERATOR V2: ⚠️ Could not identify longest section, breaking loop")
+                break
+                
+            print(f"EMAIL GENERATOR V2: Longest section identified: {longest_section_key}")
+            
+            # Calculate reduced word target (reduce by 15% or at least 25 words)
+            current_section_content = getattr(generated_letter, longest_section_key, "")
+            current_section_words = len(self._strip_html_tags(current_section_content).split())
+            word_reduction = max(25, int(current_section_words * 0.15))
+            new_word_target = max(50, current_section_words - word_reduction)  # Minimum 50 words
+            
+            print(f"EMAIL GENERATOR V2: Reducing {longest_section_key} from {current_section_words} to {new_word_target} words")
+            
+            # Regenerate the longest section with reduced word count
+            regenerated_content = self._regenerate_section_with_reduced_words(
+                section_key=longest_section_key,
+                word_target=new_word_target,
+                analysis=analysis
+            )
+            
+            if regenerated_content:
+                # Update the generated letter object
+                setattr(generated_letter, longest_section_key, regenerated_content)
+                
+                # Re-render the full HTML
+                html_content = self._rerender_full_html(generated_letter, analysis)
+                print(f"EMAIL GENERATOR V2: ✅ Regenerated {longest_section_key} and re-rendered HTML")
+            else:
+                print(f"EMAIL GENERATOR V2: ⚠️ Failed to regenerate {longest_section_key}")
+                break
+                
+            iteration += 1
+        
+        # Final word count check
+        final_plain_text = self._strip_html_tags(html_content)
+        final_word_count = len(final_plain_text.split())
+        
+        if final_word_count > 850:
+            print(f"EMAIL GENERATOR V2: ⚠️ Still over limit after {max_iterations} iterations: {final_word_count} words")
+        else:
+            print(f"EMAIL GENERATOR V2: ✅ Final word count: {final_word_count} words")
+            
+        return html_content
+
+    def _strip_html_tags(self, html_content: str) -> str:
+        """Strip HTML tags to get plain text for word counting."""
+        import re
+        if not html_content:
+            return ""
+        
+        # Remove HTML tags
+        clean = re.sub('<.*?>', '', html_content)
+        # Remove extra whitespace
+        clean = re.sub(r'\s+', ' ', clean)
+        return clean.strip()
+
+    def _identify_longest_section(self, letter: GeneratedLetter) -> str | None:
+        """Identify the section with the most words."""
+        section_word_counts = {}
+        
+        # Define sections that can be shortened (exclude closing/greeting)
+        shortenable_sections = [
+            'background_summary',
+            'analysis_and_position',
+            'media_summary',
+            'strengths',
+            'challenges',
+            'recommendations',
+            'next_steps'
+        ]
+        
+        for section_key in shortenable_sections:
+            content = getattr(letter, section_key, "")
+            if content and content.strip():
+                word_count = len(self._strip_html_tags(content).split())
+                section_word_counts[section_key] = word_count
+        
+        if not section_word_counts:
+            return None
+            
+        # Return the section with the most words
+        longest_section = max(section_word_counts.items(), key=lambda x: x[1])
+        return longest_section[0]
+
+    def _regenerate_section_with_reduced_words(self, section_key: str, word_target: int, analysis: CaseAnalysisResult) -> str | None:
+        """Regenerate a specific section with a reduced word count target."""
+        try:
+            # Map section keys to generation methods
+            section_generators = {
+                'background_summary': self._generate_factual_summary_content,
+                'analysis_and_position': self._generate_legal_analysis_content,
+                'media_summary': self._generate_evidence_review_content,
+                'strengths': self._generate_case_assessment_content,
+                'challenges': self._generate_case_assessment_content,
+                'recommendations': self._generate_case_assessment_content,
+                'next_steps': self._generate_next_steps_content
+            }
+            
+            generator_method = section_generators.get(section_key)
+            if not generator_method:
+                print(f"EMAIL GENERATOR V2: ⚠️ No generator method found for section: {section_key}")
+                return None
+            
+            # Create a temporary section plan with reduced word target
+            section_plan = SectionPlan(
+                number=1,
+                header=section_key.replace('_', ' ').title(),
+                key_points=[],
+                emphasis_items={},
+                content_requirements=[]
+            )
+            
+            # Temporarily update word counts configuration for this section
+            original_word_counts = self.config.get('word_counts', {}).copy()
+            self.config['word_counts'][section_key] = word_target
+            
+            # Generate the section with reduced word count
+            context = GenerationContext()
+            regenerated_content = generator_method(section_plan, analysis, context)
+            
+            # Restore original word counts
+            self.config['word_counts'] = original_word_counts
+            
+            return regenerated_content
+            
+        except Exception as e:
+            print(f"EMAIL GENERATOR V2: ❌ Error regenerating section {section_key}: {e}")
+            return None
+
+    def _rerender_full_html(self, letter: GeneratedLetter, analysis: CaseAnalysisResult) -> str:
+        """Re-render the full HTML content after updating a section."""
+        try:
+            # Get the template
+            main_template = self.jinja_env.get_template("findings_email.jinja2")
+            
+            # Prepare template context
+            template_context = {
+                "analysis": analysis,
+                "generated_letter": letter,
+                "current_date": datetime.now().strftime("%B %d, %Y"),
+                "case_timeline": getattr(analysis, "case_timeline", []),
+                "format_video_analysis": self.format_video_analysis_for_appendix,
+                "case_name": analysis.intake_analysis.case_type if analysis.intake_analysis and analysis.intake_analysis.case_type else "Your Case",
+                "client_name": analysis.intake_analysis.client_name if analysis.intake_analysis and analysis.intake_analysis.client_name else "Client",
+            }
+            
+            # Render template
+            html_content = main_template.render(
+                results=template_context,
+                current_date=template_context["current_date"]
+            )
+            
+            return html_content
+            
+        except Exception as e:
+            print(f"EMAIL GENERATOR V2: ❌ Error re-rendering HTML: {e}")
+            # Return a simple concatenation as fallback
+            return self._combine_letter_content(letter)
+
+    def _apply_final_sanitization(
+        self, html_content: str, apply_polishing: bool = False, word_limit: int = 850
+    ) -> str:
+        """
+        Apply final sanitization pass after full HTML assembly.
+        
+        This method implements the core requirements:
+        1. Filter citations using configured regex pattern
+        2. Apply polish_and_sanitize function from quality_validator
+        3. Optional AI polish step for tone realignment
+        
+        Args:
+            html_content: The fully assembled HTML content
+            apply_polishing: Whether to apply AI polishing for tone realignment
+            word_limit: Maximum word count for the content
+            
+        Returns:
+            Sanitized and polished HTML content
+        """
+        if not html_content or not html_content.strip():
+            print("EMAIL GENERATOR V2: ⚠️ Empty HTML content provided for sanitization")
+            return html_content
+        
+        try:
+            print(f"EMAIL GENERATOR V2: Starting final sanitization (polishing: {apply_polishing}, limit: {word_limit})")
+            
+            # Step 1: Apply citation filter using regex from configuration
+            citation_filtered_html = self._apply_citation_filter_to_html(html_content)
+            
+            # Step 2: Apply polish_and_sanitize from quality_validator module
+            sanitized_html = polish_and_sanitize(
+                email_draft=citation_filtered_html,
+                apply_polishing=apply_polishing,
+                client=self.client,
+                word_limit=word_limit
+            )
+            
+            print("EMAIL GENERATOR V2: ✅ Final sanitization completed successfully")
+            return sanitized_html
+            
+        except Exception as e:
+            print(f"EMAIL GENERATOR V2: ❌ Final sanitization failed: {e}")
+            # Return original content if sanitization fails to prevent data loss
+            return html_content
+
+    def _apply_citation_filter_to_html(self, html_content: str) -> str:
+        """
+        Apply citation filter regex to strip "§" or "Fla. Stat." references from HTML.
+        
+        Uses the citation_filter_regex from configuration to remove legal citations
+        while preserving HTML structure.
+        
+        Args:
+            html_content: HTML content to filter
+            
+        Returns:
+            HTML content with citations removed
+        """
+        if not html_content:
+            return html_content
+        
+        try:
+            # Get citation filter regex from configuration
+            citation_filter_regex = self.config.get('citation_filter_regex', '')
+            
+            if not citation_filter_regex:
+                print("EMAIL GENERATOR V2: ⚠️ No citation_filter_regex found in configuration")
+                return html_content
+            
+            print(f"EMAIL GENERATOR V2: Applying citation filter: {citation_filter_regex}")
+            
+            # Apply citation filter using re.sub with case-insensitive matching
+            filtered_html = re.sub(
+                citation_filter_regex,
+                "",
+                html_content,
+                flags=re.IGNORECASE
+            )
+            
+            # Clean up any double spaces left by removals
+            filtered_html = re.sub(r'\s+', ' ', filtered_html)
+            
+            # Count removals for logging
+            original_length = len(html_content)
+            filtered_length = len(filtered_html)
+            
+            if filtered_length < original_length:
+                removed_chars = original_length - filtered_length
+                print(f"EMAIL GENERATOR V2: Citation filter removed {removed_chars} characters")
+            else:
+                print("EMAIL GENERATOR V2: Citation filter found no matches to remove")
+            
+            return filtered_html.strip()
+            
+        except re.error as e:
+            print(f"EMAIL GENERATOR V2: ❌ Invalid citation filter regex: {e}")
+            return html_content
+        except Exception as e:
+            print(f"EMAIL GENERATOR V2: ❌ Citation filtering failed: {e}")
+            return html_content
+
+    def _apply_post_processor_guard(self, html_content: str) -> str:
+        """
+        Apply final validation and cleanup step to the email generation process.
+        
+        This implements the post-processor guard with:
+        1. Strip stray citations using regex
+        2. Get plain text for word count using BeautifulSoup
+        3. Assert total word count <= 850 words
+        
+        Args:
+            html_content: The final HTML content to validate
+            
+        Returns:
+            Sanitized and validated HTML content
+            
+        Raises:
+            AssertionError: If word count exceeds 850 words
+        """
+        if not html_content:
+            return html_content
+            
+        try:
+            print("EMAIL GENERATOR V2: STAGE 6 - POST-PROCESSOR GUARD")
+            
+            # 1. Strip stray citations
+            html_content = re.sub(r"(Fla\.?\s*Stat\.?|§|Chapter\s*\d+)", "", html_content)
+            print("EMAIL GENERATOR V2: ✅ Stripped stray citations")
+            
+            # 2. Get plain text for word count
+            plain_text = BeautifulSoup(html_content, "html.parser").get_text()
+            
+            # 3. Assert total word count
+            word_count = len(plain_text.split())
+            print(f"EMAIL GENERATOR V2: Final word count: {word_count} words")
+            
+            assert word_count <= 850, f"Letter too long ({word_count} words)—regenerate largest section."
+            
+            print("EMAIL GENERATOR V2: ✅ Post-processor guard validation passed")
+            return html_content
+            
+        except AssertionError:
+            # Re-raise assertion errors for word count violations
+            raise
+        except Exception as e:
+            print(f"EMAIL GENERATOR V2: ❌ Post-processor guard failed: {e}")
+            # Return original content if processing fails to prevent data loss
+            return html_content
+
     def _split_case_assessment(self, case_assessment: str) -> tuple[str, str]:
         """Split combined case assessment into strengths and challenges."""
         if not case_assessment:
@@ -884,7 +1328,7 @@ class EmailGeneratorV2:
             # Fallback prompt if configuration is missing
             section_prompt = "Write a factual summary section for a professional legal findings letter."
 
-        prompt = f"""
+        base_prompt = f"""
         {section_prompt}
 
         Key Facts to Emphasize:
@@ -894,14 +1338,17 @@ class EmailGeneratorV2:
         {analysis.model_dump_json(indent=2)}
         """
 
+        # Build enhanced prompt with firm voice, golden sample, and word limits
+        enhanced_prompt = self._build_enhanced_prompt(base_prompt, 'factual_summary')
+
         print(
-            f"EMAIL GENERATOR: 🔍 Factual summary prompt length: {len(prompt)} characters"
+            f"EMAIL GENERATOR: 🔍 Factual summary enhanced prompt length: {len(enhanced_prompt)} characters"
         )
         
         # Get persona from configuration (defensive against None values)
         personas_section = self.config.get('personas') or {}
         persona = personas_section.get('CONTINUING_LEGAL_ADVISOR', '')
-        result = self._make_openai_request(prompt, persona)
+        result = self._make_openai_request(enhanced_prompt, persona)
         print(
             f"EMAIL GENERATOR: 🔍 Factual summary result length: {len(result) if result else 0} characters"
         )
@@ -928,7 +1375,7 @@ class EmailGeneratorV2:
         if not section_prompt:
             section_prompt = "Write a legal analysis section as an experienced Florida litigation attorney."
 
-        prompt = f"""
+        base_prompt = f"""
         {section_prompt}
 
         Legal Issues to Analyze:
@@ -940,10 +1387,13 @@ class EmailGeneratorV2:
         {analysis.model_dump_json(indent=2)}
         """
 
+        # Build enhanced prompt with firm voice, golden sample, and word limits
+        enhanced_prompt = self._build_enhanced_prompt(base_prompt, 'analysis')
+
         # Get persona from configuration (defensive against None values)
         personas_section = self.config.get('personas') or {}
         persona = personas_section.get('CONTINUING_LEGAL_ADVISOR', '')
-        result = self._make_openai_request(prompt, persona)
+        result = self._make_openai_request(enhanced_prompt, persona)
         return (
             result
             or "<p>Legal analysis under Florida law indicates several key considerations.</p>"
@@ -959,7 +1409,7 @@ class EmailGeneratorV2:
         if not analysis.transcripted_media and not analysis.video_insights:
             return ""
 
-        prompt = f"""
+        base_prompt = f"""
         Write an evidence review section as an experienced Florida litigation attorney analyzing the evidentiary value of media and documents.
 
         EVIDENCE ANALYSIS STANDARDS:
@@ -995,10 +1445,13 @@ class EmailGeneratorV2:
         Write comprehensive evidence analysis demonstrating the expertise of a seasoned Florida litigation attorney familiar with evidence rules.
         """
 
+        # Build enhanced prompt with firm voice, golden sample, and word limits
+        enhanced_prompt = self._build_enhanced_prompt(base_prompt, 'evidence_review')
+
         # Get persona from configuration (defensive against None values)
         personas_section = self.config.get('personas') or {}
         persona = personas_section.get('CONTINUING_LEGAL_ADVISOR', '')
-        result = self._make_openai_request(prompt, persona)
+        result = self._make_openai_request(enhanced_prompt, persona)
         return (
             result
             or "<p>Review of the evidence reveals important information relevant to this case.</p>"
@@ -1011,7 +1464,7 @@ class EmailGeneratorV2:
         context: GenerationContext,
     ) -> str:
         """Generate combined case assessment covering strengths and challenges."""
-        prompt = f"""
+        base_prompt = f"""
         Write a case assessment section as an experienced Florida litigation attorney providing objective evaluation of case strengths and challenges.
 
         CASE ASSESSMENT STANDARDS:
@@ -1047,9 +1500,12 @@ class EmailGeneratorV2:
         Write a comprehensive case assessment that reflects the judgment and experience of a senior Florida litigation attorney.
         """
 
+        # Build enhanced prompt with firm voice, golden sample, and word limits
+        enhanced_prompt = self._build_enhanced_prompt(base_prompt, 'strengths_and_weaknesses')
+
         # Get persona from configuration
         persona = self.config.get('personas', {}).get('CONTINUING_LEGAL_ADVISOR', '')
-        result = self._make_openai_request(prompt, persona)
+        result = self._make_openai_request(enhanced_prompt, persona)
         return (
             result
             or "<p>Case assessment reveals both strengths and considerations under Florida law.</p>"
@@ -1062,28 +1518,27 @@ class EmailGeneratorV2:
         context: GenerationContext,
     ) -> str:
         """Generate next steps content with prioritized actions."""
-        prompt = f"""
+        base_prompt = f"""
         Write a recommended next steps section as an experienced Florida litigation attorney providing strategic guidance to the client.
 
         STRATEGIC GUIDANCE STANDARDS:
-        - Begin with a substantive paragraph explaining the strategic approach and rationale
-        - Provide specific, actionable recommendations based on Florida law and procedure
-        - Include precise timelines, deadlines, and procedural requirements where applicable
-        - Use bullet points to list specific action items, deadlines, or procedural steps
+        - Keep the opening strategy paragraph that explains the strategic approach and rationale
+        - Convert actionable items into a clean <ul><li> block structure for maximum scannability
+        - Place any explanatory text in paragraphs above or below the bulleted list
         - Bold critical deadlines and requirements using <strong> tags for emphasis
         - Demonstrate knowledge of Florida procedural rules and litigation strategy
         - Present recommendations with the authority and wisdom of a seasoned litigator
 
-        RECOMMENDATION STRUCTURE:
-        1. Opening paragraph outlining the strategic approach and immediate priorities
-        2. Specific action items organized by priority and timeline
-        3. Procedural requirements and deadlines under Florida law
-        4. Strategic considerations for case development and resolution
-        5. Professional guidance on client's role and expected participation
+        REQUIRED OUTPUT STRUCTURE:
+        1. Opening paragraph: Substantive explanation of the strategic approach and immediate priorities
+        2. Actionable items: Clean <ul><li> list of specific action items, deadlines, and procedural steps
+        3. Closing paragraph (if needed): Additional explanatory text about strategic considerations or client guidance
 
-        ATTORNEY GUIDANCE REQUIREMENTS:
+        FORMATTING REQUIREMENTS:
+        - Use <ul><li> tags for all actionable recommendations
+        - Include precise timelines, deadlines, and procedural requirements within the list items
         - Reference specific Florida procedural deadlines and requirements
-        - Explain the purpose and importance of each recommended action
+        - Explain the purpose and importance of each recommended action within the list items
         - Provide realistic timelines based on legal and practical considerations
         - Address both immediate actions and longer-term strategic planning
         - Include guidance on evidence preservation and case development
@@ -1095,12 +1550,15 @@ class EmailGeneratorV2:
         CASE CONTEXT AND ANALYSIS:
         {analysis.model_dump_json(indent=2)}
 
-        Write strategic next steps recommendations that reflect the judgment and experience of a senior Florida litigation attorney.
+        Write strategic next steps recommendations with the opening strategy paragraph, followed by a scannable <ul><li> list of actionable items, and any closing explanatory paragraphs as needed.
         """
+
+        # Build enhanced prompt with firm voice, golden sample, and word limits
+        enhanced_prompt = self._build_enhanced_prompt(base_prompt, 'next_steps')
 
         # Get persona from configuration
         persona = self.config.get('personas', {}).get('CONTINUING_LEGAL_ADVISOR', '')
-        result = self._make_openai_request(prompt, persona)
+        result = self._make_openai_request(enhanced_prompt, persona)
         final_result = (
             result
             or "<p>Based on our analysis, the following steps are recommended to advance your case.</p>"
@@ -1122,7 +1580,7 @@ class EmailGeneratorV2:
         context: GenerationContext,
     ) -> str:
         """Generate any other section type with appropriate formatting."""
-        prompt = f"""
+        base_prompt = f"""
         Generate a {section_plan.header.lower()} section for a professional legal findings letter using the AUTHENTIC_ATTORNEY style.
 
         REQUIREMENTS:
@@ -1145,9 +1603,12 @@ class EmailGeneratorV2:
         Generate only the section content with professional formatting.
         """
 
+        # Build enhanced prompt with firm voice, golden sample, and word limits
+        enhanced_prompt = self._build_enhanced_prompt(base_prompt, section_plan.header.lower().replace(" ", "_"))
+
         # Get persona from configuration
         persona = self.config.get('personas', {}).get('CONTINUING_LEGAL_ADVISOR', '')
-        result = self._make_openai_request(prompt, persona)
+        result = self._make_openai_request(enhanced_prompt, persona)
         return result or f"<p>{section_plan.header.title()} analysis for this case.</p>"
 
     def _generate_closing_section(
@@ -1283,6 +1744,62 @@ class EmailGeneratorV2:
             )
         ),
     )
+    def _build_enhanced_prompt(self, base_prompt: str, section_key: str) -> str:
+        """
+        Build enhanced prompt with firm voice, golden sample, word limits, and content restrictions.
+        
+        Args:
+            base_prompt: The base prompt content
+            section_key: The section key to look up word count limits
+            
+        Returns:
+            Enhanced prompt string with all requirements
+        """
+        # Get firm voice and golden sample from configuration
+        firm_voice = self.config.get('firm_voice', '')
+        golden_sample = self.config.get('golden_sample', '')
+        
+        # Get word count for this section
+        word_counts = self.config.get('word_counts', {})
+        
+        # Map user's section names to internal section keys
+        section_mapping = {
+            'analysis': 'legal_analysis',
+            'strengths_and_weaknesses': 'case_assessment'
+        }
+        
+        # Use mapped section key if available, otherwise use the provided section_key
+        mapped_section_key = section_mapping.get(section_key, section_key)
+        word_limit = word_counts.get(mapped_section_key, word_counts.get(section_key, None))
+        
+        # Get content restrictions
+        content_rules = self.config.get('content_rules', [])
+        
+        # Build enhanced prompt following the exact structure requested
+        enhanced_prompt = ""
+        
+        # Prepend firm voice directly (no label)
+        if firm_voice:
+            enhanced_prompt = f"{firm_voice}\n\n"
+        
+        # Add golden sample with exact format requested
+        if golden_sample:
+            enhanced_prompt += f"Below is our style exemplar:\n{golden_sample}\n\n"
+        
+        # Add section-specific instruction with word count
+        if word_limit:
+            enhanced_prompt += f"Draft the {section_key} for a client email (≤ {word_limit} words). Do not reference statutes, sections, or chapters.\n\n"
+        
+        # Add the base prompt
+        enhanced_prompt += base_prompt
+        
+        # Add content restrictions if any
+        if content_rules:
+            restrictions = "\n".join([f"- {rule}" for rule in content_rules])
+            enhanced_prompt = f"{enhanced_prompt}\n\nCONTENT RESTRICTIONS:\n{restrictions}"
+        
+        return enhanced_prompt
+
     def _make_openai_request(
         self, prompt: str, persona: str, model: str | None = None
     ) -> str | None:
@@ -2394,6 +2911,8 @@ class EmailGeneratorV2:
                 "current_date": datetime.now().strftime("%B %d, %Y"),
                 "case_timeline": getattr(analysis, "case_timeline", []),
                 "format_video_analysis": self.format_video_analysis_for_appendix,
+                "case_name": analysis.intake_analysis.case_type if analysis.intake_analysis and analysis.intake_analysis.case_type else "Your Case",
+                "client_name": analysis.intake_analysis.client_name if analysis.intake_analysis and analysis.intake_analysis.client_name else "Client",
             }
 
             main_html_content = main_template.render(
@@ -2402,6 +2921,32 @@ class EmailGeneratorV2:
             appendix_html_content = appendix_template.render(
                 results=template_context, current_date=template_context["current_date"]
             )
+
+            # CRITICAL: Apply final sanitization after full HTML assembly
+            print("EMAIL GENERATOR V2: STAGE 4 - FINAL SANITIZATION")
+            main_html_content = self._apply_final_sanitization(
+                html_content=main_html_content,
+                apply_polishing=True,  # Enable polish for full email realignment
+                word_limit=850  # STRICT 850-word limit for complete email
+            )
+            
+            # STAGE 5: WORD COUNT VALIDATION LOOP
+            print("EMAIL GENERATOR V2: STAGE 5 - WORD COUNT VALIDATION")
+            main_html_content = self._enforce_850_word_limit(
+                html_content=main_html_content,
+                generated_letter=generated_letter,
+                analysis=analysis
+            )
+            
+            appendix_html_content = self._apply_final_sanitization(
+                html_content=appendix_html_content,
+                apply_polishing=False,  # Skip polish for appendix
+                word_limit=1500  # Higher limit for appendix
+            )
+
+            # STAGE 6: POST-PROCESSOR GUARD - Final validation and cleanup
+            print("EMAIL GENERATOR V2: STAGE 6 - POST-PROCESSOR GUARD")
+            main_html_content = self._apply_post_processor_guard(main_html_content)
 
             return {"main_letter": main_html_content, "appendix": appendix_html_content}
 

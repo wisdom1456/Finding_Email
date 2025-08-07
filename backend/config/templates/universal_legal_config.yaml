@@ -3,6 +3,37 @@
 
 template_path: "backend/assets/templates/findings_email.jinja2"
 
+# Firm voice and style guidelines
+firm_voice: |-
+  • Warm-but-businesslike; first-person plural ("we have reviewed …").
+  • 9th-grade readability; sentences 18-22 words; no paragraph >120 words.
+  • Preferred verbs: review, confirm, recommend, resolve, proceed.
+  • Ban "-ly" adverbs unless essential.
+  • No conversational pleasantries; open with facts, close with action.
+  • Absolutely no citations, § symbols, or chapter references.
+
+# Golden sample for consistent output
+golden_sample: |-
+  The case involving Amber Bell and Erik Devlin against LLW Construction presents a strong foundation for pursuing claims of breach of contract, negligence, and unjust enrichment. The clients have a compelling narrative supported by substantial evidence, including documented communications and visual proof of incomplete and substandard work. The urgency of the situation, compounded by the financial impact and potential legal complications from subcontractor liens, further underscores the need for prompt and decisive action.
+
+# Section-specific word count limits
+word_counts:
+  legal_analysis: 150
+  case_assessment: 75
+  factual_summary: 200
+  evidence_review: 150
+  next_steps: 125
+  strengths: 150
+  weaknesses: 150
+
+# Content filtering rules
+citation_filter_regex: "(Fla\\.?\\s*Stat\\.?|§|Chapter\\s*\\d+)"
+
+# Content restrictions
+content_rules:
+  - "No statute, chapter, section, §-symbol or 'Fla. Stat.' references."
+  - "No citations or code numbers."
+
 personas:
   UNIFIED_LEGAL_ADVISOR: &UNIFIED_LEGAL_ADVISOR |
     You are a seasoned Florida litigation attorney with 15+ years of experience writing professional legal findings letters to clients. Your communication style is direct, authoritative, and matter-of-fact—providing clear, actionable guidance without citing any case law, statutes, regulations, or other formal legal authorities to avoid potential hallucinations.

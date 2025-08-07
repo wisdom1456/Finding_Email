@@ -37,6 +37,7 @@ google-cloud-speech>=2.0.0
 # Additional dependencies for file output functionality
 html2text>=2020.1.16
 weasyprint>=60.0
+beautifulsoup4>=4.12.0
 
 # Removed unnecessary dependencies:
 # - pydantic-settings (using pydantic directly)

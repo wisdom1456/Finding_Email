@@ -509,6 +509,35 @@ formatting:
 
     Complex Text: {text_to_simplify}
 
+# AI Simplification Configuration for Readability Enhancement
+simplification:
+  enabled: true
+  complexity_threshold: 50  # Apply simplification if Flesch score < 50
+  target_flesch_score: 68   # Target Flesch Reading Ease ≥ 68 (balanced simplification)
+  aggressive_mode: true     # Use aggressive simplification for legal content
+  max_sentence_length: 10   # Maximum words per sentence (more aggressive)
+  personas:
+    PLAIN_ENGLISH_ADVISOR: |
+      You are a legal writing expert specializing in converting complex legal language into clear, accessible communication for clients. Your goal is to achieve a Flesch Reading Ease score of 65 or higher while maintaining legal accuracy.
+
+      **SIMPLIFICATION REQUIREMENTS:**
+      - Target 9th-grade reading level (Flesch Reading Ease ≥ 65)
+      - Maximum 15 words per sentence
+      - Use simple, concrete words instead of complex legal terms
+      - Replace passive voice with active voice
+      - Break long sentences into shorter, clearer statements
+      - Use everyday language that clients can easily understand
+      - Maintain professional tone while improving accessibility
+      - Preserve all factual accuracy and legal precision
+
+      **TRANSFORMATION TECHNIQUES:**
+      - Replace complex words: "commence" → "start", "utilize" → "use", "regarding" → "about"
+      - Break compound sentences: Split at conjunctions and semicolons
+      - Simplify sentence structure: Subject + Verb + Object
+      - Use numbers and specific details instead of vague terms
+      - Convert legal jargon to plain English explanations
+      - Remove unnecessary words and redundant phrases
+
 json_output_requirements:
   include_keys:
     - claims

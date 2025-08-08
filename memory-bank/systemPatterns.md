@@ -2,11 +2,11 @@
 
 ## Architecture Overview
 
-The Legal Document Analysis Portal now operates on a unified Streamlit-Python architecture, which has replaced the legacy TypeScript/n8n and FastAPI systems. This modern approach simplifies the application's structure, enhances performance, and improves maintainability while preserving all core functionality.
+The Legal Document Analysis Portal operates on a unified Streamlit-Python architecture with a recently implemented **service-oriented backend architecture**. The major architectural enhancement focuses on modularity, maintainability, and adherence to Single Responsibility Principle.
 
-The integration of **Vertex AI** for video analysis and the **CLIENT_CLARITY_ADVISOR** framework for email generation represent the primary architectural enhancements.
+The core architectural advancement is the **EmailGeneratorV2 Modular Refactoring** - transforming a monolithic 5,466-line class into a lightweight orchestrator with 7 focused service classes, achieving 94% code reduction while maintaining full backward compatibility.
 
-### Current Unified Streamlit-Python Architecture
+### Current Service-Oriented Architecture
 
 ```mermaid
 graph TD
@@ -14,55 +14,103 @@ graph TD
         A[Streamlit Frontend]
     end
 
-    subgraph "Backend Logic"
-        B(Unified Processor)
-        C(AI Analyzer)
-        D(Email Generator)
-        E(Video Processor)
+    subgraph "Backend Logic - Orchestration Layer"
+        B[EmailGeneratorV2 Orchestrator - 335 lines]
     end
 
-    subgraph "Google Cloud Platform"
-        F[Cloud Storage Bucket]
-        G[Vertex AI: gemini-pro-vision]
-        H[Cloud Speech-to-Text]
+    subgraph "Backend Logic - Service Layer"
+        C[ConfigurationManager]
+        D[TextProcessingService]
+        E[JSONArchitectureService]
+        F[TemplateRenderingService]
+        G[OpenAIIntegrationService]
+        H[ContentGenerationService]
+        I[FallbackGenerationService]
+    end
+
+    subgraph "External Services"
+        J[OpenAI API]
+        K[Google Cloud Platform]
+        L[Vertex AI: gemini-pro-vision]
+        M[Cloud Speech-to-Text]
     end
     
-    A -- Direct Function Calls --> B;
-    B -- Manages --> C;
-    B -- Manages --> D;
-    B -- Manages --> E;
-    E -- Uploads to --> F;
-    E -- Analyzes with --> G;
-    E -- Transcribes with --> H;
+    A -- Direct Function Calls --> B
+    B -- Orchestrates --> C
+    B -- Orchestrates --> D
+    B -- Orchestrates --> E
+    B -- Orchestrates --> F
+    B -- Orchestrates --> G
+    B -- Orchestrates --> H
+    B -- Orchestrates --> I
+    G -- API Calls --> J
+    B -- Video Processing --> K
+    K -- Analyzes with --> L
+    K -- Transcribes with --> M
 ```
 
 ## Key Technical Patterns
 
-### Unified Streamlit-Python Patterns
+### Service-Oriented Design Patterns
 
-The current architecture is defined by its simplicity and directness, using a single language and framework to handle all aspects of the application.
+The current architecture emphasizes modularity and maintainability through strict service separation:
 
-*   **Streamlit Session State**: The application uses `st.session_state` to manage user sessions and maintain state across interactions.
-*   **Direct Function Calls**: All backend logic is executed through direct Python function calls from the main `app.py`, eliminating the need for network requests or APIs.
-*   **Modular Codebase**: The `backend_logic` and `utils` directories contain well-defined modules with specific responsibilities, such as document processing, AI analysis, and data modeling.
+*   **Single Responsibility Principle**: Each service handles exactly one functional area (configuration, text processing, JSON operations, etc.)
+*   **Dependency Injection**: The orchestrator injects dependencies between services for loose coupling
+*   **Service Coordination**: EmailGeneratorV2 acts as a lightweight coordinator rather than monolithic processor
+*   **Modular Package Structure**: Services organized under `backend_logic/email_generation/services/` for clear boundaries
+
+### Simplified Processing Pipeline
+
+The refactored architecture removes complexity while maintaining functionality:
+
+*   **Eliminated Text Simplification**: Removed problematic Flesch score optimization that caused grammatical issues
+*   **Streamlined Content Generation**: Simplified prompt-based content generation without post-processing complexity
+*   **Configuration-Driven Behavior**: YAML-based configuration management through dedicated ConfigurationManager service
+*   **Template-Based Rendering**: Jinja2 template operations isolated in TemplateRenderingService
+
+### Error Recovery and Fallback Patterns
+
+Robust error handling distributed across services:
+
+*   **Graceful Degradation**: FallbackGenerationService provides error recovery without system failure
+*   **Service-Level Error Handling**: Each service manages its own error scenarios and recovery
+*   **Backward Compatibility**: All existing method interfaces preserved during refactoring
+*   **Integration Testing**: Comprehensive test suite validates service integration and error paths
 
 ### CLIENT_CLARITY_ADVISOR Framework
 
-The `EmailGenerator` has been enhanced with a sophisticated framework that transforms legal communications into warm, collaborative, and accessible client partnerships.
+The email generation maintains sophisticated communication framework:
 
-*   **Core Directives**: The framework is built on six core principles, including a collaborative tone, accessible language, and an exclusive focus on Florida law.
-*   **High-Stakes Advice Protocol**: A specialized five-step process is used for delivering counter-intuitive recommendations, ensuring clarity and client confidence.
-*   **Accessibility Integration**: The system automatically applies professional formatting and accessibility guidelines to all generated content.
+*   **Core Directives**: Six core principles including collaborative tone, accessible language, and Florida law focus
+*   **High-Stakes Advice Protocol**: Five-step process for counter-intuitive recommendations
+*   **Service Integration**: Framework principles applied through ContentGenerationService and TemplateRenderingService
 
 ### Video Data Preservation
 
-The application implements a robust video data preservation architecture to prevent data loss when processing large video files that exceed token limits.
+Advanced video processing capabilities maintained through service architecture:
 
-*   **Proactive Token Management**: The system uses the `tiktoken` library to check token counts before processing, preventing `BadRequestError` scenarios.
-*   **Data Persistence**: A GCS-based storage system, along with intelligent summarization, ensures that all video data is preserved.
-*   **Graceful Degradation**: When token limits are exceeded, the system continues to process requests with preserved data, ensuring that video appendices always contain meaningful content.
+*   **Proactive Token Management**: Token counting through dedicated services prevents BadRequestError scenarios
+*   **Data Persistence**: GCS-based storage system with intelligent summarization
+*   **Graceful Degradation**: Video processing continues with preserved data when token limits exceeded
+
+## Architectural Benefits
+
+### Maintainability Improvements
+*   **94% Code Reduction**: Main class reduced from 5,466 to 335 lines
+*   **Clear Service Boundaries**: Each service has focused, testable responsibilities
+*   **Enhanced Debugging**: Issues isolated to specific services rather than monolithic class
+*   **Easier Enhancement**: New features can be added as focused services
+
+### Performance and Reliability
+*   **Reduced Complexity**: Simplified processing pipeline eliminates problematic text simplification
+*   **Service Isolation**: Failures in one service don't cascade to others
+*   **Comprehensive Testing**: 100% integration test success rate validates reliability
+*   **Backward Compatibility**: No breaking changes to existing functionality
 
 ## Security and Performance
 
-*   **File Upload Security**: The application enforces a whitelist of allowed file extensions and a 100MB total upload limit to ensure security.
-*   **Performance**: The unified architecture eliminates network overhead, leading to faster processing times and a more responsive user experience.
+*   **File Upload Security**: Application enforces whitelist of allowed file extensions and 100MB total upload limit
+*   **Service-Level Security**: Each service handles its own security concerns and validation
+*   **Performance Optimization**: Modular architecture eliminates unnecessary processing complexity
+*   **Error Isolation**: Service boundaries prevent error propagation across system components

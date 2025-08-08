@@ -3,22 +3,43 @@
 
 template_path: "backend/assets/templates/findings_email.jinja2"
 
-# Firm voice and style guidelines
+# Firm voice and style guidelines - Enhanced for readability
 firm_voice: |-
-  • Warm-but-businesslike; first-person plural ("we have reviewed …").
-  • 9th-grade readability; average sentence length ≤15 words; no paragraph >120 words.
-  • Preferred verbs: review, confirm, recommend, resolve, proceed.
-  • Ban "-ly" adverbs unless essential.
-  • No conversational pleasantries; open with facts, close with action.
-  • Absolutely no citations, § symbols, or chapter references.
+  • Warm-but-businesslike; first-person plural.
+  • CRITICAL: 9th-grade readability; Target Flesch Reading Ease ≥ 65; avg sentence ≤ 15 words; no paragraph >120 words.
+  • Use simple, concrete verbs; prefer numbers and dates; ban vague qualifiers and complex terms.
+  • Break long sentences into shorter ones; prefer active voice; use simple sentence structure.
+  • Each section must begin with a 2–3 sentence narrative bridge that previews the bullets.
+  • Each legal theory concludes with a "What this means for you" sentence.
+  • Bullet key facts and action items; paragraphs for analysis and section bridges only.
+  • Conclude every letter with a direct call-to-action (explicit approval or scheduling step).
+
+normalization_rules:
+  merge_similar_facts: true
+  remove_redundant_points: true
+  enforce_section_bridges: true
+  enforce_call_to_action: true
+
+precision_rules:
+  currency_format: "$#,###.##"
+  percent_format: "#.##%"
+  date_format_preference: "MMMM D, YYYY"
+  unknown_placeholders:
+    date: "date unknown"
+    amount: "amount unknown"
+    location: "location not yet confirmed"
+  require_specifics:
+    - "Use exact addresses/locations when available."
+    - "Use exact contract totals and payments when available."
+    - "If exact date is unknown, provide best-supported month/year and mark as estimate."
 
 plain_english_mandate:
-  - "Target a 9th-grade reading level (Flesch-Kincaid Grade Level 9, Flesch Reading Ease 50-60)."
-  - "Use active voice exclusively. (e.g., 'The contractor damaged the property,' not 'The property was damaged by the contractor.')"
-  - "Use concrete, direct verbs (e.g., 'paid,' 'hired,' 'fixed,' 'sent')."
-  - "Avoid stacking multiple clauses in a single sentence. One core idea per sentence."
-  - "Replace jargon with plain synonyms (e.g., use 'problem' instead of 'issue,' 'fix' instead of 'remedy,' 'after' instead of 'subsequent to')."
-  - "Your response MUST achieve a Flesch Reading Ease score of 60 or higher."
+  - "CRITICAL: Target Flesch Reading Ease ≥ 65 for improved readability."
+  - "Active voice; one idea per sentence; maximum 15 words per sentence."
+  - "Use simple words; replace complex terms with everyday language."
+  - "Break long sentences; prefer short, clear statements."
+  - "Start each section with a 2–3 sentence plain-English bridge."
+  - "After each claim analysis, add one line: 'What this means for you: …'"
 
 # Golden sample for consistent output
 golden_sample: |-
@@ -33,23 +54,68 @@ golden_sample: |-
 
   The next step is to draft a formal demand letter. This will outline our position and demand a response from the other party. Please review the attached documents and let us know if you have any questions.
 
+universal_sections_schema:
+  party_context:
+    location_label: ["property address","facility","site","jurisdiction"]
+    incident_context_label: ["incident","engagement","transaction","service"]
+  factual_summary_fields:
+    - parties
+    - agreements_or_policies
+    - key_dates
+    - payments_or_consideration
+    - performance_or_conduct
+    - current_status
+    - quantified_impact
+  claims:
+    - name
+    - elements[]           # plain-English elements, no citations
+    - application          # how facts satisfy or fail elements
+    - remedies[]           # money, specific performance, declarations, etc.
+    - client_risks         # "what this means for you" (consequence)
+  procedural_requirements:
+    - name                 # e.g., "pre-suit notice", "internal appeal", "mediation"
+    - steps[]              # step-by-step plain English
+    - typical_timeline     # days/weeks phrasing; no statutes
+    - consequence_if_ignored
+  evidence_items:
+    - title
+    - type                 # contract, email, photo, log, invoice, recording
+    - relevance
+    - authenticity_notes
+    - issues               # hearsay, foundation, completeness (generic)
+  third_party_exposure:
+    - party
+    - basis                # e.g., unpaid vendor, indemnity, insurer position
+    - risk
+    - mitigation_action
+  next_steps:
+    sequencing: ordered
+    items:
+      - action
+      - owner
+      - deadline_days_from_trigger
+      - trigger
+      - purpose
+      - success_criteria
+      - consequence_if_missed
+
 # Section-specific word count limits
 word_counts:
-  legal_analysis: 150
-  case_assessment: 75
-  factual_summary: 200
-  evidence_review: 150
-  next_steps: 125
-  strengths: 150
-  weaknesses: 150
+  legal_analysis: 170
+  case_assessment: 100
+  factual_summary: 240
+  evidence_review: 160
+  next_steps: 160
+  strengths: 120
+  weaknesses: 120
 
-# Content filtering rules
-citation_filter_regex: "(Fla\\.?\\s*Stat\\.?|§|Chapter\\s*\\d+)"
+# Content filtering rules - Enhanced to catch all legal citation formats
+citation_filter_regex: "(Fla\\.?\\s*Stat\\.?|F\\.S\\.?|§+|Chapter\\s*\\d+|\\b\\d+\\.\\d+|\\([^)]*§[^)]*\\)|\\bFla\\b\\.?\\s*R\\.|\\bFla\\b\\.?\\s*Admin\\.|\\d{1,3}\\s*So\\.|\\d{1,3}\\s*So\\.\\s*\\d+d|section\\s*\\d+)"
 
 # Content restrictions
 content_rules:
-  - "No statute, chapter, section, §-symbol or 'Fla. Stat.' references."
-  - "No citations or code numbers."
+  - "No statutes, cases, regs, chapter numbers, or § symbols."
+  - "Describe procedures in plain English without naming authorities."
 
 personas:
   UNIFIED_LEGAL_ADVISOR: &UNIFIED_LEGAL_ADVISOR |
@@ -71,6 +137,15 @@ personas:
     - Clearly identify potential claims, defenses, and procedural steps.
     - Address practical consequences, risk assessment, and strategic options.
     - Outline next steps and recommended actions in professional terms.
+    - Start each section with a short narrative bridge.
+    - Conclude overall letter with a direct call-to-action asking for authorization to proceed.
+
+    **CLAIM MODULE OUTPUT:**
+    - Name the claim in plain English.
+    - List elements in bullets.
+    - Apply facts in a short paragraph.
+    - State remedies in bullets.
+    - End with "What this means for you" (one sentence, concrete risk).
 
 
   CONTINUING_LEGAL_ADVISOR: |
@@ -433,3 +508,17 @@ formatting:
     Topic: {topic}
 
     Complex Text: {text_to_simplify}
+
+json_output_requirements:
+  include_keys:
+    - claims
+    - procedural_requirements
+    - third_party_exposure
+    - next_steps
+  claims_contract:
+    elements_list_required: true
+    application_paragraph_required: true
+    client_risks_required: true
+  narrative_requirements:
+    section_bridges_required: true
+    call_to_action_required: true

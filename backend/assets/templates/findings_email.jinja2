@@ -110,11 +110,87 @@
     </div>
     {% endif %}
 
-    {# Recommended Next Steps section with dynamic numbering #}
-    {% if results.generated_letter.next_steps %}
+    {# A) Render modular claims (practice-agnostic) #}
+    {% if results.claims %}
+    <div style="margin-bottom:25px;">
+      <div class="section-title">{% if has_strengths %}4{% else %}3{% endif %}. Legal Theories and Application</div>
+      <div style="margin-left:15px; text-align: justify;">
+        {% for c in results.claims %}
+          <p><strong>{{ loop.index }}) {{ c.name }}</strong></p>
+          {% if c.elements %}
+            <ul>
+              {% for e in c.elements %}<li>{{ e }}</li>{% endfor %}
+            </ul>
+          {% endif %}
+          {% if c.application %}<p>{{ c.application }}</p>{% endif %}
+          {% if c.remedies %}
+            <p><strong>Potential remedies:</strong></p>
+            <ul>
+              {% for r in c.remedies %}<li>{{ r }}</li>{% endfor %}
+            </ul>
+          {% endif %}
+          {% if c.client_risks %}<p><em>What this means for you:</em> {{ c.client_risks }}</p>{% endif %}
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
+    {# B) Procedural requirements (generic) #}
+    {% if results.procedural_requirements %}
+    <div style="margin-bottom:25px;">
+      <div class="section-title">{% if results.claims %}{% if has_strengths %}5{% else %}4{% endif %}{% else %}{% if has_strengths %}4{% else %}3{% endif %}{% endif %}. Procedural Requirements</div>
+      <div style="margin-left:15px; text-align: justify;">
+        {% for p in results.procedural_requirements %}
+          <p><strong>{{ p.name }}</strong> — Typical timeline: {{ p.typical_timeline }}</p>
+          {% if p.steps %}
+          <ul>
+            {% for s in p.steps %}<li>{{ s }}</li>{% endfor %}
+          </ul>
+          {% endif %}
+          {% if p.consequence_if_ignored %}<p><em>Consequence if ignored:</em> {{ p.consequence_if_ignored }}</p>{% endif %}
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
+    {# C) Third-party exposure (generic "lien risk" analog) #}
+    {% if results.third_party_exposure %}
+    <div style="margin-bottom:25px;">
+      <div class="section-title">{% set section_num = 3 %}{% if has_strengths %}{% set section_num = section_num + 1 %}{% endif %}{% if results.claims %}{% set section_num = section_num + 1 %}{% endif %}{% if results.procedural_requirements %}{% set section_num = section_num + 1 %}{% endif %}{{ section_num }}. Third-Party Exposure</div>
+      <div style="margin-left:15px; text-align: justify;">
+        <ul>
+          {% for t in results.third_party_exposure %}
+            <li><strong>{{ t.party }}:</strong> {{ t.basis }} — Risk: {{ t.risk }}. Mitigation: {{ t.mitigation_action }}.</li>
+          {% endfor %}
+        </ul>
+      </div>
+    </div>
+    {% endif %}
+
+    {# E) Next Steps - Enhanced version with purpose, deadline, and consequence #}
+    {% if results.next_steps and results.next_steps.items %}
+    <div style="margin-bottom:25px;">
+      <div class="section-title">{% set section_num = 3 %}{% if has_strengths %}{% set section_num = section_num + 1 %}{% endif %}{% if results.claims %}{% set section_num = section_num + 1 %}{% endif %}{% if results.procedural_requirements %}{% set section_num = section_num + 1 %}{% endif %}{% if results.third_party_exposure %}{% set section_num = section_num + 1 %}{% endif %}{{ section_num }}. Recommended Next Steps</div>
+      <div style="margin-left:15px; text-align: justify;">
+        <p>We recommend the following sequence to control risk and build leverage.</p>
+        <ol>
+          {% for n in results.next_steps.items %}
+            <li>
+              {{ n.action }} <strong>within {{ n.deadline_days_from_trigger }} days</strong> of {{ n.trigger }} (Owner: {{ n.owner }}).
+              Success: {{ n.success_criteria }}.
+              {% if n.consequence_if_missed %} Consequence if missed: {{ n.consequence_if_missed }}.{% endif %}
+            </li>
+          {% endfor %}
+        </ol>
+      </div>
+    </div>
+    {% endif %}
+
+    {# Fallback to legacy next steps if new structure not available #}
+    {% if not (results.next_steps and results.next_steps.items) and results.generated_letter.next_steps %}
     <div style="margin-bottom: 25px;">
         <div style="width: 100%;">
-            <div class="section-title">{% if has_strengths %}4{% else %}3{% endif %}. Recommended Next Steps</div>
+            <div class="section-title">{% set section_num = 3 %}{% if has_strengths %}{% set section_num = section_num + 1 %}{% endif %}{% if results.claims %}{% set section_num = section_num + 1 %}{% endif %}{% if results.procedural_requirements %}{% set section_num = section_num + 1 %}{% endif %}{% if results.third_party_exposure %}{% set section_num = section_num + 1 %}{% endif %}{{ section_num }}. Recommended Next Steps</div>
             <div style="margin-left: 15px; text-align: justify; font-family: 'Times New Roman', 'Liberation Serif', 'DejaVu Serif', 'FreeSerif', Georgia, 'Nimbus Roman No9 L', serif;">
                 {% if results.generated_letter.next_steps is iterable and results.generated_letter.next_steps is not string %}
                 <ul>
@@ -134,7 +210,7 @@
     {% if results.generated_letter.challenges and results.generated_letter.challenges|trim != '' %}
     <div style="margin-bottom: 25px;">
         <div style="width: 100%;">
-            <div class="section-title">{% if has_strengths %}5{% else %}4{% endif %}. Potential Challenges</div>
+            <div class="section-title">{% set section_num = 3 %}{% if has_strengths %}{% set section_num = section_num + 1 %}{% endif %}{% if results.claims %}{% set section_num = section_num + 1 %}{% endif %}{% if results.procedural_requirements %}{% set section_num = section_num + 1 %}{% endif %}{% if results.third_party_exposure %}{% set section_num = section_num + 1 %}{% endif %}{% if (results.next_steps and results.next_steps.items) or results.generated_letter.next_steps %}{% set section_num = section_num + 1 %}{% endif %}{{ section_num }}. Potential Challenges</div>
             <div style="margin-left: 15px; text-align: justify; font-family: 'Times New Roman', 'Liberation Serif', 'DejaVu Serif', 'FreeSerif', Georgia, 'Nimbus Roman No9 L', serif;">
                 {% if results.generated_letter.challenges is iterable and results.generated_letter.challenges is not string %}
                 <ul>

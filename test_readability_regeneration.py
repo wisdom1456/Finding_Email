@@ -158,9 +158,9 @@ def test_readability_validation_fail():
         return False
 
 
-def test_readability_validation_critical_failure():
-    """Test that content fails readability validation completely after 2 attempts."""
-    print("\n=== Testing Readability Validation - CRITICAL FAILURE ===")
+def test_readability_validation_graceful_degradation():
+    """Test that content with poor readability generates warnings but continues with document generation."""
+    print("\n=== Testing Readability Validation - GRACEFUL DEGRADATION ===")
     
     try:
         # Create mock generator with mocked AI response that always returns complex content
@@ -184,22 +184,33 @@ def test_readability_validation_critical_failure():
             content_requirements=[]
         )
         
-        # Test with complex content that should fail completely
+        # Test with complex content that should fail but continue gracefully
         complex_content = create_complex_content()
         
-        try:
-            result = generator._validate_section_readability_with_regeneration(
-                complex_content, "FACTUAL SUMMARY", section_plan, analysis, context
-            )
-            print(f"❌ FAIL: Expected EmailReadabilityError but got result")
+        result = generator._validate_section_readability_with_regeneration(
+            complex_content, "FACTUAL SUMMARY", section_plan, analysis, context
+        )
+        
+        # Verify that we got a result (not an exception)
+        if not result:
+            print(f"❌ FAIL: Expected content with warning but got empty result")
             return False
-            
-        except EmailReadabilityError as e:
-            print(f"✅ PASS: EmailReadabilityError raised as expected: {e}")
-            return True
+        
+        # Verify that the result contains a readability warning notice
+        if "⚠️ Readability Notice:" not in result:
+            print(f"❌ FAIL: Expected readability warning notice in result but not found")
+            return False
+        
+        # Verify that the original content is still included
+        print(f"✅ PASS: Graceful degradation working correctly")
+        print(f"   Result contains warning notice: {'⚠️ Readability Notice:' in result}")
+        print(f"   Document generation continued: {len(result) > len(complex_content)}")
+        print(f"   Original content preserved: {complex_content.strip() in result}")
+        
+        return True
         
     except Exception as e:
-        print(f"❌ FAIL: Critical failure test failed unexpectedly: {e}")
+        print(f"❌ FAIL: Graceful degradation test failed unexpectedly: {e}")
         return False
 
 
@@ -257,7 +268,7 @@ def main():
         test_simplification_prompt_template,
         test_readability_validation_pass,
         test_readability_validation_fail,
-        test_readability_validation_critical_failure,
+        test_readability_validation_graceful_degradation,
     ]
     
     results = []

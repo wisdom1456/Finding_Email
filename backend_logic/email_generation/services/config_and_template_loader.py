@@ -8,6 +8,10 @@ from typing import Any
 import yaml
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
+from backend_logic.utils.logging_config import get_module_logger
+
+logger = get_module_logger(__name__)
+
 
 class ConfigAndTemplateLoader:
     def __init__(self):
@@ -15,16 +19,15 @@ class ConfigAndTemplateLoader:
 
     def load_configuration(self, config_path: str | None = None) -> dict[str, Any]:
         """Load configuration from YAML file."""
-        # JSON logging for Hypothesis 2 (Configuration Loading Failure) - Entry
-        config_log_entry = {
-            "module": "ConfigAndTemplateLoader",
-            "method": "load_configuration",
-            "hypothesis_id": "config_loading_failure",
-            "stage": "entry",
-            "config_path_provided": config_path,
-            "timestamp": datetime.now().isoformat()
-        }
-        print(f"EMAIL_GENERATOR_DEBUG: {json.dumps(config_log_entry)}")
+        logger.debug(
+            "Configuration loading initiated",
+            extra={
+                "method": "load_configuration",
+                "hypothesis_id": "config_loading_failure",
+                "stage": "entry",
+                "config_path_provided": config_path
+            }
+        )
         
         if config_path is None:
             # Default to universal_legal_config.yaml for all case types
@@ -43,20 +46,24 @@ class ConfigAndTemplateLoader:
             
             config_path = os.path.join(project_root, "backend", "config", "templates", "universal_legal_config.yaml")
         
-        # JSON logging for file existence check
+        # Check file existence
         file_exists = os.path.exists(config_path)
-        config_log_file_check = {
-            "module": "ConfigAndTemplateLoader",
-            "method": "load_configuration",
-            "hypothesis_id": "config_loading_failure",
-            "stage": "file_check",
-            "config_path": config_path,
-            "file_exists": file_exists,
-            "timestamp": datetime.now().isoformat()
-        }
-        print(f"EMAIL_GENERATOR_DEBUG: {json.dumps(config_log_file_check)}")
+        logger.debug(
+            "Configuration file existence check",
+            extra={
+                "method": "load_configuration",
+                "hypothesis_id": "config_loading_failure",
+                "stage": "file_check",
+                "config_path": config_path,
+                "file_exists": file_exists
+            }
+        )
         
         if not file_exists:
+            logger.error(
+                "Configuration file not found",
+                extra={"config_path": config_path}
+            )
             msg = f"Configuration file not found: {config_path}"
             raise FileNotFoundError(msg)
         
@@ -64,48 +71,50 @@ class ConfigAndTemplateLoader:
             with open(config_path, encoding="utf-8") as f:
                 config = yaml.safe_load(f)
             
-            # JSON logging for successful config parsing
+            # Log successful config parsing
             config_keys = list(config.keys()) if config else []
-            config_log_success = {
-                "module": "ConfigAndTemplateLoader",
-                "method": "load_configuration",
-                "hypothesis_id": "config_loading_failure",
-                "stage": "parsing_success",
-                "config_keys": config_keys,
-                "config_is_none": config is None,
-                "config_type": type(config).__name__,
-                "timestamp": datetime.now().isoformat()
-            }
-            print(f"EMAIL_GENERATOR_DEBUG: {json.dumps(config_log_success)}")
+            logger.debug(
+                "Configuration parsing successful",
+                extra={
+                    "method": "load_configuration",
+                    "hypothesis_id": "config_loading_failure",
+                    "stage": "parsing_success",
+                    "config_keys": config_keys,
+                    "config_is_none": config is None,
+                    "config_type": type(config).__name__
+                }
+            )
             
-            print(f"EMAIL GENERATOR V2: Configuration loaded from: {config_path}")
+            logger.info(
+                "Configuration loaded successfully",
+                extra={"config_path": config_path, "config_keys_count": len(config_keys)}
+            )
             return config
         except yaml.YAMLError as e:
-            # JSON logging for YAML parsing failure
-            config_log_yaml_error = {
-                "module": "ConfigAndTemplateLoader",
-                "method": "load_configuration",
-                "hypothesis_id": "config_loading_failure",
-                "stage": "yaml_error",
-                "error": str(e),
-                "timestamp": datetime.now().isoformat()
-            }
-            print(f"EMAIL_GENERATOR_DEBUG: {json.dumps(config_log_yaml_error)}")
-            
+            logger.error(
+                "YAML parsing failed",
+                extra={
+                    "method": "load_configuration",
+                    "hypothesis_id": "config_loading_failure",
+                    "stage": "yaml_error",
+                    "error": str(e),
+                    "config_path": config_path
+                }
+            )
             msg = f"Failed to parse YAML configuration: {e}"
             raise ValueError(msg) from e
         except Exception as e:
-            # JSON logging for general loading failure
-            config_log_general_error = {
-                "module": "ConfigAndTemplateLoader",
-                "method": "load_configuration",
-                "hypothesis_id": "config_loading_failure",
-                "stage": "general_error",
-                "error": str(e),
-                "timestamp": datetime.now().isoformat()
-            }
-            print(f"EMAIL_GENERATOR_DEBUG: {json.dumps(config_log_general_error)}")
-            
+            logger.error(
+                "Configuration loading failed",
+                extra={
+                    "method": "load_configuration",
+                    "hypothesis_id": "config_loading_failure",
+                    "stage": "general_error",
+                    "error": str(e),
+                    "error_type": type(e).__name__,
+                    "config_path": config_path
+                }
+            )
             msg = f"Failed to load configuration: {e}"
             raise RuntimeError(msg) from e
 
@@ -149,6 +158,10 @@ class ConfigAndTemplateLoader:
             template_dir = os.path.join(project_root, "backend", "assets", "templates")
 
         if not os.path.exists(template_dir):
+            logger.error(
+                "Template directory not found",
+                extra={"template_dir": template_dir}
+            )
             msg = f"Template directory not found: {template_dir}"
             raise FileNotFoundError(msg)
 
@@ -157,10 +170,25 @@ class ConfigAndTemplateLoader:
         available_files = os.listdir(template_dir)
         missing_templates = [t for t in required_templates if t not in available_files]
         if missing_templates:
+            logger.error(
+                "Required templates missing",
+                extra={
+                    "template_dir": template_dir,
+                    "missing_templates": missing_templates,
+                    "available_files": available_files
+                }
+            )
             msg = f"Required templates missing: {missing_templates}"
             raise FileNotFoundError(msg)
 
-        print(f"EMAIL GENERATOR V2: Template directory: {template_dir}")
+        logger.info(
+            "Template directory configured successfully",
+            extra={
+                "template_dir": template_dir,
+                "available_templates": available_files,
+                "required_templates": required_templates
+            }
+        )
         return template_dir
 
     def get_jinja_env(self, config: dict[str, Any]) -> Environment:

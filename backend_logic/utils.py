@@ -572,12 +572,86 @@ def handle_file_uploads():
     Shows cost estimation after file upload but before processing.
     Returns True if analysis can proceed, False otherwise.
     """
+    from backend_logic.utils.logging_config import get_module_logger
+    
+    logger = get_module_logger(__name__)
+    
     uploaded_files = st.session_state.get("uploaded_files", [])
     if not uploaded_files:
         st.error("Please upload at least one document.")
         return False
 
-    intake_docs = [f for f in uploaded_files if "intake" in f.name.lower()]
+    # Validate files for empty content and allowed file types
+    valid_files = []
+    allowed_extensions = {'.txt', '.pdf', '.docx'}
+    
+    for uploaded_file in uploaded_files:
+        # Check for empty files
+        if uploaded_file.size == 0:
+            logger.warning(
+                "Empty file uploaded",
+                extra={
+                    "file_name": uploaded_file.name,
+                    "file_size": uploaded_file.size,
+                    "validation_issue": "empty_file"
+                }
+            )
+            st.warning(f"The uploaded file '{uploaded_file.name}' is empty. Please upload a valid document.")
+            continue
+            
+        # Check file type by extension
+        file_extension = None
+        if '.' in uploaded_file.name:
+            file_extension = '.' + uploaded_file.name.split('.')[-1].lower()
+        
+        if file_extension not in allowed_extensions:
+            logger.error(
+                "Invalid file type uploaded",
+                extra={
+                    "file_name": uploaded_file.name,
+                    "file_type": file_extension or "unknown",
+                    "allowed_types": list(allowed_extensions),
+                    "validation_issue": "invalid_file_type"
+                }
+            )
+            st.error(f"Invalid file type '{file_extension or 'unknown'}' for file '{uploaded_file.name}'. Please upload a .txt, .pdf, or .docx file.")
+            continue
+            
+        # File passed validation
+        valid_files.append(uploaded_file)
+        logger.info(
+            "File validation passed",
+            extra={
+                "file_name": uploaded_file.name,
+                "file_size": uploaded_file.size,
+                "file_type": file_extension
+            }
+        )
+    
+    # If no valid files remain, return False
+    if not valid_files:
+        logger.warning(
+            "No valid files after validation",
+            extra={
+                "total_uploaded": len(uploaded_files),
+                "valid_files": 0
+            }
+        )
+        st.error("No valid files found. Please upload at least one .txt, .pdf, or .docx file that is not empty.")
+        return False
+    
+    # Update session state with only valid files
+    st.session_state.uploaded_files = valid_files
+    logger.info(
+        "File validation completed",
+        extra={
+            "total_uploaded": len(uploaded_files),
+            "valid_files": len(valid_files),
+            "rejected_files": len(uploaded_files) - len(valid_files)
+        }
+    )
+
+    intake_docs = [f for f in valid_files if "intake" in f.name.lower()]
 
     intake_selected = False
 

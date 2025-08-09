@@ -23,6 +23,9 @@ from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_fi
 
 from backend.utils.data_models import CaseAnalysisResult
 from backend_logic.config import get_openai_config
+from backend_logic.utils.logging_config import get_module_logger
+
+logger = get_module_logger(__name__)
 
 
 class JsonProcessingService:
@@ -54,11 +57,20 @@ class JsonProcessingService:
             Generated HTML letter content
         """
         try:
-            print("EMAIL GENERATOR V2: Generating HTML letter using master prompt...")
+            logger.info("Starting HTML letter generation using master prompt")
 
             # Extract client information from analysis
             client_name = analysis.intake_analysis.client_name if analysis.intake_analysis else "Client"
             case_type = analysis.intake_analysis.case_type if analysis.intake_analysis else "Legal Matter"
+
+            logger.info(
+                "Processing case information",
+                extra={
+                    "client_name": client_name,
+                    "case_type": case_type,
+                    "has_intake_analysis": analysis.intake_analysis is not None
+                }
+            )
 
             # CAPTURE DATA: Save the final analysis data to JSON file
             try:
@@ -67,9 +79,15 @@ class JsonProcessingService:
                 
                 with open("validation_output/final_analysis_data.json", "w", encoding="utf-8") as f:
                     f.write(final_analysis_data)
-                print("EMAIL GENERATOR V2: ✅ Saved final analysis data to validation_output/final_analysis_data.json")
+                logger.info(
+                    "Saved final analysis data to file",
+                    extra={"file_path": "validation_output/final_analysis_data.json", "data_size": len(final_analysis_data)}
+                )
             except Exception as save_error:
-                print(f"EMAIL GENERATOR V2: ⚠️ Failed to save analysis data: {save_error}")
+                logger.warning(
+                    "Failed to save analysis data to file",
+                    extra={"error": str(save_error), "error_type": type(save_error).__name__}
+                )
 
             # Get the master prompt from configuration
             master_prompt = self.config.get("master_prompt")
@@ -83,15 +101,26 @@ class JsonProcessingService:
                 analysis=analysis.model_dump_json(indent=2)
             )
 
+            logger.debug(
+                "Master prompt formatted",
+                extra={"prompt_length": len(formatted_prompt), "template_length": len(master_prompt)}
+            )
+
             # CAPTURE PROMPT: Save the fully constructed prompt to text file
             try:
                 with open("validation_output/final_prompt.txt", "w", encoding="utf-8") as f:
                     f.write(formatted_prompt)
-                print("EMAIL GENERATOR V2: ✅ Saved final prompt to validation_output/final_prompt.txt")
+                logger.info(
+                    "Saved formatted prompt to file",
+                    extra={"file_path": "validation_output/final_prompt.txt", "prompt_length": len(formatted_prompt)}
+                )
             except Exception as save_error:
-                print(f"EMAIL GENERATOR V2: ⚠️ Failed to save prompt: {save_error}")
+                logger.warning(
+                    "Failed to save prompt to file",
+                    extra={"error": str(save_error), "error_type": type(save_error).__name__}
+                )
 
-            print("EMAIL GENERATOR V2: Making OpenAI request with master prompt")
+            logger.info("Making OpenAI request with master prompt")
             html_response = self._make_openai_request(formatted_prompt)
 
             if not html_response or not html_response.strip():
@@ -101,11 +130,17 @@ class JsonProcessingService:
             cleaned_html = self._clean_html_response(html_response)
             validated_html = self._validate_html_structure(cleaned_html)
 
-            print(f"EMAIL GENERATOR V2: ✅ Successfully generated HTML letter ({len(validated_html)} characters)")
+            logger.info(
+                "Successfully generated HTML letter",
+                extra={"html_length": len(validated_html), "client_name": client_name, "case_type": case_type}
+            )
             return validated_html
 
         except Exception as e:
-            print(f"EMAIL GENERATOR V2: ❌ HTML letter generation failed: {e}")
+            logger.exception(
+                "HTML letter generation failed",
+                extra={"client_name": client_name, "case_type": case_type, "error_type": type(e).__name__}
+            )
             return self._generate_fallback_html(client_name, case_type, str(e))
 
     def _clean_html_response(self, response_text: str) -> str:
@@ -212,85 +247,283 @@ class JsonProcessingService:
 </body>
 </html>"""
 
+    def _prepare_request_config(self, model: str | None = None) -> dict[str, Any]:
+        """
+        Prepare OpenAI request configuration.
+        
+        Args:
+            model: Optional model override
+            
+        Returns:
+            Configuration dictionary for OpenAI request
+        """
+        logger.debug(
+            "Preparing OpenAI request configuration",
+            extra={
+                "method": "_prepare_request_config",
+                "hypothesis_id": "configuration_setup",
+                "stage": "entry",
+                "model_provided": model is not None
+            }
+        )
+        
+        config = get_openai_config()
+        final_model = model or config["model"]
+        
+        request_config = {
+            "model": final_model,
+            "timeout": config["timeout"],
+            "max_retries": config["max_retries"],
+            "temperature": config["temperature"],
+            "max_tokens": config["max_tokens"]
+        }
+        
+        logger.debug(
+            "Request configuration prepared",
+            extra={
+                "method": "_prepare_request_config",
+                "hypothesis_id": "configuration_setup",
+                "stage": "exit",
+                "model": final_model,
+                "temperature": request_config["temperature"],
+                "max_tokens": request_config["max_tokens"]
+            }
+        )
+        
+        return request_config
+
+    def _execute_openai_request(self, config: dict[str, Any], prompt: str) -> Any:
+        """
+        Execute the core OpenAI API request.
+        
+        Args:
+            config: Request configuration
+            prompt: Prompt to send
+            
+        Returns:
+            OpenAI response object
+        """
+        logger.debug(
+            "Executing OpenAI API request",
+            extra={
+                "method": "_execute_openai_request",
+                "hypothesis_id": "api_execution",
+                "stage": "entry",
+                "prompt_length": len(prompt),
+                "model": config["model"]
+            }
+        )
+        
+        response = self.client.with_options(
+            timeout=config["timeout"],
+            max_retries=config["max_retries"]
+        ).chat.completions.create(
+            model=config["model"],
+            messages=[
+                {"role": "user", "content": prompt}
+            ],
+            temperature=config["temperature"],
+            max_tokens=config["max_tokens"]
+        )
+        
+        logger.debug(
+            "OpenAI API request executed successfully",
+            extra={
+                "method": "_execute_openai_request",
+                "hypothesis_id": "api_execution",
+                "stage": "exit",
+                "model": config["model"],
+                "response_received": response is not None
+            }
+        )
+        
+        return response
+
+    def _handle_retryable_errors(self, error: Exception, context: dict[str, Any]) -> None:
+        """Handle retryable OpenAI errors that should trigger retry logic."""
+        error_type = type(error).__name__
+        
+        logger.warning(
+            f"Retryable OpenAI error encountered: {error_type}",
+            extra={
+                "method": "_handle_retryable_errors",
+                "hypothesis_id": "retryable_error_handling",
+                "error_type": error_type,
+                "error_details": str(error),
+                "model": context.get("model"),
+                "will_retry": True
+            }
+        )
+        
+        # Re-raise to trigger tenacity retry logic
+        raise error
+
+    def _handle_authentication_errors(self, error: Exception, context: dict[str, Any]) -> None:
+        """Handle authentication-related OpenAI errors."""
+        error_type = type(error).__name__
+        
+        logger.error(
+            f"Authentication error: {error_type}",
+            extra={
+                "method": "_handle_authentication_errors",
+                "hypothesis_id": "authentication_error_handling",
+                "error_type": error_type,
+                "error_details": str(error),
+                "model": context.get("model"),
+                "requires_api_key_check": True
+            }
+        )
+
+    def _handle_client_errors(self, error: Exception, context: dict[str, Any]) -> None:
+        """Handle client-side OpenAI errors."""
+        error_type = type(error).__name__
+        
+        logger.error(
+            f"Client error: {error_type}",
+            extra={
+                "method": "_handle_client_errors",
+                "hypothesis_id": "client_error_handling",
+                "error_type": error_type,
+                "error_details": str(error),
+                "model": context.get("model"),
+                "prompt_start": context.get("prompt", "")[:200]
+            }
+        )
+
+    def _handle_server_errors(self, error: Exception, context: dict[str, Any]) -> None:
+        """Handle server-side OpenAI errors."""
+        error_type = type(error).__name__
+        request_id = getattr(error, "request_id", "unknown")
+        status_code = getattr(error, "status_code", "unknown")
+        
+        logger.error(
+            f"Server error: {error_type}",
+            extra={
+                "method": "_handle_server_errors",
+                "hypothesis_id": "server_error_handling",
+                "error_type": error_type,
+                "status_code": status_code,
+                "request_id": request_id,
+                "model": context.get("model")
+            }
+        )
+
+    def _handle_unexpected_errors(self, error: Exception, context: dict[str, Any]) -> None:
+        """Handle unexpected errors during OpenAI requests."""
+        error_type = type(error).__name__
+        
+        logger.error(
+            f"Unexpected error: {error_type}",
+            extra={
+                "method": "_handle_unexpected_errors",
+                "hypothesis_id": "unexpected_error_handling",
+                "error_type": error_type,
+                "error_details": str(error),
+                "model": context.get("model"),
+                "prompt_start": context.get("prompt", "")[:200]
+            }
+        )
+
+    def _validate_openai_response(self, response: Any, context: dict[str, Any]) -> str | None:
+        """
+        Validate OpenAI response and extract content.
+        
+        Args:
+            response: OpenAI response object
+            context: Request context for logging
+            
+        Returns:
+            Response content or None if invalid
+        """
+        logger.debug(
+            "Validating OpenAI response",
+            extra={
+                "method": "_validate_openai_response",
+                "hypothesis_id": "response_validation",
+                "stage": "entry",
+                "model": context.get("model")
+            }
+        )
+        
+        request_id = getattr(response, "_request_id", "unknown")
+        content = response.choices[0].message.content
+        
+        if not content or not content.strip():
+            logger.error(
+                "OpenAI returned empty content",
+                extra={
+                    "method": "_validate_openai_response",
+                    "hypothesis_id": "response_validation",
+                    "request_id": request_id,
+                    "model": context.get("model"),
+                    "content_empty": True
+                }
+            )
+            return None
+        
+        logger.info(
+            "OpenAI response validated successfully",
+            extra={
+                "method": "_validate_openai_response",
+                "hypothesis_id": "response_validation",
+                "stage": "exit",
+                "request_id": request_id,
+                "response_length": len(content),
+                "model": context.get("model")
+            }
+        )
+        
+        return content
+
     @retry(stop=stop_after_attempt(3), wait=wait_fixed(2), retry=retry_if_exception_type((RateLimitError, APIError, APITimeoutError, APIConnectionError, InternalServerError)))
     def _make_openai_request(self, prompt: str, model: str | None = None) -> str | None:
         """Make OpenAI API request with comprehensive error handling following OpenAI best practices."""
-        api_log_entry = {
-            "module": "EmailGeneratorV2", 
-            "method": "_make_openai_request", 
-            "hypothesis_id": "openai_api_failure", 
-            "stage": "entry", 
-            "prompt_length": len(prompt), 
-            "model_provided": model, 
-            "config_available": self.config is not None, 
-            "timestamp": datetime.now().isoformat()
-        }
-        print(f"EMAIL_GENERATOR_DEBUG: {json.dumps(api_log_entry)}")
+        logger.debug(
+            "OpenAI API request initiated",
+            extra={
+                "method": "_make_openai_request",
+                "hypothesis_id": "openai_api_failure",
+                "stage": "entry",
+                "prompt_length": len(prompt),
+                "model_provided": model is not None,
+                "config_available": self.config is not None
+            }
+        )
         
-        config = get_openai_config()
-        model = model or config["model"]
+        # Prepare request configuration
+        config = self._prepare_request_config(model)
+        context = {"model": config["model"], "prompt": prompt}
         
-        print(f"EMAIL GENERATOR V2: 🔍 Making OpenAI request with model: {model}")
-        print(f"EMAIL GENERATOR V2: 🔍 Prompt length: {len(prompt)} characters")
+        logger.info(
+            "Making OpenAI request",
+            extra={
+                "method": "_make_openai_request",
+                "hypothesis_id": "openai_api_failure",
+                "model": config["model"],
+                "prompt_length": len(prompt),
+                "temperature": config["temperature"],
+                "max_tokens": config["max_tokens"]
+            }
+        )
         
         try:
-            response = self.client.with_options(
-                timeout=config["timeout"], 
-                max_retries=config["max_retries"]
-            ).chat.completions.create(
-                model=model, 
-                messages=[
-                    {"role": "user", "content": prompt}
-                ], 
-                temperature=config["temperature"], 
-                max_tokens=config["max_tokens"]
-            )
+            # Execute the API request
+            response = self._execute_openai_request(config, prompt)
             
-            request_id = getattr(response, "_request_id", "unknown")
-            content = response.choices[0].message.content
+            # Validate and return response content
+            return self._validate_openai_response(response, context)
             
-            print(f"EMAIL GENERATOR V2: ✅ OpenAI request successful, response length: {len(content) if content else 0}")
-            
-            if not content or not content.strip():
-                print(f"EMAIL GENERATOR V2: ❌ OpenAI returned empty content (Request ID: {request_id})")
-                return None
-            
-            return content
-            
-        except APIConnectionError as e:
-            print("EMAIL GENERATOR V2: ❌ API Connection Error: The server could not be reached")
-            print(f"EMAIL GENERATOR V2: 🔍 Underlying cause: {e.__cause__}")
-            raise
-        except RateLimitError as e:
-            print(f"EMAIL GENERATOR V2: ❌ Rate Limit Error (429): {e}")
-            print("EMAIL GENERATOR V2: 🔍 Backing off and retrying...")
-            raise
-        except AuthenticationError as e:
-            print(f"EMAIL GENERATOR V2: ❌ Authentication Error (401): {e}")
-            print("EMAIL GENERATOR V2: 🔍 Check OpenAI API key configuration")
+        except (APIConnectionError, RateLimitError, APITimeoutError, APIError, InternalServerError) as e:
+            self._handle_retryable_errors(e, context)
+        except (AuthenticationError, PermissionDeniedError) as e:
+            self._handle_authentication_errors(e, context)
             return None
-        except PermissionDeniedError as e:
-            print(f"EMAIL GENERATOR V2: ❌ Permission Denied (403): {e}")
-            return None
-        except BadRequestError as e:
-            print(f"EMAIL GENERATOR V2: ❌ Bad Request (400): {e}")
-            print(f"EMAIL GENERATOR V2: 🔍 Model: {model}, Prompt start: {prompt[:200]}...")
-            return None
-        except UnprocessableEntityError as e:
-            print(f"EMAIL GENERATOR V2: ❌ Unprocessable Entity (422): {e}")
+        except (BadRequestError, UnprocessableEntityError) as e:
+            self._handle_client_errors(e, context)
             return None
         except APIStatusError as e:
-            request_id = getattr(e, "request_id", "unknown")
-            print(f"EMAIL GENERATOR V2: ❌ API Status Error: {e.status_code}")
-            print(f"EMAIL GENERATOR V2: 🔍 Request ID: {request_id}")
+            self._handle_server_errors(e, context)
             return None
-        except APITimeoutError as e:
-            print(f"EMAIL GENERATOR V2: ❌ Request Timeout: {e}")
-            raise
-        except APIError as e:
-            print(f"EMAIL GENERATOR V2: ❌ General API Error: {e}")
-            raise
         except (ValueError, TypeError, AttributeError, KeyError, OSError) as e:
-            print(f"EMAIL GENERATOR V2: ❌ Unexpected error: {type(e).__name__}: {e}")
-            print(f"EMAIL GENERATOR V2: 🔍 Model: {model}, Prompt start: {prompt[:200]}...")
+            self._handle_unexpected_errors(e, context)
             return None

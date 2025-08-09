@@ -5,6 +5,10 @@ from typing import Any
 
 from bs4 import BeautifulSoup
 
+from backend_logic.utils.logging_config import get_module_logger
+
+logger = get_module_logger(__name__)
+
 
 def regex_replace_filter(s, find, replace):
     """A custom Jinja2 filter for regex replacement."""
@@ -265,7 +269,7 @@ class ContentFormattingService:
             return content
             
         except Exception as e:
-            print(f"CONTENT FORMATTING: ❌ Enhanced citation filtering failed: {e}")
+            logger.error("Enhanced citation filtering failed", extra={"error": str(e), "error_type": type(e).__name__})
             # Fallback to basic filtering
             content = re.sub(r"\b(Fla\.?\s*Stat\.?|F\.S\.)\s*§?\s*[\d\w\.\-\(\)]+", "", content, flags=re.IGNORECASE)
             content = re.sub(r"\bChapter\s*\d+\b", "", content, flags=re.IGNORECASE)
@@ -447,13 +451,13 @@ class ContentFormattingService:
             return content
             
         try:
-            print("CONTENT FORMATTING: Starting enhanced citation filtering on raw text...")
+            logger.info("Starting enhanced citation filtering on raw text")
             
             # Get citation filter regex from configuration
             citation_filter_regex = self.config.get("citation_filter_regex", "")
             
             if citation_filter_regex:
-                print(f"CONTENT FORMATTING: Applying configured citation filter: {citation_filter_regex}")
+                logger.debug("Applying configured citation filter", extra={"citation_filter_regex": citation_filter_regex})
                 content = re.sub(
                     citation_filter_regex,
                     "",
@@ -499,17 +503,17 @@ class ContentFormattingService:
             removed_chars = original_length - filtered_length
             
             if removed_chars > 0:
-                print(f"CONTENT FORMATTING: ✅ Enhanced citation filtering removed {removed_chars} characters")
+                logger.info("Enhanced citation filtering completed", extra={"removed_characters": removed_chars})
             else:
-                print("CONTENT FORMATTING: No citations found to remove")
+                logger.debug("Citation filtering completed - no citations found to remove")
                 
             return content
             
         except re.error as e:
-            print(f"CONTENT FORMATTING: ❌ Invalid citation filter regex: {e}")
+            logger.error("Invalid citation filter regex", extra={"error": str(e), "error_type": "re.error"})
             return content
         except Exception as e:
-            print(f"CONTENT FORMATTING: ❌ Enhanced citation filtering failed: {e}")
+            logger.error("Enhanced citation filtering failed", extra={"error": str(e), "error_type": type(e).__name__})
             return content
 
     def _apply_sentence_splitting_logic(self, content: str) -> str:
@@ -529,7 +533,7 @@ class ContentFormattingService:
             return content
             
         try:
-            print("CONTENT FORMATTING: Starting sentence splitting logic on raw text...")
+            logger.debug("Starting sentence splitting logic on raw text")
             
             original_length = len(content)
             
@@ -593,14 +597,14 @@ class ContentFormattingService:
             processed_length = len(content)
             
             if processed_length != original_length:
-                print(f"CONTENT FORMATTING: ✅ Sentence splitting applied - length changed from {original_length} to {processed_length}")
+                logger.info("Sentence splitting applied", extra={"original_length": original_length, "processed_length": processed_length})
             else:
-                print("CONTENT FORMATTING: No sentence splitting needed")
+                logger.debug("Sentence splitting completed - no changes needed")
                 
             return content
             
         except Exception as e:
-            print(f"CONTENT FORMATTING: ❌ Sentence splitting logic failed: {e}")
+            logger.error("Sentence splitting logic failed", extra={"error": str(e), "error_type": type(e).__name__})
             return content
 
     def _apply_optional_ai_simplification(self, content: str) -> str:
@@ -625,15 +629,15 @@ class ContentFormattingService:
             enabled = simplification_config.get("enabled", False)
             
             if not enabled:
-                print("CONTENT FORMATTING: AI simplification disabled in configuration")
+                logger.debug("AI simplification disabled in configuration")
                 return content
             
             # For now, return original content as AI simplification is being removed in the refactor
-            print("CONTENT FORMATTING: AI simplification functionality removed in refactor")
+            logger.debug("AI simplification functionality removed in refactor")
             return content
                 
         except Exception as e:
-            print(f"CONTENT FORMATTING: ❌ AI simplification failed: {e}")
+            logger.error("AI simplification failed", extra={"error": str(e), "error_type": type(e).__name__})
             return content
 
     @staticmethod

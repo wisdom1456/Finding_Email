@@ -124,21 +124,11 @@ def file_upload_section():
     st.header("Upload Case Folder")
     uploaded_files = st.file_uploader(
         "Select a folder or multiple files "
-        "(PDF, DOCX, EML, TXT, JPG, PNG, MP3, M4A, WAV, MP4, MOV, AVI)",
+        "(TXT, PDF, DOCX files only)",
         type=[
+            "txt",
             "pdf",
             "docx",
-            "eml",
-            "txt",
-            "jpg",
-            "jpeg",
-            "png",
-            "mp3",
-            "m4a",
-            "wav",
-            "mp4",
-            "mov",
-            "avi",
         ],
         accept_multiple_files=True,
     )

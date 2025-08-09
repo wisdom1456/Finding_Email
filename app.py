@@ -6,11 +6,15 @@ import streamlit as st
 
 from backend_logic.main_processor import process_case_documents
 from backend_logic.utils import handle_file_uploads
+from backend_logic.utils.logging_config import setup_logging, get_module_logger
 from components.ui_components import (
     case_information_form,
     file_upload_section,
     results_display_section,
 )
+
+# Initialize logging
+logger = get_module_logger(__name__)
 
 
 # --- Session State Initialization ---
@@ -45,18 +49,33 @@ def initialize_session_state():
 
 def start_analysis():
     """Handles the start analysis button click."""
+    logger.info("Analysis start requested")
+    
     intake_form = st.session_state.get("intake_form")
-    st.session_state.get("case_documents", [])
+    case_documents = st.session_state.get("case_documents", [])
 
     if not intake_form:
+        logger.warning("Analysis start failed: no intake form provided")
         st.error("An intake form is required to start the analysis.")
         return
+
+    logger.info(
+        "Starting document analysis",
+        extra={
+            "intake_form": intake_form.name if hasattr(intake_form, 'name') else str(type(intake_form)),
+            "case_documents_count": len(case_documents)
+        }
+    )
 
     # Run the async processing function
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     try:
         loop.run_until_complete(process_case_documents())
+        logger.info("Document analysis completed successfully")
+    except Exception as e:
+        logger.exception("Document analysis failed", extra={"error_type": type(e).__name__})
+        raise
     finally:
         loop.close()
 
@@ -64,9 +83,14 @@ def start_analysis():
 # --- Main Application ---
 def main():
     """Main function for the Streamlit application."""
+    # Set up structured logging at application startup
+    setup_logging(level="INFO", enable_console=True)
+    logger.info("Legal Document Analysis Portal starting up")
+    
     st.set_page_config(page_title="Legal Document Analysis Portal", layout="wide")
 
     initialize_session_state()
+    logger.debug("Session state initialized")
 
     st.title("Legal Document Analysis Portal")
 

@@ -8,19 +8,23 @@ This test validates:
 3. Non-blocking error handling (warnings logged but generation continues)
 4. YAML configuration parsing for output_format specifications
 """
+from __future__ import annotations
 
 import json
-import sys
 import os
+import sys
 from unittest.mock import Mock, patch
+
 import yaml
+
 
 # Add project root to Python path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+from backend.utils.data_models import CaseAnalysisResult, EnhancedIntakeAnalysis
 from backend.utils.validators import validate_section_output
 from backend_logic.email_generator import EmailGeneratorV2
-from backend.utils.data_models import CaseAnalysisResult, EnhancedIntakeAnalysis
+
 
 def test_validate_section_output():
     """Test the core validate_section_output function."""
@@ -48,7 +52,7 @@ def test_validate_section_output():
     
     # Test 3: Valid HTML format
     print("  ✅ Testing valid HTML...")
-    valid_html = '<p>This is a detailed analysis.</p><ul><li>Point 1</li><li>Point 2</li></ul>'
+    valid_html = "<p>This is a detailed analysis.</p><ul><li>Point 1</li><li>Point 2</li></ul>"
     try:
         validate_section_output(valid_html, "html")
         print("    ✅ Valid HTML passed validation")
@@ -58,7 +62,7 @@ def test_validate_section_output():
     
     # Test 4: Invalid HTML format (no required tags)
     print("  ✅ Testing invalid HTML...")
-    invalid_html = 'Plain text without any HTML tags'
+    invalid_html = "Plain text without any HTML tags"
     try:
         validate_section_output(invalid_html, "html")
         print("    ❌ Invalid HTML should have failed validation")
@@ -84,17 +88,17 @@ def test_email_generator_integration():
     
     # Create test YAML configuration
     test_config = {
-        'sections': {
-            'intake_analysis': {'output_format': 'json'},
-            'legal_analysis': {'output_format': 'html'},
-            'factual_summary': {'output_format': 'html'},
-            'next_steps': {}  # No output_format specified (should default to html)
+        "sections": {
+            "intake_analysis": {"output_format": "json"},
+            "legal_analysis": {"output_format": "html"},
+            "factual_summary": {"output_format": "html"},
+            "next_steps": {}  # No output_format specified (should default to html)
         },
-        'personas': {
-            'CONTINUING_LEGAL_ADVISOR': 'Test persona'
+        "personas": {
+            "CONTINUING_LEGAL_ADVISOR": "Test persona"
         },
-        'formatting': {
-            'strict_format_enforcement': 'Test enforcement'
+        "formatting": {
+            "strict_format_enforcement": "Test enforcement"
         }
     }
     
@@ -103,14 +107,14 @@ def test_email_generator_integration():
     
     # Create EmailGeneratorV2 instance with test config
     try:
-        with patch('backend_logic.email_generator.EmailGeneratorV2._load_configuration') as mock_load_config:
-            with patch('backend_logic.email_generator.EmailGeneratorV2._find_template_directory') as mock_find_template:
+        with patch("backend_logic.email_generator.EmailGeneratorV2._load_configuration") as mock_load_config:
+            with patch("backend_logic.email_generator.EmailGeneratorV2._find_template_directory") as mock_find_template:
                 mock_load_config.return_value = test_config
-                mock_find_template.return_value = '/tmp'  # Mock template directory
+                mock_find_template.return_value = "/tmp"  # Mock template directory
                 
                 # Mock the template directory check
-                with patch('os.path.exists', return_value=True):
-                    with patch('os.listdir', return_value=['findings_email.jinja2', 'document_appendix.jinja2']):
+                with patch("os.path.exists", return_value=True):
+                    with patch("os.listdir", return_value=["findings_email.jinja2", "document_appendix.jinja2"]):
                         generator = EmailGeneratorV2(mock_client)
                         
         print("  ✅ EmailGeneratorV2 instance created successfully")
@@ -123,8 +127,8 @@ def test_email_generator_integration():
     valid_json_content = '{"findings": "Analysis complete", "confidence": 0.85}'
     try:
         # Capture print output to verify logging
-        with patch('builtins.print') as mock_print:
-            generator._validate_section_format(valid_json_content, 'intake_analysis')
+        with patch("builtins.print") as mock_print:
+            generator._validate_section_format(valid_json_content, "intake_analysis")
             
             # Check if success message was printed
             print_calls = [str(call) for call in mock_print.call_args_list]
@@ -141,8 +145,8 @@ def test_email_generator_integration():
     print("  ✅ Testing invalid JSON content validation...")
     invalid_json_content = '{"findings": "Analysis incomplete'  # Missing closing brace
     try:
-        with patch('builtins.print') as mock_print:
-            generator._validate_section_format(invalid_json_content, 'intake_analysis')
+        with patch("builtins.print") as mock_print:
+            generator._validate_section_format(invalid_json_content, "intake_analysis")
             
             # Check if warning was logged
             print_calls = [str(call) for call in mock_print.call_args_list]
@@ -157,10 +161,10 @@ def test_email_generator_integration():
     
     # Test 3: Valid HTML content for HTML format section
     print("  ✅ Testing valid HTML content validation...")
-    valid_html_content = '<p>Legal analysis shows strong case.</p><ul><li>Evidence point 1</li></ul>'
+    valid_html_content = "<p>Legal analysis shows strong case.</p><ul><li>Evidence point 1</li></ul>"
     try:
-        with patch('builtins.print') as mock_print:
-            generator._validate_section_format(valid_html_content, 'legal_analysis')
+        with patch("builtins.print") as mock_print:
+            generator._validate_section_format(valid_html_content, "legal_analysis")
             
             print_calls = [str(call) for call in mock_print.call_args_list]
             success_logged = any("format validation passed (html)" in call for call in print_calls)
@@ -175,8 +179,8 @@ def test_email_generator_integration():
     # Test 4: Section with no output_format (should default to html)
     print("  ✅ Testing section with default format...")
     try:
-        with patch('builtins.print') as mock_print:
-            generator._validate_section_format(valid_html_content, 'next_steps')
+        with patch("builtins.print") as mock_print:
+            generator._validate_section_format(valid_html_content, "next_steps")
             
             print_calls = [str(call) for call in mock_print.call_args_list]
             success_logged = any("format validation passed (html)" in call for call in print_calls)
@@ -191,8 +195,8 @@ def test_email_generator_integration():
     # Test 5: Non-existent section (should log warning but not crash)
     print("  ✅ Testing non-existent section...")
     try:
-        with patch('builtins.print') as mock_print:
-            generator._validate_section_format(valid_html_content, 'nonexistent_section')
+        with patch("builtins.print") as mock_print:
+            generator._validate_section_format(valid_html_content, "nonexistent_section")
             
             print_calls = [str(call) for call in mock_print.call_args_list]
             warning_logged = any("No configuration found for section" in call for call in print_calls)
@@ -220,27 +224,27 @@ def test_yaml_config_integration():
         return True  # Not a failure if file doesn't exist in test environment
     
     try:
-        with open(config_path, 'r', encoding='utf-8') as f:
+        with open(config_path, encoding="utf-8") as f:
             config = yaml.safe_load(f)
         
         print(f"  ✅ Successfully loaded configuration file: {config_path}")
         
         # Check that sections configuration exists
-        if 'sections' not in config:
+        if "sections" not in config:
             print("  ❌ Configuration missing 'sections' key")
             return False
             
-        sections = config['sections']
+        sections = config["sections"]
         print(f"  ✅ Found {len(sections)} sections in configuration")
         
         # Test specific sections we know should exist
-        expected_sections = ['intake_analysis', 'factual_summary', 'legal_analysis', 'next_steps']
+        expected_sections = ["intake_analysis", "factual_summary", "legal_analysis", "next_steps"]
         format_found = {}
         
         for section_key in expected_sections:
             if section_key in sections:
                 section_config = sections[section_key]
-                output_format = section_config.get('output_format', 'html')  # Default to html
+                output_format = section_config.get("output_format", "html")  # Default to html
                 format_found[section_key] = output_format
                 print(f"    ✅ {section_key}: {output_format} format")
             else:
@@ -251,8 +255,8 @@ def test_yaml_config_integration():
             print(f"  ✅ Found format specifications for {len(format_found)} sections")
             
             # Show format distribution
-            json_sections = [k for k, v in format_found.items() if v == 'json']
-            html_sections = [k for k, v in format_found.items() if v == 'html']
+            json_sections = [k for k, v in format_found.items() if v == "json"]
+            html_sections = [k for k, v in format_found.items() if v == "html"]
             
             if json_sections:
                 print(f"    📋 JSON format sections: {json_sections}")
@@ -296,10 +300,9 @@ def run_all_tests():
         print("  • Default format handling (html) when output_format not specified")
         print("  • Integration with EmailGeneratorV2 section generation pipeline")
         return True
-    else:
-        print(f"❌ SOME TESTS FAILED ({passed}/{total})")
-        print("\n⚠️ Please review the failed tests above and fix any issues.")
-        return False
+    print(f"❌ SOME TESTS FAILED ({passed}/{total})")
+    print("\n⚠️ Please review the failed tests above and fix any issues.")
+    return False
 
 if __name__ == "__main__":
     success = run_all_tests()

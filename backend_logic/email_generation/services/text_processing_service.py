@@ -12,12 +12,15 @@ This service is responsible for:
 
 Note: Complex text simplification methods have been removed per user requirements.
 """
+from __future__ import annotations
 
-import re
 import html
-from typing import Optional
 import logging
+import re
+from typing import Optional
+
 from bs4 import BeautifulSoup
+
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +35,6 @@ class TextProcessingService:
     
     def __init__(self):
         """Initialize the text processing service."""
-        pass
     
     def clean_ai_response(self, response: str) -> str:
         """
@@ -55,8 +57,8 @@ class TextProcessingService:
         
         try:
             # Remove excessive whitespace and normalize line breaks
-            text = re.sub(r'\n\s*\n\s*\n+', '\n\n', response)
-            text = re.sub(r'[ \t]+', ' ', text)
+            text = re.sub(r"\n\s*\n\s*\n+", "\n\n", response)
+            text = re.sub(r"[ \t]+", " ", text)
             text = text.strip()
             
             # Normalize quotes and apostrophes
@@ -64,15 +66,15 @@ class TextProcessingService:
             text = re.sub(r"[''']", "'", text)
             
             # Fix spacing around punctuation
-            text = re.sub(r'\s+([.!?])', r'\1', text)
-            text = re.sub(r'([.!?])\s*([A-Z])', r'\1 \2', text)
+            text = re.sub(r"\s+([.!?])", r"\1", text)
+            text = re.sub(r"([.!?])\s*([A-Z])", r"\1 \2", text)
             
             # Remove HTML entities if present
             text = html.unescape(text)
             
             # Fix common AI response artifacts
-            text = re.sub(r'^\s*[\-\*\+]\s*', '', text, flags=re.MULTILINE)
-            text = re.sub(r'\s*\[.*?\]\s*', ' ', text)  # Remove reference markers
+            text = re.sub(r"^\s*[\-\*\+]\s*", "", text, flags=re.MULTILINE)
+            text = re.sub(r"\s*\[.*?\]\s*", " ", text)  # Remove reference markers
             
             return text.strip()
             
@@ -96,14 +98,14 @@ class TextProcessingService:
         
         try:
             # Parse HTML with BeautifulSoup
-            soup = BeautifulSoup(html_content, 'html.parser')
+            soup = BeautifulSoup(html_content, "html.parser")
             
             # Prettify with specified indentation
             pretty_html = soup.prettify(formatter="html")
             
             # Adjust indentation if different from default
             if indent_size != 1:
-                lines = pretty_html.split('\n')
+                lines = pretty_html.split("\n")
                 adjusted_lines = []
                 
                 for line in lines:
@@ -111,12 +113,12 @@ class TextProcessingService:
                     leading_spaces = len(line) - len(line.lstrip())
                     if leading_spaces > 0:
                         # Adjust indentation
-                        new_indent = ' ' * (leading_spaces * indent_size)
+                        new_indent = " " * (leading_spaces * indent_size)
                         adjusted_lines.append(new_indent + line.lstrip())
                     else:
                         adjusted_lines.append(line)
                 
-                pretty_html = '\n'.join(adjusted_lines)
+                pretty_html = "\n".join(adjusted_lines)
             
             return pretty_html
             
@@ -138,13 +140,13 @@ class TextProcessingService:
             return ""
         
         # Replace multiple spaces with single space
-        text = re.sub(r' +', ' ', text)
+        text = re.sub(r" +", " ", text)
         
         # Replace multiple line breaks with double line break
-        text = re.sub(r'\n{3,}', '\n\n', text)
+        text = re.sub(r"\n{3,}", "\n\n", text)
         
         # Remove trailing whitespace from lines
-        text = re.sub(r'[ \t]+$', '', text, flags=re.MULTILINE)
+        text = re.sub(r"[ \t]+$", "", text, flags=re.MULTILINE)
         
         return text.strip()
     
@@ -165,12 +167,12 @@ class TextProcessingService:
         try:
             if preserve_formatting:
                 # Convert common formatting tags to text equivalents
-                text = re.sub(r'<br\s*/?>', '\n', text, flags=re.IGNORECASE)
-                text = re.sub(r'</p>', '\n\n', text, flags=re.IGNORECASE)
-                text = re.sub(r'<p[^>]*>', '', text, flags=re.IGNORECASE)
+                text = re.sub(r"<br\s*/?>", "\n", text, flags=re.IGNORECASE)
+                text = re.sub(r"</p>", "\n\n", text, flags=re.IGNORECASE)
+                text = re.sub(r"<p[^>]*>", "", text, flags=re.IGNORECASE)
             
             # Remove all HTML tags
-            text = re.sub(r'<[^>]+>', '', text)
+            text = re.sub(r"<[^>]+>", "", text)
             
             # Decode HTML entities
             text = html.unescape(text)
@@ -200,13 +202,13 @@ class TextProcessingService:
             content = self.clean_ai_response(content)
             
             # Ensure proper paragraph spacing
-            content = re.sub(r'\n\n+', '\n\n', content)
+            content = re.sub(r"\n\n+", "\n\n", content)
             
             # Format section headers (simple detection)
-            content = re.sub(r'^([A-Z][A-Z\s]{10,}):?\s*$', r'\1:', content, flags=re.MULTILINE)
+            content = re.sub(r"^([A-Z][A-Z\s]{10,}):?\s*$", r"\1:", content, flags=re.MULTILINE)
             
             # Ensure consistent bullet point formatting
-            content = re.sub(r'^\s*[-•]\s*', '• ', content, flags=re.MULTILINE)
+            content = re.sub(r"^\s*[-•]\s*", "• ", content, flags=re.MULTILINE)
             
             return content.strip()
             

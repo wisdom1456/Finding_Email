@@ -1,24 +1,28 @@
 #!/usr/bin/env python3
+from __future__ import annotations
 
-import sys
 import os
-sys.path.append(os.path.join(os.path.dirname(__file__), 'backend_logic'))
+import sys
 
-from email_generator import EmailGeneratorV2
-from config import get_openai_api_key
+
+sys.path.append(os.path.join(os.path.dirname(__file__), "backend_logic"))
+
 from bs4 import BeautifulSoup
+from config import get_openai_api_key
+from email_generator import EmailGeneratorV2
 from openai import OpenAI
 
 # Add the validation harness imports to create a proper test case
 from backend.utils.data_models import (
-    CaseAnalysisResult,
-    EnhancedIntakeAnalysis,
     AnalyzedDocument,
-    LegalAssessment,
+    CaseAnalysisResult,
     DemandLetterEvaluation,
+    EnhancedIntakeAnalysis,
     FinalAnalysis,
-    FindingsLetterContent
+    FindingsLetterContent,
+    LegalAssessment,
 )
+
 
 def create_sample_case_analysis() -> CaseAnalysisResult:
     """Create a comprehensive sample case analysis for testing."""
@@ -110,7 +114,7 @@ def main():
     # Create case analysis like validation harness
     case_analysis = create_sample_case_analysis()
     
-    print(f"🧪 Testing case: Complex Civil Rights Case")
+    print("🧪 Testing case: Complex Civil Rights Case")
     
     # Generate email using same method as validation harness
     email_result = generator.generate_email_and_analysis_docs(case_analysis)
@@ -120,54 +124,54 @@ def main():
         return
     
     # EmailGeneratorV2 returns dict with 'main_letter' and 'appendix' keys
-    generated_email = email_result['main_letter'] if isinstance(email_result, dict) else email_result
-    analysis_doc = email_result.get('appendix', '') if isinstance(email_result, dict) else ''
+    generated_email = email_result["main_letter"] if isinstance(email_result, dict) else email_result
+    analysis_doc = email_result.get("appendix", "") if isinstance(email_result, dict) else ""
     
     print(f"\n📄 Generated Email Length: {len(generated_email)} characters")
     print(f"📄 Analysis Doc Length: {len(analysis_doc)} characters")
     
     # Extract sections like validation harness does
-    soup = BeautifulSoup(generated_email, 'html.parser')
+    soup = BeautifulSoup(generated_email, "html.parser")
     
     # Look for H2 and H3 tags
-    h2_sections = soup.find_all('h2')
-    h3_sections = soup.find_all('h3')
+    h2_sections = soup.find_all("h2")
+    h3_sections = soup.find_all("h3")
     
-    print(f"\n🔍 Section Analysis:")
+    print("\n🔍 Section Analysis:")
     print(f"   H2 sections found: {len(h2_sections)}")
     print(f"   H3 sections found: {len(h3_sections)}")
     print(f"   Total sections: {len(h2_sections) + len(h3_sections)}")
     
     if h2_sections:
-        print(f"\n📋 H2 Section Titles:")
+        print("\n📋 H2 Section Titles:")
         for i, h2 in enumerate(h2_sections, 1):
             print(f"   {i}. '{h2.get_text().strip()}'")
     
     if h3_sections:
-        print(f"\n📋 H3 Section Titles:")
+        print("\n📋 H3 Section Titles:")
         for i, h3 in enumerate(h3_sections, 1):
             print(f"   {i}. '{h3.get_text().strip()}'")
     
     # Look for section-title divs (legacy format)
-    section_divs = soup.find_all('div', class_='section-title')
+    section_divs = soup.find_all("div", class_="section-title")
     if section_divs:
         print(f"\n⚠️  Found {len(section_divs)} legacy section-title divs:")
         for i, div in enumerate(section_divs, 1):
             print(f"   {i}. '{div.get_text().strip()}'")
     
     # Save output for inspection
-    with open('debug_validation_email_output.html', 'w') as f:
+    with open("debug_validation_email_output.html", "w") as f:
         f.write(generated_email)
     
-    with open('debug_validation_analysis_output.html', 'w') as f:
+    with open("debug_validation_analysis_output.html", "w") as f:
         f.write(analysis_doc)
     
-    print(f"\n💾 Saved outputs:")
-    print(f"   Email: debug_validation_email_output.html")
-    print(f"   Analysis: debug_validation_analysis_output.html")
+    print("\n💾 Saved outputs:")
+    print("   Email: debug_validation_email_output.html")
+    print("   Analysis: debug_validation_analysis_output.html")
     
     # Show first 500 chars for quick inspection
-    print(f"\n📝 Email Preview (first 500 chars):")
+    print("\n📝 Email Preview (first 500 chars):")
     print(generated_email[:500])
     print("...")
 

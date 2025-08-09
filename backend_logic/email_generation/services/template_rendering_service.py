@@ -10,11 +10,20 @@ This service is responsible for:
 
 This replaces template-related methods from the original EmailGeneratorV2 class.
 """
+from __future__ import annotations
 
-import os
-from typing import Dict, Any, Optional, List
 import logging
-from jinja2 import Environment, FileSystemLoader, Template, TemplateError, select_autoescape
+import os
+from typing import Any, Dict, List, Optional
+
+from jinja2 import (
+    Environment,
+    FileSystemLoader,
+    Template,
+    TemplateError,
+    select_autoescape,
+)
+
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +55,7 @@ class TemplateRenderingService:
             try:
                 self.jinja_env = Environment(
                     loader=FileSystemLoader(self.template_directory),
-                    autoescape=select_autoescape(['html', 'xml']),
+                    autoescape=select_autoescape(["html", "xml"]),
                     trim_blocks=True,
                     lstrip_blocks=True
                 )
@@ -102,7 +111,7 @@ class TemplateRenderingService:
                 template = self.jinja_env.from_string(template_string)
             else:
                 # Create minimal environment for string rendering
-                env = Environment(autoescape=select_autoescape(['html', 'xml']))
+                env = Environment(autoescape=select_autoescape(["html", "xml"]))
                 template = env.from_string(template_string)
             
             rendered_content = template.render(**context)
@@ -129,7 +138,7 @@ class TemplateRenderingService:
         try:
             templates = []
             for file in os.listdir(self.template_directory):
-                if file.endswith(('.html', '.jinja2', '.j2', '.txt')):
+                if file.endswith((".html", ".jinja2", ".j2", ".txt")):
                     templates.append(file)
             return sorted(templates)
         except Exception as e:
@@ -152,7 +161,7 @@ class TemplateRenderingService:
         template_path = os.path.join(self.template_directory, template_name)
         return os.path.exists(template_path)
     
-    def prepare_email_context(self, case_data: Dict[str, Any], 
+    def prepare_email_context(self, case_data: Dict[str, Any],
                             additional_context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """
         Prepare context variables for email template rendering.
@@ -166,24 +175,24 @@ class TemplateRenderingService:
         """
         context = {
             # Standard template variables
-            'case_data': case_data,
-            'current_date': None,  # Could be set by caller
-            'attorney_name': None,  # Could be set by caller
-            'firm_name': None,     # Could be set by caller
+            "case_data": case_data,
+            "current_date": None,  # Could be set by caller
+            "attorney_name": None,  # Could be set by caller
+            "firm_name": None,     # Could be set by caller
             
             # Content sections
-            'factual_summary': case_data.get('factual_summary', ''),
-            'legal_analysis': case_data.get('legal_analysis', ''),
-            'evidence_review': case_data.get('evidence_review', ''),
-            'recommendations': case_data.get('recommendations', ''),
+            "factual_summary": case_data.get("factual_summary", ""),
+            "legal_analysis": case_data.get("legal_analysis", ""),
+            "evidence_review": case_data.get("evidence_review", ""),
+            "recommendations": case_data.get("recommendations", ""),
             
             # Metadata
-            'confidence_score': case_data.get('metadata', {}).get('confidence_score', 'medium'),
-            'generation_timestamp': case_data.get('metadata', {}).get('generation_timestamp', None),
+            "confidence_score": case_data.get("metadata", {}).get("confidence_score", "medium"),
+            "generation_timestamp": case_data.get("metadata", {}).get("generation_timestamp", None),
             
             # Formatting helpers
-            'format_section_header': self._format_section_header,
-            'format_bullet_points': self._format_bullet_points,
+            "format_section_header": self._format_section_header,
+            "format_bullet_points": self._format_bullet_points,
         }
         
         # Add additional context if provided
@@ -210,11 +219,11 @@ class TemplateRenderingService:
             formatted_content = video_analysis.strip()
             
             # Add section header if not present
-            if not formatted_content.upper().startswith('VIDEO ANALYSIS'):
+            if not formatted_content.upper().startswith("VIDEO ANALYSIS"):
                 formatted_content = f"VIDEO ANALYSIS\n\n{formatted_content}"
             
             # Ensure proper paragraph spacing
-            formatted_content = formatted_content.replace('\n\n\n', '\n\n')
+            formatted_content = formatted_content.replace("\n\n\n", "\n\n")
             
             return formatted_content
             
@@ -237,16 +246,16 @@ class TemplateRenderingService:
             f"[Template rendering failed for: {template_name}]",
             "",
             "**FACTUAL SUMMARY**",
-            context.get('factual_summary', '[Factual summary not available]'),
+            context.get("factual_summary", "[Factual summary not available]"),
             "",
-            "**LEGAL ANALYSIS**", 
-            context.get('legal_analysis', '[Legal analysis not available]'),
+            "**LEGAL ANALYSIS**",
+            context.get("legal_analysis", "[Legal analysis not available]"),
             "",
             "**EVIDENCE REVIEW**",
-            context.get('evidence_review', '[Evidence review not available]'),
+            context.get("evidence_review", "[Evidence review not available]"),
             "",
             "**RECOMMENDATIONS**",
-            context.get('recommendations', '[Recommendations not available]'),
+            context.get("recommendations", "[Recommendations not available]"),
         ]
         
         return "\n".join(fallback_parts)
@@ -276,21 +285,21 @@ class TemplateRenderingService:
         if not content:
             return content
         
-        lines = content.split('\n')
+        lines = content.split("\n")
         formatted_lines = []
         
         for line in lines:
             line = line.strip()
-            if line and not line.startswith('•') and not line.startswith('-'):
+            if line and not line.startswith("•") and not line.startswith("-"):
                 # Add bullet point if line looks like a list item
-                if any(line.startswith(prefix) for prefix in ['1.', '2.', '3.', 'a.', 'b.', 'c.', '*']):
+                if any(line.startswith(prefix) for prefix in ["1.", "2.", "3.", "a.", "b.", "c.", "*"]):
                     formatted_lines.append(f"• {line}")
                 else:
                     formatted_lines.append(line)
             else:
                 formatted_lines.append(line)
         
-        return '\n'.join(formatted_lines)
+        return "\n".join(formatted_lines)
     
     def update_template_directory(self, new_directory: str):
         """

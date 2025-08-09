@@ -2,9 +2,12 @@
 """
 Simple test script that doesn't require API keys - just tests the parse_json_response method.
 """
+from __future__ import annotations
 
-import sys
 import os
+import sys
+
+
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 def test_json_parsing_simple():
@@ -36,7 +39,7 @@ def test_json_parsing_simple():
         ('```\n{"key": "value", "nested": {"inner": "data"}}\n```', "JSON in unlabeled markdown"),
         
         # Empty content
-        ('', "Empty content"),
+        ("", "Empty content"),
         
         # Invalid JSON
         ('{"invalid": json}', "Invalid JSON"),
@@ -53,16 +56,16 @@ def test_json_parsing_simple():
             print(f"Return type: {type(result)}")
             
             if result is not None:
-                print(f"✅ Success: Parsed JSON")
+                print("✅ Success: Parsed JSON")
                 print(f"   Result: {str(result)[:100]}{'...' if len(str(result)) > 100 else ''}")
                 
                 # This is the issue - checking for "success" key on direct JSON result
                 if isinstance(result, dict) and "success" in result:
                     print(f"   Has 'success' key: {result['success']}")
                 else:
-                    print(f"   ❌ No 'success' key found (this is the problem!)")
+                    print("   ❌ No 'success' key found (this is the problem!)")
             else:
-                print(f"❌ Failed: Returned None")
+                print("❌ Failed: Returned None")
         except Exception as e:
             print(f"🚨 Error: {e}")
         

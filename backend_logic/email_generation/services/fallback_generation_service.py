@@ -10,10 +10,12 @@ This service is responsible for:
 
 This replaces fallback-related methods from the original EmailGeneratorV2 class.
 """
+from __future__ import annotations
 
-from typing import Dict, Any, Optional, List
 import logging
 from datetime import datetime
+from typing import Any, Dict, List, Optional
+
 
 logger = logging.getLogger(__name__)
 
@@ -31,9 +33,9 @@ class FallbackGenerationService:
         """Initialize the fallback generation service."""
         self.fallback_templates = self._initialize_fallback_templates()
         self.error_recovery_strategies = [
-            'template_fallback',
-            'minimal_content', 
-            'error_placeholder'
+            "template_fallback",
+            "minimal_content",
+            "error_placeholder"
         ]
     
     def create_fallback_letter(self, case_data: Dict[str, Any] = None,
@@ -69,12 +71,11 @@ class FallbackGenerationService:
         Returns:
             Fallback factual summary
         """
-        if case_data and case_data.get('case_description'):
+        if case_data and case_data.get("case_description"):
             return f"Case Summary: {case_data['case_description']}"
-        elif case_data and case_data.get('case_id'):
+        if case_data and case_data.get("case_id"):
             return f"Case ID: {case_data['case_id']} - Additional factual details to be provided."
-        else:
-            return "Factual summary content is currently unavailable. Please provide case details for a complete summary."
+        return "Factual summary content is currently unavailable. Please provide case details for a complete summary."
     
     def generate_fallback_legal_analysis(self, case_data: Dict[str, Any] = None) -> str:
         """
@@ -86,13 +87,13 @@ class FallbackGenerationService:
         Returns:
             Fallback legal analysis
         """
-        case_type = case_data.get('case_type', 'general') if case_data else 'general'
+        case_type = case_data.get("case_type", "general") if case_data else "general"
         
-        template = self.fallback_templates['legal_analysis'].get(case_type,
-                    self.fallback_templates['legal_analysis']['general'])
+        template = self.fallback_templates["legal_analysis"].get(case_type,
+                    self.fallback_templates["legal_analysis"]["general"])
         
         return template.format(
-            case_id=case_data.get('case_id', 'Unknown') if case_data else 'Unknown',
+            case_id=case_data.get("case_id", "Unknown") if case_data else "Unknown",
             case_type=case_type
         )
     
@@ -106,13 +107,13 @@ class FallbackGenerationService:
         Returns:
             Fallback evidence review
         """
-        if case_data and case_data.get('evidence_list'):
-            evidence_items = case_data['evidence_list']
+        if case_data and case_data.get("evidence_list"):
+            evidence_items = case_data["evidence_list"]
             if isinstance(evidence_items, list):
                 evidence_text = "\n".join([f"• {item}" for item in evidence_items])
                 return f"Evidence items for review:\n\n{evidence_text}\n\nDetailed analysis of evidence items will be provided upon further review."
         
-        return self.fallback_templates['evidence_review']['general']
+        return self.fallback_templates["evidence_review"]["general"]
     
     def generate_fallback_recommendations(self, case_data: Dict[str, Any] = None) -> str:
         """
@@ -124,14 +125,14 @@ class FallbackGenerationService:
         Returns:
             Fallback recommendations
         """
-        case_type = case_data.get('case_type', 'general') if case_data else 'general'
+        case_type = case_data.get("case_type", "general") if case_data else "general"
         
-        template = self.fallback_templates['recommendations'].get(case_type,
-                    self.fallback_templates['recommendations']['general'])
+        template = self.fallback_templates["recommendations"].get(case_type,
+                    self.fallback_templates["recommendations"]["general"])
         
         return template
     
-    def create_error_recovery_content(self, error_type: str, 
+    def create_error_recovery_content(self, error_type: str,
                                     original_data: Dict[str, Any] = None) -> Dict[str, Any]:
         """
         Create content structure for error recovery scenarios.
@@ -146,15 +147,15 @@ class FallbackGenerationService:
         logger.info(f"Creating error recovery content for: {error_type}")
         
         recovery_content = {
-            'factual_summary': self.generate_fallback_factual_summary(original_data),
-            'legal_analysis': self.generate_fallback_legal_analysis(original_data),
-            'evidence_review': self.generate_fallback_evidence_review(original_data),
-            'recommendations': self.generate_fallback_recommendations(original_data),
-            'metadata': {
-                'is_fallback': True,
-                'error_type': error_type,
-                'recovery_timestamp': datetime.now().isoformat(),
-                'original_data_available': original_data is not None
+            "factual_summary": self.generate_fallback_factual_summary(original_data),
+            "legal_analysis": self.generate_fallback_legal_analysis(original_data),
+            "evidence_review": self.generate_fallback_evidence_review(original_data),
+            "recommendations": self.generate_fallback_recommendations(original_data),
+            "metadata": {
+                "is_fallback": True,
+                "error_type": error_type,
+                "recovery_timestamp": datetime.now().isoformat(),
+                "original_data_available": original_data is not None
             }
         }
         
@@ -168,10 +169,10 @@ class FallbackGenerationService:
             Minimal content structure
         """
         return {
-            'factual_summary': "Case details are being compiled and will be provided shortly.",
-            'legal_analysis': "Legal analysis is in progress. A detailed review will follow.",
-            'evidence_review': "Evidence review is pending. Items will be evaluated systematically.",
-            'recommendations': "Recommendations will be provided after thorough case review."
+            "factual_summary": "Case details are being compiled and will be provided shortly.",
+            "legal_analysis": "Legal analysis is in progress. A detailed review will follow.",
+            "evidence_review": "Evidence review is pending. Items will be evaluated systematically.",
+            "recommendations": "Recommendations will be provided after thorough case review."
         }
     
     def _initialize_fallback_templates(self) -> Dict[str, Dict[str, str]]:
@@ -182,8 +183,8 @@ class FallbackGenerationService:
             Dictionary of fallback templates by section and case type
         """
         return {
-            'legal_analysis': {
-                'general': """
+            "legal_analysis": {
+                "general": """
 Legal Analysis for Case {case_id}:
 
 This case requires detailed legal review to identify applicable statutes, 
@@ -198,7 +199,7 @@ regulations, and precedents. Key areas for analysis include:
 A comprehensive legal analysis will be provided upon completion of 
 fact-gathering and research phases.
                 """.strip(),
-                'contract': """
+                "contract": """
 Contract Analysis for Case {case_id}:
 
 This contract dispute requires analysis of:
@@ -211,7 +212,7 @@ This contract dispute requires analysis of:
 
 Detailed contract analysis will follow review of all relevant documents.
                 """.strip(),
-                'employment': """
+                "employment": """
 Employment Law Analysis for Case {case_id}:
 
 This employment matter involves analysis of:
@@ -225,8 +226,8 @@ This employment matter involves analysis of:
 Comprehensive employment law analysis will be provided.
                 """.strip()
             },
-            'evidence_review': {
-                'general': """
+            "evidence_review": {
+                "general": """
 Evidence review is in progress. The following steps will be completed:
 
 • Cataloging of all available evidence
@@ -238,8 +239,8 @@ Evidence review is in progress. The following steps will be completed:
 Detailed evidence analysis will be provided upon completion of review.
                 """.strip()
             },
-            'recommendations': {
-                'general': """
+            "recommendations": {
+                "general": """
 Recommendations will be provided based on:
 
 • Complete factual development
@@ -250,7 +251,7 @@ Recommendations will be provided based on:
 
 Specific recommendations will follow completion of case analysis.
                 """.strip(),
-                'litigation': """
+                "litigation": """
 Litigation Strategy Recommendations:
 
 • Case assessment and merit evaluation
@@ -261,7 +262,7 @@ Litigation Strategy Recommendations:
 
 Detailed litigation recommendations will be provided.
                 """.strip(),
-                'compliance': """
+                "compliance": """
 Compliance Recommendations:
 
 • Regulatory requirement assessment
@@ -290,7 +291,7 @@ Comprehensive compliance recommendations will follow.
         sections = []
         
         # Header
-        case_id = case_data.get('case_id', 'Unknown') if case_data else 'Unknown'
+        case_id = case_data.get("case_id", "Unknown") if case_data else "Unknown"
         sections.append(f"LEGAL ANALYSIS DOCUMENT - CASE {case_id}")
         sections.append("=" * 50)
         sections.append("")
@@ -305,7 +306,7 @@ Comprehensive compliance recommendations will follow.
         sections.append(self.generate_fallback_factual_summary(case_data))
         sections.append("")
         
-        sections.append("LEGAL ANALYSIS") 
+        sections.append("LEGAL ANALYSIS")
         sections.append("-" * 20)
         sections.append(self.generate_fallback_legal_analysis(case_data))
         sections.append("")
@@ -333,7 +334,7 @@ Comprehensive compliance recommendations will follow.
         Returns:
             Minimal fallback content
         """
-        case_id = case_data.get('case_id', 'Unknown') if case_data else 'Unknown'
+        case_id = case_data.get("case_id", "Unknown") if case_data else "Unknown"
         
         content = f"""
 LEGAL DOCUMENT - CASE {case_id}

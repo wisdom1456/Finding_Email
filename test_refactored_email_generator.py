@@ -4,17 +4,19 @@ Integration Test for Refactored EmailGeneratorV2
 This test validates that the refactored modular EmailGeneratorV2 maintains
 backward compatibility and core functionality.
 """
+from __future__ import annotations
 
-import sys
-import os
 import logging
-from typing import Dict, Any
+import os
+import sys
+from typing import Any, Dict
+
 
 # Add the project root to the path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 # Configure logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 
@@ -43,12 +45,12 @@ def test_service_imports():
     try:
         from backend_logic.email_generation import (
             ConfigurationManager,
-            TextProcessingService,
-            JSONArchitectureService,
-            TemplateRenderingService,
             ContentGenerationService,
+            FallbackGenerationService,
+            JSONArchitectureService,
             OpenAIIntegrationService,
-            FallbackGenerationService
+            TemplateRenderingService,
+            TextProcessingService,
         )
         
         logger.info("✅ All service classes successfully imported")
@@ -104,7 +106,7 @@ def test_text_processing_service():
         
         # Test whitespace normalization
         normalized = text_processor.normalize_whitespace(test_text)
-        logger.info(f"✅ Whitespace normalization successful")
+        logger.info("✅ Whitespace normalization successful")
         
         return True
         
@@ -127,7 +129,7 @@ def test_json_architecture_service():
         
         # Test JSON validation
         validated = json_service.validate_json_response(structured)
-        logger.info(f"✅ JSON validation successful")
+        logger.info("✅ JSON validation successful")
         
         # Test conversion to letter
         letter = json_service.convert_json_to_generated_letter(validated)
@@ -149,9 +151,9 @@ def test_fallback_service():
         
         # Test fallback content generation
         test_case_data = {
-            'case_id': 'TEST-001',
-            'case_type': 'general',
-            'case_description': 'Test case for fallback service'
+            "case_id": "TEST-001",
+            "case_type": "general",
+            "case_description": "Test case for fallback service"
         }
         
         fallback_letter = fallback_service.create_fallback_letter(test_case_data, "Test error")
@@ -177,10 +179,10 @@ def test_backward_compatibility():
         
         # Test that key methods exist and can be called
         methods_to_test = [
-            '_clean_ai_response',
-            '_prettify_html_output', 
-            'format_video_analysis_for_appendix',
-            '_create_fallback_letter'
+            "_clean_ai_response",
+            "_prettify_html_output",
+            "format_video_analysis_for_appendix",
+            "_create_fallback_letter"
         ]
         
         for method_name in methods_to_test:
@@ -192,7 +194,7 @@ def test_backward_compatibility():
         # Test a simple method call
         test_text = "Test response text"
         cleaned = generator._clean_ai_response(test_text)
-        logger.info(f"✅ Backward compatibility method call successful")
+        logger.info("✅ Backward compatibility method call successful")
         
         return True
         
@@ -210,11 +212,11 @@ def test_integration_flow():
         
         # Test case data
         test_case_data = {
-            'case_id': 'INTEGRATION-TEST-001',
-            'case_type': 'contract',
-            'case_description': 'Integration test case for refactored email generator',
-            'client_name': 'Test Client',
-            'matter_description': 'Test matter for architectural validation'
+            "case_id": "INTEGRATION-TEST-001",
+            "case_type": "contract",
+            "case_description": "Integration test case for refactored email generator",
+            "client_name": "Test Client",
+            "matter_description": "Test matter for architectural validation"
         }
         
         # This will use fallback services since we don't have OpenAI API key
@@ -222,15 +224,15 @@ def test_integration_flow():
         
         # Test service status
         status = generator.get_service_status()
-        logger.info(f"✅ Service status check completed")
+        logger.info("✅ Service status check completed")
         
         # Test fallback generation directly
         fallback_response = generator._generate_fallback_response(
-            test_case_data, 
+            test_case_data,
             "Integration test - no OpenAI API key"
         )
         
-        logger.info(f"✅ Integration flow completed successfully")
+        logger.info("✅ Integration flow completed successfully")
         logger.info(f"   - Structured data sections: {len(fallback_response['structured_data'])}")
         logger.info(f"   - Letter content length: {len(fallback_response['letter_content'])}")
         logger.info(f"   - Is fallback: {fallback_response['metadata']['is_fallback']}")
@@ -249,7 +251,7 @@ def main():
     
     tests = [
         ("Modular Architecture", test_modular_architecture),
-        ("Service Imports", test_service_imports), 
+        ("Service Imports", test_service_imports),
         ("Configuration Service", test_configuration_service),
         ("Text Processing Service", test_text_processing_service),
         ("JSON Architecture Service", test_json_architecture_service),
@@ -293,9 +295,8 @@ def main():
     if passed == total:
         logger.info("🎉 All tests passed! Refactoring successful.")
         return True
-    else:
-        logger.warning(f"⚠️  {total - passed} tests failed. Review required.")
-        return False
+    logger.warning(f"⚠️  {total - passed} tests failed. Review required.")
+    return False
 
 
 if __name__ == "__main__":

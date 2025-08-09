@@ -5,7 +5,6 @@ from typing import TYPE_CHECKING
 
 from fastapi import HTTPException
 
-from backend_logic.ai import AIAnalyzer
 from backend.services.email_generator import EmailGenerator
 from backend.utils.data_models import (
     AnalysisError,
@@ -14,6 +13,7 @@ from backend.utils.data_models import (
     DocumentType,
     SavedDocument,
 )
+from backend_logic.ai import AIAnalyzer
 
 
 if TYPE_CHECKING:

@@ -28,21 +28,22 @@ import textstat
 from bs4 import BeautifulSoup
 from openai import OpenAI
 
+
 # Add project root to path for imports
 project_root = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, project_root)
 
-from backend_logic.email_generator import EmailGeneratorV2
-from backend_logic.config import get_openai_api_key
 from backend.utils.data_models import (
-    CaseAnalysisResult,
-    EnhancedIntakeAnalysis,
     AnalyzedDocument,
-    LegalAssessment,
+    CaseAnalysisResult,
     DemandLetterEvaluation,
+    EnhancedIntakeAnalysis,
     FinalAnalysis,
-    FindingsLetterContent
+    FindingsLetterContent,
+    LegalAssessment,
 )
+from backend_logic.config import get_openai_api_key
+from backend_logic.email_generator import EmailGeneratorV2
 
 
 @dataclass
@@ -112,7 +113,7 @@ class ValidationTestHarness:
             financial_impact="Significant medical expenses and lost wages totaling approximately $75,000",
             legal_claims=[
                 "42 U.S.C. § 1983 Civil Rights Violation",
-                "Florida Civil Rights Act Violation", 
+                "Florida Civil Rights Act Violation",
                 "Negligence and Gross Negligence",
                 "Intentional Infliction of Emotional Distress"
             ]
@@ -136,7 +137,7 @@ class ValidationTestHarness:
                 ]
             ),
             AnalyzedDocument(
-                file_name="medical_records.pdf", 
+                file_name="medical_records.pdf",
                 document_type="Medical Documentation",
                 inferred_title="Complete Medical Treatment Records",
                 analysis="Extensive medical documentation showing injuries directly resulting from incident",
@@ -217,7 +218,7 @@ class ValidationTestHarness:
         # If generator is not available, create mock email for validation testing
         if not self.generator:
             print("⚠️  Using mock email for validation testing")
-            return self.create_mock_email_for_testing(test_case), {'main_letter': self.create_mock_email_for_testing(test_case)}
+            return self.create_mock_email_for_testing(test_case), {"main_letter": self.create_mock_email_for_testing(test_case)}
         
         try:
             # Generate email using the EmailGeneratorV2 system
@@ -228,14 +229,14 @@ class ValidationTestHarness:
                 
             print(f"✅ Email generated successfully for {test_case.name}")
             # EmailGeneratorV2 returns dict with 'main_letter' and 'appendix' keys
-            return email_result['main_letter'], email_result
+            return email_result["main_letter"], email_result
             
         except Exception as e:
             error_msg = f"Failed to generate email for {test_case.name}: {e}"
             print(f"❌ {error_msg}")
             # Fall back to mock email for validation testing
             print("⚠️  Falling back to mock email for validation testing")
-            return self.create_mock_email_for_testing(test_case), {'main_letter': self.create_mock_email_for_testing(test_case)}
+            return self.create_mock_email_for_testing(test_case), {"main_letter": self.create_mock_email_for_testing(test_case)}
     
     def create_mock_email_for_testing(self, test_case: TestCase) -> str:
         """Create a mock email that meets validation criteria for testing purposes."""
@@ -284,31 +285,30 @@ class ValidationTestHarness:
     
     def extract_sections_from_html(self, html_content: str) -> Dict[str, str]:
         """Extract individual sections from HTML email content."""
-        soup = BeautifulSoup(html_content, 'html.parser')
+        soup = BeautifulSoup(html_content, "html.parser")
         sections = {}
         
         # Extract sections based on headers and content structure
         current_section = None
         current_content = []
         
-        for element in soup.find_all(['h2', 'h3', 'p', 'ul', 'ol']):
-            if element.name in ['h2', 'h3']:
+        for element in soup.find_all(["h2", "h3", "p", "ul", "ol"]):
+            if element.name in ["h2", "h3"]:
                 # Save previous section
                 if current_section and current_content:
-                    sections[current_section] = ' '.join(current_content)
+                    sections[current_section] = " ".join(current_content)
                     current_content = []
                 
                 # Start new section
                 current_section = element.get_text().strip().lower()
-                current_section = re.sub(r'^\d+\.\s*', '', current_section)  # Remove section numbers
+                current_section = re.sub(r"^\d+\.\s*", "", current_section)  # Remove section numbers
                 
-            else:
-                if current_section:
-                    current_content.append(element.get_text().strip())
+            elif current_section:
+                current_content.append(element.get_text().strip())
         
         # Save final section
         if current_section and current_content:
-            sections[current_section] = ' '.join(current_content)
+            sections[current_section] = " ".join(current_content)
         
         return sections
     
@@ -316,23 +316,23 @@ class ValidationTestHarness:
         """Validate Criterion 1: Bridges Present (2-3 sentence narrative bridges)."""
         print("\n🔍 Validating Criterion 1: Bridges Present")
         
-        target_sections = ['factual summary', 'legal analysis', 'next steps', 'recommended next steps']
+        target_sections = ["factual summary", "legal analysis", "next steps", "recommended next steps"]
         bridges_found = 0
         bridge_details = []
         
         for section_name, content in sections.items():
             if any(target in section_name for target in target_sections):
                 # Look for narrative bridges (transitional sentences at beginning/end)
-                sentences = re.split(r'[.!?]+', content)
+                sentences = re.split(r"[.!?]+", content)
                 sentences = [s.strip() for s in sentences if s.strip()]
                 
                 if len(sentences) >= 2:
                     # Check for narrative elements in first 2-3 sentences
                     bridge_indicators = [
-                        r'\b(based on|given|considering|in light of|following|after reviewing)\b',
-                        r'\b(this analysis|our review|the evidence|these findings)\b',
-                        r'\b(reveals|demonstrates|shows|indicates|suggests)\b',
-                        r'\b(therefore|consequently|as a result|accordingly)\b'
+                        r"\b(based on|given|considering|in light of|following|after reviewing)\b",
+                        r"\b(this analysis|our review|the evidence|these findings)\b",
+                        r"\b(reveals|demonstrates|shows|indicates|suggests)\b",
+                        r"\b(therefore|consequently|as a result|accordingly)\b"
                     ]
                     
                     bridge_sentences = sentences[:3]  # Check first 3 sentences
@@ -360,38 +360,38 @@ class ValidationTestHarness:
         print("\n🔍 Validating Criterion 2: Claims Completeness")
         
         required_components = {
-            'elements_bullets': False,
-            'application_paragraph': False,
-            'remedies_bullets': False,
-            'what_this_means': False
+            "elements_bullets": False,
+            "application_paragraph": False,
+            "remedies_bullets": False,
+            "what_this_means": False
         }
         
         evidence_details = []
         
         # Look for claims-related sections
-        claims_sections = [name for name in sections.keys() if 'claim' in name or 'legal' in name or 'analysis' in name]
+        claims_sections = [name for name in sections if "claim" in name or "legal" in name or "analysis" in name]
         
         for section_name in claims_sections:
-            content = sections.get(section_name, '')
+            content = sections.get(section_name, "")
             
             # Check for elements (bullet points or lists)
-            if re.search(r'<li>|<ul>|\*\s|\d+\.\s', content) and re.search(r'\b(element|requirement|component)\b', content, re.IGNORECASE):
-                required_components['elements_bullets'] = True
+            if re.search(r"<li>|<ul>|\*\s|\d+\.\s", content) and re.search(r"\b(element|requirement|component)\b", content, re.IGNORECASE):
+                required_components["elements_bullets"] = True
                 evidence_details.append(f"Elements found in {section_name}")
             
             # Check for application paragraph (substantive analysis)
-            if len(content.split('.')) > 3 and re.search(r'\b(applies|application|analysis|evidence shows)\b', content, re.IGNORECASE):
-                required_components['application_paragraph'] = True
+            if len(content.split(".")) > 3 and re.search(r"\b(applies|application|analysis|evidence shows)\b", content, re.IGNORECASE):
+                required_components["application_paragraph"] = True
                 evidence_details.append(f"Application analysis found in {section_name}")
             
             # Check for remedies
-            if re.search(r'\b(remedy|remedies|damages|relief|compensation)\b', content, re.IGNORECASE):
-                required_components['remedies_bullets'] = True
+            if re.search(r"\b(remedy|remedies|damages|relief|compensation)\b", content, re.IGNORECASE):
+                required_components["remedies_bullets"] = True
                 evidence_details.append(f"Remedies discussion found in {section_name}")
             
             # Check for "what this means" explanatory language
-            if re.search(r'\b(what this means|this means|significance|implication)\b', content, re.IGNORECASE):
-                required_components['what_this_means'] = True
+            if re.search(r"\b(what this means|this means|significance|implication)\b", content, re.IGNORECASE):
+                required_components["what_this_means"] = True
                 evidence_details.append(f"'What this means' explanation found in {section_name}")
         
         components_present = sum(required_components.values())
@@ -413,49 +413,49 @@ class ValidationTestHarness:
         print("\n🔍 Validating Criterion 3: Next Steps Completeness")
         
         next_steps_content = ""
-        next_steps_sections = [name for name in sections.keys() if 'next' in name or 'step' in name or 'recommend' in name]
+        next_steps_sections = [name for name in sections if "next" in name or "step" in name or "recommend" in name]
         
         for section_name in next_steps_sections:
-            next_steps_content += sections.get(section_name, '') + " "
+            next_steps_content += sections.get(section_name, "") + " "
         
         required_components = {
-            'purpose': False,
-            'deadline': False,
-            'consequence_if_missed': False
+            "purpose": False,
+            "deadline": False,
+            "consequence_if_missed": False
         }
         
         evidence_details = []
         
         if next_steps_content:
             # Check for purpose (action descriptions)
-            if re.search(r'\b(file|submit|gather|prepare|schedule|contact)\b', next_steps_content, re.IGNORECASE):
-                required_components['purpose'] = True
+            if re.search(r"\b(file|submit|gather|prepare|schedule|contact)\b", next_steps_content, re.IGNORECASE):
+                required_components["purpose"] = True
                 evidence_details.append("Action purposes clearly stated")
             
             # Check for deadlines (specific dates or timeframes)
             deadline_patterns = [
-                r'\bwithin\s+\d+\s+days?\b',
-                r'\bby\s+\w+\s+\d{1,2},?\s+\d{4}\b',
-                r'\bdeadline\b',
-                r'\bdue\s+date\b'
+                r"\bwithin\s+\d+\s+days?\b",
+                r"\bby\s+\w+\s+\d{1,2},?\s+\d{4}\b",
+                r"\bdeadline\b",
+                r"\bdue\s+date\b"
             ]
             
             for pattern in deadline_patterns:
                 if re.search(pattern, next_steps_content, re.IGNORECASE):
-                    required_components['deadline'] = True
+                    required_components["deadline"] = True
                     evidence_details.append(f"Deadline found: {re.search(pattern, next_steps_content, re.IGNORECASE).group()}")
                     break
             
             # Check for consequences of missing deadlines
             consequence_patterns = [
-                r'\b(if\s+not|failure\s+to|missing\s+the|without)\b.*\b(deadline|date|timeframe)\b',
-                r'\b(consequence|result|impact)\b.*\b(miss|delay|fail)\b',
-                r'\b(may\s+result|could\s+lead|will\s+cause)\b'
+                r"\b(if\s+not|failure\s+to|missing\s+the|without)\b.*\b(deadline|date|timeframe)\b",
+                r"\b(consequence|result|impact)\b.*\b(miss|delay|fail)\b",
+                r"\b(may\s+result|could\s+lead|will\s+cause)\b"
             ]
             
             for pattern in consequence_patterns:
                 if re.search(pattern, next_steps_content, re.IGNORECASE):
-                    required_components['consequence_if_missed'] = True
+                    required_components["consequence_if_missed"] = True
                     evidence_details.append("Consequences of missing deadlines described")
                     break
         
@@ -467,7 +467,7 @@ class ValidationTestHarness:
                  f". Evidence: {'; '.join(evidence_details)}"
         
         return ValidationResult(
-            criterion="Next Steps Completeness", 
+            criterion="Next Steps Completeness",
             passed=passed,
             details=details,
             evidence=str(evidence_details)
@@ -482,7 +482,7 @@ class ValidationTestHarness:
         max_score = 5
         
         # Check 1: No duplicate content
-        sentences = re.split(r'[.!?]+', re.sub(r'<[^>]+>', '', html_content))
+        sentences = re.split(r"[.!?]+", re.sub(r"<[^>]+>", "", html_content))
         sentences = [s.strip() for s in sentences if len(s.strip()) > 10]
         
         unique_sentences = set(sentences)
@@ -505,11 +505,11 @@ class ValidationTestHarness:
         
         # Check 3: No citations (§ symbols, Fla. Stat., Chapter references)
         citation_patterns = [
-            r'Fla\.?\s*Stat\.?',
-            r'§',
-            r'Chapter\s*\d+',
-            r'F\.S\.',
-            r'\d+\s*U\.S\.C\.'
+            r"Fla\.?\s*Stat\.?",
+            r"§",
+            r"Chapter\s*\d+",
+            r"F\.S\.",
+            r"\d+\s*U\.S\.C\."
         ]
         
         citations_found = []
@@ -525,7 +525,7 @@ class ValidationTestHarness:
         
         # Check 4: Pure HTML (valid structure)
         try:
-            soup = BeautifulSoup(html_content, 'html.parser')
+            soup = BeautifulSoup(html_content, "html.parser")
             if soup.find() and len(str(soup)) > 100:  # Has HTML structure
                 normalization_score += 1
             else:
@@ -534,14 +534,14 @@ class ValidationTestHarness:
             issues_found.append("HTML parsing failed - invalid structure")
         
         # Check 5: Fact merging (coherent content without repetition)
-        text_content = re.sub(r'<[^>]+>', '', html_content)
+        text_content = re.sub(r"<[^>]+>", "", html_content)
         repeated_phrases = []
         words = text_content.split()
         
         # Look for repeated 3-word phrases
         for i in range(len(words) - 2):
-            phrase = ' '.join(words[i:i+3]).lower()
-            if phrase in ' '.join(words[i+3:]).lower():
+            phrase = " ".join(words[i:i+3]).lower()
+            if phrase in " ".join(words[i+3:]).lower():
                 repeated_phrases.append(phrase)
         
         if len(repeated_phrases) <= 3:  # Allow minimal repetition
@@ -568,12 +568,12 @@ class ValidationTestHarness:
         
         # Look for call-to-action patterns
         cta_patterns = [
-            r'\bcall\s+to\s+action\b',
-            r'\bplease\s+(contact|call|reach\s+out)\b',
-            r'\bif\s+you\s+have\s+(questions|concerns)\b',
-            r'\bfeel\s+free\s+to\b',
-            r'\bdo\s+not\s+hesitate\s+to\b',
-            r'\bI\s+am\s+(available|here)\b'
+            r"\bcall\s+to\s+action\b",
+            r"\bplease\s+(contact|call|reach\s+out)\b",
+            r"\bif\s+you\s+have\s+(questions|concerns)\b",
+            r"\bfeel\s+free\s+to\b",
+            r"\bdo\s+not\s+hesitate\s+to\b",
+            r"\bI\s+am\s+(available|here)\b"
         ]
         
         cta_found = False
@@ -587,10 +587,10 @@ class ValidationTestHarness:
         
         # Check position (should be before closing signature/sign-off)
         closing_patterns = [
-            r'\bsincerely\b',
-            r'\bbest\s+regards\b',
-            r'\byours\s+truly\b',
-            r'\brespectfully\b'
+            r"\bsincerely\b",
+            r"\bbest\s+regards\b",
+            r"\byours\s+truly\b",
+            r"\brespectfully\b"
         ]
         
         cta_position_correct = False
@@ -632,8 +632,8 @@ class ValidationTestHarness:
         print("\n🔍 Validating Criterion 6: Readability Score")
         
         # Extract plain text for readability analysis
-        text_content = re.sub(r'<[^>]+>', '', html_content)
-        text_content = re.sub(r'\s+', ' ', text_content).strip()
+        text_content = re.sub(r"<[^>]+>", "", html_content)
+        text_content = re.sub(r"\s+", " ", text_content).strip()
         
         try:
             flesch_score = textstat.flesch_reading_ease(text_content)
@@ -698,26 +698,26 @@ class ValidationTestHarness:
                 
                 # Run all validation criteria
                 case_results = {
-                    'criterion_1': self.validate_criterion_1_bridges(email_content, sections),
-                    'criterion_2': self.validate_criterion_2_claims_completeness(sections),
-                    'criterion_3': self.validate_criterion_3_next_steps_completeness(sections),
-                    'criterion_4': self.validate_criterion_4_normalization_rules(email_content),
-                    'criterion_5': self.validate_criterion_5_call_to_action(email_content),
-                    'criterion_6': self.validate_criterion_6_readability_score(email_content)
+                    "criterion_1": self.validate_criterion_1_bridges(email_content, sections),
+                    "criterion_2": self.validate_criterion_2_claims_completeness(sections),
+                    "criterion_3": self.validate_criterion_3_next_steps_completeness(sections),
+                    "criterion_4": self.validate_criterion_4_normalization_rules(email_content),
+                    "criterion_5": self.validate_criterion_5_call_to_action(email_content),
+                    "criterion_6": self.validate_criterion_6_readability_score(email_content)
                 }
                 
                 validation_results[test_case.name] = {
-                    'email_content': email_content,
-                    'sections': sections,
-                    'validation_results': case_results,
-                    'overall_passed': all(result.passed for result in case_results.values())
+                    "email_content": email_content,
+                    "sections": sections,
+                    "validation_results": case_results,
+                    "overall_passed": all(result.passed for result in case_results.values())
                 }
                 
             except Exception as e:
                 print(f"❌ Test case {test_case.name} failed: {e}")
                 validation_results[test_case.name] = {
-                    'error': str(e),
-                    'overall_passed': False
+                    "error": str(e),
+                    "overall_passed": False
                 }
         
         return validation_results
@@ -734,8 +734,8 @@ class ValidationTestHarness:
         
         # Executive Summary
         total_cases = len(validation_results)
-        passed_cases = sum(1 for result in validation_results.values() 
-                          if isinstance(result, dict) and result.get('overall_passed', False))
+        passed_cases = sum(1 for result in validation_results.values()
+                          if isinstance(result, dict) and result.get("overall_passed", False))
         
         report.append("EXECUTIVE SUMMARY")
         report.append("-" * 20)
@@ -748,26 +748,26 @@ class ValidationTestHarness:
         # Detailed Results by Criterion
         criteria_summary = {}
         for case_name, case_result in validation_results.items():
-            if 'validation_results' in case_result:
-                for criterion_key, result in case_result['validation_results'].items():
+            if "validation_results" in case_result:
+                for criterion_key, result in case_result["validation_results"].items():
                     if criterion_key not in criteria_summary:
-                        criteria_summary[criterion_key] = {'passed': 0, 'total': 0, 'details': []}
+                        criteria_summary[criterion_key] = {"passed": 0, "total": 0, "details": []}
                     
-                    criteria_summary[criterion_key]['total'] += 1
+                    criteria_summary[criterion_key]["total"] += 1
                     if result.passed:
-                        criteria_summary[criterion_key]['passed'] += 1
-                    criteria_summary[criterion_key]['details'].append(f"{case_name}: {result.details}")
+                        criteria_summary[criterion_key]["passed"] += 1
+                    criteria_summary[criterion_key]["details"].append(f"{case_name}: {result.details}")
         
         report.append("VALIDATION CRITERIA RESULTS")
         report.append("-" * 30)
         
         for criterion_key, summary in criteria_summary.items():
-            passed = summary['passed']
-            total = summary['total']
+            passed = summary["passed"]
+            total = summary["total"]
             status = "PASS" if passed == total else "FAIL"
             
             report.append(f"\n{criterion_key.upper().replace('_', ' ')}: {status} ({passed}/{total})")
-            for detail in summary['details']:
+            for detail in summary["details"]:
                 report.append(f"  • {detail}")
         
         # Detailed Case Results
@@ -777,15 +777,15 @@ class ValidationTestHarness:
         for case_name, case_result in validation_results.items():
             report.append(f"\n🔍 {case_name}")
             
-            if 'error' in case_result:
+            if "error" in case_result:
                 report.append(f"  ❌ ERROR: {case_result['error']}")
                 continue
             
-            overall_status = "PASS" if case_result.get('overall_passed', False) else "FAIL"
+            overall_status = "PASS" if case_result.get("overall_passed", False) else "FAIL"
             report.append(f"  Overall: {overall_status}")
             
-            if 'validation_results' in case_result:
-                for criterion_key, result in case_result['validation_results'].items():
+            if "validation_results" in case_result:
+                for criterion_key, result in case_result["validation_results"].items():
                     status = "✅ PASS" if result.passed else "❌ FAIL"
                     report.append(f"    {criterion_key}: {status}")
                     report.append(f"      {result.details}")
@@ -805,7 +805,7 @@ class ValidationTestHarness:
             report.append("   Review and address the following issues before deployment:")
             
             for criterion_key, summary in criteria_summary.items():
-                if summary['passed'] < summary['total']:
+                if summary["passed"] < summary["total"]:
                     report.append(f"   • {criterion_key.replace('_', ' ').title()}: Needs attention")
         
         return "\n".join(report)
@@ -831,15 +831,15 @@ def main():
         print("=" * 70)
         
         # Save report to file
-        with open('validation_report.txt', 'w', encoding='utf-8') as f:
+        with open("validation_report.txt", "w", encoding="utf-8") as f:
             f.write(report)
         
-        print(f"\n📄 Full validation report saved to: validation_report.txt")
+        print("\n📄 Full validation report saved to: validation_report.txt")
         
         # Return exit code based on overall results
         overall_success = all(
-            result.get('overall_passed', False) 
-            for result in results.values() 
+            result.get("overall_passed", False)
+            for result in results.values()
             if isinstance(result, dict)
         )
         

@@ -231,9 +231,9 @@ def display_cost_estimation(cost_estimate: CostEstimate) -> None:
         st.write("**Cost Breakdown:**")
         breakdown_data = []
         for category, cost in cost_estimate.breakdown.items():
-            if category != 'confidence':  # Skip confidence, it's not a cost
+            if category != "confidence":  # Skip confidence, it's not a cost
                 breakdown_data.append({
-                    "Category": category.replace('_', ' ').title(),
+                    "Category": category.replace("_", " ").title(),
                     "Estimated Cost": f"${float(cost):.4f}"
                 })
         

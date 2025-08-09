@@ -3,11 +3,14 @@
 Advanced Normalization Fix for Email Generator V2
 Addresses HTML corruption and implements effective sentence breaking
 """
+from __future__ import annotations
 
-import re
 import json
-from bs4 import BeautifulSoup, NavigableString, Tag
+import re
 from typing import List, Tuple
+
+from bs4 import BeautifulSoup, NavigableString, Tag
+
 
 class AdvancedNormalizationProcessor:
     """Advanced processor to fix HTML corruption and normalize content."""
@@ -38,19 +41,19 @@ class AdvancedNormalizationProcessor:
         # Sentence breaking improvements
         self.sentence_splitters = [
             # Legal enumeration patterns
-            (r'(\d+\))\s+([A-Z][^.!?]*[.!?])', r'\1 \2'),
+            (r"(\d+\))\s+([A-Z][^.!?]*[.!?])", r"\1 \2"),
             
             # Long procedural sentences - break after colons
-            (r':\s*([A-Z][^.!?]{30,}[.!?])', r': \1'),
+            (r":\s*([A-Z][^.!?]{30,}[.!?])", r": \1"),
             
             # Break compound sentences with "and" if over 20 words
-            (r'\band\s+([A-Z][^.!?]{25,}[.!?])', r'. \1'),
+            (r"\band\s+([A-Z][^.!?]{25,}[.!?])", r". \1"),
             
             # Break after "The evidence" in long sentences
-            (r'The evidence demonstrates ([^.!?]{25,}[.!?])', r'The evidence demonstrates \1'),
+            (r"The evidence demonstrates ([^.!?]{25,}[.!?])", r"The evidence demonstrates \1"),
             
             # Break long "Application Analysis" sentences
-            (r'Application Analysis:\s*([^.!?]{30,}[.!?])', r'Application Analysis: \1'),
+            (r"Application Analysis:\s*([^.!?]{30,}[.!?])", r"Application Analysis: \1"),
         ]
 
     def _fix_style_attribute(self, style_attr: str) -> str:
@@ -63,8 +66,8 @@ class AdvancedNormalizationProcessor:
         style_content = match.group(1)
         
         # Fix common style corruptions
-        fixed_style = re.sub(r'font-family:\s*[^;]*times[^;]*;', 'font-family: "Times New Roman", serif;', style_content)
-        fixed_style = re.sub(r'[^;]*\d+px[^;]*;', '', fixed_style)  # Remove malformed px declarations
+        fixed_style = re.sub(r"font-family:\s*[^;]*times[^;]*;", 'font-family: "Times New Roman", serif;', style_content)
+        fixed_style = re.sub(r"[^;]*\d+px[^;]*;", "", fixed_style)  # Remove malformed px declarations
         
         return f'style="{fixed_style}"'
 
@@ -76,7 +79,7 @@ class AdvancedNormalizationProcessor:
         content = self._fix_html_corruption(html_content)
         
         # Step 2: Parse with BeautifulSoup for safe manipulation
-        soup = BeautifulSoup(content, 'html.parser')
+        soup = BeautifulSoup(content, "html.parser")
         
         # Step 3: Process text nodes for sentence normalization
         self._normalize_text_nodes(soup)
@@ -110,7 +113,7 @@ class AdvancedNormalizationProcessor:
                 original_text = str(element).strip()
                 
                 # Skip if it's very short or doesn't contain sentences
-                if len(original_text) < 20 or '.' not in original_text:
+                if len(original_text) < 20 or "." not in original_text:
                     continue
                 
                 normalized_text = self._break_long_sentences(original_text)
@@ -125,11 +128,11 @@ class AdvancedNormalizationProcessor:
             text = re.sub(pattern, replacement, text)
         
         # Split into sentences and process each
-        sentences = re.split(r'[.!?]+', text)
+        sentences = re.split(r"[.!?]+", text)
         processed_sentences = []
         
-        for sentence in sentences:
-            sentence = sentence.strip()
+        for original_sentence in sentences:
+            sentence = original_sentence.strip()
             if not sentence:
                 continue
                 
@@ -144,9 +147,9 @@ class AdvancedNormalizationProcessor:
                 processed_sentences.append(sentence)
         
         # Rejoin with proper punctuation
-        result = '. '.join(processed_sentences)
-        if result and not result.endswith('.'):
-            result += '.'
+        result = ". ".join(processed_sentences)
+        if result and not result.endswith("."):
+            result += "."
             
         return result
 
@@ -162,23 +165,22 @@ class AdvancedNormalizationProcessor:
         
         # Find conjunctions that could be break points
         for i, word in enumerate(words):
-            if word.lower() in ['and', 'but', 'however', 'moreover', 'furthermore', 'additionally']:
-                if i > 5 and i < len(words) - 5:  # Not too close to beginning or end
-                    break_points.append(i)
+            if (word.lower() in ["and", "but", "however", "moreover", "furthermore", "additionally"] and
+                i > 5 and i < len(words) - 5):  # Not too close to beginning or end
+                break_points.append(i)
         
         # Find commas that could be break points
         for i, word in enumerate(words):
-            if word.endswith(','):
-                if i > 7 and i < len(words) - 7:
-                    break_points.append(i)
+            if word.endswith(",") and i > 7 and i < len(words) - 7:
+                break_points.append(i)
         
         if break_points:
             # Use the break point closest to the middle
             middle = len(words) // 2
             best_break = min(break_points, key=lambda x: abs(x - middle))
             
-            first_part = ' '.join(words[:best_break]).strip()
-            second_part = ' '.join(words[best_break:]).strip()
+            first_part = " ".join(words[:best_break]).strip()
+            second_part = " ".join(words[best_break:]).strip()
             
             # Recursively process if still too long
             result = []
@@ -192,31 +194,31 @@ class AdvancedNormalizationProcessor:
         
         # If no natural break points, break in half
         mid_point = len(words) // 2
-        first_half = ' '.join(words[:mid_point])
-        second_half = ' '.join(words[mid_point:])
+        first_half = " ".join(words[:mid_point])
+        second_half = " ".join(words[mid_point:])
         
         return [first_half, second_half]
 
     def _final_cleanup(self, content: str) -> str:
         """Final cleanup of the content."""
         # Remove extra whitespace
-        content = re.sub(r'\s+', ' ', content)
+        content = re.sub(r"\s+", " ", content)
         
         # Fix sentence spacing
-        content = re.sub(r'\.\s+([a-z])', r'. \1', content)
-        content = re.sub(r'([.!?])\s*([A-Z])', r'\1 \2', content)
+        content = re.sub(r"\.\s+([a-z])", r". \1", content)
+        content = re.sub(r"([.!?])\s*([A-Z])", r"\1 \2", content)
         
         # Remove empty elements
-        content = re.sub(r'<([^>]+)>\s*</\1>', '', content)
+        content = re.sub(r"<([^>]+)>\s*</\1>", "", content)
         
         return content
 
 def main():
     """Test the advanced normalization processor."""
     # Test with a sample of problematic content
-    test_content = '''
+    test_content = """
     <p>Legal Claims Analysis: 1) civil rights Legal Elements: State actor requirement is satisfied Constitutional deprivation component is established Causation element links actions to harm Damages component supports monetary relief Application Analysis: The legal framework applies directly to your situation based on the available evidence and our analysis shows Video and witness evidence The evidence demonstrates clear liability under established legal standards.</p>
-    '''
+    """
     
     processor = AdvancedNormalizationProcessor()
     result = processor.process_html_content(test_content)

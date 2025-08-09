@@ -2,9 +2,11 @@
 """
 Simple verification that the EmailGenerator can be instantiated without TemplateRuntimeError.
 """
+from __future__ import annotations
 
-import sys
 import os
+import sys
+
 
 # Add the project root to the Python path
 project_root = os.path.dirname(os.path.abspath(__file__))
@@ -28,13 +30,12 @@ def test_email_generator_instantiation():
         generator = EmailGeneratorV2(client=mock_client)
         
         # Verify that the regex_replace filter is registered
-        if 'regex_replace' in generator.jinja_env.filters:
+        if "regex_replace" in generator.jinja_env.filters:
             print("✅ SUCCESS: EmailGenerator instantiated successfully!")
             print("✅ SUCCESS: regex_replace filter is registered with Jinja2 environment!")
             return True
-        else:
-            print("❌ FAIL: regex_replace filter not found in Jinja2 environment")
-            return False
+        print("❌ FAIL: regex_replace filter not found in Jinja2 environment")
+        return False
             
     except Exception as e:
         print(f"❌ FAIL: Error instantiating EmailGenerator: {e}")
@@ -47,25 +48,25 @@ def test_template_rendering():
     print("\n🔧 Testing template rendering with regex_replace filter...")
     
     try:
-        from jinja2 import Environment, DictLoader
+        from jinja2 import DictLoader, Environment
+
         from backend_logic.email_generator import regex_replace_filter
         
         # Simple template that uses regex_replace
-        template_str = '''{{ text | regex_replace("days", "DAYS") }}'''
+        template_str = """{{ text | regex_replace("days", "DAYS") }}"""
         
-        env = Environment(loader=DictLoader({'test': template_str}))
-        env.filters['regex_replace'] = regex_replace_filter
+        env = Environment(loader=DictLoader({"test": template_str}))
+        env.filters["regex_replace"] = regex_replace_filter
         
-        template = env.get_template('test')
+        template = env.get_template("test")
         result = template.render(text="within 14 days")
         
         if result == "within 14 DAYS":
             print("✅ SUCCESS: Template with regex_replace filter rendered correctly!")
             print(f"   Result: '{result}'")
             return True
-        else:
-            print(f"❌ FAIL: Unexpected result: '{result}'")
-            return False
+        print(f"❌ FAIL: Unexpected result: '{result}'")
+        return False
             
     except Exception as e:
         print(f"❌ FAIL: Error rendering template: {e}")

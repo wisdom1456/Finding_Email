@@ -33,6 +33,7 @@ from .prompt_builder import PromptBuilder
 from .timeline_analyzer import TimelineAnalyzer
 from .token_manager import TokenManager
 
+
 if TYPE_CHECKING:
     from ..document_processor import DocumentProcessor
 
@@ -97,7 +98,7 @@ class AIAnalyzer:
                 raise AIAnalysisError(error_msg)
             
             raw_analysis = response["content"]
-            print(f"AI ANALYZER: 🔍 OpenAI response received successfully")
+            print("AI ANALYZER: 🔍 OpenAI response received successfully")
 
             print("AI ANALYZER: 🔍 Preprocessing AI output...")
             # Parse JSON response if needed
@@ -387,6 +388,5 @@ class AIAnalyzer:
         
         if response["success"]:
             return response["content"]
-        else:
-            print(f"AI ANALYZER: ❌ Failed to summarize {media_type} for {file_name}: {response.get('error')}")
-            return f"[A {media_type} from {file_name} is available but could not be summarized.]"
+        print(f"AI ANALYZER: ❌ Failed to summarize {media_type} for {file_name}: {response.get('error')}")
+        return f"[A {media_type} from {file_name} is available but could not be summarized.]"

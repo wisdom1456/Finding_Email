@@ -24,27 +24,29 @@ Benefits:
 - Simplified text processing (removed problematic simplification pipeline)
 - Modular architecture enabling independent service development
 """
+from __future__ import annotations
 
 from .email_generator_v2 import EmailGeneratorV2
 
 # Also export services for advanced usage
 from .services import (
     ConfigurationManager,
-    TextProcessingService,
-    JSONArchitectureService,
-    TemplateRenderingService,
     ContentGenerationService,
+    FallbackGenerationService,
+    JSONArchitectureService,
     OpenAIIntegrationService,
-    FallbackGenerationService
+    TemplateRenderingService,
+    TextProcessingService,
 )
 
+
 __all__ = [
-    'EmailGeneratorV2',
-    'ConfigurationManager',
-    'TextProcessingService',
-    'JSONArchitectureService',
-    'TemplateRenderingService',
-    'ContentGenerationService',
-    'OpenAIIntegrationService',
-    'FallbackGenerationService'
+    "ConfigurationManager",
+    "ContentGenerationService",
+    "EmailGeneratorV2",
+    "FallbackGenerationService",
+    "JSONArchitectureService",
+    "OpenAIIntegrationService",
+    "TemplateRenderingService",
+    "TextProcessingService"
 ]

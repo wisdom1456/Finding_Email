@@ -164,14 +164,14 @@ class LegalAssessment(BaseModel):
     overall_evidence_strength: str
     potential_challenges: str
     recommended_actions: str
-    demand_letter_appropriate: bool
+    demand_letter_appropriate: bool  # Fixed: Changed from str to bool to match AI output
     urgency_assessment: str
 
 
 class DemandLetterEvaluation(BaseModel):
     """Evaluation for demand letter."""
 
-    is_appropriate: bool
+    is_appropriate: bool  # Fixed: Changed from str to bool to match AI output
     reasoning: str
     potential_outcomes: list[str] = Field(default_factory=list)
     relevant_statutes: list[str] = Field(default_factory=list)

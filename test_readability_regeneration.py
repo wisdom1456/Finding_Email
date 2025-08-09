@@ -8,25 +8,28 @@ This script tests the robust multi-pass regeneration system that:
 3. Logs detailed information for each attempt
 4. Raises EmailReadabilityError if still fails after 2 attempts
 """
+from __future__ import annotations
 
+import json
 import os
 import sys
-import json
 from datetime import datetime
 from unittest.mock import Mock, patch
+
 
 # Add the project root to the Python path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 # Import the necessary modules
-from backend_logic.email_generator import EmailGeneratorV2, EmailReadabilityError
-from backend.utils.data_models import (
-    CaseAnalysisResult, 
-    EnhancedIntakeAnalysis, 
-    SectionPlan,
-    GenerationContext
-)
 from openai import OpenAI
+
+from backend.utils.data_models import (
+    CaseAnalysisResult,
+    EnhancedIntakeAnalysis,
+    GenerationContext,
+    SectionPlan,
+)
+from backend_logic.email_generator import EmailGeneratorV2, EmailReadabilityError
 
 
 def create_mock_analysis() -> CaseAnalysisResult:
@@ -101,7 +104,7 @@ def test_readability_validation_pass():
             simple_content, "FACTUAL SUMMARY", section_plan, analysis, context
         )
         
-        print(f"✅ PASS: Simple content passed readability validation")
+        print("✅ PASS: Simple content passed readability validation")
         print(f"   Original: {len(simple_content)} chars")
         print(f"   Result: {len(result)} chars")
         print(f"   Content unchanged: {result == simple_content}")
@@ -146,7 +149,7 @@ def test_readability_validation_fail():
             complex_content, "FACTUAL SUMMARY", section_plan, analysis, context
         )
         
-        print(f"✅ PASS: Complex content was regenerated successfully")
+        print("✅ PASS: Complex content was regenerated successfully")
         print(f"   Original: {len(complex_content)} chars")
         print(f"   Result: {len(result)} chars")
         print(f"   Content was regenerated: {result != complex_content}")
@@ -193,16 +196,16 @@ def test_readability_validation_graceful_degradation():
         
         # Verify that we got a result (not an exception)
         if not result:
-            print(f"❌ FAIL: Expected content with warning but got empty result")
+            print("❌ FAIL: Expected content with warning but got empty result")
             return False
         
         # Verify that the result contains a readability warning notice
         if "⚠️ Readability Notice:" not in result:
-            print(f"❌ FAIL: Expected readability warning notice in result but not found")
+            print("❌ FAIL: Expected readability warning notice in result but not found")
             return False
         
         # Verify that the original content is still included
-        print(f"✅ PASS: Graceful degradation working correctly")
+        print("✅ PASS: Graceful degradation working correctly")
         print(f"   Result contains warning notice: {'⚠️ Readability Notice:' in result}")
         print(f"   Document generation continued: {len(result) > len(complex_content)}")
         print(f"   Original content preserved: {complex_content.strip() in result}")
@@ -224,8 +227,8 @@ def test_simplification_prompt_template():
         generator = EmailGeneratorV2(mock_client)
         
         # Check that the simplification prompt template exists
-        formatting_section = generator.config.get('formatting', {})
-        simplification_template = formatting_section.get('simplification_pass_prompt', '')
+        formatting_section = generator.config.get("formatting", {})
+        simplification_template = formatting_section.get("simplification_pass_prompt", "")
         
         if not simplification_template:
             print("❌ FAIL: simplification_pass_prompt not found in configuration")
@@ -246,9 +249,8 @@ def test_simplification_prompt_template():
                 print(f"   Template contains topic placeholder: {'{{topic}}' in simplification_template}")
                 print(f"   Template contains text placeholder: {'{{text_to_simplify}}' in simplification_template}")
                 return True
-            else:
-                print("❌ FAIL: Template formatting failed - missing topic or text")
-                return False
+            print("❌ FAIL: Template formatting failed - missing topic or text")
+            return False
                 
         except KeyError as e:
             print(f"❌ FAIL: Template formatting failed - missing placeholder: {e}")
@@ -296,9 +298,8 @@ def main():
     if passed == total:
         print("🎉 ALL TESTS PASSED - Robust Multi-Pass Regeneration System is working correctly!")
         return True
-    else:
-        print("⚠️  SOME TESTS FAILED - Please review the implementation")
-        return False
+    print("⚠️  SOME TESTS FAILED - Please review the implementation")
+    return False
 
 
 if __name__ == "__main__":

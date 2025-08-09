@@ -2,9 +2,11 @@
 """
 Test script to verify word count trimming functionality
 """
+from __future__ import annotations
 
-import sys
 import os
+import sys
+
 
 # Add the project root to the Python path
 project_root = os.path.dirname(os.path.abspath(__file__))
@@ -16,17 +18,18 @@ def test_word_count_trimming():
     
     try:
         # Import the EmailGeneratorV2 class
-        from backend_logic.email_generator import EmailGeneratorV2
         from openai import OpenAI
+
+        from backend_logic.email_generator import EmailGeneratorV2
         
         # Create a mock config for testing
         test_config = {
-            'word_counts': {
-                'factual_summary': 200,
-                'legal_analysis': 150,
-                'evidence_review': 150,
-                'case_assessment': 75,
-                'next_steps': 125
+            "word_counts": {
+                "factual_summary": 200,
+                "legal_analysis": 150,
+                "evidence_review": 150,
+                "case_assessment": 75,
+                "next_steps": 125
             }
         }
         
@@ -57,7 +60,7 @@ def test_word_count_trimming():
         # Test trimming to different word limits
         test_cases = [
             ("factual_summary", 200),
-            ("legal_analysis", 150), 
+            ("legal_analysis", 150),
             ("case_assessment", 75),
             ("next_steps", 125)
         ]
@@ -73,15 +76,15 @@ def test_word_count_trimming():
             print(f"   🎯 Target: {target_words}, Max allowed: {max_allowed}")
             
             if final_word_count <= max_allowed:
-                print(f"   ✅ PASS - Word count within limits")
+                print("   ✅ PASS - Word count within limits")
             else:
-                print(f"   ❌ FAIL - Word count exceeds limit")
+                print("   ❌ FAIL - Word count exceeds limit")
                 
             # Check if HTML structure is preserved
             if "<p>" in trimmed_content and "</p>" in trimmed_content:
-                print(f"   ✅ PASS - HTML structure preserved")
+                print("   ✅ PASS - HTML structure preserved")
             else:
-                print(f"   ⚠️  WARN - HTML structure may be damaged")
+                print("   ⚠️  WARN - HTML structure may be damaged")
         
         print("\n🧪 Testing _apply_word_count_trimming integration...")
         
@@ -92,13 +95,13 @@ def test_word_count_trimming():
         trimmed_words = len(generator._strip_html_tags(trimmed).split())
         
         print(f"   📊 Original: {len(generator._strip_html_tags(test_content).split())} words")
-        print(f"   📊 Trimmed: {trimmed_words} words") 
+        print(f"   📊 Trimmed: {trimmed_words} words")
         print(f"   🎯 Target: {test_config['word_counts']['case_assessment']} words")
         
-        if trimmed_words <= test_config['word_counts']['case_assessment']:
-            print(f"   ✅ PASS - Integration test successful")
+        if trimmed_words <= test_config["word_counts"]["case_assessment"]:
+            print("   ✅ PASS - Integration test successful")
         else:
-            print(f"   ❌ FAIL - Integration test failed")
+            print("   ❌ FAIL - Integration test failed")
             
         print("\n✅ Word count trimming functionality test completed!")
         return True

@@ -7,8 +7,10 @@ This test validates:
 2. Defensive coding handles missing attributes gracefully
 3. The original AttributeError is resolved
 """
+from __future__ import annotations
 
 from backend.utils.data_models import AnalyzedDocument
+
 
 def test_analyzed_document_with_new_fields():
     """Test that AnalyzedDocument accepts the new fields."""
@@ -24,14 +26,14 @@ def test_analyzed_document_with_new_fields():
         metadata={"type": "contract"}
     )
     
-    print(f"✅ AnalyzedDocument created successfully")
+    print("✅ AnalyzedDocument created successfully")
     print(f"   - file_name: {doc.file_name}")
     print(f"   - summary: {doc.summary}")
     print(f"   - key_information: {doc.key_information}")
     
     # Test 2: Access key_information field (this was the original error)
     try:
-        key_info_excerpt = doc.key_information[:100] if doc.key_information else 'No key info'
+        key_info_excerpt = doc.key_information[:100] if doc.key_information else "No key info"
         print(f"✅ key_information access successful: {key_info_excerpt}")
     except AttributeError as e:
         print(f"❌ AttributeError still occurs: {e}")
@@ -54,14 +56,14 @@ def test_defensive_coding():
     
     # Test the defensive patterns we implemented
     # Pattern 1: hasattr check (as used in email_generator.py:1903)
-    if hasattr(doc, 'key_information') and doc.key_information:
+    if hasattr(doc, "key_information") and doc.key_information:
         print("✅ hasattr check passed for key_information")
     else:
         print("❌ hasattr check failed for key_information")
         return False
     
     # Pattern 2: getattr with default (as used in utils.py:500)
-    key_info = getattr(doc, 'key_information', 'Not available')
+    key_info = getattr(doc, "key_information", "Not available")
     print(f"✅ getattr check passed: {key_info[:50]}...")
     
     return True
@@ -80,14 +82,14 @@ def test_backward_compatibility():
     # Should not crash even if fields are None/missing
     try:
         # Test getattr pattern
-        key_info = getattr(doc, 'key_information', 'Not available')
-        summary = getattr(doc, 'summary', 'Not available')
+        key_info = getattr(doc, "key_information", "Not available")
+        summary = getattr(doc, "summary", "Not available")
         
         print(f"✅ Backward compatibility: key_information = {key_info}")
         print(f"✅ Backward compatibility: summary = {summary}")
         
         # Test hasattr pattern
-        if hasattr(doc, 'key_information') and doc.key_information:
+        if hasattr(doc, "key_information") and doc.key_information:
             print("✅ hasattr check handled None/missing gracefully")
         else:
             print("✅ hasattr check correctly identified missing field")
@@ -126,9 +128,8 @@ def main():
     if passed == total:
         print("🎉 ALL TESTS PASSED! The AttributeError fix is working correctly.")
         return True
-    else:
-        print("❌ Some tests failed. The fix may need additional work.")
-        return False
+    print("❌ Some tests failed. The fix may need additional work.")
+    return False
 
 if __name__ == "__main__":
     success = main()

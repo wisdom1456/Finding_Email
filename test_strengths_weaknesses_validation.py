@@ -7,17 +7,27 @@ This script tests:
 2. The validation guard that prevents emails with empty weaknesses
 3. The fail-fast behavior when validation fails
 """
+from __future__ import annotations
 
 import sys
 import traceback
-from unittest.mock import Mock, MagicMock
+from unittest.mock import MagicMock, Mock
+
 
 # Import the modules we need to test
 try:
-    from backend_logic.email_generator import EmailGeneratorV2
-    from backend.quality_validator import validate_email_completeness, WeaknessesValidationError
-    from backend.utils.data_models import GeneratedLetter, CaseAnalysisResult, EnhancedIntakeAnalysis
     from openai import OpenAI
+
+    from backend.quality_validator import (
+        WeaknessesValidationError,
+        validate_email_completeness,
+    )
+    from backend.utils.data_models import (
+        CaseAnalysisResult,
+        EnhancedIntakeAnalysis,
+        GeneratedLetter,
+    )
+    from backend_logic.email_generator import EmailGeneratorV2
 except ImportError as e:
     print(f"❌ Import error: {e}")
     print("Make sure you're running this from the project root directory")
@@ -28,7 +38,7 @@ def create_mock_letter_with_empty_weaknesses():
     """Create a mock letter with empty weaknesses field."""
     return GeneratedLetter(
         executive_summary="Sample executive summary",
-        background_summary="Sample background", 
+        background_summary="Sample background",
         analysis_and_position="Sample analysis",
         media_summary="",
         video_analysis_appendix="",
@@ -45,7 +55,7 @@ def create_mock_letter_with_placeholder_weaknesses():
     return GeneratedLetter(
         executive_summary="Sample executive summary",
         background_summary="Sample background",
-        analysis_and_position="Sample analysis", 
+        analysis_and_position="Sample analysis",
         media_summary="",
         video_analysis_appendix="",
         strengths="<p><strong>STRENGTHS</strong></p><p>This case has strong documentation and clear liability.</p>",
@@ -79,7 +89,7 @@ def create_mock_letter_with_valid_content():
         <li>Discovery costs may be substantial given document volume</li>
         </ul>""",
         recommendations="Sample recommendations",
-        next_steps="Sample next steps", 
+        next_steps="Sample next steps",
         closing_paragraph="Sample closing"
     )
 
@@ -156,11 +166,11 @@ def test_enhanced_prompt_structure():
         
         # Mock the configuration loading to avoid file dependencies
         generator.config = {
-            'personas': {'CONTINUING_LEGAL_ADVISOR': 'You are a legal advisor.'},
-            'word_counts': {'strengths_and_weaknesses': 200},
-            'firm_voice': 'Professional legal analysis',
-            'golden_sample': 'Sample legal writing',
-            'content_rules': []
+            "personas": {"CONTINUING_LEGAL_ADVISOR": "You are a legal advisor."},
+            "word_counts": {"strengths_and_weaknesses": 200},
+            "firm_voice": "Professional legal analysis",
+            "golden_sample": "Sample legal writing",
+            "content_rules": []
         }
         
         # Create a minimal case analysis for testing
@@ -188,7 +198,7 @@ def test_enhanced_prompt_structure():
         
         # Verify that the prompt was called with enhanced requirements
         args, kwargs = mock_client.with_options.return_value.chat.completions.create.call_args
-        prompt_content = kwargs['messages'][1]['content']
+        prompt_content = kwargs["messages"][1]["content"]
         
         if "CRITICAL REQUIREMENT: You MUST generate TWO distinct sections" in prompt_content:
             print("✅ PASSED: Enhanced prompt includes critical requirement for two sections")

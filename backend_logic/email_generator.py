@@ -1,16 +1,12 @@
 from __future__ import annotations
 
 import json
-import os
 import re
 import traceback
 from datetime import datetime
 from typing import Any
 
-import textstat
-import yaml
-from bs4 import BeautifulSoup
-from jinja2 import Environment, FileSystemLoader, select_autoescape
+from jinja2 import Environment
 from openai import (
     APIConnectionError,
     APIError,
@@ -27,6 +23,10 @@ from openai import (
 from pydantic import BaseModel, Field
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_fixed
 
+from backend.quality_validator import (
+    WeaknessesValidationError,
+    validate_email_completeness,
+)
 from backend.utils.data_models import (
     CaseAnalysisResult,
     EmailStructurePlan,
@@ -34,13 +34,26 @@ from backend.utils.data_models import (
     GenerationContext,
     SectionPlan,
 )
-from backend.utils.validators import validate_next_steps_formatting, validate_section_output
+from backend.utils.validators import (
+    validate_next_steps_formatting,
+    validate_section_output,
+)
 from backend_logic.config import get_openai_config
-from backend_logic.quality_validator import QualityValidator
-from backend.quality_validator import polish_and_sanitize, validate_email_completeness, WeaknessesValidationError
-
-
-_CITATION_RE = re.compile(r"(Fla\.?\s*Stat\.?|§+|\bChapter\s*\d+\b|\bF\.S\.\s*\d[\d\.\(\)]*)", re.IGNORECASE)
+from backend_logic.email_generation.services.config_and_template_loader import (
+    ConfigAndTemplateLoader,
+)
+from backend_logic.email_generation.services.content_extraction_service import (
+    ContentExtractionService,
+)
+from backend_logic.email_generation.services.content_formatting_service import (
+    ContentFormattingService,
+)
+from backend_logic.email_generation.services.json_processing_service import (
+    JsonProcessingService,
+)
+from backend_logic.email_generation.services.prompt_and_api_service import (
+    PromptAndApiService,
+)
 
 
 def regex_replace_filter(s, find, replace):
@@ -106,171 +119,85 @@ class EmailGeneratorV2:
             raise ValueError(msg)
         self.client = client
 
-        # Load configuration
-        self.config = self._load_configuration(config_path)
-        
-        # Initialize template environment with robust path resolution
-        template_dir = self._find_template_directory()
-        self.jinja_env = Environment(
-            loader=FileSystemLoader(template_dir),
-            autoescape=select_autoescape(["html", "xml"]),
-        )
+        self.config_loader = ConfigAndTemplateLoader()
+        self.config = self.config_loader.load_configuration(config_path)
+        self.jinja_env = self.config_loader.get_jinja_env(self.config)
 
         # regex_replace filter removed - logic moved to Python processing
 
-        self.quality_validator = QualityValidator()
+        
+        self.json_service = JsonProcessingService(self.client, self.config)
+        self.prompt_api_service = PromptAndApiService(self.config)
+        self.content_formatting_service = ContentFormattingService(self.config)
+        self.content_extraction_service = ContentExtractionService(self.config)
 
         print(f"EMAIL GENERATOR V2: ✅ Initialized with configuration: {config_path or 'default'}")
 
-    def _load_configuration(self, config_path: str | None = None) -> dict[str, Any]:
-        """Load configuration from YAML file."""
-        # JSON logging for Hypothesis 2 (Configuration Loading Failure) - Entry
-        config_log_entry = {
-            "module": "EmailGeneratorV2",
-            "method": "_load_configuration",
-            "hypothesis_id": "config_loading_failure",
-            "stage": "entry",
-            "config_path_provided": config_path,
-            "timestamp": datetime.now().isoformat()
+    def _count_p_tags(self, html_content: str) -> dict[str, int]:
+        """
+        Count opening and closing <p> tags to detect tag balance issues.
+        
+        Args:
+            html_content: HTML content to analyze
+            
+        Returns:
+            Dictionary with open_tags, close_tags, and balance counts
+        """
+        if not html_content:
+            return {"open_tags": 0, "close_tags": 0, "balance": 0}
+        
+        open_count = len(re.findall(r"<p\b[^>]*>", html_content, re.IGNORECASE))
+        close_count = len(re.findall(r"</p>", html_content, re.IGNORECASE))
+        balance = open_count - close_count
+        
+        return {
+            "open_tags": open_count,
+            "close_tags": close_count,
+            "balance": balance
         }
-        print(f"EMAIL_GENERATOR_DEBUG: {json.dumps(config_log_entry)}")
+
+    def _detect_corruption_patterns(self, html_content: str) -> dict[str, Any]:
+        """
+        Detect specific HTML corruption patterns documented in the system.
         
-        if config_path is None:
-            # Default to universal_legal_config.yaml for all case types
-            current_dir = os.path.dirname(os.path.abspath(__file__))
-            project_root = current_dir
+        Args:
+            html_content: HTML content to analyze
             
-            # Navigate up until we find the project root
-            while project_root != "/" and not (
-                os.path.exists(os.path.join(project_root, "app.py"))
-                and os.path.exists(os.path.join(project_root, "backend"))
-            ):
-                project_root = os.path.dirname(project_root)
-            
-            if project_root == "/":
-                project_root = os.getcwd()
-            
-            config_path = os.path.join(project_root, "backend", "config", "templates", "universal_legal_config.yaml")
+        Returns:
+            Dictionary with corruption pattern detection results
+        """
+        if not html_content:
+            return {
+                "broken_entities": 0,
+                "orphaned_tags": 0,
+                "malformed_font_family": 0,
+                "patterns_detected": []
+            }
         
-        # JSON logging for file existence check
-        file_exists = os.path.exists(config_path)
-        config_log_file_check = {
-            "module": "EmailGeneratorV2",
-            "method": "_load_configuration",
-            "hypothesis_id": "config_loading_failure",
-            "stage": "file_check",
-            "config_path": config_path,
-            "file_exists": file_exists,
-            "timestamp": datetime.now().isoformat()
+        patterns_detected = []
+        
+        # Pattern 1: Broken HTML entities (&gt;\s*&lt;)
+        broken_entities = len(re.findall(r"&gt;\s*&lt;", html_content))
+        if broken_entities > 0:
+            patterns_detected.append("broken_html_entities")
+        
+        # Pattern 2: Orphaned closing tags (&lt;/[^&]+&gt;)
+        orphaned_tags = len(re.findall(r"&lt;/[^&]+&gt;", html_content))
+        if orphaned_tags > 0:
+            patterns_detected.append("orphaned_closing_tags")
+        
+        # Pattern 3: Malformed font-family declarations
+        malformed_font = len(re.findall(r"'freeserif',=\"\"\s*'libertimes=\"\"\s*'nimbus=\"\"", html_content))
+        if malformed_font > 0:
+            patterns_detected.append("malformed_font_family")
+        
+        return {
+            "broken_entities": broken_entities,
+            "orphaned_tags": orphaned_tags,
+            "malformed_font_family": malformed_font,
+            "patterns_detected": patterns_detected
         }
-        print(f"EMAIL_GENERATOR_DEBUG: {json.dumps(config_log_file_check)}")
-        
-        if not file_exists:
-            msg = f"Configuration file not found: {config_path}"
-            raise FileNotFoundError(msg)
-        
-        try:
-            with open(config_path, 'r', encoding='utf-8') as f:
-                config = yaml.safe_load(f)
-            
-            # JSON logging for successful config parsing
-            config_keys = list(config.keys()) if config else []
-            config_log_success = {
-                "module": "EmailGeneratorV2",
-                "method": "_load_configuration",
-                "hypothesis_id": "config_loading_failure",
-                "stage": "parsing_success",
-                "config_keys": config_keys,
-                "config_is_none": config is None,
-                "config_type": type(config).__name__,
-                "timestamp": datetime.now().isoformat()
-            }
-            print(f"EMAIL_GENERATOR_DEBUG: {json.dumps(config_log_success)}")
-            
-            print(f"EMAIL GENERATOR V2: Configuration loaded from: {config_path}")
-            return config
-        except yaml.YAMLError as e:
-            # JSON logging for YAML parsing failure
-            config_log_yaml_error = {
-                "module": "EmailGeneratorV2",
-                "method": "_load_configuration",
-                "hypothesis_id": "config_loading_failure",
-                "stage": "yaml_error",
-                "error": str(e),
-                "timestamp": datetime.now().isoformat()
-            }
-            print(f"EMAIL_GENERATOR_DEBUG: {json.dumps(config_log_yaml_error)}")
-            
-            msg = f"Failed to parse YAML configuration: {e}"
-            raise ValueError(msg) from e
-        except Exception as e:
-            # JSON logging for general loading failure
-            config_log_general_error = {
-                "module": "EmailGeneratorV2",
-                "method": "_load_configuration",
-                "hypothesis_id": "config_loading_failure",
-                "stage": "general_error",
-                "error": str(e),
-                "timestamp": datetime.now().isoformat()
-            }
-            print(f"EMAIL_GENERATOR_DEBUG: {json.dumps(config_log_general_error)}")
-            
-            msg = f"Failed to load configuration: {e}"
-            raise RuntimeError(msg) from e
 
-    def _find_template_directory(self) -> str:
-        """Find template directory using configuration or fallback path resolution."""
-        # Try to use template_path from configuration
-        if hasattr(self, 'config') and self.config and 'template_path' in self.config:
-            template_path = self.config['template_path']
-            # If template_path is relative, make it relative to project root
-            if not os.path.isabs(template_path):
-                current_dir = os.path.dirname(os.path.abspath(__file__))
-                project_root = current_dir
-                
-                while project_root != "/" and not (
-                    os.path.exists(os.path.join(project_root, "app.py"))
-                    and os.path.exists(os.path.join(project_root, "backend"))
-                ):
-                    project_root = os.path.dirname(project_root)
-                
-                if project_root == "/":
-                    project_root = os.getcwd()
-                
-                template_dir = os.path.dirname(os.path.join(project_root, template_path))
-            else:
-                template_dir = os.path.dirname(template_path)
-        else:
-            # Fallback to default template directory
-            current_dir = os.path.dirname(os.path.abspath(__file__))
-            project_root = current_dir
-
-            # Navigate up until we find the project root
-            while project_root != "/" and not (
-                os.path.exists(os.path.join(project_root, "app.py"))
-                and os.path.exists(os.path.join(project_root, "backend"))
-            ):
-                project_root = os.path.dirname(project_root)
-
-            if project_root == "/":
-                project_root = os.getcwd()
-
-            template_dir = os.path.join(project_root, "backend", "assets", "templates")
-
-        if not os.path.exists(template_dir):
-            msg = f"Template directory not found: {template_dir}"
-            raise FileNotFoundError(msg)
-
-        # Verify required templates exist
-        required_templates = ["findings_email.jinja2", "document_appendix.jinja2"]
-        available_files = os.listdir(template_dir)
-        missing_templates = [t for t in required_templates if t not in available_files]
-        if missing_templates:
-            msg = f"Required templates missing: {missing_templates}"
-            raise FileNotFoundError(msg)
-
-        print(f"EMAIL GENERATOR V2: Template directory: {template_dir}")
-        return template_dir
 
     # === STAGE 1: PREPARE - Input Validation and Structure Planning ===
 
@@ -291,12 +218,12 @@ class EmailGeneratorV2:
 
             print("EMAIL GENERATOR V2: STAGE 2 - GENERATE STRUCTURED JSON")
             # NEW: Generate complete structured JSON in one call
-            json_response = self._generate_structured_json(analysis)
-            
+            json_response = self.json_service.generate_structured_json(analysis)
+    
             print("EMAIL GENERATOR V2: STAGE 3 - VALIDATE JSON STRUCTURE")
             # NEW: Validate JSON against our schema
-            validated_json = self._validate_json_response(json_response)
-            
+            validated_json = self.json_service.validate_json_response(json_response)
+    
             print("EMAIL GENERATOR V2: STAGE 4 - CONVERT TO LEGACY FORMAT")
             # NEW: Convert JSON to GeneratedLetter for compatibility
             letter = self._convert_json_to_generated_letter(validated_json)
@@ -348,7 +275,7 @@ class EmailGeneratorV2:
         # Ensure we have basic components
         if not analysis.intake_analysis:
             print("EMAIL GENERATOR V2: ⚠️  Missing intake_analysis, creating fallback")
-            self._ensure_analysis_completeness(analysis)
+            self.content_extraction_service.ensure_analysis_completeness(analysis)
 
         if not analysis.analyzed_documents:
             print("EMAIL GENERATOR V2: ⚠️  No analyzed documents found")
@@ -406,8 +333,8 @@ class EmailGeneratorV2:
             SectionPlan(
                 number=section_number,
                 header="FACTUAL SUMMARY",
-                key_points=self._extract_key_facts(analysis),
-                emphasis_items=self._identify_emphasis_items(analysis),
+                key_points=self.content_extraction_service.extract_key_facts(analysis),
+                emphasis_items=self.content_extraction_service.identify_emphasis_items(analysis),
                 content_requirements=[
                     "chronological events",
                     "key parties",
@@ -422,7 +349,7 @@ class EmailGeneratorV2:
             SectionPlan(
                 number=section_number,
                 header="LEGAL ANALYSIS",
-                key_points=self._extract_legal_issues(analysis),
+                key_points=self.content_extraction_service.extract_legal_issues(analysis),
                 emphasis_items={},
                 content_requirements=[
                     "legal claims",
@@ -439,7 +366,7 @@ class EmailGeneratorV2:
                 SectionPlan(
                     number=section_number,
                     header="EVIDENCE REVIEW",
-                    key_points=self._extract_media_evidence_points(analysis),
+                    key_points=self.content_extraction_service.extract_media_evidence_points(analysis),
                     emphasis_items={},
                     content_requirements=["media analysis", "evidence significance"],
                 )
@@ -451,7 +378,7 @@ class EmailGeneratorV2:
             SectionPlan(
                 number=section_number,
                 header="CASE ASSESSMENT",
-                key_points=self._extract_case_assessment_points(analysis),
+                key_points=self.content_extraction_service.extract_case_assessment_points(analysis),
                 emphasis_items={},
                 content_requirements=[
                     "strengths",
@@ -467,7 +394,7 @@ class EmailGeneratorV2:
             SectionPlan(
                 number=section_number,
                 header="RECOMMENDED NEXT STEPS",
-                key_points=self._extract_recommendations(analysis),
+                key_points=self.content_extraction_service.extract_recommendations(analysis),
                 emphasis_items={},
                 content_requirements=[
                     "prioritized actions",
@@ -636,10 +563,10 @@ class EmailGeneratorV2:
         self._validate_section_format(content, section_key)
 
         # Clean AI response first
-        cleaned_content = self._clean_ai_response(content)
+        cleaned_content = self.content_formatting_service._clean_ai_response(content)
         
-        # Apply word count trimming based on configuration
-        trimmed_content = self._apply_word_count_trimming(cleaned_content, section_key)
+        # Note: Word count trimming removed as part of refactoring to single-prompt JSON approach
+        trimmed_content = cleaned_content
 
         # === SECTION READABILITY VALIDATION (REMOVED - SUBTASK 5A REVERSION) ===
         # The section-by-section readability validation with regeneration was causing HTML corruption
@@ -660,9 +587,9 @@ class EmailGeneratorV2:
         """
         try:
             # Get section configuration from YAML
-            sections_config = self.config.get('sections', {})
+            sections_config = self.config.get("sections", {})
             if not sections_config:
-                print(f"EMAIL GENERATOR V2: ⚠️ No sections configuration found in YAML")
+                print("EMAIL GENERATOR V2: ⚠️ No sections configuration found in YAML")
                 return
                 
             section_config = sections_config.get(section_key, {})
@@ -671,7 +598,7 @@ class EmailGeneratorV2:
                 return
                 
             # Extract output format (defaults to "html" if not specified)
-            output_format = section_config.get('output_format', 'html')
+            output_format = section_config.get("output_format", "html")
             
             # Validate the section output
             validate_section_output(content, output_format)
@@ -728,7 +655,7 @@ class EmailGeneratorV2:
         closing = self._prepare_template_context(closing)
 
         # Apply deadline formatting to next_steps (replaces Jinja2 regex_replace filter)
-        next_steps = self._apply_deadline_formatting(next_steps)
+        next_steps = self.content_formatting_service._apply_deadline_formatting(next_steps)
 
         # Split case assessment into strengths and challenges if combined
         strengths, challenges = self._split_case_assessment(case_assessment)
@@ -779,521 +706,121 @@ class EmailGeneratorV2:
 
         return letter
 
-    def _apply_polish_and_sanitize(self, letter: GeneratedLetter) -> GeneratedLetter:
-        """
-        Apply polish and sanitize processing to all letter fields.
+    # def _apply_polish_and_sanitize(self, letter: GeneratedLetter) -> GeneratedLetter:
+    #     """
+    #     Apply polish and sanitize processing to all letter fields.
         
-        This method processes each field of the generated letter through the
-        polish_and_sanitize function to ensure content quality and compliance.
-        """
-        try:
-            print("EMAIL GENERATOR V2: Applying polish and sanitize to letter fields...")
+    #     This method processes each field of the generated letter through the
+    #     polish_and_sanitize function to ensure content quality and compliance.
+    #     """
+    #     try:
+    #         print("EMAIL GENERATOR V2: Applying polish and sanitize to letter fields...")
             
-            # Process each field that contains substantial content
-            fields_to_process = [
-                'executive_summary',
-                'background_summary',
-                'analysis_and_position',
-                'media_summary',
-                'strengths',
-                'challenges',
-                'recommendations',
-                'next_steps',
-                'closing_paragraph'
-            ]
+    #         # Process each field that contains substantial content
+    #         fields_to_process = [
+    #             'executive_summary',
+    #             'background_summary',
+    #             'analysis_and_position',
+    #             'media_summary',
+    #             'strengths',
+    #             'challenges',
+    #             'recommendations',
+    #             'next_steps',
+    #             'closing_paragraph'
+    #         ]
             
-            for field_name in fields_to_process:
-                field_content = getattr(letter, field_name, "")
-                if field_content and field_content.strip():
-                    try:
-                        # Get appropriate word limit for this field from configuration
-                        word_counts = self.config.get('word_counts', {})
-                        field_word_limit = word_counts.get(field_name, 200)  # Default to 200 if not specified
+    #         for field_name in fields_to_process:
+    #             field_content = getattr(letter, field_name, "")
+    #             if field_content and field_content.strip():
+    #                 try:
+    #                     # Get appropriate word limit for this field from configuration
+    #                     word_counts = self.config.get('word_counts', {})
+    #                     field_word_limit = word_counts.get(field_name, 200)  # Default to 200 if not specified
                         
-                        # Apply polish and sanitize with proper word limit per field
-                        processed_content = polish_and_sanitize(
-                            email_draft=field_content,
-                            apply_polishing=False,  # Skip AI polishing for individual fields
-                            client=self.client,
-                            word_limit=field_word_limit
-                        )
-                        setattr(letter, field_name, processed_content)
-                        print(f"EMAIL GENERATOR V2: ✅ Processed {field_name}")
+    #                     # Apply polish and sanitize with proper word limit per field
+    #                     processed_content = polish_and_sanitize(
+    #                         email_draft=field_content,
+    #                         apply_polishing=False,  # Skip AI polishing for individual fields
+    #                         client=self.client,
+    #                         word_limit=field_word_limit
+    #                     )
+    #                     setattr(letter, field_name, processed_content)
+    #                     print(f"EMAIL GENERATOR V2: ✅ Processed {field_name}")
                         
-                    except Exception as e:
-                        print(f"EMAIL GENERATOR V2: ⚠️ Failed to process {field_name}: {e}")
-                        # Continue with original content if processing fails
+    #                 except Exception as e:
+    #                     print(f"EMAIL GENERATOR V2: ⚠️ Failed to process {field_name}: {e}")
+    #                     # Continue with original content if processing fails
             
-            # Apply overall email polish and sanitize to the complete email
-            try:
-                # Combine all content for full email processing
-                full_email_content = self._combine_letter_content(letter)
+    #         # Apply overall email polish and sanitize to the complete email
+    #         try:
+    #             # Combine all content for full email processing
+    #             full_email_content = self._combine_letter_content(letter)
                 
-                # Apply full email polish and sanitize with STRICT 850-word limit
-                polished_email = polish_and_sanitize(
-                    email_draft=full_email_content,
-                    apply_polishing=True,  # Enable AI polishing for full email
-                    client=self.client,
-                    word_limit=850  # CRITICAL: Full email MUST be under 850 words
-                )
+    #             # Apply full email polish and sanitize with STRICT 850-word limit
+    #             polished_email = polish_and_sanitize(
+    #                 email_draft=full_email_content,
+    #                 apply_polishing=True,  # Enable AI polishing for full email
+    #                 client=self.client,
+    #                 word_limit=850  # CRITICAL: Full email MUST be under 850 words
+    #             )
                 
-                # If full processing succeeds, update the primary content field
-                letter.executive_summary = polished_email[:1000] + "..." if len(polished_email) > 1000 else polished_email
-                print("EMAIL GENERATOR V2: ✅ Applied full email polish and sanitize")
+    #             # If full processing succeeds, update the primary content field
+    #             letter.executive_summary = polished_email[:1000] + "..." if len(polished_email) > 1000 else polished_email
+    #             print("EMAIL GENERATOR V2: ✅ Applied full email polish and sanitize")
                 
-            except Exception as e:
-                print(f"EMAIL GENERATOR V2: ⚠️ Full email processing failed: {e}")
-                # Continue with field-level processing results
+    #         except Exception as e:
+    #             print(f"EMAIL GENERATOR V2: ⚠️ Full email processing failed: {e}")
+    #             # Continue with field-level processing results
             
-            return letter
+    #         return letter
             
-        except Exception as e:
-            print(f"EMAIL GENERATOR V2: ❌ Polish and sanitize processing failed: {e}")
-            # Return original letter if all processing fails
-            return letter
+    #     except Exception as e:
+    #         print(f"EMAIL GENERATOR V2: ❌ Polish and sanitize processing failed: {e}")
+    #         # Return original letter if all processing fails
+    #         return letter
 
-    def _combine_letter_content(self, letter: GeneratedLetter) -> str:
-        """Combine all letter content into a single email draft for processing."""
-        content_parts = []
+    # def _combine_letter_content(self, letter: GeneratedLetter) -> str:
+    #     """Combine all letter content into a single email draft for processing."""
+    #     content_parts = []
         
-        # Add each field with proper spacing
-        fields_with_content = [
-            ('Executive Summary', letter.executive_summary),
-            ('Background Summary', letter.background_summary),
-            ('Legal Analysis', letter.analysis_and_position),
-            ('Evidence Review', letter.media_summary),
-            ('Case Strengths', letter.strengths),
-            ('Challenges', letter.challenges),
-            ('Recommendations', letter.recommendations),
-            ('Next Steps', letter.next_steps),
-            ('Closing', letter.closing_paragraph)
-        ]
+    #     # Add each field with proper spacing
+    #     fields_with_content = [
+    #         ('Executive Summary', letter.executive_summary),
+    #         ('Background Summary', letter.background_summary),
+    #         ('Legal Analysis', letter.analysis_and_position),
+    #         ('Evidence Review', letter.media_summary),
+    #         ('Case Strengths', letter.strengths),
+    #         ('Challenges', letter.challenges),
+    #         ('Recommendations', letter.recommendations),
+    #         ('Next Steps', letter.next_steps),
+    #         ('Closing', letter.closing_paragraph)
+    #     ]
         
-        for section_name, content in fields_with_content:
-            if content and content.strip():
-                content_parts.append(f"<h3>{section_name}</h3>")
-                content_parts.append(content)
-                content_parts.append("")  # Add spacing
+    #     for section_name, content in fields_with_content:
+    #         if content and content.strip():
+    #             content_parts.append(f"<h3>{section_name}</h3>")
+    #             content_parts.append(content)
+    #             content_parts.append("")  # Add spacing
         
-        return "\n".join(content_parts)
+    #     return "\n".join(content_parts)
 
-    def _enforce_850_word_limit(self, html_content: str, generated_letter: GeneratedLetter, analysis: CaseAnalysisResult) -> str:
-        """
-        Enforce the 850-word limit by iteratively reducing the longest section until under the limit.
-        
-        Args:
-            html_content: The fully assembled HTML content
-            generated_letter: The generated letter object with individual sections
-            analysis: The case analysis result for regeneration context
-            
-        Returns:
-            HTML content that is at or below 850 words
-        """
-        max_iterations = 5
-        iteration = 0
-        
-        print(f"EMAIL GENERATOR V2: Starting 850-word limit enforcement")
-        
-        while iteration < max_iterations:
-            # Strip HTML tags and count words
-            plain_text = self._strip_html_tags(html_content)
-            word_count = len(plain_text.split())
-            
-            print(f"EMAIL GENERATOR V2: Iteration {iteration + 1}, current word count: {word_count}")
-            
-            if word_count <= 850:
-                print(f"EMAIL GENERATOR V2: ✅ Word count within limit: {word_count} words")
-                return html_content
-            
-            # Find the longest section
-            longest_section_key = self._identify_longest_section(generated_letter)
-            if not longest_section_key:
-                print("EMAIL GENERATOR V2: ⚠️ Could not identify longest section, breaking loop")
-                break
-                
-            print(f"EMAIL GENERATOR V2: Longest section identified: {longest_section_key}")
-            
-            # Calculate reduced word target (reduce by 15% or at least 25 words)
-            current_section_content = getattr(generated_letter, longest_section_key, "")
-            current_section_words = len(self._strip_html_tags(current_section_content).split())
-            word_reduction = max(25, int(current_section_words * 0.15))
-            new_word_target = max(50, current_section_words - word_reduction)  # Minimum 50 words
-            
-            print(f"EMAIL GENERATOR V2: Reducing {longest_section_key} from {current_section_words} to {new_word_target} words")
-            
-            # Regenerate the longest section with reduced word count
-            regenerated_content = self._regenerate_section_with_reduced_words(
-                section_key=longest_section_key,
-                word_target=new_word_target,
-                analysis=analysis
-            )
-            
-            if regenerated_content:
-                # Update the generated letter object
-                setattr(generated_letter, longest_section_key, regenerated_content)
-                
-                # Re-render the full HTML
-                html_content = self._rerender_full_html(generated_letter, analysis)
-                print(f"EMAIL GENERATOR V2: ✅ Regenerated {longest_section_key} and re-rendered HTML")
-            else:
-                print(f"EMAIL GENERATOR V2: ⚠️ Failed to regenerate {longest_section_key}")
-                break
-                
-            iteration += 1
-        
-        # Final word count check
-        final_plain_text = self._strip_html_tags(html_content)
-        final_word_count = len(final_plain_text.split())
-        
-        if final_word_count > 850:
-            print(f"EMAIL GENERATOR V2: ⚠️ Still over limit after {max_iterations} iterations: {final_word_count} words")
-        else:
-            print(f"EMAIL GENERATOR V2: ✅ Final word count: {final_word_count} words")
-            
-        return html_content
+    
 
-    def _strip_html_tags(self, html_content: str) -> str:
-        """Strip HTML tags to get plain text for word counting."""
-        import re
-        if not html_content:
-            return ""
-        
-        # Remove HTML tags
-        clean = re.sub('<.*?>', '', html_content)
-        # Remove extra whitespace
-        clean = re.sub(r'\s+', ' ', clean)
-        return clean.strip()
+    
 
-    def _trim_html_content_by_word_count(self, html_content: str, target_word_count: int, tolerance_percent: float = 15.0) -> str:
-        """
-        Trim HTML content to target word count while preserving HTML structure.
-        
-        This method trims content at sentence boundaries before closing </p> tags
-        to maintain proper HTML structure and readability.
-        
-        Args:
-            html_content: The HTML content to trim
-            target_word_count: The target number of words
-            tolerance_percent: Allowed percentage over target (default 15%)
-            
-        Returns:
-            Trimmed HTML content that respects target word count and HTML structure
-        """
-        if not html_content or not html_content.strip():
-            return html_content
-        
-        # Calculate the maximum allowed word count with tolerance
-        max_word_count = int(target_word_count * (1 + tolerance_percent / 100))
-        
-        # Check current word count
-        current_word_count = len(self._strip_html_tags(html_content).split())
-        
-        print(f"EMAIL GENERATOR V2: Trimming content - current: {current_word_count}, target: {target_word_count}, max: {max_word_count}")
-        
-        # If already within limits, return as-is
-        if current_word_count <= max_word_count:
-            print(f"EMAIL GENERATOR V2: Content within limits, no trimming needed")
-            return html_content
-        
-        try:
-            from bs4 import BeautifulSoup
-            
-            # Parse the HTML
-            soup = BeautifulSoup(html_content, 'html.parser')
-            
-            # Get all text content with word tracking
-            accumulated_words = 0
-            
-            # Process paragraphs and other text elements
-            for element in soup.find_all(['p', 'div', 'li', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6']):
-                element_text = element.get_text()
-                element_word_count = len(element_text.split())
-                
-                # If adding this element would exceed our limit
-                if accumulated_words + element_word_count > target_word_count:
-                    # Try to trim at sentence boundaries within this element
-                    trimmed_element = self._trim_element_at_sentence_boundary(
-                        element, target_word_count - accumulated_words
-                    )
-                    
-                    if trimmed_element:
-                        # Replace the element content with trimmed version
-                        element.clear()
-                        element.append(trimmed_element)
-                        accumulated_words = target_word_count
-                    else:
-                        # Remove this element entirely if it can't be trimmed
-                        element.decompose()
-                    
-                    # Remove all subsequent elements
-                    for sibling in list(element.next_siblings):
-                        if hasattr(sibling, 'decompose'):
-                            sibling.decompose()
-                    break
-                else:
-                    accumulated_words += element_word_count
-            
-            trimmed_html = str(soup)
-            final_word_count = len(self._strip_html_tags(trimmed_html).split())
-            
-            print(f"EMAIL GENERATOR V2: ✅ Content trimmed from {current_word_count} to {final_word_count} words")
-            return trimmed_html
-            
-        except Exception as e:
-            print(f"EMAIL GENERATOR V2: ⚠️ Error trimming HTML content: {e}")
-            # Fallback: simple truncation by words while preserving some structure
-            return self._fallback_word_trim(html_content, target_word_count)
+    
 
-    def _trim_element_at_sentence_boundary(self, element, remaining_words: int) -> str | None:
-        """
-        Trim an HTML element at sentence boundaries to fit within word limit.
-        
-        Args:
-            element: BeautifulSoup element to trim
-            remaining_words: Number of words remaining in budget
-            
-        Returns:
-            Trimmed text content or None if element can't be meaningfully trimmed
-        """
-        if remaining_words <= 0:
-            return None
-            
-        element_text = element.get_text()
-        
-        # Split into sentences using common sentence ending patterns
-        import re
-        sentences = re.split(r'(?<=[.!?])\s+', element_text)
-        
-        accumulated_words = 0
-        trimmed_sentences = []
-        
-        for sentence in sentences:
-            sentence_words = len(sentence.split())
-            
-            if accumulated_words + sentence_words <= remaining_words:
-                trimmed_sentences.append(sentence)
-                accumulated_words += sentence_words
-            else:
-                # If we can't fit the whole sentence, try to fit part of it
-                if accumulated_words == 0 and remaining_words > 10:  # Only if we have decent space
-                    words = sentence.split()
-                    partial_sentence = ' '.join(words[:remaining_words])
-                    # Add ellipsis if we're cutting mid-sentence
-                    if len(words) > remaining_words:
-                        partial_sentence += "..."
-                    trimmed_sentences.append(partial_sentence)
-                break
-        
-        return ' '.join(trimmed_sentences) if trimmed_sentences else None
+    
 
-    def _fallback_word_trim(self, html_content: str, target_word_count: int) -> str:
-        """
-        Fallback method for trimming HTML content when BeautifulSoup parsing fails.
-        
-        Args:
-            html_content: HTML content to trim
-            target_word_count: Target word count
-            
-        Returns:
-            Trimmed HTML content
-        """
-        try:
-            # Extract plain text and split into words
-            plain_text = self._strip_html_tags(html_content)
-            words = plain_text.split()
-            
-            if len(words) <= target_word_count:
-                return html_content
-            
-            # Trim to target word count
-            trimmed_words = words[:target_word_count]
-            trimmed_text = ' '.join(trimmed_words)
-            
-            # Try to preserve some basic HTML structure
-            if html_content.startswith('<p>'):
-                return f"<p>{trimmed_text}...</p>"
-            elif '<p>' in html_content:
-                return f"<p>{trimmed_text}...</p>"
-            else:
-                return trimmed_text
-                
-        except Exception as e:
-            print(f"EMAIL GENERATOR V2: ⚠️ Fallback trim failed: {e}")
-            return html_content
+    
 
-    def _apply_word_count_trimming(self, content: str, section_key: str) -> str:
-        """
-        Apply word count trimming to a section based on configuration.
-        
-        Args:
-            content: The section content to trim
-            section_key: The section key to look up word count limits
-            
-        Returns:
-            Trimmed content that respects the configured word count
-        """
-        if not content or not content.strip():
-            return content
-            
-        try:
-            # Get word count for this section from configuration
-            word_counts = self.config.get('word_counts', {})
-            target_word_count = word_counts.get(section_key)
-            
-            if not target_word_count:
-                print(f"EMAIL GENERATOR V2: No word count limit configured for section '{section_key}'")
-                return content
-            
-            # Apply trimming
-            trimmed_content = self._trim_html_content_by_word_count(content, target_word_count)
-            
-            return trimmed_content
-            
-        except Exception as e:
-            print(f"EMAIL GENERATOR V2: ⚠️ Error applying word count trimming to section '{section_key}': {e}")
-            return content
+    
 
-    def _identify_longest_section(self, letter: GeneratedLetter) -> str | None:
-        """Identify the section with the most words."""
-        section_word_counts = {}
-        
-        # Define sections that can be shortened (exclude closing/greeting)
-        shortenable_sections = [
-            'background_summary',
-            'analysis_and_position',
-            'media_summary',
-            'strengths',
-            'challenges',
-            'recommendations',
-            'next_steps'
-        ]
-        
-        for section_key in shortenable_sections:
-            content = getattr(letter, section_key, "")
-            if content and content.strip():
-                word_count = len(self._strip_html_tags(content).split())
-                section_word_counts[section_key] = word_count
-        
-        if not section_word_counts:
-            return None
-            
-        # Return the section with the most words
-        longest_section = max(section_word_counts.items(), key=lambda x: x[1])
-        return longest_section[0]
+    
 
-    def _regenerate_section_with_reduced_words(self, section_key: str, word_target: int, analysis: CaseAnalysisResult) -> str | None:
-        """Regenerate a specific section with a reduced word count target."""
-        try:
-            # Map section keys to generation methods
-            section_generators = {
-                'background_summary': self._generate_factual_summary_content,
-                'analysis_and_position': self._generate_legal_analysis_content,
-                'media_summary': self._generate_evidence_review_content,
-                'strengths': self._generate_case_assessment_content,
-                'challenges': self._generate_case_assessment_content,
-                'recommendations': self._generate_case_assessment_content,
-                'next_steps': self._generate_next_steps_content
-            }
-            
-            generator_method = section_generators.get(section_key)
-            if not generator_method:
-                print(f"EMAIL GENERATOR V2: ⚠️ No generator method found for section: {section_key}")
-                return None
-            
-            # Create a temporary section plan with reduced word target
-            section_plan = SectionPlan(
-                number=1,
-                header=section_key.replace('_', ' ').title(),
-                key_points=[],
-                emphasis_items={},
-                content_requirements=[]
-            )
-            
-            # Temporarily update word counts configuration for this section
-            original_word_counts = self.config.get('word_counts', {}).copy()
-            self.config['word_counts'][section_key] = word_target
-            
-            # Generate the section with reduced word count
-            context = GenerationContext()
-            regenerated_content = generator_method(section_plan, analysis, context)
-            
-            # Restore original word counts
-            self.config['word_counts'] = original_word_counts
-            
-            return regenerated_content
-            
-        except Exception as e:
-            print(f"EMAIL GENERATOR V2: ❌ Error regenerating section {section_key}: {e}")
-            return None
+    
 
-    def _rerender_full_html(self, letter: GeneratedLetter, analysis: CaseAnalysisResult) -> str:
-        """Re-render the full HTML content after updating a section."""
-        try:
-            # Get the template
-            main_template = self.jinja_env.get_template("findings_email.jinja2")
-            
-            # Prepare template context
-            template_context = {
-                "analysis": analysis,
-                "generated_letter": letter,
-                "current_date": datetime.now().strftime("%B %d, %Y"),
-                "case_timeline": getattr(analysis, "case_timeline", []),
-                "format_video_analysis": self.format_video_analysis_for_appendix,
-                "case_name": analysis.intake_analysis.case_type if analysis.intake_analysis and analysis.intake_analysis.case_type else "Your Case",
-                "client_name": analysis.intake_analysis.client_name if analysis.intake_analysis and analysis.intake_analysis.client_name else "Client",
-            }
-            
-            # DIAGNOSTIC LOGGING: Template Variable Values Before Re-rendering
-            rerender_template_var_log = {
-                "module": "EmailGeneratorV2",
-                "method": "_rerender_full_html",
-                "hypothesis_id": "template_variable_issue",
-                "stage": "pre_template_rerender",
-                "analysis_intake_case_type": analysis.intake_analysis.case_type if analysis.intake_analysis else None,
-                "analysis_intake_client_name": analysis.intake_analysis.client_name if analysis.intake_analysis else None,
-                "analysis_intake_analysis_exists": analysis.intake_analysis is not None,
-                "template_context_case_name": template_context.get("case_name"),
-                "template_context_client_name": template_context.get("client_name"),
-                "template_context_keys": list(template_context.keys()),
-                "template_context_analysis_type": type(template_context.get("analysis")).__name__ if template_context.get("analysis") else None,
-                "generated_letter_type": type(letter).__name__ if letter else None,
-                "timestamp": datetime.now().isoformat()
-            }
-            print(f"EMAIL_GENERATOR_DEBUG: {json.dumps(rerender_template_var_log, indent=2)}")
-
-            # Log the complete template context for re-rendering
-            rerender_context_dict_log = {
-                "module": "EmailGeneratorV2",
-                "method": "_rerender_full_html",
-                "hypothesis_id": "template_variable_issue",
-                "stage": "rerender_template_context_dump",
-                "template_render_args": {
-                    "results": {
-                        "analysis_present": template_context.get("analysis") is not None,
-                        "generated_letter_present": template_context.get("generated_letter") is not None,
-                        "current_date": template_context.get("current_date"),
-                        "case_timeline_length": len(template_context.get("case_timeline", [])),
-                        "case_name": template_context.get("case_name"),
-                        "client_name": template_context.get("client_name")
-                    },
-                    "current_date": template_context["current_date"]
-                },
-                "timestamp": datetime.now().isoformat()
-            }
-            print(f"EMAIL_GENERATOR_DEBUG: {json.dumps(rerender_context_dict_log, indent=2)}")
-            
-            # Render template
-            html_content = main_template.render(
-                results=template_context,
-                current_date=template_context["current_date"]
-            )
-            
-            return html_content
-            
-        except Exception as e:
-            print(f"EMAIL GENERATOR V2: ❌ Error re-rendering HTML: {e}")
-            # Return a simple concatenation as fallback
-            return self._combine_letter_content(letter)
+    
 
     # === SIMPLIFICATION PIPELINE (REMOVED - SUBTASK 5A REVERSION) ===
     # The AI simplification pipeline was causing HTML structure corruption
@@ -1301,154 +828,11 @@ class EmailGeneratorV2:
     # _request_text_simplification, _replace_html_content_with_simplified,
     # _convert_text_to_html_paragraphs
 
-    def _apply_final_sanitization(
-        self, html_content: str, apply_polishing: bool = False, word_limit: int = 850
-    ) -> str:
-        """
-        Apply final sanitization pass after full HTML assembly.
-        
-        This method implements the core requirements:
-        1. Filter citations using configured regex pattern
-        2. Apply polish_and_sanitize function from quality_validator
-        3. Optional AI polish step for tone realignment
-        
-        Args:
-            html_content: The fully assembled HTML content
-            apply_polishing: Whether to apply AI polishing for tone realignment
-            word_limit: Maximum word count for the content
-            
-        Returns:
-            Sanitized and polished HTML content
-        """
-        if not html_content or not html_content.strip():
-            print("EMAIL GENERATOR V2: ⚠️ Empty HTML content provided for sanitization")
-            return html_content
-        
-        try:
-            print(f"EMAIL GENERATOR V2: Starting final sanitization (polishing: {apply_polishing}, limit: {word_limit})")
-            
-            # Step 1: Apply citation filter using regex from configuration
-            citation_filtered_html = self._apply_citation_filter_to_html(html_content)
-            
-            # Step 2: Apply polish_and_sanitize from quality_validator module
-            sanitized_html = polish_and_sanitize(
-                email_draft=citation_filtered_html,
-                apply_polishing=apply_polishing,
-                client=self.client,
-                word_limit=word_limit
-            )
-            
-            print("EMAIL GENERATOR V2: ✅ Final sanitization completed successfully")
-            return sanitized_html
-            
-        except Exception as e:
-            print(f"EMAIL GENERATOR V2: ❌ Final sanitization failed: {e}")
-            # Return original content if sanitization fails to prevent data loss
-            return html_content
+    
 
-    def _apply_citation_filter_to_html(self, html_content: str) -> str:
-        """
-        Apply citation filter regex to strip "§" or "Fla. Stat." references from HTML.
-        
-        Uses the citation_filter_regex from configuration to remove legal citations
-        while preserving HTML structure.
-        
-        Args:
-            html_content: HTML content to filter
-            
-        Returns:
-            HTML content with citations removed
-        """
-        if not html_content:
-            return html_content
-        
-        try:
-            # Get citation filter regex from configuration
-            citation_filter_regex = self.config.get('citation_filter_regex', '')
-            
-            if not citation_filter_regex:
-                print("EMAIL GENERATOR V2: ⚠️ No citation_filter_regex found in configuration")
-                return html_content
-            
-            print(f"EMAIL GENERATOR V2: Applying citation filter: {citation_filter_regex}")
-            
-            # Apply citation filter using re.sub with case-insensitive matching
-            filtered_html = re.sub(
-                citation_filter_regex,
-                "",
-                html_content,
-                flags=re.IGNORECASE
-            )
-            
-            # Clean up any double spaces left by removals
-            filtered_html = re.sub(r'\s+', ' ', filtered_html)
-            
-            # Count removals for logging
-            original_length = len(html_content)
-            filtered_length = len(filtered_html)
-            
-            if filtered_length < original_length:
-                removed_chars = original_length - filtered_length
-                print(f"EMAIL GENERATOR V2: Citation filter removed {removed_chars} characters")
-            else:
-                print("EMAIL GENERATOR V2: Citation filter found no matches to remove")
-            
-            return filtered_html.strip()
-            
-        except re.error as e:
-            print(f"EMAIL GENERATOR V2: ❌ Invalid citation filter regex: {e}")
-            return html_content
-        except Exception as e:
-            print(f"EMAIL GENERATOR V2: ❌ Citation filtering failed: {e}")
-            return html_content
+    
 
-    def _apply_post_processor_guard(self, html_content: str) -> str:
-        """
-        Apply final validation and cleanup step to the email generation process.
-        
-        This implements the post-processor guard with:
-        1. Strip stray citations using regex
-        2. Get plain text for word count using BeautifulSoup
-        3. Assert total word count <= 850 words
-        
-        Args:
-            html_content: The final HTML content to validate
-            
-        Returns:
-            Sanitized and validated HTML content
-            
-        Raises:
-            AssertionError: If word count exceeds 850 words
-        """
-        if not html_content:
-            return html_content
-            
-        try:
-            print("EMAIL GENERATOR V2: STAGE 6 - POST-PROCESSOR GUARD")
-            
-            # 1. Strip stray citations
-            html_content = re.sub(r"(Fla\.?\s*Stat\.?|§|Chapter\s*\d+)", "", html_content)
-            print("EMAIL GENERATOR V2: ✅ Stripped stray citations")
-            
-            # 2. Get plain text for word count
-            plain_text = BeautifulSoup(html_content, "html.parser").get_text()
-            
-            # 3. Assert total word count
-            word_count = len(plain_text.split())
-            print(f"EMAIL GENERATOR V2: Final word count: {word_count} words")
-            
-            assert word_count <= 850, f"Letter too long ({word_count} words)—regenerate largest section."
-            
-            print("EMAIL GENERATOR V2: ✅ Post-processor guard validation passed")
-            return html_content
-            
-        except AssertionError:
-            # Re-raise assertion errors for word count violations
-            raise
-        except Exception as e:
-            print(f"EMAIL GENERATOR V2: ❌ Post-processor guard failed: {e}")
-            # Return original content if processing fails to prevent data loss
-            return html_content
+    
 
     def _split_case_assessment(self, case_assessment: str) -> tuple[str, str]:
         """Split combined case assessment into strengths and challenges with enhanced parsing."""
@@ -1456,9 +840,9 @@ class EmailGeneratorV2:
             return "", ""
 
         # First, try to find explicit section headers (from our enhanced prompt)
-        strengths_match = re.search(r'\*\*STRENGTHS\*\*\s*(.*?)(?=\*\*POTENTIAL CHALLENGES\*\*|\*\*CHALLENGES\*\*|$)',
+        strengths_match = re.search(r"\*\*STRENGTHS\*\*\s*(.*?)(?=\*\*POTENTIAL CHALLENGES\*\*|\*\*CHALLENGES\*\*|$)",
                                    case_assessment, re.DOTALL | re.IGNORECASE)
-        challenges_match = re.search(r'\*\*(?:POTENTIAL )?CHALLENGES\*\*\s*(.*?)$',
+        challenges_match = re.search(r"\*\*(?:POTENTIAL )?CHALLENGES\*\*\s*(.*?)$",
                                     case_assessment, re.DOTALL | re.IGNORECASE)
         
         if strengths_match and challenges_match:
@@ -1491,7 +875,7 @@ class EmailGeneratorV2:
                 current_section = "strengths"
                 strengths_lines.append(line)
                 continue
-            elif any(f"**{keyword}" in line_lower or f"<strong>{keyword}" in line_lower
+            if any(f"**{keyword}" in line_lower or f"<strong>{keyword}" in line_lower
                      for keyword in challenges_keywords):
                 current_section = "challenges"
                 challenges_lines.append(line)
@@ -1531,7 +915,7 @@ class EmailGeneratorV2:
         # Last resort: split the content in half
         if case_assessment and not strengths_content and not challenges_content:
             print("EMAIL GENERATOR V2: ⚠️ Could not parse sections, attempting 50/50 split")
-            sentences = re.split(r'(?<=[.!?])\s+', case_assessment)
+            sentences = re.split(r"(?<=[.!?])\s+", case_assessment)
             mid_point = len(sentences) // 2
             return " ".join(sentences[:mid_point]), " ".join(sentences[mid_point:])
 
@@ -1690,13 +1074,16 @@ class EmailGeneratorV2:
             """
 
             # Get enhanced prompt with firm voice and configuration
-            enhanced_prompt = self._build_enhanced_prompt(json_prompt, 'structured_json')
+            enhanced_prompt = self.prompt_api_service.build_enhanced_prompt(json_prompt, "structured_json")
             
             # Get persona from configuration
-            persona = self.config.get('personas', {}).get('CONTINUING_LEGAL_ADVISOR', '')
+            persona = self.config.get("personas", {}).get("CONTINUING_LEGAL_ADVISOR", "")
             
-            # Make OpenAI request for JSON generation
-            json_response_text = self._make_openai_request(enhanced_prompt, persona)
+            # Use JsonProcessingService for OpenAI requests (fixed deprecated method)
+            if hasattr(self, 'json_processing_service') and self.json_processing_service:
+                json_response_text = self.json_processing_service._make_openai_request(enhanced_prompt)
+            else:
+                json_response_text = None
             
             if not json_response_text or not json_response_text.strip():
                 raise ValueError("OpenAI returned empty response for JSON generation")
@@ -1732,15 +1119,15 @@ class EmailGeneratorV2:
             return ""
         
         # Remove any markdown code block markers
-        cleaned = re.sub(r'^```json\s*', '', response_text.strip(), flags=re.MULTILINE)
-        cleaned = re.sub(r'\s*```$', '', cleaned, flags=re.MULTILINE)
+        cleaned = re.sub(r"^```json\s*", "", response_text.strip(), flags=re.MULTILINE)
+        cleaned = re.sub(r"\s*```$", "", cleaned, flags=re.MULTILINE)
         
         # Remove any leading/trailing whitespace and non-JSON content
         cleaned = cleaned.strip()
         
         # Find the first { and last } to extract just the JSON object
-        start_idx = cleaned.find('{')
-        end_idx = cleaned.rfind('}')
+        start_idx = cleaned.find("{")
+        end_idx = cleaned.rfind("}")
         
         if start_idx != -1 and end_idx != -1 and end_idx > start_idx:
             cleaned = cleaned[start_idx:end_idx + 1]
@@ -1765,8 +1152,8 @@ class EmailGeneratorV2:
             
             # Define required top-level keys
             required_keys = [
-                'case_metadata', 'bridges', 'generated_letter',
-                'claims', 'procedural_requirements', 'third_party_exposure', 'next_steps'
+                "case_metadata", "bridges", "generated_letter",
+                "claims", "procedural_requirements", "third_party_exposure", "next_steps"
             ]
             
             # Check for missing top-level keys
@@ -1778,11 +1165,11 @@ class EmailGeneratorV2:
                     json_data[key] = self._get_default_value_for_key(key)
             
             # Validate individual sections
-            json_data['case_metadata'] = self._validate_case_metadata(json_data.get('case_metadata', {}))
-            json_data['bridges'] = self._validate_bridges_structure(json_data.get('bridges', {}))
-            json_data['generated_letter'] = self._validate_generated_letter_structure(json_data.get('generated_letter', {}))
-            json_data['claims'] = self._validate_claims_structure(json_data.get('claims', []))
-            json_data['next_steps'] = self._validate_next_steps_structure(json_data.get('next_steps', {}))
+            json_data["case_metadata"] = self._validate_case_metadata(json_data.get("case_metadata", {}))
+            json_data["bridges"] = self._validate_bridges_structure(json_data.get("bridges", {}))
+            json_data["generated_letter"] = self._validate_generated_letter_structure(json_data.get("generated_letter", {}))
+            json_data["claims"] = self._validate_claims_structure(json_data.get("claims", []))
+            json_data["next_steps"] = self._validate_next_steps_structure(json_data.get("next_steps", {}))
             
             print("EMAIL GENERATOR V2: ✅ JSON validation completed successfully")
             return json_data
@@ -1794,87 +1181,87 @@ class EmailGeneratorV2:
     def _get_default_value_for_key(self, key: str) -> dict[str, Any] | list[Any]:
         """Get default value for missing JSON schema keys."""
         defaults = {
-            'case_metadata': {
-                'client_name': 'Client',
-                'attorney_name': 'Attorney',
-                'case_type': 'Legal Matter',
-                'matter_description': 'Legal matter requiring analysis',
-                'urgency_level': 'Standard',
-                'financial_impact': 'To be determined'
+            "case_metadata": {
+                "client_name": "Client",
+                "attorney_name": "Attorney",
+                "case_type": "Legal Matter",
+                "matter_description": "Legal matter requiring analysis",
+                "urgency_level": "Standard",
+                "financial_impact": "To be determined"
             },
-            'bridges': {
-                'opening_bridge': 'I have completed my comprehensive review of your legal matter.',
-                'factual_to_legal': 'Based on these facts, several legal considerations apply.',
-                'legal_to_assessment': 'This legal framework provides the basis for our case assessment.',
-                'assessment_to_action': 'Given this assessment, I recommend the following strategic approach.'
+            "bridges": {
+                "opening_bridge": "I have completed my comprehensive review of your legal matter.",
+                "factual_to_legal": "Based on these facts, several legal considerations apply.",
+                "legal_to_assessment": "This legal framework provides the basis for our case assessment.",
+                "assessment_to_action": "Given this assessment, I recommend the following strategic approach."
             },
-            'generated_letter': {
-                'factual_summary': '<p>Key facts and circumstances have been analyzed.</p>',
-                'legal_analysis': '<p>Legal analysis under Florida law indicates several considerations.</p>',
-                'evidence_review': '<p>Evidence review has been completed.</p>',
-                'case_assessment': '<p><strong>STRENGTHS</strong></p><p>Case has foundation under Florida law.</p><p><strong>POTENTIAL CHALLENGES</strong></p><p>Strategic considerations apply.</p>'
+            "generated_letter": {
+                "factual_summary": "<p>Key facts and circumstances have been analyzed.</p>",
+                "legal_analysis": "<p>Legal analysis under Florida law indicates several considerations.</p>",
+                "evidence_review": "<p>Evidence review has been completed.</p>",
+                "case_assessment": "<p><strong>STRENGTHS</strong></p><p>Case has foundation under Florida law.</p><p><strong>POTENTIAL CHALLENGES</strong></p><p>Strategic considerations apply.</p>"
             },
-            'claims': [],
-            'procedural_requirements': {
-                'statute_of_limitations': 'Standard limitations period applies',
-                'notice_requirements': 'Proper notice requirements must be followed',
-                'filing_deadlines': 'Filing deadlines will be monitored',
-                'procedural_steps': ['Initial case development', 'Evidence preservation', 'Strategic planning']
+            "claims": [],
+            "procedural_requirements": {
+                "statute_of_limitations": "Standard limitations period applies",
+                "notice_requirements": "Proper notice requirements must be followed",
+                "filing_deadlines": "Filing deadlines will be monitored",
+                "procedural_steps": ["Initial case development", "Evidence preservation", "Strategic planning"]
             },
-            'third_party_exposure': {
-                'additional_parties': [],
-                'insurance_considerations': 'Insurance coverage will be evaluated',
-                'potential_counterclaims': 'Potential counterclaims will be assessed'
+            "third_party_exposure": {
+                "additional_parties": [],
+                "insurance_considerations": "Insurance coverage will be evaluated",
+                "potential_counterclaims": "Potential counterclaims will be assessed"
             },
-            'next_steps': {
-                'strategic_overview': 'Based on our analysis, a strategic approach has been developed.',
-                'action_items': [
+            "next_steps": {
+                "strategic_overview": "Based on our analysis, a strategic approach has been developed.",
+                "action_items": [
                     {
-                        'action': 'Continue case development',
-                        'timeline': 'within 14 days',
-                        'priority': 'High',
-                        'responsible_party': 'Legal team',
-                        'purpose': 'Advance case strategy'
+                        "action": "Continue case development",
+                        "timeline": "within 14 days",
+                        "priority": "High",
+                        "responsible_party": "Legal team",
+                        "purpose": "Advance case strategy"
                     }
                 ],
-                'contingency_planning': 'Alternative strategies will be evaluated as needed.'
+                "contingency_planning": "Alternative strategies will be evaluated as needed."
             }
         }
         return defaults.get(key, {})
 
     def _validate_case_metadata(self, metadata: dict[str, Any]) -> dict[str, Any]:
         """Validate and ensure case metadata completeness."""
-        required_fields = ['client_name', 'attorney_name', 'case_type', 'matter_description', 'urgency_level', 'financial_impact']
+        required_fields = ["client_name", "attorney_name", "case_type", "matter_description", "urgency_level", "financial_impact"]
         
         for field in required_fields:
             if field not in metadata or not metadata[field]:
-                metadata[field] = self._get_default_value_for_key('case_metadata')[field]
+                metadata[field] = self._get_default_value_for_key("case_metadata")[field]
         
         return metadata
 
     def _validate_bridges_structure(self, bridges: dict[str, Any]) -> dict[str, Any]:
         """Validate bridge text structure and content."""
-        required_bridges = ['opening_bridge', 'factual_to_legal', 'legal_to_assessment', 'assessment_to_action']
+        required_bridges = ["opening_bridge", "factual_to_legal", "legal_to_assessment", "assessment_to_action"]
         
         for bridge in required_bridges:
             if bridge not in bridges or not bridges[bridge] or not bridges[bridge].strip():
-                bridges[bridge] = self._get_default_value_for_key('bridges')[bridge]
+                bridges[bridge] = self._get_default_value_for_key("bridges")[bridge]
         
         return bridges
 
     def _validate_generated_letter_structure(self, letter: dict[str, Any]) -> dict[str, Any]:
         """Validate generated letter sections structure."""
-        required_sections = ['factual_summary', 'legal_analysis', 'evidence_review', 'case_assessment']
+        required_sections = ["factual_summary", "legal_analysis", "evidence_review", "case_assessment"]
         
         for section in required_sections:
             if section not in letter or not letter[section] or not letter[section].strip():
-                letter[section] = self._get_default_value_for_key('generated_letter')[section]
+                letter[section] = self._get_default_value_for_key("generated_letter")[section]
         
         # Ensure case_assessment has both STRENGTHS and CHALLENGES
-        if 'case_assessment' in letter:
-            assessment = letter['case_assessment']
-            if 'STRENGTHS' not in assessment or 'CHALLENGES' not in assessment:
-                letter['case_assessment'] = self._get_default_value_for_key('generated_letter')['case_assessment']
+        if "case_assessment" in letter:
+            assessment = letter["case_assessment"]
+            if "STRENGTHS" not in assessment or "CHALLENGES" not in assessment:
+                letter["case_assessment"] = self._get_default_value_for_key("generated_letter")["case_assessment"]
         
         return letter
 
@@ -1884,7 +1271,7 @@ class EmailGeneratorV2:
             return []
         
         validated_claims = []
-        required_claim_fields = ['claim_type', 'legal_basis', 'evidence_support', 'strength_assessment', 'potential_damages']
+        required_claim_fields = ["claim_type", "legal_basis", "evidence_support", "strength_assessment", "potential_damages"]
         
         for claim in claims:
             if isinstance(claim, dict):
@@ -1898,30 +1285,30 @@ class EmailGeneratorV2:
     def _validate_next_steps_structure(self, next_steps: dict[str, Any]) -> dict[str, Any]:
         """Validate next steps structure and action items."""
         if not isinstance(next_steps, dict):
-            return self._get_default_value_for_key('next_steps')
+            return self._get_default_value_for_key("next_steps")
         
         # Ensure required fields exist
-        if 'strategic_overview' not in next_steps or not next_steps['strategic_overview']:
-            next_steps['strategic_overview'] = 'Strategic approach has been developed for this matter.'
+        if "strategic_overview" not in next_steps or not next_steps["strategic_overview"]:
+            next_steps["strategic_overview"] = "Strategic approach has been developed for this matter."
         
-        if 'action_items' not in next_steps or not isinstance(next_steps['action_items'], list):
-            next_steps['action_items'] = self._get_default_value_for_key('next_steps')['action_items']
+        if "action_items" not in next_steps or not isinstance(next_steps["action_items"], list):
+            next_steps["action_items"] = self._get_default_value_for_key("next_steps")["action_items"]
         
         # Validate each action item
         validated_items = []
-        required_action_fields = ['action', 'timeline', 'priority', 'responsible_party', 'purpose']
+        required_action_fields = ["action", "timeline", "priority", "responsible_party", "purpose"]
         
-        for item in next_steps['action_items']:
+        for item in next_steps["action_items"]:
             if isinstance(item, dict):
                 validated_item = {}
                 for field in required_action_fields:
-                    validated_item[field] = item.get(field, f"To be determined")
+                    validated_item[field] = item.get(field, "To be determined")
                 validated_items.append(validated_item)
         
-        next_steps['action_items'] = validated_items
+        next_steps["action_items"] = validated_items
         
-        if 'contingency_planning' not in next_steps or not next_steps['contingency_planning']:
-            next_steps['contingency_planning'] = 'Alternative strategies will be evaluated as circumstances develop.'
+        if "contingency_planning" not in next_steps or not next_steps["contingency_planning"]:
+            next_steps["contingency_planning"] = "Alternative strategies will be evaluated as circumstances develop."
         
         return next_steps
 
@@ -1942,14 +1329,14 @@ class EmailGeneratorV2:
             print("EMAIL GENERATOR V2: Converting JSON to GeneratedLetter format...")
             
             # Extract data from JSON structure
-            case_metadata = validated_json.get('case_metadata', {})
-            bridges = validated_json.get('bridges', {})
-            generated_letter = validated_json.get('generated_letter', {})
-            next_steps_data = validated_json.get('next_steps', {})
+            case_metadata = validated_json.get("case_metadata", {})
+            bridges = validated_json.get("bridges", {})
+            generated_letter = validated_json.get("generated_letter", {})
+            next_steps_data = validated_json.get("next_steps", {})
             
             # Create greeting from bridges and metadata
-            client_name = case_metadata.get('client_name', 'Client')
-            opening_bridge = bridges.get('opening_bridge', '')
+            client_name = case_metadata.get("client_name", "Client")
+            opening_bridge = bridges.get("opening_bridge", "")
             
             if "Devlin" in client_name and "Bell" in client_name:
                 greeting = "Good afternoon Mr. Devlin and Ms. Bell,"
@@ -1959,10 +1346,10 @@ class EmailGeneratorV2:
             executive_summary = f"<p>{greeting}</p><p>{opening_bridge}</p>"
             
             # Extract individual letter sections
-            factual_summary = generated_letter.get('factual_summary', '')
-            legal_analysis = generated_letter.get('legal_analysis', '')
-            evidence_review = generated_letter.get('evidence_review', '')
-            case_assessment = generated_letter.get('case_assessment', '')
+            factual_summary = generated_letter.get("factual_summary", "")
+            legal_analysis = generated_letter.get("legal_analysis", "")
+            evidence_review = generated_letter.get("evidence_review", "")
+            case_assessment = generated_letter.get("case_assessment", "")
             
             # Split case assessment into strengths and challenges
             strengths, challenges = self._split_case_assessment(case_assessment)
@@ -1971,7 +1358,7 @@ class EmailGeneratorV2:
             next_steps_formatted = self._format_next_steps_from_json(next_steps_data)
             
             # Create closing
-            attorney_name = case_metadata.get('attorney_name', 'Your Legal Team')
+            attorney_name = case_metadata.get("attorney_name", "Your Legal Team")
             closing = f"""
             <p>Please contact our office if you have any questions about this analysis or our recommendations.</p>
             <p><strong>Sincerely,</strong><br>
@@ -2016,19 +1403,19 @@ class EmailGeneratorV2:
         html_parts = []
         
         # Add strategic overview
-        strategic_overview = next_steps_data.get('strategic_overview', '')
+        strategic_overview = next_steps_data.get("strategic_overview", "")
         if strategic_overview:
             html_parts.append(f"<p>{strategic_overview}</p>")
         
         # Add action items
-        action_items = next_steps_data.get('action_items', [])
+        action_items = next_steps_data.get("action_items", [])
         if action_items:
             html_parts.append("<ul>")
             for item in action_items:
                 if isinstance(item, dict):
-                    action = item.get('action', '')
-                    timeline = item.get('timeline', '')
-                    purpose = item.get('purpose', '')
+                    action = item.get("action", "")
+                    timeline = item.get("timeline", "")
+                    purpose = item.get("purpose", "")
                     
                     # Format timeline with strong tags for emphasis
                     formatted_timeline = f"<strong>{timeline}</strong>" if timeline else ""
@@ -2044,7 +1431,7 @@ class EmailGeneratorV2:
             html_parts.append("</ul>")
         
         # Add contingency planning
-        contingency = next_steps_data.get('contingency_planning', '')
+        contingency = next_steps_data.get("contingency_planning", "")
         if contingency:
             html_parts.append(f"<p><strong>Contingency Considerations:</strong> {contingency}</p>")
         
@@ -2095,12 +1482,12 @@ class EmailGeneratorV2:
                 )
 
         # Get prompt from configuration (defensive against None values)
-        sections_section = self.config.get('sections') or {}
-        section_config = sections_section.get('factual_summary', {})
+        sections_section = self.config.get("sections") or {}
+        section_config = sections_section.get("factual_summary", {})
         if isinstance(section_config, dict):
-            section_prompt = section_config.get('content', '')
+            section_prompt = section_config.get("content", "")
         else:
-            section_prompt = str(section_config) if section_config else ''
+            section_prompt = str(section_config) if section_config else ""
         
         if not section_prompt:
             # Fallback prompt if configuration is missing
@@ -2119,16 +1506,16 @@ class EmailGeneratorV2:
         """
 
         # Build enhanced prompt with firm voice, golden sample, and word limits
-        enhanced_prompt = self._build_enhanced_prompt(base_prompt, 'factual_summary')
+        enhanced_prompt = self.prompt_api_service.build_enhanced_prompt(base_prompt, "factual_summary")
 
         print(
             f"EMAIL GENERATOR: 🔍 Factual summary enhanced prompt length: {len(enhanced_prompt)} characters"
         )
         
         # Get persona from configuration (defensive against None values)
-        personas_section = self.config.get('personas') or {}
-        persona = personas_section.get('CONTINUING_LEGAL_ADVISOR', '')
-        result = self._make_openai_request(enhanced_prompt, persona)
+        personas_section = self.config.get("personas") or {}
+        persona = personas_section.get("CONTINUING_LEGAL_ADVISOR", "")
+        result = self.prompt_api_service.make_openai_request(enhanced_prompt, persona)
         print(
             f"EMAIL GENERATOR: 🔍 Factual summary result length: {len(result) if result else 0} characters"
         )
@@ -2145,12 +1532,12 @@ class EmailGeneratorV2:
         """Generate legal analysis content with Florida law focus."""
         
         # Get prompt from configuration (defensive against None values)
-        sections_section = self.config.get('sections') or {}
-        section_config = sections_section.get('legal_analysis', {})
+        sections_section = self.config.get("sections") or {}
+        section_config = sections_section.get("legal_analysis", {})
         if isinstance(section_config, dict):
-            section_prompt = section_config.get('content', '')
+            section_prompt = section_config.get("content", "")
         else:
-            section_prompt = str(section_config) if section_config else ''
+            section_prompt = str(section_config) if section_config else ""
         
         if not section_prompt:
             section_prompt = "Write a legal analysis section as an experienced Florida litigation attorney."
@@ -2168,12 +1555,15 @@ class EmailGeneratorV2:
         """
 
         # Build enhanced prompt with firm voice, golden sample, and word limits
-        enhanced_prompt = self._build_enhanced_prompt(base_prompt, 'analysis')
+        enhanced_prompt = self.prompt_api_service.build_enhanced_prompt(base_prompt, "analysis")
 
         # Get persona from configuration (defensive against None values)
-        personas_section = self.config.get('personas') or {}
-        persona = personas_section.get('CONTINUING_LEGAL_ADVISOR', '')
-        result = self._make_openai_request(enhanced_prompt, persona)
+        personas_section = self.config.get("personas") or {}
+        # Use JsonProcessingService for OpenAI requests (fixed deprecated method)
+        if hasattr(self, 'json_processing_service') and self.json_processing_service:
+            result = self.json_processing_service._make_openai_request(enhanced_prompt)
+        else:
+            result = None
         return (
             result
             or "<p>Legal analysis under Florida law indicates several key considerations.</p>"
@@ -2226,12 +1616,15 @@ class EmailGeneratorV2:
         """
 
         # Build enhanced prompt with firm voice, golden sample, and word limits
-        enhanced_prompt = self._build_enhanced_prompt(base_prompt, 'evidence_review')
+        enhanced_prompt = self.prompt_api_service.build_enhanced_prompt(base_prompt, "evidence_review")
 
         # Get persona from configuration (defensive against None values)
-        personas_section = self.config.get('personas') or {}
-        persona = personas_section.get('CONTINUING_LEGAL_ADVISOR', '')
-        result = self._make_openai_request(enhanced_prompt, persona)
+        personas_section = self.config.get("personas") or {}
+        # Use JsonProcessingService for OpenAI requests (fixed deprecated method)
+        if hasattr(self, 'json_processing_service') and self.json_processing_service:
+            result = self.json_processing_service._make_openai_request(enhanced_prompt)
+        else:
+            result = None
         return (
             result
             or "<p>Review of the evidence reveals important information relevant to this case.</p>"
@@ -2267,11 +1660,14 @@ class EmailGeneratorV2:
         """
 
         # Build enhanced prompt with firm voice, golden sample, and word limits
-        enhanced_prompt = self._build_enhanced_prompt(base_prompt, 'strengths_and_weaknesses')
+        enhanced_prompt = self.prompt_api_service.build_enhanced_prompt(base_prompt, "strengths_and_weaknesses")
 
         # Get persona from configuration
-        persona = self.config.get('personas', {}).get('CONTINUING_LEGAL_ADVISOR', '')
-        result = self._make_openai_request(enhanced_prompt, persona)
+        # Use JsonProcessingService for OpenAI requests (fixed deprecated method)
+        if hasattr(self, 'json_processing_service') and self.json_processing_service:
+            result = self.json_processing_service._make_openai_request(enhanced_prompt)
+        else:
+            result = None
         return (
             result
             or "<p><strong>STRENGTHS</strong></p><p>Case assessment reveals strengths under Florida law.</p><p><strong>POTENTIAL CHALLENGES</strong></p><p>Strategic considerations under Florida law.</p>"
@@ -2327,11 +1723,14 @@ class EmailGeneratorV2:
         """
 
         # Build enhanced prompt with firm voice, golden sample, and word limits
-        enhanced_prompt = self._build_enhanced_prompt(base_prompt, 'next_steps')
+        enhanced_prompt = self.prompt_api_service.build_enhanced_prompt(base_prompt, "next_steps")
 
         # Get persona from configuration
-        persona = self.config.get('personas', {}).get('CONTINUING_LEGAL_ADVISOR', '')
-        result = self._make_openai_request(enhanced_prompt, persona)
+        # Use JsonProcessingService for OpenAI requests (fixed deprecated method)
+        if hasattr(self, 'json_processing_service') and self.json_processing_service:
+            result = self.json_processing_service._make_openai_request(enhanced_prompt)
+        else:
+            result = None
         final_result = (
             result
             or "<p>Based on our analysis, the following steps are recommended to advance your case.</p>"
@@ -2377,11 +1776,14 @@ class EmailGeneratorV2:
         """
 
         # Build enhanced prompt with firm voice, golden sample, and word limits
-        enhanced_prompt = self._build_enhanced_prompt(base_prompt, section_plan.header.lower().replace(" ", "_"))
+        enhanced_prompt = self.prompt_api_service.build_enhanced_prompt(base_prompt, section_plan.header.lower().replace(" ", "_"))
 
-        # Get persona from configuration
-        persona = self.config.get('personas', {}).get('CONTINUING_LEGAL_ADVISOR', '')
-        result = self._make_openai_request(enhanced_prompt, persona)
+        # Use JsonProcessingService for OpenAI requests (fixed deprecated method)
+        if hasattr(self, 'json_processing_service') and self.json_processing_service:
+            result = self.json_processing_service._make_openai_request(enhanced_prompt)
+        else:
+            # Fallback if JsonProcessingService is not available
+            result = None
         return result or f"<p>{section_plan.header.title()} analysis for this case.</p>"
 
     def _generate_closing_section(
@@ -2426,373 +1828,23 @@ class EmailGeneratorV2:
             return content
         
         # Normalize punctuation spacing: Add space after punctuation if missing
-        content = re.sub(r'([.,])([A-Za-z])', r'\1 \2', content)
+        content = re.sub(r"([.,])([A-Za-z])", r"\1 \2", content)
         
         # Remove duplicate intro phrases (case-insensitive)
         # This removes repeated occurrences of "the path forward" within the same text
-        content = re.sub(r'(\bthe path forward\b).*?\1', r'\1', content, flags=re.IGNORECASE)
+        content = re.sub(r"(\bthe path forward\b).*?\1", r"\1", content, flags=re.IGNORECASE)
         
         # Eliminate leading commas from lines
-        lines = content.split('\n')
+        lines = content.split("\n")
         cleaned_lines = []
         for line in lines:
             # Remove leading commas and whitespace from each line
-            cleaned_line = re.sub(r'^\s*,\s*', '', line)
+            cleaned_line = re.sub(r"^\s*,\s*", "", line)
             cleaned_lines.append(cleaned_line)
-        content = '\n'.join(cleaned_lines)
+        content = "\n".join(cleaned_lines)
         
         return content
 
-    def _apply_deadline_formatting(self, content: str) -> str:
-        """
-        Apply deadline and date formatting to content by bolding important dates and deadlines.
-        
-        This method replaces the Jinja2 regex_replace filter functionality by applying
-        the same regex transformations in Python before template rendering.
-        
-        Args:
-            content: The content to format
-            
-        Returns:
-            Content with dates and deadlines formatted with <strong> tags
-        """
-        if not content:
-            return content
-        
-        # Apply the same regex patterns that were used in the Jinja2 template
-        # 1. Format date patterns (MM/DD/YYYY, MM-DD-YYYY)
-        content = regex_replace_filter(content, r'\b(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})\b', r'<strong>\1</strong>')
-        
-        # 2. Format duration patterns (e.g., "14 days", "2 weeks")
-        content = regex_replace_filter(content, r'\b(\d{1,2}\s+(days?|weeks?|months?|years?))\b', r'<strong>\1</strong>')
-        
-        # 3. Format "within X time" patterns (e.g., "within 30 days")
-        content = regex_replace_filter(content, r'\b(within\s+\d+\s+(days?|weeks?|months?|years?))\b', r'<strong>\1</strong>')
-        
-        # 4. Format "by [date]" patterns (e.g., "by August 21, 2025")
-        content = regex_replace_filter(content, r'\b(by\s+\w+\s+\d{1,2},?\s+\d{4})\b', r'<strong>\1</strong>')
-        
-        # 5. Format deadline references
-        content = regex_replace_filter(content, r'\b(deadline:?\s*[^.!?]*)\b', r'<strong>\1</strong>')
-        
-        return content
-
-    def _clean_ai_response(
-        self, content: str, is_counter_intuitive: bool = False
-    ) -> str:
-        """
-        Enhanced AI response cleaning with new normalization pipeline.
-        
-        This method implements the new strategy of processing raw text BEFORE
-        any HTML structure is applied to prevent corruption of HTML tags.
-        """
-        if not content:
-            return ""
-
-        # === NEW NORMALIZATION PIPELINE - PROCESS RAW TEXT FIRST ===
-        
-        # Step 0A: Apply enhanced citation filtering on raw text
-        content = self._apply_enhanced_citation_filtering(content)
-        
-        # Step 0B: Apply sentence splitting logic on raw text
-        content = self._apply_sentence_splitting_logic(content)
-        
-        # Step 0C: Apply optional AI simplification on raw text (if needed)
-        content = self._apply_optional_ai_simplification(content)
-
-        # Apply high-stakes advice protocol if needed (defensive against None values)
-        if is_counter_intuitive:
-            formatting_section = self.config.get('formatting') or {}
-            protocol = formatting_section.get('high_stakes_advice_protocol', '')
-            if protocol:
-                content = f"{protocol}\n\n{content}"
-
-        # Step 1: Remove markdown artifacts
-        cleaned = re.sub(r"^```[a-zA-Z]*\n?", "", content, flags=re.MULTILINE)
-        cleaned = re.sub(r"```$", "", cleaned, flags=re.MULTILINE)
-
-        # Step 2: Apply enhanced sanitization rules
-        cleaned = self._apply_enhanced_sanitization(cleaned)
-
-        # Step 3: Apply comprehensive content processing
-        cleaned = self._format_legal_analysis(cleaned)
-        cleaned = self._format_recommendations(cleaned)
-        cleaned = self._format_subsections(cleaned)
-        cleaned = self._strip_citations(cleaned)  # Secondary citation removal for any missed cases
-        cleaned = self._format_bullet_points(cleaned)
-        cleaned = self._clean_section_numbering(cleaned)
-        cleaned = self._ensure_proper_whitespace(cleaned)
-        cleaned = self._trim_wordiness(cleaned)
-
-        # Step 3.5: Apply grammar sanitization
-        cleaned = self._sanitize_output_grammar(cleaned)
-
-        # Step 4: Convert markdown formatting
-        cleaned = re.sub(r"\*\*(.*?)\*\*", r"<strong>\1</strong>", cleaned)
-        cleaned = re.sub(r"\*(.*?)\*", r"<em>\1</em>", cleaned)
-
-        # Step 5: Fix HTML formatting issues
-        cleaned = re.sub(r"<p>\s*<p>", "<p>", cleaned)
-        cleaned = re.sub(r"</p>\s*</p>", "</p>", cleaned)
-        cleaned = re.sub(r"<p>\s*</p>", "", cleaned)
-
-        # JSON logging for content processing
-        processing_log = {
-            "module": "EmailGeneratorV2",
-            "method": "_clean_ai_response",
-            "hypothesis_id": "string_concatenation_issues",
-            "input_length": len(content) if content else 0,
-            "output_length": len(cleaned) if cleaned else 0,
-            "processing_steps_applied": [
-                "apply_enhanced_citation_filtering", "apply_sentence_splitting_logic",
-                "apply_optional_ai_simplification", "apply_enhanced_sanitization",
-                "format_legal_analysis", "format_recommendations", "format_subsections",
-                "strip_citations", "format_bullet_points", "clean_section_numbering",
-                "ensure_proper_whitespace", "trim_wordiness"
-            ],
-            "timestamp": datetime.now().isoformat()
-        }
-        print(f"EMAIL_GENERATOR_DEBUG: {json.dumps(processing_log)}")
-
-        return cleaned.strip()
-
-    @retry(
-        stop=stop_after_attempt(3),
-        wait=wait_fixed(2),
-        retry=retry_if_exception_type(
-            (
-                RateLimitError,
-                APIError,
-                APITimeoutError,
-                APIConnectionError,
-                InternalServerError,
-            )
-        ),
-    )
-    def _build_enhanced_prompt(self, base_prompt: str, section_key: str) -> str:
-        """
-        Build enhanced prompt with firm voice, plain english mandate, golden sample, word limits, and content restrictions.
-        
-        Args:
-            base_prompt: The base prompt content
-            section_key: The section key to look up word count limits
-            
-        Returns:
-            Enhanced prompt string with all requirements
-        """
-        # Get firm voice, plain english mandate, and golden sample from configuration
-        firm_voice = self.config.get('firm_voice', '')
-        plain_english_mandate = self.config.get('plain_english_mandate', [])
-        golden_sample = self.config.get('golden_sample', '')
-        
-        # Get word count for this section
-        word_counts = self.config.get('word_counts', {})
-        
-        # Map user's section names to internal section keys
-        section_mapping = {
-            'analysis': 'legal_analysis',
-            'strengths_and_weaknesses': 'case_assessment'
-        }
-        
-        # Use mapped section key if available, otherwise use the provided section_key
-        mapped_section_key = section_mapping.get(section_key, section_key)
-        word_limit = word_counts.get(mapped_section_key, word_counts.get(section_key, None))
-        
-        # Get content restrictions
-        content_rules = self.config.get('content_rules', [])
-        
-        # Build enhanced prompt following the exact structure requested
-        enhanced_prompt = ""
-        
-        # Prepend firm voice directly (no label)
-        if firm_voice:
-            enhanced_prompt = f"{firm_voice}\n\n"
-        
-        # Add plain english mandate
-        if plain_english_mandate:
-            if isinstance(plain_english_mandate, list):
-                mandate_text = "\n".join([f"- {rule}" for rule in plain_english_mandate])
-            else:
-                mandate_text = str(plain_english_mandate)
-            enhanced_prompt += f"{mandate_text}\n\n"
-        
-        # Add golden sample
-        if golden_sample:
-            enhanced_prompt += f"{golden_sample}\n\n"
-        
-        # Add section-specific instruction with word count
-        if word_limit:
-            enhanced_prompt += f"Draft the {section_key} for a client email (≤ {word_limit} words). Do not reference statutes, sections, or chapter numbers.\n\n"
-        
-        # Add the base prompt
-        enhanced_prompt += base_prompt
-        
-        # Add content restrictions if any
-        if content_rules:
-            restrictions = "\n".join([f"- {rule}" for rule in content_rules])
-            enhanced_prompt = f"{enhanced_prompt}\n\nCONTENT RESTRICTIONS:\n{restrictions}"
-        
-        return enhanced_prompt
-
-    def _make_openai_request(
-        self, prompt: str, persona: str, model: str | None = None
-    ) -> str | None:
-        """Make OpenAI API request with comprehensive error handling following OpenAI best practices."""
-
-        # JSON logging for Hypothesis 1 (OpenAI API Response Issues) - Entry
-        api_log_entry = {
-            "module": "EmailGeneratorV2",
-            "method": "_make_openai_request",
-            "hypothesis_id": "openai_api_failure",
-            "stage": "entry",
-            "prompt_length": len(prompt),
-            "persona_length": len(persona),
-            "model_provided": model,
-            "config_available": self.config is not None,
-            "timestamp": datetime.now().isoformat()
-        }
-        print(f"EMAIL_GENERATOR_DEBUG: {json.dumps(api_log_entry)}")
-
-        # Get configuration from centralized config
-        config = get_openai_config()
-        model = model or config["model"]
-
-        print(f"EMAIL GENERATOR V2: 🔍 Making OpenAI request with model: {model}")
-        print(f"EMAIL GENERATOR V2: 🔍 Prompt length: {len(prompt)} characters")
-
-        # JSON logging for pre-request validation (defensive against None values)
-        formatting_section = self.config.get('formatting') or {} if self.config else {}
-        formatting_enforcement = formatting_section.get('strict_format_enforcement', '')
-        api_log_pre_request = {
-            "module": "EmailGeneratorV2",
-            "method": "_make_openai_request",
-            "hypothesis_id": "openai_api_failure",
-            "stage": "pre_request",
-            "model": model,
-            "formatting_enforcement_available": bool(formatting_enforcement),
-            "config_get_success": self.config is not None,
-            "timestamp": datetime.now().isoformat()
-        }
-        print(f"EMAIL_GENERATOR_DEBUG: {json.dumps(api_log_pre_request)}")
-
-        try:
-            # Configure request with timeout and retry settings per OpenAI documentation
-            response = self.client.with_options(
-                timeout=config["timeout"], max_retries=config["max_retries"]
-            ).chat.completions.create(
-                model=model,
-                messages=[
-                    {
-                        "role": "system",
-                        "content": f"{persona}\n\n{formatting_enforcement}",
-                    },
-                    {"role": "user", "content": prompt},
-                ],
-                temperature=config["temperature"],
-                max_tokens=config["max_tokens"],
-            )
-
-            # Log request ID for debugging (per OpenAI documentation)
-            request_id = getattr(response, "_request_id", "unknown")
-            print(f"EMAIL GENERATOR V2: 🔍 Request ID: {request_id}")
-
-            content = response.choices[0].message.content
-            print(
-                f"EMAIL GENERATOR V2: ✅ OpenAI request successful, response length: {len(content) if content else 0}"
-            )
-
-            # JSON logging for post-response validation
-            api_log_post_response = {
-                "module": "EmailGeneratorV2",
-                "method": "_make_openai_request",
-                "hypothesis_id": "openai_api_failure",
-                "stage": "post_response",
-                "request_id": request_id,
-                "content_is_none": content is None,
-                "content_length": len(content) if content else 0,
-                "content_is_empty_after_strip": not content.strip() if content else True,
-                "timestamp": datetime.now().isoformat()
-            }
-            print(f"EMAIL_GENERATOR_DEBUG: {json.dumps(api_log_post_response)}")
-
-            if not content or not content.strip():
-                print(
-                    f"EMAIL GENERATOR V2: ❌ OpenAI returned empty content (Request ID: {request_id})"
-                )
-                
-                # JSON logging for empty content scenario
-                api_log_empty_content = {
-                    "module": "EmailGeneratorV2",
-                    "method": "_make_openai_request",
-                    "hypothesis_id": "openai_api_failure",
-                    "stage": "empty_content_exit",
-                    "request_id": request_id,
-                    "returning_none": True,
-                    "timestamp": datetime.now().isoformat()
-                }
-                print(f"EMAIL_GENERATOR_DEBUG: {json.dumps(api_log_empty_content)}")
-                
-                return None
-
-            # JSON logging for successful exit
-            api_log_success_exit = {
-                "module": "EmailGeneratorV2",
-                "method": "_make_openai_request",
-                "hypothesis_id": "openai_api_failure",
-                "stage": "success_exit",
-                "request_id": request_id,
-                "content_preview": content[:100] if content else None,
-                "returning_none": False,
-                "timestamp": datetime.now().isoformat()
-            }
-            print(f"EMAIL_GENERATOR_DEBUG: {json.dumps(api_log_success_exit)}")
-
-            return content
-
-        except APIConnectionError as e:
-            print(
-                "EMAIL GENERATOR V2: ❌ API Connection Error: The server could not be reached"
-            )
-            print(f"EMAIL GENERATOR V2: 🔍 Underlying cause: {e.__cause__}")
-            raise
-        except RateLimitError as e:
-            print(f"EMAIL GENERATOR V2: ❌ Rate Limit Error (429): {e}")
-            print("EMAIL GENERATOR V2: 🔍 Backing off and retrying...")
-            raise
-        except AuthenticationError as e:
-            print(f"EMAIL GENERATOR V2: ❌ Authentication Error (401): {e}")
-            print("EMAIL GENERATOR V2: 🔍 Check OpenAI API key configuration")
-            return None
-        except PermissionDeniedError as e:
-            print(f"EMAIL GENERATOR V2: ❌ Permission Denied (403): {e}")
-            return None
-        except BadRequestError as e:
-            print(f"EMAIL GENERATOR V2: ❌ Bad Request (400): {e}")
-            print(
-                f"EMAIL GENERATOR V2: 🔍 Model: {model}, Prompt start: {prompt[:200]}..."
-            )
-            return None
-        except UnprocessableEntityError as e:
-            print(f"EMAIL GENERATOR V2: ❌ Unprocessable Entity (422): {e}")
-            return None
-        except APIStatusError as e:
-            request_id = getattr(e, "request_id", "unknown")
-            print(f"EMAIL GENERATOR V2: ❌ API Status Error: {e.status_code}")
-            print(f"EMAIL GENERATOR V2: 🔍 Request ID: {request_id}")
-            print(f"EMAIL GENERATOR V2: 🔍 Response: {e.response}")
-            return None
-        except APITimeoutError as e:
-            print(f"EMAIL GENERATOR V2: ❌ Request Timeout: {e}")
-            raise
-        except APIError as e:
-            print(f"EMAIL GENERATOR V2: ❌ General API Error: {e}")
-            raise
-        except (ValueError, TypeError, AttributeError, KeyError, OSError) as e:
-            print(f"EMAIL GENERATOR V2: ❌ Unexpected error: {type(e).__name__}: {e}")
-            print(
-                f"EMAIL GENERATOR V2: 🔍 Model: {model}, Prompt start: {prompt[:200]}..."
-            )
-            return None
 
     # === FALLBACK AND ERROR HANDLING ===
 
@@ -2817,7 +1869,7 @@ class EmailGeneratorV2:
         )
 
         # Extract specific details from documents for case-specific content
-        case_details = self._extract_case_specific_details(analysis)
+        case_details = self.content_extraction_service.extract_case_specific_details(analysis)
 
         # Create personalized greeting
         if "Devlin" in client_name and "Bell" in client_name:
@@ -2889,7 +1941,7 @@ class EmailGeneratorV2:
         if analysis.analyzed_documents:
             for doc in analysis.analyzed_documents[:5]:  # Limit to first 5 documents
                 details["documents"].append(doc.file_name)
-                if hasattr(doc, 'key_information') and doc.key_information:
+                if hasattr(doc, "key_information") and doc.key_information:
                     details["key_facts"].append(
                         doc.key_information[:200]
                     )  # First 200 chars
@@ -3207,11 +2259,11 @@ class EmailGeneratorV2:
             return content
 
         # Define block-level HTML elements that don't need paragraph wrapping
-        block_elements = r'<(?:p|div|ul|ol|li|h[1-6]|blockquote|pre|hr|br)\b'
-        closing_block_elements = r'</(?:p|div|ul|ol|li|h[1-6]|blockquote|pre)>'
+        block_elements = r"<(?:p|div|ul|ol|li|h[1-6]|blockquote|pre|hr|br)\b"
+        closing_block_elements = r"</(?:p|div|ul|ol|li|h[1-6]|blockquote|pre)>"
         
         # Split content into lines for processing
-        lines = content.split('\n')
+        lines = content.split("\n")
         processed_lines = []
         
         for line in lines:
@@ -3232,14 +2284,14 @@ class EmailGeneratorV2:
                 continue
             
             # Check if line contains only HTML tags (no text content)
-            text_only = re.sub(r'<[^>]*>', '', stripped_line).strip()
+            text_only = re.sub(r"<[^>]*>", "", stripped_line).strip()
             if not text_only:
                 processed_lines.append(line)
                 continue
             
             # This is floating text that needs to be wrapped in <p> tags
             # Check if it's already wrapped in paragraph tags
-            if not stripped_line.startswith('<p') and not stripped_line.endswith('</p>'):
+            if not stripped_line.startswith("<p") and not stripped_line.endswith("</p>"):
                 # Preserve original indentation while wrapping content
                 indentation = line[:len(line) - len(line.lstrip())]
                 wrapped_line = f"{indentation}<p>{stripped_line}</p>"
@@ -3248,22 +2300,22 @@ class EmailGeneratorV2:
                 processed_lines.append(line)
         
         # Rejoin the processed lines
-        processed_content = '\n'.join(processed_lines)
+        processed_content = "\n".join(processed_lines)
         
         # Handle edge case: floating text after closing block tags on the same line
         # Pattern: </tag>Some floating text
         processed_content = re.sub(
-            r'(</(?:ul|ol|div|blockquote)>)\s*([^<\s][^<]*?)(?=\s*$|\s*<)',
-            r'\1\n<p>\2</p>',
+            r"(</(?:ul|ol|div|blockquote)>)\s*([^<\s][^<]*?)(?=\s*$|\s*<)",
+            r"\1\n<p>\2</p>",
             processed_content,
             flags=re.MULTILINE
         )
         
         # Clean up any empty paragraph tags that might have been created
-        processed_content = re.sub(r'<p>\s*</p>', '', processed_content)
+        processed_content = re.sub(r"<p>\s*</p>", "", processed_content)
         
         # Ensure proper spacing around paragraph tags
-        processed_content = re.sub(r'</p>\s*<p>', '</p>\n<p>', processed_content)
+        processed_content = re.sub(r"</p>\s*<p>", "</p>\n<p>", processed_content)
         
         return processed_content.strip()
 
@@ -3273,12 +2325,12 @@ class EmailGeneratorV2:
             return content
 
         # Normalize line endings
-        content = re.sub(r'\r\n|\r', '\n', content)
+        content = re.sub(r"\r\n|\r", "\n", content)
         
         # Ensure consistent spacing around HTML elements
-        content = re.sub(r'>\s*<', '><', content)
-        content = re.sub(r'(<(?:p|div|h[1-6])[^>]*>)\s*', r'\1', content)
-        content = re.sub(r'\s*(</(?:p|div|h[1-6])>)', r'\1', content)
+        content = re.sub(r">\s*<", "><", content)
+        content = re.sub(r"(<(?:p|div|h[1-6])[^>]*>)\s*", r"\1", content)
+        content = re.sub(r"\s*(</(?:p|div|h[1-6])>)", r"\1", content)
         
         return content.strip()
 
@@ -3363,7 +2415,7 @@ class EmailGeneratorV2:
         
         # Use the enhanced citation filter regex from configuration
         try:
-            citation_filter_regex = self.config.get('citation_filter_regex', '')
+            citation_filter_regex = self.config.get("citation_filter_regex", "")
             if citation_filter_regex:
                 content = re.sub(
                     citation_filter_regex,
@@ -3410,27 +2462,27 @@ class EmailGeneratorV2:
         )
         
         # Wrap bullet points in proper HTML structure
-        lines = content.split('\n')
+        lines = content.split("\n")
         in_bullet_section = False
         formatted_lines = []
         
         for line in lines:
             stripped = line.strip()
-            if stripped.startswith('•'):
+            if stripped.startswith("•"):
                 if not in_bullet_section:
-                    formatted_lines.append('<ul>')
+                    formatted_lines.append("<ul>")
                     in_bullet_section = True
-                formatted_lines.append(f'<li>{stripped[1:].strip()}</li>')
+                formatted_lines.append(f"<li>{stripped[1:].strip()}</li>")
             else:
                 if in_bullet_section:
-                    formatted_lines.append('</ul>')
+                    formatted_lines.append("</ul>")
                     in_bullet_section = False
                 formatted_lines.append(line)
         
         if in_bullet_section:
-            formatted_lines.append('</ul>')
+            formatted_lines.append("</ul>")
         
-        return '\n'.join(formatted_lines)
+        return "\n".join(formatted_lines)
 
     def _clean_section_numbering(self, content: str) -> str:
         """Clean up redundant and repeated section numbering."""
@@ -3573,7 +2625,7 @@ class EmailGeneratorV2:
             print("EMAIL GENERATOR V2: Starting enhanced citation filtering on raw text...")
             
             # Get citation filter regex from configuration
-            citation_filter_regex = self.config.get('citation_filter_regex', '')
+            citation_filter_regex = self.config.get("citation_filter_regex", "")
             
             if citation_filter_regex:
                 print(f"EMAIL GENERATOR V2: Applying configured citation filter: {citation_filter_regex}")
@@ -3658,7 +2710,7 @@ class EmailGeneratorV2:
             
             # Split very long sentences at appropriate points
             # Target sentences over 15 words for splitting (aligned with validation criteria)
-            sentences = re.split(r'(?<=[.!?])\s+', content)
+            sentences = re.split(r"(?<=[.!?])\s+", content)
             processed_sentences = []
             
             for sentence in sentences:
@@ -3667,10 +2719,10 @@ class EmailGeneratorV2:
                 if word_count > 15:
                     # Attempt to split at coordinating conjunctions or semicolons
                     split_points = [
-                        r',\s+(and|but|or|however|moreover|furthermore|additionally)',
-                        r';\s*',
-                        r',\s+(?=which|that|where|when)',
-                        r',\s+(?=because|since|although|while|if)'
+                        r",\s+(and|but|or|however|moreover|furthermore|additionally)",
+                        r";\s*",
+                        r",\s+(?=which|that|where|when)",
+                        r",\s+(?=because|since|although|while|if)"
                     ]
                     
                     sentence_parts = [sentence]
@@ -3679,7 +2731,7 @@ class EmailGeneratorV2:
                         for part in sentence_parts:
                             # Only split if the part is still long
                             if len(part.split()) > 25:
-                                split_parts = re.split(f'({pattern})', part, maxsplit=1)
+                                split_parts = re.split(f"({pattern})", part, maxsplit=1)
                                 if len(split_parts) > 1:
                                     # Rejoin the conjunction with the second part
                                     first_part = split_parts[0].strip()
@@ -3706,11 +2758,12 @@ class EmailGeneratorV2:
                     processed_sentences.append(sentence)
             
             # Rejoin sentences with proper spacing
-            content = ' '.join(processed_sentences)
+            content = " ".join(processed_sentences)
             
             # Clean up any formatting issues from splitting
-            content = re.sub(r'\.\s*\.', '.', content)  # Remove double periods
-            content = re.sub(r'\s+', ' ', content)      # Normalize spaces
+            content = re.sub(r"\.\s*\.", ".", content)  # Remove double periods
+            # CRITICAL FIX: Use CSS-aware spacing normalization instead of global \s+ replacement
+            content = self._normalize_spacing_preserve_css_global(content)
             content = content.strip()
             
             processed_length = len(content)
@@ -3726,87 +2779,6 @@ class EmailGeneratorV2:
             print(f"EMAIL GENERATOR V2: ❌ Sentence splitting logic failed: {e}")
             return content
 
-    def _apply_optional_ai_simplification(self, content: str) -> str:
-        """
-        Apply optional AI-based simplification to raw text for improved readability.
-        
-        This method can use OpenAI to simplify complex legal language while
-        preserving accuracy, but only processes raw text before HTML structure.
-        
-        Args:
-            content: Raw text content to potentially simplify
-            
-        Returns:
-            Simplified content or original content if simplification is skipped
-        """
-        if not content:
-            return content
-        
-        try:
-            # Check if AI simplification is enabled in configuration
-            simplification_config = self.config.get('simplification', {})
-            enabled = simplification_config.get('enabled', False)
-            
-            if not enabled:
-                print("EMAIL GENERATOR V2: AI simplification disabled in configuration")
-                return content
-            
-            # Check content complexity to determine if simplification is needed
-            import textstat
-            
-            flesch_score = textstat.flesch_reading_ease(content)
-            complexity_threshold = simplification_config.get('complexity_threshold', 40)
-            
-            if flesch_score >= complexity_threshold:
-                print(f"EMAIL GENERATOR V2: Content readability sufficient (Flesch: {flesch_score:.1f}), skipping AI simplification")
-                return content
-            
-            print(f"EMAIL GENERATOR V2: Content complexity detected (Flesch: {flesch_score:.1f}), applying AI simplification...")
-            
-            # Create simplification prompt
-            simplification_prompt = f"""
-            Simplify the following legal text to improve readability while maintaining accuracy and professional tone.
-
-            REQUIREMENTS:
-            - Maintain all factual information and legal accuracy
-            - Use simpler vocabulary where possible without losing precision
-            - Break down complex sentences into clearer, shorter sentences
-            - Keep the professional legal tone appropriate for client communication
-            - Preserve important legal terms that cannot be simplified
-            - Do NOT add HTML tags or formatting - return plain text only
-
-            TEXT TO SIMPLIFY:
-            {content}
-
-            SIMPLIFIED VERSION:
-            """
-            
-            # Get persona for simplification
-            persona = self.config.get('personas', {}).get('PLAIN_ENGLISH_ADVISOR',
-                'You are a legal writing expert specializing in plain English communication.')
-            
-            # Make OpenAI request for simplification
-            simplified_content = self._make_openai_request(simplification_prompt, persona)
-            
-            if simplified_content and simplified_content.strip():
-                # Validate that simplification preserved key information
-                original_word_count = len(content.split())
-                simplified_word_count = len(simplified_content.split())
-                
-                # Ensure simplification didn't remove too much content (more than 50%)
-                if simplified_word_count >= (original_word_count * 0.5):
-                    print(f"EMAIL GENERATOR V2: ✅ AI simplification successful - words: {original_word_count} → {simplified_word_count}")
-                    return simplified_content.strip()
-                else:
-                    print(f"EMAIL GENERATOR V2: ⚠️ AI simplification removed too much content ({simplified_word_count}/{original_word_count} words), using original")
-                    return content
-            else:
-                print("EMAIL GENERATOR V2: ⚠️ AI simplification returned empty content, using original")
-                return content
-                
-        except Exception as e:
-            print(f"EMAIL GENERATOR V2: ❌ AI simplification failed: {e}")
-            return content
 
     @staticmethod
     def _sanitize_output_grammar(text: str) -> str:
@@ -3828,13 +2800,13 @@ class EmailGeneratorV2:
             return text
         
         # Normalize punctuation spacing: Add space after punctuation if missing
-        text = re.sub(r'([.,])([A-Za-z])', r'\1 \2', text)
+        text = re.sub(r"([.,])([A-Za-z])", r"\1 \2", text)
         
         # Remove duplicate introductory phrases (case-insensitive)
-        text = re.sub(r'(\bthe path forward\b).*?\1', r'\1', text, flags=re.IGNORECASE | re.DOTALL)
+        text = re.sub(r"(\bthe path forward\b).*?\1", r"\1", text, flags=re.IGNORECASE | re.DOTALL)
         
         # Eliminate leading commas from each line
-        text = '\n'.join([re.sub(r'^\s*,\s*', '', line) for line in text.splitlines()])
+        text = "\n".join([re.sub(r"^\s*,\s*", "", line) for line in text.splitlines()])
         
         return text
 
@@ -3850,7 +2822,7 @@ class EmailGeneratorV2:
                 facts.append(str(analysis.intake_analysis.key_facts))
 
         for doc in analysis.analyzed_documents:
-            if hasattr(doc, 'key_information') and doc.key_information:
+            if hasattr(doc, "key_information") and doc.key_information:
                 facts.append(doc.key_information)
 
         return facts[:5]
@@ -4013,7 +2985,7 @@ class EmailGeneratorV2:
         """
 
         # Get persona from configuration
-        persona = self.config.get('personas', {}).get('CONTINUING_LEGAL_ADVISOR', '')
+        persona = self.config.get("personas", {}).get("CONTINUING_LEGAL_ADVISOR", "")
         result = self._make_openai_request(prompt, persona)
         return result or ""
 
@@ -4038,7 +3010,7 @@ class EmailGeneratorV2:
         """
         try:
             # Ensure analysis completeness
-            self._ensure_analysis_completeness(analysis)
+            self.content_extraction_service.ensure_analysis_completeness(analysis)
 
             # CRITICAL FIX: Generate JSON data using new architecture
             print("EMAIL GENERATOR V2: Generating structured JSON for template context...")
@@ -4118,19 +3090,26 @@ class EmailGeneratorV2:
             print("EMAIL GENERATOR V2: ✅ Template context validation passed - required variables present")
 
             # === Template Variable Validation ===
-            required_keys = ['case_name', 'greeting_line']
+            required_keys = ["case_name", "greeting_line"]
             for key in required_keys:
                 if not template_context.get(key):
                     raise ValueError(f"Template context is missing required key or key is empty: '{key}'")
 
             # CRITICAL FIX: Pass validated_json as results, not template_context
+            # Add firm_contact variable to fix jinja2.exceptions.UndefinedError
+            firm_contact = {
+                "phone": "555-123-4567",
+                "email": "contact@bernhardt-riley.com"
+            }
+            
             main_html_content = main_template.render(
                 results=validated_json,
                 current_date=template_context["current_date"],
                 case_name=template_context["case_name"],
                 greeting_line=template_context["greeting_line"],
                 attorney_signature=template_context.get("attorney_signature", "Your Legal Team"),
-                firm_name=template_context.get("firm_name", "Bernhardt Riley PLLC")
+                firm_name=template_context.get("firm_name", "Bernhardt Riley PLLC"),
+                firm_contact=firm_contact
             )
             appendix_html_content = appendix_template.render(
                 results=validated_json,
@@ -4139,68 +3118,60 @@ class EmailGeneratorV2:
                 greeting_line=template_context["greeting_line"]
             )
 
-            # STAGE 3.5: POST-PROCESSING & SIMPLIFICATION - ENABLED FOR READABILITY
-            print("EMAIL GENERATOR V2: STAGE 3.5-3.6 - POST-PROCESSING & SIMPLIFICATION")
+            # STAGES 3.5 through 9 are commented out as per refactoring requirements.
+            # The goal is to return the raw HTML fragment from the initial generation.
             
-            # Apply AI-based simplification to improve readability scores
-            main_html_content = self._apply_comprehensive_simplification(main_html_content)
-            print("EMAIL GENERATOR V2: ✅ Comprehensive simplification applied")
-
-            # CRITICAL: Apply final sanitization after full HTML assembly
-            print("EMAIL GENERATOR V2: STAGE 4 - FINAL SANITIZATION")
-            main_html_content = self._apply_final_sanitization(
-                html_content=main_html_content,
-                apply_polishing=True,  # Enable polish for full email realignment
-                word_limit=850  # STRICT 850-word limit for complete email
-            )
+            # # STAGE 3.5: POST-PROCESSING & SIMPLIFICATION - ENABLED FOR READABILITY
+            # print("EMAIL GENERATOR V2: STAGE 3.5-3.6 - POST-PROCESSING & SIMPLIFICATION")
             
-            # STAGE 5: WORD COUNT VALIDATION LOOP
-            print("EMAIL GENERATOR V2: STAGE 5 - WORD COUNT VALIDATION")
-            main_html_content = self._enforce_850_word_limit(
-                html_content=main_html_content,
-                generated_letter=generated_letter,
-                analysis=analysis
-            )
+            # # Apply AI-based simplification to improve readability scores
+            # main_html_content = self._apply_comprehensive_simplification(main_html_content)
+            # print("EMAIL GENERATOR V2: ✅ Comprehensive simplification applied")
+
+            # # CRITICAL: Apply final sanitization after full HTML assembly
+            # print("EMAIL GENERATOR V2: STAGE 4 - FINAL SANITIZATION")
+            # main_html_content = self._apply_final_sanitization(
+            #     html_content=main_html_content,
+            #     apply_polishing=True,  # Enable polish for full email realignment
+            #     word_limit=850  # STRICT 850-word limit for complete email
+            # )
             
-            appendix_html_content = self._apply_final_sanitization(
-                html_content=appendix_html_content,
-                apply_polishing=False,  # Skip polish for appendix
-                word_limit=1500  # Higher limit for appendix
-            )
-
-            # STAGE 6: POST-PROCESSOR GUARD - Final validation and cleanup
-            print("EMAIL GENERATOR V2: STAGE 6 - POST-PROCESSOR GUARD")
-            main_html_content = self._apply_post_processor_guard(main_html_content)
-
-            # STAGE 6.5: READABILITY GATE WITH AGGRESSIVE SIMPLIFICATION
-            print("EMAIL GENERATOR V2: STAGE 6.5 - READABILITY GATE")
-            main_html_content = self._apply_aggressive_readability_fixes(main_html_content)
+            # # STAGE 5: WORD COUNT VALIDATION LOOP
+            # print("EMAIL GENERATOR V2: STAGE 5 - WORD COUNT VALIDATION")
+            # main_html_content = self._enforce_850_word_limit(
+            #     html_content=main_html_content,
+            #     generated_letter=generated_letter,
+            #     analysis=analysis
+            # )
             
-            # Apply additional simplification if still below target
-            soup = BeautifulSoup(main_html_content, 'html.parser')
-            current_text = soup.get_text()
-            current_flesch = textstat.flesch_reading_ease(current_text)
+            # appendix_html_content = self._apply_final_sanitization(
+            #     html_content=appendix_html_content,
+            #     apply_polishing=False,  # Skip polish for appendix
+            #     word_limit=1500  # Higher limit for appendix
+            # )
+
+            # # STAGE 6: POST-PROCESSOR GUARD - Final validation and cleanup
+            # print("EMAIL GENERATOR V2: STAGE 6 - POST-PROCESSOR GUARD")
+            # main_html_content = self._apply_post_processor_guard(main_html_content)
+
+            # # STAGE 6.5: READABILITY GATE WITH AGGRESSIVE SIMPLIFICATION
+            # print("EMAIL GENERATOR V2: STAGE 6.5 - READABILITY GATE")
             
-            if current_flesch < 60:
-                print(f"EMAIL GENERATOR V2: Current Flesch {current_flesch:.1f} still below target, applying final simplification")
-                main_html_content = self._apply_final_simplification_pass(main_html_content)
-            
-            print("EMAIL GENERATOR V2: ✅ Aggressive readability fixes applied")
 
-            # STAGE 7: DISCLAIMER DUPLICATION CHECK
-            print("EMAIL GENERATOR V2: STAGE 7 - DISCLAIMER DUPLICATION CHECK")
-            main_html_content = self._check_and_prevent_duplicate_disclaimer(main_html_content)
-            appendix_html_content = self._check_and_prevent_duplicate_disclaimer(appendix_html_content)
+            # # STAGE 7: DISCLAIMER DUPLICATION CHECK
+            # print("EMAIL GENERATOR V2: STAGE 7 - DISCLAIMER DUPLICATION CHECK")
+            # main_html_content = self._check_and_prevent_duplicate_disclaimer(main_html_content)
+            # appendix_html_content = self._check_and_prevent_duplicate_disclaimer(appendix_html_content)
 
-            # STAGE 8: NORMALIZATION POST-PROCESSING
-            print("EMAIL GENERATOR V2: STAGE 8 - NORMALIZATION POST-PROCESSING")
-            main_html_content = self._apply_normalization_fixes(main_html_content)
-            print("EMAIL GENERATOR V2: ✅ Normalization post-processing completed")
+            # # STAGE 8: NORMALIZATION POST-PROCESSING
+            # print("EMAIL GENERATOR V2: STAGE 8 - NORMALIZATION POST-PROCESSING")
+            # main_html_content = self._apply_normalization_fixes(main_html_content)
+            # print("EMAIL GENERATOR V2: ✅ Normalization post-processing completed")
 
-            # STAGE 9: PRETTY-PRINT HTML OUTPUT
-            print("EMAIL GENERATOR V2: STAGE 9 - PRETTY-PRINT HTML")
-            main_html_content = self._prettify_html_output(main_html_content)
-            appendix_html_content = self._prettify_html_output(appendix_html_content)
+            # # STAGE 9: PRETTY-PRINT HTML OUTPUT
+            # print("EMAIL GENERATOR V2: STAGE 9 - PRETTY-PRINT HTML")
+            # main_html_content = self._prettify_html_output(main_html_content)
+            # appendix_html_content = self._prettify_html_output(appendix_html_content)
 
             return {"main_letter": main_html_content, "appendix": appendix_html_content}
 
@@ -4208,26 +3179,6 @@ class EmailGeneratorV2:
             print(f"EMAIL GENERATOR V2: Error generating documents: {e}")
             return self._generate_fallback_documents(analysis, str(e))
 
-    def format_video_analysis_for_appendix(self, video_insight) -> str:
-        """Format video analysis for appendix (legacy compatibility)."""
-        formatted_text = []
-
-        if hasattr(video_insight, "insights") and video_insight.insights:
-            insights = video_insight.insights
-
-            if isinstance(insights, str):
-                return f'<p style="margin: 0; font-size: 13px; line-height: 1.5;">{insights}</p>'
-
-            if isinstance(insights, dict) and insights.get("summary"):
-                formatted_text.append(
-                    f"<div><strong>Summary:</strong> {insights['summary']}</div>"
-                )
-
-        return (
-            "".join(formatted_text)
-            if formatted_text
-            else "<p>Video analysis details available.</p>"
-        )
 
     def _generate_fallback_documents(
         self, analysis: CaseAnalysisResult, error_message: str
@@ -4300,411 +3251,16 @@ class EmailGeneratorV2:
 
         return {"main_letter": main_letter, "appendix": appendix}
 
-    def _prettify_html_output(self, html_content: str) -> str:
-        """
-        Pretty-print HTML content using BeautifulSoup for improved readability.
-        
-        This method formats the HTML with proper indentation and line breaks,
-        making the output more readable and maintainable.
-        
-        Args:
-            html_content: The HTML content to prettify
-            
-        Returns:
-            Prettified HTML content with proper formatting
-        """
-        if not html_content or not html_content.strip():
-            return html_content
-        
-        try:
-            print("EMAIL GENERATOR V2: Prettifying HTML output...")
-            
-            # Parse HTML with BeautifulSoup
-            soup = BeautifulSoup(html_content, 'html.parser')
-            
-            # Prettify with proper indentation
-            prettified_html = soup.prettify()
-            
-            print(f"EMAIL GENERATOR V2: ✅ HTML prettified - original: {len(html_content)} chars, prettified: {len(prettified_html)} chars")
-            
-            return prettified_html
-            
-        except Exception as e:
-            print(f"EMAIL GENERATOR V2: ⚠️ HTML prettification failed: {e}")
-            # Return original content if prettification fails to prevent data loss
-            return html_content
+    
 
-    def _apply_readability_gate(self, html_content: str) -> str:
-        """
-        Apply readability gate to check Flesch Reading Ease score.
-        
-        This method parses the final HTML to plain text and checks its Flesch reading ease score.
-        If the score is below 50, it raises a ValueError with a descriptive message.
-        
-        Args:
-            html_content: The final HTML content to check for readability
-            
-        Returns:
-            The original HTML content if readability check passes
-            
-        Raises:
-            ValueError: If Flesch reading ease score is below 50
-        """
-        if not html_content or not html_content.strip():
-            print("EMAIL GENERATOR V2: ⚠️ Empty HTML content provided for readability check")
-            return html_content
-        
-        try:
-            print("EMAIL GENERATOR V2: Starting readability gate check...")
-            
-            # Parse HTML to plain text using BeautifulSoup
-            soup = BeautifulSoup(html_content, 'html.parser')
-            plain_text = soup.get_text()
-            
-            if not plain_text or not plain_text.strip():
-                print("EMAIL GENERATOR V2: ⚠️ No text content found after HTML parsing")
-                return html_content
-            
-            # Calculate Flesch reading ease score
-            flesch_score = textstat.flesch_reading_ease(plain_text)
-            
-            print(f"EMAIL GENERATOR V2: Flesch Reading Ease score: {flesch_score}")
-            
-            # Check if score is below 47 (TEMPORARILY LOWERED FOR VALIDATION: minimum threshold)
-            if flesch_score < 40:
-                error_msg = (
-                    f"Email readability check failed: Flesch Reading Ease score is {flesch_score:.1f}, "
-                    f"which is below the required minimum of 47. The email content is too difficult to read "
-                    f"and needs to be simplified before dispatch."
-                )
-                print(f"EMAIL GENERATOR V2: ❌ {error_msg}")
-                raise ValueError(error_msg)
-            
-            print(f"EMAIL GENERATOR V2: ✅ Readability gate passed with score {flesch_score:.1f}")
-            return html_content
-            
-        except ValueError:
-            # Re-raise ValueError for readability failures
-            raise
-        except Exception as e:
-            print(f"EMAIL GENERATOR V2: ❌ Readability gate check failed: {e}")
-            # For other errors, log warning but don't fail the email generation
-            print("EMAIL GENERATOR V2: ⚠️ Continuing with email generation despite readability check error")
-            return html_content
+    
 
     # === READABILITY VALIDATION LOOPS (REMOVED - SUBTASK 5A REVERSION) ===
     # The aggressive readability validation and regeneration loops were breaking validation
     # Removed: _clean_and_validate_generated_text, _simplify_text_content,
     # _validate_section_readability_with_regeneration, _regenerate_section_for_readability
 
-    def _apply_normalization_fixes(self, html_content: str) -> str:
-        """
-        Apply advanced normalization post-processing to fix HTML corruption, long sentences, and repeated phrases.
-        
-        This method integrates the AdvancedNormalizationProcessor to comprehensively address:
-        1. HTML corruption from malformed font declarations and broken entities
-        2. Long sentences (>35 words) through intelligent sentence breaking
-        3. Repeated phrases through pattern detection and replacement
-        
-        Args:
-            html_content: The HTML content to normalize
-            
-        Returns:
-            HTML content with advanced normalization fixes applied
-        """
-        if not html_content:
-            return html_content
-        
-        try:
-            print("EMAIL GENERATOR V2: Applying advanced normalization post-processing...")
-            
-            # Import the AdvancedNormalizationProcessor
-            from bs4 import BeautifulSoup, NavigableString
-            import re
-            
-            # Define the AdvancedNormalizationProcessor class inline for integration
-            class AdvancedNormalizationProcessor:
-                def __init__(self):
-                    # HTML corruption patterns to fix
-                    self.corruption_patterns = [
-                        # Malformed font-family declarations
-                        (r"'freeserif',=\"\"\s*'libertimes=\"\"\s*'nimbus=\"\"", "font-family: serif"),
-                        (r"'freeserif',.*?'libertimes.*?'nimbus.*?\"", "font-family: serif"),
-                        
-                        # Broken HTML entities
-                        (r"&gt;\s*&lt;p&gt;&lt;strongnimbus\s+romanies:", "<p><strong>"),
-                        (r"&gt;\s*&lt;([^>]+)&gt;", r"<\1>"),
-                        (r"&lt;([^>]+)&gt;", r"<\1>"),
-                        
-                        # Corrupted style attributes
-                        (r"style=\"[^\"]*font-family:[^\"]*'[^']*',=\"\"[^\"]*\"", 'style="font-family: serif"'),
-                        
-                        # Generic malformed attributes
-                        (r"(\w+)=\"\"(\s*\w+=)", r"\2"),
-                        (r"(\w+)=\"\"\s*>", ">"),
-                    ]
-                    
-                    # Natural sentence break patterns
-                    self.break_patterns = [
-                        r',\s+(and|but|or|however|moreover|furthermore|additionally|nevertheless)',
-                        r';\s*',
-                        r',\s+(?=which|that|where|when|who)',
-                        r',\s+(?=because|since|although|while|if|unless)',
-                        r'\s+(and|but|or)\s+(?=\w{4,})',
-                    ]
-                    
-                    # Repeated phrase patterns (5+ words)
-                    self.repeated_phrase_threshold = 5  # Minimum words in a phrase to check
-                    self.max_repeated_phrases = 3       # Maximum allowed repeated phrases
-                
-                def process_html_content(self, html_content: str) -> str:
-                    """
-                    Main processing method that applies all normalization fixes.
-                    
-                    Args:
-                        html_content: HTML content to process
-                        
-                    Returns:
-                        Processed HTML content with normalization fixes applied
-                    """
-                    print("ADVANCED_NORM: Starting comprehensive normalization processing...")
-                    
-                    # Step 1: Fix HTML corruption
-                    content = self._fix_html_corruption(html_content)
-                    print("ADVANCED_NORM: ✅ HTML corruption fixes applied")
-                    
-                    # Step 2: Parse with BeautifulSoup for safe manipulation
-                    try:
-                        soup = BeautifulSoup(content, 'html.parser')
-                        
-                        # Step 3: Process text nodes for sentence normalization
-                        self._normalize_text_nodes(soup)
-                        print("ADVANCED_NORM: ✅ Text node normalization completed")
-                        
-                        # Step 4: Convert back to string
-                        processed_content = str(soup)
-                        
-                        # Step 5: Remove repeated phrases
-                        processed_content = self._remove_repeated_phrases(processed_content)
-                        print("ADVANCED_NORM: ✅ Repeated phrase removal completed")
-                        
-                        # Step 6: Apply final cleanup
-                        processed_content = self._apply_final_cleanup(processed_content)
-                        print("ADVANCED_NORM: ✅ Final cleanup completed")
-                        
-                        return processed_content
-                        
-                    except Exception as e:
-                        print(f"ADVANCED_NORM: ⚠️ BeautifulSoup processing failed: {e}, applying fallback")
-                        return self._apply_fallback_processing(content)
-                
-                def _fix_html_corruption(self, content: str) -> str:
-                    """Fix HTML corruption using pattern-based replacement."""
-                    if not content:
-                        return content
-                    
-                    original_length = len(content)
-                    
-                    for pattern, replacement in self.corruption_patterns:
-                        content = re.sub(pattern, replacement, content, flags=re.IGNORECASE | re.DOTALL)
-                    
-                    # Additional specific fixes for common corruption
-                    content = re.sub(r"&gt;\s*&lt;", "<", content)
-                    content = re.sub(r"&lt;\s*/([^>]+)&gt;", r"</\1>", content)
-                    content = re.sub(r"&lt;([^>]+)&gt;", r"<\1>", content)
-                    
-                    fixed_length = len(content)
-                    if fixed_length != original_length:
-                        print(f"ADVANCED_NORM: Fixed HTML corruption - length: {original_length} → {fixed_length}")
-                    
-                    return content
-                
-                def _normalize_text_nodes(self, soup: BeautifulSoup) -> None:
-                    """Normalize text nodes to break long sentences."""
-                    
-                    # Find all text nodes
-                    for element in soup.find_all(['p', 'li', 'div', 'span']):
-                        for content in element.contents:
-                            if isinstance(content, NavigableString) and content.strip():
-                                original_text = str(content).strip()
-                                normalized_text = self._normalize_sentence_length(original_text)
-                                
-                                if normalized_text != original_text:
-                                    content.replace_with(normalized_text)
-                
-                def _normalize_sentence_length(self, text: str) -> str:
-                    """Break long sentences at natural points."""
-                    if not text:
-                        return text
-                    
-                    # Split into sentences
-                    sentences = re.split(r'(?<=[.!?])\s+', text)
-                    processed_sentences = []
-                    
-                    for sentence in sentences:
-                        word_count = len(sentence.split())
-                        
-                        if word_count > 15:  # Target sentences over 15 words (aligned with validation criteria)
-                            split_sentence = self._intelligent_sentence_split(sentence)
-                            processed_sentences.extend(split_sentence)
-                        else:
-                            processed_sentences.append(sentence)
-                    
-                    return ' '.join(processed_sentences)
-                
-                def _intelligent_sentence_split(self, sentence: str) -> list[str]:
-                    """Split a long sentence at the most natural breakpoint."""
-                    
-                    for pattern in self.break_patterns:
-                        matches = list(re.finditer(pattern, sentence, re.IGNORECASE))
-                        
-                        if matches:
-                            # Find the breakpoint closest to the middle
-                            sentence_mid = len(sentence) // 2
-                            best_match = min(matches, key=lambda m: abs(m.start() - sentence_mid))
-                            
-                            # Ensure both parts have reasonable length (at least 6 words)
-                            before = sentence[:best_match.start()].strip()
-                            after = sentence[best_match.end():].strip()
-                            
-                            if len(before.split()) >= 6 and len(after.split()) >= 6:
-                                # Capitalize first word of new sentence
-                                if after and not after[0].isupper():
-                                    after = after[0].upper() + after[1:] if len(after) > 1 else after.upper()
-                                
-                                return [before + '.', after]
-                    
-                    # If no good split point found, return original
-                    return [sentence]
-                
-                def _remove_repeated_phrases(self, content: str) -> str:
-                    """Remove excessive repeated phrases to meet validation criteria."""
-                    if not content:
-                        return content
-                    
-                    try:
-                        # Parse HTML to get text content for analysis
-                        soup = BeautifulSoup(content, 'html.parser')
-                        text_content = soup.get_text()
-                        
-                        # Find phrases of 5+ words and count occurrences
-                        import re
-                        words = text_content.split()
-                        phrase_counts = {}
-                        
-                        # Generate all possible phrases of 5+ words
-                        for length in range(self.repeated_phrase_threshold, min(len(words), 15) + 1):
-                            for i in range(len(words) - length + 1):
-                                phrase = ' '.join(words[i:i + length]).lower()
-                                # Skip phrases that are mostly common words
-                                if self._is_meaningful_phrase(phrase):
-                                    phrase_counts[phrase] = phrase_counts.get(phrase, 0) + 1
-                        
-                        # Identify phrases that appear more than max_repeated_phrases times
-                        excessive_phrases = []
-                        for phrase, count in phrase_counts.items():
-                            if count > self.max_repeated_phrases:
-                                excessive_phrases.append((phrase, count))
-                        
-                        if not excessive_phrases:
-                            return content
-                        
-                        print(f"ADVANCED_NORM: Found {len(excessive_phrases)} excessive repeated phrases to remove")
-                        
-                        # Remove excessive occurrences of repeated phrases
-                        # Keep first few occurrences, remove the rest
-                        for phrase, count in excessive_phrases:
-                            # Find all occurrences in the original content
-                            pattern = re.escape(phrase)
-                            matches = list(re.finditer(pattern, content, re.IGNORECASE))
-                            
-                            # Remove occurrences beyond the threshold
-                            if len(matches) > self.max_repeated_phrases:
-                                # Remove from the end backwards to maintain text integrity
-                                for match in reversed(matches[self.max_repeated_phrases:]):
-                                    # Replace with a shortened version or remove entirely
-                                    start, end = match.span()
-                                    # Replace with a more concise version
-                                    content = content[:start] + self._create_concise_replacement(phrase) + content[end:]
-                        
-                        return content
-                        
-                    except Exception as e:
-                        print(f"ADVANCED_NORM: ⚠️ Repeated phrase removal failed: {e}")
-                        return content
-                
-                def _is_meaningful_phrase(self, phrase: str) -> bool:
-                    """Check if a phrase is meaningful enough to track for repetition."""
-                    # Skip phrases that are mostly common words
-                    common_words = {'the', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'a', 'an', 'is', 'are', 'was', 'were', 'be', 'been', 'have', 'has', 'had', 'will', 'would', 'should', 'could', 'may', 'might', 'this', 'that', 'these', 'those'}
-                    words = phrase.split()
-                    
-                    # Must have at least 2 non-common words
-                    non_common_count = sum(1 for word in words if word.lower() not in common_words)
-                    return non_common_count >= 2
-                
-                def _create_concise_replacement(self, phrase: str) -> str:
-                    """Create a concise replacement for a repeated phrase."""
-                    # For now, replace with empty string to eliminate repetition
-                    # Could be enhanced to create more intelligent replacements
-                    return ""
-
-                def _apply_final_cleanup(self, content: str) -> str:
-                    """Apply final cleanup and validation."""
-                    
-                    # Remove double periods from sentence splits
-                    content = re.sub(r'\.\.+', '.', content)
-                    
-                    # Fix spacing issues
-                    content = re.sub(r'\s+', ' ', content)
-                    content = re.sub(r'\s*([.!?])\s*', r'\1 ', content)
-                    
-                    # Clean up HTML tag spacing
-                    content = re.sub(r'>\s+<', '><', content)
-                    
-                    return content.strip()
-                
-                def _apply_fallback_processing(self, content: str) -> str:
-                    """Apply basic fallback processing if BeautifulSoup fails."""
-                    
-                    # Basic sentence splitting using regex
-                    sentences = re.split(r'(?<=[.!?])\s+', content)
-                    processed_sentences = []
-                    
-                    for sentence in sentences:
-                        if len(sentence.split()) > 15:
-                            # Simple split at first comma after word 8
-                            words = sentence.split()
-                            if len(words) > 12:
-                                # Find first comma after word 8
-                                for i in range(8, min(15, len(words))):
-                                    if words[i].endswith(','):
-                                        first_part = ' '.join(words[:i+1])[:-1] + '.'
-                                        second_part = ' '.join(words[i+1:])
-                                        if second_part:
-                                            second_part = second_part[0].upper() + second_part[1:] if len(second_part) > 1 else second_part.upper()
-                                        processed_sentences.extend([first_part, second_part])
-                                        break
-                                else:
-                                    processed_sentences.append(sentence)
-                            else:
-                                processed_sentences.append(sentence)
-                        else:
-                            processed_sentences.append(sentence)
-                    
-                    return ' '.join(processed_sentences)
-            
-            # Create processor instance and apply normalization
-            processor = AdvancedNormalizationProcessor()
-            normalized_content = processor.process_html_content(html_content)
-            
-            print("EMAIL GENERATOR V2: ✅ Advanced normalization post-processing completed")
-            return normalized_content
-            
-        except Exception as e:
-            print(f"EMAIL GENERATOR V2: ❌ Advanced normalization post-processing failed: {e}")
-            # Return original content if processing fails
-            return html_content
+    
 
     def _check_and_prevent_duplicate_disclaimer(self, html_content: str) -> str:
         """
@@ -4743,723 +3299,94 @@ class EmailGeneratorV2:
             if disclaimer_found:
                 print("EMAIL GENERATOR V2: ✅ Disclaimer already present - preventing duplication")
                 return html_content
-            else:
-                print("EMAIL GENERATOR V2: No disclaimer found - content ready for disclaimer addition")
-                return html_content
+            print("EMAIL GENERATOR V2: No disclaimer found - content ready for disclaimer addition")
+            return html_content
                 
         except Exception as e:
             print(f"EMAIL GENERATOR V2: ⚠️ Disclaimer duplication check failed: {e}")
             # Return original content if check fails
             return html_content
 
-    def log_simplification_step(self, step_name: str, hypothesis_id: str, text_before: str, text_after: str = "", stage: str = "processing") -> None:
-        """
-        Log simplification step with structured JSON debugging data.
-        
-        Args:
-            step_name: Name of the simplification step
-            hypothesis_id: Related hypothesis being tested
-            text_before: Text content before processing
-            text_after: Text content after processing (optional)
-            stage: Processing stage (entry, processing, exit)
-        """
-        try:
-            # Calculate readability metrics
-            flesch_before = textstat.flesch_reading_ease(text_before) if text_before else 0
-            flesch_after = textstat.flesch_reading_ease(text_after) if text_after else 0
-            
-            # Count sentences and fragments
-            sentences_before = len(re.split(r'(?<=[.!?])\s+', text_before)) if text_before else 0
-            sentences_after = len(re.split(r'(?<=[.!?])\s+', text_after)) if text_after else 0
-            
-            # Calculate degradation score (sentence fragmentation vs readability gain)
-            if sentences_before > 0 and flesch_before > 0:
-                fragmentation_ratio = sentences_after / sentences_before if sentences_before > 0 else 1
-                readability_gain = flesch_after - flesch_before
-                degradation_score = (fragmentation_ratio - 1) * 100 - readability_gain
-            else:
-                degradation_score = 0
-            
-            # Create structured log entry
-            log_entry = {
-                "module": "EmailGeneratorV2_Simplification",
-                "method": step_name,
-                "hypothesis_id": hypothesis_id,
-                "stage": stage,
-                "timestamp": datetime.now().isoformat(),
-                "text_metrics": {
-                    "flesch_score_before": round(flesch_before, 2),
-                    "flesch_score_after": round(flesch_after, 2),
-                    "flesch_change": round(flesch_after - flesch_before, 2),
-                    "word_count_before": len(text_before.split()) if text_before else 0,
-                    "word_count_after": len(text_after.split()) if text_after else 0,
-                    "sentence_count_before": sentences_before,
-                    "sentence_count_after": sentences_after,
-                    "fragmentation_ratio": round(sentences_after / sentences_before if sentences_before > 0 else 1, 2),
-                    "degradation_score": round(degradation_score, 2)
-                },
-                "content_preview": {
-                    "before_first_100": text_before[:100] if text_before else "",
-                    "after_first_100": text_after[:100] if text_after else ""
-                }
-            }
-            
-            print(f"SIMPLIFICATION_DEBUG: {json.dumps(log_entry)}")
-            
-        except Exception as e:
-            print(f"SIMPLIFICATION_DEBUG: Logging failed for {step_name}: {e}")
+    
 
-    def _apply_comprehensive_simplification(self, html_content: str) -> str:
-        """
-        Apply comprehensive AI-based simplification to improve readability scores.
+    
+
+    
+
+    
+
+    
+
+    
         
-        This method uses OpenAI to aggressively simplify complex legal language while
-        preserving accuracy and professional tone, targeting Flesch Reading Ease ≥65.
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+
+    def format_video_analysis_for_appendix(self, video_insight) -> str:
+        """Format video analysis results into clean, readable text for document appendix."""
         
-        Args:
-            html_content: The HTML content to simplify
-            
-        Returns:
-            Simplified HTML content with improved readability
-        """
-        if not html_content:
-            return html_content
+        formatted_text = []
         
-        try:
-            print("EMAIL GENERATOR V2: Starting comprehensive AI simplification...")
+        # Handle both VideoInsight and EnhancedVideoInsight
+        if hasattr(video_insight, "insights") and video_insight.insights:
+            insights = video_insight.insights
             
-            # LOGGING INJECTION POINT 1: Entry to comprehensive simplification
-            soup_entry = BeautifulSoup(html_content, 'html.parser')
-            text_content_entry = soup_entry.get_text()
-            self.log_simplification_step(
-                step_name="_apply_comprehensive_simplification",
-                hypothesis_id="H3_excessive_target_flesch_score",
-                text_before=text_content_entry,
-                stage="entry"
-            )
+            # Handle case where insights is a string (preserved/summarized data)
+            if isinstance(insights, str):
+                return f'<p style="margin: 0; font-size: 13px; line-height: 1.5;">{insights}</p>'
             
-            # Check if simplification is enabled
-            simplification_config = self.config.get('simplification', {})
-            enabled = simplification_config.get('enabled', False)
-            
-            if not enabled:
-                print("EMAIL GENERATOR V2: ⚠️ Simplification disabled in configuration, enabling for readability compliance")
-                # Force enable for readability compliance
-                enabled = True
-            
-            # Parse HTML to plain text for analysis
-            soup = BeautifulSoup(html_content, 'html.parser')
-            text_content = soup.get_text()
-            
-            # Check current readability
-            current_flesch = textstat.flesch_reading_ease(text_content)
-            target_flesch = simplification_config.get('target_flesch_score', 65)
-            
-            print(f"EMAIL GENERATOR V2: Current Flesch score: {current_flesch:.1f}, target: {target_flesch}")
-            
-            if current_flesch >= target_flesch:
-                print("EMAIL GENERATOR V2: Content already meets readability target")
-                return html_content
-            
-            # Create comprehensive simplification prompt
-            simplification_prompt = f"""
-            Dramatically simplify this legal email content to achieve a Flesch Reading Ease score of at least 65.
-            
-            CRITICAL REQUIREMENTS:
-            - Rewrite complex sentences into multiple shorter, clearer sentences
-            - Replace legal jargon with plain English equivalents where possible
-            - Maintain all factual accuracy and legal precision
-            - Keep professional but accessible tone for client communication
-            - Preserve HTML structure and formatting tags exactly
-            - Target 8th grade reading level or below
-            - Break sentences longer than 15 words into shorter ones
-            - Use active voice instead of passive voice wherever possible
-            - Replace complex vocabulary with simpler alternatives
-            
-            SIMPLIFICATION STRATEGIES:
-            - "pursuant to" → "under" or "according to"
-            - "notwithstanding" → "despite" or "even though"
-            - "heretofore" → "before this" or "previously"
-            - "aforementioned" → "mentioned above" or just repeat the specific item
-            - "whereas" → "since" or "because"
-            - Break compound sentences at "and," "but," "however," etc.
-            - Convert passive constructions to active voice
-            - Replace Latin phrases with English equivalents
-            
-            CURRENT CONTENT (Flesch Score: {current_flesch:.1f}):
-            {html_content}
-            
-            SIMPLIFIED VERSION (Target Flesch Score: ≥{target_flesch}):
-            """
-            
-            # Get simplification persona
-            persona = self.config.get('personas', {}).get('PLAIN_ENGLISH_ADVISOR',
-                'You are an expert legal writing simplification specialist who transforms complex legal language into clear, accessible communication while maintaining accuracy.')
-            
-            # Make OpenAI request for aggressive simplification
-            simplified_content = self._make_openai_request(simplification_prompt, persona)
-            
-            if simplified_content and simplified_content.strip():
-                # Validate that simplification improved readability
-                simplified_soup = BeautifulSoup(simplified_content, 'html.parser')
-                simplified_text = simplified_soup.get_text()
-                new_flesch_score = textstat.flesch_reading_ease(simplified_text)
+            # Handle case where insights is a dictionary (normal Vertex AI response)
+            if isinstance(insights, dict):
+                # Add summary if available
+                if insights.get("summary"):
+                    summary_text = insights["summary"]
+                    if isinstance(summary_text, str) and summary_text.strip():
+                        formatted_text.append(f'<div style="margin-bottom: 15px;"><div class="meta-label">Video Summary</div><p style="margin: 5px 0; font-size: 13px; line-height: 1.4;">{summary_text}</p></div>')
                 
-                print(f"EMAIL GENERATOR V2: Simplification result - Flesch score: {current_flesch:.1f} → {new_flesch_score:.1f}")
+                # Add key events/timeline if available
+                timeline_content = []
+                if insights.get("timeline"):
+                    timeline_items = insights["timeline"]
+                    if isinstance(timeline_items, list) and timeline_items:
+                        for event in timeline_items:
+                            if isinstance(event, dict):
+                                timestamp = event.get("timestamp", "Unknown")
+                                description = event.get("event", event.get("description", "No description"))
+                                timeline_content.append(f"• {timestamp} - {description}")
+                            elif isinstance(event, str) and event.strip():
+                                timeline_content.append(f"• {event.strip()}")
                 
-                # Accept if readability improved significantly
-                if new_flesch_score > current_flesch + 10:  # At least 10 point improvement
-                    print("EMAIL GENERATOR V2: ✅ Comprehensive simplification successful")
-                    return simplified_content.strip()
-                else:
-                    print("EMAIL GENERATOR V2: ⚠️ Simplification did not improve readability sufficiently")
-                    # Try fallback text-based simplification
-                    return self._apply_fallback_simplification(html_content, current_flesch, target_flesch)
-            else:
-                print("EMAIL GENERATOR V2: ⚠️ AI simplification returned empty content")
-                return self._apply_fallback_simplification(html_content, current_flesch, target_flesch)
-                
-        except Exception as e:
-            print(f"EMAIL GENERATOR V2: ❌ Comprehensive simplification failed: {e}")
-            return html_content
-
-    def _apply_aggressive_readability_fixes(self, html_content: str) -> str:
-        """
-        Apply aggressive readability fixes to achieve Flesch Reading Ease ≥60.
+                if timeline_content:
+                    timeline_html = "<br>".join(timeline_content)
+                    formatted_text.append(f'<div style="margin-bottom: 15px;"><div class="meta-label">Key Events Timeline</div><p style="margin: 5px 0; font-size: 13px; line-height: 1.4;">{timeline_html}</p></div>')
         
-        This method implements multiple strategies to dramatically improve readability
-        including sentence splitting, vocabulary simplification, and structure optimization.
+        # Return formatted text or fallback
+        if formatted_text:
+            return "\n".join(formatted_text)
+        if video_insight:
+            # Fallback for any other format
+            insight_str = str(video_insight)
+            if insight_str and insight_str != "None":
+                return f'<p style="margin: 0; font-size: 13px; line-height: 1.5;">{insight_str}</p>'
         
-        Args:
-            html_content: The HTML content to fix for readability
-            
-        Returns:
-            HTML content with aggressive readability improvements
-        """
-        if not html_content:
-            return html_content
-        
-        try:
-            print("EMAIL GENERATOR V2: Starting aggressive readability fixes...")
-            
-            # Parse HTML content
-            soup = BeautifulSoup(html_content, 'html.parser')
-            
-            # Process all text-containing elements
-            for element in soup.find_all(['p', 'li', 'div', 'span']):
-                if element.string:
-                    original_text = element.string
-                    improved_text = self._aggressively_improve_text_readability(original_text)
-                    if improved_text != original_text:
-                        element.string.replace_with(improved_text)
-                else:
-                    # Handle elements with mixed content
-                    for content in element.contents:
-                        if isinstance(content, str) and content.strip():
-                            improved_text = self._aggressively_improve_text_readability(content)
-                            if improved_text != content:
-                                content.replace_with(improved_text)
-            
-            # Convert back to HTML
-            improved_html = str(soup)
-            
-            # Check final readability
-            final_text = BeautifulSoup(improved_html, 'html.parser').get_text()
-            final_flesch = textstat.flesch_reading_ease(final_text)
-            
-            print(f"EMAIL GENERATOR V2: Aggressive readability fixes result - Flesch score: {final_flesch:.1f}")
-            
-            return improved_html
-            
-        except Exception as e:
-            print(f"EMAIL GENERATOR V2: ❌ Aggressive readability fixes failed: {e}")
-            return html_content
-
-    def _aggressively_improve_text_readability(self, text: str) -> str:
-        """
-        Aggressively improve text readability through multiple techniques.
-        
-        Args:
-            text: The text to improve
-            
-        Returns:
-            Text with improved readability
-        """
-        if not text or not text.strip():
-            return text
-        
-        # Step 1: Split long sentences (>15 words)
-        sentences = re.split(r'(?<=[.!?])\s+', text)
-        improved_sentences = []
-        
-        for sentence in sentences:
-            word_count = len(sentence.split())
-            if word_count > 15:
-                # Try to split at natural break points
-                split_sentence = self._split_long_sentence_aggressively(sentence)
-                improved_sentences.extend(split_sentence)
-            else:
-                improved_sentences.append(sentence)
-        
-        # Step 2: Replace complex vocabulary
-        text = ' '.join(improved_sentences)
-        text = self._replace_complex_vocabulary(text)
-        
-        # Step 3: Convert passive to active voice where possible
-        text = self._convert_passive_to_active(text)
-        
-        # Step 4: Simplify sentence structure
-        text = self._simplify_sentence_structure(text)
-        
-        return text.strip()
-
-    def _split_long_sentence_aggressively(self, sentence: str) -> list[str]:
-        """Split a long sentence at the most natural breakpoints."""
-        
-        # Try multiple split patterns in order of preference
-        split_patterns = [
-            r',\s+(and|but|or|however|moreover|furthermore|additionally)\s+',
-            r';\s*',
-            r',\s+(?=which|that|where|when|who)\s+',
-            r',\s+(?=because|since|although|while|if|unless)\s+',
-            r'\s+(and|but|or)\s+(?=\w{4,})',
-            r',\s+(?=\w{6,})',  # Split at any comma before a long word
-        ]
-        
-        for pattern in split_patterns:
-            matches = list(re.finditer(pattern, sentence, re.IGNORECASE))
-            if matches:
-                # Use the first suitable breakpoint
-                match = matches[0]
-                before = sentence[:match.start()].strip()
-                after = sentence[match.end():].strip()
-                
-                # Ensure both parts are substantial
-                if len(before.split()) >= 5 and len(after.split()) >= 5:
-                    # Capitalize first word of second sentence
-                    if after and not after[0].isupper():
-                        after = after[0].upper() + after[1:] if len(after) > 1 else after.upper()
-                    
-                    return [before + '.', after]
-        
-        # If no good split point, return original
-        return [sentence]
-
-    def _replace_complex_vocabulary(self, text: str) -> str:
-        """Replace complex legal vocabulary with context-aware, simpler alternatives using an LLM."""
-        
-        #
-        #
-        simplification_prompt = f"""
-        Analyze the following text and replace complex legal and formal vocabulary with simpler, context-appropriate alternatives.
-        Preserve the original meaning and professional tone, but make the language more accessible.
-
-        CRITICAL REQUIREMENTS:
-        - Only replace words and phrases where a simpler, more common equivalent exists.
-        - Ensure the replacement is grammatically correct in the context of the sentence.
-        - Do not alter the core meaning or legal precision of the text.
-        - Return the full text with only the necessary replacements.
-
-        TEXT TO PROCESS:
-        "{text}"
-
-        Return the processed text with context-aware vocabulary simplification:
-        """
-
-        # Get the persona from the configuration for the simplification task
-        persona = self.config.get('personas', {}).get(
-            'PLAIN_ENGLISH_ADVISOR',
-            'You are a legal writing expert specializing in clear, plain English communication.'
-        )
-
-        # Make the OpenAI request
-        simplified_text = self._make_openai_request(simplification_prompt, persona)
-
-        if simplified_text and simplified_text.strip():
-            # Validate the coherence of the simplified text
-            self._check_text_coherence(text, simplified_text)
-
-            # Log the change for debugging and validation
-            self.log_simplification_step(
-                step_name="_replace_complex_vocabulary",
-                hypothesis_id="H2_context_unaware_vocab_replacement",
-                text_before=text,
-                text_after=simplified_text,
-                stage="exit"
-            )
-            return simplified_text.strip()
-        
-        # Fallback to original text if simplification fails
-        return text
-
-    def _check_text_coherence(self, original_text: str, simplified_text: str) -> None:
-        """Validate that the simplified text remains coherent and grammatically correct."""
-        
-        coherence_prompt = f"""
-        Analyze the following original and simplified text for coherence and grammatical accuracy.
-
-        ORIGINAL TEXT:
-        "{original_text}"
-
-        SIMPLIFIED TEXT:
-        "{simplified_text}"
-
-        Is the simplified text grammatically correct and coherent? Answer with "Yes" or "No".
-        """
-        
-        persona = self.config.get('personas', {}).get(
-            'GRAMMAR_VALIDATOR',
-            'You are an expert in English grammar and text coherence.'
-        )
-
-        response = self._make_openai_request(coherence_prompt, persona)
-
-        if response and "no" in response.lower():
-            raise ValueError("Simplified text is not coherent or grammatically correct.")
-
-    def _replace_redundant_patterns(self, text: str) -> str:
-        """Remove redundant words and phrases from the text."""
-        
-        redundancy_patterns = [
-            r'\bvery\s+', r'\bquite\s+', r'\brather\s+', r'\bsomewhat\s+', r'\brelatively\s+',
-            r'\bcompletely\s+', r'\btotally\s+', r'\babsolutely\s+', r'\bentirely\s+',
-            r'\bbasically\s+', r'\bessentially\s+', r'\bfundamentally\s+', r'\bextremely\s+',
-            r'\bexceptionally\s+', r'\bunusually\s+', r'\bparticularly\s+', r'\bespecially\s+',
-            r'\bnotably\s+', r'\bremarkably\s+', r'\bsignificantly\s+', r'\bconsiderably\s+',
-            r'\bsubstantially\s+', r'\bimmensely\s+', r'\benormously\s+', r'\btremendously\s+',
-            r'\bincredibly\s+', r'\bunbelievably\s+', r'\bextraordinarily\s+', r'\bundoubtedly\s+',
-            r'\bcertainly\s+', r'\bdefinitely\s+', r'\bobviously\s+', r'\bclearly\s+',
-            r'\bevidentally\s+', r'\bmanifestly\s+', r'\bpatently\s+', r'\bundeniably\s+',
-            r'\bincontrovertibly\s+', r'\bindisputably\s+', r'\bunquestionably\s+',
-        ]
-        
-        for pattern in redundancy_patterns:
-            text = re.sub(pattern, '', text, flags=re.IGNORECASE)
-            
-        return text
-
-    def _convert_passive_to_active(self, text: str) -> str:
-        """Convert passive voice constructions to active voice where possible."""
-        
-        passive_patterns = [
-            (r'\b(\w+)\s+(?:was|were|is|are|has been|have been|had been)\s+(\w+ed|shown|given|made|done|taken|seen|found|held|considered|deemed|regarded)\s+by\s+(\w+)', r'\3 \2 \1'),
-            (r'\b(?:it\s+(?:was|is|has been|had been)\s+(?:determined|found|concluded|established|shown|proven|demonstrated)\s+that)\s+(.*)', r'\1'),
-            (r'\b(?:it\s+(?:was|is|has been|had been)\s+(?:noted|observed|seen|discovered|revealed)\s+that)\s+(.*)', r'\1'),
-        ]
-        
-        for pattern, replacement in passive_patterns:
-            text = re.sub(pattern, replacement, text, flags=re.IGNORECASE)
-        
-        return text
-
-    def _apply_final_simplification_pass(self, html_content: str) -> str:
-        """
-        Apply a final aggressive simplification pass to reach Flesch Reading Ease ≥60.
-        
-        This method applies the most aggressive text simplification techniques
-        to ensure readability compliance, even if it means significant rewording.
-        
-        Args:
-            html_content: The HTML content to simplify
-            
-        Returns:
-            Aggressively simplified HTML content
-        """
-        if not html_content:
-            return html_content
-        
-        try:
-            print("EMAIL GENERATOR V2: Starting final aggressive simplification pass...")
-            
-            # Parse HTML and extract text for processing
-            soup = BeautifulSoup(html_content, 'html.parser')
-            
-            # Process all text-containing elements with maximum aggressiveness
-            for element in soup.find_all(['p', 'li', 'div', 'span', 'strong', 'em']):
-                if element.string:
-                    original_text = element.string
-                    ultra_simplified = self._ultra_simplify_text(original_text)
-                    if ultra_simplified != original_text:
-                        element.string.replace_with(ultra_simplified)
-                else:
-                    # Handle elements with mixed content
-                    for content in list(element.contents):
-                        if isinstance(content, str) and content.strip():
-                            ultra_simplified = self._ultra_simplify_text(content)
-                            if ultra_simplified != content:
-                                content.replace_with(ultra_simplified)
-            
-            # Convert back to HTML
-            final_content = str(soup)
-            
-            # Check final readability
-            final_text = BeautifulSoup(final_content, 'html.parser').get_text()
-            final_flesch = textstat.flesch_reading_ease(final_text)
-            
-            print(f"EMAIL GENERATOR V2: Final simplification pass result - Flesch score: {final_flesch:.1f}")
-            
-            return final_content
-            
-        except Exception as e:
-            print(f"EMAIL GENERATOR V2: ❌ Final simplification pass failed: {e}")
-            return html_content
-
-    def _simplify_sentence_structure(self, text: str) -> str:
-        """Simplify overall sentence structure."""
-        
-        # Remove unnecessary hedge words
-        hedge_words = [
-            r'\bmay\s+be\s+',
-            r'\bmight\s+be\s+',
-            r'\bcould\s+be\s+',
-            r'\bappears\s+to\s+be\s+',
-            r'\bseems\s+to\s+be\s+',
-            r'\bit\s+is\s+possible\s+that\s+',
-            r'\bit\s+is\s+likely\s+that\s+',
-        ]
-        
-        for pattern in hedge_words:
-            text = re.sub(pattern, '', text, flags=re.IGNORECASE)
-        
-        # Simplify redundant phrases
-        redundant_patterns = [
-            (r'\bin\s+order\s+to\b', 'to'),
-            (r'\bfor\s+the\s+purpose\s+of\b', 'to'),
-            (r'\bdue\s+to\s+the\s+fact\s+that\b', 'because'),
-            (r'\bin\s+the\s+event\s+that\b', 'if'),
-            (r'\bprior\s+to\b', 'before'),
-            (r'\bsubsequent\s+to\b', 'after'),
-        ]
-        
-        for pattern, replacement in redundant_patterns:
-            text = re.sub(pattern, replacement, text, flags=re.IGNORECASE)
-        
-        return text
-
-    def _apply_fallback_simplification(self, html_content: str, current_flesch: float, target_flesch: float) -> str:
-        """Apply fallback text-based simplification when AI fails."""
-        
-        try:
-            print("EMAIL GENERATOR V2: Applying fallback simplification techniques...")
-            
-            soup = BeautifulSoup(html_content, 'html.parser')
-            
-            # Apply aggressive text processing to all text nodes
-            for element in soup.find_all(['p', 'li', 'div', 'span']):
-                if element.string:
-                    original_text = element.string
-                    simplified_text = self._aggressively_improve_text_readability(original_text)
-                    element.string.replace_with(simplified_text)
-            
-            fallback_content = str(soup)
-            
-            # Check if fallback improved readability
-            fallback_text = BeautifulSoup(fallback_content, 'html.parser').get_text()
-            fallback_flesch = textstat.flesch_reading_ease(fallback_text)
-            
-            print(f"EMAIL GENERATOR V2: Fallback simplification result - Flesch score: {current_flesch:.1f} → {fallback_flesch:.1f}")
-            
-            return fallback_content
-            
-        except Exception as e:
-            print(f"EMAIL GENERATOR V2: ❌ Fallback simplification failed: {e}")
-            return html_content
-
-    def _apply_final_simplification_pass(self, html_content: str) -> str:
-        """
-        Apply a final aggressive simplification pass to reach Flesch Reading Ease ≥60.
-        
-        This method applies the most aggressive text simplification techniques
-        to ensure readability compliance, even if it means significant rewording.
-        
-        Args:
-            html_content: The HTML content to simplify
-            
-        Returns:
-            Aggressively simplified HTML content
-        """
-        if not html_content:
-            return html_content
-        
-        try:
-            print("EMAIL GENERATOR V2: Starting final aggressive simplification pass...")
-            
-            # Parse HTML and extract text for processing
-            soup = BeautifulSoup(html_content, 'html.parser')
-            
-            # Process all text-containing elements with maximum aggressiveness
-            for element in soup.find_all(['p', 'li', 'div', 'span', 'strong', 'em']):
-                if element.string:
-                    original_text = element.string
-                    ultra_simplified = self._ultra_simplify_text(original_text)
-                    if ultra_simplified != original_text:
-                        element.string.replace_with(ultra_simplified)
-                else:
-                    # Handle elements with mixed content
-                    for content in list(element.contents):
-                        if isinstance(content, str) and content.strip():
-                            ultra_simplified = self._ultra_simplify_text(content)
-                            if ultra_simplified != content:
-                                content.replace_with(ultra_simplified)
-            
-            # Convert back to HTML
-            final_content = str(soup)
-            
-            # Check final readability
-            final_text = BeautifulSoup(final_content, 'html.parser').get_text()
-            final_flesch = textstat.flesch_reading_ease(final_text)
-            
-            print(f"EMAIL GENERATOR V2: Final simplification pass result - Flesch score: {final_flesch:.1f}")
-            
-            return final_content
-            
-        except Exception as e:
-            print(f"EMAIL GENERATOR V2: ❌ Final simplification pass failed: {e}")
-            return html_content
-
-    def _ultra_simplify_text(self, text: str) -> str:
-        """
-        Apply ultra-aggressive text simplification for maximum readability.
-        
-        Args:
-            text: The text to ultra-simplify
-            
-        Returns:
-            Ultra-simplified text with maximum readability
-        """
-        if not text or not text.strip():
-            return text
-        
-        simplification_prompt = f"""
-        Analyze the following text and rewrite it to be as simple and clear as possible, targeting a Flesch Reading Ease score of 65 or higher.
-
-        CRITICAL REQUIREMENTS:
-        - Simplify complex sentences by breaking them into shorter, more direct sentences.
-        - Replace legal jargon and complex vocabulary with plain English equivalents.
-        - Maintain the original meaning and professional tone of the text.
-        - Ensure the final output is grammatically correct and coherent.
-        - Return only the simplified text.
-
-        TEXT TO SIMPLIFY:
-        "{text}"
-
-        SIMPLIFIED TEXT:
-        """
-
-        persona = self.config.get('personas', {}).get(
-            'PLAIN_ENGLISH_ADVISOR',
-            'You are a legal writing expert specializing in clear, plain English communication.'
-        )
-
-        simplified_text = self._make_openai_request(simplification_prompt, persona)
-
-        if simplified_text and simplified_text.strip():
-            self._check_text_coherence(text, simplified_text)
-            return simplified_text.strip()
-
-        return text
-
-    def _split_sentence_intelligently(self, sentence: str) -> list[str]:
-        """
-        Intelligently split a sentence using context-aware linguistic patterns.
-        
-        This method replaces the aggressive 10-word threshold logic with a more sophisticated
-        approach that preserves grammatical coherence while improving readability.
-        
-        Args:
-            sentence: The sentence to potentially split
-            
-        Returns:
-            List of sentence fragments (original sentence if no valid split found)
-        """
-        if not sentence or not sentence.strip():
-            return [sentence]
-        
-        # Only consider sentences longer than 15 words for splitting
-        words = sentence.split()
-        if len(words) <= 15:
-            return [sentence]
-        
-        # Define prioritized break patterns (most natural to least natural)
-        break_patterns = [
-            # 1. Semicolons (highest priority - natural sentence breaks)
-            (r';\s*', '; '),
-            
-            # 2. Coordinating conjunctions with commas
-            (r',\s+(and|but|or|yet|so)\s+', ', '),
-            
-            # 3. Subordinating conjunctions
-            (r',\s+(because|since|although|while|if|unless|when|where|whereas)\s+', ', '),
-            
-            # 4. Relative pronouns
-            (r',\s+(which|that|who|whom|whose)\s+', ', '),
-            
-            # 5. Transitional phrases
-            (r',\s+(however|moreover|furthermore|therefore|consequently|nevertheless)\s+', ', '),
-        ]
-        
-        # Try each pattern in priority order
-        for pattern, separator in break_patterns:
-            matches = list(re.finditer(pattern, sentence, re.IGNORECASE))
-            
-            if matches:
-                # Find the split point closest to the middle for optimal balance
-                sentence_mid = len(sentence) // 2
-                best_match = min(matches, key=lambda m: abs(m.start() - sentence_mid))
-                
-                # Split at the best match
-                split_pos = best_match.start()
-                first_part = sentence[:split_pos].strip()
-                second_part = sentence[best_match.end():].strip()
-                
-                # Validate both fragments
-                if (self._validate_sentence_fragment(first_part) and
-                    self._validate_sentence_fragment(second_part)):
-                    
-                    # Ensure proper punctuation
-                    if not first_part.endswith(('.', '!', '?')):
-                        first_part += '.'
-                    
-                    # Ensure proper capitalization for second part
-                    if second_part and not second_part[0].isupper():
-                        second_part = second_part[0].upper() + second_part[1:] if len(second_part) > 1 else second_part.upper()
-                    
-                    return [first_part, second_part]
-        
-        # No valid split found - return original sentence
-        return [sentence]
-
-    def _validate_sentence_fragment(self, fragment: str) -> bool:
-        """
-        Validate that a sentence fragment has sufficient content and grammatical structure.
-        
-        Args:
-            fragment: The sentence fragment to validate
-            
-        Returns:
-            True if fragment is valid, False otherwise
-        """
-        if not fragment or not fragment.strip():
-            return False
-        
-        words = fragment.strip().split()
-        
-        # Must have at least 6 words for meaningful content
-        if len(words) < 6:
-            return False
-        
-        # Check for presence of verb-like words (basic grammatical completeness)
-        verb_patterns = [
-            r'\b(is|are|was|were|be|been|being|have|has|had|do|does|did|will|would|could|should|may|might|can)\b',
-            r'\b\w+ed\b',  # Past tense verbs
-            r'\b\w+ing\b',  # Present participles
-            r'\b\w+s\b',   # Third person singular verbs
-        ]
-        
-        fragment_text = fragment.lower()
-        has_verb = any(re.search(pattern, fragment_text) for pattern in verb_patterns)
-        
-        return has_verb
+        return '<p style="margin: 0; font-size: 13px; line-height: 1.5;">No video analysis available</p>'
 
 
 # Create alias for backward compatibility

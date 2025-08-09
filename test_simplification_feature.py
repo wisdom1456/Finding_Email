@@ -7,17 +7,19 @@ This script tests the two-step simplification pass that:
 2. Sends plain text to AI for simplification (Flesch ≥ 50)
 3. Replaces original content with simplified version
 """
+from __future__ import annotations
 
-import sys
 import os
+import sys
 from datetime import datetime
+
 
 # Add project root to path
 project_root = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, project_root)
 
-from backend_logic.email_generator import EmailGeneratorV2
 from backend.utils.data_models import CaseAnalysisResult, EnhancedIntakeAnalysis
+from backend_logic.email_generator import EmailGeneratorV2
 
 
 def create_mock_openai_client():
@@ -32,7 +34,7 @@ def create_mock_openai_client():
         def chat(self):
             return self
         
-        @property 
+        @property
         def completions(self):
             return self
         

@@ -2,12 +2,16 @@
 """
 Test script for the updated JSON parsing logic in OpenAI client.
 """
+from __future__ import annotations
 
-import sys
 import os
+import sys
+
+
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from backend_logic.ai.openai_client import OpenAIClient
+
 
 def test_json_parsing():
     """Test the new JSON parsing functionality."""
@@ -34,13 +38,13 @@ def test_json_parsing():
         ('```json\n[{"name": "test"}, {"name": "test2"}]\n```', "JSON array in markdown"),
         
         # Empty content
-        ('', "Empty content"),
+        ("", "Empty content"),
         
         # Invalid JSON
         ('{"invalid": json}', "Invalid JSON"),
         
         # Text with no JSON
-        ('This is just plain text with no JSON content.', "Plain text"),
+        ("This is just plain text with no JSON content.", "Plain text"),
     ]
     
     print(f"\nRunning {len(test_cases)} test cases...\n")
@@ -55,7 +59,7 @@ def test_json_parsing():
                 print(f"✅ Success: Parsed JSON - {type(result).__name__}")
                 print(f"   Result: {str(result)[:100]}{'...' if len(str(result)) > 100 else ''}")
             else:
-                print(f"❌ Failed: Returned None")
+                print("❌ Failed: Returned None")
         except Exception as e:
             print(f"🚨 Error: {e}")
         

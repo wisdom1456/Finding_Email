@@ -5,16 +5,19 @@ Test script for the improved _ensure_html_structure() method.
 This script tests the enhanced paragraph enforcement logic to ensure it properly
 handles edge cases like floating text after closing block tags.
 """
+from __future__ import annotations
 
-import sys
 import os
+import sys
+
 
 # Add the project root to the Python path
 project_root = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, project_root)
 
-from backend_logic.email_generator import EmailGeneratorV2
 from openai import OpenAI
+
+from backend_logic.email_generator import EmailGeneratorV2
 
 
 def test_html_structure_improvements():
@@ -65,7 +68,7 @@ This text appears after the list and should be wrapped.
 Final floating text at the end.""",
             "expected_contains": [
                 "<h2>Legal Analysis</h2>",
-                "<p>This paragraph is properly wrapped.</p>", 
+                "<p>This paragraph is properly wrapped.</p>",
                 "</ul>",
                 "<p>This text appears after the list and should be wrapped.</p>",
                 "</div>",
@@ -96,7 +99,7 @@ Second line of floating text.
 Third line of floating text.""",
             "expected_contains": [
                 "<p>First line of floating text.</p>",
-                "<p>Second line of floating text.</p>", 
+                "<p>Second line of floating text.</p>",
                 "<p>Third line of floating text.</p>"
             ]
         }
@@ -110,16 +113,16 @@ Third line of floating text.""",
     
     for i, test_case in enumerate(test_cases, 1):
         print(f"\nTest {i}: {test_case['name']}")
-        print(f"Input: {repr(test_case['input'])}")
+        print(f"Input: {test_case['input']!r}")
         
         try:
             # Call the improved method
-            result = generator._ensure_html_structure(test_case['input'])
-            print(f"Output: {repr(result)}")
+            result = generator._ensure_html_structure(test_case["input"])
+            print(f"Output: {result!r}")
             
             # Check if expected content is present
             test_passed = True
-            for expected in test_case['expected_contains']:
+            for expected in test_case["expected_contains"]:
                 if expected not in result:
                     print(f"❌ FAIL: Expected '{expected}' not found in result")
                     test_passed = False
@@ -140,9 +143,8 @@ Third line of floating text.""",
     if failed_tests == 0:
         print("🎉 All tests passed! The improved _ensure_html_structure() method is working correctly.")
         return True
-    else:
-        print("⚠️  Some tests failed. Please review the implementation.")
-        return False
+    print("⚠️  Some tests failed. Please review the implementation.")
+    return False
 
 
 def test_specific_edge_case():
@@ -161,18 +163,17 @@ def test_specific_edge_case():
 <li>Second item</li>
 </ul>This text should be wrapped in paragraph tags."""
     
-    print(f"Input: {repr(problematic_input)}")
+    print(f"Input: {problematic_input!r}")
     
     result = generator._ensure_html_structure(problematic_input)
-    print(f"Output: {repr(result)}")
+    print(f"Output: {result!r}")
     
     # Check that the floating text after </ul> is properly wrapped
     if "<p>This text should be wrapped in paragraph tags.</p>" in result:
         print("✅ SUCCESS: Floating text after </ul> is properly wrapped!")
         return True
-    else:
-        print("❌ FAILURE: Floating text after </ul> was not properly wrapped!")
-        return False
+    print("❌ FAILURE: Floating text after </ul> was not properly wrapped!")
+    return False
 
 
 if __name__ == "__main__":

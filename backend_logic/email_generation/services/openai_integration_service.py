@@ -10,12 +10,15 @@ This service is responsible for:
 
 This replaces OpenAI-related methods from the original EmailGeneratorV2 class.
 """
+from __future__ import annotations
+
+import logging
+import time
+from dataclasses import dataclass
+from typing import Any, Dict, List, Optional
 
 import openai
-import time
-from typing import Dict, Any, Optional, List
-import logging
-from dataclasses import dataclass
+
 
 logger = logging.getLogger(__name__)
 
@@ -84,7 +87,7 @@ class OpenAIIntegrationService:
                     })
                 
                 messages.append({
-                    "role": "user", 
+                    "role": "user",
                     "content": request.prompt
                 })
                 
@@ -124,7 +127,7 @@ class OpenAIIntegrationService:
         logger.error("All OpenAI request attempts failed")
         return "Error generating content. Please try again later."
     
-    def build_enhanced_prompt(self, base_prompt: str, case_context: Dict[str, Any], 
+    def build_enhanced_prompt(self, base_prompt: str, case_context: Dict[str, Any],
                             section_type: str = "general") -> str:
         """
         Build an enhanced prompt with context and section-specific instructions.
@@ -321,7 +324,7 @@ class OpenAIIntegrationService:
         
         # Remove timestamps older than 1 minute
         self.request_timestamps = [
-            ts for ts in self.request_timestamps 
+            ts for ts in self.request_timestamps
             if current_time - ts < 60
         ]
         

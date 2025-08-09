@@ -8,6 +8,7 @@ import json
 import os
 from typing import Any, Dict, List, Optional
 
+
 # Optional imports with fallback handling
 try:
     import cv2
@@ -24,7 +25,7 @@ except ImportError:
     print("MEDIA PROCESSOR: ⚠️  NumPy not available - advanced video analysis will be limited")
 
 try:
-    from google.cloud import videointelligence, storage
+    from google.cloud import storage, videointelligence
     GOOGLE_CLOUD_AVAILABLE = True
 except ImportError:
     GOOGLE_CLOUD_AVAILABLE = False
@@ -43,8 +44,8 @@ class MediaProcessor:
 
     def __init__(self):
         """Initialize MediaProcessor."""
-        self.supported_video_formats = {'.mp4', '.avi', '.mov', '.mkv', '.wmv', '.flv'}
-        self.supported_image_formats = {'.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff'}
+        self.supported_video_formats = {".mp4", ".avi", ".mov", ".mkv", ".wmv", ".flv"}
+        self.supported_image_formats = {".jpg", ".jpeg", ".png", ".gif", ".bmp", ".tiff"}
 
     def process_video_with_google_api(self, file_path: str, file_name: str) -> Dict[str, Any]:
         """Process video using Google Cloud Video Intelligence API."""
@@ -95,7 +96,7 @@ class MediaProcessor:
             operation = client.annotate_video(request=request)
             
             # Wait for operation to complete
-            print(f"MEDIA PROCESSOR: ⏳ Waiting for analysis to complete...")
+            print("MEDIA PROCESSOR: ⏳ Waiting for analysis to complete...")
             result = operation.result(timeout=300)  # 5 minute timeout
             
             # Parse results
@@ -260,8 +261,7 @@ class MediaProcessor:
         frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
         samples = []
         
-        if frame_count < num_samples:
-            num_samples = frame_count
+        num_samples = min(num_samples, frame_count)
         
         for i in range(num_samples):
             frame_number = int((i / (num_samples - 1)) * (frame_count - 1)) if num_samples > 1 else 0
@@ -330,12 +330,11 @@ class MediaProcessor:
         # Determine dominant color
         if avg_r > avg_g and avg_r > avg_b:
             return "red_dominant"
-        elif avg_g > avg_r and avg_g > avg_b:
+        if avg_g > avg_r and avg_g > avg_b:
             return "green_dominant"
-        elif avg_b > avg_r and avg_b > avg_g:
+        if avg_b > avg_r and avg_b > avg_g:
             return "blue_dominant"
-        else:
-            return "neutral_tones"
+        return "neutral_tones"
 
     def _create_empty_video_analysis(self, file_name: str) -> Dict[str, Any]:
         """Create empty video analysis result."""
@@ -363,8 +362,8 @@ class MediaProcessor:
                 format_name = img.format
                 
                 # Convert to RGB for analysis
-                if mode != 'RGB':
-                    img = img.convert('RGB')
+                if mode != "RGB":
+                    img = img.convert("RGB")
                 
                 # Basic color analysis
                 colors = img.getcolors(maxcolors=256*256*256)

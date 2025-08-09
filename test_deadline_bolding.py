@@ -5,12 +5,14 @@ Test script for deadline bolding functionality.
 This script tests the regex safety-net function that ensures all deadlines
 in the "Next Steps" section are properly bolded.
 """
+from __future__ import annotations
 
-import sys
 import os
+import sys
+
 
 # Add the backend directory to the Python path
-sys.path.append(os.path.join(os.path.dirname(__file__), 'backend'))
+sys.path.append(os.path.join(os.path.dirname(__file__), "backend"))
 
 from quality_validator import bold_deadlines_in_next_steps
 

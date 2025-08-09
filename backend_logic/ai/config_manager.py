@@ -43,7 +43,7 @@ class ConfigManager:
             return {}
         
         try:
-            with open(config_path, 'r', encoding='utf-8') as f:
+            with open(config_path, encoding="utf-8") as f:
                 config = yaml.safe_load(f)
             print(f"CONFIG MANAGER: Configuration loaded from: {config_path}")
             return config
@@ -56,19 +56,19 @@ class ConfigManager:
 
     def get_prompt(self, section: str, fallback: str = "") -> str:
         """Get a prompt from the configuration with fallback."""
-        return self.config.get('sections', {}).get(section, fallback)
+        return self.config.get("sections", {}).get(section, fallback)
 
     def get_persona(self, persona_name: str, fallback: str = "") -> str:
         """Get a persona from the configuration with fallback."""
-        return self.config.get('personas', {}).get(persona_name, fallback)
+        return self.config.get("personas", {}).get(persona_name, fallback)
 
     def get_formatting_rule(self, rule_name: str, fallback: str = "") -> str:
         """Get a formatting rule from the configuration with fallback."""
-        return self.config.get('formatting', {}).get(rule_name, fallback)
+        return self.config.get("formatting", {}).get(rule_name, fallback)
 
     def get_template_path(self) -> str | None:
         """Get the template path from configuration."""
-        return self.config.get('template_path')
+        return self.config.get("template_path")
 
     def has_config(self) -> bool:
         """Check if configuration was successfully loaded."""

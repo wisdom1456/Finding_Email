@@ -6,6 +6,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+
 if TYPE_CHECKING:
     from backend.utils.data_models import EnhancedIntakeAnalysis, ProcessedDocument
 
@@ -21,7 +22,7 @@ class PromptBuilder:
         """Builds the prompt for analyzing an intake form using configuration-driven prompts."""
         # Get prompt from configuration or use fallback
         base_prompt = self.config_manager.get_prompt(
-            'intake_analysis',
+            "intake_analysis",
             # Fallback prompt if configuration is missing
             "You are a seasoned Florida litigation attorney with 15+ years of experience analyzing case documents and extracting legally significant information. Your document analysis supports comprehensive legal findings letters.\n\n"
             "DOCUMENT ANALYSIS EXPERTISE:\n"
@@ -92,7 +93,7 @@ class PromptBuilder:
 
         # Get prompt from configuration or use fallback
         base_prompt = self.config_manager.get_prompt(
-            'case_document_analysis',
+            "case_document_analysis",
             # Fallback prompt if configuration is missing
             "You are a seasoned Florida litigation attorney with 15+ years of experience analyzing legal documents and extracting case-critical information. Your analysis forms the foundation for professional legal findings letters.\n\n"
             "PROFESSIONAL ANALYSIS STANDARDS:\n"
@@ -154,9 +155,9 @@ class PromptBuilder:
         self, content: dict | str, media_type: str, file_name: str
     ) -> str:
         """Builds prompt for summarizing media content using configuration-driven prompts."""
-        # Get prompt from configuration or use fallback  
+        # Get prompt from configuration or use fallback
         base_prompt = self.config_manager.get_prompt(
-            'media_summarization',
+            "media_summarization",
             # Fallback prompt if configuration is missing
             "You are a UNIFIED_LEGAL_ADVISOR paralegal specializing in clear, accessible legal communication. Create a concise summary (100-150 words) of the provided media content that will be easily understood by clients without legal training.\n\n"
             "UNIFIED_LEGAL_ADVISOR PRINCIPLES:\n"
@@ -180,7 +181,7 @@ class PromptBuilder:
         """Builds the prompt for the final legal assessment."""
         # Get prompt from configuration or use fallback
         base_prompt = self.config_manager.get_prompt(
-            'final_assessment',
+            "final_assessment",
             # Fallback prompt if configuration is missing
             "You are a seasoned Florida litigation attorney with 15+ years of experience conducting comprehensive case assessments and providing strategic legal analysis. You are preparing the legal analysis foundation that will support a detailed findings letter to your client.\n\n"
             "ATTORNEY ANALYSIS STANDARDS:\n"
@@ -191,11 +192,11 @@ class PromptBuilder:
             "5. **Professional Objectivity:** Provide balanced assessment of strengths and challenges based on Florida law and litigation realities\n"
             "6. **Case Development Strategy:** Consider both immediate legal remedies and long-term strategic options under Florida law\n\n"
             "PROFESSIONAL ASSESSMENT PROTOCOL: When addressing complex or counterintuitive legal strategies:\n"
-            "• **Professional Context:** \"Based on my experience with Florida [relevant area] law...\"\n"
+            '• **Professional Context:** "Based on my experience with Florida [relevant area] law..."\n'
             "• **Legal Foundation:** Cite specific Florida statutes, case law, or procedural requirements\n"
             "• **Strategic Rationale:** Explain the legal and practical reasoning behind the recommendation\n"
             "• **Risk Assessment:** Address potential outcomes and strategic considerations\n"
-            "• **Professional Guidance:** \"This analysis reflects Florida law standards and litigation experience\"\n\n"
+            '• **Professional Guidance:** "This analysis reflects Florida law standards and litigation experience"\n\n'
             "CRITICAL: Reference ONLY Florida statutes, case law, and legal precedents (e.g., Florida Statutes § 83.51(1), Florida case citations). Do NOT cite laws from other jurisdictions unless they have specific relevance to Florida legal standards."
         )
 

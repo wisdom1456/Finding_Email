@@ -8,23 +8,25 @@ This script tests the new quality validation functionality to ensure:
 3. Integration with EmailGeneratorV2 works properly
 4. Error handling is robust
 """
+from __future__ import annotations
 
 import os
 import sys
 from unittest.mock import Mock, patch
+
 
 # Add project root to Python path
 project_root = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, project_root)
 
 from backend.quality_validator import (
+    ContentValidationError,
+    _apply_citation_filter,
+    _count_words,
+    _extract_plain_text,
+    apply_citation_sanitization,
     polish_and_sanitize,
     validate_email_word_count,
-    apply_citation_sanitization,
-    ContentValidationError,
-    _extract_plain_text,
-    _count_words,
-    _apply_citation_filter
 )
 
 
@@ -42,8 +44,8 @@ def test_extract_plain_text():
     """
     
     plain_text = _extract_plain_text(html_content)
-    expected_words = ["This", "is", "a", "legal", "document", "with", "various", "HTML", "elements", 
-                     "First", "point", "about", "contract", "terms", "Second", "point", "about", 
+    expected_words = ["This", "is", "a", "legal", "document", "with", "various", "HTML", "elements",
+                     "First", "point", "about", "contract", "terms", "Second", "point", "about",
                      "Fla", "Stat", "672.101", "Total", "word", "count", "should", "be", "calculated", "correctly"]
     
     print(f"   Plain text: {plain_text}")
@@ -150,7 +152,6 @@ def test_polish_and_sanitize_basic():
     except ContentValidationError as e:
         print(f"   ⚠️ Content validation error: {e}")
         # This might be expected if content can't be trimmed enough
-        pass
 
 
 def test_polish_and_sanitize_with_mock_ai():
@@ -222,8 +223,8 @@ def test_integration_with_email_generator():
     
     try:
         # Mock the EmailGeneratorV2 components we need
-        from backend_logic.email_generator import EmailGeneratorV2
         from backend.utils.data_models import GeneratedLetter
+        from backend_logic.email_generator import EmailGeneratorV2
         
         # Create a sample letter
         sample_letter = GeneratedLetter(

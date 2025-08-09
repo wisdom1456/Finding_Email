@@ -2,9 +2,11 @@
 """
 Test script for the next steps validation functionality.
 """
+from __future__ import annotations
 
-import sys
 import os
+import sys
+
 
 # Add the project root to Python path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -120,9 +122,8 @@ def main():
         print("- Validation checks for <strong> tags (case insensitive)")
         print("- Logs warnings when validation fails but doesn't interrupt generation process")
         return 0
-    else:
-        print("❌ SOME TESTS FAILED!")
-        return 1
+    print("❌ SOME TESTS FAILED!")
+    return 1
 
 
 if __name__ == "__main__":

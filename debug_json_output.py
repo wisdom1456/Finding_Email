@@ -2,12 +2,24 @@
 """
 Debug script to test our JSON-based architecture and see the actual output
 """
+from __future__ import annotations
 
 import json
-from backend_logic.email_generator import EmailGeneratorV2
-from backend_logic.config import get_openai_api_key
+
 from openai import OpenAI
-from backend.utils.data_models import CaseAnalysisResult, EnhancedIntakeAnalysis, AnalyzedDocument, LegalAssessment, DemandLetterEvaluation, FinalAnalysis, FindingsLetterContent
+
+from backend.utils.data_models import (
+    AnalyzedDocument,
+    CaseAnalysisResult,
+    DemandLetterEvaluation,
+    EnhancedIntakeAnalysis,
+    FinalAnalysis,
+    FindingsLetterContent,
+    LegalAssessment,
+)
+from backend_logic.config import get_openai_api_key
+from backend_logic.email_generator import EmailGeneratorV2
+
 
 def create_simple_test_case():
     """Create a simple test case to debug the JSON architecture."""
@@ -15,7 +27,7 @@ def create_simple_test_case():
     # Simple intake analysis
     intake = EnhancedIntakeAnalysis(
         client_name="Jane Smith",
-        attorney_name="John Attorney", 
+        attorney_name="John Attorney",
         case_summary="Test civil rights case",
         case_type="Civil Rights Violation",
         urgency_level="High",
@@ -30,7 +42,7 @@ def create_simple_test_case():
     # Simple document
     docs = [AnalyzedDocument(
         file_name="incident_report.pdf",
-        document_type="Incident Report", 
+        document_type="Incident Report",
         inferred_title="Official Documentation",
         analysis="Clear evidence of misconduct",
         summary="Strong supporting evidence",
@@ -59,7 +71,7 @@ def create_simple_test_case():
     
     final_analysis = FinalAnalysis(
         case_summary="Strong civil rights case with excellent evidence",
-        recommendations="Proceed with demand letter immediately", 
+        recommendations="Proceed with demand letter immediately",
         next_steps=["File demand letter within 14 days", "Gather witness statements by August 30"]
     )
     
@@ -104,13 +116,13 @@ def main():
             print(f"📧 Keys in result: {list(result.keys())}")
             
             # Save raw output for inspection
-            with open('debug_raw_output.html', 'w', encoding='utf-8') as f:
-                f.write(result['main_letter'])
+            with open("debug_raw_output.html", "w", encoding="utf-8") as f:
+                f.write(result["main_letter"])
             
             print("📄 Raw HTML output saved to: debug_raw_output.html")
             
             # Show preview of content
-            content_preview = result['main_letter'][:500]
+            content_preview = result["main_letter"][:500]
             print(f"\n📋 Content Preview:\n{content_preview}...")
             
         else:

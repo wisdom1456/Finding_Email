@@ -2,27 +2,31 @@
 """
 Debug script to analyze and fix normalization issues
 """
+from __future__ import annotations
 
-import re
 import os
+import re
 import sys
 from collections import Counter
+
 from openai import OpenAI
+
 
 # Add project root to path for imports
 project_root = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, project_root)
 
-from backend_logic.email_generator import EmailGeneratorV2
-from backend_logic.config import get_openai_api_key
 from backend.utils.data_models import (
     CaseAnalysisResult,
-    EnhancedIntakeAnalysis,
-    LegalAssessment,
     DemandLetterEvaluation,
+    EnhancedIntakeAnalysis,
     FinalAnalysis,
-    FindingsLetterContent
+    FindingsLetterContent,
+    LegalAssessment,
 )
+from backend_logic.config import get_openai_api_key
+from backend_logic.email_generator import EmailGeneratorV2
+
 
 def create_sample_case_analysis():
     """Create a sample case analysis for testing."""
@@ -93,11 +97,11 @@ def analyze_normalization_issues(html_content):
     print("=" * 40)
     
     # Extract plain text
-    text_content = re.sub(r'<[^>]+>', '', html_content)
-    text_content = re.sub(r'\s+', ' ', text_content).strip()
+    text_content = re.sub(r"<[^>]+>", "", html_content)
+    text_content = re.sub(r"\s+", " ", text_content).strip()
     
     # Analyze sentences
-    sentences = re.split(r'[.!?]+', text_content)
+    sentences = re.split(r"[.!?]+", text_content)
     sentences = [s.strip() for s in sentences if s.strip()]
     
     print(f"📊 Total sentences: {len(sentences)}")
@@ -122,7 +126,7 @@ def analyze_normalization_issues(html_content):
     three_word_phrases = []
     
     for i in range(len(words) - 2):
-        phrase = ' '.join(words[i:i+3]).lower()
+        phrase = " ".join(words[i:i+3]).lower()
         three_word_phrases.append(phrase)
     
     phrase_counts = Counter(three_word_phrases)
@@ -143,10 +147,10 @@ def analyze_normalization_issues(html_content):
         print(f"  {i+1}. '{sentence[:80]}...' - {count} times")
     
     return {
-        'long_sentences': long_sentences,
-        'repeated_phrases': repeated_phrases,
-        'duplicate_sentences': duplicate_sentences,
-        'total_sentences': len(sentences)
+        "long_sentences": long_sentences,
+        "repeated_phrases": repeated_phrases,
+        "duplicate_sentences": duplicate_sentences,
+        "total_sentences": len(sentences)
     }
 
 def main():
@@ -167,15 +171,15 @@ def main():
         print("📧 Generating email...")
         email_result = generator.generate_email_and_analysis_docs(case_analysis)
         
-        if email_result and 'main_letter' in email_result:
-            html_content = email_result['main_letter']
+        if email_result and "main_letter" in email_result:
+            html_content = email_result["main_letter"]
             
             # Save the content for analysis
-            with open('debug_normalization_content.html', 'w', encoding='utf-8') as f:
+            with open("debug_normalization_content.html", "w", encoding="utf-8") as f:
                 f.write(html_content)
             
             print("✅ Email generated successfully!")
-            print(f"📁 Content saved to: debug_normalization_content.html")
+            print("📁 Content saved to: debug_normalization_content.html")
             
             # Analyze normalization issues
             issues = analyze_normalization_issues(html_content)
@@ -185,15 +189,15 @@ def main():
             max_score = 5
             
             # Check 1: No duplicate sentences
-            if len(issues['duplicate_sentences']) == 0:
+            if len(issues["duplicate_sentences"]) == 0:
                 normalization_score += 1
                 print("✅ No duplicate sentences")
             else:
                 print(f"❌ Found {len(issues['duplicate_sentences'])} duplicate sentences")
             
             # Check 2: Sentence length ≤15 words (allow 10% tolerance)
-            tolerance = issues['total_sentences'] * 0.1
-            if len(issues['long_sentences']) <= tolerance:
+            tolerance = issues["total_sentences"] * 0.1
+            if len(issues["long_sentences"]) <= tolerance:
                 normalization_score += 1
                 print(f"✅ Long sentences within tolerance ({len(issues['long_sentences'])}/{tolerance:.1f})")
             else:
@@ -208,25 +212,25 @@ def main():
             print("✅ Valid HTML structure")
             
             # Check 5: Repeated phrases ≤3
-            if len(issues['repeated_phrases']) <= 3:
+            if len(issues["repeated_phrases"]) <= 3:
                 normalization_score += 1
                 print(f"✅ Repeated phrases within limit ({len(issues['repeated_phrases'])}/3)")
             else:
                 print(f"❌ Too many repeated phrases ({len(issues['repeated_phrases'])} > 3)")
             
             print(f"\n📊 Normalization Score: {normalization_score}/{max_score}")
-            print(f"🎯 Target: ≥4/5 to pass")
+            print("🎯 Target: ≥4/5 to pass")
             
             if normalization_score >= 4:
                 print("✅ NORMALIZATION PASSES")
             else:
                 print("❌ NORMALIZATION FAILS")
                 print("\n💡 Recommendations:")
-                if len(issues['long_sentences']) > tolerance:
+                if len(issues["long_sentences"]) > tolerance:
                     print("  • Break long sentences into shorter ones")
-                if len(issues['repeated_phrases']) > 3:
+                if len(issues["repeated_phrases"]) > 3:
                     print("  • Reduce repetitive language")
-                if len(issues['duplicate_sentences']) > 0:
+                if len(issues["duplicate_sentences"]) > 0:
                     print("  • Remove duplicate content")
             
         else:

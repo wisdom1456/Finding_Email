@@ -39,7 +39,8 @@ from backend_logic.audio_processor import AudioProcessor
 from backend_logic.config import get_openai_api_key
 from backend_logic.cost_session_manager import CostSessionManager
 from backend_logic.document_processor import DocumentProcessor
-from backend_logic.email_generator import EmailGeneratorV2, EmailReadabilityError
+from backend_logic.email_generation import EmailGeneratorV2
+from backend_logic.email_generator import EmailReadabilityError
 from backend_logic.utils import (
     ProgressTracker,
     calculate_document_sizes,
@@ -239,7 +240,7 @@ async def process_case_documents(output_dir: str | None = None, config_path: str
         audio_processor = AudioProcessor(openai_client)
         video_processor = VideoProcessor()
         ai_analyzer = AIAnalyzer(openai_client, doc_processor, config_path=config_path)
-        email_generator = EmailGeneratorV2(openai_client, config_path=config_path)
+        email_generator = EmailGeneratorV2(config_path=config_path, openai_api_key=openai_client.api_key)
 
         # Initialize cost tracking
         cost_session_manager = CostSessionManager()
@@ -622,7 +623,61 @@ async def process_case_documents(output_dir: str | None = None, config_path: str
             except (AttributeError, KeyError, ValueError):
                 pass
 
+        # H1 DEBUG: Email generation start
+        import json
+        print(f"DEBUG_H1: {json.dumps({'module': 'main_processor', 'hypothesis_id': 'H1', 'action': 'email_generation_start', 'line': 625})}")
+        
         email_docs = email_generator.generate_email_and_analysis_docs(final_analysis)
+        
+        # H1 DEBUG: Email generation complete - capture return value analysis
+        email_docs_debug = {
+            'module': 'main_processor',
+            'hypothesis_id': 'H1',
+            'action': 'email_generation_complete',
+            'line': 627,
+            'email_docs_type': str(type(email_docs)),
+            'email_docs_keys': list(email_docs.keys()) if isinstance(email_docs, dict) else None,
+            'email_docs_length': len(str(email_docs)) if email_docs else 0,
+            'has_content': bool(email_docs)
+        }
+        print(f"DEBUG_H1: {json.dumps(email_docs_debug)}")
+        
+        # H1 DEBUG: Critical issue - No file save operation found after email generation
+        print(f"DEBUG_H1: {json.dumps({'module': 'main_processor', 'hypothesis_id': 'H1', 'action': 'file_save_missing', 'line': 628, 'issue': 'No file write operation found after email generation'})}")
+
+        # CRITICAL FIX: Add missing file save operation
+        if email_docs and isinstance(email_docs, dict):
+            try:
+                import os
+                # Ensure output directory exists
+                output_dir = "validation_output"
+                os.makedirs(output_dir, exist_ok=True)
+                
+                # Extract HTML content - check multiple possible keys
+                html_content = None
+                for key in ['letter_content', 'main_letter', 'rendered_email', 'html_content']:
+                    if key in email_docs and email_docs[key]:
+                        html_content = email_docs[key]
+                        break
+                
+                if html_content:
+                    output_file = os.path.join(output_dir, "findings_letter.html")
+                    with open(output_file, 'w', encoding='utf-8') as f:
+                        f.write(html_content)
+                    
+                    print(f"DEBUG_FIX: {json.dumps({'module': 'main_processor', 'action': 'file_saved_successfully', 'file_path': output_file, 'content_length': len(html_content)})}")
+                    st.success(f"✅ Findings letter saved successfully to: {output_file}")
+                else:
+                    print(f"DEBUG_FIX: {json.dumps({'module': 'main_processor', 'action': 'file_save_failed', 'issue': 'No HTML content found in email_docs', 'available_keys': list(email_docs.keys())})}")
+                    st.warning("⚠️ HTML content not found in generated email data")
+                    
+            except Exception as e:
+                error_msg = f"Failed to save findings letter: {str(e)}"
+                print(f"DEBUG_FIX: {json.dumps({'module': 'main_processor', 'action': 'file_save_error', 'error': error_msg})}")
+                st.error(f"❌ {error_msg}")
+        else:
+            print(f"DEBUG_FIX: {json.dumps({'module': 'main_processor', 'action': 'file_save_failed', 'issue': 'email_docs is None or not a dictionary'})}")
+            st.error("❌ Email generation returned invalid data")
 
         # Update cost tracking after email generation
         if st.session_state.cost_session_id:
@@ -631,12 +686,19 @@ async def process_case_documents(output_dir: str | None = None, config_path: str
                     st.session_state.cost_session_id
                 )
                 if updated_cost_summary and updated_cost_summary.actual_costs:
-                    updated_cost = float(
-                        updated_cost_summary.actual_costs.total_actual_cost
-                    )
-                    st.session_state.current_processing_cost = updated_cost
-                    display_processing_cost_update(updated_cost)
-            except (AttributeError, KeyError, ValueError):
+                    # Fix TypeError: Add null checking for total_actual_cost
+                    total_cost = updated_cost_summary.actual_costs.total_actual_cost
+                    if total_cost is not None:
+                        updated_cost = float(total_cost)
+                        st.session_state.current_processing_cost = updated_cost
+                        display_processing_cost_update(updated_cost)
+                    else:
+                        # Default to 0.0 if cost is None
+                        st.session_state.current_processing_cost = 0.0
+                        display_processing_cost_update(0.0)
+            except (AttributeError, KeyError, ValueError, TypeError) as e:
+                # Enhanced error handling for cost tracking
+                print(f"DEBUG_COST: {json.dumps({'module': 'main_processor', 'action': 'cost_tracking_error', 'error': str(e), 'error_type': type(e).__name__})}")
                 pass
 
         tracker.complete_phase(
@@ -688,10 +750,23 @@ async def process_case_documents(output_dir: str | None = None, config_path: str
             except Exception as e:
                 st.warning(f"Could not finalize cost tracking: {e!s}")
 
-        # Store results
+        # Store results - FIXED: Use correct keys from EmailGeneratorV2
         st.session_state.final_results = final_analysis
-        st.session_state.main_letter = email_docs.get("main_letter", "")
-        st.session_state.appendix = email_docs.get("appendix", "")
+        
+        # EmailGeneratorV2 returns "letter_content", not "main_letter"/"appendix"
+        if email_docs and isinstance(email_docs, dict):
+            # Extract the main letter content using the correct key
+            main_letter_content = email_docs.get("letter_content", "")
+            
+            # Set both main_letter and appendix to the same content since
+            # the new architecture generates a single complete findings letter
+            st.session_state.main_letter = main_letter_content
+            st.session_state.appendix = main_letter_content  # For UI compatibility
+        else:
+            # Fallback if email_docs is invalid
+            st.session_state.main_letter = ""
+            st.session_state.appendix = ""
+            
         st.session_state.processing_status = "completed"
 
         # Save output files if output_dir is specified

@@ -16,38 +16,31 @@ from components.ui_components import (
 # --- Session State Initialization ---
 def initialize_session_state():
     """Initializes the session state with default values."""
-    if "case_info" not in st.session_state:
-        st.session_state.case_info = {
+    # Define default values for all session state variables
+    defaults = {
+        "case_info": {
             "clientName": "",
             "attorneyName": "",
             "caseReference": "",
-        }
-    if "uploaded_files" not in st.session_state:
-        st.session_state.uploaded_files = []
-    if "intake_form" not in st.session_state:
-        st.session_state.intake_form = None
-    if "case_documents" not in st.session_state:
-        st.session_state.case_documents = []
-    if "final_results" not in st.session_state:
-        st.session_state.final_results = None
-    if "main_letter" not in st.session_state:
-        st.session_state.main_letter = None
-    if "appendix" not in st.session_state:
-        st.session_state.appendix = None
-    if "processing_status" not in st.session_state:
-        st.session_state.processing_status = "idle"  # idle, active, completed, failed
-    if "processing_error" not in st.session_state:
-        st.session_state.processing_error = None
-
-    # Cost tracking session state
-    if "cost_estimate" not in st.session_state:
-        st.session_state.cost_estimate = None
-    if "cost_summary" not in st.session_state:
-        st.session_state.cost_summary = None
-    if "current_processing_cost" not in st.session_state:
-        st.session_state.current_processing_cost = 0.0
-    if "cost_session_id" not in st.session_state:
-        st.session_state.cost_session_id = None
+        },
+        "uploaded_files": [],
+        "intake_form": None,
+        "case_documents": [],
+        "final_results": None,
+        "main_letter": None,
+        "appendix": None,
+        "processing_status": "idle",  # idle, active, completed, failed
+        "processing_error": None,
+        "cost_estimate": None,
+        "cost_summary": None,
+        "current_processing_cost": 0.0,
+        "cost_session_id": None,
+    }
+    
+    # Initialize any missing session state variables
+    for key, default_value in defaults.items():
+        if key not in st.session_state:
+            st.session_state[key] = default_value
 
 
 def start_analysis():
@@ -85,10 +78,10 @@ def main():
         if st.session_state.processing_status in ["idle", "failed", "completed"]:
             file_upload_section()
 
-            if st.session_state.get("uploaded_files"):
-                if handle_file_uploads():
-                    if st.button("Start Analysis"):
-                        start_analysis()
+            if (st.session_state.get("uploaded_files") and
+                handle_file_uploads() and
+                st.button("Start Analysis")):
+                start_analysis()
 
         elif st.session_state.processing_status == "active":
             st.info("Analysis is currently in progress. Please wait...")

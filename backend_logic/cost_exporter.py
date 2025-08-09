@@ -167,7 +167,7 @@ class CostExporter:
                     "",
                     "",
                     "TOTAL ACTUAL:",
-                    f"${float(cost_summary.actual_costs.total_actual_cost):.4f}",
+                    f"${float(cost_summary.actual_costs.total_actual_cost or 0.0):.4f}",
                 ]
             )
             writer.writerow([])

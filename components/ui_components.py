@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+
 import streamlit as st
 import streamlit.components.v1 as components
 
@@ -52,31 +53,31 @@ def load_devlin_test_case():
             
         # Load files from test directory
         uploaded_files = []
-        supported_extensions = {'.pdf', '.docx', '.eml', '.txt', '.jpg', '.jpeg', '.png', '.mp3', '.m4a', '.wav', '.mp4', '.mov', '.avi'}
+        supported_extensions = {".pdf", ".docx", ".eml", ".txt", ".jpg", ".jpeg", ".png", ".mp3", ".m4a", ".wav", ".mp4", ".mov", ".avi"}
         
         for file_path in test_folder.rglob("*"):
             if file_path.is_file() and file_path.suffix.lower() in supported_extensions:
                 # Create a mock uploaded file object
                 try:
-                    with open(file_path, 'rb') as f:
+                    with open(file_path, "rb") as f:
                         file_content = f.read()
                     
                     # Determine MIME type based on file extension
                     extension = file_path.suffix.lower()
                     mime_type_map = {
-                        '.pdf': 'application/pdf',
-                        '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-                        '.eml': 'message/rfc822',
-                        '.txt': 'text/plain',
-                        '.jpg': 'image/jpeg',
-                        '.jpeg': 'image/jpeg',
-                        '.png': 'image/png',
-                        '.mp3': 'audio/mpeg',
-                        '.m4a': 'audio/mp4',
-                        '.wav': 'audio/wav',
-                        '.mp4': 'video/mp4',
-                        '.mov': 'video/quicktime',
-                        '.avi': 'video/x-msvideo'
+                        ".pdf": "application/pdf",
+                        ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                        ".eml": "message/rfc822",
+                        ".txt": "text/plain",
+                        ".jpg": "image/jpeg",
+                        ".jpeg": "image/jpeg",
+                        ".png": "image/png",
+                        ".mp3": "audio/mpeg",
+                        ".m4a": "audio/mp4",
+                        ".wav": "audio/wav",
+                        ".mp4": "video/mp4",
+                        ".mov": "video/quicktime",
+                        ".avi": "video/x-msvideo"
                     }
                     
                     # Create a proper mock file object that simulates Streamlit UploadedFile
@@ -100,7 +101,7 @@ def load_devlin_test_case():
                     mock_file = MockFile(
                         file_path.name,
                         file_content,
-                        mime_type_map.get(extension, 'application/octet-stream')
+                        mime_type_map.get(extension, "application/octet-stream")
                     )
                     
                     uploaded_files.append(mock_file)

@@ -2,16 +2,20 @@
 """
 Test script to verify the regex_replace filter fix works correctly.
 """
+from __future__ import annotations
 
-import sys
 import os
+import sys
+
 
 # Add the project root to the Python path
 project_root = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, project_root)
 
-from jinja2 import Environment, DictLoader
+from jinja2 import DictLoader, Environment
+
 from backend_logic.email_generator import regex_replace_filter
+
 
 def test_regex_replace_filter():
     """Test the regex_replace_filter function directly."""
@@ -19,8 +23,8 @@ def test_regex_replace_filter():
     
     # Test 1: Basic regex replacement
     test_input = "Please complete this within 14 days"
-    pattern = r'\b(within\s+\d+\s+days?)\b'
-    replacement = r'<strong>\1</strong>'
+    pattern = r"\b(within\s+\d+\s+days?)\b"
+    replacement = r"<strong>\1</strong>"
     result = regex_replace_filter(test_input, pattern, replacement)
     expected = "Please complete this <strong>within 14 days</strong>"
     
@@ -31,8 +35,8 @@ def test_regex_replace_filter():
     
     # Test 2: Date format replacement
     test_input2 = "Due by March 15, 2025"
-    pattern2 = r'\b(by\s+\w+\s+\d{1,2},?\s+\d{4})\b'
-    replacement2 = r'<strong>\1</strong>'
+    pattern2 = r"\b(by\s+\w+\s+\d{1,2},?\s+\d{4})\b"
+    replacement2 = r"<strong>\1</strong>"
     result2 = regex_replace_filter(test_input2, pattern2, replacement2)
     expected2 = "Due <strong>by March 15, 2025</strong>"
     
@@ -42,10 +46,10 @@ def test_regex_replace_filter():
     print(f"Test 2 - {'✅ PASS' if result2 == expected2 else '❌ FAIL'}")
     
     # Test 3: Handle None input
-    result3 = regex_replace_filter(None, r'test', 'replacement')
+    result3 = regex_replace_filter(None, r"test", "replacement")
     expected3 = ""
     
-    print(f"\nTest 3 - Input: None")
+    print("\nTest 3 - Input: None")
     print(f"Test 3 - Result: '{result3}'")
     print(f"Test 3 - Expected: '{expected3}'")
     print(f"Test 3 - {'✅ PASS' if result3 == expected3 else '❌ FAIL'}")
@@ -65,10 +69,10 @@ def test_jinja2_integration():
     """.strip()
     
     # Create Jinja2 environment and register the filter
-    env = Environment(loader=DictLoader({'test': template_str}))
-    env.filters['regex_replace'] = regex_replace_filter
+    env = Environment(loader=DictLoader({"test": template_str}))
+    env.filters["regex_replace"] = regex_replace_filter
     
-    template = env.get_template('test')
+    template = env.get_template("test")
     result = template.render().strip()
     expected = "Complete <strong>within 30 days</strong> of <strong>12/25/2024</strong>"
     

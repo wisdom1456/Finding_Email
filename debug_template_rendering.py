@@ -1,17 +1,21 @@
 #!/usr/bin/env python3
+from __future__ import annotations
 
 import json
-import sys
 import os
+import sys
 from datetime import datetime
+
 
 # Add project root to path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from backend_logic.email_generator import EmailGeneratorV2
-from backend.utils.data_models import CaseAnalysisResult, EnhancedIntakeAnalysis
-from backend_logic.config import get_openai_config, get_openai_api_key
 from openai import OpenAI
+
+from backend.utils.data_models import CaseAnalysisResult, EnhancedIntakeAnalysis
+from backend_logic.config import get_openai_api_key, get_openai_config
+from backend_logic.email_generator import EmailGeneratorV2
+
 
 def create_simple_test_case():
     """Create a simple test case for debugging."""
@@ -59,7 +63,7 @@ def main():
         print(f"✅ JSON generated with keys: {list(validated_json.keys())}")
         
         # Check if generated_letter section has content
-        generated_letter = validated_json.get('generated_letter', {})
+        generated_letter = validated_json.get("generated_letter", {})
         print(f"📄 Generated letter sections: {list(generated_letter.keys())}")
         
         for section_name, content in generated_letter.items():
@@ -72,19 +76,19 @@ def main():
         docs = generator.generate_email_and_analysis_docs(analysis)
         
         print(f"📊 Generated documents: {list(docs.keys())}")
-        main_content = docs.get('main_letter', '')
+        main_content = docs.get("main_letter", "")
         
         print(f"📝 Main letter length: {len(main_content)} chars")
         
         # Save debug output
-        with open('debug_template_output.html', 'w') as f:
+        with open("debug_template_output.html", "w") as f:
             f.write(main_content)
         print("💾 Debug output saved to: debug_template_output.html")
         
         # Extract sections using validation harness logic
         from bs4 import BeautifulSoup
-        soup = BeautifulSoup(main_content, 'html.parser')
-        headers = soup.find_all(['h2', 'h3'])
+        soup = BeautifulSoup(main_content, "html.parser")
+        headers = soup.find_all(["h2", "h3"])
         
         print(f"\n🔍 Found {len(headers)} headers in rendered template:")
         for i, header in enumerate(headers):
@@ -93,7 +97,7 @@ def main():
         if len(headers) == 0:
             print("❌ No headers found - template may be using legacy format")
             print("🔍 Checking for div.section-title elements:")
-            div_sections = soup.find_all('div', class_='section-title')
+            div_sections = soup.find_all("div", class_="section-title")
             for i, div in enumerate(div_sections):
                 print(f"  {i+1}. <div class='section-title'>{div.get_text().strip()}</div>")
         else:

@@ -5,6 +5,9 @@ OpenAI API client and interaction handling for AI analysis components.
 from __future__ import annotations
 
 import json
+
+# Add logging for debugging
+import logging
 import os
 import re
 import time
@@ -13,8 +16,7 @@ from typing import Any, Dict, List, Optional
 import openai
 from openai import OpenAI
 
-# Add logging for debugging
-import logging
+
 logger = logging.getLogger(__name__)
 
 
@@ -35,16 +37,16 @@ class OpenAIClient:
         Handles both plain JSON and JSON wrapped in Markdown code blocks.
         """
         # Check for plain JSON
-        if content.strip().startswith('{') or content.strip().startswith('['):
+        if content.strip().startswith("{") or content.strip().startswith("["):
             return content
 
         # Primary regex for JSON in markdown block
-        primary_match = re.search(r'```(?:json)?\s*([\{\[][^`]*[\}\]])\s*```', content, re.DOTALL)
+        primary_match = re.search(r"```(?:json)?\s*([\{\[][^`]*[\}\]])\s*```", content, re.DOTALL)
         if primary_match:
             return primary_match.group(1)
 
         # Fallback regex for simpler markdown block
-        fallback_match = re.search(r'```\s*([\{\[][^`]*[\}\]])\s*```', content, re.DOTALL)
+        fallback_match = re.search(r"```\s*([\{\[][^`]*[\}\]])\s*```", content, re.DOTALL)
         if fallback_match:
             return fallback_match.group(1)
             
@@ -86,7 +88,7 @@ class OpenAIClient:
                 
                 # Track usage
                 usage = response.usage
-                print(f"OPENAI CLIENT: 📊 API usage:")
+                print("OPENAI CLIENT: 📊 API usage:")
                 print(f"OPENAI CLIENT: 📊   - Prompt tokens: {usage.prompt_tokens:,}")
                 print(f"OPENAI CLIENT: 📊   - Completion tokens: {usage.completion_tokens:,}")
                 print(f"OPENAI CLIENT: 📊   - Total tokens: {usage.total_tokens:,}")
@@ -213,7 +215,7 @@ class OpenAIClient:
         output_cost = (completion_tokens / 1000) * model_pricing["output"]
         total_cost = input_cost + output_cost
         
-        print(f"OPENAI CLIENT: 💰 Estimated cost:")
+        print("OPENAI CLIENT: 💰 Estimated cost:")
         print(f"OPENAI CLIENT: 💰   - Input: ${input_cost:.4f}")
         print(f"OPENAI CLIENT: 💰   - Output: ${output_cost:.4f}")
         print(f"OPENAI CLIENT: 💰   - Total: ${total_cost:.4f}")

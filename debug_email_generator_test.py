@@ -3,19 +3,27 @@
 Diagnostic test to trigger the EmailGenerator and capture debug logs.
 This test will help identify where the 'NoneType' object error occurs.
 """
+from __future__ import annotations
 
-import sys
-import os
 import json
+import os
+import sys
 from datetime import datetime
 
+
 # Add the backend directories to Python path
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), 'backend'))
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), 'backend_logic'))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "backend"))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "backend_logic"))
 
 from openai import OpenAI
-from backend.utils.data_models import CaseAnalysisResult, EnhancedIntakeAnalysis, AnalyzedDocument
+
+from backend.utils.data_models import (
+    AnalyzedDocument,
+    CaseAnalysisResult,
+    EnhancedIntakeAnalysis,
+)
 from backend_logic.email_generator import EmailGeneratorV2
+
 
 def create_minimal_test_case():
     """Create a minimal test case to trigger the email generator."""
@@ -72,13 +80,13 @@ def test_email_generator_with_debug():
         result = email_generator.generate_email_with_debug(case_analysis)
         
         print("Step 5: Results summary...")
-        print(f"✅ Email generation completed without fatal errors")
+        print("✅ Email generation completed without fatal errors")
         print(f"📧 Letter fields populated: {len([f for f in result.letter.__fields__ if getattr(result.letter, f)])}")
         print(f"🐛 Debug info available: {result.debug_info is not None}")
         
-        if result.debug_info and 'errors' in result.debug_info:
+        if result.debug_info and "errors" in result.debug_info:
             print(f"❌ Errors detected: {len(result.debug_info['errors'])}")
-            for error in result.debug_info['errors']:
+            for error in result.debug_info["errors"]:
                 print(f"   - {error}")
         
         return True

@@ -2,18 +2,21 @@
 """
 Test script for post-processing functionality in quality_validator.py
 """
+from __future__ import annotations
 
 import os
 import sys
 
+
 # Add backend to path so we can import the module
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'backend'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "backend"))
 
 from backend.quality_validator import (
     enforce_word_count_truncation,
+    process_section_content,
     replace_hedging_language,
-    process_section_content
 )
+
 
 def test_word_count_truncation():
     """Test the word count truncation function."""
@@ -31,7 +34,7 @@ def test_word_count_truncation():
     This is the fourth sentence that will also be removed during truncation.</p>"""
     
     result = enforce_word_count_truncation(long_content, 15)
-    print(f"✅ Long content test passed: truncated to appropriate length")
+    print("✅ Long content test passed: truncated to appropriate length")
     print(f"   Result: {result[:100]}...")
     
     return True
@@ -43,21 +46,21 @@ def test_hedging_language_replacement():
     # Test case 1: Simple hedging words
     hedged_text = "This case may result in a favorable outcome. The defendant might be liable."
     result = replace_hedging_language(hedged_text)
-    print(f"✅ Basic replacement test:")
+    print("✅ Basic replacement test:")
     print(f"   Before: {hedged_text}")
     print(f"   After:  {result}")
     
     # Test case 2: Hedging within quotes (should be preserved)
     quoted_text = 'The contract states "The work may be completed by Friday" but the defendant could still be liable.'
     result = replace_hedging_language(quoted_text)
-    print(f"✅ Quoted text preservation test:")
+    print("✅ Quoted text preservation test:")
     print(f"   Before: {quoted_text}")
     print(f"   After:  {result}")
     
     # Test case 3: Complex hedging patterns
     complex_text = "The client could potentially recover damages. This might result in a settlement."
     result = replace_hedging_language(complex_text)
-    print(f"✅ Complex patterns test:")
+    print("✅ Complex patterns test:")
     print(f"   Before: {complex_text}")
     print(f"   After:  {result}")
     
@@ -76,7 +79,7 @@ def test_section_processing():
     
     try:
         result = process_section_content(test_content, "legal_analysis")
-        print(f"✅ Section processing test passed")
+        print("✅ Section processing test passed")
         print(f"   Result: {result}")
         return True
     except Exception as e:
@@ -113,9 +116,8 @@ def main():
     if tests_passed == total_tests:
         print("🎉 All tests passed! Post-processing implementation is working correctly.")
         return True
-    else:
-        print("⚠️  Some tests failed. Please review the implementation.")
-        return False
+    print("⚠️  Some tests failed. Please review the implementation.")
+    return False
 
 if __name__ == "__main__":
     success = main()

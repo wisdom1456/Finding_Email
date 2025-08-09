@@ -59,7 +59,7 @@ class BudgetSheetComponent:
             with col2:
                 st.metric(
                     label="Actual Cost",
-                    value=f"${float(cost_summary.actual_costs.total_actual_cost):.4f}",
+                    value=f"${float(cost_summary.actual_costs.total_actual_cost or 0.0):.4f}",
                     help="Actual costs incurred during processing",
                 )
 
@@ -99,7 +99,7 @@ class BudgetSheetComponent:
         elif cost_summary.actual_costs:
             st.metric(
                 label="Total Processing Cost",
-                value=f"${float(cost_summary.actual_costs.total_actual_cost):.4f}",
+                value=f"${float(cost_summary.actual_costs.total_actual_cost or 0.0):.4f}",
                 help="Total costs incurred during case processing",
             )
 

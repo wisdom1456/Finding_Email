@@ -7,10 +7,12 @@ This script tests:
 2. Template rendering fails with ValueError when required variables are missing
 3. Template rendering fails with ValueError when required variables are empty
 """
+from __future__ import annotations
 
-import sys
 import os
-from unittest.mock import Mock, MagicMock
+import sys
+from unittest.mock import MagicMock, Mock
+
 
 # Add the project root to Python path
 project_root = os.path.dirname(os.path.abspath(__file__))
@@ -24,9 +26,10 @@ def test_template_validation():
     
     try:
         # Import the EmailGeneratorV2 class
-        from backend_logic.email_generator import EmailGeneratorV2
-        from backend.utils.data_models import CaseAnalysisResult, EnhancedIntakeAnalysis
         from openai import OpenAI
+
+        from backend.utils.data_models import CaseAnalysisResult, EnhancedIntakeAnalysis
+        from backend_logic.email_generator import EmailGeneratorV2
         
         print("✅ Successfully imported required modules")
         

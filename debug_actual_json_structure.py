@@ -2,27 +2,31 @@
 """
 Debug script to examine the actual JSON structure being generated
 """
+from __future__ import annotations
 
 import json
 import os
 import sys
+
 from openai import OpenAI
+
 
 # Add project root to path for imports
 project_root = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, project_root)
 
-from backend_logic.email_generator import EmailGeneratorV2
-from backend_logic.config import get_openai_api_key
 from backend.utils.data_models import (
-    CaseAnalysisResult,
-    EnhancedIntakeAnalysis,
     AnalyzedDocument,
-    LegalAssessment,
+    CaseAnalysisResult,
     DemandLetterEvaluation,
+    EnhancedIntakeAnalysis,
     FinalAnalysis,
-    FindingsLetterContent
+    FindingsLetterContent,
+    LegalAssessment,
 )
+from backend_logic.config import get_openai_api_key
+from backend_logic.email_generator import EmailGeneratorV2
+
 
 def create_sample_case_analysis():
     """Create a sample case analysis for testing."""
@@ -112,7 +116,7 @@ def main():
             print(f"📄 JSON Keys: {list(json_data.keys())}")
             
             # Save raw JSON for inspection
-            with open('debug_raw_json_structure.json', 'w', encoding='utf-8') as f:
+            with open("debug_raw_json_structure.json", "w", encoding="utf-8") as f:
                 json.dump(json_data, f, indent=2, ensure_ascii=False)
             
             print("📁 Raw JSON saved to: debug_raw_json_structure.json")
@@ -121,35 +125,35 @@ def main():
             print("\n🔍 Checking Template-Expected Fields:")
             
             # Check generated_letter fields
-            if 'generated_letter' in json_data:
-                gl = json_data['generated_letter']
+            if "generated_letter" in json_data:
+                gl = json_data["generated_letter"]
                 print(f"  ✅ generated_letter present with keys: {list(gl.keys())}")
                 print(f"  📝 background_summary present: {'background_summary' in gl}")
                 print(f"  📝 analysis_and_position present: {'analysis_and_position' in gl}")
-                if 'background_summary' in gl:
+                if "background_summary" in gl:
                     print(f"  📏 background_summary length: {len(str(gl['background_summary']))}")
-                if 'analysis_and_position' in gl:
+                if "analysis_and_position" in gl:
                     print(f"  📏 analysis_and_position length: {len(str(gl['analysis_and_position']))}")
             else:
                 print("  ❌ generated_letter missing!")
             
             # Check bridges
-            if 'bridges' in json_data:
-                bridges = json_data['bridges']
+            if "bridges" in json_data:
+                bridges = json_data["bridges"]
                 print(f"  ✅ bridges present with keys: {list(bridges.keys())}")
             else:
                 print("  ❌ bridges missing!")
             
             # Check claims
-            if 'claims' in json_data:
-                claims = json_data['claims']
+            if "claims" in json_data:
+                claims = json_data["claims"]
                 print(f"  ✅ claims present, count: {len(claims) if isinstance(claims, list) else 'not a list'}")
             else:
                 print("  ❌ claims missing!")
             
             # Check next_steps
-            if 'next_steps' in json_data:
-                ns = json_data['next_steps']
+            if "next_steps" in json_data:
+                ns = json_data["next_steps"]
                 print(f"  ✅ next_steps present with keys: {list(ns.keys()) if isinstance(ns, dict) else 'not a dict'}")
             else:
                 print("  ❌ next_steps missing!")

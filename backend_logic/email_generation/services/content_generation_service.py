@@ -1,349 +1,197 @@
 """
-Content Generation Service
+Content Generation Service - REFACTORED
 
-Handles section-specific content generation for legal emails and documents.
-This service is responsible for:
-- Orchestrating content generation for different sections
-- Coordinating between OpenAI service and other components
-- Managing content flow and dependencies
-- Handling section-specific logic and formatting
+Simplified service for content generation using the new single master prompt approach.
+This service has been refactored to:
+- Use a single master prompt instead of multi-step JSON processing
+- Inject CaseAnalysisResult directly into the master prompt
+- Generate HTML directly without complex section-by-section processing
+- Remove dependencies on deleted YAML configuration keys
 
-This replaces content generation methods from the original EmailGeneratorV2 class.
+This replaces the complex multi-prompt pipeline with a streamlined single-call approach.
 """
+from __future__ import annotations
 
-from typing import Dict, Any, Optional, List
 import logging
-from .openai_integration_service import OpenAIIntegrationService
-from .json_architecture_service import JSONArchitectureService
-from .text_processing_service import TextProcessingService
+from typing import Any, Dict
+
+from backend.utils.data_models import CaseAnalysisResult
 
 logger = logging.getLogger(__name__)
 
 
 class ContentGenerationService:
     """
-    Orchestrates content generation for different sections of legal documents.
+    Simplified content generation service using single master prompt approach.
     
-    This service coordinates the generation of various content sections,
-    managing the flow between AI generation, processing, and structuring.
+    This refactored service coordinates content generation using the new architecture:
+    - Single master prompt instead of multiple AI calls
+    - Direct HTML generation
+    - Simplified error handling and fallback mechanisms
     """
     
-    def __init__(self, openai_service: OpenAIIntegrationService,
-                 json_service: JSONArchitectureService,
-                 text_service: TextProcessingService):
+    def __init__(self, json_processing_service, openai_service=None, json_service=None, text_service=None):
         """
-        Initialize the content generation service.
+        Initialize the simplified content generation service.
         
         Args:
-            openai_service: Service for AI content generation
-            json_service: Service for JSON operations
-            text_service: Service for text processing
+            json_processing_service: The refactored JsonProcessingService for HTML generation
+            openai_service: Legacy parameter (deprecated)
+            json_service: Legacy parameter (deprecated)
+            text_service: Legacy parameter (deprecated)
         """
+        self.json_processing_service = json_processing_service
+        
+        # Legacy parameters kept for backward compatibility
+        if openai_service or json_service or text_service:
+            logger.warning(
+                "Legacy service parameters are deprecated. "
+                "Only json_processing_service is used in the new architecture."
+            )
+        
         self.openai_service = openai_service
         self.json_service = json_service
         self.text_service = text_service
-        
-        # Content generation pipeline stages
-        self.pipeline_stages = [
-            'PREPARE',
-            'GENERATE', 
-            'FORMAT'
-        ]
-        
-        # Required content sections
-        self.content_sections = [
-            'factual_summary',
-            'legal_analysis',
-            'evidence_review', 
-            'recommendations'
-        ]
     
-    def generate_email_and_analysis_docs(self, case_data: Dict[str, Any],
+    def generate_email_and_analysis_docs(self, case_analysis: CaseAnalysisResult,
                                        config: Dict[str, Any] = None) -> Dict[str, Any]:
         """
-        Generate complete email and analysis documents.
+        Generate complete email and analysis documents using the new single-prompt approach.
         
-        Main orchestration method that coordinates the entire content generation
-        process from raw case data to structured legal documents.
+        This is the main orchestration method that uses the simplified architecture
+        to generate legal document content directly as HTML.
         
         Args:
-            case_data: Raw case information and context
-            config: Optional configuration parameters
+            case_analysis: Complete case analysis result from document processing
+            config: Optional configuration parameters (largely unused in new approach)
             
         Returns:
-            Complete generated document structure
+            Complete generated document structure with HTML content
         """
-        logger.info("Starting email and analysis document generation")
+        logger.info("Starting email and analysis document generation with new architecture")
         
         try:
-            # Stage 1: PREPARE - Prepare and validate input data
-            prepared_data = self._prepare_case_data(case_data, config)
+            # Use the refactored JsonProcessingService to generate HTML directly
+            html_content = self.json_processing_service.generate_html_letter(case_analysis)
             
-            # Stage 2: GENERATE - Generate content for each section
-            generated_content = self._generate_all_sections(prepared_data)
+            if not html_content:
+                raise ValueError("HTML generation returned empty content")
             
-            # Stage 3: FORMAT - Process and format the generated content
-            formatted_content = self._format_generated_content(generated_content)
-            
-            logger.info("Email and analysis document generation completed successfully")
-            return formatted_content
-            
-        except Exception as e:
-            logger.error(f"Error in content generation pipeline: {e}")
-            return self._create_error_response(str(e), case_data)
-    
-    def generate_factual_summary_content(self, case_data: Dict[str, Any]) -> str:
-        """
-        Generate factual summary content for the case.
-        
-        Args:
-            case_data: Case information and context
-            
-        Returns:
-            Generated factual summary content
-        """
-        logger.info("Generating factual summary content")
-        
-        try:
-            # Use OpenAI service to generate content
-            raw_content = self.openai_service.generate_factual_summary(case_data)
-            
-            # Process the generated content
-            processed_content = self.text_service.clean_ai_response(raw_content)
-            formatted_content = self.text_service.format_legal_content(processed_content)
-            
-            return formatted_content
-            
-        except Exception as e:
-            logger.error(f"Error generating factual summary: {e}")
-            return f"[Error generating factual summary: {e}]"
-    
-    def generate_legal_analysis_content(self, case_data: Dict[str, Any]) -> str:
-        """
-        Generate legal analysis content for the case.
-        
-        Args:
-            case_data: Case information and context
-            
-        Returns:
-            Generated legal analysis content
-        """
-        logger.info("Generating legal analysis content")
-        
-        try:
-            # Use OpenAI service to generate content
-            raw_content = self.openai_service.generate_legal_analysis(case_data)
-            
-            # Process the generated content
-            processed_content = self.text_service.clean_ai_response(raw_content)
-            formatted_content = self.text_service.format_legal_content(processed_content)
-            
-            return formatted_content
-            
-        except Exception as e:
-            logger.error(f"Error generating legal analysis: {e}")
-            return f"[Error generating legal analysis: {e}]"
-    
-    def generate_evidence_review_content(self, case_data: Dict[str, Any]) -> str:
-        """
-        Generate evidence review content for the case.
-        
-        Args:
-            case_data: Case information and context
-            
-        Returns:
-            Generated evidence review content
-        """
-        logger.info("Generating evidence review content")
-        
-        try:
-            # Use OpenAI service to generate content
-            raw_content = self.openai_service.generate_evidence_review(case_data)
-            
-            # Process the generated content
-            processed_content = self.text_service.clean_ai_response(raw_content)
-            formatted_content = self.text_service.format_legal_content(processed_content)
-            
-            return formatted_content
-            
-        except Exception as e:
-            logger.error(f"Error generating evidence review: {e}")
-            return f"[Error generating evidence review: {e}]"
-    
-    def generate_recommendations_content(self, case_data: Dict[str, Any]) -> str:
-        """
-        Generate recommendations content for the case.
-        
-        Args:
-            case_data: Case information and context
-            
-        Returns:
-            Generated recommendations content
-        """
-        logger.info("Generating recommendations content")
-        
-        try:
-            # Use OpenAI service to generate content
-            raw_content = self.openai_service.generate_recommendations(case_data)
-            
-            # Process the generated content
-            processed_content = self.text_service.clean_ai_response(raw_content)
-            formatted_content = self.text_service.format_legal_content(processed_content)
-            
-            return formatted_content
-            
-        except Exception as e:
-            logger.error(f"Error generating recommendations: {e}")
-            return f"[Error generating recommendations: {e}]"
-    
-    def _prepare_case_data(self, case_data: Dict[str, Any], 
-                          config: Dict[str, Any] = None) -> Dict[str, Any]:
-        """
-        Prepare and validate case data for content generation.
-        
-        Args:
-            case_data: Raw case data
-            config: Optional configuration
-            
-        Returns:
-            Prepared and validated case data
-        """
-        prepared_data = case_data.copy()
-        
-        # Add default values for missing fields
-        if 'case_id' not in prepared_data:
-            prepared_data['case_id'] = 'unknown'
-        
-        if 'case_type' not in prepared_data:
-            prepared_data['case_type'] = 'general'
-        
-        # Add configuration if provided
-        if config:
-            prepared_data['generation_config'] = config
-        
-        # Add metadata
-        prepared_data['metadata'] = prepared_data.get('metadata', {})
-        prepared_data['metadata']['pipeline_stage'] = 'PREPARE'
-        
-        logger.info(f"Case data prepared for generation: {prepared_data.get('case_id', 'unknown')}")
-        return prepared_data
-    
-    def _generate_all_sections(self, case_data: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Generate content for all required sections.
-        
-        Args:
-            case_data: Prepared case data
-            
-        Returns:
-            Generated content for all sections
-        """
-        logger.info("Generating content for all sections")
-        
-        generated_content = {}
-        
-        # Generate each section
-        for section in self.content_sections:
-            try:
-                if section == 'factual_summary':
-                    content = self.generate_factual_summary_content(case_data)
-                elif section == 'legal_analysis':
-                    content = self.generate_legal_analysis_content(case_data)
-                elif section == 'evidence_review':
-                    content = self.generate_evidence_review_content(case_data)
-                elif section == 'recommendations':
-                    content = self.generate_recommendations_content(case_data)
-                else:
-                    content = f"[{section.replace('_', ' ').title()} content not implemented]"
-                
-                generated_content[section] = content
-                logger.info(f"Successfully generated {section}")
-                
-            except Exception as e:
-                logger.error(f"Error generating {section}: {e}")
-                generated_content[section] = f"[Error generating {section}: {e}]"
-        
-        # Add metadata
-        generated_content['metadata'] = {
-            'pipeline_stage': 'GENERATE',
-            'sections_generated': len([s for s in generated_content.keys() if s != 'metadata']),
-            'generation_timestamp': None  # Could be set by caller
-        }
-        
-        return generated_content
-    
-    def _format_generated_content(self, generated_content: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Format and structure the generated content.
-        
-        Args:
-            generated_content: Raw generated content
-            
-        Returns:
-            Formatted and structured content
-        """
-        logger.info("Formatting generated content")
-        
-        try:
-            # Validate and structure using JSON service
-            structured_content = self.json_service.validate_json_response(generated_content)
-            
-            # Convert to letter format
-            letter_content = self.json_service.convert_json_to_generated_letter(structured_content)
-            
-            # Create final response
-            formatted_response = {
-                'structured_data': structured_content,
-                'letter_content': letter_content,
-                'metadata': {
-                    'pipeline_stage': 'FORMAT',
-                    'format_timestamp': None,
-                    'content_length': len(letter_content),
-                    'sections_count': len(structured_content) - 1  # Excluding metadata
+            # Create response structure compatible with existing interfaces
+            result = {
+                "letter_content": html_content,
+                "generated_letter": html_content,  # For backward compatibility
+                "metadata": {
+                    "architecture": "single_master_prompt",
+                    "generation_method": "direct_html",
+                    "content_length": len(html_content),
+                    "has_error": False,
+                    "is_fallback": False
                 }
             }
             
-            return formatted_response
+            logger.info("Email and analysis document generation completed successfully")
+            return result
             
         except Exception as e:
-            logger.error(f"Error formatting content: {e}")
-            return self._create_error_response(f"Formatting error: {e}", generated_content)
+            logger.error(f"Error in simplified content generation: {e}")
+            return self._create_error_response(str(e), case_analysis)
     
     def _create_error_response(self, error_message: str, 
-                             original_data: Dict[str, Any] = None) -> Dict[str, Any]:
+                             case_analysis: CaseAnalysisResult = None) -> Dict[str, Any]:
         """
         Create an error response with fallback content.
         
         Args:
             error_message: Error description
-            original_data: Original data that caused the error
+            case_analysis: Original case analysis that caused the error
             
         Returns:
             Error response with fallback content
         """
         logger.warning(f"Creating error response: {error_message}")
         
-        error_response = {
-            'structured_data': {
-                'factual_summary': f"[Content generation error: {error_message}]",
-                'legal_analysis': "[Legal analysis not available due to generation error]",
-                'evidence_review': "[Evidence review not available due to generation error]", 
-                'recommendations': "[Recommendations not available due to generation error]",
-                'metadata': {
-                    'pipeline_stage': 'ERROR',
-                    'error_message': error_message,
-                    'has_error': True
-                }
-            },
-            'letter_content': f"Error generating document content: {error_message}",
-            'metadata': {
-                'pipeline_stage': 'ERROR',
-                'error_message': error_message,
-                'has_error': True
+        # Extract basic info for fallback
+        client_name = "Client"
+        case_type = "Legal Matter"
+        
+        if case_analysis and case_analysis.intake_analysis:
+            client_name = case_analysis.intake_analysis.client_name or client_name
+            case_type = case_analysis.intake_analysis.case_type or case_type
+        
+        fallback_html = f"""<html>
+<body>
+<p>We have completed our initial review of your {case_type.lower()} matter. Due to a technical issue during document generation, we are providing this preliminary communication.</p>
+
+<p>Our analysis is currently being finalized and we will provide a comprehensive findings letter within 24 hours. Based on our initial review, your matter requires immediate attention and strategic consideration.</p>
+
+<p><strong>Immediate Next Steps:</strong></p>
+<ul>
+<li>We will contact you within 24 hours with detailed findings</li>
+<li>Please preserve all relevant documents and communications</li>
+<li>Do not take any action regarding this matter until we provide guidance</li>
+</ul>
+
+<p>If you have urgent questions or concerns, please contact our office immediately. We are committed to providing you with thorough legal guidance.</p>
+</body>
+</html>"""
+        
+        return {
+            "letter_content": fallback_html,
+            "generated_letter": fallback_html,
+            "metadata": {
+                "architecture": "single_master_prompt",
+                "generation_method": "error_fallback",
+                "error_message": error_message,
+                "has_error": True,
+                "is_fallback": True
             }
         }
-        
-        return error_response
+    
+    # Legacy methods kept for backward compatibility
+    def generate_factual_summary_content(self, case_data: Dict[str, Any]) -> str:
+        """
+        DEPRECATED: Legacy method for backward compatibility.
+        Use generate_email_and_analysis_docs() instead.
+        """
+        logger.warning(
+            "generate_factual_summary_content() is deprecated. "
+            "Use generate_email_and_analysis_docs() with CaseAnalysisResult instead."
+        )
+        return "[Legacy method - use new architecture]"
+    
+    def generate_legal_analysis_content(self, case_data: Dict[str, Any]) -> str:
+        """
+        DEPRECATED: Legacy method for backward compatibility.
+        Use generate_email_and_analysis_docs() instead.
+        """
+        logger.warning(
+            "generate_legal_analysis_content() is deprecated. "
+            "Use generate_email_and_analysis_docs() with CaseAnalysisResult instead."
+        )
+        return "[Legacy method - use new architecture]"
+    
+    def generate_evidence_review_content(self, case_data: Dict[str, Any]) -> str:
+        """
+        DEPRECATED: Legacy method for backward compatibility.
+        Use generate_email_and_analysis_docs() instead.
+        """
+        logger.warning(
+            "generate_evidence_review_content() is deprecated. "
+            "Use generate_email_and_analysis_docs() with CaseAnalysisResult instead."
+        )
+        return "[Legacy method - use new architecture]"
+    
+    def generate_recommendations_content(self, case_data: Dict[str, Any]) -> str:
+        """
+        DEPRECATED: Legacy method for backward compatibility.
+        Use generate_email_and_analysis_docs() instead.
+        """
+        logger.warning(
+            "generate_recommendations_content() is deprecated. "
+            "Use generate_email_and_analysis_docs() with CaseAnalysisResult instead."
+        )
+        return "[Legacy method - use new architecture]"
     
     def get_generation_status(self) -> Dict[str, Any]:
         """
@@ -353,12 +201,14 @@ class ContentGenerationService:
             Service status information
         """
         return {
-            'service_name': 'ContentGenerationService',
-            'pipeline_stages': self.pipeline_stages,
-            'content_sections': self.content_sections,
-            'is_configured': all([
-                self.openai_service is not None,
-                self.json_service is not None,
-                self.text_service is not None
-            ])
+            "service_name": "ContentGenerationService",
+            "architecture": "single_master_prompt",
+            "generation_method": "direct_html",
+            "legacy_methods_available": True,
+            "is_configured": self.json_processing_service is not None,
+            "deprecated_services": {
+                "openai_service": self.openai_service is not None,
+                "json_service": self.json_service is not None,
+                "text_service": self.text_service is not None
+            }
         }

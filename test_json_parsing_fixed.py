@@ -2,11 +2,14 @@
 """
 Test script to validate the fixed JSON parsing logic without API keys.
 """
+from __future__ import annotations
 
-import sys
-import os
 import json
+import os
 import re
+import sys
+
+
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 def test_json_parsing_fixed():
@@ -16,16 +19,16 @@ def test_json_parsing_fixed():
     # Replicate the JSON parsing methods locally without API key dependencies
     def _extract_json_content(content: str) -> str:
         """Replicate the extraction logic."""
-        if content.strip().startswith('{') or content.strip().startswith('['):
+        if content.strip().startswith("{") or content.strip().startswith("["):
             return content
 
         # Primary regex for JSON in markdown block
-        primary_match = re.search(r'```(?:json)?\s*([\{\[][^`]*[\}\]])\s*```', content, re.DOTALL)
+        primary_match = re.search(r"```(?:json)?\s*([\{\[][^`]*[\}\]])\s*```", content, re.DOTALL)
         if primary_match:
             return primary_match.group(1)
 
         # Fallback regex for simpler markdown block
-        fallback_match = re.search(r'```\s*([\{\[][^`]*[\}\]])\s*```', content, re.DOTALL)
+        fallback_match = re.search(r"```\s*([\{\[][^`]*[\}\]])\s*```", content, re.DOTALL)
         if fallback_match:
             return fallback_match.group(1)
             
@@ -74,13 +77,13 @@ def test_json_parsing_fixed():
         ('```json\n[{"name": "test"}, {"name": "test2"}]\n```', "JSON array in markdown"),
         
         # Empty content
-        ('', "Empty content"),
+        ("", "Empty content"),
         
         # Invalid JSON
         ('{"invalid": json}', "Invalid JSON"),
         
         # Text with no JSON
-        ('This is just plain text with no JSON content.', "Plain text"),
+        ("This is just plain text with no JSON content.", "Plain text"),
     ]
     
     print(f"\nRunning {len(test_cases)} test cases...\n")
@@ -107,12 +110,12 @@ def test_json_parsing_fixed():
                 else:
                     print(f"   ❌ Failed: {result['error']}")
                     if i in [6, 7, 8]:  # Expected failures
-                        print(f"   ✅ (Expected failure)")
+                        print("   ✅ (Expected failure)")
                         passed += 1
                     else:
                         failed += 1
             else:
-                print(f"   ❌ Wrong format: Missing 'success' key")
+                print("   ❌ Wrong format: Missing 'success' key")
                 failed += 1
                 
         except Exception as e:
@@ -121,7 +124,7 @@ def test_json_parsing_fixed():
         
         print("-" * 60)
     
-    print(f"JSON parsing tests completed!")
+    print("JSON parsing tests completed!")
     print(f"✅ Passed: {passed}")
     print(f"❌ Failed: {failed}")
     print(f"Total: {passed + failed}")

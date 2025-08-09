@@ -261,7 +261,7 @@ def validate_next_steps_formatting(content: str) -> None:
         raise ValueError("Next steps content is empty or invalid")
     
     # Check for <strong> tag presence
-    if not re.search(r'<strong>', content, re.IGNORECASE):
+    if not re.search(r"<strong>", content, re.IGNORECASE):
         raise ValueError("Next steps section is missing deadline formatting (no <strong> tags found)")
     
     # Log successful validation for debugging
@@ -301,9 +301,9 @@ def validate_section_output(output_content: str, output_format: str) -> None:
     
     elif output_format == "html":
         # Check if the content contains at least one HTML tag structure
-        html_pattern = re.search(r'<p>|</p>|<ul>|</ul>|<li>|</li>', output_content, re.IGNORECASE)
+        html_pattern = re.search(r"<p>|</p>|<ul>|</ul>|<li>|</li>", output_content, re.IGNORECASE)
         if not html_pattern:
-            print(f"VALIDATORS: HTML validation failed - no required HTML tags found")
+            print("VALIDATORS: HTML validation failed - no required HTML tags found")
             raise ValueError("HTML format validation failed: required HTML tags (<p>, <ul>, <li>) are missing")
         
         print(f"VALIDATORS: HTML format validation passed for content length {len(output_content)}")

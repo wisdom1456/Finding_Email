@@ -3,16 +3,26 @@
 """
 Debug script to examine the actual content that's failing normalization.
 """
+from __future__ import annotations
 
-import sys
 import os
-sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+import sys
 
-from backend_logic.email_generator import EmailGeneratorV2
-from openai import OpenAI
-from backend.utils.data_models import CaseAnalysisResult, EnhancedIntakeAnalysis, LegalAssessment
+
+sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
+
 import re
+
 from bs4 import BeautifulSoup
+from openai import OpenAI
+
+from backend.utils.data_models import (
+    CaseAnalysisResult,
+    EnhancedIntakeAnalysis,
+    LegalAssessment,
+)
+from backend_logic.email_generator import EmailGeneratorV2
+
 
 def count_normalization_issues(html_content):
     """Count normalization issues like the validation harness does."""
@@ -20,14 +30,14 @@ def count_normalization_issues(html_content):
         return 0, 0, 0
     
     # Parse HTML and extract text
-    soup = BeautifulSoup(html_content, 'html.parser')
+    soup = BeautifulSoup(html_content, "html.parser")
     text = soup.get_text()
     
     # Count duplicate sentences
-    sentences = re.split(r'(?<=[.!?])\s+', text)
+    sentences = re.split(r"(?<=[.!?])\s+", text)
     sentence_counts = {}
     for sentence in sentences:
-        clean_sentence = re.sub(r'\s+', ' ', sentence.strip().lower())
+        clean_sentence = re.sub(r"\s+", " ", sentence.strip().lower())
         if len(clean_sentence) > 10:  # Only count meaningful sentences
             sentence_counts[clean_sentence] = sentence_counts.get(clean_sentence, 0) + 1
     
@@ -41,10 +51,10 @@ def count_normalization_issues(html_content):
             long_sentences += 1
     
     # Count repeated 3-word phrases
-    words = re.findall(r'\b\w+\b', text.lower())
+    words = re.findall(r"\b\w+\b", text.lower())
     phrase_counts = {}
     for i in range(len(words) - 2):
-        phrase = ' '.join(words[i:i+3])
+        phrase = " ".join(words[i:i+3])
         phrase_counts[phrase] = phrase_counts.get(phrase, 0) + 1
     
     repeated_phrases = sum(1 for count in phrase_counts.values() if count > 2)
@@ -119,7 +129,7 @@ analysis = CaseAnalysisResult(
 print("📧 Generating email...")
 try:
     result = generator.generate_email_and_analysis_docs(analysis)
-    html_content = result['main_letter']
+    html_content = result["main_letter"]
     
     print("✅ Email generated successfully")
     print(f"📏 Content length: {len(html_content)} characters")
@@ -130,7 +140,7 @@ try:
     
     duplicates, long_count, repeated_count, sentences, phrase_counts = count_normalization_issues(html_content)
     
-    print(f"📊 SUMMARY:")
+    print("📊 SUMMARY:")
     print(f"  - Duplicate sentences: {duplicates}")
     print(f"  - Long sentences (>15 words): {long_count}")
     print(f"  - Repeated 3-word phrases (>2 times): {repeated_count}")
@@ -142,7 +152,7 @@ try:
     repeated_phrases = analyze_repeated_phrases(phrase_counts)
     
     # Save detailed analysis
-    with open('normalization_analysis.txt', 'w') as f:
+    with open("normalization_analysis.txt", "w") as f:
         f.write("DETAILED NORMALIZATION ANALYSIS\n")
         f.write("=" * 50 + "\n\n")
         f.write(f"Duplicate sentences: {duplicates}\n")
@@ -159,16 +169,16 @@ try:
         for phrase, count in repeated_phrases:
             f.write(f"'{phrase}' appears {count} times\n")
         
-        f.write(f"\n\nFULL HTML CONTENT:\n")
+        f.write("\n\nFULL HTML CONTENT:\n")
         f.write("=" * 50 + "\n")
         f.write(html_content)
     
-    print(f"\n📄 Detailed analysis saved to: normalization_analysis.txt")
+    print("\n📄 Detailed analysis saved to: normalization_analysis.txt")
     
     # Show a sample of the problematic content
-    print(f"\n📝 SAMPLE CONTENT (first 500 chars):")
+    print("\n📝 SAMPLE CONTENT (first 500 chars):")
     print("=" * 60)
-    plain_text = BeautifulSoup(html_content, 'html.parser').get_text()
+    plain_text = BeautifulSoup(html_content, "html.parser").get_text()
     print(plain_text[:500] + "...")
 
 except Exception as e:

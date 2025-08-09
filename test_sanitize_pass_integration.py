@@ -8,19 +8,23 @@ This test validates that:
 3. Optional polish step works with model realignment
 4. Word count limits are enforced properly
 """
+from __future__ import annotations
 
 import os
-import sys
 import re
-from typing import Dict, Any
+import sys
+from typing import Any, Dict
+
 
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from backend.quality_validator import polish_and_sanitize, apply_citation_sanitization
-from backend_logic.email_generator import EmailGeneratorV2
-from backend.utils.data_models import CaseAnalysisResult, EnhancedIntakeAnalysis
 from openai import OpenAI
+
+from backend.quality_validator import apply_citation_sanitization, polish_and_sanitize
+from backend.utils.data_models import CaseAnalysisResult, EnhancedIntakeAnalysis
+from backend_logic.email_generator import EmailGeneratorV2
+
 
 def test_citation_filter():
     """Test that citation filter removes legal references correctly."""
@@ -137,9 +141,9 @@ def test_configuration_loading():
         
         # Verify configuration is loaded
         assert generator.config is not None, "Configuration not loaded"
-        assert 'citation_filter_regex' in generator.config, "Citation filter regex not found in config"
+        assert "citation_filter_regex" in generator.config, "Citation filter regex not found in config"
         
-        citation_regex = generator.config.get('citation_filter_regex', '')
+        citation_regex = generator.config.get("citation_filter_regex", "")
         assert citation_regex, "Citation filter regex is empty"
         
         print(f"✅ Configuration loaded successfully with regex: {citation_regex}")
@@ -182,9 +186,8 @@ def main():
     if failed == 0:
         print("🎉 All sanitization integration tests passed!")
         return True
-    else:
-        print("⚠️ Some tests failed - check implementation")
-        return False
+    print("⚠️ Some tests failed - check implementation")
+    return False
 
 if __name__ == "__main__":
     success = main()

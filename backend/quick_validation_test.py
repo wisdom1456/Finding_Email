@@ -2,15 +2,21 @@
 """
 Quick test to verify fallback validation fixes.
 """
+from __future__ import annotations
 
-import sys
 import os
+import sys
+
 
 # Add the backend directory to Python path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from utils.data_models import LegalAssessment, DemandLetterEvaluation
-from utils.validators import create_fallback_legal_assessment, create_fallback_demand_letter_evaluation
+from utils.data_models import DemandLetterEvaluation, LegalAssessment
+from utils.validators import (
+    create_fallback_demand_letter_evaluation,
+    create_fallback_legal_assessment,
+)
+
 
 def test_fallback_validation():
     """Test that fallback functions now return valid data for updated models."""
@@ -21,7 +27,7 @@ def test_fallback_validation():
     try:
         fallback_data = create_fallback_legal_assessment()
         legal_assessment = LegalAssessment.model_validate(fallback_data)
-        print(f"   ✅ LegalAssessment validation successful")
+        print("   ✅ LegalAssessment validation successful")
         print(f"   - demand_letter_appropriate: {legal_assessment.demand_letter_appropriate} (type: {type(legal_assessment.demand_letter_appropriate).__name__})")
         print(f"   - case_type: {legal_assessment.case_type}")
         assert isinstance(legal_assessment.demand_letter_appropriate, str), "demand_letter_appropriate should be string"
@@ -34,7 +40,7 @@ def test_fallback_validation():
     try:
         fallback_data = create_fallback_demand_letter_evaluation()
         demand_evaluation = DemandLetterEvaluation.model_validate(fallback_data)
-        print(f"   ✅ DemandLetterEvaluation validation successful")
+        print("   ✅ DemandLetterEvaluation validation successful")
         print(f"   - is_appropriate: {demand_evaluation.is_appropriate} (type: {type(demand_evaluation.is_appropriate).__name__})")
         print(f"   - reasoning: {demand_evaluation.reasoning[:50]}...")
         assert isinstance(demand_evaluation.is_appropriate, str), "is_appropriate should be string"

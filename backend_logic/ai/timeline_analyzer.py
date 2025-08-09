@@ -4,11 +4,16 @@ Timeline analysis and chronological processing for legal case data.
 
 from __future__ import annotations
 
+import json
+import logging
 import re
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple
 
 import dateutil.parser as date_parser
+
+# Configure logger for timeline analyzer debugging
+logger = logging.getLogger(__name__)
 
 
 class TimelineAnalyzer:
@@ -17,16 +22,16 @@ class TimelineAnalyzer:
     def __init__(self):
         """Initialize TimelineAnalyzer."""
         self.date_patterns = [
-            r'\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b',  # MM/DD/YYYY or MM-DD-YYYY
-            r'\b\d{4}[/-]\d{1,2}[/-]\d{1,2}\b',    # YYYY/MM/DD or YYYY-MM-DD
-            r'\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]* \d{1,2},? \d{4}\b',  # Month DD, YYYY
-            r'\b\d{1,2} (?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]* \d{4}\b',     # DD Month YYYY
+            r"\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b",  # MM/DD/YYYY or MM-DD-YYYY
+            r"\b\d{4}[/-]\d{1,2}[/-]\d{1,2}\b",    # YYYY/MM/DD or YYYY-MM-DD
+            r"\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]* \d{1,2},? \d{4}\b",  # Month DD, YYYY
+            r"\b\d{1,2} (?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]* \d{4}\b",     # DD Month YYYY
         ]
         
         self.time_indicators = [
-            r'\b\d{1,2}:\d{2}(?::\d{2})?\s*(?:AM|PM|am|pm)?\b',  # Time patterns
-            r'\b(?:morning|afternoon|evening|night)\b',
-            r'\b(?:early|late|mid)\s+(?:morning|afternoon|evening)\b',
+            r"\b\d{1,2}:\d{2}(?::\d{2})?\s*(?:AM|PM|am|pm)?\b",  # Time patterns
+            r"\b(?:morning|afternoon|evening|night)\b",
+            r"\b(?:early|late|mid)\s+(?:morning|afternoon|evening)\b",
         ]
 
     def extract_timeline_from_content(self, content: str, source: str = "unknown") -> List[Dict[str, Any]]:
@@ -65,39 +70,61 @@ class TimelineAnalyzer:
 
     def create_comprehensive_timeline(self, analysis_data: Any) -> Dict[str, Any]:
         """Create comprehensive timeline from all available data sources."""
+        
+        # ENTRY LOG: Capture full input data payload
+        entry_log = {
+            "module": "TimelineAnalyzer",
+            "function": "create_comprehensive_timeline",
+            "event": "entry",
+            "timestamp": datetime.now().isoformat(),
+            "hypothesis_id": "data_flow_analysis",
+            "input_data": {
+                "analysis_data_type": type(analysis_data).__name__,
+                "analysis_data_str": str(analysis_data)[:1000],  # Truncate to avoid massive logs
+                "has_intake_summary": hasattr(analysis_data, "intake_summary"),
+                "has_case_documents": hasattr(analysis_data, "case_documents"),
+                "has_video_insights": hasattr(analysis_data, "video_insights"),
+                "intake_summary_content": str(getattr(analysis_data, "intake_summary", "N/A"))[:500] if hasattr(analysis_data, "intake_summary") else "N/A",
+                "case_documents_count": len(getattr(analysis_data, "case_documents", [])) if hasattr(analysis_data, "case_documents") else 0,
+                "video_insights_count": len(getattr(analysis_data, "video_insights", [])) if hasattr(analysis_data, "video_insights") else 0
+            }
+        }
+        logger.info(json.dumps(entry_log, indent=2))
+        print(f"TIMELINE ANALYZER DEBUG - ENTRY LOG: {json.dumps(entry_log, indent=2)}")
+        
         print("TIMELINE ANALYZER: 🗓️  Creating comprehensive timeline")
         
         all_events = []
         sources_processed = []
         
         # Extract from intake form
-        if hasattr(analysis_data, 'intake_summary') and analysis_data.intake_summary:
+        if hasattr(analysis_data, "intake_summary") and analysis_data.intake_summary:
             intake_events = self.extract_timeline_from_content(
-                str(analysis_data.intake_summary), 
+                str(analysis_data.intake_summary),
                 "intake_form"
             )
             all_events.extend(intake_events)
             sources_processed.append("intake_form")
         
         # Extract from case documents
-        if hasattr(analysis_data, 'case_documents') and analysis_data.case_documents:
+        if hasattr(analysis_data, "case_documents") and analysis_data.case_documents:
             for i, doc in enumerate(analysis_data.case_documents):
-                doc_content = doc.content if hasattr(doc, 'content') else str(doc)
-                doc_name = getattr(doc, 'file_name', f"document_{i}")
+                doc_content = doc.content if hasattr(doc, "content") else str(doc)
+                doc_name = getattr(doc, "file_name", f"document_{i}")
                 
                 doc_events = self.extract_timeline_from_content(
-                    doc_content, 
+                    doc_content,
                     f"document_{doc_name}"
                 )
                 all_events.extend(doc_events)
                 sources_processed.append(f"document_{doc_name}")
         
         # Extract from video transcripts
-        if hasattr(analysis_data, 'video_insights') and analysis_data.video_insights:
+        if hasattr(analysis_data, "video_insights") and analysis_data.video_insights:
             for video in analysis_data.video_insights:
                 if video.transcript:
                     video_events = self.extract_timeline_from_content(
-                        video.transcript, 
+                        video.transcript,
                         f"video_{video.file_name}"
                     )
                     all_events.extend(video_events)
@@ -112,7 +139,8 @@ class TimelineAnalyzer:
         print(f"TIMELINE ANALYZER: 🗓️  Timeline created with {len(unique_events)} events")
         print(f"TIMELINE ANALYZER: 🗓️  Sources: {', '.join(sources_processed)}")
         
-        return {
+        # Prepare the response
+        response = {
             "events": unique_events,
             "sources_processed": sources_processed,
             "total_events": len(unique_events),
@@ -120,11 +148,34 @@ class TimelineAnalyzer:
             "analysis": analysis,
             "created_at": datetime.now().isoformat()
         }
+        
+        # EXIT LOG: Capture the response before returning
+        exit_log = {
+            "module": "TimelineAnalyzer",
+            "function": "create_comprehensive_timeline",
+            "event": "exit",
+            "timestamp": datetime.now().isoformat(),
+            "hypothesis_id": "data_flow_analysis",
+            "response_data": {
+                "total_events": len(unique_events),
+                "sources_processed": sources_processed,
+                "events_sample": unique_events[:3] if unique_events else [],  # First 3 events for sample
+                "date_range": response["date_range"],
+                "analysis_gaps_count": len(analysis.get("gaps", [])),
+                "analysis_clusters_count": len(analysis.get("date_clusters", [])),
+                "response_structure": list(response.keys()),
+                "events_empty": len(unique_events) == 0
+            }
+        }
+        logger.info(json.dumps(exit_log, indent=2))
+        print(f"TIMELINE ANALYZER DEBUG - EXIT LOG: {json.dumps(exit_log, indent=2)}")
+        
+        return response
 
     def _split_into_sentences(self, text: str) -> List[str]:
         """Split text into sentences for timeline extraction."""
         # Simple sentence splitting - can be enhanced with more sophisticated methods
-        sentences = re.split(r'[.!?]+\s+', text)
+        sentences = re.split(r"[.!?]+\s+", text)
         return [s.strip() for s in sentences if s.strip()]
 
     def _extract_dates_from_text(self, text: str) -> List[Dict[str, Any]]:
@@ -163,7 +214,7 @@ class TimelineAnalyzer:
         """Parse date string into datetime object."""
         try:
             # Clean up the date string
-            cleaned = re.sub(r'[^\w\s/:-]', '', date_string).strip()
+            cleaned = re.sub(r"[^\w\s/:-]", "", date_string).strip()
             
             # Try dateutil parser first (very flexible)
             parsed = date_parser.parse(cleaned, fuzzy=True)
@@ -196,14 +247,14 @@ class TimelineAnalyzer:
         confidence = 0.5  # Base confidence
         
         # Higher confidence for explicit date formats
-        if re.match(r'\d{4}[/-]\d{1,2}[/-]\d{1,2}', date_string):
+        if re.match(r"\d{4}[/-]\d{1,2}[/-]\d{1,2}", date_string):
             confidence += 0.3
-        elif re.match(r'\d{1,2}[/-]\d{1,2}[/-]\d{4}', date_string):
+        elif re.match(r"\d{1,2}[/-]\d{1,2}[/-]\d{4}", date_string):
             confidence += 0.2
         
         # Higher confidence if surrounded by time indicators
         context_lower = context.lower()
-        time_words = ['occurred', 'happened', 'on', 'date', 'dated', 'signed', 'filed', 'received']
+        time_words = ["occurred", "happened", "on", "date", "dated", "signed", "filed", "received"]
         
         for word in time_words:
             if word in context_lower:

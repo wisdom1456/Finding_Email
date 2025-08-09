@@ -9,11 +9,14 @@ This service is responsible for:
 
 This replaces configuration-related methods from the original EmailGeneratorV2 class.
 """
+from __future__ import annotations
 
-import os
-import yaml
-from typing import Dict, Any, Optional
 import logging
+import os
+from typing import Any, Dict, Optional
+
+import yaml
+
 
 logger = logging.getLogger(__name__)
 
@@ -54,7 +57,7 @@ class ConfigurationManager:
         
         try:
             if os.path.exists(self.config_path):
-                with open(self.config_path, 'r', encoding='utf-8') as file:
+                with open(self.config_path, encoding="utf-8") as file:
                     self.config = yaml.safe_load(file) or {}
                 logger.info(f"Configuration loaded successfully from {self.config_path}")
             else:
@@ -73,7 +76,7 @@ class ConfigurationManager:
         """
         possible_dirs = [
             "backend/assets/templates",
-            "assets/templates", 
+            "assets/templates",
             "templates"
         ]
         
@@ -101,7 +104,7 @@ class ConfigurationManager:
             return self.config
         
         # Support dot notation for nested keys
-        keys = key.split('.')
+        keys = key.split(".")
         value = self.config
         
         try:

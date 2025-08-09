@@ -70,7 +70,7 @@ class AIAnalyzer:
             return {}
         
         try:
-            with open(config_path, 'r', encoding='utf-8') as f:
+            with open(config_path, encoding="utf-8") as f:
                 config = yaml.safe_load(f)
             print(f"AI ANALYZER: Configuration loaded from: {config_path}")
             return config
@@ -700,11 +700,11 @@ class AIAnalyzer:
                 "5. **Professional Objectivity:** Provide balanced assessment of strengths and challenges based on Florida law and litigation realities\n"
                 "6. **Case Development Strategy:** Consider both immediate legal remedies and long-term strategic options under Florida law\n\n"
                 "PROFESSIONAL ASSESSMENT PROTOCOL: When addressing complex or counterintuitive legal strategies:\n"
-                "• **Professional Context:** \"Based on my experience with Florida [relevant area] law...\"\n"
+                '• **Professional Context:** "Based on my experience with Florida [relevant area] law..."\n'
                 "• **Legal Foundation:** Cite specific Florida statutes, case law, or procedural requirements\n"
                 "• **Strategic Rationale:** Explain the legal and practical reasoning behind the recommendation\n"
                 "• **Risk Assessment:** Address potential outcomes and strategic considerations\n"
-                "• **Professional Guidance:** \"This analysis reflects Florida law standards and litigation experience\"\n\n"
+                '• **Professional Guidance:** "This analysis reflects Florida law standards and litigation experience"\n\n'
                 "CRITICAL: Reference ONLY Florida statutes, case law, and legal precedents (e.g., Florida Statutes § 83.51(1), Florida case citations). Do NOT cite laws from other jurisdictions unless they have specific relevance to Florida legal standards."
             )
 

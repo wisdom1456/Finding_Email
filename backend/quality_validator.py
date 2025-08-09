@@ -9,12 +9,15 @@ from __future__ import annotations
 
 import os
 import re
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 import yaml
-from openai import OpenAI
 
 from backend_logic.config import get_openai_config
+
+
+if TYPE_CHECKING:
+    from openai import OpenAI
 
 
 class ContentValidationError(Exception):
@@ -41,7 +44,7 @@ def _load_config() -> dict:
     if not os.path.exists(config_path):
         raise FileNotFoundError(f"Configuration file not found: {config_path}")
     
-    with open(config_path, 'r', encoding='utf-8') as f:
+    with open(config_path, encoding="utf-8") as f:
         return yaml.safe_load(f)
 
 
@@ -51,18 +54,18 @@ def _extract_plain_text(html_content: str) -> str:
         return ""
     
     # Remove HTML tags
-    text = re.sub(r'<[^>]+>', '', html_content)
+    text = re.sub(r"<[^>]+>", "", html_content)
     
     # Decode HTML entities
-    text = text.replace('&nbsp;', ' ')
-    text = text.replace('&amp;', '&')
-    text = text.replace('&lt;', '<')
-    text = text.replace('&gt;', '>')
-    text = text.replace('&quot;', '"')
-    text = text.replace('&#39;', "'")
+    text = text.replace("&nbsp;", " ")
+    text = text.replace("&amp;", "&")
+    text = text.replace("&lt;", "<")
+    text = text.replace("&gt;", ">")
+    text = text.replace("&quot;", '"')
+    text = text.replace("&#39;", "'")
     
     # Normalize whitespace
-    text = re.sub(r'\s+', ' ', text)
+    text = re.sub(r"\s+", " ", text)
     
     return text.strip()
 
@@ -73,8 +76,14 @@ def _count_words(text: str) -> int:
         return 0
     
     # Split on whitespace and filter out empty strings and punctuation-only strings
-    words = [word.strip('.,!?;:()[]{}""''') for word in text.split()]
-    words = [word for word in words if word and not re.match(r'^[^\w]+$', word)]
+    words = []
+    for word in text.split():
+        # Remove common punctuation from each end, one character at a time
+        cleaned_word = word.strip()
+        for punct in '.,!?;:()[]{}""''':
+            cleaned_word = cleaned_word.strip(punct)
+        if cleaned_word and not re.match(r"^[^\w]+$", cleaned_word):
+            words.append(cleaned_word)
     
     return len(words)
 
@@ -86,10 +95,10 @@ def _apply_citation_filter(content: str, citation_regex: str) -> str:
     
     try:
         # Apply the citation filter regex
-        filtered_content = re.sub(citation_regex, '', content, flags=re.IGNORECASE)
+        filtered_content = re.sub(citation_regex, "", content, flags=re.IGNORECASE)
         
         # Clean up any double spaces left by removals
-        filtered_content = re.sub(r'\s+', ' ', filtered_content)
+        filtered_content = re.sub(r"\s+", " ", filtered_content)
         
         return filtered_content.strip()
         
@@ -112,13 +121,13 @@ def _trim_content_to_limit(content: str, word_limit: int = 850) -> str:
     print(f"QUALITY_VALIDATOR: Content exceeds {word_limit} words ({current_word_count}), trimming...")
     
     # Split content into sentences
-    sentences = re.split(r'(?<=[.!?])\s+', content)
+    sentences = re.split(r"(?<=[.!?])\s+", content)
     
     # Remove sentences from the end until we're under the limit
     trimmed_content = content
-    while sentences and _count_words(_extract_plain_text(' '.join(sentences))) > word_limit:
+    while sentences and _count_words(_extract_plain_text(" ".join(sentences))) > word_limit:
         sentences.pop()
-        trimmed_content = ' '.join(sentences)
+        trimmed_content = " ".join(sentences)
     
     # Add ellipsis to indicate trimming
     if trimmed_content != content:
@@ -157,7 +166,7 @@ def enforce_word_count_truncation(html_content: str, max_word_count: int) -> str
     print(f"QUALITY_VALIDATOR: Enforcing word count limit - truncating from {current_word_count} to {max_word_count} words")
     
     # Split the plain text into sentences for intelligent truncation
-    sentences = re.split(r'(?<=[.!?])\s+', plain_text)
+    sentences = re.split(r"(?<=[.!?])\s+", plain_text)
     
     # Build truncated content sentence by sentence
     truncated_sentences = []
@@ -174,7 +183,7 @@ def enforce_word_count_truncation(html_content: str, max_word_count: int) -> str
         running_word_count += sentence_word_count
     
     # Rejoin the sentences
-    truncated_text = ' '.join(truncated_sentences)
+    truncated_text = " ".join(truncated_sentences)
     
     # If we truncated content, add ellipsis
     if len(truncated_sentences) < len(sentences):
@@ -182,7 +191,7 @@ def enforce_word_count_truncation(html_content: str, max_word_count: int) -> str
     
     # Now we need to preserve HTML formatting for the truncated content
     # We'll use a simple approach: if the original had HTML tags, apply basic formatting
-    if '<p>' in html_content or '<strong>' in html_content or '<ul>' in html_content:
+    if "<p>" in html_content or "<strong>" in html_content or "<ul>" in html_content:
         # Preserve paragraph structure by wrapping in <p> tags
         truncated_html = f"<p>{truncated_text}</p>"
     else:
@@ -213,26 +222,26 @@ def replace_hedging_language(text_content: str) -> str:
     
     # Define hedging word replacements based on context
     hedging_replacements = {
-        r'\bmay\b': 'will',
-        r'\bmight\b': 'will',
-        r'\bcould\b': 'will',
-        r'\bpotentially\b': '',  # Remove entirely
-        r'\bpossibly\b': '',    # Remove entirely
-        r'\bperhaps\b': '',     # Remove entirely
-        r'\blikely\b': '',      # Remove as it's still hedging
-        r'\bprobably\b': '',    # Remove as it's still hedging
-        r'\bmay be able to\b': 'can',
-        r'\bmight be able to\b': 'can',
-        r'\bcould be able to\b': 'can',
-        r'\bmay result in\b': 'will result in',
-        r'\bmight result in\b': 'will result in',
-        r'\bcould result in\b': 'will result in',
-        r'\bmay have\b': 'has',
-        r'\bmight have\b': 'has',
-        r'\bcould have\b': 'has',
-        r'\bmay include\b': 'includes',
-        r'\bmight include\b': 'includes',
-        r'\bcould include\b': 'includes'
+        r"\bmay\b": "will",
+        r"\bmight\b": "will",
+        r"\bcould\b": "will",
+        r"\bpotentially\b": "",  # Remove entirely
+        r"\bpossibly\b": "",    # Remove entirely
+        r"\bperhaps\b": "",     # Remove entirely
+        r"\blikely\b": "",      # Remove as it's still hedging
+        r"\bprobably\b": "",    # Remove as it's still hedging
+        r"\bmay be able to\b": "can",
+        r"\bmight be able to\b": "can",
+        r"\bcould be able to\b": "can",
+        r"\bmay result in\b": "will result in",
+        r"\bmight result in\b": "will result in",
+        r"\bcould result in\b": "will result in",
+        r"\bmay have\b": "has",
+        r"\bmight have\b": "has",
+        r"\bcould have\b": "has",
+        r"\bmay include\b": "includes",
+        r"\bmight include\b": "includes",
+        r"\bcould include\b": "includes"
     }
     
     print("QUALITY_VALIDATOR: Applying hedging language replacement...")
@@ -267,7 +276,7 @@ def replace_hedging_language(text_content: str) -> str:
         processed_content = processed_content.replace(placeholder, original_quote)
     
     # Clean up extra whitespace that might result from removing words
-    processed_content = re.sub(r'\s+', ' ', processed_content)
+    processed_content = re.sub(r"\s+", " ", processed_content)
     processed_content = processed_content.strip()
     
     if replacements_made > 0:
@@ -331,11 +340,10 @@ REQUIREMENTS:
         if polished_content and polished_content.strip():
             print("QUALITY_VALIDATOR: Content successfully polished with AI")
             return polished_content.strip()
-        else:
-            print("QUALITY_VALIDATOR: AI polishing returned empty content, using original")
-            return content
+        print("QUALITY_VALIDATOR: AI polishing returned empty content, using original")
+        return content
             
-    except Exception as e:
+    except (OSError, ValueError, AttributeError, KeyError) as e:
         print(f"QUALITY_VALIDATOR: AI polishing failed: {e}, using original content")
         return content
 
@@ -372,7 +380,7 @@ def process_section_content(
     try:
         # Load configuration to get section-specific word limits
         config = _load_config()
-        word_counts = config.get('word_counts', {})
+        word_counts = config.get("word_counts", {})
         section_word_limit = word_counts.get(section_name, 150)  # Default to 150 if not specified
         
         processed_content = content
@@ -383,18 +391,18 @@ def process_section_content(
         
         # Step 2: Apply polishing (optional)
         if apply_polishing and client:
-            golden_sample = config.get('golden_sample', '')
+            golden_sample = config.get("golden_sample", "")
             print(f"QUALITY_VALIDATOR: Applying AI polishing for '{section_name}'...")
             processed_content = _polish_with_ai(processed_content, golden_sample, client)
         
         # Step 3: Apply citation filtering
-        citation_filter_regex = config.get('citation_filter_regex', '')
+        citation_filter_regex = config.get("citation_filter_regex", "")
         if citation_filter_regex:
             print(f"QUALITY_VALIDATOR: Applying citation filter for '{section_name}'...")
             processed_content = _apply_citation_filter(processed_content, citation_filter_regex)
         
         # Step 4: Apply deadline bolding for Next Steps section
-        if section_name == 'next_steps':
+        if section_name == "next_steps":
             print(f"QUALITY_VALIDATOR: Applying deadline bolding for '{section_name}'...")
             processed_content = bold_deadlines_in_next_steps(processed_content)
         
@@ -446,8 +454,8 @@ def polish_and_sanitize(
     try:
         # Load configuration
         config = _load_config()
-        citation_filter_regex = config.get('citation_filter_regex', '')
-        golden_sample = config.get('golden_sample', '')
+        citation_filter_regex = config.get("citation_filter_regex", "")
+        golden_sample = config.get("golden_sample", "")
         
         # Track processing steps
         processed_content = email_draft
@@ -471,8 +479,8 @@ def polish_and_sanitize(
                 print(f"QUALITY_VALIDATOR: Removed {original_length - len(processed_content)} characters via citation filter")
         
         # Step 4: Apply deadline bolding for Next Steps content (detect based on content patterns)
-        if ('next steps' in email_draft.lower() or 'recommended next steps' in email_draft.lower() or
-            'within' in email_draft.lower() and 'days' in email_draft.lower()):
+        if ("next steps" in email_draft.lower() or "recommended next steps" in email_draft.lower() or
+            ("within" in email_draft.lower() and "days" in email_draft.lower())):
             print("QUALITY_VALIDATOR: Applying deadline bolding to Next Steps content...")
             processed_content = bold_deadlines_in_next_steps(processed_content)
         
@@ -562,13 +570,13 @@ def bold_deadlines_in_next_steps(html_content: str) -> str:
     # This matches patterns like:
     # - "within 14 days", "within 30 days"
     # - "by August 21, 2025", "by December 1, 2024"
-    deadline_pattern = r'(\bwithin\s+\d+\s+days?\b|\bby\s+\w+\s+\d{1,2},\s+\d{4}\b)'
+    deadline_pattern = r"(\bwithin\s+\d+\s+days?\b|\bby\s+\w+\s+\d{1,2},\s+\d{4}\b)"
     
     # Find all matches that are NOT already within <strong> tags
     def replace_unbolded_deadlines(match):
         deadline_text = match.group(1)
         # Check if this deadline is already within strong tags by looking at surrounding context
-        return f'<strong>{deadline_text}</strong>'
+        return f"<strong>{deadline_text}</strong>"
     
     # First, we need to identify which deadlines are already bolded
     # We'll use a more sophisticated approach to avoid double-bolding
@@ -578,12 +586,12 @@ def bold_deadlines_in_next_steps(html_content: str) -> str:
     
     # Find all existing <strong>...</strong> sections to preserve them
     strong_sections = []
-    strong_pattern = r'<strong>(.*?)</strong>'
+    strong_pattern = r"<strong>(.*?)</strong>"
     
     # Replace existing strong sections with placeholders to protect them
     def preserve_strong_section(match):
         strong_sections.append(match.group(0))
-        return f'__STRONG_PLACEHOLDER_{len(strong_sections)-1}__'
+        return f"__STRONG_PLACEHOLDER_{len(strong_sections)-1}__"
     
     # Preserve existing strong tags
     protected_content = re.sub(strong_pattern, preserve_strong_section, html_content, flags=re.IGNORECASE | re.DOTALL)
@@ -594,13 +602,13 @@ def bold_deadlines_in_next_steps(html_content: str) -> str:
         nonlocal matches_found
         matches_found += 1
         deadline_text = match.group(1)
-        return f'<strong>{deadline_text}</strong>'
+        return f"<strong>{deadline_text}</strong>"
     
     processed_content = re.sub(deadline_pattern, process_deadline_match, protected_content, flags=re.IGNORECASE)
     
     # Restore the original strong sections
     for i, strong_section in enumerate(strong_sections):
-        placeholder = f'__STRONG_PLACEHOLDER_{i}__'
+        placeholder = f"__STRONG_PLACEHOLDER_{i}__"
         processed_content = processed_content.replace(placeholder, strong_section)
     
     if matches_found > 0:
@@ -623,7 +631,7 @@ def apply_citation_sanitization(content: str) -> str:
     """
     try:
         config = _load_config()
-        citation_filter_regex = config.get('citation_filter_regex', '')
+        citation_filter_regex = config.get("citation_filter_regex", "")
         
         if citation_filter_regex:
             return _apply_citation_filter(content, citation_filter_regex)
@@ -656,10 +664,10 @@ def validate_weaknesses_field(generated_letter) -> None:
         raise WeaknessesValidationError("Generated letter object is None or empty")
     
     # Check if the letter has a weaknesses field
-    if not hasattr(generated_letter, 'challenges'):
+    if not hasattr(generated_letter, "challenges"):
         raise WeaknessesValidationError("Generated letter missing 'challenges' field (weaknesses)")
     
-    weaknesses_content = getattr(generated_letter, 'challenges', '')
+    weaknesses_content = getattr(generated_letter, "challenges", "")
     
     # Check if weaknesses field is empty
     if not weaknesses_content or not weaknesses_content.strip():
@@ -673,10 +681,10 @@ def validate_weaknesses_field(generated_letter) -> None:
     
     # Check for placeholder text patterns
     placeholder_patterns = [
-        r'^(?:no\s+)?(?:challenges?|weaknesses?|issues?|concerns?)\s*(?:identified|found|available)?\.?$',
-        r'^(?:potential\s+)?(?:challenges?|considerations?)\s+(?:under\s+)?(?:florida\s+)?law\.?$',
-        r'^(?:strategic\s+)?considerations?\s+for\s+this\s+case\.?$',
-        r'^(?:assessment\s+)?(?:reveals?\s+)?(?:considerations?\s+)?(?:under\s+)?(?:florida\s+)?law\.?$'
+        r"^(?:no\s+)?(?:challenges?|weaknesses?|issues?|concerns?)\s*(?:identified|found|available)?\.?$",
+        r"^(?:potential\s+)?(?:challenges?|considerations?)\s+(?:under\s+)?(?:florida\s+)?law\.?$",
+        r"^(?:strategic\s+)?considerations?\s+for\s+this\s+case\.?$",
+        r"^(?:assessment\s+)?(?:reveals?\s+)?(?:considerations?\s+)?(?:under\s+)?(?:florida\s+)?law\.?$"
     ]
     
     for pattern in placeholder_patterns:
@@ -711,8 +719,8 @@ def validate_email_completeness(generated_letter) -> None:
     validate_weaknesses_field(generated_letter)
     
     # Additional validation for strengths field
-    if hasattr(generated_letter, 'strengths'):
-        strengths_content = getattr(generated_letter, 'strengths', '')
+    if hasattr(generated_letter, "strengths"):
+        strengths_content = getattr(generated_letter, "strengths", "")
         if strengths_content and strengths_content.strip():
             strengths_plain_text = _extract_plain_text(strengths_content).strip()
             strengths_word_count = _count_words(strengths_plain_text)

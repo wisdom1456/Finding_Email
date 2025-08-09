@@ -8,20 +8,23 @@ This script validates that:
 3. AI simplification (when enabled) works properly
 4. HTML structure is preserved throughout the process
 """
+from __future__ import annotations
 
 import os
-import sys
 import re
+import sys
 from pathlib import Path
+
 
 # Add the project root to Python path
 project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root))
 
 try:
-    from backend_logic.email_generator import EmailGeneratorV2
-    from backend.utils.data_models import CaseAnalysisResult, EnhancedIntakeAnalysis
     from openai import OpenAI
+
+    from backend.utils.data_models import CaseAnalysisResult, EnhancedIntakeAnalysis
+    from backend_logic.email_generator import EmailGeneratorV2
 except ImportError as e:
     print(f"❌ Import error: {e}")
     print("Make sure you're running this from the project root directory")
@@ -37,8 +40,8 @@ def test_citation_filtering():
     
     # Create mock config with citation filter
     mock_config = {
-        'citation_filter_regex': r'(Fla\.?\s*Stat\.?|§+|\bChapter\s*\d+\b|\bF\.S\.\s*\d[\d\.\(\)]*)',
-        'template_path': 'backend/assets/templates/findings_email.jinja2'
+        "citation_filter_regex": r"(Fla\.?\s*Stat\.?|§+|\bChapter\s*\d+\b|\bF\.S\.\s*\d[\d\.\(\)]*)",
+        "template_path": "backend/assets/templates/findings_email.jinja2"
     }
     
     # Create generator instance
@@ -58,18 +61,17 @@ def test_citation_filtering():
     result = generator._apply_enhanced_citation_filtering(test_content)
     
     # Verify citations were removed
-    citation_patterns = [r'§\s*\d+', r'Chapter\s*\d+', r'F\.S\.\s*\d+', r'Fla\.\s*Stat\.']
+    citation_patterns = [r"§\s*\d+", r"Chapter\s*\d+", r"F\.S\.\s*\d+", r"Fla\.\s*Stat\."]
     citations_found = any(re.search(pattern, result, re.IGNORECASE) for pattern in citation_patterns)
     
     if citations_found:
         print(f"❌ Citation filtering failed - citations still present in: {result}")
         return False
-    else:
-        print(f"✅ Citation filtering successful")
-        print(f"   Original: {len(test_content)} chars")
-        print(f"   Filtered: {len(result)} chars")
-        print(f"   Sample result: {result[:100]}...")
-        return True
+    print("✅ Citation filtering successful")
+    print(f"   Original: {len(test_content)} chars")
+    print(f"   Filtered: {len(result)} chars")
+    print(f"   Sample result: {result[:100]}...")
+    return True
 
 
 def test_sentence_splitting():
@@ -94,7 +96,7 @@ def test_sentence_splitting():
     result = generator._apply_sentence_splitting_logic(test_content)
     
     # Count sentences in result
-    sentences = re.split(r'(?<=[.!?])\s+', result.strip())
+    sentences = re.split(r"(?<=[.!?])\s+", result.strip())
     sentences = [s for s in sentences if s.strip()]  # Remove empty sentences
     
     # Check if splitting occurred
@@ -106,11 +108,10 @@ def test_sentence_splitting():
     print(f"   Sample result: {result[:150]}...")
     
     if max_sentence_length <= 35:
-        print(f"✅ Sentence splitting successful - no sentences exceed 35 words")
+        print("✅ Sentence splitting successful - no sentences exceed 35 words")
         return True
-    else:
-        print(f"❌ Sentence splitting failed - longest sentence: {max_sentence_length} words")
-        return False
+    print(f"❌ Sentence splitting failed - longest sentence: {max_sentence_length} words")
+    return False
 
 
 def test_html_preservation():
@@ -121,8 +122,8 @@ def test_html_preservation():
     client = OpenAI(api_key="test-key")
     
     mock_config = {
-        'citation_filter_regex': r'(Fla\.?\s*Stat\.?|§+|\bChapter\s*\d+\b)',
-        'simplification': {'enabled': False}  # Disable AI simplification for this test
+        "citation_filter_regex": r"(Fla\.?\s*Stat\.?|§+|\bChapter\s*\d+\b)",
+        "simplification": {"enabled": False}  # Disable AI simplification for this test
     }
     
     generator = EmailGeneratorV2.__new__(EmailGeneratorV2)
@@ -145,18 +146,17 @@ def test_html_preservation():
     
     # Check that basic processing occurred
     if len(result) < len(test_content):
-        print(f"✅ Content was processed (citations removed)")
+        print("✅ Content was processed (citations removed)")
     else:
-        print(f"⚠️  Content length unchanged - processing may not have occurred")
+        print("⚠️  Content length unchanged - processing may not have occurred")
     
     # Since this is raw text processing, we don't expect HTML tags yet
     # The key is that the content is clean and ready for HTML template processing
     if result and result.strip():
-        print(f"✅ Content processing successful - clean text ready for template")
+        print("✅ Content processing successful - clean text ready for template")
         return True
-    else:
-        print(f"❌ Content processing failed - empty result")
-        return False
+    print("❌ Content processing failed - empty result")
+    return False
 
 
 def test_ai_simplification_config():
@@ -168,7 +168,7 @@ def test_ai_simplification_config():
     
     # Test with AI simplification disabled
     mock_config_disabled = {
-        'simplification': {'enabled': False}
+        "simplification": {"enabled": False}
     }
     
     generator = EmailGeneratorV2.__new__(EmailGeneratorV2)
@@ -180,11 +180,10 @@ def test_ai_simplification_config():
     result = generator._apply_optional_ai_simplification(test_content)
     
     if result == test_content:
-        print(f"✅ AI simplification correctly disabled - content unchanged")
+        print("✅ AI simplification correctly disabled - content unchanged")
         return True
-    else:
-        print(f"❌ AI simplification config not respected")
-        return False
+    print("❌ AI simplification config not respected")
+    return False
 
 
 def run_all_tests():
@@ -225,9 +224,8 @@ def run_all_tests():
     if passed == total:
         print("🎉 All tests passed! Normalization pipeline implementation is working correctly.")
         return True
-    else:
-        print("⚠️  Some tests failed. Please review the implementation.")
-        return False
+    print("⚠️  Some tests failed. Please review the implementation.")
+    return False
 
 
 if __name__ == "__main__":

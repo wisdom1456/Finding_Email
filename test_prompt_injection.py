@@ -4,10 +4,13 @@ Test script to validate the prompt generation modifications.
 This script tests that firm_voice, plain_english_mandate, and golden_sample
 are properly injected at the top of every section-level prompt.
 """
+from __future__ import annotations
 
 import os
 import sys
+
 import yaml
+
 
 # Add the project root to the Python path
 project_root = os.path.dirname(os.path.abspath(__file__))
@@ -31,11 +34,11 @@ def test_prompt_injection():
         
         # Test data
         test_sections = [
-            ('factual_summary', 200),
-            ('legal_analysis', 150),
-            ('case_assessment', 75),
-            ('evidence_review', 150),
-            ('next_steps', 125)
+            ("factual_summary", 200),
+            ("legal_analysis", 150),
+            ("case_assessment", 75),
+            ("evidence_review", 150),
+            ("next_steps", 125)
         ]
         
         # Base prompt to test with
@@ -52,18 +55,18 @@ def test_prompt_injection():
             enhanced_prompt = generator._build_enhanced_prompt(base_prompt, section_key)
             
             # Verify components are present
-            firm_voice = generator.config.get('firm_voice', '')
-            plain_english_mandate = generator.config.get('plain_english_mandate', [])
-            golden_sample = generator.config.get('golden_sample', '')
+            firm_voice = generator.config.get("firm_voice", "")
+            plain_english_mandate = generator.config.get("plain_english_mandate", [])
+            golden_sample = generator.config.get("golden_sample", "")
             
             # Check that all components are in the prompt
             checks = {
-                'firm_voice': firm_voice in enhanced_prompt if firm_voice else True,
-                'plain_english_mandate': any(mandate in enhanced_prompt for mandate in plain_english_mandate) if plain_english_mandate else True,
-                'golden_sample': golden_sample in enhanced_prompt if golden_sample else True,
-                'word_limit': f"≤ {expected_word_limit} words" in enhanced_prompt,
-                'instruction_format': f"Draft the {section_key} for a client email" in enhanced_prompt,
-                'base_prompt': base_prompt in enhanced_prompt
+                "firm_voice": firm_voice in enhanced_prompt if firm_voice else True,
+                "plain_english_mandate": any(mandate in enhanced_prompt for mandate in plain_english_mandate) if plain_english_mandate else True,
+                "golden_sample": golden_sample in enhanced_prompt if golden_sample else True,
+                "word_limit": f"≤ {expected_word_limit} words" in enhanced_prompt,
+                "instruction_format": f"Draft the {section_key} for a client email" in enhanced_prompt,
+                "base_prompt": base_prompt in enhanced_prompt
             }
             
             # Report results
@@ -72,23 +75,23 @@ def test_prompt_injection():
                 print(f"  {status} {check_name}: {'PASS' if result else 'FAIL'}")
                 
             # Show prompt structure preview
-            prompt_lines = enhanced_prompt.split('\n')
+            prompt_lines = enhanced_prompt.split("\n")
             print(f"  📄 Prompt length: {len(enhanced_prompt)} characters")
             print(f"  📄 Prompt lines: {len(prompt_lines)}")
             print(f"  📄 First 150 chars: {enhanced_prompt[:150]}...")
             
             if not all(checks.values()):
                 print(f"  ⚠️  FAILED checks for section: {section_key}")
-                print(f"  📝 Full prompt preview:")
+                print("  📝 Full prompt preview:")
                 print("  " + "\n  ".join(prompt_lines[:10]))
                 return False
                 
-        print(f"\n🎉 All tests PASSED!")
+        print("\n🎉 All tests PASSED!")
         
         # Show detailed structure for one example
-        print(f"\n📋 Example prompt structure for 'factual_summary':")
-        example_prompt = generator._build_enhanced_prompt(base_prompt, 'factual_summary')
-        example_lines = example_prompt.split('\n')
+        print("\n📋 Example prompt structure for 'factual_summary':")
+        example_prompt = generator._build_enhanced_prompt(base_prompt, "factual_summary")
+        example_lines = example_prompt.split("\n")
         for i, line in enumerate(example_lines[:15], 1):
             print(f"  {i:2d}: {line}")
         if len(example_lines) > 15:
@@ -105,7 +108,7 @@ def test_prompt_injection():
 
 def test_configuration_loading():
     """Test that the configuration file loads correctly."""
-    print(f"\n🔧 Testing Configuration Loading")
+    print("\n🔧 Testing Configuration Loading")
     print("-" * 30)
     
     try:
@@ -115,11 +118,11 @@ def test_configuration_loading():
             print(f"❌ Configuration file not found: {config_path}")
             return False
             
-        with open(config_path, 'r', encoding='utf-8') as f:
+        with open(config_path, encoding="utf-8") as f:
             config = yaml.safe_load(f)
             
         # Check required keys
-        required_keys = ['firm_voice', 'plain_english_mandate', 'golden_sample', 'word_counts']
+        required_keys = ["firm_voice", "plain_english_mandate", "golden_sample", "word_counts"]
         
         for key in required_keys:
             if key in config:
@@ -141,7 +144,7 @@ def test_configuration_loading():
                 print(f"❌ {key}: Missing")
                 return False
                 
-        print(f"✅ All required configuration keys present")
+        print("✅ All required configuration keys present")
         return True
         
     except Exception as e:
@@ -161,11 +164,11 @@ if __name__ == "__main__":
         test_success = test_prompt_injection()
         
         if test_success:
-            print(f"\n🎉 ALL TESTS PASSED - Prompt injection is working correctly!")
+            print("\n🎉 ALL TESTS PASSED - Prompt injection is working correctly!")
             sys.exit(0)
         else:
-            print(f"\n💥 TESTS FAILED - Prompt injection needs fixes")
+            print("\n💥 TESTS FAILED - Prompt injection needs fixes")
             sys.exit(1)
     else:
-        print(f"\n💥 CONFIGURATION TEST FAILED - Cannot proceed with prompt tests")
+        print("\n💥 CONFIGURATION TEST FAILED - Cannot proceed with prompt tests")
         sys.exit(1)

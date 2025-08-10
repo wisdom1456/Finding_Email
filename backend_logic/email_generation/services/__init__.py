@@ -6,6 +6,7 @@ of the email generation system, following the Single Responsibility Principle.
 
 Each service is focused on a single concern and can be independently tested and maintained.
 """
+
 from __future__ import annotations
 
 from .configuration_manager import ConfigurationManager
@@ -24,5 +25,5 @@ __all__ = [
     "JSONArchitectureService",
     "OpenAIIntegrationService",
     "TemplateRenderingService",
-    "TextProcessingService"
+    "TextProcessingService",
 ]

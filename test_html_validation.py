@@ -15,7 +15,9 @@ import json
 import os
 import sys
 from datetime import datetime
-from typing import Dict, Any
+from utils.logging_config import setup_logging
+logger = setup_logging('unknown_service')
+
 
 # Add the project paths
 sys.path.insert(0, os.path.abspath('.'))
@@ -26,8 +28,7 @@ from backend.utils.data_models import (
     CaseAnalysisResult, 
     EnhancedIntakeAnalysis, 
     AnalyzedDocument,
-    LegalAssessment,
-    DemandLetterEvaluation
+    LegalAssessment
 )
 from backend_logic.email_generation.services.configuration_manager import ConfigurationManager
 from backend_logic.email_generation.services.json_processing_service import JsonProcessingService
@@ -154,7 +155,7 @@ class MockMessage:
 def create_comprehensive_test_case() -> CaseAnalysisResult:
     """Create a comprehensive test case with realistic legal data."""
     
-    print("📋 Creating comprehensive test case...")
+logger.info('📋 Creating comprehensive test case...')
     
     # Create detailed intake analysis
     intake_analysis = EnhancedIntakeAnalysis(
@@ -228,13 +229,13 @@ def create_comprehensive_test_case() -> CaseAnalysisResult:
         video_insights=[]  # No video content in this test case
     )
     
-    print("✅ Comprehensive test case created")
+logger.info('✅ Comprehensive test case created')
     return case_analysis
 
 
 def test_configuration_and_service_setup():
     """Test that configuration and service setup work correctly."""
-    print("\n🔧 Testing configuration and service setup...")
+logger.info('\n🔧 Testing configuration and service setup...')
     
     try:
         # Test configuration manager
@@ -242,24 +243,24 @@ def test_configuration_and_service_setup():
         config = config_manager.get_config()
         
         if not config.get("master_prompt"):
-            print("❌ FAIL: Master prompt not found in configuration")
+logger.info('❌ FAIL: Master prompt not found in configuration')
             return False
             
         # Test service initialization
         mock_client = MockOpenAIClient()
         json_service = JsonProcessingService(client=mock_client, config=config)
         
-        print("✅ Configuration and service setup successful")
+logger.info('✅ Configuration and service setup successful')
         return True
         
     except Exception as e:
-        print(f"❌ FAIL: Configuration/service setup failed: {e}")
+logger.error(f'❌ FAIL: Configuration/service setup failed: {e}')
         return False
 
 
 def test_html_generation_pipeline():
     """Test the complete HTML generation pipeline."""
-    print("\n🚀 Testing HTML generation pipeline...")
+logger.info('\n🚀 Testing HTML generation pipeline...')
     
     try:
         # Setup
@@ -272,30 +273,30 @@ def test_html_generation_pipeline():
         case_analysis = create_comprehensive_test_case()
         
         # Generate HTML
-        print("📧 Generating HTML letter...")
+logger.info('📧 Generating HTML letter...')
         html_output = json_service.generate_html_letter(case_analysis)
         
         if not html_output:
-            print("❌ FAIL: HTML generation returned empty result")
+logger.info('❌ FAIL: HTML generation returned empty result')
             return False
             
-        print(f"✅ HTML generation successful - {len(html_output)} characters generated")
+logger.info(f'✅ HTML generation successful - {len(html_output)} characters generated')
         
         # Basic validation
         if "<html>" not in html_output or "</html>" not in html_output:
-            print("❌ FAIL: Generated HTML missing basic structure")
+logger.info('❌ FAIL: Generated HTML missing basic structure')
             return False
             
         # Check for client name integration
         if case_analysis.intake_analysis.client_name not in html_output:
-            print("❌ FAIL: Client name not found in generated HTML")
+logger.info('❌ FAIL: Client name not found in generated HTML')
             return False
             
-        print("✅ HTML generation pipeline test passed")
+logger.info('✅ HTML generation pipeline test passed')
         return True
         
     except Exception as e:
-        print(f"❌ FAIL: HTML generation pipeline failed: {e}")
+logger.error(f'❌ FAIL: HTML generation pipeline failed: {e}')
         import traceback
         traceback.print_exc()
         return False
@@ -303,11 +304,11 @@ def test_html_generation_pipeline():
 
 def analyze_validation_output():
     """Analyze the validation output files that were generated."""
-    print("\n📊 Analyzing validation output files...")
+logger.info('\n📊 Analyzing validation output files...')
     
     validation_dir = "validation_output"
     if not os.path.exists(validation_dir):
-        print("❌ No validation output directory found")
+logger.info('❌ No validation output directory found')
         return False
     
     try:
@@ -316,49 +317,49 @@ def analyze_validation_output():
         metrics_files = [f for f in os.listdir(validation_dir) if f.startswith("validation_metrics_")]
         
         if not html_files or not metrics_files:
-            print("❌ Validation output files not found")
+logger.info('❌ Validation output files not found')
             return False
         
         # Get the most recent files
         latest_html = max(html_files, key=lambda f: os.path.getctime(os.path.join(validation_dir, f)))
         latest_metrics = max(metrics_files, key=lambda f: os.path.getctime(os.path.join(validation_dir, f)))
         
-        print(f"📄 Latest HTML file: {latest_html}")
-        print(f"📊 Latest metrics file: {latest_metrics}")
+logger.info(f'📄 Latest HTML file: {latest_html}')
+logger.info(f'📊 Latest metrics file: {latest_metrics}')
         
         # Read and analyze metrics
         with open(os.path.join(validation_dir, latest_metrics), 'r') as f:
             metrics = json.load(f)
         
-        print("\n📈 Validation Metrics Summary:")
-        print(f"  • Word count: {metrics['html_validation']['word_count']}")
-        print(f"  • Paragraph count: {metrics['html_validation']['paragraph_count']}")
-        print(f"  • Character count: {metrics['html_validation']['character_count']}")
-        print(f"  • HTML structure: {'✅' if metrics['html_validation']['has_html_structure'] else '❌'}")
-        print(f"  • Body structure: {'✅' if metrics['html_validation']['has_body_structure'] else '❌'}")
-        print(f"  • Client name present: {'✅' if metrics['case_analysis_integration']['client_name_present'] else '❌'}")
-        print(f"  • Case type present: {'✅' if metrics['case_analysis_integration']['case_type_present'] else '❌'}")
-        print(f"  • Minimum word count met: {'✅' if metrics['quality_checks']['minimum_word_count_met'] else '❌'}")
-        print(f"  • Data integration successful: {'✅' if metrics['quality_checks']['data_integration_successful'] else '❌'}")
+logger.info('\n📈 Validation Metrics Summary:')
+logger.info(f'  • Word count: {metrics['html_validation']['word_count']}')
+logger.info(f'  • Paragraph count: {metrics['html_validation']['paragraph_count']}')
+logger.info(f'  • Character count: {metrics['html_validation']['character_count']}')
+logger.info(f'  • HTML structure: {('✅' if metrics['html_validation']['has_html_structure'] else '❌')}')
+logger.info(f'  • Body structure: {('✅' if metrics['html_validation']['has_body_structure'] else '❌')}')
+logger.info(f'  • Client name present: {('✅' if metrics['case_analysis_integration']['client_name_present'] else '❌')}')
+logger.info(f'  • Case type present: {('✅' if metrics['case_analysis_integration']['case_type_present'] else '❌')}')
+logger.info(f'  • Minimum word count met: {('✅' if metrics['quality_checks']['minimum_word_count_met'] else '❌')}')
+logger.info(f'  • Data integration successful: {('✅' if metrics['quality_checks']['data_integration_successful'] else '❌')}')
         
         return True
         
     except Exception as e:
-        print(f"❌ Failed to analyze validation output: {e}")
+logger.error(f'❌ Failed to analyze validation output: {e}')
         return False
 
 
 def main():
     """Run the comprehensive HTML validation test."""
-    print("🧪 COMPREHENSIVE HTML VALIDATION TEST")
-    print("=" * 60)
-    print(f"🕐 Test started at: {datetime.now().isoformat()}")
-    print("\n📋 This test validates:")
-    print("  1. Refactored architecture functionality")
-    print("  2. HTML generation quality and structure")
-    print("  3. CaseAnalysisResult data integration")
-    print("  4. Master prompt functionality")
-    print("=" * 60)
+logger.info('🧪 COMPREHENSIVE HTML VALIDATION TEST')
+logger.info('=' * 60)
+logger.info(f'🕐 Test started at: {datetime.now().isoformat()}')
+logger.info('\n📋 This test validates:')
+logger.info('  1. Refactored architecture functionality')
+logger.info('  2. HTML generation quality and structure')
+logger.info('  3. CaseAnalysisResult data integration')
+logger.info('  4. Master prompt functionality')
+logger.info('=' * 60)
     
     tests = [
         ("Configuration and Service Setup", test_configuration_and_service_setup),
@@ -370,32 +371,32 @@ def main():
     total = len(tests)
     
     for test_name, test_func in tests:
-        print(f"\n🧪 Running: {test_name}")
+logger.info(f'\n🧪 Running: {test_name}')
         if test_func():
             passed += 1
-            print(f"✅ {test_name}: PASSED")
+logger.info(f'✅ {test_name}: PASSED')
         else:
-            print(f"❌ {test_name}: FAILED")
+logger.error(f'❌ {test_name}: FAILED')
     
-    print("\n" + "=" * 60)
-    print(f"📊 Test Results: {passed}/{total} tests passed")
+logger.info('\n' + '=' * 60)
+logger.info(f'📊 Test Results: {passed}/{total} tests passed')
     
     if passed == total:
-        print("🎉 All validation tests passed!")
-        print("\n✅ The refactored email generation pipeline is working correctly:")
-        print("  • HTML generation produces valid output")
-        print("  • Case analysis data is properly integrated")
-        print("  • Master prompt approach is functional")
-        print("  • Validation logging captures comprehensive metrics")
+logger.info('🎉 All validation tests passed!')
+logger.info('\n✅ The refactored email generation pipeline is working correctly:')
+logger.info('  • HTML generation produces valid output')
+logger.info('  • Case analysis data is properly integrated')
+logger.info('  • Master prompt approach is functional')
+logger.info('  • Validation logging captures comprehensive metrics')
         
-        print("\n📁 Check the 'validation_output' directory for:")
-        print("  • Generated HTML files")
-        print("  • Case analysis data files") 
-        print("  • Validation metrics reports")
+logger.info("\n📁 Check the 'validation_output' directory for:")
+logger.info('  • Generated HTML files')
+logger.info('  • Case analysis data files')
+logger.info('  • Validation metrics reports')
         
         return True
     else:
-        print(f"❌ {total - passed} tests failed. Review the output above for details.")
+logger.error(f'❌ {total - passed} tests failed. Review the output above for details.')
         return False
 
 

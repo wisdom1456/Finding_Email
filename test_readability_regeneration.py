@@ -10,11 +10,12 @@ This script tests the robust multi-pass regeneration system that:
 """
 from __future__ import annotations
 
-import json
 import os
 import sys
-from datetime import datetime
-from unittest.mock import Mock, patch
+from unittest.mock import Mock
+from utils.logging_config import setup_logging
+logger = setup_logging('unknown_service')
+
 
 
 # Add the project root to the Python path
@@ -29,7 +30,7 @@ from backend.utils.data_models import (
     GenerationContext,
     SectionPlan,
 )
-from backend_logic.email_generator import EmailGeneratorV2, EmailReadabilityError
+from backend_logic.email_generator import EmailGeneratorV2
 
 
 def create_mock_analysis() -> CaseAnalysisResult:
@@ -79,7 +80,7 @@ def create_simple_content() -> str:
 
 def test_readability_validation_pass():
     """Test that simple content passes readability validation without regeneration."""
-    print("\n=== Testing Readability Validation - PASS ===")
+logger.info('\n=== Testing Readability Validation - PASS ===')
     
     try:
         # Create mock generator
@@ -104,21 +105,21 @@ def test_readability_validation_pass():
             simple_content, "FACTUAL SUMMARY", section_plan, analysis, context
         )
         
-        print("✅ PASS: Simple content passed readability validation")
-        print(f"   Original: {len(simple_content)} chars")
-        print(f"   Result: {len(result)} chars")
-        print(f"   Content unchanged: {result == simple_content}")
+logger.info('✅ PASS: Simple content passed readability validation')
+logger.info(f'   Original: {len(simple_content)} chars')
+logger.info(f'   Result: {len(result)} chars')
+logger.info(f'   Content unchanged: {result == simple_content}')
         
         return True
         
     except Exception as e:
-        print(f"❌ FAIL: Simple content test failed: {e}")
+logger.error(f'❌ FAIL: Simple content test failed: {e}')
         return False
 
 
 def test_readability_validation_fail():
     """Test that complex content fails readability validation and triggers regeneration."""
-    print("\n=== Testing Readability Validation - FAIL with Regeneration ===")
+logger.info('\n=== Testing Readability Validation - FAIL with Regeneration ===')
     
     try:
         # Create mock generator with mocked AI response
@@ -149,21 +150,21 @@ def test_readability_validation_fail():
             complex_content, "FACTUAL SUMMARY", section_plan, analysis, context
         )
         
-        print("✅ PASS: Complex content was regenerated successfully")
-        print(f"   Original: {len(complex_content)} chars")
-        print(f"   Result: {len(result)} chars")
-        print(f"   Content was regenerated: {result != complex_content}")
+logger.info('✅ PASS: Complex content was regenerated successfully')
+logger.info(f'   Original: {len(complex_content)} chars')
+logger.info(f'   Result: {len(result)} chars')
+logger.info(f'   Content was regenerated: {result != complex_content}')
         
         return True
         
     except Exception as e:
-        print(f"❌ FAIL: Complex content regeneration test failed: {e}")
+logger.error(f'❌ FAIL: Complex content regeneration test failed: {e}')
         return False
 
 
 def test_readability_validation_graceful_degradation():
     """Test that content with poor readability generates warnings but continues with document generation."""
-    print("\n=== Testing Readability Validation - GRACEFUL DEGRADATION ===")
+logger.info('\n=== Testing Readability Validation - GRACEFUL DEGRADATION ===')
     
     try:
         # Create mock generator with mocked AI response that always returns complex content
@@ -196,30 +197,30 @@ def test_readability_validation_graceful_degradation():
         
         # Verify that we got a result (not an exception)
         if not result:
-            print("❌ FAIL: Expected content with warning but got empty result")
+logger.warning('❌ FAIL: Expected content with warning but got empty result')
             return False
         
         # Verify that the result contains a readability warning notice
         if "⚠️ Readability Notice:" not in result:
-            print("❌ FAIL: Expected readability warning notice in result but not found")
+logger.warning('❌ FAIL: Expected readability warning notice in result but not found')
             return False
         
         # Verify that the original content is still included
-        print("✅ PASS: Graceful degradation working correctly")
-        print(f"   Result contains warning notice: {'⚠️ Readability Notice:' in result}")
-        print(f"   Document generation continued: {len(result) > len(complex_content)}")
-        print(f"   Original content preserved: {complex_content.strip() in result}")
+logger.info('✅ PASS: Graceful degradation working correctly')
+logger.warning(f'   Result contains warning notice: {'⚠️ Readability Notice:' in result}')
+logger.info(f'   Document generation continued: {len(result) > len(complex_content)}')
+logger.info(f'   Original content preserved: {complex_content.strip() in result}')
         
         return True
         
     except Exception as e:
-        print(f"❌ FAIL: Graceful degradation test failed unexpectedly: {e}")
+logger.error(f'❌ FAIL: Graceful degradation test failed unexpectedly: {e}')
         return False
 
 
 def test_simplification_prompt_template():
     """Test that the simplification prompt template is correctly configured."""
-    print("\n=== Testing Simplification Prompt Template ===")
+logger.info('\n=== Testing Simplification Prompt Template ===')
     
     try:
         # Create mock generator
@@ -231,7 +232,7 @@ def test_simplification_prompt_template():
         simplification_template = formatting_section.get("simplification_pass_prompt", "")
         
         if not simplification_template:
-            print("❌ FAIL: simplification_pass_prompt not found in configuration")
+logger.info('❌ FAIL: simplification_pass_prompt not found in configuration')
             return False
         
         # Test template formatting
@@ -245,26 +246,26 @@ def test_simplification_prompt_template():
             )
             
             if test_topic in formatted_prompt and test_text in formatted_prompt:
-                print("✅ PASS: Simplification prompt template is correctly configured")
-                print(f"   Template contains topic placeholder: {'{{topic}}' in simplification_template}")
-                print(f"   Template contains text placeholder: {'{{text_to_simplify}}' in simplification_template}")
+logger.info('✅ PASS: Simplification prompt template is correctly configured')
+logger.info(f'   Template contains topic placeholder: {'{{topic}}' in simplification_template}')
+logger.info(f'   Template contains text placeholder: {'{{text_to_simplify}}' in simplification_template}')
                 return True
-            print("❌ FAIL: Template formatting failed - missing topic or text")
+logger.error('❌ FAIL: Template formatting failed - missing topic or text')
             return False
                 
         except KeyError as e:
-            print(f"❌ FAIL: Template formatting failed - missing placeholder: {e}")
+logger.error(f'❌ FAIL: Template formatting failed - missing placeholder: {e}')
             return False
         
     except Exception as e:
-        print(f"❌ FAIL: Simplification template test failed: {e}")
+logger.error(f'❌ FAIL: Simplification template test failed: {e}')
         return False
 
 
 def main():
     """Run all readability regeneration tests."""
-    print("🧪 TESTING: Robust Multi-Pass Regeneration System")
-    print("=" * 60)
+logger.info('🧪 TESTING: Robust Multi-Pass Regeneration System')
+logger.info('=' * 60)
     
     tests = [
         test_simplification_prompt_template,
@@ -279,26 +280,26 @@ def main():
             result = test()
             results.append(result)
         except Exception as e:
-            print(f"❌ FAIL: Test {test.__name__} crashed: {e}")
+logger.error(f'❌ FAIL: Test {test.__name__} crashed: {e}')
             results.append(False)
     
-    print("\n" + "=" * 60)
-    print("📊 TEST RESULTS SUMMARY")
-    print("=" * 60)
+logger.info('\n' + '=' * 60)
+logger.info('📊 TEST RESULTS SUMMARY')
+logger.info('=' * 60)
     
     passed = sum(results)
     total = len(results)
     
     for i, (test, result) in enumerate(zip(tests, results)):
         status = "✅ PASS" if result else "❌ FAIL"
-        print(f"{i+1}. {test.__name__}: {status}")
+logger.info(f'{i + 1}. {test.__name__}: {status}')
     
-    print(f"\nOverall: {passed}/{total} tests passed")
+logger.info(f'\nOverall: {passed}/{total} tests passed')
     
     if passed == total:
-        print("🎉 ALL TESTS PASSED - Robust Multi-Pass Regeneration System is working correctly!")
+logger.info('🎉 ALL TESTS PASSED - Robust Multi-Pass Regeneration System is working correctly!')
         return True
-    print("⚠️  SOME TESTS FAILED - Please review the implementation")
+logger.error('⚠️  SOME TESTS FAILED - Please review the implementation')
     return False
 
 

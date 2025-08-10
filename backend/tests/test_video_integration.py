@@ -6,6 +6,9 @@ import sys
 from pathlib import Path
 
 import pytest
+from utils.logging_config import setup_logging
+logger = setup_logging('unknown_service')
+
 
 
 # Add the project root to the Python path
@@ -70,10 +73,10 @@ class TestVideoProcessorIntegration:
         self, video_processor, sample_video_file
     ):
         """Test complete video processing pipeline with real Google Cloud APIs."""
-        print(
+logger.info(f'\n🎥 Testing video processing with file: {Path(sample_video_file).name}')
             f"\n🎥 Testing video processing with file: {Path(sample_video_file).name}"
         )
-        print(
+logger.info(f'📁 File size: {os.path.getsize(sample_video_file) / (1024 * 1024):.2f} MB')
             f"📁 File size: {os.path.getsize(sample_video_file) / (1024 * 1024):.2f} MB"
         )
 
@@ -100,34 +103,34 @@ class TestVideoProcessorIntegration:
             assert result.metadata.size > 0
 
             # Print results for manual verification
-            print("\n✅ Video processing successful!")
-            print(f"📊 Insights keys: {list(result.insights.keys())}")
+logger.debug('\n✅ Video processing successful!')
+logger.info(f'📊 Insights keys: {list(result.insights.keys())}')
             if result.transcript:
-                print(f"🎤 Transcript length: {len(result.transcript)} characters")
-                print(f"🎤 Transcript preview: {result.transcript[:200]}...")
+logger.info(f'🎤 Transcript length: {len(result.transcript)} characters')
+logger.info(f'🎤 Transcript preview: {result.transcript[:200]}...')
             else:
-                print("🎤 No transcript generated")
+logger.info('🎤 No transcript generated')
 
             if result.labels:
-                print(f"🏷️  Labels detected: {len(result.labels)} items")
-                print(f"🏷️  Labels: {result.labels[:5]}")  # Show first 5 labels
+logger.info(f'🏷️  Labels detected: {len(result.labels)} items')
+logger.info(f'🏷️  Labels: {result.labels[:5]}')
 
             if result.objects:
-                print(f"🎯 Objects detected: {len(result.objects)} items")
-                print(f"🎯 Objects: {result.objects[:5]}")  # Show first 5 objects
+logger.info(f'🎯 Objects detected: {len(result.objects)} items')
+logger.info(f'🎯 Objects: {result.objects[:5]}')
 
             # Verify Vertex AI analysis results
             vertex_analysis = result.insights.get("vertex_analysis", {})
-            print(f"🧠 Vertex AI analysis keys: {list(vertex_analysis.keys())}")
+logger.info(f'🧠 Vertex AI analysis keys: {list(vertex_analysis.keys())}')
 
             return result
 
         except Exception as e:
-            print(f"\n❌ Video processing failed: {e}")
+logger.error(f'\n❌ Video processing failed: {e}')
             # If it's a MediaProcessingError, it's handled gracefully
             if isinstance(result, MediaProcessingError):
-                print(f"📝 Error details: {result.error_message}")
-                print(f"🔧 Error type: {result.error_type}")
+logger.error(f'📝 Error details: {result.error_message}')
+logger.error(f'🔧 Error type: {result.error_type}')
             raise
 
     @pytest.mark.asyncio
@@ -151,7 +154,7 @@ class TestVideoProcessorIntegration:
         smallest_file = min(video_files, key=lambda f: f.stat().st_size)
         file_size_mb = smallest_file.stat().st_size / (1024 * 1024)
 
-        print(
+logger.info(f'\n🎥 Testing with smallest video: {smallest_file.name} ({file_size_mb:.2f} MB)')
             f"\n🎥 Testing with smallest video: {smallest_file.name} ({file_size_mb:.2f} MB)"
         )
 
@@ -160,11 +163,11 @@ class TestVideoProcessorIntegration:
         )
 
         if isinstance(result, VideoInsight):
-            print(f"✅ Processing successful for {smallest_file.name}")
+logger.debug(f'✅ Processing successful for {smallest_file.name}')
             assert result.file_name == smallest_file.name
             assert result.insights is not None
         elif isinstance(result, MediaProcessingError):
-            print(f"⚠️  Processing failed gracefully: {result.error_message}")
+logger.error(f'⚠️  Processing failed gracefully: {result.error_message}')
             # This is still considered a success since errors are handled gracefully
             assert result.source == "VideoProcessor"
             assert result.file_name == smallest_file.name
@@ -187,11 +190,11 @@ class TestVideoProcessorIntegration:
         if len(video_files) < 2:
             pytest.skip("Need at least 2 video files for batch testing")
 
-        print(f"\n🎥 Testing batch processing of {len(video_files)} videos")
+logger.debug(f'\n🎥 Testing batch processing of {len(video_files)} videos')
 
         results = []
         for video_file in video_files:
-            print(f"📹 Processing: {video_file.name}")
+logger.debug(f'📹 Processing: {video_file.name}')
             result = await video_processor.process_video_file(
                 file_path=str(video_file), file_name=video_file.name
             )
@@ -208,16 +211,16 @@ class TestVideoProcessorIntegration:
             video_name = video_files[i].name
             if isinstance(result, VideoInsight):
                 successful_count += 1
-                print(f"✅ {video_name}: Success")
+logger.info(f'✅ {video_name}: Success')
                 assert result.file_name == video_name
             elif isinstance(result, MediaProcessingError):
                 error_count += 1
-                print(f"⚠️  {video_name}: Error - {result.error_message}")
+logger.error(f'⚠️  {video_name}: Error - {result.error_message}')
                 assert result.file_name == video_name
             else:
                 pytest.fail(f"Unexpected result type for {video_name}: {type(result)}")
 
-        print(
+logger.info(f'\n📊 Batch processing results: {successful_count} successful, {error_count} errors')
             f"\n📊 Batch processing results: {successful_count} successful, {error_count} errors"
         )
 
@@ -232,10 +235,10 @@ def test_google_cloud_credentials():
     bucket_name = settings.gcp_bucket_name
     credentials_file = settings.google_application_credentials
 
-    print("\n🔐 Google Cloud Configuration Check:")
-    print(f"📋 Project ID: {project_id}")
-    print(f"🪣 Bucket Name: {bucket_name}")
-    print(f"🔑 Credentials File: {credentials_file}")
+logger.info('\n🔐 Google Cloud Configuration Check:')
+logger.info(f'📋 Project ID: {project_id}')
+logger.info(f'🪣 Bucket Name: {bucket_name}')
+logger.info(f'🔑 Credentials File: {credentials_file}')
 
     assert project_id, "GCP_PROJECT_ID environment variable is required"
     assert bucket_name, "GCP_BUCKET_NAME environment variable is required"
@@ -244,9 +247,9 @@ def test_google_cloud_credentials():
         assert os.path.exists(credentials_file), (
             f"Credentials file not found: {credentials_file}"
         )
-        print("✅ Credentials file exists and is accessible")
+logger.info('✅ Credentials file exists and is accessible')
     else:
-        print("⚠️  GOOGLE_APPLICATION_CREDENTIALS not set, using default authentication")
+logger.info('⚠️  GOOGLE_APPLICATION_CREDENTIALS not set, using default authentication')
 
 
 if __name__ == "__main__":

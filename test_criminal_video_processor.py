@@ -7,6 +7,9 @@ Validates that the video processor correctly handles criminal case analysis.
 from __future__ import annotations
 
 from backend_logic.video_processor import VideoProcessor
+from utils.logging_config import setup_logging
+logger = setup_logging('unknown_service')
+
 
 
 def test_criminal_prompt_generation():
@@ -21,7 +24,7 @@ def test_criminal_prompt_generation():
     assert "Driving Pattern & Reason for Stop" in criminal_prompt
     assert "constitutional compliance" in criminal_prompt.lower()
     assert "JSON STRUCTURE" in criminal_prompt
-    print("✅ Criminal prompt generation test passed")
+logger.info('✅ Criminal prompt generation test passed')
 
 
 def test_standard_prompt_generation():
@@ -35,7 +38,7 @@ def test_standard_prompt_generation():
     assert "summary" in standard_prompt
     assert "timeline" in standard_prompt
     assert "objects" in standard_prompt
-    print("✅ Standard prompt generation test passed")
+logger.info('✅ Standard prompt generation test passed')
 
 
 def test_criminal_analysis_parsing():
@@ -72,7 +75,7 @@ def test_criminal_analysis_parsing():
     assert len(criminal_analysis.evidence_items) == 1
     assert criminal_analysis.evidence_items[0].evidence_strength == "strong"
     assert len(criminal_analysis.missing_categories) == 1
-    print("✅ Criminal analysis parsing test passed")
+logger.debug('✅ Criminal analysis parsing test passed')
 
 
 def test_error_handling():
@@ -85,7 +88,7 @@ def test_error_handling():
     error_response = {"error": "Failed to parse JSON from model."}
     result = temp_instance._parse_criminal_analysis(error_response)
     assert result is None
-    print("✅ Error handling test passed")
+logger.error('✅ Error handling test passed')
 
 
 def test_backward_compatibility():
@@ -98,13 +101,13 @@ def test_backward_compatibility():
     sig = inspect.signature(VideoProcessor.process_video_file)
     assert "is_criminal_case" in sig.parameters
     assert sig.parameters["is_criminal_case"].default is False
-    print("✅ Backward compatibility test passed")
+logger.info('✅ Backward compatibility test passed')
 
 
 def run_all_tests():
     """Run all unit tests for the enhanced video processor."""
-    print("🧪 Testing Enhanced Criminal Video Processor")
-    print("=" * 50)
+logger.info('🧪 Testing Enhanced Criminal Video Processor')
+logger.info('=' * 50)
 
     try:
         test_criminal_prompt_generation()
@@ -113,18 +116,18 @@ def run_all_tests():
         test_error_handling()
         test_backward_compatibility()
 
-        print("=" * 50)
-        print("🎉 All tests passed! Criminal video processor is ready.")
-        print("\n📋 Enhanced Capabilities Summary:")
-        print("   • Criminal case detection with is_criminal_case parameter")
-        print("   • 16 specialized criminal evidence categories")
-        print("   • Constitutional compliance assessment")
-        print("   • Timestamped evidence extraction")
-        print("   • Enhanced legal significance analysis")
-        print("   • Full backward compatibility maintained")
+logger.info('=' * 50)
+logger.info('🎉 All tests passed! Criminal video processor is ready.')
+logger.info('\n📋 Enhanced Capabilities Summary:')
+logger.info('   • Criminal case detection with is_criminal_case parameter')
+logger.info('   • 16 specialized criminal evidence categories')
+logger.info('   • Constitutional compliance assessment')
+logger.info('   • Timestamped evidence extraction')
+logger.info('   • Enhanced legal significance analysis')
+logger.info('   • Full backward compatibility maintained')
 
     except Exception as e:
-        print(f"❌ Test failed: {e}")
+logger.error(f'❌ Test failed: {e}')
         return False
 
     return True
@@ -136,6 +139,6 @@ if __name__ == "__main__":
 
     settings = get_settings()
     if not settings.gcp_project_id or not settings.gcp_bucket_name:
-        print("⚠️  Google Cloud credentials not configured - running unit tests only")
+logger.info('⚠️  Google Cloud credentials not configured - running unit tests only')
 
     run_all_tests()

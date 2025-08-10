@@ -14,6 +14,9 @@ from pathlib import Path
 from typing import Any
 
 import requests
+from utils.logging_config import setup_logging
+logger = setup_logging('unknown_service')
+
 
 
 # Configuration
@@ -45,9 +48,9 @@ VIDEO_EXTENSIONS = {".mov", ".mp4", ".avi", ".mkv", ".wmv"}
 
 def print_banner(title: str) -> None:
     """Print a formatted banner for section headers."""
-    print("\n" + "=" * 80)
-    print(f"  {title}")
-    print("=" * 80)
+logger.info('\n' + '=' * 80)
+logger.info(f'  {title}')
+logger.info('=' * 80)
 
 
 def print_progress(current: int, total: int, description: str) -> None:
@@ -56,7 +59,7 @@ def print_progress(current: int, total: int, description: str) -> None:
     bar_length = 40
     filled_length = int(bar_length * current // total) if total > 0 else 0
     bar = "█" * filled_length + "-" * (bar_length - filled_length)
-    print(
+logger.info(f'\r[{bar}] {percentage:6.1f}% | {current}/{total} | {description}')
         f"\r[{bar}] {percentage:6.1f}% | {current}/{total} | {description}",
         end="",
         flush=True,
@@ -81,10 +84,10 @@ def discover_documents() -> tuple[str, list[str]]:
         msg = f"Client documents directory not found: {DOCUMENTS_PATH}"
         raise FileNotFoundError(msg)
 
-    print(f"📂 Scanning: {DOCUMENTS_PATH.name}")
+logger.info(f'📂 Scanning: {DOCUMENTS_PATH.name}')
 
     all_files = [f for f in DOCUMENTS_PATH.iterdir() if f.is_file()]
-    print(f"📁 Found {len(all_files)} total files")
+logger.info(f'📁 Found {len(all_files)} total files')
 
     # Filter by supported file types
     supported_files = []
@@ -93,22 +96,22 @@ def discover_documents() -> tuple[str, list[str]]:
     for file_path in all_files:
         if file_path.suffix.lower() in SUPPORTED_EXTENSIONS:
             supported_files.append(file_path)
-            print(f"  ✅ {file_path.name}")
+logger.info(f'  ✅ {file_path.name}')
         elif file_path.suffix.lower() in VIDEO_EXTENSIONS:
             skipped_files.append(f"{file_path.name} (video)")
-            print(f"  ⏭️  {file_path.name} (video - skipped)")
+logger.warning(f'  ⏭️  {file_path.name} (video - skipped)')
         else:
             skipped_files.append(f"{file_path.name} (unsupported)")
-            print(f"  ❓ {file_path.name} (unsupported)")
+logger.info(f'  ❓ {file_path.name} (unsupported)')
 
-    print("\n📊 DISCOVERY SUMMARY:")
-    print(f"  ✅ Supported files: {len(supported_files)}")
-    print(f"  ⏭️  Skipped files: {len(skipped_files)}")
+logger.info('\n📊 DISCOVERY SUMMARY:')
+logger.info(f'  ✅ Supported files: {len(supported_files)}')
+logger.warning(f'  ⏭️  Skipped files: {len(skipped_files)}')
 
     if skipped_files:
-        print("\n📋 Skipped Files:")
+logger.warning('\n📋 Skipped Files:')
         for i, skipped in enumerate(skipped_files, 1):
-            print(f"  {i:2d}. {skipped}")
+logger.warning(f'  {i:2d}. {skipped}')
 
     # Identify intake form (should be "Intake - Miguel and Rachael.pdf")
     intake_form = None
@@ -131,12 +134,12 @@ def discover_documents() -> tuple[str, list[str]]:
     # All other supported files are case documents
     case_documents = [str(f) for f in supported_files if str(f) != intake_form]
 
-    print(f"\n📄 INTAKE FORM: {Path(intake_form).name}")
-    print(f"📁 CASE DOCUMENTS: {len(case_documents)} files")
+logger.info(f'\n📄 INTAKE FORM: {Path(intake_form).name}')
+logger.info(f'📁 CASE DOCUMENTS: {len(case_documents)} files')
 
     # List case documents with descriptions based on names
     if case_documents:
-        print("\n📋 Case Documents:")
+logger.info('\n📋 Case Documents:')
         for i, doc_path in enumerate(case_documents, 1):
             doc_name = Path(doc_path).name
             file_size = Path(doc_path).stat().st_size
@@ -154,9 +157,9 @@ def discover_documents() -> tuple[str, list[str]]:
             elif "screenshot" in doc_name.lower():
                 doc_type = "Screenshot Evidence"
 
-            print(f"  {i:2d}. {doc_name}")
-            print(f"      Type: {doc_type}")
-            print(f"      Size: {file_size:,} bytes")
+logger.info(f'  {i:2d}. {doc_name}')
+logger.info(f'      Type: {doc_type}')
+logger.info(f'      Size: {file_size:,} bytes')
 
     return intake_form, case_documents
 
@@ -196,7 +199,7 @@ def prepare_test_data() -> list[tuple[str, tuple[str, bytes, str]]]:
     total_files = 1 + len(case_documents)  # 1 intake + case docs
     files_data = []
 
-    print(f"\n🔄 Loading {total_files} files...")
+logger.info(f'\n🔄 Loading {total_files} files...')
 
     # Load intake form
     print_progress(0, total_files, "Loading intake form...")
@@ -205,7 +208,7 @@ def prepare_test_data() -> list[tuple[str, tuple[str, bytes, str]]]:
         files_data.append(("intake_form", (Path(intake_form).name, content, mime_type)))
         print_progress(1, total_files, f"Loaded: {Path(intake_form).name}")
     except Exception as e:
-        print(f"\n❌ Failed to load intake form: {e}")
+logger.error(f'\n❌ Failed to load intake form: {e}')
         return []
 
     # Load case documents with progress tracking
@@ -218,10 +221,10 @@ def prepare_test_data() -> list[tuple[str, tuple[str, bytes, str]]]:
             )
             print_progress(i + 1, total_files, f"Loaded: {Path(doc_path).name}")
         except Exception as e:
-            print(f"\n⚠️  Failed to load {Path(doc_path).name}: {e}")
+logger.error(f'\n⚠️  Failed to load {Path(doc_path).name}: {e}')
             continue
 
-    print(f"\n✅ Successfully prepared {len(files_data)} files for upload")
+logger.info(f'\n✅ Successfully prepared {len(files_data)} files for upload')
 
     # Summary with file type breakdown and flooding case specifics
     file_types = {}
@@ -243,16 +246,16 @@ def prepare_test_data() -> list[tuple[str, tuple[str, bytes, str]]]:
         if any(term in filename.lower() for term in ["insurance", "estimate", "claim"]):
             insurance_docs += 1
 
-    print("\n📊 File Type Breakdown:")
+logger.info('\n📊 File Type Breakdown:')
     for ext, info in file_types.items():
         size_mb = info["size"] / 1024 / 1024
-        print(f"  {ext}: {info['count']} files ({size_mb:.1f} MB)")
+logger.info(f'  {ext}: {info['count']} files ({size_mb:.1f} MB)')
 
-    print("\n🏠 Case-Specific Documents:")
-    print(f"  💧 Flooding evidence: {flooding_docs} files")
-    print(f"  🏢 Insurance documents: {insurance_docs} files")
+logger.info('\n🏠 Case-Specific Documents:')
+logger.info(f'  💧 Flooding evidence: {flooding_docs} files')
+logger.info(f'  🏢 Insurance documents: {insurance_docs} files')
 
-    print(
+logger.info(f'📊 Total payload size: {total_size:,} bytes ({total_size / 1024 / 1024:.1f} MB)')
         f"📊 Total payload size: {total_size:,} bytes ({total_size / 1024 / 1024:.1f} MB)"
     )
 
@@ -265,32 +268,32 @@ def send_request(
     """Send request to API with progress tracking."""
     print_banner("🚀 SENDING API REQUEST")
 
-    print(f"🌐 Endpoint: {API_URL}")
-    print(f"📁 Files: {len(files_data)}")
-    print("⏱️  Timeout: 300 seconds")
-    print(f"🎯 Case Type: {CASE_TYPE}")
+logger.info(f'🌐 Endpoint: {API_URL}')
+logger.info(f'📁 Files: {len(files_data)}')
+logger.info('⏱️  Timeout: 300 seconds')
+logger.info(f'🎯 Case Type: {CASE_TYPE}')
 
     start_time = time.time()
 
     try:
-        print("\n🔄 Sending request...")
+logger.info('\n🔄 Sending request...')
         response = requests.post(API_URL, files=files_data, timeout=300)
 
         duration = time.time() - start_time
-        print(f"✅ Request completed in {duration:.1f} seconds")
+logger.info(f'✅ Request completed in {duration:.1f} seconds')
 
         if response.status_code == 200:
-            print(f"✅ Success! Status: {response.status_code}")
+logger.info(f'✅ Success! Status: {response.status_code}')
             return response.json()
-        print(f"❌ Request failed! Status: {response.status_code}")
-        print(f"Response: {response.text}")
+logger.error(f'❌ Request failed! Status: {response.status_code}')
+logger.info(f'Response: {response.text}')
         return {"error": f"HTTP {response.status_code}", "details": response.text}
 
     except requests.exceptions.Timeout:
-        print("⏰ Request timed out after 300 seconds")
+logger.info('⏰ Request timed out after 300 seconds')
         return {"error": "Timeout", "details": "Request exceeded 300 second timeout"}
     except requests.exceptions.RequestException as e:
-        print(f"❌ Request error: {e}")
+logger.error(f'❌ Request error: {e}')
         return {"error": "Request failed", "details": str(e)}
 
 
@@ -299,9 +302,9 @@ def analyze_response(result: dict[str, Any]) -> dict[str, Any]:
     print_banner("📊 RESPONSE ANALYSIS")
 
     if "error" in result:
-        print(f"❌ Error Response: {result['error']}")
+logger.error(f'❌ Error Response: {result['error']}')
         if "details" in result:
-            print(f"Details: {result['details']}")
+logger.info(f'Details: {result['details']}')
         return {"status": "error", "error": result["error"]}
 
     analysis_data = {}
@@ -310,9 +313,9 @@ def analyze_response(result: dict[str, Any]) -> dict[str, Any]:
     has_analysis = "analysis" in result
     has_email = "email" in result
 
-    print("📋 Response Structure:")
-    print(f"  ✅ Analysis section: {'Yes' if has_analysis else 'No'}")
-    print(f"  ✅ Email section: {'Yes' if has_email else 'No'}")
+logger.info('📋 Response Structure:')
+logger.info(f'  ✅ Analysis section: {('Yes' if has_analysis else 'No')}')
+logger.info(f'  ✅ Email section: {('Yes' if has_email else 'No')}')
 
     if has_analysis:
         analysis = result["analysis"]
@@ -320,19 +323,19 @@ def analyze_response(result: dict[str, Any]) -> dict[str, Any]:
         # Intake analysis
         if "intake_analysis" in analysis:
             intake = analysis["intake_analysis"]
-            print("\n📄 Intake Analysis:")
-            print(f"  👥 Clients: {intake.get('client_name', 'N/A')}")
-            print(f"  ⚖️  Case Type: {intake.get('case_type', 'N/A')}")
-            print(f"  🚨 Urgency: {intake.get('urgency_level', 'N/A')}")
+logger.info('\n📄 Intake Analysis:')
+logger.info(f'  👥 Clients: {intake.get('client_name', 'N/A')}')
+logger.info(f'  ⚖️  Case Type: {intake.get('case_type', 'N/A')}')
+logger.info(f'  🚨 Urgency: {intake.get('urgency_level', 'N/A')}')
 
             # Look for flooding-specific details
             key_facts = intake.get("key_facts", [])
             if key_facts:
-                print(f"  📋 Key Facts ({len(key_facts)}):")
+logger.info(f'  📋 Key Facts ({len(key_facts)}):')
                 for fact in key_facts[:3]:
-                    print(f"    • {fact}")
+logger.info(f'    • {fact}')
                 if len(key_facts) > 3:
-                    print(f"    ... and {len(key_facts) - 3} more")
+logger.info(f'    ... and {len(key_facts) - 3} more')
 
             analysis_data["intake"] = {
                 "client_name": intake.get("client_name"),
@@ -344,7 +347,7 @@ def analyze_response(result: dict[str, Any]) -> dict[str, Any]:
         # Case document analyses
         if "case_analyses" in analysis:
             case_docs = analysis["case_analyses"]
-            print(f"\n📁 Case Documents Analyzed: {len(case_docs)}")
+logger.info(f'\n📁 Case Documents Analyzed: {len(case_docs)}')
 
             analysis_data["case_documents"] = []
 
@@ -355,9 +358,9 @@ def analyze_response(result: dict[str, Any]) -> dict[str, Any]:
                 summary = doc.get("summary", "")
                 summary_length = len(summary)
 
-                print(f"  {i:2d}. {doc_title}")
-                print(f"      Type: {doc_type}")
-                print(f"      Summary: {summary_length} characters")
+logger.info(f'  {i:2d}. {doc_title}')
+logger.info(f'      Type: {doc_type}')
+logger.info(f'      Summary: {summary_length} characters')
 
                 # Look for flooding-related terms in summary
                 flooding_terms = [
@@ -376,7 +379,7 @@ def analyze_response(result: dict[str, Any]) -> dict[str, Any]:
                 }
 
                 if relevant_terms:
-                    print(f"      Key terms: {', '.join(relevant_terms.keys())}")
+logger.info(f'      Key terms: {', '.join(relevant_terms.keys())}')
 
                 analysis_data["case_documents"].append(
                     {
@@ -390,25 +393,25 @@ def analyze_response(result: dict[str, Any]) -> dict[str, Any]:
         # Legal assessment
         if "legal_assessment" in analysis:
             legal = analysis["legal_assessment"]
-            print("\n⚖️  Legal Assessment:")
-            print(f"  📊 Claim Viability: {legal.get('claim_viability', 'N/A')}")
-            print(f"  📈 Evidence Strength: {legal.get('evidence_strength', 'N/A')}")
+logger.info('\n⚖️  Legal Assessment:')
+logger.info(f'  📊 Claim Viability: {legal.get('claim_viability', 'N/A')}')
+logger.info(f'  📈 Evidence Strength: {legal.get('evidence_strength', 'N/A')}')
 
             challenges = legal.get("potential_challenges", [])
             if challenges:
-                print(f"  ⚠️  Potential Challenges ({len(challenges)}):")
+logger.info(f'  ⚠️  Potential Challenges ({len(challenges)}):')
                 for challenge in challenges[:3]:
-                    print(f"    • {challenge}")
+logger.info(f'    • {challenge}')
                 if len(challenges) > 3:
-                    print(f"    ... and {len(challenges) - 3} more")
+logger.info(f'    ... and {len(challenges) - 3} more')
 
             recommendations = legal.get("recommended_actions", [])
             if recommendations:
-                print(f"  💡 Recommendations ({len(recommendations)}):")
+logger.info(f'  💡 Recommendations ({len(recommendations)}):')
                 for rec in recommendations[:3]:
-                    print(f"    • {rec}")
+logger.info(f'    • {rec}')
                 if len(recommendations) > 3:
-                    print(f"    ... and {len(recommendations) - 3} more")
+logger.info(f'    ... and {len(recommendations) - 3} more')
 
             analysis_data["legal_assessment"] = {
                 "claim_viability": legal.get("claim_viability"),
@@ -420,19 +423,19 @@ def analyze_response(result: dict[str, Any]) -> dict[str, Any]:
     if has_email:
         email_response = result["email"]
 
-        print("\n📧 Email Generation:")
+logger.info('\n📧 Email Generation:')
 
         # Download links
         download_links = email_response.get("download_links", [])
-        print(f"  💾 Download Links: {len(download_links)}")
+logger.info(f'  💾 Download Links: {len(download_links)}')
 
         for link in download_links:
             file_name = link.get("file_name", "Unknown")
-            print(f"    📎 {file_name}")
+logger.info(f'    📎 {file_name}')
 
         # Case analysis text
         case_text = email_response.get("case_analysis_text", "")
-        print(f"  📝 Case Analysis: {len(case_text)} characters")
+logger.info(f'  📝 Case Analysis: {len(case_text)} characters')
 
         # Look for specific flooding/property damage terms in the email
         flooding_terms = [
@@ -450,9 +453,9 @@ def analyze_response(result: dict[str, Any]) -> dict[str, Any]:
         }
 
         if relevant_terms:
-            print("  🔍 Case-Specific Terms Found:")
+logger.info('  🔍 Case-Specific Terms Found:')
             for term, count in relevant_terms.items():
-                print(f"    • '{term}': {count} mentions")
+logger.info(f"    • '{term}': {count} mentions")
 
         analysis_data["email"] = {
             "download_links_count": len(download_links),
@@ -467,11 +470,11 @@ def analyze_response(result: dict[str, Any]) -> dict[str, Any]:
         errors.extend(result["analysis"]["errors"])
 
     if errors:
-        print(f"\n⚠️  Errors Found: {len(errors)}")
+logger.error(f'\n⚠️  Errors Found: {len(errors)}')
         for i, error in enumerate(errors, 1):
             source = error.get("source", "Unknown")
             message = error.get("error_message", "No message")
-            print(f"  {i}. [{source}] {message}")
+logger.info(f'  {i}. [{source}] {message}')
 
         analysis_data["errors"] = errors
 
@@ -490,36 +493,36 @@ def save_results(result: dict[str, Any], analysis_data: dict[str, Any]) -> None:
     json_file = results_dir / f"response_{timestamp}.json"
     with open(json_file, "w", encoding="utf-8") as f:
         json.dump(result, f, indent=2, default=str, ensure_ascii=False)
-    print(f"📄 Full response: {json_file.name}")
+logger.info(f'📄 Full response: {json_file.name}')
 
     # Save analysis summary
     summary_file = results_dir / f"analysis_{timestamp}.json"
     with open(summary_file, "w", encoding="utf-8") as f:
         json.dump(analysis_data, f, indent=2, default=str, ensure_ascii=False)
-    print(f"📊 Analysis summary: {summary_file.name}")
+logger.info(f'📊 Analysis summary: {summary_file.name}')
 
     # Save email content if available
     if "email" in result and "case_analysis_text" in result["email"]:
         email_file = results_dir / f"email_content_{timestamp}.txt"
         with open(email_file, "w", encoding="utf-8") as f:
             f.write(result["email"]["case_analysis_text"])
-        print(f"📧 Email content: {email_file.name}")
+logger.info(f'📧 Email content: {email_file.name}')
 
-    print(f"📁 Results saved to: {results_dir}")
+logger.info(f'📁 Results saved to: {results_dir}')
 
 
 def main():
     """Main test execution function."""
     print_banner(f"🧪 COMPREHENSIVE TEST SUITE - {CLIENT_NAME}")
-    print(f"📅 Test Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    print(f"🎯 Case Type: {CASE_TYPE}")
-    print("👥 Multiple Clients: Miguel & Rachael Velasco")
+logger.info(f'📅 Test Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}')
+logger.info(f'🎯 Case Type: {CASE_TYPE}')
+logger.info('👥 Multiple Clients: Miguel & Rachael Velasco')
 
     try:
         # Step 1: Prepare test data
         files_data = prepare_test_data()
         if not files_data:
-            print("❌ Failed to prepare test data. Exiting.")
+logger.error('❌ Failed to prepare test data. Exiting.')
             return
 
         # Step 2: Send API request
@@ -535,12 +538,12 @@ def main():
         print_banner("🎉 TEST COMPLETE")
 
         if analysis_data.get("status") == "success":
-            print("✅ Test completed successfully!")
+logger.info('✅ Test completed successfully!')
 
             # Quick stats specific to flooding case
             if "case_documents" in analysis_data:
                 docs_count = len(analysis_data["case_documents"])
-                print(f"📁 Documents processed: {docs_count}")
+logger.info(f'📁 Documents processed: {docs_count}')
 
                 # Count flooding-specific documents
                 flooding_docs = sum(
@@ -548,28 +551,28 @@ def main():
                     for doc in analysis_data["case_documents"]
                     if doc.get("flooding_terms")
                 )
-                print(f"💧 Flooding-related docs: {flooding_docs}")
+logger.info(f'💧 Flooding-related docs: {flooding_docs}')
 
             if "email" in analysis_data:
                 email_length = analysis_data["email"]["case_analysis_length"]
                 links_count = analysis_data["email"]["download_links_count"]
-                print(f"📧 Email generated: {email_length:,} characters")
-                print(f"💾 Download files: {links_count}")
+logger.info(f'📧 Email generated: {email_length:,} characters')
+logger.info(f'💾 Download files: {links_count}')
 
                 # Show case-specific analysis
                 terms = analysis_data["email"].get("case_specific_terms", {})
                 if terms:
                     total_terms = sum(terms.values())
-                    print(f"🔍 Property damage terms: {total_terms} total mentions")
+logger.info(f'🔍 Property damage terms: {total_terms} total mentions')
 
             if "errors" in analysis_data:
                 error_count = len(analysis_data["errors"])
-                print(f"⚠️  Errors encountered: {error_count}")
+logger.error(f'⚠️  Errors encountered: {error_count}')
         else:
-            print("❌ Test failed!")
+logger.error('❌ Test failed!')
 
     except Exception as e:
-        print(f"\n💥 FATAL ERROR: {e}")
+logger.error(f'\n💥 FATAL ERROR: {e}')
         import traceback
 
         traceback.print_exc()

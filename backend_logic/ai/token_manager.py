@@ -9,6 +9,11 @@ from typing import Any
 
 import tiktoken
 
+from utils.logging_config import setup_logging
+
+
+logger = setup_logging("token_manager")
+
 
 class TokenManager:
     """Manages token counting and prompt size validation."""
@@ -30,10 +35,12 @@ class TokenManager:
         overhead_factor = 1.15
         estimated_tokens = int(base_tokens * overhead_factor)
 
-        print("TOKEN MANAGER: 🔍 Token estimation details:")
-        print(f"TOKEN MANAGER: 🔍   - Content length: {len(prompt_content):,} characters")
-        print(f"TOKEN MANAGER: 🔍   - Base tokens: {int(base_tokens):,}")
-        print(f"TOKEN MANAGER: 🔍   - With overhead: {estimated_tokens:,}")
+        logger.info("TOKEN MANAGER: 🔍 Token estimation details:")
+        logger.info(
+            f"TOKEN MANAGER: 🔍   - Content length: {len(prompt_content):,} characters"
+        )
+        logger.info(f"TOKEN MANAGER: 🔍   - Base tokens: {int(base_tokens):,}")
+        logger.info(f"TOKEN MANAGER: 🔍   - With overhead: {estimated_tokens:,}")
 
         return estimated_tokens
 
@@ -50,23 +57,29 @@ class TokenManager:
             tokens = encoding.encode(text)
             token_count = len(tokens)
 
-            print(f"TOKEN MANAGER: 🔢 Accurate token count ({model}): {token_count:,}")
+            logger.info(
+                f"TOKEN MANAGER: 🔢 Accurate token count ({model}): {token_count:,}"
+            )
             return token_count
         except (ImportError, AttributeError, ValueError, TypeError) as e:
-            print(f"TOKEN MANAGER: ⚠️  tiktoken error, falling back to estimation: {e}")
+            logger.error(
+                f"TOKEN MANAGER: ⚠️  tiktoken error, falling back to estimation: {e}"
+            )
             # Fallback to existing estimation method
             return self.estimate_tokens_detailed(text)
 
     def check_token_threshold(self, analysis, model: str = "gpt-4o") -> bool:
         """Check if video insights would exceed token threshold before building prompt."""
-        print(f"TOKEN MANAGER: 🔍 Pre-computation token checking for model: {model}")
+        logger.debug(
+            f"TOKEN MANAGER: 🔍 Pre-computation token checking for model: {model}"
+        )
 
         threshold = self.model_limits.get(model, 96000)  # Default to 120k * 0.8
-        print(f"TOKEN MANAGER: 🔍 Token threshold for {model}: {threshold:,}")
+        logger.info(f"TOKEN MANAGER: 🔍 Token threshold for {model}: {threshold:,}")
 
         # Estimate token usage from video insights
         if not analysis.video_insights:
-            print("TOKEN MANAGER: 🔍 No video insights, threshold check passed")
+            logger.info("TOKEN MANAGER: 🔍 No video insights, threshold check passed")
             return True
 
         total_video_tokens = 0
@@ -83,26 +96,31 @@ class TokenManager:
             video_tokens = self.count_tokens_accurate(video_content, model)
             total_video_tokens += video_tokens
 
-            print(f"TOKEN MANAGER: 🔍   - {video.file_name}: {video_tokens:,} tokens")
+            logger.info(
+                f"TOKEN MANAGER: 🔍   - {video.file_name}: {video_tokens:,} tokens"
+            )
 
         # Add estimated tokens for other content (documents, intake, etc.)
         base_content_estimate = 10000  # Conservative estimate for non-video content
         total_estimated_tokens = total_video_tokens + base_content_estimate
 
-        print(f"TOKEN MANAGER: 🔍 Total estimated tokens: {total_estimated_tokens:,}")
-        print(f"TOKEN MANAGER: 🔍 Threshold: {threshold:,}")
+        logger.info(
+            f"TOKEN MANAGER: 🔍 Total estimated tokens: {total_estimated_tokens:,}"
+        )
+        logger.info(f"TOKEN MANAGER: 🔍 Threshold: {threshold:,}")
 
         if total_estimated_tokens > threshold:
-            print(
+            logger.info(
                 f"TOKEN MANAGER: ⚠️  Token count exceeds threshold ({total_estimated_tokens:,} > {threshold:,})"
             )
             return False
-        print("TOKEN MANAGER: ✅ Token count within threshold")
+
+        logger.info("TOKEN MANAGER: ✅ Token count within threshold")
         return True
 
     def apply_summarization_strategy(self, analysis) -> Any:
         """Apply summarization strategy when token threshold is exceeded."""
-        print(
+        logger.info(
             "TOKEN MANAGER: 🔄 Token count exceeds threshold. Triggering summarization strategy."
         )
 
@@ -143,16 +161,16 @@ class TokenManager:
                     "status": "Video analyzed - full details preserved, summary applied for prompt"
                 }
 
-                print(
+                logger.info(
                     f"TOKEN MANAGER: 🔄   - Summarized {video.file_name}: {len(condensed_summary)} chars"
                 )
             else:
                 video.insights_summary = f"Video file {video.file_name} processed but content summarized due to size constraints."
-                print(
+                logger.info(
                     f"TOKEN MANAGER: 🔄   - Applied default summary for {video.file_name}"
                 )
 
-        print(
+        logger.info(
             f"TOKEN MANAGER: 🔄 Summarization strategy applied to {len(analysis_copy.video_insights)} video(s)"
         )
         return analysis_copy
@@ -161,7 +179,7 @@ class TokenManager:
         self, analysis, target_tokens: int = 100000
     ) -> Any:
         """Aggressively truncate video content to meet token limits."""
-        print(
+        logger.info(
             f"TOKEN MANAGER: 🔄 Aggressively truncating video content to target {target_tokens:,} tokens"
         )
 
@@ -186,7 +204,7 @@ class TokenManager:
                 video.text_annotations[:3] if video.text_annotations else []
             )
 
-            print(f"TOKEN MANAGER: 🔄   - Truncated {video.file_name}")
+            logger.info(f"TOKEN MANAGER: 🔄   - Truncated {video.file_name}")
 
         return analysis_copy
 
@@ -209,7 +227,7 @@ class TokenManager:
             truncated_content = (
                 f"{first_part}\n\n[... CONTENT TRUNCATED FOR SIZE ...]\n\n{last_part}"
             )
-            print(
+            logger.info(
                 f"TOKEN MANAGER: ⚠️  Content truncated from ~{estimated_tokens} to ~{max_tokens} tokens"
             )
             return truncated_content

@@ -9,6 +9,10 @@ from backend.utils.data_models import (
     FileType,
     ProcessedDocument,
 )
+from utils.logging_config import setup_logging
+
+
+logger = setup_logging("txt_processor")
 
 
 async def process_txt(
@@ -17,7 +21,7 @@ async def process_txt(
     """
     Processes a TXT file by reading its content from a given path.
     """
-    print(f"Processing TXT: {original_filename}")
+    logger.debug(f"Processing TXT: {original_filename}")
 
     with open(file_path, encoding="utf-8") as f:
         content = f.read()
@@ -28,7 +32,9 @@ async def process_txt(
     # Create proper FileMetadata object with required fields
     file_metadata = FileMetadata(filename=original_filename, size=file_size)
 
-    print(f"✅ Fixed: Created FileMetadata for {original_filename}, size: {file_size}")
+    logger.info(
+        f"✅ Fixed: Created FileMetadata for {original_filename}, size: {file_size}"
+    )
 
     return ProcessedDocument(
         file_name=original_filename,

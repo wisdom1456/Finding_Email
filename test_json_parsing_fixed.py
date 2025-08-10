@@ -8,13 +8,16 @@ import json
 import os
 import re
 import sys
+from utils.logging_config import setup_logging
+logger = setup_logging('unknown_service')
+
 
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 def test_json_parsing_fixed():
     """Test the fixed JSON parsing functionality."""
-    print("Testing FIXED JSON parsing logic...")
+logger.debug('Testing FIXED JSON parsing logic...')
     
     # Replicate the JSON parsing methods locally without API key dependencies
     def _extract_json_content(content: str) -> str:
@@ -86,53 +89,53 @@ def test_json_parsing_fixed():
         ("This is just plain text with no JSON content.", "Plain text"),
     ]
     
-    print(f"\nRunning {len(test_cases)} test cases...\n")
+logger.info(f'\nRunning {len(test_cases)} test cases...\n')
     
     passed = 0
     failed = 0
     
     for i, (content, description) in enumerate(test_cases, 1):
-        print(f"Test {i}: {description}")
-        print(f"Input: {content[:50]}{'...' if len(content) > 50 else ''}")
+logger.info(f'Test {i}: {description}')
+logger.info(f'Input: {content[:50]}{('...' if len(content) > 50 else '')}')
         
         try:
             result = parse_json_response_fixed(content)
-            print(f"Return type: {type(result)}")
+logger.info(f'Return type: {type(result)}')
             
             # Validate the response format
             if isinstance(result, dict) and "success" in result:
-                print(f"✅ Correct format: Has 'success' key = {result['success']}")
+logger.info(f"✅ Correct format: Has 'success' key = {result['success']}")
                 
                 if result["success"]:
-                    print(f"   ✅ Success: {type(result['data']).__name__}")
-                    print(f"   Data: {str(result['data'])[:100]}{'...' if len(str(result['data'])) > 100 else ''}")
+logger.info(f'   ✅ Success: {type(result['data']).__name__}')
+logger.info(f'   Data: {str(result['data'])[:100]}{('...' if len(str(result['data'])) > 100 else '')}')
                     passed += 1
                 else:
-                    print(f"   ❌ Failed: {result['error']}")
+logger.error(f'   ❌ Failed: {result['error']}')
                     if i in [6, 7, 8]:  # Expected failures
-                        print("   ✅ (Expected failure)")
+logger.error('   ✅ (Expected failure)')
                         passed += 1
                     else:
                         failed += 1
             else:
-                print("   ❌ Wrong format: Missing 'success' key")
+logger.info("   ❌ Wrong format: Missing 'success' key")
                 failed += 1
                 
         except Exception as e:
-            print(f"🚨 Unexpected Error: {e}")
+logger.error(f'🚨 Unexpected Error: {e}')
             failed += 1
         
-        print("-" * 60)
+logger.info('-' * 60)
     
-    print("JSON parsing tests completed!")
-    print(f"✅ Passed: {passed}")
-    print(f"❌ Failed: {failed}")
-    print(f"Total: {passed + failed}")
+logger.debug('JSON parsing tests completed!')
+logger.info(f'✅ Passed: {passed}')
+logger.error(f'❌ Failed: {failed}')
+logger.error(f'Total: {passed + failed}')
     
-    print("\n🔍 KEY FIXES IMPLEMENTED:")
-    print("   ✅ parse_json_response() now returns standardized dict with 'success' key")
-    print("   ✅ Compatible with ai_analyzer_refactored.py expectations")
-    print("   ✅ Maintains error handling and proper JSON extraction")
+logger.info('\n🔍 KEY FIXES IMPLEMENTED:')
+logger.info("   ✅ parse_json_response() now returns standardized dict with 'success' key")
+logger.info('   ✅ Compatible with ai_analyzer_refactored.py expectations')
+logger.error('   ✅ Maintains error handling and proper JSON extraction')
 
 if __name__ == "__main__":
     test_json_parsing_fixed()

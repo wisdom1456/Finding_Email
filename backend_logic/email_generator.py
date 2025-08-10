@@ -4,29 +4,18 @@ import json
 import re
 import traceback
 from datetime import datetime
-from typing import Any
+from typing import Any, Dict, List, Optional, Tuple, Union
 
-from jinja2 import Environment
+from utils.logging_config import setup_logging
+
+
+logger = setup_logging("email_generator")
+
 from openai import (
-    APIConnectionError,
-    APIError,
-    APIStatusError,
-    APITimeoutError,
-    AuthenticationError,
-    BadRequestError,
-    InternalServerError,
     OpenAI,
-    PermissionDeniedError,
-    RateLimitError,
-    UnprocessableEntityError,
 )
 from pydantic import BaseModel, Field
-from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_fixed
 
-from backend.quality_validator import (
-    WeaknessesValidationError,
-    validate_email_completeness,
-)
 from backend.utils.data_models import (
     CaseAnalysisResult,
     EmailStructurePlan,
@@ -38,7 +27,6 @@ from backend.utils.validators import (
     validate_next_steps_formatting,
     validate_section_output,
 )
-from backend_logic.config import get_openai_config
 from backend_logic.email_generation.services.config_and_template_loader import (
     ConfigAndTemplateLoader,
 )
@@ -70,21 +58,21 @@ class GenerationOutput(BaseModel):
     """Enhanced output structure for email generation with debugging capabilities."""
 
     letter: GeneratedLetter
-    debug_info: dict[str, Any] | None = None
-    validation_results: dict[str, dict[str, Any]] = Field(default_factory=dict)
-    generation_metadata: dict[str, Any] = Field(default_factory=dict)
+    debug_info: Optional[Dict[str, Any]] = None
+    validation_results: Dict[str, Dict[str, Any]] = Field(default_factory=dict)
+    generation_metadata: Dict[str, Any] = Field(default_factory=dict)
 
 
 class DebugOutput(BaseModel):
     """Detailed debug information for testing and validation."""
 
-    input_validation: dict[str, Any] = Field(default_factory=dict)
-    structure_plan: dict[str, Any] | None = None
-    generated_sections: dict[str, dict[str, Any]] = Field(default_factory=dict)
-    field_mapping: dict[str, Any] = Field(default_factory=dict)
-    validation_results: dict[str, dict[str, Any]] = Field(default_factory=dict)
-    errors: list[dict[str, str]] = Field(default_factory=list)
-    generation_time: float | None = None
+    input_validation: Dict[str, Any] = Field(default_factory=dict)
+    structure_plan: Optional[Dict[str, Any]] = None
+    generated_sections: Dict[str, Dict[str, Any]] = Field(default_factory=dict)
+    field_mapping: Dict[str, Any] = Field(default_factory=dict)
+    validation_results: Dict[str, Dict[str, Any]] = Field(default_factory=dict)
+    errors: List[Dict[str, str]] = Field(default_factory=list)
+    generation_time: Optional[float] = None
 
 
 class SectionValidationError(ValueError):
@@ -112,7 +100,7 @@ class EmailGeneratorV2:
     3. FORMAT: Validate output and ensure all template fields are populated
     """
 
-    def __init__(self, client: OpenAI, config_path: str | None = None) -> None:
+    def __init__(self, client: OpenAI, config_path: Optional[str] = None) -> None:
         """Initialize the EmailGenerator with OpenAI client, configuration, and Jinja2 environment."""
         if not client:
             msg = "An OpenAI client is required for EmailGenerator."
@@ -125,79 +113,14 @@ class EmailGeneratorV2:
 
         # regex_replace filter removed - logic moved to Python processing
 
-        
         self.json_service = JsonProcessingService(self.client, self.config)
         self.prompt_api_service = PromptAndApiService(self.config)
         self.content_formatting_service = ContentFormattingService(self.config)
         self.content_extraction_service = ContentExtractionService(self.config)
 
-        print(f"EMAIL GENERATOR V2: ✅ Initialized with configuration: {config_path or 'default'}")
-
-    def _count_p_tags(self, html_content: str) -> dict[str, int]:
-        """
-        Count opening and closing <p> tags to detect tag balance issues.
-        
-        Args:
-            html_content: HTML content to analyze
-            
-        Returns:
-            Dictionary with open_tags, close_tags, and balance counts
-        """
-        if not html_content:
-            return {"open_tags": 0, "close_tags": 0, "balance": 0}
-        
-        open_count = len(re.findall(r"<p\b[^>]*>", html_content, re.IGNORECASE))
-        close_count = len(re.findall(r"</p>", html_content, re.IGNORECASE))
-        balance = open_count - close_count
-        
-        return {
-            "open_tags": open_count,
-            "close_tags": close_count,
-            "balance": balance
-        }
-
-    def _detect_corruption_patterns(self, html_content: str) -> dict[str, Any]:
-        """
-        Detect specific HTML corruption patterns documented in the system.
-        
-        Args:
-            html_content: HTML content to analyze
-            
-        Returns:
-            Dictionary with corruption pattern detection results
-        """
-        if not html_content:
-            return {
-                "broken_entities": 0,
-                "orphaned_tags": 0,
-                "malformed_font_family": 0,
-                "patterns_detected": []
-            }
-        
-        patterns_detected = []
-        
-        # Pattern 1: Broken HTML entities (&gt;\s*&lt;)
-        broken_entities = len(re.findall(r"&gt;\s*&lt;", html_content))
-        if broken_entities > 0:
-            patterns_detected.append("broken_html_entities")
-        
-        # Pattern 2: Orphaned closing tags (&lt;/[^&]+&gt;)
-        orphaned_tags = len(re.findall(r"&lt;/[^&]+&gt;", html_content))
-        if orphaned_tags > 0:
-            patterns_detected.append("orphaned_closing_tags")
-        
-        # Pattern 3: Malformed font-family declarations
-        malformed_font = len(re.findall(r"'freeserif',=\"\"\s*'libertimes=\"\"\s*'nimbus=\"\"", html_content))
-        if malformed_font > 0:
-            patterns_detected.append("malformed_font_family")
-        
-        return {
-            "broken_entities": broken_entities,
-            "orphaned_tags": orphaned_tags,
-            "malformed_font_family": malformed_font,
-            "patterns_detected": patterns_detected
-        }
-
+        logger.info(
+            f"EMAIL GENERATOR V2: ✅ Initialized with configuration: {config_path or 'default'}"
+        )
 
     # === STAGE 1: PREPARE - Input Validation and Structure Planning ===
 
@@ -212,22 +135,22 @@ class EmailGeneratorV2:
         start_time = datetime.now().timestamp()
 
         try:
-            print("EMAIL GENERATOR V2: STAGE 1 - VALIDATE INPUT")
+            logger.info("EMAIL GENERATOR V2: STAGE 1 - VALIDATE INPUT")
             self._validate_input_analysis(analysis)
             debug_info.input_validation = self._get_validation_summary(analysis)
 
-            print("EMAIL GENERATOR V2: STAGE 2 - GENERATE STRUCTURED JSON")
+            logger.info("EMAIL GENERATOR V2: STAGE 2 - GENERATE STRUCTURED JSON")
             # NEW: Generate complete structured JSON in one call
             json_response = self.json_service.generate_structured_json(analysis)
-    
-            print("EMAIL GENERATOR V2: STAGE 3 - VALIDATE JSON STRUCTURE")
+
+            logger.info("EMAIL GENERATOR V2: STAGE 3 - VALIDATE JSON STRUCTURE")
             # NEW: Validate JSON against our schema
             validated_json = self.json_service.validate_json_response(json_response)
-    
-            print("EMAIL GENERATOR V2: STAGE 4 - CONVERT TO LEGACY FORMAT")
+
+            logger.info("EMAIL GENERATOR V2: STAGE 4 - CONVERT TO LEGACY FORMAT")
             # NEW: Convert JSON to GeneratedLetter for compatibility
             letter = self._convert_json_to_generated_letter(validated_json)
-            
+
             debug_info.generation_time = datetime.now().timestamp() - start_time
             debug_info.validation_results = self._validate_all_fields(letter)
 
@@ -274,15 +197,17 @@ class EmailGeneratorV2:
 
         # Ensure we have basic components
         if not analysis.intake_analysis:
-            print("EMAIL GENERATOR V2: ⚠️  Missing intake_analysis, creating fallback")
+            logger.warning(
+                "EMAIL GENERATOR V2: ⚠️  Missing intake_analysis, creating fallback"
+            )
             self.content_extraction_service.ensure_analysis_completeness(analysis)
 
         if not analysis.analyzed_documents:
-            print("EMAIL GENERATOR V2: ⚠️  No analyzed documents found")
+            logger.info("EMAIL GENERATOR V2: ⚠️  No analyzed documents found")
 
-        print("EMAIL GENERATOR V2: ✅ Input validation complete")
+        logger.info("EMAIL GENERATOR V2: ✅ Input validation complete")
 
-    def _get_validation_summary(self, analysis: CaseAnalysisResult) -> dict[str, Any]:
+    def _get_validation_summary(self, analysis: CaseAnalysisResult) -> Dict[str, Any]:
         """Get comprehensive validation summary for debugging."""
         return {
             "has_intake_analysis": analysis.intake_analysis is not None,
@@ -334,7 +259,9 @@ class EmailGeneratorV2:
                 number=section_number,
                 header="FACTUAL SUMMARY",
                 key_points=self.content_extraction_service.extract_key_facts(analysis),
-                emphasis_items=self.content_extraction_service.identify_emphasis_items(analysis),
+                emphasis_items=self.content_extraction_service.identify_emphasis_items(
+                    analysis
+                ),
                 content_requirements=[
                     "chronological events",
                     "key parties",
@@ -349,7 +276,9 @@ class EmailGeneratorV2:
             SectionPlan(
                 number=section_number,
                 header="LEGAL ANALYSIS",
-                key_points=self.content_extraction_service.extract_legal_issues(analysis),
+                key_points=self.content_extraction_service.extract_legal_issues(
+                    analysis
+                ),
                 emphasis_items={},
                 content_requirements=[
                     "legal claims",
@@ -366,7 +295,9 @@ class EmailGeneratorV2:
                 SectionPlan(
                     number=section_number,
                     header="EVIDENCE REVIEW",
-                    key_points=self.content_extraction_service.extract_media_evidence_points(analysis),
+                    key_points=self.content_extraction_service.extract_media_evidence_points(
+                        analysis
+                    ),
                     emphasis_items={},
                     content_requirements=["media analysis", "evidence significance"],
                 )
@@ -378,7 +309,9 @@ class EmailGeneratorV2:
             SectionPlan(
                 number=section_number,
                 header="CASE ASSESSMENT",
-                key_points=self.content_extraction_service.extract_case_assessment_points(analysis),
+                key_points=self.content_extraction_service.extract_case_assessment_points(
+                    analysis
+                ),
                 emphasis_items={},
                 content_requirements=[
                     "strengths",
@@ -394,7 +327,9 @@ class EmailGeneratorV2:
             SectionPlan(
                 number=section_number,
                 header="RECOMMENDED NEXT STEPS",
-                key_points=self.content_extraction_service.extract_recommendations(analysis),
+                key_points=self.content_extraction_service.extract_recommendations(
+                    analysis
+                ),
                 emphasis_items={},
                 content_requirements=[
                     "prioritized actions",
@@ -427,7 +362,7 @@ class EmailGeneratorV2:
             },
         )
 
-        print(
+        logger.info(
             f"EMAIL GENERATOR V2: Created structure plan with {len(sections)} sections"
         )
         return plan
@@ -439,13 +374,13 @@ class EmailGeneratorV2:
         plan: EmailStructurePlan,
         analysis: CaseAnalysisResult,
         debug_info: DebugOutput,
-    ) -> dict[str, str]:
+    ) -> Dict[str, str]:
         """Generate all sections with detailed tracking for debugging."""
         generated_sections = {}
         context = GenerationContext()
 
         # Generate header/greeting
-        print("EMAIL GENERATOR V2: Generating greeting section...")
+        logger.info("EMAIL GENERATOR V2: Generating greeting section...")
         greeting_content = self._generate_greeting_section(plan, analysis, context)
         generated_sections["greeting"] = greeting_content
         debug_info.generated_sections["greeting"] = {
@@ -456,7 +391,9 @@ class EmailGeneratorV2:
 
         # Generate each planned section
         for section_plan in plan.sections:
-            print(f"EMAIL GENERATOR V2: Generating section: {section_plan.header}")
+            logger.info(
+                f"EMAIL GENERATOR V2: Generating section: {section_plan.header}"
+            )
             try:
                 section_content = self._generate_section_with_validation(
                     section_plan, context, analysis
@@ -481,7 +418,7 @@ class EmailGeneratorV2:
 
             except (ValueError, TypeError, AttributeError, KeyError, ImportError) as e:
                 error_msg = f"Failed to generate section {section_plan.header}: {e!s}"
-                print(f"EMAIL GENERATOR V2: ❌ {error_msg}")
+                logger.error(f"EMAIL GENERATOR V2: ❌ {error_msg}")
 
                 # Generate fallback content
                 fallback_content = self._generate_fallback_section_content(
@@ -499,7 +436,7 @@ class EmailGeneratorV2:
                 )
 
         # Generate closing
-        print("EMAIL GENERATOR V2: Generating closing section...")
+        logger.info("EMAIL GENERATOR V2: Generating closing section...")
         closing_content = self._generate_closing_section(plan, analysis, context)
         generated_sections["closing"] = closing_content
         debug_info.generated_sections["closing"] = {
@@ -508,7 +445,9 @@ class EmailGeneratorV2:
             "first_100_chars": closing_content[:100] if closing_content else None,
         }
 
-        print(f"EMAIL GENERATOR V2: ✅ Generated {len(generated_sections)} sections")
+        logger.info(
+            f"EMAIL GENERATOR V2: ✅ Generated {len(generated_sections)} sections"
+        )
         return generated_sections
 
     def _section_header_to_key(self, header: str) -> str:
@@ -564,50 +503,58 @@ class EmailGeneratorV2:
 
         # Clean AI response first
         cleaned_content = self.content_formatting_service._clean_ai_response(content)
-        
+
         # Note: Word count trimming removed as part of refactoring to single-prompt JSON approach
         trimmed_content = cleaned_content
 
         # === SECTION READABILITY VALIDATION (REMOVED - SUBTASK 5A REVERSION) ===
         # The section-by-section readability validation with regeneration was causing HTML corruption
         # Removed: _validate_section_readability_with_regeneration call
-        
+
         # Return trimmed content - template system handles headers and structure
         return trimmed_content
 
     def _validate_section_format(self, content: str, section_key: str) -> None:
         """
         Validate section output format against YAML configuration specifications.
-        
+
         Args:
             content: The generated section content to validate
             section_key: The section key to look up format specification
-            
+
         Logs warnings for validation failures without stopping generation.
         """
         try:
             # Get section configuration from YAML
             sections_config = self.config.get("sections", {})
             if not sections_config:
-                print("EMAIL GENERATOR V2: ⚠️ No sections configuration found in YAML")
+                logger.info(
+                    "EMAIL GENERATOR V2: ⚠️ No sections configuration found in YAML"
+                )
                 return
-                
+
             section_config = sections_config.get(section_key, {})
             if not section_config:
-                print(f"EMAIL GENERATOR V2: ⚠️ No configuration found for section: {section_key}")
+                logger.info(
+                    f"EMAIL GENERATOR V2: ⚠️ No configuration found for section: {section_key}"
+                )
                 return
-                
+
             # Extract output format (defaults to "html" if not specified)
             output_format = section_config.get("output_format", "html")
-            
+
             # Validate the section output
             validate_section_output(content, output_format)
-            
-            print(f"EMAIL GENERATOR V2: ✅ Section '{section_key}' format validation passed ({output_format})")
-            
+
+            logger.info(
+                f"EMAIL GENERATOR V2: ✅ Section '{section_key}' format validation passed ({output_format})"
+            )
+
         except Exception as e:
             # Log validation warning but don't stop generation
-            print(f"EMAIL GENERATOR V2: ⚠️ Section '{section_key}' format validation warning: {e}")
+            logger.warning(
+                f"EMAIL GENERATOR V2: ⚠️ Section '{section_key}' format validation warning: {e}"
+            )
             # Continue processing - validation failure shouldn't stop email generation
 
     # === STAGE 3: FORMAT - Field Mapping and Validation ===
@@ -630,11 +577,11 @@ class EmailGeneratorV2:
             "stage": "entry",
             "sections_available": list(generated_sections.keys()),
             "section_lengths": {k: len(v) for k, v in generated_sections.items()},
-            "timestamp": datetime.now().isoformat()
+            "timestamp": datetime.now().isoformat(),
         }
-        print(f"EMAIL_GENERATOR_DEBUG: {json.dumps(mapping_log)}")
+        logger.debug(f"EMAIL_GENERATOR_DEBUG: {json.dumps(mapping_log)}")
 
-        print("EMAIL GENERATOR V2: Mapping sections to template fields...")
+        logger.info("EMAIL GENERATOR V2: Mapping sections to template fields...")
 
         # Extract individual sections from generated content
         greeting = generated_sections.get("greeting", "")
@@ -655,7 +602,9 @@ class EmailGeneratorV2:
         closing = self._prepare_template_context(closing)
 
         # Apply deadline formatting to next_steps (replaces Jinja2 regex_replace filter)
-        next_steps = self.content_formatting_service._apply_deadline_formatting(next_steps)
+        next_steps = self.content_formatting_service._apply_deadline_formatting(
+            next_steps
+        )
 
         # Split case assessment into strengths and challenges if combined
         strengths, challenges = self._split_case_assessment(case_assessment)
@@ -680,7 +629,9 @@ class EmailGeneratorV2:
         )
 
         # VALIDATION GUARD REMOVED: Challenges section is now optional to prevent email generation failures
-        print("EMAIL GENERATOR V2: OPTIONAL VALIDATION - Challenges section made optional")
+        logger.info(
+            "EMAIL GENERATOR V2: OPTIONAL VALIDATION - Challenges section made optional"
+        )
 
         # JSON logging for exit state
         exit_log = {
@@ -688,34 +639,38 @@ class EmailGeneratorV2:
             "method": "_map_sections_to_template_fields",
             "hypothesis_id": "missing_content_parsing",
             "stage": "exit",
-            "letter_fields": {k: len(getattr(letter, k, "")) for k in letter.__fields__},
+            "letter_fields": {
+                k: len(getattr(letter, k, "")) for k in letter.__fields__
+            },
             "processing_applied": True,
             "validation_passed": True,
-            "timestamp": datetime.now().isoformat()
+            "timestamp": datetime.now().isoformat(),
         }
-        print(f"EMAIL_GENERATOR_DEBUG: {json.dumps(exit_log)}")
+        logger.debug(f"EMAIL_GENERATOR_DEBUG: {json.dumps(exit_log)}")
 
-        print("EMAIL GENERATOR V2: ✅ Sections mapped to template fields")
-        print(f"  - executive_summary: {len(letter.executive_summary)} chars")
-        print(f"  - background_summary: {len(letter.background_summary)} chars")
-        print(f"  - analysis_and_position: {len(letter.analysis_and_position)} chars")
-        print(f"  - strengths: {len(letter.strengths)} chars")
-        print(f"  - challenges: {len(letter.challenges)} chars")
-        print(f"  - next_steps: {len(letter.next_steps)} chars")
-        print(f"  - closing_paragraph: {len(letter.closing_paragraph)} chars")
+        logger.info("EMAIL GENERATOR V2: ✅ Sections mapped to template fields")
+        logger.info(f"  - executive_summary: {len(letter.executive_summary)} chars")
+        logger.info(f"  - background_summary: {len(letter.background_summary)} chars")
+        logger.info(
+            f"  - analysis_and_position: {len(letter.analysis_and_position)} chars"
+        )
+        logger.info(f"  - strengths: {len(letter.strengths)} chars")
+        logger.info(f"  - challenges: {len(letter.challenges)} chars")
+        logger.debug(f"  - next_steps: {len(letter.next_steps)} chars")
+        logger.info(f"  - closing_paragraph: {len(letter.closing_paragraph)} chars")
 
         return letter
 
     # def _apply_polish_and_sanitize(self, letter: GeneratedLetter) -> GeneratedLetter:
     #     """
     #     Apply polish and sanitize processing to all letter fields.
-        
+
     #     This method processes each field of the generated letter through the
     #     polish_and_sanitize function to ensure content quality and compliance.
     #     """
     #     try:
     #         print("EMAIL GENERATOR V2: Applying polish and sanitize to letter fields...")
-            
+
     #         # Process each field that contains substantial content
     #         fields_to_process = [
     #             'executive_summary',
@@ -728,7 +683,7 @@ class EmailGeneratorV2:
     #             'next_steps',
     #             'closing_paragraph'
     #         ]
-            
+
     #         for field_name in fields_to_process:
     #             field_content = getattr(letter, field_name, "")
     #             if field_content and field_content.strip():
@@ -736,7 +691,7 @@ class EmailGeneratorV2:
     #                     # Get appropriate word limit for this field from configuration
     #                     word_counts = self.config.get('word_counts', {})
     #                     field_word_limit = word_counts.get(field_name, 200)  # Default to 200 if not specified
-                        
+
     #                     # Apply polish and sanitize with proper word limit per field
     #                     processed_content = polish_and_sanitize(
     #                         email_draft=field_content,
@@ -746,16 +701,16 @@ class EmailGeneratorV2:
     #                     )
     #                     setattr(letter, field_name, processed_content)
     #                     print(f"EMAIL GENERATOR V2: ✅ Processed {field_name}")
-                        
+
     #                 except Exception as e:
     #                     print(f"EMAIL GENERATOR V2: ⚠️ Failed to process {field_name}: {e}")
     #                     # Continue with original content if processing fails
-            
+
     #         # Apply overall email polish and sanitize to the complete email
     #         try:
     #             # Combine all content for full email processing
     #             full_email_content = self._combine_letter_content(letter)
-                
+
     #             # Apply full email polish and sanitize with STRICT 850-word limit
     #             polished_email = polish_and_sanitize(
     #                 email_draft=full_email_content,
@@ -763,17 +718,17 @@ class EmailGeneratorV2:
     #                 client=self.client,
     #                 word_limit=850  # CRITICAL: Full email MUST be under 850 words
     #             )
-                
+
     #             # If full processing succeeds, update the primary content field
     #             letter.executive_summary = polished_email[:1000] + "..." if len(polished_email) > 1000 else polished_email
     #             print("EMAIL GENERATOR V2: ✅ Applied full email polish and sanitize")
-                
+
     #         except Exception as e:
     #             print(f"EMAIL GENERATOR V2: ⚠️ Full email processing failed: {e}")
     #             # Continue with field-level processing results
-            
+
     #         return letter
-            
+
     #     except Exception as e:
     #         print(f"EMAIL GENERATOR V2: ❌ Polish and sanitize processing failed: {e}")
     #         # Return original letter if all processing fails
@@ -782,7 +737,7 @@ class EmailGeneratorV2:
     # def _combine_letter_content(self, letter: GeneratedLetter) -> str:
     #     """Combine all letter content into a single email draft for processing."""
     #     content_parts = []
-        
+
     #     # Add each field with proper spacing
     #     fields_with_content = [
     #         ('Executive Summary', letter.executive_summary),
@@ -795,32 +750,14 @@ class EmailGeneratorV2:
     #         ('Next Steps', letter.next_steps),
     #         ('Closing', letter.closing_paragraph)
     #     ]
-        
+
     #     for section_name, content in fields_with_content:
     #         if content and content.strip():
     #             content_parts.append(f"<h3>{section_name}</h3>")
     #             content_parts.append(content)
     #             content_parts.append("")  # Add spacing
-        
+
     #     return "\n".join(content_parts)
-
-    
-
-    
-
-    
-
-    
-
-    
-
-    
-
-    
-
-    
-
-    
 
     # === SIMPLIFICATION PIPELINE (REMOVED - SUBTASK 5A REVERSION) ===
     # The AI simplification pipeline was causing HTML structure corruption
@@ -828,36 +765,50 @@ class EmailGeneratorV2:
     # _request_text_simplification, _replace_html_content_with_simplified,
     # _convert_text_to_html_paragraphs
 
-    
-
-    
-
-    
-
-    def _split_case_assessment(self, case_assessment: str) -> tuple[str, str]:
+    def _split_case_assessment(self, case_assessment: str) -> Tuple[str, str]:
         """Split combined case assessment into strengths and challenges with enhanced parsing."""
         if not case_assessment:
             return "", ""
 
         # First, try to find explicit section headers (from our enhanced prompt)
-        strengths_match = re.search(r"\*\*STRENGTHS\*\*\s*(.*?)(?=\*\*POTENTIAL CHALLENGES\*\*|\*\*CHALLENGES\*\*|$)",
-                                   case_assessment, re.DOTALL | re.IGNORECASE)
-        challenges_match = re.search(r"\*\*(?:POTENTIAL )?CHALLENGES\*\*\s*(.*?)$",
-                                    case_assessment, re.DOTALL | re.IGNORECASE)
-        
+        strengths_match = re.search(
+            r"\*\*STRENGTHS\*\*\s*(.*?)(?=\*\*POTENTIAL CHALLENGES\*\*|\*\*CHALLENGES\*\*|$)",
+            case_assessment,
+            re.DOTALL | re.IGNORECASE,
+        )
+        challenges_match = re.search(
+            r"\*\*(?:POTENTIAL )?CHALLENGES\*\*\s*(.*?)$",
+            case_assessment,
+            re.DOTALL | re.IGNORECASE,
+        )
+
         if strengths_match and challenges_match:
             strengths = strengths_match.group(1).strip()
             challenges = challenges_match.group(1).strip()
-            print("EMAIL GENERATOR V2: ✅ Successfully parsed explicit STRENGTHS and CHALLENGES sections")
+            logger.info(
+                "EMAIL GENERATOR V2: ✅ Successfully parsed explicit STRENGTHS and CHALLENGES sections"
+            )
             return strengths, challenges
 
         # Fallback: Look for alternative header patterns
         strengths_keywords = [
-            "strength", "advantage", "positive", "favorable", "support", "benefits"
+            "strength",
+            "advantage",
+            "positive",
+            "favorable",
+            "support",
+            "benefits",
         ]
         challenges_keywords = [
-            "challenge", "weakness", "risk", "concern", "obstacle", "difficulty",
-            "potential challenges", "considerations", "issues"
+            "challenge",
+            "weakness",
+            "risk",
+            "concern",
+            "obstacle",
+            "difficulty",
+            "potential challenges",
+            "considerations",
+            "issues",
         ]
 
         # Try to split by sections with clear headers
@@ -868,15 +819,19 @@ class EmailGeneratorV2:
 
         for line in lines:
             line_lower = line.lower().strip()
-            
+
             # Check for section headers
-            if any(f"**{keyword}" in line_lower or f"<strong>{keyword}" in line_lower
-                   for keyword in strengths_keywords):
+            if any(
+                f"**{keyword}" in line_lower or f"<strong>{keyword}" in line_lower
+                for keyword in strengths_keywords
+            ):
                 current_section = "strengths"
                 strengths_lines.append(line)
                 continue
-            if any(f"**{keyword}" in line_lower or f"<strong>{keyword}" in line_lower
-                     for keyword in challenges_keywords):
+            if any(
+                f"**{keyword}" in line_lower or f"<strong>{keyword}" in line_lower
+                for keyword in challenges_keywords
+            ):
                 current_section = "challenges"
                 challenges_lines.append(line)
                 continue
@@ -899,53 +854,39 @@ class EmailGeneratorV2:
 
         # Validation: If we have no challenges content, this is a problem that needs to be flagged
         if not challenges_content:
-            print("EMAIL GENERATOR V2: ⚠️ No challenges content found - this will trigger validation failure")
+            logger.error(
+                "EMAIL GENERATOR V2: ⚠️ No challenges content found - this will trigger validation failure"
+            )
             return strengths_content, ""
-        
+
         # If we have content in both sections, return it
         if strengths_content and challenges_content:
-            print("EMAIL GENERATOR V2: ✅ Successfully split content into strengths and challenges")
+            logger.info(
+                "EMAIL GENERATOR V2: ✅ Successfully split content into strengths and challenges"
+            )
             return strengths_content, challenges_content
 
         # If we couldn't split intelligently and have no challenges, flag this as an issue
         if strengths_content and not challenges_content:
-            print("EMAIL GENERATOR V2: ⚠️ Only found strengths content, no challenges - validation will fail")
+            logger.info(
+                "EMAIL GENERATOR V2: ⚠️ Only found strengths content, no challenges - validation will fail"
+            )
             return strengths_content, ""
 
         # Last resort: split the content in half
         if case_assessment and not strengths_content and not challenges_content:
-            print("EMAIL GENERATOR V2: ⚠️ Could not parse sections, attempting 50/50 split")
+            logger.info(
+                "EMAIL GENERATOR V2: ⚠️ Could not parse sections, attempting 50/50 split"
+            )
             sentences = re.split(r"(?<=[.!?])\s+", case_assessment)
             mid_point = len(sentences) // 2
             return " ".join(sentences[:mid_point]), " ".join(sentences[mid_point:])
 
         return strengths_content, challenges_content
 
-    def _validate_generated_letter(self, letter: GeneratedLetter) -> None:
-        """Validate that generated letter has all required fields populated."""
-        required_fields = [
-            "executive_summary",
-            "background_summary",
-            "analysis_and_position",
-            "next_steps",
-            "closing_paragraph",
-        ]
-
-        empty_fields = []
-        for field in required_fields:
-            value = getattr(letter, field, "")
-            if not value or not value.strip():
-                empty_fields.append(field)
-
-        if empty_fields:
-            msg = f"Required fields are empty: {', '.join(empty_fields)}"
-            raise EmailGenerationError(msg)
-
-        print("EMAIL GENERATOR V2: ✅ Letter validation passed")
-
     def _validate_all_fields(
         self, letter: GeneratedLetter
-    ) -> dict[str, dict[str, Any]]:
+    ) -> Dict[str, Dict[str, Any]]:
         """Comprehensive validation of all letter fields for debugging."""
         validation_results = {}
 
@@ -961,29 +902,37 @@ class EmailGeneratorV2:
 
     # === NEW JSON-BASED ARCHITECTURE METHODS ===
 
-    def _generate_structured_json(self, analysis: CaseAnalysisResult) -> dict[str, Any]:
+    def _generate_structured_json(self, analysis: CaseAnalysisResult) -> Dict[str, Any]:
         """
         Generate structured JSON response from OpenAI following the master schema.
-        
+
         This method replaces multi-stage HTML generation with a single JSON call
         that conforms to our comprehensive master schema.
-        
+
         Args:
             analysis: The case analysis result containing all case data
-            
+
         Returns:
             Dictionary containing the structured JSON response
-            
+
         Raises:
             ValueError: If JSON generation fails or returns invalid structure
         """
         try:
-            print("EMAIL GENERATOR V2: Generating structured JSON from OpenAI...")
-            
+            logger.info("EMAIL GENERATOR V2: Generating structured JSON from OpenAI...")
+
             # Extract case context for the prompt
-            client_name = analysis.intake_analysis.client_name if analysis.intake_analysis else "Client"
-            case_type = analysis.intake_analysis.case_type if analysis.intake_analysis else "Legal Matter"
-            
+            client_name = (
+                analysis.intake_analysis.client_name
+                if analysis.intake_analysis
+                else "Client"
+            )
+            case_type = (
+                analysis.intake_analysis.case_type
+                if analysis.intake_analysis
+                else "Legal Matter"
+            )
+
             # Build comprehensive JSON generation prompt
             json_prompt = f"""
             Generate a SINGLE, VALID JSON object for a legal findings email that strictly conforms to the following schema structure.
@@ -1074,111 +1023,145 @@ class EmailGeneratorV2:
             """
 
             # Get enhanced prompt with firm voice and configuration
-            enhanced_prompt = self.prompt_api_service.build_enhanced_prompt(json_prompt, "structured_json")
-            
+            enhanced_prompt = self.prompt_api_service.build_enhanced_prompt(
+                json_prompt, "structured_json"
+            )
+
             # Get persona from configuration
-            persona = self.config.get("personas", {}).get("CONTINUING_LEGAL_ADVISOR", "")
-            
+            persona = self.config.get("personas", {}).get(
+                "CONTINUING_ATTORNEY_ADVISOR", ""
+            )
+
             # Use JsonProcessingService for OpenAI requests (fixed deprecated method)
-            if hasattr(self, 'json_processing_service') and self.json_processing_service:
-                json_response_text = self.json_processing_service._make_openai_request(enhanced_prompt)
+            if (
+                hasattr(self, "json_processing_service")
+                and self.json_processing_service
+            ):
+                json_response_text = self.json_processing_service._make_openai_request(
+                    enhanced_prompt
+                )
             else:
                 json_response_text = None
-            
+
             if not json_response_text or not json_response_text.strip():
                 raise ValueError("OpenAI returned empty response for JSON generation")
-            
+
             # Clean and parse JSON response
             cleaned_json_text = self._clean_json_response(json_response_text)
-            
+
             try:
                 json_data = json.loads(cleaned_json_text)
             except json.JSONDecodeError as e:
-                print(f"EMAIL GENERATOR V2: ❌ JSON parsing failed: {e}")
-                print(f"Response text (first 500 chars): {json_response_text[:500]}...")
+                logger.error(f"EMAIL GENERATOR V2: ❌ JSON parsing failed: {e}")
+                logger.info(
+                    f"Response text (first 500 chars): {json_response_text[:500]}..."
+                )
                 raise ValueError(f"Failed to parse JSON response: {e}")
-            
-            print(f"EMAIL GENERATOR V2: ✅ Successfully generated structured JSON with {len(json_data)} top-level keys")
+
+            logger.info(
+                f"EMAIL GENERATOR V2: ✅ Successfully generated structured JSON with {len(json_data)} top-level keys"
+            )
             return json_data
-            
+
         except Exception as e:
-            print(f"EMAIL GENERATOR V2: ❌ Structured JSON generation failed: {e}")
+            logger.error(
+                f"EMAIL GENERATOR V2: ❌ Structured JSON generation failed: {e}"
+            )
             raise ValueError(f"Failed to generate structured JSON: {e}")
 
     def _clean_json_response(self, response_text: str) -> str:
         """
         Clean OpenAI response to extract valid JSON.
-        
+
         Args:
             response_text: Raw response from OpenAI
-            
+
         Returns:
             Cleaned JSON string ready for parsing
         """
         if not response_text:
             return ""
-        
+
         # Remove any markdown code block markers
         cleaned = re.sub(r"^```json\s*", "", response_text.strip(), flags=re.MULTILINE)
         cleaned = re.sub(r"\s*```$", "", cleaned, flags=re.MULTILINE)
-        
+
         # Remove any leading/trailing whitespace and non-JSON content
         cleaned = cleaned.strip()
-        
+
         # Find the first { and last } to extract just the JSON object
         start_idx = cleaned.find("{")
         end_idx = cleaned.rfind("}")
-        
+
         if start_idx != -1 and end_idx != -1 and end_idx > start_idx:
-            cleaned = cleaned[start_idx:end_idx + 1]
-        
+            cleaned = cleaned[start_idx : end_idx + 1]
+
         return cleaned
 
-    def _validate_json_response(self, json_data: dict[str, Any]) -> dict[str, Any]:
+    def _validate_json_response(self, json_data: Dict[str, Any]) -> Dict[str, Any]:
         """
         Validate JSON response against our master schema structure.
-        
+
         Args:
             json_data: The JSON data to validate
-            
+
         Returns:
             Validated and potentially corrected JSON data
-            
+
         Raises:
             ValueError: If validation fails critically
         """
         try:
-            print("EMAIL GENERATOR V2: Validating JSON response against master schema...")
-            
+            logger.debug(
+                "EMAIL GENERATOR V2: Validating JSON response against master schema..."
+            )
+
             # Define required top-level keys
             required_keys = [
-                "case_metadata", "bridges", "generated_letter",
-                "claims", "procedural_requirements", "third_party_exposure", "next_steps"
+                "case_metadata",
+                "bridges",
+                "generated_letter",
+                "claims",
+                "procedural_requirements",
+                "third_party_exposure",
+                "next_steps",
             ]
-            
+
             # Check for missing top-level keys
             missing_keys = [key for key in required_keys if key not in json_data]
             if missing_keys:
-                print(f"EMAIL GENERATOR V2: ⚠️ Missing top-level keys: {missing_keys}")
+                logger.info(
+                    f"EMAIL GENERATOR V2: ⚠️ Missing top-level keys: {missing_keys}"
+                )
                 # Add default values for missing keys
                 for key in missing_keys:
                     json_data[key] = self._get_default_value_for_key(key)
-            
+
             # Validate individual sections
-            json_data["case_metadata"] = self._validate_case_metadata(json_data.get("case_metadata", {}))
-            json_data["bridges"] = self._validate_bridges_structure(json_data.get("bridges", {}))
-            json_data["generated_letter"] = self._validate_generated_letter_structure(json_data.get("generated_letter", {}))
-            json_data["claims"] = self._validate_claims_structure(json_data.get("claims", []))
-            json_data["next_steps"] = self._validate_next_steps_structure(json_data.get("next_steps", {}))
-            
-            print("EMAIL GENERATOR V2: ✅ JSON validation completed successfully")
+            json_data["case_metadata"] = self._validate_case_metadata(
+                json_data.get("case_metadata", {})
+            )
+            json_data["bridges"] = self._validate_bridges_structure(
+                json_data.get("bridges", {})
+            )
+            json_data["generated_letter"] = self._validate_generated_letter_structure(
+                json_data.get("generated_letter", {})
+            )
+            json_data["claims"] = self._validate_claims_structure(
+                json_data.get("claims", [])
+            )
+            json_data["next_steps"] = self._validate_next_steps_structure(
+                json_data.get("next_steps", {})
+            )
+
+            logger.info("EMAIL GENERATOR V2: ✅ JSON validation completed successfully")
             return json_data
-            
+
         except Exception as e:
-            print(f"EMAIL GENERATOR V2: ❌ JSON validation failed: {e}")
+            logger.error(f"EMAIL GENERATOR V2: ❌ JSON validation failed: {e}")
             raise ValueError(f"JSON validation failed: {e}")
 
-    def _get_default_value_for_key(self, key: str) -> dict[str, Any] | list[Any]:
+    def _get_default_value_for_key(self, key: str) -> Union[Dict[str, Any], List[Any]]:
         """Get default value for missing JSON schema keys."""
         defaults = {
             "case_metadata": {
@@ -1187,31 +1170,35 @@ class EmailGeneratorV2:
                 "case_type": "Legal Matter",
                 "matter_description": "Legal matter requiring analysis",
                 "urgency_level": "Standard",
-                "financial_impact": "To be determined"
+                "financial_impact": "To be determined",
             },
             "bridges": {
                 "opening_bridge": "I have completed my comprehensive review of your legal matter.",
                 "factual_to_legal": "Based on these facts, several legal considerations apply.",
                 "legal_to_assessment": "This legal framework provides the basis for our case assessment.",
-                "assessment_to_action": "Given this assessment, I recommend the following strategic approach."
+                "assessment_to_action": "Given this assessment, I recommend the following strategic approach.",
             },
             "generated_letter": {
                 "factual_summary": "<p>Key facts and circumstances have been analyzed.</p>",
                 "legal_analysis": "<p>Legal analysis under Florida law indicates several considerations.</p>",
                 "evidence_review": "<p>Evidence review has been completed.</p>",
-                "case_assessment": "<p><strong>STRENGTHS</strong></p><p>Case has foundation under Florida law.</p><p><strong>POTENTIAL CHALLENGES</strong></p><p>Strategic considerations apply.</p>"
+                "case_assessment": "<p><strong>STRENGTHS</strong></p><p>Case has foundation under Florida law.</p><p><strong>POTENTIAL CHALLENGES</strong></p><p>Strategic considerations apply.</p>",
             },
             "claims": [],
             "procedural_requirements": {
                 "statute_of_limitations": "Standard limitations period applies",
                 "notice_requirements": "Proper notice requirements must be followed",
                 "filing_deadlines": "Filing deadlines will be monitored",
-                "procedural_steps": ["Initial case development", "Evidence preservation", "Strategic planning"]
+                "procedural_steps": [
+                    "Initial case development",
+                    "Evidence preservation",
+                    "Strategic planning",
+                ],
             },
             "third_party_exposure": {
                 "additional_parties": [],
                 "insurance_considerations": "Insurance coverage will be evaluated",
-                "potential_counterclaims": "Potential counterclaims will be assessed"
+                "potential_counterclaims": "Potential counterclaims will be assessed",
             },
             "next_steps": {
                 "strategic_overview": "Based on our analysis, a strategic approach has been developed.",
@@ -1221,142 +1208,211 @@ class EmailGeneratorV2:
                         "timeline": "within 14 days",
                         "priority": "High",
                         "responsible_party": "Legal team",
-                        "purpose": "Advance case strategy"
+                        "purpose": "Advance case strategy",
                     }
                 ],
-                "contingency_planning": "Alternative strategies will be evaluated as needed."
-            }
+                "contingency_planning": "Alternative strategies will be evaluated as needed.",
+            },
         }
         return defaults.get(key, {})
 
-    def _validate_case_metadata(self, metadata: dict[str, Any]) -> dict[str, Any]:
+    def _validate_case_metadata(self, metadata: Dict[str, Any]) -> Dict[str, Any]:
         """Validate and ensure case metadata completeness."""
-        required_fields = ["client_name", "attorney_name", "case_type", "matter_description", "urgency_level", "financial_impact"]
-        
+        required_fields = [
+            "client_name",
+            "attorney_name",
+            "case_type",
+            "matter_description",
+            "urgency_level",
+            "financial_impact",
+        ]
+
         for field in required_fields:
             if field not in metadata or not metadata[field]:
-                metadata[field] = self._get_default_value_for_key("case_metadata")[field]
-        
+                metadata[field] = self._get_default_value_for_key("case_metadata")[
+                    field
+                ]
+
         return metadata
 
-    def _validate_bridges_structure(self, bridges: dict[str, Any]) -> dict[str, Any]:
+    def _validate_bridges_structure(self, bridges: Dict[str, Any]) -> Dict[str, Any]:
         """Validate bridge text structure and content."""
-        required_bridges = ["opening_bridge", "factual_to_legal", "legal_to_assessment", "assessment_to_action"]
-        
+        required_bridges = [
+            "opening_bridge",
+            "factual_to_legal",
+            "legal_to_assessment",
+            "assessment_to_action",
+        ]
+
         for bridge in required_bridges:
-            if bridge not in bridges or not bridges[bridge] or not bridges[bridge].strip():
+            if (
+                bridge not in bridges
+                or not bridges[bridge]
+                or not bridges[bridge].strip()
+            ):
                 bridges[bridge] = self._get_default_value_for_key("bridges")[bridge]
-        
+
         return bridges
 
-    def _validate_generated_letter_structure(self, letter: dict[str, Any]) -> dict[str, Any]:
+    def _validate_generated_letter_structure(
+        self, letter: Dict[str, Any]
+    ) -> Dict[str, Any]:
         """Validate generated letter sections structure."""
-        required_sections = ["factual_summary", "legal_analysis", "evidence_review", "case_assessment"]
-        
+        required_sections = [
+            "factual_summary",
+            "legal_analysis",
+            "evidence_review",
+            "case_assessment",
+        ]
+
         for section in required_sections:
-            if section not in letter or not letter[section] or not letter[section].strip():
-                letter[section] = self._get_default_value_for_key("generated_letter")[section]
-        
+            if (
+                section not in letter
+                or not letter[section]
+                or not letter[section].strip()
+            ):
+                letter[section] = self._get_default_value_for_key("generated_letter")[
+                    section
+                ]
+
         # Ensure case_assessment has both STRENGTHS and CHALLENGES
         if "case_assessment" in letter:
             assessment = letter["case_assessment"]
             if "STRENGTHS" not in assessment or "CHALLENGES" not in assessment:
-                letter["case_assessment"] = self._get_default_value_for_key("generated_letter")["case_assessment"]
-        
+                letter["case_assessment"] = self._get_default_value_for_key(
+                    "generated_letter"
+                )["case_assessment"]
+
         return letter
 
-    def _validate_claims_structure(self, claims: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    def _validate_claims_structure(
+        self, claims: List[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
         """Validate claims array structure."""
         if not claims or not isinstance(claims, list):
             return []
-        
+
         validated_claims = []
-        required_claim_fields = ["claim_type", "legal_basis", "evidence_support", "strength_assessment", "potential_damages"]
-        
+        required_claim_fields = [
+            "claim_type",
+            "legal_basis",
+            "evidence_support",
+            "strength_assessment",
+            "potential_damages",
+        ]
+
         for claim in claims:
             if isinstance(claim, dict):
                 validated_claim = {}
                 for field in required_claim_fields:
-                    validated_claim[field] = claim.get(field, f"Information regarding {field} to be developed")
+                    validated_claim[field] = claim.get(
+                        field, f"Information regarding {field} to be developed"
+                    )
                 validated_claims.append(validated_claim)
-        
+
         return validated_claims
 
-    def _validate_next_steps_structure(self, next_steps: dict[str, Any]) -> dict[str, Any]:
+    def _validate_next_steps_structure(
+        self, next_steps: Dict[str, Any]
+    ) -> Dict[str, Any]:
         """Validate next steps structure and action items."""
         if not isinstance(next_steps, dict):
             return self._get_default_value_for_key("next_steps")
-        
+
         # Ensure required fields exist
-        if "strategic_overview" not in next_steps or not next_steps["strategic_overview"]:
-            next_steps["strategic_overview"] = "Strategic approach has been developed for this matter."
-        
-        if "action_items" not in next_steps or not isinstance(next_steps["action_items"], list):
-            next_steps["action_items"] = self._get_default_value_for_key("next_steps")["action_items"]
-        
+        if (
+            "strategic_overview" not in next_steps
+            or not next_steps["strategic_overview"]
+        ):
+            next_steps["strategic_overview"] = (
+                "Strategic approach has been developed for this matter."
+            )
+
+        if "action_items" not in next_steps or not isinstance(
+            next_steps["action_items"], list
+        ):
+            next_steps["action_items"] = self._get_default_value_for_key("next_steps")[
+                "action_items"
+            ]
+
         # Validate each action item
         validated_items = []
-        required_action_fields = ["action", "timeline", "priority", "responsible_party", "purpose"]
-        
+        required_action_fields = [
+            "action",
+            "timeline",
+            "priority",
+            "responsible_party",
+            "purpose",
+        ]
+
         for item in next_steps["action_items"]:
             if isinstance(item, dict):
                 validated_item = {}
                 for field in required_action_fields:
                     validated_item[field] = item.get(field, "To be determined")
                 validated_items.append(validated_item)
-        
+
         next_steps["action_items"] = validated_items
-        
-        if "contingency_planning" not in next_steps or not next_steps["contingency_planning"]:
-            next_steps["contingency_planning"] = "Alternative strategies will be evaluated as circumstances develop."
-        
+
+        if (
+            "contingency_planning" not in next_steps
+            or not next_steps["contingency_planning"]
+        ):
+            next_steps["contingency_planning"] = (
+                "Alternative strategies will be evaluated as circumstances develop."
+            )
+
         return next_steps
 
-    def _convert_json_to_generated_letter(self, validated_json: dict[str, Any]) -> GeneratedLetter:
+    def _convert_json_to_generated_letter(
+        self, validated_json: Dict[str, Any]
+    ) -> GeneratedLetter:
         """
         Convert validated JSON to GeneratedLetter format for backward compatibility.
-        
+
         This method bridges the new JSON architecture with the existing template system
         by mapping JSON fields to the expected GeneratedLetter structure.
-        
+
         Args:
             validated_json: The validated JSON data
-            
+
         Returns:
             GeneratedLetter object populated from JSON data
         """
         try:
-            print("EMAIL GENERATOR V2: Converting JSON to GeneratedLetter format...")
-            
+            logger.info(
+                "EMAIL GENERATOR V2: Converting JSON to GeneratedLetter format..."
+            )
+
             # Extract data from JSON structure
             case_metadata = validated_json.get("case_metadata", {})
             bridges = validated_json.get("bridges", {})
             generated_letter = validated_json.get("generated_letter", {})
             next_steps_data = validated_json.get("next_steps", {})
-            
+
             # Create greeting from bridges and metadata
             client_name = case_metadata.get("client_name", "Client")
             opening_bridge = bridges.get("opening_bridge", "")
-            
+
             if "Devlin" in client_name and "Bell" in client_name:
                 greeting = "Good afternoon Mr. Devlin and Ms. Bell,"
             else:
                 greeting = f"Good afternoon {client_name},"
-            
+
             executive_summary = f"<p>{greeting}</p><p>{opening_bridge}</p>"
-            
+
             # Extract individual letter sections
             factual_summary = generated_letter.get("factual_summary", "")
             legal_analysis = generated_letter.get("legal_analysis", "")
             evidence_review = generated_letter.get("evidence_review", "")
             case_assessment = generated_letter.get("case_assessment", "")
-            
+
             # Split case assessment into strengths and challenges
             strengths, challenges = self._split_case_assessment(case_assessment)
-            
+
             # Format next steps from JSON structure
             next_steps_formatted = self._format_next_steps_from_json(next_steps_data)
-            
+
             # Create closing
             attorney_name = case_metadata.get("attorney_name", "Your Legal Team")
             closing = f"""
@@ -1365,7 +1421,7 @@ class EmailGeneratorV2:
             {attorney_name}<br>
             Bernhardt Riley PLLC</p>
             """
-            
+
             # Create GeneratedLetter object
             letter = GeneratedLetter(
                 executive_summary=executive_summary,
@@ -1379,34 +1435,38 @@ class EmailGeneratorV2:
                 next_steps=next_steps_formatted,
                 closing_paragraph=closing,
             )
-            
-            print("EMAIL GENERATOR V2: ✅ Successfully converted JSON to GeneratedLetter")
+
+            logger.info(
+                "EMAIL GENERATOR V2: ✅ Successfully converted JSON to GeneratedLetter"
+            )
             return letter
-            
+
         except Exception as e:
-            print(f"EMAIL GENERATOR V2: ❌ JSON to GeneratedLetter conversion failed: {e}")
+            logger.error(
+                f"EMAIL GENERATOR V2: ❌ JSON to GeneratedLetter conversion failed: {e}"
+            )
             raise ValueError(f"Failed to convert JSON to GeneratedLetter: {e}")
 
-    def _format_next_steps_from_json(self, next_steps_data: dict[str, Any]) -> str:
+    def _format_next_steps_from_json(self, next_steps_data: Dict[str, Any]) -> str:
         """
         Format next steps from JSON structure into HTML.
-        
+
         Args:
             next_steps_data: Next steps data from JSON
-            
+
         Returns:
             HTML formatted next steps content
         """
         if not next_steps_data:
             return "<p>Recommended next steps will be provided based on case development.</p>"
-        
+
         html_parts = []
-        
+
         # Add strategic overview
         strategic_overview = next_steps_data.get("strategic_overview", "")
         if strategic_overview:
             html_parts.append(f"<p>{strategic_overview}</p>")
-        
+
         # Add action items
         action_items = next_steps_data.get("action_items", [])
         if action_items:
@@ -1416,26 +1476,34 @@ class EmailGeneratorV2:
                     action = item.get("action", "")
                     timeline = item.get("timeline", "")
                     purpose = item.get("purpose", "")
-                    
+
                     # Format timeline with strong tags for emphasis
-                    formatted_timeline = f"<strong>{timeline}</strong>" if timeline else ""
-                    
+                    formatted_timeline = (
+                        f"<strong>{timeline}</strong>" if timeline else ""
+                    )
+
                     # Build action item description
                     item_text = action
                     if formatted_timeline:
                         item_text += f" ({formatted_timeline})"
                     if purpose:
                         item_text += f" - {purpose}"
-                    
+
                     html_parts.append(f"<li>{item_text}</li>")
             html_parts.append("</ul>")
-        
+
         # Add contingency planning
         contingency = next_steps_data.get("contingency_planning", "")
         if contingency:
-            html_parts.append(f"<p><strong>Contingency Considerations:</strong> {contingency}</p>")
-        
-        return "".join(html_parts) if html_parts else "<p>Strategic next steps are being developed.</p>"
+            html_parts.append(
+                f"<p><strong>Contingency Considerations:</strong> {contingency}</p>"
+            )
+
+        return (
+            "".join(html_parts)
+            if html_parts
+            else "<p>Strategic next steps are being developed.</p>"
+        )
 
     # === CONTENT GENERATION METHODS ===
 
@@ -1463,22 +1531,22 @@ class EmailGeneratorV2:
         """Generate factual summary content with validation."""
 
         # DIAGNOSTIC LOGGING: Check what context we're getting
-        print(
+        logger.info(
             "EMAIL GENERATOR: 🔍 === DIAGNOSTIC LOGGING - Factual Summary Context ==="
         )
-        print(
-            f"EMAIL GENERATOR: 🔍 Analyzed documents count: {len(analysis.analyzed_documents) if analysis.analyzed_documents else 0}"
+        logger.info(
+            f"EMAIL GENERATOR: 🔍 Analyzed documents count: {(len(analysis.analyzed_documents) if analysis.analyzed_documents else 0)}"
         )
         if analysis.analyzed_documents:
             for i, doc in enumerate(
                 analysis.analyzed_documents[:3]
             ):  # Log first 3 docs
-                print(f"EMAIL GENERATOR: 🔍   Document {i + 1}: {doc.file_name}")
-                print(
-                    f"EMAIL GENERATOR: 🔍   Summary: {doc.summary[:100] if doc.summary else 'No summary'}..."
+                logger.info(f"EMAIL GENERATOR: 🔍   Document {i + 1}: {doc.file_name}")
+                logger.info(
+                    f"EMAIL GENERATOR: 🔍   Summary: {(doc.summary[:100] if doc.summary else 'No summary')}..."
                 )
-                print(
-                    f"EMAIL GENERATOR: 🔍   Key info: {doc.key_information[:100] if doc.key_information else 'No key info'}..."
+                logger.info(
+                    f"EMAIL GENERATOR: 🔍   Key info: {(doc.key_information[:100] if doc.key_information else 'No key info')}..."
                 )
 
         # Get prompt from configuration (defensive against None values)
@@ -1488,7 +1556,7 @@ class EmailGeneratorV2:
             section_prompt = section_config.get("content", "")
         else:
             section_prompt = str(section_config) if section_config else ""
-        
+
         if not section_prompt:
             # Fallback prompt if configuration is missing
             section_prompt = "Write a factual summary section for a professional legal findings letter."
@@ -1506,20 +1574,22 @@ class EmailGeneratorV2:
         """
 
         # Build enhanced prompt with firm voice, golden sample, and word limits
-        enhanced_prompt = self.prompt_api_service.build_enhanced_prompt(base_prompt, "factual_summary")
+        enhanced_prompt = self.prompt_api_service.build_enhanced_prompt(
+            base_prompt, "factual_summary"
+        )
 
-        print(
+        logger.info(
             f"EMAIL GENERATOR: 🔍 Factual summary enhanced prompt length: {len(enhanced_prompt)} characters"
         )
-        
+
         # Get persona from configuration (defensive against None values)
         personas_section = self.config.get("personas") or {}
-        persona = personas_section.get("CONTINUING_LEGAL_ADVISOR", "")
+        persona = personas_section.get("CONTINUING_ATTORNEY_ADVISOR", "")
         result = self.prompt_api_service.make_openai_request(enhanced_prompt, persona)
-        print(
-            f"EMAIL GENERATOR: 🔍 Factual summary result length: {len(result) if result else 0} characters"
+        logger.info(
+            f"EMAIL GENERATOR: 🔍 Factual summary result length: {(len(result) if result else 0)} characters"
         )
-        print("EMAIL GENERATOR: 🔍 === END DIAGNOSTIC LOGGING ===")
+        logger.info("EMAIL GENERATOR: 🔍 === END DIAGNOSTIC LOGGING ===")
 
         return result or "<p>Factual summary of the key events and circumstances.</p>"
 
@@ -1530,7 +1600,7 @@ class EmailGeneratorV2:
         context: GenerationContext,
     ) -> str:
         """Generate legal analysis content with Florida law focus."""
-        
+
         # Get prompt from configuration (defensive against None values)
         sections_section = self.config.get("sections") or {}
         section_config = sections_section.get("legal_analysis", {})
@@ -1538,7 +1608,7 @@ class EmailGeneratorV2:
             section_prompt = section_config.get("content", "")
         else:
             section_prompt = str(section_config) if section_config else ""
-        
+
         if not section_prompt:
             section_prompt = "Write a legal analysis section as an experienced Florida litigation attorney."
 
@@ -1555,12 +1625,14 @@ class EmailGeneratorV2:
         """
 
         # Build enhanced prompt with firm voice, golden sample, and word limits
-        enhanced_prompt = self.prompt_api_service.build_enhanced_prompt(base_prompt, "analysis")
+        enhanced_prompt = self.prompt_api_service.build_enhanced_prompt(
+            base_prompt, "analysis"
+        )
 
         # Get persona from configuration (defensive against None values)
         personas_section = self.config.get("personas") or {}
         # Use JsonProcessingService for OpenAI requests (fixed deprecated method)
-        if hasattr(self, 'json_processing_service') and self.json_processing_service:
+        if hasattr(self, "json_processing_service") and self.json_processing_service:
             result = self.json_processing_service._make_openai_request(enhanced_prompt)
         else:
             result = None
@@ -1616,12 +1688,14 @@ class EmailGeneratorV2:
         """
 
         # Build enhanced prompt with firm voice, golden sample, and word limits
-        enhanced_prompt = self.prompt_api_service.build_enhanced_prompt(base_prompt, "evidence_review")
+        enhanced_prompt = self.prompt_api_service.build_enhanced_prompt(
+            base_prompt, "evidence_review"
+        )
 
         # Get persona from configuration (defensive against None values)
         personas_section = self.config.get("personas") or {}
         # Use JsonProcessingService for OpenAI requests (fixed deprecated method)
-        if hasattr(self, 'json_processing_service') and self.json_processing_service:
+        if hasattr(self, "json_processing_service") and self.json_processing_service:
             result = self.json_processing_service._make_openai_request(enhanced_prompt)
         else:
             result = None
@@ -1660,11 +1734,13 @@ class EmailGeneratorV2:
         """
 
         # Build enhanced prompt with firm voice, golden sample, and word limits
-        enhanced_prompt = self.prompt_api_service.build_enhanced_prompt(base_prompt, "strengths_and_weaknesses")
+        enhanced_prompt = self.prompt_api_service.build_enhanced_prompt(
+            base_prompt, "strengths_and_weaknesses"
+        )
 
         # Get persona from configuration
         # Use JsonProcessingService for OpenAI requests (fixed deprecated method)
-        if hasattr(self, 'json_processing_service') and self.json_processing_service:
+        if hasattr(self, "json_processing_service") and self.json_processing_service:
             result = self.json_processing_service._make_openai_request(enhanced_prompt)
         else:
             result = None
@@ -1723,11 +1799,13 @@ class EmailGeneratorV2:
         """
 
         # Build enhanced prompt with firm voice, golden sample, and word limits
-        enhanced_prompt = self.prompt_api_service.build_enhanced_prompt(base_prompt, "next_steps")
+        enhanced_prompt = self.prompt_api_service.build_enhanced_prompt(
+            base_prompt, "next_steps"
+        )
 
         # Get persona from configuration
         # Use JsonProcessingService for OpenAI requests (fixed deprecated method)
-        if hasattr(self, 'json_processing_service') and self.json_processing_service:
+        if hasattr(self, "json_processing_service") and self.json_processing_service:
             result = self.json_processing_service._make_openai_request(enhanced_prompt)
         else:
             result = None
@@ -1735,14 +1813,14 @@ class EmailGeneratorV2:
             result
             or "<p>Based on our analysis, the following steps are recommended to advance your case.</p>"
         )
-        
+
         # Validate next steps formatting for deadline emphasis
         try:
             validate_next_steps_formatting(final_result)
         except ValueError as e:
-            print(f"EMAIL GENERATOR V2: ⚠️ Next steps validation warning: {e}")
+            logger.warning(f"EMAIL GENERATOR V2: ⚠️ Next steps validation warning: {e}")
             # Log the warning but don't fail the generation process
-            
+
         return final_result
 
     def _generate_generic_section_content(
@@ -1776,10 +1854,12 @@ class EmailGeneratorV2:
         """
 
         # Build enhanced prompt with firm voice, golden sample, and word limits
-        enhanced_prompt = self.prompt_api_service.build_enhanced_prompt(base_prompt, section_plan.header.lower().replace(" ", "_"))
+        enhanced_prompt = self.prompt_api_service.build_enhanced_prompt(
+            base_prompt, section_plan.header.lower().replace(" ", "_")
+        )
 
         # Use JsonProcessingService for OpenAI requests (fixed deprecated method)
-        if hasattr(self, 'json_processing_service') and self.json_processing_service:
+        if hasattr(self, "json_processing_service") and self.json_processing_service:
             result = self.json_processing_service._make_openai_request(enhanced_prompt)
         else:
             # Fallback if JsonProcessingService is not available
@@ -1808,7 +1888,7 @@ class EmailGeneratorV2:
     # === UTILITY AND HELPER METHODS ===
 
     def _format_section_header(
-        self, number: int, header: str, citation: str | None = None
+        self, number: int, header: str, citation: Optional[str] = None
     ) -> str:
         """Format section header with consistent structure."""
         if citation:
@@ -1818,7 +1898,7 @@ class EmailGeneratorV2:
     def _apply_enhanced_sanitization(self, content: str) -> str:
         """
         Apply enhanced sanitization rules to clean AI response content.
-        
+
         This method implements specific regex rules for:
         - Normalizing punctuation spacing
         - Removing duplicate intro phrases
@@ -1826,14 +1906,16 @@ class EmailGeneratorV2:
         """
         if not content:
             return content
-        
+
         # Normalize punctuation spacing: Add space after punctuation if missing
         content = re.sub(r"([.,])([A-Za-z])", r"\1 \2", content)
-        
+
         # Remove duplicate intro phrases (case-insensitive)
         # This removes repeated occurrences of "the path forward" within the same text
-        content = re.sub(r"(\bthe path forward\b).*?\1", r"\1", content, flags=re.IGNORECASE)
-        
+        content = re.sub(
+            r"(\bthe path forward\b).*?\1", r"\1", content, flags=re.IGNORECASE
+        )
+
         # Eliminate leading commas from lines
         lines = content.split("\n")
         cleaned_lines = []
@@ -1842,9 +1924,8 @@ class EmailGeneratorV2:
             cleaned_line = re.sub(r"^\s*,\s*", "", line)
             cleaned_lines.append(cleaned_line)
         content = "\n".join(cleaned_lines)
-        
-        return content
 
+        return content
 
     # === FALLBACK AND ERROR HANDLING ===
 
@@ -1852,7 +1933,7 @@ class EmailGeneratorV2:
         self, analysis: CaseAnalysisResult, error_msg: str
     ) -> GeneratedLetter:
         """Create intelligent fallback letter with case-specific details when OpenAI generation fails."""
-        print(
+        logger.info(
             f"EMAIL GENERATOR V2: 🔄 Creating enhanced fallback letter due to: {error_msg}"
         )
 
@@ -1869,7 +1950,9 @@ class EmailGeneratorV2:
         )
 
         # Extract specific details from documents for case-specific content
-        case_details = self.content_extraction_service.extract_case_specific_details(analysis)
+        case_details = self.content_extraction_service.extract_case_specific_details(
+            analysis
+        )
 
         # Create personalized greeting
         if "Devlin" in client_name and "Bell" in client_name:
@@ -1903,7 +1986,7 @@ class EmailGeneratorV2:
 
     def _extract_case_specific_details(
         self, analysis: CaseAnalysisResult
-    ) -> dict[str, Any]:
+    ) -> Dict[str, Any]:
         """Extract specific details from analysis for fallback content generation."""
         details = {
             "amounts": [],
@@ -1967,7 +2050,7 @@ class EmailGeneratorV2:
         return details
 
     def _generate_fallback_factual_summary(
-        self, analysis: CaseAnalysisResult, case_details: dict[str, Any]
+        self, analysis: CaseAnalysisResult, case_details: Dict[str, Any]
     ) -> str:
         """Generate factual summary using extracted case details."""
         summary_parts = []
@@ -2016,7 +2099,7 @@ class EmailGeneratorV2:
         return "".join(summary_parts)
 
     def _generate_fallback_legal_analysis(
-        self, analysis: CaseAnalysisResult, case_details: dict[str, Any]
+        self, analysis: CaseAnalysisResult, case_details: Dict[str, Any]
     ) -> str:
         """Generate legal analysis using available case information."""
         analysis_parts = []
@@ -2069,7 +2152,7 @@ class EmailGeneratorV2:
         return "".join(analysis_parts)
 
     def _generate_fallback_next_steps(
-        self, analysis: CaseAnalysisResult, case_details: dict[str, Any]
+        self, analysis: CaseAnalysisResult, case_details: Dict[str, Any]
     ) -> str:
         """Generate next steps recommendations using case information."""
         steps_parts = ["<p><strong>Recommended Next Steps:</strong></p><ul>"]
@@ -2148,7 +2231,7 @@ class EmailGeneratorV2:
         return "".join(media_parts)
 
     def _generate_fallback_strengths(
-        self, analysis: CaseAnalysisResult, case_details: dict[str, Any]
+        self, analysis: CaseAnalysisResult, case_details: Dict[str, Any]
     ) -> str:
         """Generate case strengths assessment."""
         strengths_parts = ["<p><strong>Case Strengths:</strong></p><ul>"]
@@ -2182,7 +2265,7 @@ class EmailGeneratorV2:
         return "".join(strengths_parts)
 
     def _generate_fallback_challenges(
-        self, analysis: CaseAnalysisResult, case_details: dict[str, Any]
+        self, analysis: CaseAnalysisResult, case_details: Dict[str, Any]
     ) -> str:
         """Generate case challenges assessment."""
         challenges_parts = ["<p><strong>Strategic Considerations:</strong></p><ul>"]
@@ -2234,23 +2317,23 @@ class EmailGeneratorV2:
             "method": "_prepare_template_context",
             "hypothesis_id": "template_processing_issue",
             "input_length": len(content),
-            "timestamp": datetime.now().isoformat()
+            "timestamp": datetime.now().isoformat(),
         }
-        print(f"EMAIL_GENERATOR_DEBUG: {json.dumps(context_log)}")
+        logger.debug(f"EMAIL_GENERATOR_DEBUG: {json.dumps(context_log)}")
 
         # Apply comprehensive formatting pipeline
         processed_content = self._clean_ai_response(content)
-        
+
         # Additional template-specific processing
         processed_content = self._ensure_html_structure(processed_content)
         processed_content = self._normalize_spacing(processed_content)
-        
+
         return processed_content
 
     def _ensure_html_structure(self, content: str) -> str:
         """
         Ensure content has proper HTML structure for template rendering.
-        
+
         This method processes content line-by-line to ensure that any floating text
         content is properly wrapped in <p> tags, while preserving existing HTML structure.
         It handles edge cases like text that appears after closing block tags.
@@ -2261,62 +2344,68 @@ class EmailGeneratorV2:
         # Define block-level HTML elements that don't need paragraph wrapping
         block_elements = r"<(?:p|div|ul|ol|li|h[1-6]|blockquote|pre|hr|br)\b"
         closing_block_elements = r"</(?:p|div|ul|ol|li|h[1-6]|blockquote|pre)>"
-        
+
         # Split content into lines for processing
         lines = content.split("\n")
         processed_lines = []
-        
+
         for line in lines:
             stripped_line = line.strip()
-            
+
             # Skip empty lines
             if not stripped_line:
                 processed_lines.append(line)
                 continue
-            
+
             # Check if line contains any block-level elements (opening or closing)
-            has_block_element = bool(re.search(block_elements, stripped_line, re.IGNORECASE))
-            has_closing_block = bool(re.search(closing_block_elements, stripped_line, re.IGNORECASE))
-            
+            has_block_element = bool(
+                re.search(block_elements, stripped_line, re.IGNORECASE)
+            )
+            has_closing_block = bool(
+                re.search(closing_block_elements, stripped_line, re.IGNORECASE)
+            )
+
             # If line has block elements, keep as-is
             if has_block_element or has_closing_block:
                 processed_lines.append(line)
                 continue
-            
+
             # Check if line contains only HTML tags (no text content)
             text_only = re.sub(r"<[^>]*>", "", stripped_line).strip()
             if not text_only:
                 processed_lines.append(line)
                 continue
-            
+
             # This is floating text that needs to be wrapped in <p> tags
             # Check if it's already wrapped in paragraph tags
-            if not stripped_line.startswith("<p") and not stripped_line.endswith("</p>"):
+            if not stripped_line.startswith("<p") and not stripped_line.endswith(
+                "</p>"
+            ):
                 # Preserve original indentation while wrapping content
-                indentation = line[:len(line) - len(line.lstrip())]
+                indentation = line[: len(line) - len(line.lstrip())]
                 wrapped_line = f"{indentation}<p>{stripped_line}</p>"
                 processed_lines.append(wrapped_line)
             else:
                 processed_lines.append(line)
-        
+
         # Rejoin the processed lines
         processed_content = "\n".join(processed_lines)
-        
+
         # Handle edge case: floating text after closing block tags on the same line
         # Pattern: </tag>Some floating text
         processed_content = re.sub(
             r"(</(?:ul|ol|div|blockquote)>)\s*([^<\s][^<]*?)(?=\s*$|\s*<)",
             r"\1\n<p>\2</p>",
             processed_content,
-            flags=re.MULTILINE
+            flags=re.MULTILINE,
         )
-        
+
         # Clean up any empty paragraph tags that might have been created
         processed_content = re.sub(r"<p>\s*</p>", "", processed_content)
-        
+
         # Ensure proper spacing around paragraph tags
         processed_content = re.sub(r"</p>\s*<p>", "</p>\n<p>", processed_content)
-        
+
         return processed_content.strip()
 
     def _normalize_spacing(self, content: str) -> str:
@@ -2326,12 +2415,12 @@ class EmailGeneratorV2:
 
         # Normalize line endings
         content = re.sub(r"\r\n|\r", "\n", content)
-        
+
         # Ensure consistent spacing around HTML elements
         content = re.sub(r">\s*<", "><", content)
         content = re.sub(r"(<(?:p|div|h[1-6])[^>]*>)\s*", r"\1", content)
         content = re.sub(r"\s*(</(?:p|div|h[1-6])>)", r"\1", content)
-        
+
         return content.strip()
 
     # === POST-PROCESSING FUNCTIONS (REMOVED - SUBTASK 5A REVERSION) ===
@@ -2350,17 +2439,17 @@ class EmailGeneratorV2:
         content = re.sub(
             r"(?i)(legal\s+analysis|analysis\s+and\s+position|statutory\s+analysis)",
             lambda m: f"<strong>{m.group(1).upper()}</strong>",
-            content
+            content,
         )
-        
+
         # Format subsection headers (A, B, C, etc.)
         content = re.sub(
             r"^([A-Z])\.\s*([A-Z][^.]*?)(?=\n|$)",
             r"<strong>\1. \2</strong>",
             content,
-            flags=re.MULTILINE
+            flags=re.MULTILINE,
         )
-        
+
         return content
 
     def _format_recommendations(self, content: str) -> str:
@@ -2372,17 +2461,17 @@ class EmailGeneratorV2:
         content = re.sub(
             r"(?i)(recommended?\s+(?:next\s+)?steps?|recommendations?|next\s+steps?)",
             lambda m: f"<strong>{m.group(1).upper()}</strong>",
-            content
+            content,
         )
-        
+
         # Format numbered recommendations
         content = re.sub(
             r"^(\d+)\.\s*([^.]+?)(?=\n|$)",
             r"<strong>\1.</strong> \2",
             content,
-            flags=re.MULTILINE
+            flags=re.MULTILINE,
         )
-        
+
         return content
 
     def _format_subsections(self, content: str) -> str:
@@ -2395,54 +2484,75 @@ class EmailGeneratorV2:
             r"^([A-Z])\.\s+(.+?)$",
             r"    <strong>\1.</strong> \2",
             content,
-            flags=re.MULTILINE
+            flags=re.MULTILINE,
         )
-        
+
         # Format numbered subsections with proper spacing
         content = re.sub(
             r"^(\d+)\.\s+(.+?)$",
             r"<strong>\1.</strong> \2",
             content,
-            flags=re.MULTILINE
+            flags=re.MULTILINE,
         )
-        
+
         return content
 
     def _strip_citations(self, content: str) -> str:
         """ENHANCED: Strip all legal citations using comprehensive regex pattern."""
         if not content:
             return content
-        
+
         # Use the enhanced citation filter regex from configuration
         try:
             citation_filter_regex = self.config.get("citation_filter_regex", "")
             if citation_filter_regex:
                 content = re.sub(
-                    citation_filter_regex,
-                    "",
-                    content,
-                    flags=re.IGNORECASE
+                    citation_filter_regex, "", content, flags=re.IGNORECASE
                 )
-            
+
             # Additional comprehensive citation cleanup
-            content = re.sub(r"\b(Fla\.?\s*Stat\.?|F\.S\.?)\s*§?\s*[\d\w\.\-\(\)]+", "", content, flags=re.IGNORECASE)
+            content = re.sub(
+                r"\b(Fla\.?\s*Stat\.?|F\.S\.?)\s*§?\s*[\d\w\.\-\(\)]+",
+                "",
+                content,
+                flags=re.IGNORECASE,
+            )
             content = re.sub(r"\bChapter\s*\d+\b", "", content, flags=re.IGNORECASE)
             content = re.sub(r"§+\s*[\d\w\.\-\(\)]+", "", content)
-            content = re.sub(r"\b\d+\.\d+\b", "", content)  # Remove section numbers like 123.45
-            content = re.sub(r"\([^)]*§[^)]*\)", "", content)  # Remove parenthetical citations with §
-            content = re.sub(r"\bFla\b\.?\s*R\.", "", content, flags=re.IGNORECASE)  # Florida Rules
-            content = re.sub(r"\bFla\b\.?\s*Admin\.", "", content, flags=re.IGNORECASE)  # Florida Admin
-            content = re.sub(r"\d{1,3}\s*So\.", "", content, flags=re.IGNORECASE)  # Southern Reporter
-            content = re.sub(r"section\s*\d+", "", content, flags=re.IGNORECASE)  # Section references
-            
+            content = re.sub(
+                r"\b\d+\.\d+\b", "", content
+            )  # Remove section numbers like 123.45
+            content = re.sub(
+                r"\([^)]*§[^)]*\)", "", content
+            )  # Remove parenthetical citations with §
+            content = re.sub(
+                r"\bFla\b\.?\s*R\.", "", content, flags=re.IGNORECASE
+            )  # Florida Rules
+            content = re.sub(
+                r"\bFla\b\.?\s*Admin\.", "", content, flags=re.IGNORECASE
+            )  # Florida Admin
+            content = re.sub(
+                r"\d{1,3}\s*So\.", "", content, flags=re.IGNORECASE
+            )  # Southern Reporter
+            content = re.sub(
+                r"section\s*\d+", "", content, flags=re.IGNORECASE
+            )  # Section references
+
             # Collapse extra spaces left behind
             content = re.sub(r"\s{2,}", " ", content).strip()
             return content
-            
+
         except Exception as e:
-            print(f"EMAIL GENERATOR V2: ❌ Enhanced citation filtering failed: {e}")
+            logger.error(
+                f"EMAIL GENERATOR V2: ❌ Enhanced citation filtering failed: {e}"
+            )
             # Fallback to basic filtering
-            content = re.sub(r"\b(Fla\.?\s*Stat\.?|F\.S\.)\s*§?\s*[\d\w\.\-\(\)]+", "", content, flags=re.IGNORECASE)
+            content = re.sub(
+                r"\b(Fla\.?\s*Stat\.?|F\.S\.)\s*§?\s*[\d\w\.\-\(\)]+",
+                "",
+                content,
+                flags=re.IGNORECASE,
+            )
             content = re.sub(r"\bChapter\s*\d+\b", "", content, flags=re.IGNORECASE)
             content = re.sub(r"§+\s*[\d\w\.\-\(\)]+", "", content)
             content = re.sub(r"\s{2,}", " ", content).strip()
@@ -2454,18 +2564,13 @@ class EmailGeneratorV2:
             return content
 
         # Convert dashes and asterisks to proper bullet points
-        content = re.sub(
-            r"^[-*]\s+(.+?)$",
-            r"• \1",
-            content,
-            flags=re.MULTILINE
-        )
-        
+        content = re.sub(r"^[-*]\s+(.+?)$", r"• \1", content, flags=re.MULTILINE)
+
         # Wrap bullet points in proper HTML structure
         lines = content.split("\n")
         in_bullet_section = False
         formatted_lines = []
-        
+
         for line in lines:
             stripped = line.strip()
             if stripped.startswith("•"):
@@ -2478,10 +2583,10 @@ class EmailGeneratorV2:
                     formatted_lines.append("</ul>")
                     in_bullet_section = False
                 formatted_lines.append(line)
-        
+
         if in_bullet_section:
             formatted_lines.append("</ul>")
-        
+
         return "\n".join(formatted_lines)
 
     def _clean_section_numbering(self, content: str) -> str:
@@ -2491,43 +2596,28 @@ class EmailGeneratorV2:
 
         # Remove numbered section headers at the beginning of content (template handles headers)
         content = re.sub(
-            r"^(\d+)\.\s*([A-Z][A-Z\s]+)(?:\n|$)",
-            "",
-            content,
-            flags=re.MULTILINE
+            r"^(\d+)\.\s*([A-Z][A-Z\s]+)(?:\n|$)", "", content, flags=re.MULTILINE
         )
-        
+
         # Remove any remaining standalone section headers
         content = re.sub(
-            r"^([A-Z][A-Z\s]{10,})(?:\n|$)",
-            "",
-            content,
-            flags=re.MULTILINE
+            r"^([A-Z][A-Z\s]{10,})(?:\n|$)", "", content, flags=re.MULTILINE
         )
-        
+
         # Remove redundant section numbers at the beginning of content
         content = re.sub(
             r"^(\d+)\.\s*(\d+)\.\s*([A-Z][^.]*?)$",
             r"\1. \3",
             content,
-            flags=re.MULTILINE
+            flags=re.MULTILINE,
         )
-        
+
         # Clean up repeated headers
-        content = re.sub(
-            r"^([A-Z\s]+)\n\1$",
-            r"\1",
-            content,
-            flags=re.MULTILINE
-        )
-        
+        content = re.sub(r"^([A-Z\s]+)\n\1$", r"\1", content, flags=re.MULTILINE)
+
         # Remove section numbers that appear mid-sentence
-        content = re.sub(
-            r"(\w+)\s+\d+\.\s+([A-Z])",
-            r"\1 \2",
-            content
-        )
-        
+        content = re.sub(r"(\w+)\s+\d+\.\s+([A-Z])", r"\1 \2", content)
+
         return content
 
     def _ensure_proper_whitespace(self, content: str) -> str:
@@ -2536,36 +2626,20 @@ class EmailGeneratorV2:
             return content
 
         # Add proper spacing after headers
-        content = re.sub(
-            r"(<h[1-6][^>]*>.*?</h[1-6]>)(\w)",
-            r"\1\n\n\2",
-            content
-        )
-        
+        content = re.sub(r"(<h[1-6][^>]*>.*?</h[1-6]>)(\w)", r"\1\n\n\2", content)
+
         # Add spacing before new paragraphs
-        content = re.sub(
-            r"(</p>)(<p[^>]*>)",
-            r"\1\n\n\2",
-            content
-        )
-        
+        content = re.sub(r"(</p>)(<p[^>]*>)", r"\1\n\n\2", content)
+
         # Ensure proper spacing around bullet points
-        content = re.sub(
-            r"(</ul>)(<p[^>]*>)",
-            r"\1\n\n\2",
-            content
-        )
-        
-        content = re.sub(
-            r"(</p>)(<ul>)",
-            r"\1\n\n\2",
-            content
-        )
-        
+        content = re.sub(r"(</ul>)(<p[^>]*>)", r"\1\n\n\2", content)
+
+        content = re.sub(r"(</p>)(<ul>)", r"\1\n\n\2", content)
+
         # Clean up excessive whitespace while preserving intentional breaks
         content = re.sub(r"\n\s*\n\s*\n", "\n\n", content)
         content = re.sub(r"^\s+|\s+$", "", content, flags=re.MULTILINE)
-        
+
         return content
 
     def _trim_wordiness(self, content: str) -> str:
@@ -2580,151 +2654,163 @@ class EmailGeneratorV2:
             r"\b(?:as mentioned above|as previously stated|as noted earlier)\b",
             r"\b(?:furthermore|moreover|additionally)\b(?=.*?furthermore|.*?moreover|.*?additionally)",
         ]
-        
+
         for pattern in wordy_patterns:
             content = re.sub(pattern, "", content, flags=re.IGNORECASE)
-        
+
         # Simplify overly complex sentences
         content = re.sub(
             r"\b(?:in order to|for the purpose of)\b",
             "to",
             content,
-            flags=re.IGNORECASE
+            flags=re.IGNORECASE,
         )
-        
+
         # Remove redundant disclaimers in the middle of content
         content = re.sub(
             r"(?i)\b(?:this is not legal advice|consult with an attorney|seek legal counsel)\b(?=.*?\w{10,})",
             "",
-            content
+            content,
         )
-        
+
         # Clean up extra spaces left by removals
         content = re.sub(r"\s{2,}", " ", content)
         content = re.sub(r"^\s+|\s+$", "", content, flags=re.MULTILINE)
-        
+
         return content
 
     def _apply_enhanced_citation_filtering(self, content: str) -> str:
         """
         Apply enhanced citation filtering to raw text using comprehensive regex patterns.
-        
+
         This method processes raw text BEFORE any HTML structure is applied,
         ensuring that citations are removed without corrupting HTML tags.
-        
+
         Args:
             content: Raw text content to filter
-            
+
         Returns:
             Content with citations removed
         """
         if not content:
             return content
-            
+
         try:
-            print("EMAIL GENERATOR V2: Starting enhanced citation filtering on raw text...")
-            
+            logger.debug(
+                "EMAIL GENERATOR V2: Starting enhanced citation filtering on raw text..."
+            )
+
             # Get citation filter regex from configuration
             citation_filter_regex = self.config.get("citation_filter_regex", "")
-            
+
             if citation_filter_regex:
-                print(f"EMAIL GENERATOR V2: Applying configured citation filter: {citation_filter_regex}")
-                content = re.sub(
-                    citation_filter_regex,
-                    "",
-                    content,
-                    flags=re.IGNORECASE
+                logger.info(
+                    f"EMAIL GENERATOR V2: Applying configured citation filter: {citation_filter_regex}"
                 )
-            
+                content = re.sub(
+                    citation_filter_regex, "", content, flags=re.IGNORECASE
+                )
+
             # Enhanced comprehensive citation cleanup on raw text
             original_length = len(content)
-            
+
             # Remove Florida Statute references
-            content = re.sub(r"\b(Fla\.?\s*Stat\.?|F\.S\.?)\s*§?\s*[\d\w\.\-\(\)]+", "", content, flags=re.IGNORECASE)
-            
+            content = re.sub(
+                r"\b(Fla\.?\s*Stat\.?|F\.S\.?)\s*§?\s*[\d\w\.\-\(\)]+",
+                "",
+                content,
+                flags=re.IGNORECASE,
+            )
+
             # Remove Chapter references
             content = re.sub(r"\bChapter\s*\d+\b", "", content, flags=re.IGNORECASE)
-            
+
             # Remove section symbols and numbers
             content = re.sub(r"§+\s*[\d\w\.\-\(\)]+", "", content)
-            
+
             # Remove decimal section numbers
             content = re.sub(r"\b\d{2,3}\.\d+\b", "", content)
-            
+
             # Remove parenthetical citations with section symbols
             content = re.sub(r"\([^)]*§[^)]*\)", "", content)
-            
+
             # Remove Florida Rules references
             content = re.sub(r"\bFla\b\.?\s*R\.", "", content, flags=re.IGNORECASE)
-            
+
             # Remove Florida Admin references
             content = re.sub(r"\bFla\b\.?\s*Admin\.", "", content, flags=re.IGNORECASE)
-            
+
             # Remove Southern Reporter citations
             content = re.sub(r"\d{1,3}\s*So\.", "", content, flags=re.IGNORECASE)
-            
+
             # Remove generic section references
             content = re.sub(r"\bsection\s*\d+", "", content, flags=re.IGNORECASE)
-            
+
             # Clean up extra spaces and normalize whitespace
             content = re.sub(r"\s{2,}", " ", content)
             content = content.strip()
-            
+
             filtered_length = len(content)
             removed_chars = original_length - filtered_length
-            
+
             if removed_chars > 0:
-                print(f"EMAIL GENERATOR V2: ✅ Enhanced citation filtering removed {removed_chars} characters")
+                logger.info(
+                    f"EMAIL GENERATOR V2: ✅ Enhanced citation filtering removed {removed_chars} characters"
+                )
             else:
-                print("EMAIL GENERATOR V2: No citations found to remove")
-                
+                logger.info("EMAIL GENERATOR V2: No citations found to remove")
+
             return content
-            
+
         except re.error as e:
-            print(f"EMAIL GENERATOR V2: ❌ Invalid citation filter regex: {e}")
+            logger.info(f"EMAIL GENERATOR V2: ❌ Invalid citation filter regex: {e}")
             return content
         except Exception as e:
-            print(f"EMAIL GENERATOR V2: ❌ Enhanced citation filtering failed: {e}")
+            logger.error(
+                f"EMAIL GENERATOR V2: ❌ Enhanced citation filtering failed: {e}"
+            )
             return content
 
     def _apply_sentence_splitting_logic(self, content: str) -> str:
         """
         Apply sentence splitting logic to improve readability on raw text.
-        
+
         This method processes raw text to normalize sentence structure and improve
         readability without affecting HTML structure.
-        
+
         Args:
             content: Raw text content to process
-            
+
         Returns:
             Content with improved sentence structure
         """
         if not content:
             return content
-            
+
         try:
-            print("EMAIL GENERATOR V2: Starting sentence splitting logic on raw text...")
-            
+            logger.debug(
+                "EMAIL GENERATOR V2: Starting sentence splitting logic on raw text..."
+            )
+
             original_length = len(content)
-            
+
             # Split very long sentences at appropriate points
             # Target sentences over 15 words for splitting (aligned with validation criteria)
             sentences = re.split(r"(?<=[.!?])\s+", content)
             processed_sentences = []
-            
+
             for sentence in sentences:
                 word_count = len(sentence.split())
-                
+
                 if word_count > 15:
                     # Attempt to split at coordinating conjunctions or semicolons
                     split_points = [
                         r",\s+(and|but|or|however|moreover|furthermore|additionally)",
                         r";\s*",
                         r",\s+(?=which|that|where|when)",
-                        r",\s+(?=because|since|although|while|if)"
+                        r",\s+(?=because|since|although|while|if)",
                     ]
-                    
+
                     sentence_parts = [sentence]
                     for pattern in split_points:
                         new_parts = []
@@ -2735,15 +2821,27 @@ class EmailGeneratorV2:
                                 if len(split_parts) > 1:
                                     # Rejoin the conjunction with the second part
                                     first_part = split_parts[0].strip()
-                                    conjunction = split_parts[1] if len(split_parts) > 1 else ""
-                                    remaining = split_parts[2] if len(split_parts) > 2 else ""
-                                    
+                                    conjunction = (
+                                        split_parts[1] if len(split_parts) > 1 else ""
+                                    )
+                                    remaining = (
+                                        split_parts[2] if len(split_parts) > 2 else ""
+                                    )
+
                                     if first_part:
                                         new_parts.append(first_part + ".")
                                     if remaining:
                                         # Capitalize first word of new sentence
-                                        remaining = conjunction.strip() + " " + remaining.strip()
-                                        remaining = remaining[0].upper() + remaining[1:] if remaining else ""
+                                        remaining = (
+                                            conjunction.strip()
+                                            + " "
+                                            + remaining.strip()
+                                        )
+                                        remaining = (
+                                            remaining[0].upper() + remaining[1:]
+                                            if remaining
+                                            else ""
+                                        )
                                         new_parts.append(remaining)
                                 else:
                                     new_parts.append(part)
@@ -2752,67 +2850,70 @@ class EmailGeneratorV2:
                         sentence_parts = new_parts
                         if len(sentence_parts) > 1:
                             break  # Found a good split point
-                    
+
                     processed_sentences.extend(sentence_parts)
                 else:
                     processed_sentences.append(sentence)
-            
+
             # Rejoin sentences with proper spacing
             content = " ".join(processed_sentences)
-            
+
             # Clean up any formatting issues from splitting
             content = re.sub(r"\.\s*\.", ".", content)  # Remove double periods
             # CRITICAL FIX: Use CSS-aware spacing normalization instead of global \s+ replacement
             content = self._normalize_spacing_preserve_css_global(content)
             content = content.strip()
-            
+
             processed_length = len(content)
-            
+
             if processed_length != original_length:
-                print(f"EMAIL GENERATOR V2: ✅ Sentence splitting applied - length changed from {original_length} to {processed_length}")
+                logger.info(
+                    f"EMAIL GENERATOR V2: ✅ Sentence splitting applied - length changed from {original_length} to {processed_length}"
+                )
             else:
-                print("EMAIL GENERATOR V2: No sentence splitting needed")
-                
-            return content
-            
-        except Exception as e:
-            print(f"EMAIL GENERATOR V2: ❌ Sentence splitting logic failed: {e}")
+                logger.info("EMAIL GENERATOR V2: No sentence splitting needed")
+
             return content
 
+        except Exception as e:
+            logger.error(f"EMAIL GENERATOR V2: ❌ Sentence splitting logic failed: {e}")
+            return content
 
     @staticmethod
     def _sanitize_output_grammar(text: str) -> str:
         """
         Sanitize output grammar with specific regex operations.
-        
+
         Performs the following operations:
         - Normalize punctuation spacing
         - Remove duplicate introductory phrases (case-insensitive)
         - Eliminate leading commas from each line
-        
+
         Args:
             text: The text string to sanitize
-            
+
         Returns:
             The processed text with grammar corrections applied
         """
         if not text:
             return text
-        
+
         # Normalize punctuation spacing: Add space after punctuation if missing
         text = re.sub(r"([.,])([A-Za-z])", r"\1 \2", text)
-        
+
         # Remove duplicate introductory phrases (case-insensitive)
-        text = re.sub(r"(\bthe path forward\b).*?\1", r"\1", text, flags=re.IGNORECASE | re.DOTALL)
-        
+        text = re.sub(
+            r"(\bthe path forward\b).*?\1", r"\1", text, flags=re.IGNORECASE | re.DOTALL
+        )
+
         # Eliminate leading commas from each line
         text = "\n".join([re.sub(r"^\s*,\s*", "", line) for line in text.splitlines()])
-        
+
         return text
 
     # === EXTRACTION METHODS (from original code) ===
 
-    def _extract_key_facts(self, analysis: CaseAnalysisResult) -> list[str]:
+    def _extract_key_facts(self, analysis: CaseAnalysisResult) -> List[str]:
         """Extract key facts for the factual summary section."""
         facts = []
         if analysis.intake_analysis and analysis.intake_analysis.key_facts:
@@ -2827,7 +2928,7 @@ class EmailGeneratorV2:
 
         return facts[:5]
 
-    def _identify_emphasis_items(self, analysis: CaseAnalysisResult) -> dict[str, str]:
+    def _identify_emphasis_items(self, analysis: CaseAnalysisResult) -> Dict[str, str]:
         """Identify items that should be bolded."""
         emphasis_items = {}
 
@@ -2839,8 +2940,7 @@ class EmailGeneratorV2:
 
         return emphasis_items
 
-
-    def _extract_legal_issues(self, analysis: CaseAnalysisResult) -> list[str]:
+    def _extract_legal_issues(self, analysis: CaseAnalysisResult) -> List[str]:
         """Extract legal issues for analysis section."""
         issues = []
 
@@ -2855,7 +2955,7 @@ class EmailGeneratorV2:
 
         return issues
 
-    def _extract_media_evidence_points(self, analysis: CaseAnalysisResult) -> list[str]:
+    def _extract_media_evidence_points(self, analysis: CaseAnalysisResult) -> List[str]:
         """Extract key points about media evidence."""
         points = []
 
@@ -2869,7 +2969,7 @@ class EmailGeneratorV2:
 
     def _extract_case_assessment_points(
         self, analysis: CaseAnalysisResult
-    ) -> list[str]:
+    ) -> List[str]:
         """Extract points for case assessment section."""
         points = []
 
@@ -2885,7 +2985,7 @@ class EmailGeneratorV2:
 
         return points
 
-    def _extract_recommendations(self, analysis: CaseAnalysisResult) -> list[str]:
+    def _extract_recommendations(self, analysis: CaseAnalysisResult) -> List[str]:
         """Extract recommendations for next steps."""
         recommendations = []
 
@@ -2985,7 +3085,7 @@ class EmailGeneratorV2:
         """
 
         # Get persona from configuration
-        persona = self.config.get("personas", {}).get("CONTINUING_LEGAL_ADVISOR", "")
+        persona = self.config.get("personas", {}).get("CONTINUING_ATTORNEY_ADVISOR", "")
         result = self._make_openai_request(prompt, persona)
         return result or ""
 
@@ -2999,12 +3099,12 @@ class EmailGeneratorV2:
             output = self.generate_email_with_debug(analysis)
             return output.letter
         except (ValueError, TypeError, AttributeError, KeyError, ImportError) as e:
-            print(f"EMAIL GENERATOR V2: Error in generate_findings: {e}")
+            logger.error(f"EMAIL GENERATOR V2: Error in generate_findings: {e}")
             return self._create_fallback_letter(analysis, str(e))
 
     def generate_email_and_analysis_docs(
         self, analysis: CaseAnalysisResult
-    ) -> dict[str, str]:
+    ) -> Dict[str, str]:
         """
         Generate email and analysis documents using the refactored generator.
         """
@@ -3013,10 +3113,12 @@ class EmailGeneratorV2:
             self.content_extraction_service.ensure_analysis_completeness(analysis)
 
             # CRITICAL FIX: Generate JSON data using new architecture
-            print("EMAIL GENERATOR V2: Generating structured JSON for template context...")
+            logger.info(
+                "EMAIL GENERATOR V2: Generating structured JSON for template context..."
+            )
             json_data = self._generate_structured_json(analysis)
             validated_json = self._validate_json_response(json_data)
-            
+
             # Generate letter using new architecture
             generated_letter = self.generate_findings(analysis)
 
@@ -3025,16 +3127,22 @@ class EmailGeneratorV2:
             appendix_template = self.jinja_env.get_template("document_appendix.jinja2")
 
             # Create pre-composed greeting line
-            client_name = analysis.intake_analysis.client_name if analysis.intake_analysis and analysis.intake_analysis.client_name else "Client"
+            client_name = (
+                analysis.intake_analysis.client_name
+                if analysis.intake_analysis and analysis.intake_analysis.client_name
+                else "Client"
+            )
             greeting_line = f"Dear {client_name},"
-            
+
             template_context = {
                 "analysis": analysis,
                 "generated_letter": generated_letter,
                 "current_date": datetime.now().strftime("%B %d, %Y"),
                 "case_timeline": getattr(analysis, "case_timeline", []),
                 "format_video_analysis": self.format_video_analysis_for_appendix,
-                "case_name": analysis.intake_analysis.case_type if analysis.intake_analysis and analysis.intake_analysis.case_type else "Your Case",
+                "case_name": analysis.intake_analysis.case_type
+                if analysis.intake_analysis and analysis.intake_analysis.case_type
+                else "Your Case",
                 "greeting_line": greeting_line,
                 "results": validated_json,  # CRITICAL: Add JSON data for enhanced template
             }
@@ -3045,16 +3153,26 @@ class EmailGeneratorV2:
                 "method": "generate_email_and_analysis_docs",
                 "hypothesis_id": "template_variable_issue",
                 "stage": "pre_template_render",
-                "analysis_intake_case_type": analysis.intake_analysis.case_type if analysis.intake_analysis else None,
-                "analysis_intake_client_name": analysis.intake_analysis.client_name if analysis.intake_analysis else None,
+                "analysis_intake_case_type": analysis.intake_analysis.case_type
+                if analysis.intake_analysis
+                else None,
+                "analysis_intake_client_name": analysis.intake_analysis.client_name
+                if analysis.intake_analysis
+                else None,
                 "analysis_intake_analysis_exists": analysis.intake_analysis is not None,
                 "template_context_case_name": template_context.get("case_name"),
                 "template_context_client_name": template_context.get("client_name"),
                 "template_context_keys": list(template_context.keys()),
-                "template_context_analysis_type": type(template_context.get("analysis")).__name__ if template_context.get("analysis") else None,
-                "timestamp": datetime.now().isoformat()
+                "template_context_analysis_type": type(
+                    template_context.get("analysis")
+                ).__name__
+                if template_context.get("analysis")
+                else None,
+                "timestamp": datetime.now().isoformat(),
             }
-            print(f"EMAIL_GENERATOR_DEBUG: {json.dumps(template_var_log, indent=2)}")
+            logger.debug(
+                f"EMAIL_GENERATOR_DEBUG: {json.dumps(template_var_log, indent=2)}"
+            )
 
             # Log the complete template context dictionary being passed to render()
             context_dict_log = {
@@ -3064,66 +3182,86 @@ class EmailGeneratorV2:
                 "stage": "template_context_dump",
                 "template_render_args": {
                     "results": {
-                        "analysis_present": template_context.get("analysis") is not None,
-                        "generated_letter_present": template_context.get("generated_letter") is not None,
+                        "analysis_present": template_context.get("analysis")
+                        is not None,
+                        "generated_letter_present": template_context.get(
+                            "generated_letter"
+                        )
+                        is not None,
                         "current_date": template_context.get("current_date"),
-                        "case_timeline_length": len(template_context.get("case_timeline", [])),
+                        "case_timeline_length": len(
+                            template_context.get("case_timeline", [])
+                        ),
                         "case_name": template_context.get("case_name"),
-                        "client_name": template_context.get("client_name")
+                        "client_name": template_context.get("client_name"),
                     },
-                    "current_date": template_context["current_date"]
+                    "current_date": template_context["current_date"],
                 },
-                "timestamp": datetime.now().isoformat()
+                "timestamp": datetime.now().isoformat(),
             }
-            print(f"EMAIL_GENERATOR_DEBUG: {json.dumps(context_dict_log, indent=2)}")
+            logger.debug(
+                f"EMAIL_GENERATOR_DEBUG: {json.dumps(context_dict_log, indent=2)}"
+            )
 
             # CRITICAL: Validate required template variables before rendering
             # This prevents jinja2.exceptions.UndefinedError for missing required variables
             required_vars = ["case_name", "greeting_line"]
             for var_name in required_vars:
                 if var_name not in template_context:
-                    raise ValueError(f"Template context is missing required key: '{var_name}'")
+                    raise ValueError(
+                        f"Template context is missing required key: '{var_name}'"
+                    )
                 var_value = template_context[var_name]
-                if not var_value or (isinstance(var_value, str) and not var_value.strip()):
-                    raise ValueError(f"Template context key '{var_name}' is empty or None")
+                if not var_value or (
+                    isinstance(var_value, str) and not var_value.strip()
+                ):
+                    raise ValueError(
+                        f"Template context key '{var_name}' is empty or None"
+                    )
 
-            print("EMAIL GENERATOR V2: ✅ Template context validation passed - required variables present")
+            logger.info(
+                "EMAIL GENERATOR V2: ✅ Template context validation passed - required variables present"
+            )
 
             # === Template Variable Validation ===
             required_keys = ["case_name", "greeting_line"]
             for key in required_keys:
                 if not template_context.get(key):
-                    raise ValueError(f"Template context is missing required key or key is empty: '{key}'")
+                    raise ValueError(
+                        f"Template context is missing required key or key is empty: '{key}'"
+                    )
 
             # CRITICAL FIX: Pass validated_json as results, not template_context
             # Add firm_contact variable to fix jinja2.exceptions.UndefinedError
             firm_contact = {
                 "phone": "555-123-4567",
-                "email": "contact@bernhardt-riley.com"
+                "email": "contact@bernhardt-riley.com",
             }
-            
+
             main_html_content = main_template.render(
                 results=validated_json,
                 current_date=template_context["current_date"],
                 case_name=template_context["case_name"],
                 greeting_line=template_context["greeting_line"],
-                attorney_signature=template_context.get("attorney_signature", "Your Legal Team"),
+                attorney_signature=template_context.get(
+                    "attorney_signature", "Your Legal Team"
+                ),
                 firm_name=template_context.get("firm_name", "Bernhardt Riley PLLC"),
-                firm_contact=firm_contact
+                firm_contact=firm_contact,
             )
             appendix_html_content = appendix_template.render(
                 results=validated_json,
                 current_date=template_context["current_date"],
                 case_name=template_context["case_name"],
-                greeting_line=template_context["greeting_line"]
+                greeting_line=template_context["greeting_line"],
             )
 
             # STAGES 3.5 through 9 are commented out as per refactoring requirements.
             # The goal is to return the raw HTML fragment from the initial generation.
-            
+
             # # STAGE 3.5: POST-PROCESSING & SIMPLIFICATION - ENABLED FOR READABILITY
             # print("EMAIL GENERATOR V2: STAGE 3.5-3.6 - POST-PROCESSING & SIMPLIFICATION")
-            
+
             # # Apply AI-based simplification to improve readability scores
             # main_html_content = self._apply_comprehensive_simplification(main_html_content)
             # print("EMAIL GENERATOR V2: ✅ Comprehensive simplification applied")
@@ -3135,7 +3273,7 @@ class EmailGeneratorV2:
             #     apply_polishing=True,  # Enable polish for full email realignment
             #     word_limit=850  # STRICT 850-word limit for complete email
             # )
-            
+
             # # STAGE 5: WORD COUNT VALIDATION LOOP
             # print("EMAIL GENERATOR V2: STAGE 5 - WORD COUNT VALIDATION")
             # main_html_content = self._enforce_850_word_limit(
@@ -3143,7 +3281,7 @@ class EmailGeneratorV2:
             #     generated_letter=generated_letter,
             #     analysis=analysis
             # )
-            
+
             # appendix_html_content = self._apply_final_sanitization(
             #     html_content=appendix_html_content,
             #     apply_polishing=False,  # Skip polish for appendix
@@ -3156,12 +3294,8 @@ class EmailGeneratorV2:
 
             # # STAGE 6.5: READABILITY GATE WITH AGGRESSIVE SIMPLIFICATION
             # print("EMAIL GENERATOR V2: STAGE 6.5 - READABILITY GATE")
-            
 
             # # STAGE 7: DISCLAIMER DUPLICATION CHECK
-            # print("EMAIL GENERATOR V2: STAGE 7 - DISCLAIMER DUPLICATION CHECK")
-            # main_html_content = self._check_and_prevent_duplicate_disclaimer(main_html_content)
-            # appendix_html_content = self._check_and_prevent_duplicate_disclaimer(appendix_html_content)
 
             # # STAGE 8: NORMALIZATION POST-PROCESSING
             # print("EMAIL GENERATOR V2: STAGE 8 - NORMALIZATION POST-PROCESSING")
@@ -3176,13 +3310,12 @@ class EmailGeneratorV2:
             return {"main_letter": main_html_content, "appendix": appendix_html_content}
 
         except (ValueError, TypeError, AttributeError, KeyError, ImportError) as e:
-            print(f"EMAIL GENERATOR V2: Error generating documents: {e}")
+            logger.error(f"EMAIL GENERATOR V2: Error generating documents: {e}")
             return self._generate_fallback_documents(analysis, str(e))
-
 
     def _generate_fallback_documents(
         self, analysis: CaseAnalysisResult, error_message: str
-    ) -> dict[str, str]:
+    ) -> Dict[str, str]:
         """Generate fallback documents when template rendering fails."""
         client_name = (
             analysis.intake_analysis.client_name
@@ -3251,115 +3384,34 @@ class EmailGeneratorV2:
 
         return {"main_letter": main_letter, "appendix": appendix}
 
-    
-
-    
-
     # === READABILITY VALIDATION LOOPS (REMOVED - SUBTASK 5A REVERSION) ===
     # The aggressive readability validation and regeneration loops were breaking validation
     # Removed: _clean_and_validate_generated_text, _simplify_text_content,
     # _validate_section_readability_with_regeneration, _regenerate_section_for_readability
 
-    
-
-    def _check_and_prevent_duplicate_disclaimer(self, html_content: str) -> str:
-        """
-        Check for and prevent duplicate disclaimers in email content.
-        
-        This method ensures that disclaimer text is only appended once by checking
-        if the disclaimer already exists in the content before adding it.
-        
-        Args:
-            html_content: The HTML content to check for duplicate disclaimers
-            
-        Returns:
-            HTML content with single disclaimer ensured
-        """
-        if not html_content:
-            return html_content
-        
-        try:
-            # Define common disclaimer patterns to detect
-            disclaimer_patterns = [
-                r"this\s+(?:communication\s+)?(?:is\s+)?not\s+(?:intended\s+as\s+)?legal\s+advice",
-                r"consult\s+(?:with\s+)?(?:an?\s+)?attorney",
-                r"seek\s+(?:independent\s+)?legal\s+counsel",
-                r"attorney-client\s+relationship",
-                r"confidential\s+(?:and\s+)?privileged",
-                r"bernhardt\s+riley\s+pllc"
-            ]
-            
-            # Check if any disclaimer pattern already exists (case-insensitive)
-            disclaimer_found = False
-            for pattern in disclaimer_patterns:
-                if re.search(pattern, html_content, re.IGNORECASE):
-                    disclaimer_found = True
-                    break
-            
-            if disclaimer_found:
-                print("EMAIL GENERATOR V2: ✅ Disclaimer already present - preventing duplication")
-                return html_content
-            print("EMAIL GENERATOR V2: No disclaimer found - content ready for disclaimer addition")
-            return html_content
-                
-        except Exception as e:
-            print(f"EMAIL GENERATOR V2: ⚠️ Disclaimer duplication check failed: {e}")
-            # Return original content if check fails
-            return html_content
-
-    
-
-    
-
-    
-
-    
-
-    
-
-    
-        
-
-    
-
-    
-
-    
-
-    
-
-    
-
-    
-
-    
-
-    
-
-    
-
-
     def format_video_analysis_for_appendix(self, video_insight) -> str:
         """Format video analysis results into clean, readable text for document appendix."""
-        
+
         formatted_text = []
-        
+
         # Handle both VideoInsight and EnhancedVideoInsight
         if hasattr(video_insight, "insights") and video_insight.insights:
             insights = video_insight.insights
-            
+
             # Handle case where insights is a string (preserved/summarized data)
             if isinstance(insights, str):
                 return f'<p style="margin: 0; font-size: 13px; line-height: 1.5;">{insights}</p>'
-            
+
             # Handle case where insights is a dictionary (normal Vertex AI response)
             if isinstance(insights, dict):
                 # Add summary if available
                 if insights.get("summary"):
                     summary_text = insights["summary"]
                     if isinstance(summary_text, str) and summary_text.strip():
-                        formatted_text.append(f'<div style="margin-bottom: 15px;"><div class="meta-label">Video Summary</div><p style="margin: 5px 0; font-size: 13px; line-height: 1.4;">{summary_text}</p></div>')
-                
+                        formatted_text.append(
+                            f'<div style="margin-bottom: 15px;"><div class="meta-label">Video Summary</div><p style="margin: 5px 0; font-size: 13px; line-height: 1.4;">{summary_text}</p></div>'
+                        )
+
                 # Add key events/timeline if available
                 timeline_content = []
                 if insights.get("timeline"):
@@ -3368,15 +3420,21 @@ class EmailGeneratorV2:
                         for event in timeline_items:
                             if isinstance(event, dict):
                                 timestamp = event.get("timestamp", "Unknown")
-                                description = event.get("event", event.get("description", "No description"))
-                                timeline_content.append(f"• {timestamp} - {description}")
+                                description = event.get(
+                                    "event", event.get("description", "No description")
+                                )
+                                timeline_content.append(
+                                    f"• {timestamp} - {description}"
+                                )
                             elif isinstance(event, str) and event.strip():
                                 timeline_content.append(f"• {event.strip()}")
-                
+
                 if timeline_content:
                     timeline_html = "<br>".join(timeline_content)
-                    formatted_text.append(f'<div style="margin-bottom: 15px;"><div class="meta-label">Key Events Timeline</div><p style="margin: 5px 0; font-size: 13px; line-height: 1.4;">{timeline_html}</p></div>')
-        
+                    formatted_text.append(
+                        f'<div style="margin-bottom: 15px;"><div class="meta-label">Key Events Timeline</div><p style="margin: 5px 0; font-size: 13px; line-height: 1.4;">{timeline_html}</p></div>'
+                    )
+
         # Return formatted text or fallback
         if formatted_text:
             return "\n".join(formatted_text)
@@ -3385,7 +3443,7 @@ class EmailGeneratorV2:
             insight_str = str(video_insight)
             if insight_str and insight_str != "None":
                 return f'<p style="margin: 0; font-size: 13px; line-height: 1.5;">{insight_str}</p>'
-        
+
         return '<p style="margin: 0; font-size: 13px; line-height: 1.5;">No video analysis available</p>'
 
 

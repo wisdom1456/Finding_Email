@@ -25,6 +25,9 @@ import sys
 from pathlib import Path
 
 from dotenv import load_dotenv
+from utils.logging_config import setup_logging
+logger = setup_logging('unknown_service')
+
 
 
 # Load environment variables from .env file
@@ -40,7 +43,7 @@ from backend_logic.video_processor import VideoProcessor
 
 def check_environment():
     """Check if the environment is properly configured for Google Cloud API access."""
-    print("🔍 Checking Google Cloud configuration...")
+logger.debug('🔍 Checking Google Cloud configuration...')
 
     from backend_logic.config import get_settings
 
@@ -50,29 +53,29 @@ def check_environment():
     bucket_name = settings.gcp_bucket_name
     credentials_file = settings.google_application_credentials
 
-    print(f"📋 Project ID: {project_id or 'NOT SET'}")
-    print(f"🪣 Bucket Name: {bucket_name or 'NOT SET'}")
-    print(f"🔑 Credentials File: {credentials_file or 'Using default authentication'}")
+logger.info(f'📋 Project ID: {project_id or 'NOT SET'}')
+logger.info(f'🪣 Bucket Name: {bucket_name or 'NOT SET'}')
+logger.info(f'🔑 Credentials File: {credentials_file or 'Using default authentication'}')
 
     if not project_id:
-        print("❌ ERROR: GCP_PROJECT_ID environment variable is required")
-        print("   Set it with: export GCP_PROJECT_ID='your-project-id'")
+logger.error('❌ ERROR: GCP_PROJECT_ID environment variable is required')
+logger.info("   Set it with: export GCP_PROJECT_ID='your-project-id'")
         return False
 
     if not bucket_name:
-        print("❌ ERROR: GCP_BUCKET_NAME environment variable is required")
-        print("   Set it with: export GCP_BUCKET_NAME='your-bucket-name'")
+logger.error('❌ ERROR: GCP_BUCKET_NAME environment variable is required')
+logger.info("   Set it with: export GCP_BUCKET_NAME='your-bucket-name'")
         return False
 
     if credentials_file:
         if not os.path.exists(credentials_file):
-            print(f"❌ ERROR: Credentials file not found: {credentials_file}")
+logger.error(f'❌ ERROR: Credentials file not found: {credentials_file}')
             return False
-        print("✅ Credentials file exists and is accessible")
+logger.info('✅ Credentials file exists and is accessible')
     else:
-        print("⚠️  Using default authentication (gcloud auth login)")
+logger.info('⚠️  Using default authentication (gcloud auth login)')
 
-    print("✅ Environment configuration looks good!")
+logger.info('✅ Environment configuration looks good!')
     return True
 
 
@@ -88,58 +91,58 @@ def find_sample_videos():
     )
 
     if not video_dir.exists():
-        print(f"❌ ERROR: Sample video directory not found: {video_dir}")
+logger.error(f'❌ ERROR: Sample video directory not found: {video_dir}')
         return []
 
     video_files = list(video_dir.glob("*.MOV"))
 
     if not video_files:
-        print(f"❌ ERROR: No .MOV files found in: {video_dir}")
+logger.error(f'❌ ERROR: No .MOV files found in: {video_dir}')
         return []
 
-    print(f"📹 Found {len(video_files)} video files:")
+logger.info(f'📹 Found {len(video_files)} video files:')
     for video_file in video_files:
         size_mb = video_file.stat().st_size / (1024 * 1024)
-        print(f"   - {video_file.name} ({size_mb:.2f} MB)")
+logger.info(f'   - {video_file.name} ({size_mb:.2f} MB)')
 
     return video_files
 
 
 async def test_video_processor_initialization():
     """Test that VideoProcessor can be initialized with Google Cloud credentials."""
-    print("\n🔧 Testing VideoProcessor initialization...")
+logger.info('\n🔧 Testing VideoProcessor initialization...')
 
     try:
         processor = VideoProcessor()
-        print("✅ VideoProcessor initialized successfully")
-        print(f"📋 Project ID: {processor.project_id}")
-        print(f"🪣 Bucket Name: {processor.bucket_name}")
+logger.info('✅ VideoProcessor initialized successfully')
+logger.info(f'📋 Project ID: {processor.project_id}')
+logger.info(f'🪣 Bucket Name: {processor.bucket_name}')
         return processor
     except Exception as e:
-        print(f"❌ ERROR: Failed to initialize VideoProcessor: {e}")
+logger.error(f'❌ ERROR: Failed to initialize VideoProcessor: {e}')
         return None
 
 
 async def test_single_video_processing(processor, video_file):
     """Test processing a single video file with the Google Cloud API."""
-    print(f"\n🎥 Testing video processing with: {video_file.name}")
+logger.debug(f'\n🎥 Testing video processing with: {video_file.name}')
 
     file_size_mb = video_file.stat().st_size / (1024 * 1024)
-    print(f"📏 File size: {file_size_mb:.2f} MB")
+logger.info(f'📏 File size: {file_size_mb:.2f} MB')
 
     try:
         # Process the video file
-        print("🚀 Starting video processing...")
+logger.debug('🚀 Starting video processing...')
         result = await processor.process_video_file(
             file_path=str(video_file), file_name=video_file.name
         )
 
         if isinstance(result, VideoInsight):
-            print("✅ Video processing completed successfully!")
+logger.debug('✅ Video processing completed successfully!')
 
             # Display results
-            print(f"\n📊 Processing Results for {result.file_name}:")
-            print(f"   🧠 Analysis insights: {list(result.insights.keys())}")
+logger.debug(f'\n📊 Processing Results for {result.file_name}:')
+logger.info(f'   🧠 Analysis insights: {list(result.insights.keys())}')
 
             if result.transcript:
                 transcript_preview = (
@@ -147,103 +150,103 @@ async def test_single_video_processing(processor, video_file):
                     if len(result.transcript) > 200
                     else result.transcript
                 )
-                print(f"   🎤 Transcript: {transcript_preview}")
+logger.info(f'   🎤 Transcript: {transcript_preview}')
             else:
-                print("   🎤 No transcript generated")
+logger.info('   🎤 No transcript generated')
 
             if result.labels:
-                print(f"   🏷️  Labels detected: {len(result.labels)} items")
-                print(f"   🏷️  Sample labels: {result.labels[:3]}")
+logger.info(f'   🏷️  Labels detected: {len(result.labels)} items')
+logger.info(f'   🏷️  Sample labels: {result.labels[:3]}')
 
             if result.objects:
-                print(f"   🎯 Objects detected: {len(result.objects)} items")
-                print(f"   🎯 Sample objects: {result.objects[:3]}")
+logger.info(f'   🎯 Objects detected: {len(result.objects)} items')
+logger.info(f'   🎯 Sample objects: {result.objects[:3]}')
 
             # Check Vertex AI analysis
             vertex_analysis = result.insights.get("vertex_analysis", {})
             if vertex_analysis:
-                print(f"   🤖 Vertex AI analysis: {list(vertex_analysis.keys())}")
+logger.info(f'   🤖 Vertex AI analysis: {list(vertex_analysis.keys())}')
             else:
-                print("   🤖 No Vertex AI analysis results")
+logger.info('   🤖 No Vertex AI analysis results')
 
             return True
 
         if isinstance(result, MediaProcessingError):
-            print("⚠️  Video processing failed gracefully:")
-            print(f"   📝 Error: {result.error_message}")
-            print(f"   🔧 Type: {result.error_type}")
-            print(f"   📍 Source: {result.source}")
+logger.error('⚠️  Video processing failed gracefully:')
+logger.error(f'   📝 Error: {result.error_message}')
+logger.error(f'   🔧 Type: {result.error_type}')
+logger.info(f'   📍 Source: {result.source}')
             return False
 
-        print(f"❌ Unexpected result type: {type(result)}")
+logger.info(f'❌ Unexpected result type: {type(result)}')
         return False
 
     except Exception as e:
-        print(f"❌ ERROR: Video processing failed with exception: {e}")
+logger.error(f'❌ ERROR: Video processing failed with exception: {e}')
         return False
 
 
 async def main():
     """Main test execution function."""
-    print("🎬 Google Cloud Video Processing API Test")
-    print("=" * 50)
+logger.debug('🎬 Google Cloud Video Processing API Test')
+logger.info('=' * 50)
 
     # Step 1: Check environment configuration
     if not check_environment():
-        print("\n❌ Environment configuration failed. Please fix the issues above.")
+logger.error('\n❌ Environment configuration failed. Please fix the issues above.')
         return False
 
     # Step 2: Find sample video files
     video_files = find_sample_videos()
     if not video_files:
-        print("\n❌ No sample video files found. Cannot proceed with testing.")
+logger.info('\n❌ No sample video files found. Cannot proceed with testing.')
         return False
 
     # Step 3: Initialize VideoProcessor
     processor = await test_video_processor_initialization()
     if not processor:
-        print("\n❌ VideoProcessor initialization failed. Cannot proceed with testing.")
+logger.error('\n❌ VideoProcessor initialization failed. Cannot proceed with testing.')
         return False
 
     # Step 4: Test with the smallest video file first
     smallest_video = min(video_files, key=lambda f: f.stat().st_size)
-    print(f"\n🎯 Testing with smallest video file: {smallest_video.name}")
+logger.info(f'\n🎯 Testing with smallest video file: {smallest_video.name}')
 
     success = await test_single_video_processing(processor, smallest_video)
 
     if success:
-        print("\n🎉 SUCCESS: Google Cloud Video Processing API integration is working!")
-        print(
+logger.debug('\n🎉 SUCCESS: Google Cloud Video Processing API integration is working!')
+logger.info('✅ The video processing pipeline is correctly configured and functional.')
             "✅ The video processing pipeline is correctly configured and functional."
         )
 
         # Optionally test one more file if available
         if len(video_files) > 1:
-            print("\n🔄 Testing with one additional file...")
+logger.info('\n🔄 Testing with one additional file...')
             second_video = (
                 video_files[1] if video_files[1] != smallest_video else video_files[0]
             )
             await test_single_video_processing(processor, second_video)
 
     else:
-        print("\n❌ FAILURE: Google Cloud Video Processing API integration has issues.")
-        print("🔧 Please check your Google Cloud configuration and try again.")
+logger.error('\n❌ FAILURE: Google Cloud Video Processing API integration has issues.')
+logger.info('🔧 Please check your Google Cloud configuration and try again.')
 
     return success
 
 
 if __name__ == "__main__":
-    print("Starting Google Cloud Video Processing API test...")
-    print("Please ensure your Google Cloud credentials are properly configured.\n")
+logger.debug('Starting Google Cloud Video Processing API test...')
+logger.info('Please ensure your Google Cloud credentials are properly configured.\n')
 
     try:
         result = asyncio.run(main())
         exit_code = 0 if result else 1
-        print(f"\nTest {'PASSED' if result else 'FAILED'}")
+logger.error(f'\nTest {('PASSED' if result else 'FAILED')}')
         sys.exit(exit_code)
     except KeyboardInterrupt:
-        print("\n🛑 Test interrupted by user")
+logger.info('\n🛑 Test interrupted by user')
         sys.exit(1)
     except Exception as e:
-        print(f"\n💥 Unexpected error during testing: {e}")
+logger.error(f'\n💥 Unexpected error during testing: {e}')
         sys.exit(1)

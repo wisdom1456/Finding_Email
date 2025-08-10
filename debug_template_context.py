@@ -7,6 +7,11 @@ from __future__ import annotations
 
 from jinja2 import DictLoader, Environment
 
+from utils.logging_config import setup_logging
+
+
+logger = setup_logging("unknown_service")
+
 
 # Test function
 def test_format_function(video_data):
@@ -35,26 +40,26 @@ env = Environment(
     loader=DictLoader({"current": template_current, "fixed": template_fixed})
 )
 
-print("=== TESTING TEMPLATE CONTEXT ACCESS ===")
+logger.info("=== TESTING TEMPLATE CONTEXT ACCESS ===")
 
 # Test 1: Current broken approach
-print("\n1. Testing current template call (should fail):")
+logger.info("\n1. Testing current template call (should fail):")
 try:
     template = env.get_template("current")
     result = template.render(
         video=video_test_data, format_video_analysis=test_format_function
     )
-    print(f"SUCCESS: {result}")
+    logger.info(f"SUCCESS: {result}")
 except Exception as e:
-    print(f"FAILED: {e}")
+    logger.error(f"FAILED: {e}")
 
 # Test 2: Proposed fix
-print("\n2. Testing fixed template call (should work):")
+logger.info("\n2. Testing fixed template call (should work):")
 try:
     template = env.get_template("fixed")
     result = template.render(results=template_context, video=video_test_data)
-    print(f"SUCCESS: {result}")
+    logger.info(f"SUCCESS: {result}")
 except Exception as e:
-    print(f"FAILED: {e}")
+    logger.error(f"FAILED: {e}")
 
-print("\n=== DIAGNOSIS COMPLETE ===")
+logger.info("\n=== DIAGNOSIS COMPLETE ===")

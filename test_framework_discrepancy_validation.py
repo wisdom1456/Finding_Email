@@ -13,15 +13,16 @@ This test confirms which framework is actually running in production.
 """
 from __future__ import annotations
 
-import json
 import os
 
 from dotenv import load_dotenv
 from openai import OpenAI
 
 from backend.utils.data_models import CaseAnalysisResult, EnhancedIntakeAnalysis
-from backend_logic.ai import AIAnalyzer
 from backend_logic.email_generator import EmailGeneratorV2
+from utils.logging_config import setup_logging
+logger = setup_logging('unknown_service')
+
 
 
 # Load environment variables
@@ -30,8 +31,8 @@ load_dotenv()
 def test_framework_discrepancy():
     """Test to reveal which framework is actually implemented."""
     
-    print("🔍 FRAMEWORK DISCREPANCY VALIDATION TEST")
-    print("=" * 50)
+logger.info('🔍 FRAMEWORK DISCREPANCY VALIDATION TEST')
+logger.info('=' * 50)
     
     # Create minimal test data
     test_analysis = CaseAnalysisResult(
@@ -51,8 +52,8 @@ def test_framework_discrepancy():
     )
     
     # Test EMAIL GENERATOR framework constants
-    print("📋 EMAIL GENERATOR FRAMEWORK ANALYSIS:")
-    print("-" * 40)
+logger.info('📋 EMAIL GENERATOR FRAMEWORK ANALYSIS:')
+logger.info('-' * 40)
     
     try:
         # Initialize OpenAI client (needed for EmailGenerator)
@@ -62,24 +63,23 @@ def test_framework_discrepancy():
         # Check what framework constants are actually defined
         if hasattr(email_gen.__class__.__module__, "AUTHENTIC_ATTORNEY_ADVISOR"):
             from backend_logic.email_generator import (
-                AUTHENTIC_ATTORNEY_ADVISOR,
                 CORE_DIRECTIVES,
             )
-            print("✅ AUTHENTIC_ATTORNEY_ADVISOR found in email_generator.py")
-            print("📝 Core Directives:")
-            print(CORE_DIRECTIVES[:300] + "...")
+logger.info('✅ AUTHENTIC_ATTORNEY_ADVISOR found in email_generator.py')
+logger.info('📝 Core Directives:')
+logger.info(CORE_DIRECTIVES[:300] + '...')
             
         if hasattr(email_gen.__class__.__module__, "CLIENT_CLARITY_ADVISOR"):
-            print("✅ CLIENT_CLARITY_ADVISOR found in email_generator.py")
+logger.info('✅ CLIENT_CLARITY_ADVISOR found in email_generator.py')
         else:
-            print("❌ CLIENT_CLARITY_ADVISOR NOT found in email_generator.py")
+logger.info('❌ CLIENT_CLARITY_ADVISOR NOT found in email_generator.py')
             
     except Exception as e:
-        print(f"⚠️  Email generator analysis failed: {e}")
+logger.error(f'⚠️  Email generator analysis failed: {e}')
     
     # Test AI ANALYZER framework references
-    print("\n📋 AI ANALYZER FRAMEWORK ANALYSIS:")
-    print("-" * 40)
+logger.info('\n📋 AI ANALYZER FRAMEWORK ANALYSIS:')
+logger.info('-' * 40)
     
     try:
         from backend_logic.ai import AIAnalyzer
@@ -90,73 +90,72 @@ def test_framework_discrepancy():
         # Test intake prompt
         test_prompt = analyzer._build_intake_prompt("Test content")
         if "CLIENT_CLARITY_ADVISOR" in test_prompt:
-            print("✅ AI Analyzer uses CLIENT_CLARITY_ADVISOR in prompts")
+logger.info('✅ AI Analyzer uses CLIENT_CLARITY_ADVISOR in prompts')
             if "we" in test_prompt.lower():
-                print("✅ AI Analyzer prompts contain collaborative 'we' language")
+logger.info("✅ AI Analyzer prompts contain collaborative 'we' language")
         
         if "AUTHENTIC_ATTORNEY" in test_prompt:
-            print("✅ AI Analyzer uses AUTHENTIC_ATTORNEY in prompts")
+logger.info('✅ AI Analyzer uses AUTHENTIC_ATTORNEY in prompts')
             
     except Exception as e:
-        print(f"⚠️  AI analyzer analysis failed: {e}")
+logger.error(f'⚠️  AI analyzer analysis failed: {e}')
     
     # FRAMEWORK MISMATCH DETECTION
-    print("\n🚨 FRAMEWORK DISCREPANCY SUMMARY:")
-    print("=" * 50)
+logger.info('\n🚨 FRAMEWORK DISCREPANCY SUMMARY:')
+logger.info('=' * 50)
     
     framework_mismatch_detected = True  # Based on our analysis
     
     if framework_mismatch_detected:
-        print("❌ CRITICAL ISSUE DETECTED:")
-        print("   • Documentation describes CLIENT_CLARITY_ADVISOR")
-        print("   • AI Analyzer generates CLIENT_CLARITY_ADVISOR content")
-        print("   • Email Generator applies AUTHENTIC_ATTORNEY_ADVISOR formatting")
-        print("   • This creates inconsistent output that matches neither framework")
-        print("\n💡 ROOT CAUSE: Incomplete framework migration")
-        print("   • backup file 'email_generator_backup.py' suggests partial migration")
-        print("   • AI analysis stage != Email generation stage")
+logger.error('❌ CRITICAL ISSUE DETECTED:')
+logger.info('   • Documentation describes CLIENT_CLARITY_ADVISOR')
+logger.info('   • AI Analyzer generates CLIENT_CLARITY_ADVISOR content')
+logger.info('   • Email Generator applies AUTHENTIC_ATTORNEY_ADVISOR formatting')
+logger.info('   • This creates inconsistent output that matches neither framework')
+logger.info('\n💡 ROOT CAUSE: Incomplete framework migration')
+logger.info("   • backup file 'email_generator_backup.py' suggests partial migration")
+logger.info('   • AI analysis stage != Email generation stage')
         
-        print("\n📊 VALIDATION RESULT: FRAMEWORK MISMATCH CONFIRMED")
+logger.info('\n📊 VALIDATION RESULT: FRAMEWORK MISMATCH CONFIRMED')
         return False  # Framework validation FAILED due to mismatch
-    print("✅ Framework implementation is consistent")
+logger.info('✅ Framework implementation is consistent')
     return True
 
 def analyze_actual_framework_characteristics():
     """Analyze what framework characteristics are actually implemented."""
     
-    print("\n🔬 ACTUAL FRAMEWORK CHARACTERISTICS ANALYSIS:")
-    print("=" * 50)
+logger.info('\n🔬 ACTUAL FRAMEWORK CHARACTERISTICS ANALYSIS:')
+logger.info('=' * 50)
     
     # Check AUTHENTIC_ATTORNEY_ADVISOR characteristics
     try:
         from backend_logic.email_generator import (
-            AUTHENTIC_ATTORNEY_ADVISOR,
             CORE_DIRECTIVES,
             HIGH_STAKES_ADVICE_PROTOCOL,
         )
         
-        print("📋 AUTHENTIC_ATTORNEY_ADVISOR Core Directives:")
+logger.info('📋 AUTHENTIC_ATTORNEY_ADVISOR Core Directives:')
         if "Direct Professional Tone" in CORE_DIRECTIVES:
-            print("✅ Uses Direct Professional Tone")
+logger.info('✅ Uses Direct Professional Tone')
         if "collaborative" in CORE_DIRECTIVES.lower() and "artificial" in CORE_DIRECTIVES.lower():
-            print("❌ EXPLICITLY AVOIDS collaborative language")
+logger.info('❌ EXPLICITLY AVOIDS collaborative language')
         if "Florida Law Exclusive" in CORE_DIRECTIVES:
-            print("✅ Florida Law Exclusive requirement present")
+logger.info('✅ Florida Law Exclusive requirement present')
         if "Professional Realism" in CORE_DIRECTIVES:
-            print("✅ Professional Realism requirement present")
+logger.info('✅ Professional Realism requirement present')
             
         # Check High-Stakes Protocol
         if "HIGH-STAKES ADVICE PROTOCOL" in HIGH_STAKES_ADVICE_PROTOCOL:
-            print("✅ High-Stakes Advice Protocol implemented")
+logger.info('✅ High-Stakes Advice Protocol implemented')
             
     except Exception as e:
-        print(f"⚠️  Framework analysis failed: {e}")
+logger.error(f'⚠️  Framework analysis failed: {e}')
 
 def create_florida_test_scenario():
     """Create a basic Florida legal scenario for framework testing."""
     
-    print("\n🏖️ FLORIDA LAW TEST SCENARIO CREATION:")
-    print("=" * 50)
+logger.info('\n🏖️ FLORIDA LAW TEST SCENARIO CREATION:')
+logger.info('=' * 50)
     
     florida_scenario = {
         "case_type": "Florida Landlord-Tenant Dispute",
@@ -183,18 +182,18 @@ def create_florida_test_scenario():
         }
     }
     
-    print("✅ Florida test scenario created")
-    print(f"📋 Case Type: {florida_scenario['case_type']}")
-    print(f"📋 Florida Statutes: {', '.join(florida_scenario['florida_statutes'])}")
+logger.info('✅ Florida test scenario created')
+logger.info(f'📋 Case Type: {florida_scenario['case_type']}')
+logger.info(f'📋 Florida Statutes: {', '.join(florida_scenario['florida_statutes'])}')
     
     return florida_scenario
 
 def main():
     """Main test execution."""
     
-    print("🚨 FRAMEWORK DISCREPANCY VALIDATION")
-    print("Testing CLIENT_CLARITY_ADVISOR framework implementation")
-    print("=" * 60)
+logger.info('🚨 FRAMEWORK DISCREPANCY VALIDATION')
+logger.info('Testing CLIENT_CLARITY_ADVISOR framework implementation')
+logger.info('=' * 60)
     
     # Test 1: Framework Discrepancy Detection
     framework_valid = test_framework_discrepancy()
@@ -206,20 +205,20 @@ def main():
     florida_test = create_florida_test_scenario()
     
     # FINAL RESULTS
-    print("\n🎯 VALIDATION RESULTS:")
-    print("=" * 30)
+logger.info('\n🎯 VALIDATION RESULTS:')
+logger.info('=' * 30)
     
     if not framework_valid:
-        print("❌ FRAMEWORK VALIDATION FAILED")
-        print("   • CLIENT_CLARITY_ADVISOR is NOT actually implemented")
-        print("   • AUTHENTIC_ATTORNEY_ADVISOR is the actual framework")
-        print("   • Documentation-implementation mismatch detected")
-        print("\n🔧 RECOMMENDATION:")
-        print("   • Test the AUTHENTIC_ATTORNEY_ADVISOR framework instead")
-        print("   • Update documentation to match actual implementation")
-        print("   • Or complete the CLIENT_CLARITY_ADVISOR migration")
+logger.error('❌ FRAMEWORK VALIDATION FAILED')
+logger.info('   • CLIENT_CLARITY_ADVISOR is NOT actually implemented')
+logger.info('   • AUTHENTIC_ATTORNEY_ADVISOR is the actual framework')
+logger.info('   • Documentation-implementation mismatch detected')
+logger.info('\n🔧 RECOMMENDATION:')
+logger.info('   • Test the AUTHENTIC_ATTORNEY_ADVISOR framework instead')
+logger.info('   • Update documentation to match actual implementation')
+logger.info('   • Or complete the CLIENT_CLARITY_ADVISOR migration')
     else:
-        print("✅ Framework implementation is consistent")
+logger.info('✅ Framework implementation is consistent')
     
     return framework_valid
 

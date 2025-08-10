@@ -8,6 +8,9 @@ from __future__ import annotations
 import os
 
 from jinja2 import Environment, FileSystemLoader
+from utils.logging_config import setup_logging
+logger = setup_logging('unknown_service')
+
 
 
 # Mock format_video_analysis function
@@ -45,20 +48,20 @@ def test_template_fix():
     current_dir = os.path.dirname(os.path.abspath(__file__))
     template_dir = os.path.join(current_dir, "backend", "assets", "templates")
 
-    print(f"Template directory: {template_dir}")
-    print(f"Template directory exists: {os.path.exists(template_dir)}")
+logger.info(f'Template directory: {template_dir}')
+logger.info(f'Template directory exists: {os.path.exists(template_dir)}')
 
     if not os.path.exists(template_dir):
-        print("❌ Template directory not found!")
+logger.info('❌ Template directory not found!')
         return False
 
     # Create Jinja2 environment
     try:
         env = Environment(loader=FileSystemLoader(template_dir))
         template = env.get_template("document_appendix.jinja2")
-        print("✅ Template loaded successfully")
+logger.info('✅ Template loaded successfully')
     except Exception as e:
-        print(f"❌ Failed to load template: {e}")
+logger.error(f'❌ Failed to load template: {e}')
         return False
 
     # Test template rendering with the fix
@@ -66,38 +69,38 @@ def test_template_fix():
         result = template.render(
             results=template_context, current_date=template_context["current_date"]
         )
-        print("✅ Template rendered successfully without errors!")
+logger.error('✅ Template rendered successfully without errors!')
 
         # Check if our mock function output is in the result
         if (
             "Video analysis for test_criminal_video.mp4 rendered successfully!"
             in result
         ):
-            print("✅ Video analysis function was called and executed correctly!")
+logger.info('✅ Video analysis function was called and executed correctly!')
             return True
-        print(
+logger.info('⚠️  Template rendered but video analysis function may not have been called')
             "⚠️  Template rendered but video analysis function may not have been called"
         )
         return False
 
     except Exception as e:
-        print(f"❌ Template rendering failed: {e}")
+logger.error(f'❌ Template rendering failed: {e}')
         return False
 
 
 if __name__ == "__main__":
-    print("=== TESTING TEMPLATE FIX VERIFICATION ===")
+logger.info('=== TESTING TEMPLATE FIX VERIFICATION ===')
 
     success = test_template_fix()
 
     if success:
-        print("\n🎉 SUCCESS: The Jinja2 template error has been resolved!")
-        print("   - Template loads without errors")
-        print(
+logger.error('\n🎉 SUCCESS: The Jinja2 template error has been resolved!')
+logger.error('   - Template loads without errors')
+logger.info('   - format_video_analysis function is accessible via results.format_video_analysis')
             "   - format_video_analysis function is accessible via results.format_video_analysis"
         )
-        print("   - Video analysis formatting works correctly")
+logger.info('   - Video analysis formatting works correctly')
     else:
-        print("\n❌ FAILED: The fix may not have resolved the issue completely")
+logger.error('\n❌ FAILED: The fix may not have resolved the issue completely')
 
-    print("\n=== TEST COMPLETE ===")
+logger.info('\n=== TEST COMPLETE ===')

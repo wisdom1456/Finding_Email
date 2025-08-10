@@ -46,6 +46,7 @@ The application relies on a curated set of libraries optimized for the service a
     *   `google-cloud-aiplatform`: Vertex AI integration for video analysis
     *   `google-cloud-speech`: Speech-to-Text API for audio transcription
 *   **tiktoken**: Accurate token counting for API limit management
+*   **loguru**: Modern structured logging framework with rotation, serialization, and PII sanitization
 
 #### Document Processing Dependencies
 *   **Document Processors**: Multi-format document handling suite

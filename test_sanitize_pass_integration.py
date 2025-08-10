@@ -11,9 +11,10 @@ This test validates that:
 from __future__ import annotations
 
 import os
-import re
 import sys
-from typing import Any, Dict
+from utils.logging_config import setup_logging
+logger = setup_logging('unknown_service')
+
 
 
 # Add project root to path
@@ -22,13 +23,12 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from openai import OpenAI
 
 from backend.quality_validator import apply_citation_sanitization, polish_and_sanitize
-from backend.utils.data_models import CaseAnalysisResult, EnhancedIntakeAnalysis
 from backend_logic.email_generator import EmailGeneratorV2
 
 
 def test_citation_filter():
     """Test that citation filter removes legal references correctly."""
-    print("🧪 Testing citation filter functionality...")
+logger.info('🧪 Testing citation filter functionality...')
     
     # Test content with various citation patterns
     test_html = """
@@ -47,12 +47,12 @@ def test_citation_filter():
     assert "Chapter" not in filtered_html or "Chapter" in filtered_html, "Chapter references handling unclear"
     assert "Normal content" in filtered_html, "Normal content was incorrectly removed"
     
-    print("✅ Citation filter test passed")
+logger.info('✅ Citation filter test passed')
     return True
 
 def test_polish_and_sanitize_function():
     """Test the polish_and_sanitize function with various scenarios."""
-    print("🧪 Testing polish_and_sanitize function...")
+logger.info('🧪 Testing polish_and_sanitize function...')
     
     # Test HTML content exceeding word limit
     long_html = """
@@ -75,17 +75,17 @@ def test_polish_and_sanitize_function():
         assert "§" not in result, "Section symbols not removed"
         
         # Verify content is trimmed (though exact word count may vary due to HTML)
-        print(f"✅ Content processed successfully (length: {len(result)} chars)")
+logger.info(f'✅ Content processed successfully (length: {len(result)} chars)')
         
     except Exception as e:
-        print(f"⚠️ Polish and sanitize test encountered expected behavior: {e}")
+logger.info(f'⚠️ Polish and sanitize test encountered expected behavior: {e}')
     
-    print("✅ Polish and sanitize function test completed")
+logger.info('✅ Polish and sanitize function test completed')
     return True
 
 def test_email_generator_integration():
     """Test the EmailGeneratorV2 integration with sanitization."""
-    print("🧪 Testing EmailGeneratorV2 sanitization integration...")
+logger.info('🧪 Testing EmailGeneratorV2 sanitization integration...')
     
     try:
         # Create a mock OpenAI client (we won't actually call the API)
@@ -112,7 +112,7 @@ def test_email_generator_integration():
         assert "§" not in filtered_html, "Section symbol filtering failed"
         assert "Legal Analysis" in filtered_html, "Normal content was removed"
         
-        print("✅ EmailGeneratorV2 citation filtering works correctly")
+logger.info('✅ EmailGeneratorV2 citation filtering works correctly')
         
         # Test final sanitization method
         final_result = generator._apply_final_sanitization(
@@ -121,16 +121,16 @@ def test_email_generator_integration():
             word_limit=100
         )
         
-        print("✅ Final sanitization method works correctly")
+logger.info('✅ Final sanitization method works correctly')
         
     except Exception as e:
-        print(f"⚠️ EmailGeneratorV2 integration test completed with expected behavior: {e}")
+logger.info(f'⚠️ EmailGeneratorV2 integration test completed with expected behavior: {e}')
     
     return True
 
 def test_configuration_loading():
     """Test that configuration is loaded correctly."""
-    print("🧪 Testing configuration loading...")
+logger.info('🧪 Testing configuration loading...')
     
     try:
         # Test with a mock client
@@ -146,17 +146,17 @@ def test_configuration_loading():
         citation_regex = generator.config.get("citation_filter_regex", "")
         assert citation_regex, "Citation filter regex is empty"
         
-        print(f"✅ Configuration loaded successfully with regex: {citation_regex}")
+logger.info(f'✅ Configuration loaded successfully with regex: {citation_regex}')
         
     except Exception as e:
-        print(f"⚠️ Configuration loading test completed: {e}")
+logger.info(f'⚠️ Configuration loading test completed: {e}')
     
     return True
 
 def main():
     """Run all sanitization integration tests."""
-    print("🚀 Starting Sanitize Pass Integration Tests")
-    print("=" * 50)
+logger.info('🚀 Starting Sanitize Pass Integration Tests')
+logger.info('=' * 50)
     
     tests = [
         test_citation_filter,
@@ -174,19 +174,19 @@ def main():
                 passed += 1
             else:
                 failed += 1
-                print(f"❌ {test.__name__} failed")
+logger.error(f'❌ {test.__name__} failed')
         except Exception as e:
             failed += 1
-            print(f"❌ {test.__name__} failed with exception: {e}")
-        print()
+logger.error(f'❌ {test.__name__} failed with exception: {e}')
+logger.info('')
     
-    print("=" * 50)
-    print(f"🏁 Test Results: {passed} passed, {failed} failed")
+logger.info('=' * 50)
+logger.error(f'🏁 Test Results: {passed} passed, {failed} failed')
     
     if failed == 0:
-        print("🎉 All sanitization integration tests passed!")
+logger.info('🎉 All sanitization integration tests passed!')
         return True
-    print("⚠️ Some tests failed - check implementation")
+logger.error('⚠️ Some tests failed - check implementation')
     return False
 
 if __name__ == "__main__":

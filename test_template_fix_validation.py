@@ -5,9 +5,10 @@ Tests that EmailGeneratorV2 can process content without template errors.
 """
 
 import sys
-import json
-from datetime import datetime
 from backend.utils.data_models import (
+from utils.logging_config import setup_logging
+logger = setup_logging('unknown_service')
+
     CaseAnalysisResult,
     IntakeAnalysis
 )
@@ -36,69 +37,69 @@ def create_test_analysis():
 
 def test_template_fix():
     """Test that the template fix resolves the Jinja2 error."""
-    print("🧪 TESTING: EmailGeneratorV2 Template Fix Validation")
-    print("=" * 60)
+logger.info('🧪 TESTING: EmailGeneratorV2 Template Fix Validation')
+logger.info('=' * 60)
     
     try:
         # Initialize EmailGeneratorV2
-        print("📋 Step 1: Initializing EmailGeneratorV2...")
+logger.debug('📋 Step 1: Initializing EmailGeneratorV2...')
         generator = EmailGeneratorV2()
-        print("✅ EmailGeneratorV2 initialized successfully")
+logger.info('✅ EmailGeneratorV2 initialized successfully')
         
         # Create test analysis
-        print("\n📋 Step 2: Creating test case analysis...")
+logger.debug('\n📋 Step 2: Creating test case analysis...')
         test_analysis = create_test_analysis()
-        print("✅ Test analysis created")
+logger.info('✅ Test analysis created')
         
         # Test the generate_email_and_analysis_docs method
-        print("\n📋 Step 3: Testing email generation (this was failing before)...")
+logger.debug('\n📋 Step 3: Testing email generation (this was failing before)...')
         result = generator.generate_email_and_analysis_docs(test_analysis)
-        print("✅ Email generation completed without errors!")
+logger.error('✅ Email generation completed without errors!')
         
         # Validate result structure
-        print("\n📋 Step 4: Validating result structure...")
+logger.debug('\n📋 Step 4: Validating result structure...')
         expected_keys = ["letter_content", "metadata"]
         actual_keys = list(result.keys())
         
-        print(f"   Expected keys: {expected_keys}")
-        print(f"   Actual keys: {actual_keys}")
+logger.info(f'   Expected keys: {expected_keys}')
+logger.info(f'   Actual keys: {actual_keys}')
         
         if "letter_content" in result:
             content_length = len(result["letter_content"]) if result["letter_content"] else 0
-            print(f"   Letter content length: {content_length} characters")
+logger.info(f'   Letter content length: {content_length} characters')
             
             if content_length > 0:
-                print("✅ Letter content generated successfully")
+logger.info('✅ Letter content generated successfully')
             else:
-                print("⚠️  Letter content is empty")
+logger.info('⚠️  Letter content is empty')
         
         if "metadata" in result:
             metadata = result["metadata"]
-            print(f"   Architecture: {metadata.get('architecture_version', 'Unknown')}")
-            print(f"   Generation method: {metadata.get('generation_method', 'Unknown')}")
-            print("✅ Metadata structure is correct")
+logger.info(f'   Architecture: {metadata.get('architecture_version', 'Unknown')}')
+logger.info(f'   Generation method: {metadata.get('generation_method', 'Unknown')}')
+logger.info('✅ Metadata structure is correct')
         
         # Log debug information if available
-        print("\n📋 Step 5: Looking for debug logs...")
+logger.debug('\n📋 Step 5: Looking for debug logs...')
         template_applied = result.get("template_applied", "Not specified")
-        print(f"   Template applied: {template_applied}")
+logger.info(f'   Template applied: {template_applied}')
         
         if "rendered_email" in result:
-            print("✅ Optional template formatting was applied")
+logger.info('✅ Optional template formatting was applied')
         else:
-            print("ℹ️  No optional template formatting (this is expected with our fix)")
+logger.info('ℹ️  No optional template formatting (this is expected with our fix)')
         
-        print("\n" + "=" * 60)
-        print("🎉 SUCCESS: Template fix validation completed!")
-        print("🔧 The Jinja2 'results is undefined' error has been resolved")
-        print("📧 EmailGeneratorV2 now bypasses template rendering as intended")
+logger.info('\n' + '=' * 60)
+logger.info('🎉 SUCCESS: Template fix validation completed!')
+logger.error("🔧 The Jinja2 'results is undefined' error has been resolved")
+logger.info('📧 EmailGeneratorV2 now bypasses template rendering as intended')
         return True
         
     except Exception as e:
-        print(f"\n❌ ERROR during validation: {e}")
-        print(f"   Error type: {type(e).__name__}")
+logger.error(f'\n❌ ERROR during validation: {e}')
+logger.error(f'   Error type: {type(e).__name__}')
         import traceback
-        print(f"   Traceback: {traceback.format_exc()}")
+logger.error(f'   Traceback: {traceback.format_exc()}')
         return False
 
 if __name__ == "__main__":

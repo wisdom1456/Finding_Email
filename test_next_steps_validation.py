@@ -6,6 +6,9 @@ from __future__ import annotations
 
 import os
 import sys
+from utils.logging_config import setup_logging
+logger = setup_logging('unknown_service')
+
 
 
 # Add the project root to Python path
@@ -17,7 +20,7 @@ from backend.utils.validators import validate_next_steps_formatting
 def test_validate_next_steps_formatting():
     """Test the validate_next_steps_formatting function."""
     
-    print("Testing validate_next_steps_formatting function...")
+logger.debug('Testing validate_next_steps_formatting function...')
     
     # Test case 1: Valid content with <strong> tags
     valid_content = """
@@ -31,9 +34,9 @@ def test_validate_next_steps_formatting():
     
     try:
         validate_next_steps_formatting(valid_content)
-        print("✅ Test 1 PASSED: Valid content with <strong> tags accepted")
+logger.info('✅ Test 1 PASSED: Valid content with <strong> tags accepted')
     except ValueError as e:
-        print(f"❌ Test 1 FAILED: Valid content rejected: {e}")
+logger.error(f'❌ Test 1 FAILED: Valid content rejected: {e}')
         return False
     
     # Test case 2: Invalid content without <strong> tags
@@ -48,29 +51,29 @@ def test_validate_next_steps_formatting():
     
     try:
         validate_next_steps_formatting(invalid_content)
-        print("❌ Test 2 FAILED: Invalid content was accepted (should have been rejected)")
+logger.error('❌ Test 2 FAILED: Invalid content was accepted (should have been rejected)')
         return False
     except ValueError as e:
-        print("✅ Test 2 PASSED: Invalid content correctly rejected")
-        print(f"   Error message: {e}")
+logger.info('✅ Test 2 PASSED: Invalid content correctly rejected')
+logger.error(f'   Error message: {e}')
     
     # Test case 3: Empty content
     try:
         validate_next_steps_formatting("")
-        print("❌ Test 3 FAILED: Empty content was accepted")
+logger.error('❌ Test 3 FAILED: Empty content was accepted')
         return False
     except ValueError as e:
-        print("✅ Test 3 PASSED: Empty content correctly rejected")
-        print(f"   Error message: {e}")
+logger.info('✅ Test 3 PASSED: Empty content correctly rejected')
+logger.error(f'   Error message: {e}')
     
     # Test case 4: None content
     try:
         validate_next_steps_formatting(None)
-        print("❌ Test 4 FAILED: None content was accepted")
+logger.error('❌ Test 4 FAILED: None content was accepted')
         return False
     except ValueError as e:
-        print("✅ Test 4 PASSED: None content correctly rejected")
-        print(f"   Error message: {e}")
+logger.info('✅ Test 4 PASSED: None content correctly rejected')
+logger.error(f'   Error message: {e}')
     
     # Test case 5: Content with <STRONG> tags (case insensitive)
     content_with_uppercase = """
@@ -79,9 +82,9 @@ def test_validate_next_steps_formatting():
     
     try:
         validate_next_steps_formatting(content_with_uppercase)
-        print("✅ Test 5 PASSED: Case insensitive <STRONG> tags accepted")
+logger.info('✅ Test 5 PASSED: Case insensitive <STRONG> tags accepted')
     except ValueError as e:
-        print(f"❌ Test 5 FAILED: Case insensitive tags rejected: {e}")
+logger.error(f'❌ Test 5 FAILED: Case insensitive tags rejected: {e}')
         return False
     
     return True
@@ -89,21 +92,21 @@ def test_validate_next_steps_formatting():
 
 def test_integration():
     """Test basic integration check (import test)."""
-    print("\nTesting integration...")
+logger.info('\nTesting integration...')
     
     try:
         # Test that the import works correctly
         from backend_logic.email_generator import EmailGeneratorV2
-        print("✅ Import test PASSED: EmailGeneratorV2 can be imported with validation")
+logger.info('✅ Import test PASSED: EmailGeneratorV2 can be imported with validation')
         return True
     except ImportError as e:
-        print(f"❌ Import test FAILED: {e}")
+logger.error(f'❌ Import test FAILED: {e}')
         return False
 
 
 def main():
     """Run all tests."""
-    print("=== Next Steps Validation Test Suite ===\n")
+logger.debug('=== Next Steps Validation Test Suite ===\n')
     
     # Run validation tests
     validation_passed = test_validate_next_steps_formatting()
@@ -111,18 +114,18 @@ def main():
     # Run integration tests
     integration_passed = test_integration()
     
-    print("\n=== Test Results ===")
+logger.info('\n=== Test Results ===')
     if validation_passed and integration_passed:
-        print("🎉 ALL TESTS PASSED!")
-        print("✅ Validation function correctly identifies missing <strong> tags")
-        print("✅ Integration with EmailGeneratorV2 successful")
-        print("\nImplementation Summary:")
-        print("- Added validate_next_steps_formatting() to backend/utils/validators.py")
-        print("- Integrated validation into _generate_next_steps_content() in EmailGeneratorV2")
-        print("- Validation checks for <strong> tags (case insensitive)")
-        print("- Logs warnings when validation fails but doesn't interrupt generation process")
+logger.info('🎉 ALL TESTS PASSED!')
+logger.info('✅ Validation function correctly identifies missing <strong> tags')
+logger.info('✅ Integration with EmailGeneratorV2 successful')
+logger.info('\nImplementation Summary:')
+logger.debug('- Added validate_next_steps_formatting() to backend/utils/validators.py')
+logger.debug('- Integrated validation into _generate_next_steps_content() in EmailGeneratorV2')
+logger.info('- Validation checks for <strong> tags (case insensitive)')
+logger.warning("- Logs warnings when validation fails but doesn't interrupt generation process")
         return 0
-    print("❌ SOME TESTS FAILED!")
+logger.error('❌ SOME TESTS FAILED!')
     return 1
 
 

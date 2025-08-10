@@ -7,6 +7,9 @@ Tests the full document analysis pipeline with all available client documents.
 from __future__ import annotations
 
 import sys
+from utils.logging_config import setup_logging
+logger = setup_logging('unknown_service')
+
 
 # Add the project root to the Python path
 from pathlib import Path
@@ -55,9 +58,9 @@ VIDEO_EXTENSIONS = set(config["video_extensions"])
 
 def print_banner(title: str) -> None:
     """Print a formatted banner for section headers."""
-    print("\n" + "=" * 80)
-    print(f"  {title}")
-    print("=" * 80)
+logger.info('\n' + '=' * 80)
+logger.info(f'  {title}')
+logger.info('=' * 80)
 
 
 def print_progress(current: int, total: int, description: str) -> None:
@@ -66,7 +69,7 @@ def print_progress(current: int, total: int, description: str) -> None:
     bar_length = 40
     filled_length = int(bar_length * current // total) if total > 0 else 0
     bar = "█" * filled_length + "-" * (bar_length - filled_length)
-    print(
+logger.info(f'\r[{bar}] {percentage:6.1f}% | {current}/{total} | {description}')
         f"\r[{bar}] {percentage:6.1f}% | {current}/{total} | {description}",
         end="",
         flush=True,
@@ -97,7 +100,7 @@ def categorize_documents() -> tuple[str, list[str]]:
         raise FileNotFoundError(msg)
 
     all_files = [f for f in INPUT_PATH.iterdir() if f.is_file()]
-    print(f"📂 Found {len(all_files)} total files in {INPUT_PATH.name}")
+logger.info(f'📂 Found {len(all_files)} total files in {INPUT_PATH.name}')
 
     supported_files = []
     skipped_files = []
@@ -110,13 +113,13 @@ def categorize_documents() -> tuple[str, list[str]]:
         else:
             skipped_files.append(f"{file_path.name} (unsupported)")
 
-    print(f"✅ Supported files: {len(supported_files)}")
-    print(f"⏭️  Skipped files: {len(skipped_files)}")
+logger.info(f'✅ Supported files: {len(supported_files)}')
+logger.warning(f'⏭️  Skipped files: {len(skipped_files)}')
 
     if skipped_files:
-        print("\n📋 Skipped Files:")
+logger.warning('\n📋 Skipped Files:')
         for i, skipped in enumerate(skipped_files, 1):
-            print(f"  {i:2d}. {skipped}")
+logger.warning(f'  {i:2d}. {skipped}')
 
     intake_form = None
     intake_patterns = [
@@ -148,21 +151,21 @@ def categorize_documents() -> tuple[str, list[str]]:
     if all_case_documents:
         # Take the first case document for testing
         case_documents = [all_case_documents[0]]
-        print(
+logger.info(f'\n🧪 TESTING MODE: Using only 1 of {len(all_case_documents)} available case documents')
             f"\n🧪 TESTING MODE: Using only 1 of {len(all_case_documents)} available case documents"
         )
     else:
         case_documents = []
 
-    print(f"\n📄 INTAKE FORM: {Path(intake_form).name}")
-    print(f"📁 CASE DOCUMENTS: {len(case_documents)} files (limited for testing)")
+logger.info(f'\n📄 INTAKE FORM: {Path(intake_form).name}')
+logger.info(f'📁 CASE DOCUMENTS: {len(case_documents)} files (limited for testing)')
 
     if case_documents:
-        print("\n📋 Case Documents (Testing Set):")
+logger.info('\n📋 Case Documents (Testing Set):')
         for i, doc_path in enumerate(case_documents, 1):
             doc_name = Path(doc_path).name
             file_size = Path(doc_path).stat().st_size
-            print(f"  {i:2d}. {doc_name} ({file_size:,} bytes)")
+logger.info(f'  {i:2d}. {doc_name} ({file_size:,} bytes)')
 
     return intake_form, case_documents
 
@@ -204,7 +207,7 @@ def prepare_test_data() -> list[tuple[str, tuple[str, bytes, str]]]:
     total_files = 1 + len(case_documents)
     files_data = []
 
-    print(f"\n🔄 Loading {total_files} files...")
+logger.info(f'\n🔄 Loading {total_files} files...')
 
     # Load intake form
     print_progress(0, total_files, "Loading intake form...")
@@ -213,7 +216,7 @@ def prepare_test_data() -> list[tuple[str, tuple[str, bytes, str]]]:
         files_data.append(("intake_form", (Path(intake_form).name, content, mime_type)))
         print_progress(1, total_files, f"Loaded: {Path(intake_form).name}")
     except Exception as e:
-        print(f"\n❌ Failed to load intake form: {e}")
+logger.error(f'\n❌ Failed to load intake form: {e}')
         return []
 
     # Load case documents
@@ -226,13 +229,13 @@ def prepare_test_data() -> list[tuple[str, tuple[str, bytes, str]]]:
             )
             print_progress(i + 1, total_files, f"Loaded: {Path(doc_path).name}")
         except Exception as e:
-            print(f"\n⚠️  Failed to load {Path(doc_path).name}: {e}")
+logger.error(f'\n⚠️  Failed to load {Path(doc_path).name}: {e}')
             continue
 
-    print(f"\n✅ Successfully prepared {len(files_data)} files for upload")
+logger.info(f'\n✅ Successfully prepared {len(files_data)} files for upload')
 
     total_size = sum(len(data[1][1]) for data in files_data)
-    print(
+logger.info(f'📊 Total payload size: {total_size:,} bytes ({total_size / 1048576:.1f} MB)')
         f"📊 Total payload size: {total_size:,} bytes ({total_size / 1_048_576:.1f} MB)"
     )
 
@@ -245,31 +248,31 @@ def send_request(
     """Send request to API with progress tracking."""
     print_banner("🚀 SENDING API REQUEST")
 
-    print(f"🌐 Endpoint: {API_URL}")
-    print(f"📁 Files: {len(files_data)}")
-    print("⏱️  Timeout: 300 seconds")
+logger.info(f'🌐 Endpoint: {API_URL}')
+logger.info(f'📁 Files: {len(files_data)}')
+logger.info('⏱️  Timeout: 300 seconds')
 
     start_time = time.time()
 
     try:
-        print("\n🔄 Sending request...")
+logger.info('\n🔄 Sending request...')
         response = requests.post(API_URL, files=files_data, timeout=300)
 
         duration = time.time() - start_time
-        print(f"✅ Request completed in {duration:.1f} seconds")
+logger.info(f'✅ Request completed in {duration:.1f} seconds')
 
         if response.status_code == 200:
-            print(f"✅ Success! Status: {response.status_code}")
+logger.info(f'✅ Success! Status: {response.status_code}')
             return response.json()
-        print(f"❌ Request failed! Status: {response.status_code}")
-        print(f"Response: {response.text}")
+logger.error(f'❌ Request failed! Status: {response.status_code}')
+logger.info(f'Response: {response.text}')
         return {"error": f"HTTP {response.status_code}", "details": response.text}
 
     except requests.exceptions.Timeout:
-        print("⏰ Request timed out after 300 seconds")
+logger.info('⏰ Request timed out after 300 seconds')
         return {"error": "Timeout", "details": "Request exceeded 300 second timeout"}
     except requests.exceptions.RequestException as e:
-        print(f"❌ Request error: {e}")
+logger.error(f'❌ Request error: {e}')
         return {"error": "Request failed", "details": str(e)}
 
 
@@ -326,7 +329,7 @@ def validate_response(response: dict[str, Any]) -> tuple[dict[str, Any], str]:
 
 def validate_document_intake(response: dict[str, Any], results: dict[str, Any]) -> None:
     """Validate the document intake part of the analysis."""
-    print("  - Validating Document Intake...")
+logger.debug('  - Validating Document Intake...')
     intake_check = {"check": "Document Intake", "status": "PASS", "details": []}
 
     analysis = response.get("analysis", {})
@@ -357,7 +360,7 @@ def validate_document_intake(response: dict[str, Any], results: dict[str, Any]) 
 
 def validate_ai_analysis(response: dict[str, Any], results: dict[str, Any]) -> None:
     """Validate the AI-driven analysis components."""
-    print("  - Validating AI Analysis...")
+logger.debug('  - Validating AI Analysis...')
     ai_check = {"check": "AI Analysis", "status": "PASS", "details": []}
 
     analysis = response.get("analysis", {})
@@ -382,7 +385,7 @@ def validate_ai_analysis(response: dict[str, Any], results: dict[str, Any]) -> N
 
 def validate_file_generation(response: dict[str, Any], results: dict[str, Any]) -> None:
     """Validate the file generation and download links."""
-    print("  - Validating File Generation...")
+logger.debug('  - Validating File Generation...')
     file_gen_check = {"check": "File Generation", "status": "PASS", "details": []}
 
     email = response.get("email", {})
@@ -406,7 +409,7 @@ def validate_email_comparison(
     response: dict[str, Any], results: dict[str, Any]
 ) -> None:
     """Compare the generated email with the reference email."""
-    print("  - Validating Email Comparison...")
+logger.debug('  - Validating Email Comparison...')
     comparison_check = {"check": "Email Comparison", "status": "PASS", "details": []}
 
     try:
@@ -459,14 +462,14 @@ def analyze_and_save(result: dict[str, Any]) -> None:
     json_file = output_dir / f"response_{timestamp}.json"
     with open(json_file, "w", encoding="utf-8") as f:
         json.dump(result, f, indent=2, default=str, ensure_ascii=False)
-    print(f"📄 Full response saved: {json_file.name}")
+logger.info(f'📄 Full response saved: {json_file.name}')
 
     # Perform validation and get email content
     validation_results, email_content = validate_response(result)
     validation_file = output_dir / f"validation_{timestamp}.json"
     with open(validation_file, "w", encoding="utf-8") as f:
         json.dump(validation_results, f, indent=2, default=str, ensure_ascii=False)
-    print(f"✔️ Validation results saved: {validation_file.name}")
+logger.info(f'✔️ Validation results saved: {validation_file.name}')
 
     # Save email content only if it exists
     if email_content:
@@ -474,34 +477,34 @@ def analyze_and_save(result: dict[str, Any]) -> None:
         try:
             with open(email_file, "w", encoding="utf-8") as f:
                 f.write(email_content)
-            print(f"📧 Email content saved: {email_file.name}")
+logger.info(f'📧 Email content saved: {email_file.name}')
         except TypeError:
-            print("⚠️  Could not save email content because it is not a string.")
+logger.info('⚠️  Could not save email content because it is not a string.')
 
-    print("\n\n-LL-ANALYSIS-COMPLETE-\n")
+logger.info('\n\n-LL-ANALYSIS-COMPLETE-\n')
 
     if validation_results["overall_status"] == "FAIL":
-        print("\n❌ VALIDATION FAILED")
+logger.error('\n❌ VALIDATION FAILED')
         for check in validation_results["checks"]:
             if check["status"] == "FAIL":
                 # Ensure details are properly formatted for printing
                 details_str = ", ".join(map(str, check.get("details", [])))
-                print(f"  - {check['check']}: {details_str}")
+logger.info(f'  - {check['check']}: {details_str}')
     else:
-        print("\n✅ VALIDATION PASSED")
+logger.info('\n✅ VALIDATION PASSED')
 
 
 def main():
     """Main test execution function."""
     print_banner(f"🧪 COMPREHENSIVE TEST SUITE - {CASE_REFERENCE}")
-    print(f"📅 Test Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    print(f"🎯 Case Type: {CASE_TYPE}")
+logger.info(f'📅 Test Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}')
+logger.info(f'🎯 Case Type: {CASE_TYPE}')
 
     try:
         # Step 1: Prepare test data
         files_data = prepare_test_data()
         if not files_data:
-            print("❌ Failed to prepare test data. Exiting.")
+logger.error('❌ Failed to prepare test data. Exiting.')
             return
 
         # Step 2: Send API request
@@ -512,10 +515,10 @@ def main():
 
         # Step 4: Final summary
         print_banner("🎉 TEST SETUP COMPLETE")
-        print("Test infrastructure is ready and the test has been executed.")
+logger.info('Test infrastructure is ready and the test has been executed.')
 
     except Exception as e:
-        print(f"\n💥 FATAL ERROR: {e}")
+logger.error(f'\n💥 FATAL ERROR: {e}')
         import traceback
 
         traceback.print_exc()

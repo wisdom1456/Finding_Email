@@ -5,6 +5,9 @@ import sys
 from pathlib import Path
 
 import pytest
+from utils.logging_config import setup_logging
+logger = setup_logging('unknown_service')
+
 
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
@@ -196,7 +199,7 @@ class TestVideoPreservationStrategy:
         small_token_count = simulate_token_count(small_video_content)
 
         # Print actual sizes for debugging
-        print(f"Small video token count: {small_token_count}")
+logger.info(f'Small video token count: {small_token_count}')
 
         # Test with large video (should exceed threshold)
         # Simulate token check for large video
@@ -205,7 +208,7 @@ class TestVideoPreservationStrategy:
         )
         large_token_count = simulate_token_count(large_video_content)
 
-        print(f"Large video token count: {large_token_count}")
+logger.info(f'Large video token count: {large_token_count}')
 
         # Use a reasonable threshold based on actual test data
         # Small videos should be under 10,000 tokens, large videos should be over 30,000

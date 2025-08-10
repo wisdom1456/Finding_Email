@@ -10,81 +10,82 @@ This test validates:
 """
 from __future__ import annotations
 
-import json
 import os
 import sys
 from unittest.mock import Mock, patch
 
 import yaml
+from utils.logging_config import setup_logging
+logger = setup_logging('unknown_service')
+
 
 
 # Add project root to Python path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from backend.utils.data_models import CaseAnalysisResult, EnhancedIntakeAnalysis
 from backend.utils.validators import validate_section_output
 from backend_logic.email_generator import EmailGeneratorV2
 
 
 def test_validate_section_output():
     """Test the core validate_section_output function."""
-    print("🧪 Testing validate_section_output function...")
+logger.info('🧪 Testing validate_section_output function...')
     
     # Test 1: Valid JSON format
-    print("  ✅ Testing valid JSON...")
+logger.info('  ✅ Testing valid JSON...')
     valid_json = '{"key": "value", "analysis": "detailed findings"}'
     try:
         validate_section_output(valid_json, "json")
-        print("    ✅ Valid JSON passed validation")
+logger.info('    ✅ Valid JSON passed validation')
     except ValueError as e:
-        print(f"    ❌ Valid JSON failed validation: {e}")
+logger.error(f'    ❌ Valid JSON failed validation: {e}')
         return False
     
     # Test 2: Invalid JSON format
-    print("  ✅ Testing invalid JSON...")
+logger.info('  ✅ Testing invalid JSON...')
     invalid_json = '{"key": "value", "analysis": incomplete'
     try:
         validate_section_output(invalid_json, "json")
-        print("    ❌ Invalid JSON should have failed validation")
+logger.error('    ❌ Invalid JSON should have failed validation')
         return False
     except ValueError as e:
-        print(f"    ✅ Invalid JSON correctly failed validation: {e}")
+logger.error(f'    ✅ Invalid JSON correctly failed validation: {e}')
     
     # Test 3: Valid HTML format
-    print("  ✅ Testing valid HTML...")
+logger.info('  ✅ Testing valid HTML...')
     valid_html = "<p>This is a detailed analysis.</p><ul><li>Point 1</li><li>Point 2</li></ul>"
     try:
         validate_section_output(valid_html, "html")
-        print("    ✅ Valid HTML passed validation")
+logger.info('    ✅ Valid HTML passed validation')
     except ValueError as e:
-        print(f"    ❌ Valid HTML failed validation: {e}")
+logger.error(f'    ❌ Valid HTML failed validation: {e}')
         return False
     
     # Test 4: Invalid HTML format (no required tags)
-    print("  ✅ Testing invalid HTML...")
+logger.info('  ✅ Testing invalid HTML...')
     invalid_html = "Plain text without any HTML tags"
     try:
         validate_section_output(invalid_html, "html")
-        print("    ❌ Invalid HTML should have failed validation")
+logger.error('    ❌ Invalid HTML should have failed validation')
         return False
     except ValueError as e:
-        print(f"    ✅ Invalid HTML correctly failed validation: {e}")
+logger.error(f'    ✅ Invalid HTML correctly failed validation: {e}')
     
     # Test 5: Unknown format (should default gracefully)
-    print("  ✅ Testing unknown format...")
+logger.info('  ✅ Testing unknown format...')
     try:
         validate_section_output("any content", "unknown")
-        print("    ✅ Unknown format handled gracefully")
+logger.info('    ✅ Unknown format handled gracefully')
     except ValueError as e:
-        print(f"    ❌ Unknown format should be handled gracefully: {e}")
+logger.info(f'    ❌ Unknown format should be handled gracefully: {e}')
         return False
     
-    print("✅ validate_section_output function tests PASSED")
+logger.info('✅ validate_section_output function tests PASSED')
     return True
 
 def test_email_generator_integration():
     """Test integration with EmailGeneratorV2._validate_section_format method."""
-    print("\n🧪 Testing EmailGeneratorV2 integration...")
+logger.info('\n🧪 Testing EmailGeneratorV2 integration...')
     
     # Create test YAML configuration
     test_config = {
@@ -117,13 +118,13 @@ def test_email_generator_integration():
                     with patch("os.listdir", return_value=["findings_email.jinja2", "document_appendix.jinja2"]):
                         generator = EmailGeneratorV2(mock_client)
                         
-        print("  ✅ EmailGeneratorV2 instance created successfully")
+logger.info('  ✅ EmailGeneratorV2 instance created successfully')
     except Exception as e:
-        print(f"  ❌ Failed to create EmailGeneratorV2 instance: {e}")
+logger.error(f'  ❌ Failed to create EmailGeneratorV2 instance: {e}')
         return False
     
     # Test 1: Valid JSON content for JSON format section
-    print("  ✅ Testing valid JSON content validation...")
+logger.info('  ✅ Testing valid JSON content validation...')
     valid_json_content = '{"findings": "Analysis complete", "confidence": 0.85}'
     try:
         # Capture print output to verify logging
@@ -134,15 +135,15 @@ def test_email_generator_integration():
             print_calls = [str(call) for call in mock_print.call_args_list]
             success_logged = any("format validation passed (json)" in call for call in print_calls)
             if success_logged:
-                print("    ✅ Valid JSON validation passed and logged correctly")
+logger.info('    ✅ Valid JSON validation passed and logged correctly')
             else:
-                print("    ⚠️ Valid JSON validation passed but logging unclear")
+logger.info('    ⚠️ Valid JSON validation passed but logging unclear')
     except Exception as e:
-        print(f"    ❌ Valid JSON validation failed unexpectedly: {e}")
+logger.error(f'    ❌ Valid JSON validation failed unexpectedly: {e}')
         return False
     
     # Test 2: Invalid JSON content (should log warning but not raise exception)
-    print("  ✅ Testing invalid JSON content validation...")
+logger.info('  ✅ Testing invalid JSON content validation...')
     invalid_json_content = '{"findings": "Analysis incomplete'  # Missing closing brace
     try:
         with patch("builtins.print") as mock_print:
@@ -152,15 +153,15 @@ def test_email_generator_integration():
             print_calls = [str(call) for call in mock_print.call_args_list]
             warning_logged = any("format validation warning" in call for call in print_calls)
             if warning_logged:
-                print("    ✅ Invalid JSON validation correctly logged warning")
+logger.warning('    ✅ Invalid JSON validation correctly logged warning')
             else:
-                print("    ⚠️ Invalid JSON validation should have logged warning")
+logger.warning('    ⚠️ Invalid JSON validation should have logged warning')
     except Exception as e:
-        print(f"    ❌ Invalid JSON validation should not raise exception: {e}")
+logger.error(f'    ❌ Invalid JSON validation should not raise exception: {e}')
         return False
     
     # Test 3: Valid HTML content for HTML format section
-    print("  ✅ Testing valid HTML content validation...")
+logger.info('  ✅ Testing valid HTML content validation...')
     valid_html_content = "<p>Legal analysis shows strong case.</p><ul><li>Evidence point 1</li></ul>"
     try:
         with patch("builtins.print") as mock_print:
@@ -169,15 +170,15 @@ def test_email_generator_integration():
             print_calls = [str(call) for call in mock_print.call_args_list]
             success_logged = any("format validation passed (html)" in call for call in print_calls)
             if success_logged:
-                print("    ✅ Valid HTML validation passed and logged correctly")
+logger.info('    ✅ Valid HTML validation passed and logged correctly')
             else:
-                print("    ⚠️ Valid HTML validation passed but logging unclear")
+logger.info('    ⚠️ Valid HTML validation passed but logging unclear')
     except Exception as e:
-        print(f"    ❌ Valid HTML validation failed unexpectedly: {e}")
+logger.error(f'    ❌ Valid HTML validation failed unexpectedly: {e}')
         return False
     
     # Test 4: Section with no output_format (should default to html)
-    print("  ✅ Testing section with default format...")
+logger.info('  ✅ Testing section with default format...')
     try:
         with patch("builtins.print") as mock_print:
             generator._validate_section_format(valid_html_content, "next_steps")
@@ -185,15 +186,15 @@ def test_email_generator_integration():
             print_calls = [str(call) for call in mock_print.call_args_list]
             success_logged = any("format validation passed (html)" in call for call in print_calls)
             if success_logged:
-                print("    ✅ Default HTML format validation passed correctly")
+logger.info('    ✅ Default HTML format validation passed correctly')
             else:
-                print("    ⚠️ Default HTML format validation passed but logging unclear")
+logger.info('    ⚠️ Default HTML format validation passed but logging unclear')
     except Exception as e:
-        print(f"    ❌ Default format validation failed unexpectedly: {e}")
+logger.error(f'    ❌ Default format validation failed unexpectedly: {e}')
         return False
     
     # Test 5: Non-existent section (should log warning but not crash)
-    print("  ✅ Testing non-existent section...")
+logger.info('  ✅ Testing non-existent section...')
     try:
         with patch("builtins.print") as mock_print:
             generator._validate_section_format(valid_html_content, "nonexistent_section")
@@ -201,41 +202,41 @@ def test_email_generator_integration():
             print_calls = [str(call) for call in mock_print.call_args_list]
             warning_logged = any("No configuration found for section" in call for call in print_calls)
             if warning_logged:
-                print("    ✅ Non-existent section correctly logged warning")
+logger.warning('    ✅ Non-existent section correctly logged warning')
             else:
-                print("    ⚠️ Non-existent section should have logged configuration warning")
+logger.warning('    ⚠️ Non-existent section should have logged configuration warning')
     except Exception as e:
-        print(f"    ❌ Non-existent section validation should not raise exception: {e}")
+logger.error(f'    ❌ Non-existent section validation should not raise exception: {e}')
         return False
     
-    print("✅ EmailGeneratorV2 integration tests PASSED")
+logger.info('✅ EmailGeneratorV2 integration tests PASSED')
     return True
 
 def test_yaml_config_integration():
     """Test actual YAML configuration file parsing."""
-    print("\n🧪 Testing YAML configuration integration...")
+logger.info('\n🧪 Testing YAML configuration integration...')
     
     # Test loading the actual universal_legal_config.yaml file
     config_path = "backend/config/templates/universal_legal_config.yaml"
     
     if not os.path.exists(config_path):
-        print(f"  ⚠️ Configuration file not found: {config_path}")
-        print("    This test requires the actual YAML configuration file")
+logger.info(f'  ⚠️ Configuration file not found: {config_path}')
+logger.info('    This test requires the actual YAML configuration file')
         return True  # Not a failure if file doesn't exist in test environment
     
     try:
         with open(config_path, encoding="utf-8") as f:
             config = yaml.safe_load(f)
         
-        print(f"  ✅ Successfully loaded configuration file: {config_path}")
+logger.info(f'  ✅ Successfully loaded configuration file: {config_path}')
         
         # Check that sections configuration exists
         if "sections" not in config:
-            print("  ❌ Configuration missing 'sections' key")
+logger.info("  ❌ Configuration missing 'sections' key")
             return False
             
         sections = config["sections"]
-        print(f"  ✅ Found {len(sections)} sections in configuration")
+logger.info(f'  ✅ Found {len(sections)} sections in configuration')
         
         # Test specific sections we know should exist
         expected_sections = ["intake_analysis", "factual_summary", "legal_analysis", "next_steps"]
@@ -246,34 +247,34 @@ def test_yaml_config_integration():
                 section_config = sections[section_key]
                 output_format = section_config.get("output_format", "html")  # Default to html
                 format_found[section_key] = output_format
-                print(f"    ✅ {section_key}: {output_format} format")
+logger.info(f'    ✅ {section_key}: {output_format} format')
             else:
-                print(f"    ⚠️ Expected section '{section_key}' not found in configuration")
+logger.info(f"    ⚠️ Expected section '{section_key}' not found in configuration")
         
         # Verify we found format specifications
         if format_found:
-            print(f"  ✅ Found format specifications for {len(format_found)} sections")
+logger.info(f'  ✅ Found format specifications for {len(format_found)} sections')
             
             # Show format distribution
             json_sections = [k for k, v in format_found.items() if v == "json"]
             html_sections = [k for k, v in format_found.items() if v == "html"]
             
             if json_sections:
-                print(f"    📋 JSON format sections: {json_sections}")
+logger.info(f'    📋 JSON format sections: {json_sections}')
             if html_sections:
-                print(f"    🌐 HTML format sections: {html_sections}")
+logger.info(f'    🌐 HTML format sections: {html_sections}')
         
-        print("✅ YAML configuration integration tests PASSED")
+logger.info('✅ YAML configuration integration tests PASSED')
         return True
         
     except Exception as e:
-        print(f"  ❌ Error loading configuration file: {e}")
+logger.error(f'  ❌ Error loading configuration file: {e}')
         return False
 
 def run_all_tests():
     """Run all validation tests."""
-    print("🚀 Starting Section Validation Integration Tests")
-    print("=" * 60)
+logger.info('🚀 Starting Section Validation Integration Tests')
+logger.info('=' * 60)
     
     test_results = []
     
@@ -282,26 +283,26 @@ def run_all_tests():
     test_results.append(test_email_generator_integration())
     test_results.append(test_yaml_config_integration())
     
-    print("\n" + "=" * 60)
-    print("📊 TEST RESULTS SUMMARY")
-    print("=" * 60)
+logger.info('\n' + '=' * 60)
+logger.info('📊 TEST RESULTS SUMMARY')
+logger.info('=' * 60)
     
     passed = sum(test_results)
     total = len(test_results)
     
     if passed == total:
-        print(f"🎉 ALL TESTS PASSED ({passed}/{total})")
-        print("\n✅ Section validation integration is working correctly!")
-        print("\nKey Features Validated:")
-        print("  • JSON format validation for structured data sections")
-        print("  • HTML format validation for content sections")
-        print("  • Non-blocking error handling (warnings logged, generation continues)")
-        print("  • YAML configuration parsing for output_format specifications")
-        print("  • Default format handling (html) when output_format not specified")
-        print("  • Integration with EmailGeneratorV2 section generation pipeline")
+logger.info(f'🎉 ALL TESTS PASSED ({passed}/{total})')
+logger.info('\n✅ Section validation integration is working correctly!')
+logger.info('\nKey Features Validated:')
+logger.info('  • JSON format validation for structured data sections')
+logger.info('  • HTML format validation for content sections')
+logger.error('  • Non-blocking error handling (warnings logged, generation continues)')
+logger.debug('  • YAML configuration parsing for output_format specifications')
+logger.info('  • Default format handling (html) when output_format not specified')
+logger.info('  • Integration with EmailGeneratorV2 section generation pipeline')
         return True
-    print(f"❌ SOME TESTS FAILED ({passed}/{total})")
-    print("\n⚠️ Please review the failed tests above and fix any issues.")
+logger.error(f'❌ SOME TESTS FAILED ({passed}/{total})')
+logger.error('\n⚠️ Please review the failed tests above and fix any issues.')
     return False
 
 if __name__ == "__main__":

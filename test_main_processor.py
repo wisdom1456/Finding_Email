@@ -8,6 +8,9 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
+from utils.logging_config import setup_logging
+logger = setup_logging('unknown_service')
+
 
 
 def test_help():
@@ -25,18 +28,18 @@ def test_help():
             check=False,
         )
 
-        print("Return code:", result.returncode)
-        print("STDOUT:", result.stdout)
-        print("STDERR:", result.stderr)
+logger.info('Return code:' + " " + result.returncode)
+logger.info('STDOUT:' + " " + result.stdout)
+logger.info('STDERR:' + " " + result.stderr)
 
         if result.returncode == 0:
-            print("✅ Help command works!")
+logger.info('✅ Help command works!')
             return True
-        print("❌ Help command failed")
+logger.error('❌ Help command failed')
         return False
 
     except Exception as e:
-        print(f"❌ Test failed with exception: {e}")
+logger.error(f'❌ Test failed with exception: {e}')
         return False
 
 

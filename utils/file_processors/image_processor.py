@@ -7,6 +7,10 @@ import pytesseract
 from PIL import Image
 
 from utils.data_models import DocumentType, FileType, ProcessedDocument
+from utils.logging_config import setup_logging
+
+
+logger = setup_logging("image_processor")
 
 
 async def process_image(
@@ -15,7 +19,7 @@ async def process_image(
     """
     Processes an image file by extracting text using OCR from a given path.
     """
-    print(f"Processing Image: {original_filename}")
+    logger.debug(f"Processing Image: {original_filename}")
 
     text_content = ""
 
@@ -25,9 +29,9 @@ async def process_image(
             # Convert image to grayscale for better OCR results
             image = image.convert("L")
             text_content = pytesseract.image_to_string(image)
-            print(f"Successfully extracted text from {original_filename}")
+            logger.info(f"Successfully extracted text from {original_filename}")
     except Exception as e:
-        print(f"Error processing image {original_filename}: {e}")
+        logger.error(f"Error processing image {original_filename}: {e}")
         text_content = f"Error extracting text from {original_filename}."
 
     content_type, _ = mimetypes.guess_type(file_path)

@@ -11,6 +11,10 @@ from backend.utils.data_models import (
     FileType,
     ProcessedDocument,
 )
+from utils.logging_config import setup_logging
+
+
+logger = setup_logging("pdf_processor")
 
 
 async def process_pdf(
@@ -19,7 +23,7 @@ async def process_pdf(
     """
     Processes a PDF file by extracting its text content using PyMuPDF from a given path.
     """
-    print(f"Processing PDF: {original_filename}")
+    logger.debug(f"Processing PDF: {original_filename}")
 
     text_content = ""
 
@@ -28,7 +32,7 @@ async def process_pdf(
             for page in doc:
                 text_content += page.get_text()
     except Exception as e:
-        print(f"Error processing PDF {original_filename}: {e}")
+        logger.error(f"Error processing PDF {original_filename}: {e}")
         text_content = f"Error extracting text from {original_filename}."
 
     content_type, _ = mimetypes.guess_type(file_path)
@@ -37,7 +41,9 @@ async def process_pdf(
     # Create proper FileMetadata object with required fields
     file_metadata = FileMetadata(filename=original_filename, size=file_size)
 
-    print(f"✅ Fixed: Created FileMetadata for {original_filename}, size: {file_size}")
+    logger.info(
+        f"✅ Fixed: Created FileMetadata for {original_filename}, size: {file_size}"
+    )
 
     return ProcessedDocument(
         file_name=original_filename,

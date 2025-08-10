@@ -13,6 +13,12 @@ from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 
+from utils.logging_config import setup_logging
+
+
+logger = setup_logging("e2e_test_devlin_workflow")
+
+
 # Import the main processing function and required modules
 from backend_logic.main_processor import process_case_documents
 
@@ -226,18 +232,20 @@ class TestDevlinWorkflow:
         mock_st.sidebar.warning = Mock()
 
         # Execute the real E2E workflow without mocking internal components
-        print(
+        logger.info(
             "🔍 E2E TEST: About to call process_case_documents() for real E2E workflow"
         )
-        print(f"🔍 E2E TEST: Output directory = {output_directory}")
-        print(f"🔍 E2E TEST: Session state before call: {mock_session_state}")
+        logger.info(f"🔍 E2E TEST: Output directory = {output_directory}")
+        logger.info(f"🔍 E2E TEST: Session state before call: {mock_session_state}")
 
         result = await process_case_documents(output_dir=str(output_directory))
-        print(f"🔍 E2E TEST: process_case_documents() returned: {result}")
-        print(f"🔍 E2E TEST: Session state after call: {vars(session_state_mock)}")
+        logger.info(f"🔍 E2E TEST: process_case_documents() returned: {result}")
+        logger.info(
+            f"🔍 E2E TEST: Session state after call: {vars(session_state_mock)}"
+        )
 
         # Check directory contents before assertions
-        print(
+        logger.info(
             f"🔍 E2E TEST: Output directory contents: {list(output_directory.glob('*'))}"
         )
 
@@ -295,7 +303,9 @@ class TestDevlinWorkflow:
             "Intake analysis should not be None"
         )
 
-        print("✅ E2E TEST: All validations passed - workflow completed successfully!")
+        logger.info(
+            "✅ E2E TEST: All validations passed - workflow completed successfully!"
+        )
 
     # Note: Removed legacy helper methods - E2E test now validates real HTML output files directly
 
@@ -350,11 +360,11 @@ def run_devlin_e2e_test():
         check=False,
     )
 
-    print("Test Output:")
-    print(result.stdout)
+    logger.info("Test Output:")
+    logger.info(result.stdout)
     if result.stderr:
-        print("Errors:")
-        print(result.stderr)
+        logger.error("Errors:")
+        logger.info(result.stderr)
 
     return result.returncode == 0
 
@@ -363,6 +373,6 @@ if __name__ == "__main__":
     # Allow running the test directly
     success = run_devlin_e2e_test()
     if success:
-        print("\n✅ Devlin E2E test completed successfully!")
+        logger.info("\n✅ Devlin E2E test completed successfully!")
     else:
-        print("\n❌ Devlin E2E test failed!")
+        logger.error("\n❌ Devlin E2E test failed!")

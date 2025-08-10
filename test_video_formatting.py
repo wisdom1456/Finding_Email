@@ -7,6 +7,9 @@ import os
 import sys
 
 from openai import OpenAI
+from utils.logging_config import setup_logging
+logger = setup_logging('unknown_service')
+
 
 
 # Add the project root to the path
@@ -89,15 +92,15 @@ def test_video_analysis_formatting():
         test_video_insight
     )
 
-    print("=== VIDEO ANALYSIS FORMATTING TEST ===")
-    print("\nOriginal insights structure:")
-    print(f"Type: {type(test_video_insight.insights)}")
-    print(
+logger.info('=== VIDEO ANALYSIS FORMATTING TEST ===')
+logger.info('\nOriginal insights structure:')
+logger.info(f'Type: {type(test_video_insight.insights)}')
+logger.info(f'Keys: {(list(test_video_insight.insights.keys()) if isinstance(test_video_insight.insights, dict) else 'N/A')}')
         f"Keys: {list(test_video_insight.insights.keys()) if isinstance(test_video_insight.insights, dict) else 'N/A'}"
     )
 
-    print("\nFormatted output:")
-    print(formatted_output)
+logger.info('\nFormatted output:')
+logger.info(formatted_output)
 
     # Verify the output contains expected elements
     expected_elements = [
@@ -109,28 +112,28 @@ def test_video_analysis_formatting():
         "• Wooden floor (",  # Object with timestamp
     ]
 
-    print("\n=== VALIDATION RESULTS ===")
+logger.info('\n=== VALIDATION RESULTS ===')
     all_passed = True
     for element in expected_elements:
         if element in formatted_output:
-            print(f"✅ PASS: Found '{element}'")
+logger.info(f"✅ PASS: Found '{element}'")
         else:
-            print(f"❌ FAIL: Missing '{element}'")
+logger.info(f"❌ FAIL: Missing '{element}'")
             all_passed = False
 
     # Check that raw dictionary format is NOT present
     raw_dict_indicators = ["'summary':", "'timeline':", "'objects':"]
     for indicator in raw_dict_indicators:
         if indicator in formatted_output:
-            print(f"❌ FAIL: Found raw dictionary format '{indicator}'")
+logger.debug(f"❌ FAIL: Found raw dictionary format '{indicator}'")
             all_passed = False
         else:
-            print(f"✅ PASS: No raw dictionary format '{indicator}'")
+logger.debug(f"✅ PASS: No raw dictionary format '{indicator}'")
 
     if all_passed:
-        print("\n🎉 ALL TESTS PASSED! Video analysis formatting is working correctly.")
+logger.info('\n🎉 ALL TESTS PASSED! Video analysis formatting is working correctly.')
         return True
-    print("\n❌ SOME TESTS FAILED! Please check the formatting function.")
+logger.error('\n❌ SOME TESTS FAILED! Please check the formatting function.')
     return False
 
 
@@ -141,7 +144,7 @@ def test_edge_cases():
     mock_client = OpenAI(api_key="test-key")
     email_generator = EmailGenerator(mock_client)
 
-    print("\n=== EDGE CASE TESTS ===")
+logger.info('\n=== EDGE CASE TESTS ===')
 
     # Test 1: Empty insights
     empty_video = VideoInsight(
@@ -156,8 +159,8 @@ def test_edge_cases():
     )
 
     result1 = email_generator.format_video_analysis_for_appendix(empty_video)
-    print("Test 1 - Empty insights:")
-    print(f"Result: {result1}")
+logger.info('Test 1 - Empty insights:')
+logger.info(f'Result: {result1}')
 
     # Test 2: String insights (preserved/summarized case)
     string_video = VideoInsight(
@@ -172,27 +175,27 @@ def test_edge_cases():
     )
 
     result2 = email_generator.format_video_analysis_for_appendix(string_video)
-    print("\nTest 2 - String insights:")
-    print(f"Result: {result2}")
+logger.info('\nTest 2 - String insights:')
+logger.info(f'Result: {result2}')
 
     # Test 3: Missing video insight object
     try:
         result3 = email_generator.format_video_analysis_for_appendix(None)
-        print(f"\nTest 3 - None input: {result3}")
+logger.info(f'\nTest 3 - None input: {result3}')
     except Exception as e:
-        print(f"\nTest 3 - None input: Exception caught: {e}")
+logger.error(f'\nTest 3 - None input: Exception caught: {e}')
 
-    print("✅ Edge case tests completed.")
+logger.info('✅ Edge case tests completed.')
 
 
 if __name__ == "__main__":
-    print("Testing video analysis formatting...")
+logger.info('Testing video analysis formatting...')
     success = test_video_analysis_formatting()
     test_edge_cases()
 
     if success:
-        print("\n✅ Video analysis formatting is ready for production!")
+logger.info('\n✅ Video analysis formatting is ready for production!')
         sys.exit(0)
     else:
-        print("\n❌ Video analysis formatting needs fixes.")
+logger.info('\n❌ Video analysis formatting needs fixes.')
         sys.exit(1)

@@ -9,7 +9,7 @@ and file characteristics.
 from __future__ import annotations
 
 from decimal import Decimal
-from typing import Any
+from typing import Any, Dict, List, Optional
 
 from backend.utils.data_models import CostEstimate, ProcessedDocument, ServiceCost
 
@@ -59,8 +59,8 @@ class CostEstimator:
         self.confidence_level = 0.8  # Default estimation confidence
 
     def estimate_document_processing_costs(
-        self, documents: list[ProcessedDocument]
-    ) -> list[ServiceCost]:
+        self, documents: List[ProcessedDocument]
+    ) -> List[ServiceCost]:
         """
         Estimate costs for document processing using OpenAI models.
 
@@ -118,8 +118,8 @@ class CostEstimator:
         return document_costs
 
     def estimate_audio_processing_costs(
-        self, audio_files: list[dict[str, Any]]
-    ) -> list[ServiceCost]:
+        self, audio_files: List[Dict[str, Any]]
+    ) -> List[ServiceCost]:
         """
         Estimate costs for audio transcription using OpenAI Whisper.
 
@@ -151,7 +151,9 @@ class CostEstimator:
                     operation_type="audio_transcription",
                     units_consumed=int(estimated_minutes),
                     unit_type="minutes",
-                    rate_per_unit=float(self.PRICING_RATES["openai_whisper"]["per_minute"]),
+                    rate_per_unit=float(
+                        self.PRICING_RATES["openai_whisper"]["per_minute"]
+                    ),
                     total_cost=float(whisper_cost),
                     file_name=file_name,
                 )
@@ -160,8 +162,8 @@ class CostEstimator:
         return audio_costs
 
     def estimate_video_processing_costs(
-        self, video_files: list[dict[str, Any]]
-    ) -> list[ServiceCost]:
+        self, video_files: List[Dict[str, Any]]
+    ) -> List[ServiceCost]:
         """
         Estimate costs for video processing using Google Vertex AI.
 
@@ -193,7 +195,9 @@ class CostEstimator:
                     operation_type="video_processing",
                     units_consumed=int(estimated_minutes),
                     unit_type="minutes",
-                    rate_per_unit=float(self.PRICING_RATES["vertex_ai_video"]["per_minute"]),
+                    rate_per_unit=float(
+                        self.PRICING_RATES["vertex_ai_video"]["per_minute"]
+                    ),
                     total_cost=float(video_cost),
                     file_name=file_name,
                 )
@@ -221,9 +225,9 @@ class CostEstimator:
                     operation_type="video_analysis",
                     units_consumed=analysis_input_tokens + analysis_output_tokens,
                     unit_type="tokens",
-                    rate_per_unit=float(self.PRICING_RATES["vertex_ai_gemini_flash"][
-                        "input_tokens"
-                    ]),
+                    rate_per_unit=float(
+                        self.PRICING_RATES["vertex_ai_gemini_flash"]["input_tokens"]
+                    ),
                     total_cost=float(gemini_total_cost),
                     file_name=file_name,
                 )
@@ -233,9 +237,9 @@ class CostEstimator:
 
     def generate_cost_estimate(
         self,
-        documents: list[ProcessedDocument] | None = None,
-        audio_files: list[dict[str, Any]] | None = None,
-        video_files: list[dict[str, Any]] | None = None,
+        documents: Optional[List[ProcessedDocument]] = None,
+        audio_files: Optional[List[Dict[str, Any]]] = None,
+        video_files: Optional[List[Dict[str, Any]]] = None,
     ) -> CostEstimate:
         """
         Generate comprehensive cost estimate for case processing.

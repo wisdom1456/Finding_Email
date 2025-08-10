@@ -12,6 +12,11 @@ from tenacity import (
     wait_exponential,
 )
 
+from utils.logging_config import setup_logging
+
+
+logger = setup_logging("audio_processor")
+
 from backend.utils.data_models import (
     FileMetadata,
     MediaProcessingError,
@@ -84,7 +89,7 @@ class AudioProcessor:
                     )
                     raise AudioProcessingError(msg)
         except Exception as e:
-            print(
+            logger.info(
                 f"AUDIO PROCESSOR: Warning - Could not detect MIME type for {file_name}: {e}"
             )
             # Allow processing to continue with file extension check
@@ -109,14 +114,14 @@ class AudioProcessor:
             AudioProcessingError: If transcription fails after retries
         """
         try:
-            print(f"AUDIO PROCESSOR: Starting transcription for {file_name}")
+            logger.info(f"AUDIO PROCESSOR: Starting transcription for {file_name}")
 
             with open(file_path, "rb") as audio_file:
                 response = self.openai_client.audio.transcriptions.create(
                     model="whisper-1", file=audio_file, response_format="verbose_json"
                 )
 
-            print(f"AUDIO PROCESSOR: ✅ Successfully transcribed {file_name}")
+            logger.info(f"AUDIO PROCESSOR: ✅ Successfully transcribed {file_name}")
             return (
                 response.model_dump()
                 if hasattr(response, "model_dump")
@@ -125,11 +130,11 @@ class AudioProcessor:
 
         except (RateLimitError, APIError, APITimeoutError) as e:
             error_msg = f"OpenAI API error for '{file_name}': {type(e).__name__} - {e}. Retrying..."
-            print(f"AUDIO PROCESSOR: ❌ {error_msg}")
+            logger.error(f"AUDIO PROCESSOR: ❌ {error_msg}")
             raise
         except Exception as e:
             error_msg = f"Whisper transcription failed for '{file_name}': {type(e).__name__} - {e}"
-            print(f"AUDIO PROCESSOR: ❌ {error_msg}")
+            logger.error(f"AUDIO PROCESSOR: ❌ {error_msg}")
             raise AudioProcessingError(error_msg)
 
     async def process_audio_file(
@@ -146,7 +151,7 @@ class AudioProcessor:
             TranscriptedMedia on success, MediaProcessingError on failure
         """
         try:
-            print(f"AUDIO PROCESSOR: Processing audio file: {file_name}")
+            logger.debug(f"AUDIO PROCESSOR: Processing audio file: {file_name}")
 
             # Validate the audio file
             self._validate_audio_file(file_path, file_name)
@@ -207,7 +212,7 @@ class AudioProcessor:
             )
         except Exception as e:
             error_msg = f"Unexpected error processing audio file '{file_name}': {e!s}"
-            print(f"AUDIO PROCESSOR: ❌ {error_msg}")
+            logger.error(f"AUDIO PROCESSOR: ❌ {error_msg}")
             return MediaProcessingError(
                 source="AudioProcessor",
                 file_name=file_name,
@@ -242,7 +247,7 @@ class AudioProcessor:
 
         except Exception as e:
             error_msg = f"Error processing Streamlit audio upload '{file_name}': {e!s}"
-            print(f"AUDIO PROCESSOR: ❌ {error_msg}")
+            logger.error(f"AUDIO PROCESSOR: ❌ {error_msg}")
             return MediaProcessingError(
                 source="AudioProcessor",
                 file_name=file_name,
@@ -255,7 +260,7 @@ class AudioProcessor:
                 try:
                     os.unlink(temp_path)
                 except Exception as e:
-                    print(
+                    logger.info(
                         f"AUDIO PROCESSOR: Warning - Could not delete temp file {temp_path}: {e}"
                     )
 

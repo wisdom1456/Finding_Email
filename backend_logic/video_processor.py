@@ -17,6 +17,11 @@ from tenacity import (
     stop_after_attempt,
     wait_exponential,
 )
+
+from utils.logging_config import setup_logging
+
+
+logger = setup_logging("video_processor")
 from vertexai.generative_models import GenerativeModel, Part
 
 from backend.utils.data_models import (
@@ -65,7 +70,7 @@ class VideoProcessor:
             self.storage_client = storage.Client(project=self.project_id)
             self.speech_client = speech.SpeechClient()
             self.vertex_model = GenerativeModel("gemini-2.5-flash")
-            print(
+            logger.info(
                 "VIDEO PROCESSOR: Vertex AI and other Google Cloud clients initialized successfully."
             )
         except Exception as e:
@@ -87,14 +92,18 @@ class VideoProcessor:
 
     def _ensure_bucket_exists(self) -> None:
         try:
-            print(f"VIDEO PROCESSOR: 🔍 Checking bucket existence: {self.bucket_name}")
+            logger.debug(
+                f"VIDEO PROCESSOR: 🔍 Checking bucket existence: {self.bucket_name}"
+            )
             bucket = self.storage_client.bucket(self.bucket_name)
             if not bucket.exists():
-                print(f"VIDEO PROCESSOR: 📝 Creating bucket: {self.bucket_name}")
+                logger.info(f"VIDEO PROCESSOR: 📝 Creating bucket: {self.bucket_name}")
                 self.storage_client.create_bucket(self.bucket_name)
-                print("VIDEO PROCESSOR: ✅ Bucket created successfully")
+                logger.info("VIDEO PROCESSOR: ✅ Bucket created successfully")
             else:
-                print(f"VIDEO PROCESSOR: ✅ Using existing bucket: {self.bucket_name}")
+                logger.info(
+                    f"VIDEO PROCESSOR: ✅ Using existing bucket: {self.bucket_name}"
+                )
         except Exception as e:
             msg = f"Could not access or create storage bucket: {e}"
             raise VideoProcessingError(msg)
@@ -126,12 +135,12 @@ class VideoProcessor:
             )
             blob = bucket.blob(unique_name)
 
-            print(
+            logger.info(
                 f"VIDEO PROCESSOR: Uploading {file_name} to gs://{self.bucket_name}/{unique_name}"
             )
             blob.upload_from_filename(file_path)
             gcs_uri = f"gs://{self.bucket_name}/{unique_name}"
-            print(f"VIDEO PROCESSOR: ✅ Successfully uploaded to {gcs_uri}")
+            logger.info(f"VIDEO PROCESSOR: ✅ Successfully uploaded to {gcs_uri}")
             return gcs_uri
         except Exception as e:
             msg = f"Failed to upload '{file_name}' to GCS: {e}"
@@ -213,11 +222,11 @@ CONSTITUTIONAL FOCUS: Emphasize 4th Amendment (search/seizure), 5th Amendment (s
         self, gcs_uri: str, file_name: str, is_criminal_case: bool = False
     ) -> dict[str, Any]:
         try:
-            print(
+            logger.info(
                 f"VIDEO PROCESSOR: Starting Vertex AI analysis for {file_name} ({gcs_uri})"
             )
             if is_criminal_case:
-                print(
+                logger.info(
                     f"VIDEO PROCESSOR: Using enhanced criminal law analysis for {file_name}"
                 )
 
@@ -229,16 +238,18 @@ CONSTITUTIONAL FOCUS: Emphasize 4th Amendment (search/seizure), 5th Amendment (s
             )
 
             response = self.vertex_model.generate_content([video_file, prompt])
-            print(f"VIDEO PROCESSOR: ✅ Vertex AI analysis completed for {file_name}")
+            logger.info(
+                f"VIDEO PROCESSOR: ✅ Vertex AI analysis completed for {file_name}"
+            )
             return self._parse_json_response(response.text)
         except (GoogleAPICallError, RetryError) as e:
             error_message = str(e)
             # Handle Google Cloud service agent provisioning specifically
             if "Service agents are being provisioned" in error_message:
-                print(
+                logger.info(
                     f"VIDEO PROCESSOR: ⏳ Google Cloud service agents still provisioning for {file_name}. This is a one-time setup process."
                 )
-                print(
+                logger.info(
                     "VIDEO PROCESSOR: 🔄 Will retry with exponential backoff (up to 5 minutes)..."
                 )
                 raise  # Let tenacity handle the retry
@@ -248,10 +259,10 @@ CONSTITUTIONAL FOCUS: Emphasize 4th Amendment (search/seizure), 5th Amendment (s
             error_message = str(e)
             # Handle Google Cloud service agent provisioning for generic exceptions too
             if "Service agents are being provisioned" in error_message:
-                print(
+                logger.info(
                     f"VIDEO PROCESSOR: ⏳ Google Cloud service agents still provisioning for {file_name}. This is a one-time setup process."
                 )
-                print(
+                logger.info(
                     "VIDEO PROCESSOR: 🔄 Will retry with exponential backoff (up to 5 minutes)..."
                 )
                 raise  # Let tenacity handle the retry
@@ -267,17 +278,17 @@ CONSTITUTIONAL FOCUS: Emphasize 4th Amendment (search/seizure), 5th Amendment (s
         self, gcs_uri: str, file_name: str
     ) -> str:
         try:
-            print(
+            logger.info(
                 f"VIDEO PROCESSOR: Starting audio transcription for {file_name} ({gcs_uri})"
             )
 
             # Check if this is a video file - Speech-to-Text API requires pure audio
             file_extension = os.path.splitext(file_name)[1].lower()
             if file_extension in [".mov", ".mp4", ".avi", ".mkv", ".webm"]:
-                print(
+                logger.info(
                     f"VIDEO PROCESSOR: ⚠️  Skipping direct audio transcription for video file {file_name}"
                 )
-                print(
+                logger.info(
                     "VIDEO PROCESSOR: Note: Speech-to-Text API requires pure audio files, not video containers"
                 )
                 return "Audio transcription not available for video files. Consider using Vertex AI's video analysis capabilities."
@@ -299,12 +310,12 @@ CONSTITUTIONAL FOCUS: Emphasize 4th Amendment (search/seizure), 5th Amendment (s
             transcript = "".join(
                 result.alternatives[0].transcript for result in response.results
             )
-            print(f"VIDEO PROCESSOR: ✅ Transcription completed for {file_name}")
+            logger.info(f"VIDEO PROCESSOR: ✅ Transcription completed for {file_name}")
             return transcript
         except (GoogleAPICallError, RetryError) as e:
             error_msg = str(e)
             if "bad encoding" in error_msg or "Invalid recognition" in error_msg:
-                print(
+                logger.info(
                     f"VIDEO PROCESSOR: ⚠️  Audio transcription not supported for this file format: {file_name}"
                 )
                 return "Audio transcription not supported for this file format. Video analysis available via Vertex AI."
@@ -313,7 +324,7 @@ CONSTITUTIONAL FOCUS: Emphasize 4th Amendment (search/seizure), 5th Amendment (s
         except Exception as e:
             error_msg = str(e)
             if "bad encoding" in error_msg or "Invalid recognition" in error_msg:
-                print(
+                logger.info(
                     f"VIDEO PROCESSOR: ⚠️  Audio transcription not supported for this file format: {file_name}"
                 )
                 return "Audio transcription not supported for this file format. Video analysis available via Vertex AI."
@@ -338,7 +349,7 @@ CONSTITUTIONAL FOCUS: Emphasize 4th Amendment (search/seizure), 5th Amendment (s
         """Parse criminal analysis response into structured CriminalVideoAnalysis model."""
         try:
             if "error" in analysis_result:
-                print(
+                logger.info(
                     "VIDEO PROCESSOR: ⚠️ Criminal analysis parsing skipped due to API error"
                 )
                 return None
@@ -365,7 +376,7 @@ CONSTITUTIONAL FOCUS: Emphasize 4th Amendment (search/seizure), 5th Amendment (s
                             break
 
                     if not category:
-                        print(
+                        logger.info(
                             f"VIDEO PROCESSOR: ⚠️ Unknown criminal evidence category: {category_name}"
                         )
                         continue
@@ -386,7 +397,9 @@ CONSTITUTIONAL FOCUS: Emphasize 4th Amendment (search/seizure), 5th Amendment (s
                     )
                     evidence_items.append(evidence_item)
                 except Exception as e:
-                    print(f"VIDEO PROCESSOR: ⚠️ Failed to parse evidence item: {e}")
+                    logger.error(
+                        f"VIDEO PROCESSOR: ⚠️ Failed to parse evidence item: {e}"
+                    )
                     continue
 
             # Parse missing categories
@@ -407,7 +420,7 @@ CONSTITUTIONAL FOCUS: Emphasize 4th Amendment (search/seizure), 5th Amendment (s
                 missing_categories=missing_categories,
             )
         except Exception as e:
-            print(f"VIDEO PROCESSOR: ⚠️ Failed to parse criminal analysis: {e}")
+            logger.error(f"VIDEO PROCESSOR: ⚠️ Failed to parse criminal analysis: {e}")
             return None
 
     def _delete_from_cloud_storage(self, gcs_uri: str) -> None:
@@ -416,10 +429,10 @@ CONSTITUTIONAL FOCUS: Emphasize 4th Amendment (search/seizure), 5th Amendment (s
             bucket = self.storage_client.bucket(bucket_name)
             blob = bucket.blob(blob_name)
             if blob.exists():
-                print(f"VIDEO PROCESSOR: Deleting {gcs_uri} from GCS.")
+                logger.info(f"VIDEO PROCESSOR: Deleting {gcs_uri} from GCS.")
                 blob.delete()
         except Exception as e:
-            print(
+            logger.info(
                 f"VIDEO PROCESSOR: Warning - Failed to delete {gcs_uri} from GCS: {e}"
             )
 
@@ -428,9 +441,9 @@ CONSTITUTIONAL FOCUS: Emphasize 4th Amendment (search/seizure), 5th Amendment (s
     ) -> VideoInsight | EnhancedVideoInsight | MediaProcessingError:
         gcs_uri = None
         try:
-            print(f"VIDEO PROCESSOR: Processing video file: {file_name}")
+            logger.debug(f"VIDEO PROCESSOR: Processing video file: {file_name}")
             if is_criminal_case:
-                print(
+                logger.info(
                     f"VIDEO PROCESSOR: Criminal case analysis enabled for {file_name}"
                 )
 

@@ -7,6 +7,11 @@ from __future__ import annotations
 
 from jinja2 import DictLoader, Environment
 
+from utils.logging_config import setup_logging
+
+
+logger = setup_logging("unknown_service")
+
 
 # Test function mimicking the real format_video_analysis_for_appendix method
 def test_format_function(video_data):
@@ -51,30 +56,30 @@ template_context = {
 # Test Jinja2 environment
 env = Environment(loader=DictLoader({"real": template_real, "fixed": template_fixed}))
 
-print("=== TESTING REAL APPLICATION TEMPLATE CONTEXT ===")
+logger.info("=== TESTING REAL APPLICATION TEMPLATE CONTEXT ===")
 
 # Test 1: Current broken approach (as it is in document_appendix.jinja2)
-print("\n1. Testing current real template call (should fail):")
+logger.info("\n1. Testing current real template call (should fail):")
 try:
     template = env.get_template("real")
     # Render exactly as in email_generator.py line 272
     result = template.render(
         results=template_context, current_date=template_context["current_date"]
     )
-    print(f"SUCCESS: {result}")
+    logger.info(f"SUCCESS: {result}")
 except Exception as e:
-    print(f"FAILED: {e}")
+    logger.error(f"FAILED: {e}")
 
 # Test 2: Proposed fix
-print("\n2. Testing fixed template call (should work):")
+logger.info("\n2. Testing fixed template call (should work):")
 try:
     template = env.get_template("fixed")
     # Render exactly as in email_generator.py line 272
     result = template.render(
         results=template_context, current_date=template_context["current_date"]
     )
-    print(f"SUCCESS: {result}")
+    logger.info(f"SUCCESS: {result}")
 except Exception as e:
-    print(f"FAILED: {e}")
+    logger.error(f"FAILED: {e}")
 
-print("\n=== REAL APPLICATION DIAGNOSIS COMPLETE ===")
+logger.info("\n=== REAL APPLICATION DIAGNOSIS COMPLETE ===")

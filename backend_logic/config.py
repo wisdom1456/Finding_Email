@@ -8,6 +8,7 @@ All environment variables are defined here with proper validation and documentat
 from __future__ import annotations
 
 import os
+from typing import Dict, Optional, Union
 
 from dotenv import load_dotenv
 from pydantic import Field, field_validator
@@ -40,19 +41,19 @@ class Settings(BaseSettings):
     # GOOGLE CLOUD CONFIGURATION (Optional for Video Processing)
     # ==================================================
 
-    gcp_project_id: str | None = Field(
+    gcp_project_id: Optional[str] = Field(
         None,
         alias="GCP_PROJECT_ID",
         description="Google Cloud Project ID for video analysis features",
     )
 
-    gcp_bucket_name: str | None = Field(
+    gcp_bucket_name: Optional[str] = Field(
         None,
         alias="GCP_BUCKET_NAME",
         description="Google Cloud Storage bucket name for temporary video storage",
     )
 
-    google_application_credentials: str | None = Field(
+    google_application_credentials: Optional[str] = Field(
         None,
         alias="GOOGLE_APPLICATION_CREDENTIALS",
         description="Path to Google Cloud service account JSON file",
@@ -102,7 +103,7 @@ class Settings(BaseSettings):
         description="Port number for the application (set by Railway in production)",
     )
 
-    railway_static_url: str | None = Field(
+    railway_static_url: Optional[str] = Field(
         None,
         alias="RAILWAY_STATIC_URL",
         description="Railway static URL (automatically set by Railway)",
@@ -235,7 +236,7 @@ def get_google_cloud_config() -> tuple[str, str, str]:
     )
 
 
-def get_openai_config() -> dict[str, float | int | str]:
+def get_openai_config() -> Dict[str, Union[float, int, str]]:
     """
     Get OpenAI configuration for content generation.
 

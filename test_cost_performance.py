@@ -16,6 +16,11 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from decimal import Decimal
 
+from utils.logging_config import setup_logging
+
+
+logger = setup_logging("unknown_service")
+
 
 # Add the project root to the path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -51,11 +56,11 @@ class PerformanceTestSuite:
             if os.path.exists("perf_test_sessions"):
                 shutil.rmtree("perf_test_sessions")
         except Exception as e:
-            print(f"Cleanup warning: {e}")
+            logger.warning(f"Cleanup warning: {e}")
 
     def test_large_document_estimation(self):
         """Test cost estimation with large numbers of documents."""
-        print("\n📊 Testing Large Document Set Estimation...")
+        logger.info("\n📊 Testing Large Document Set Estimation...")
 
         # Create 100 sample documents
         large_doc_set = []
@@ -97,23 +102,23 @@ class PerformanceTestSuite:
                 "status": "PASSED",
             }
 
-            print(
+            logger.info(
                 f"   ✅ Processed {len(large_doc_set)} documents in {processing_time:.3f}s"
             )
-            print(
+            logger.info(
                 f"   💰 Total estimated cost: ${float(estimate.total_estimated_cost):.4f}"
             )
-            print(
+            logger.info(
                 f"   ⏱️  Average time per document: {processing_time / len(large_doc_set):.4f}s"
             )
 
         except Exception as e:
             self.results["large_doc_estimation"] = {"status": "FAILED", "error": str(e)}
-            print(f"   ❌ Large document estimation failed: {e}")
+            logger.error(f"   ❌ Large document estimation failed: {e}")
 
     def test_concurrent_sessions(self):
         """Test multiple concurrent cost tracking sessions."""
-        print("\n🔄 Testing Concurrent Session Management...")
+        logger.info("\n🔄 Testing Concurrent Session Management...")
 
         def create_session(session_id):
             """Create a single test session."""
@@ -171,17 +176,19 @@ class PerformanceTestSuite:
             "status": "PASSED" if len(failed_sessions) == 0 else "PARTIAL",
         }
 
-        print(
+        logger.info(
             f"   ✅ Created {len(successful_sessions)} concurrent sessions in {processing_time:.3f}s"
         )
         if failed_sessions:
-            print(f"   ⚠️  {len(failed_sessions)} sessions failed")
+            logger.error(f"   ⚠️  {len(failed_sessions)} sessions failed")
             for failed in failed_sessions[:3]:  # Show first 3 failures
-                print(f"      - Session {failed['session_id']}: {failed['error']}")
+                logger.error(
+                    f"      - Session {failed['session_id']}: {failed['error']}"
+                )
 
     def test_export_performance(self):
         """Test export performance with various data sizes."""
-        print("\n📤 Testing Export Performance...")
+        logger.info("\n📤 Testing Export Performance...")
 
         # Create a session with substantial data
         large_cost_data = []
@@ -247,19 +254,19 @@ class PerformanceTestSuite:
                     "status": "PASSED",
                 }
 
-                print(
+                logger.info(
                     f"   ✅ {format_type.upper()} export: {len(export_data)} chars in {end_time - start_time:.3f}s"
                 )
 
             except Exception as e:
                 export_results[format_type] = {"status": "FAILED", "error": str(e)}
-                print(f"   ❌ {format_type.upper()} export failed: {e}")
+                logger.error(f"   ❌ {format_type.upper()} export failed: {e}")
 
         self.results["export_performance"] = export_results
 
     def test_memory_efficiency(self):
         """Test memory usage during operations."""
-        print("\n🧠 Testing Memory Efficiency...")
+        logger.info("\n🧠 Testing Memory Efficiency...")
 
         try:
             import psutil
@@ -306,26 +313,26 @@ class PerformanceTestSuite:
                 else "WARNING",  # Warn if >50MB growth
             }
 
-            print(f"   📊 Initial memory: {initial_memory:.1f} MB")
-            print(f"   📈 Final memory: {final_memory:.1f} MB")
-            print(
+            logger.info(f"   📊 Initial memory: {initial_memory:.1f} MB")
+            logger.info(f"   📈 Final memory: {final_memory:.1f} MB")
+            logger.info(
                 f"   💾 Memory growth: {memory_growth:.1f} MB ({memory_growth / 5:.1f} MB per session)"
             )
 
         except ImportError:
-            print("   ⚠️  psutil not available, skipping memory test")
+            logger.warning("   ⚠️  psutil not available, skipping memory test")
             self.results["memory_efficiency"] = {
                 "status": "SKIPPED",
                 "reason": "psutil not available",
             }
         except Exception as e:
-            print(f"   ❌ Memory efficiency test failed: {e}")
+            logger.error(f"   ❌ Memory efficiency test failed: {e}")
             self.results["memory_efficiency"] = {"status": "FAILED", "error": str(e)}
 
     def run_all_tests(self):
         """Run all performance tests."""
-        print("🚀 Cost Tracking Performance Test Suite")
-        print("=" * 50)
+        logger.info("🚀 Cost Tracking Performance Test Suite")
+        logger.info("=" * 50)
 
         start_time = time.time()
 
@@ -342,7 +349,7 @@ class PerformanceTestSuite:
             self.generate_performance_report(total_time)
 
         except Exception as e:
-            print(f"\n❌ Performance test suite failed: {e}")
+            logger.error(f"\n❌ Performance test suite failed: {e}")
             import traceback
 
             traceback.print_exc()
@@ -351,9 +358,9 @@ class PerformanceTestSuite:
 
     def generate_performance_report(self, total_time):
         """Generate a comprehensive performance report."""
-        print("\n" + "=" * 50)
-        print("📋 PERFORMANCE TEST REPORT")
-        print("=" * 50)
+        logger.info("\n" + "=" * 50)
+        logger.info("📋 PERFORMANCE TEST REPORT")
+        logger.info("=" * 50)
 
         passed_tests = 0
         failed_tests = 0
@@ -363,26 +370,26 @@ class PerformanceTestSuite:
             status = result.get("status", "UNKNOWN")
             if status == "PASSED":
                 passed_tests += 1
-                print(f"✅ {test_name}: PASSED")
+                logger.info(f"✅ {test_name}: PASSED")
             elif status == "FAILED":
                 failed_tests += 1
-                print(f"❌ {test_name}: FAILED")
+                logger.error(f"❌ {test_name}: FAILED")
                 if "error" in result:
-                    print(f"   Error: {result['error']}")
+                    logger.error(f"   Error: {result['error']}")
             elif status == "WARNING":
                 warning_tests += 1
-                print(f"⚠️  {test_name}: WARNING")
+                logger.warning(f"⚠️  {test_name}: WARNING")
             elif status == "PARTIAL":
                 warning_tests += 1
-                print(f"⚠️  {test_name}: PARTIAL SUCCESS")
+                logger.info(f"⚠️  {test_name}: PARTIAL SUCCESS")
             else:
-                print(f"❓ {test_name}: {status}")
+                logger.info(f"❓ {test_name}: {status}")
 
-        print("\n📊 SUMMARY:")
-        print(f"   Total test time: {total_time:.3f}s")
-        print(f"   Tests passed: {passed_tests}")
-        print(f"   Tests failed: {failed_tests}")
-        print(f"   Tests with warnings: {warning_tests}")
+        logger.info("\n📊 SUMMARY:")
+        logger.info(f"   Total test time: {total_time:.3f}s")
+        logger.info(f"   Tests passed: {passed_tests}")
+        logger.error(f"   Tests failed: {failed_tests}")
+        logger.warning(f"   Tests with warnings: {warning_tests}")
 
         # Performance highlights
         if (
@@ -390,7 +397,7 @@ class PerformanceTestSuite:
             and self.results["large_doc_estimation"]["status"] == "PASSED"
         ):
             avg_time = self.results["large_doc_estimation"]["avg_time_per_doc"]
-            print(f"   Document processing rate: {1 / avg_time:.1f} docs/second")
+            logger.debug(f"   Document processing rate: {1 / avg_time:.1f} docs/second")
 
         if "concurrent_sessions" in self.results:
             concurrent_result = self.results["concurrent_sessions"]
@@ -399,19 +406,19 @@ class PerformanceTestSuite:
                     concurrent_result["successful_sessions"]
                     / concurrent_result["total_sessions"]
                 ) * 100
-                print(f"   Concurrent session success rate: {success_rate:.1f}%")
+                logger.info(f"   Concurrent session success rate: {success_rate:.1f}%")
 
         # Overall assessment
         if failed_tests == 0:
             if warning_tests == 0:
-                print("\n🎉 ALL PERFORMANCE TESTS PASSED!")
-                print("✅ Cost tracking system is production-ready")
+                logger.info("\n🎉 ALL PERFORMANCE TESTS PASSED!")
+                logger.info("✅ Cost tracking system is production-ready")
             else:
-                print("\n✅ PERFORMANCE TESTS PASSED WITH WARNINGS")
-                print("⚠️  Some optimizations may be beneficial")
+                logger.warning("\n✅ PERFORMANCE TESTS PASSED WITH WARNINGS")
+                logger.info("⚠️  Some optimizations may be beneficial")
         else:
-            print(f"\n❌ {failed_tests} PERFORMANCE TESTS FAILED")
-            print("🔧 Performance issues require attention")
+            logger.error(f"\n❌ {failed_tests} PERFORMANCE TESTS FAILED")
+            logger.info("🔧 Performance issues require attention")
 
         # Save detailed results
         with open("performance_test_results.json", "w") as f:
@@ -431,7 +438,7 @@ class PerformanceTestSuite:
                 default=str,
             )
 
-        print("\n📁 Detailed results saved to: performance_test_results.json")
+        logger.info("\n📁 Detailed results saved to: performance_test_results.json")
 
 
 if __name__ == "__main__":

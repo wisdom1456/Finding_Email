@@ -21,8 +21,8 @@ def test_structured_logging():
     # Get logger for this module
     logger = get_module_logger(__name__)
     
-    print("=== Testing Structured Logging Implementation ===\n")
-    print("The following logs will be in JSON format:\n")
+logger.info('=== Testing Structured Logging Implementation ===\n')
+logger.info('The following logs will be in JSON format:\n')
     
     # Test different log levels
     logger.debug("Debug message for testing", extra={"test_type": "debug", "data": {"key": "value"}})
@@ -60,8 +60,8 @@ def test_structured_logging():
         "citations_found": 23
     })
     
-    print("\n=== Structured Logging Test Complete ===")
-    print("All logs above are in machine-readable JSON format for production observability.")
+logger.info('\n=== Structured Logging Test Complete ===')
+logger.info('All logs above are in machine-readable JSON format for production observability.')
 
 if __name__ == "__main__":
     test_structured_logging()

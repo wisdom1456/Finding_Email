@@ -15,6 +15,9 @@ import requests
 import yaml
 
 from backend.tests.utils.email_comparator import EmailComparator
+from utils.logging_config import setup_logging
+logger = setup_logging('test_framework')
+
 
 
 class TestOrchestrator:
@@ -54,13 +57,13 @@ class TestOrchestrator:
     def run_test(self):
         """Main test execution function."""
         print_banner(f"🧪 COMPREHENSIVE TEST SUITE - {self.client_name}")
-        print(f"📅 Test Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-        print(f"🎯 Case Type: {self.case_type}")
+logger.info(f'📅 Test Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}')
+logger.info(f'🎯 Case Type: {self.case_type}')
 
         try:
             files_data = self._prepare_test_data()
             if not files_data:
-                print("❌ Failed to prepare test data. Exiting.")
+logger.error('❌ Failed to prepare test data. Exiting.')
                 return
 
             result = self._send_request(files_data)
@@ -69,7 +72,7 @@ class TestOrchestrator:
             print_banner("🎉 TEST RUN COMPLETE")
 
         except Exception as e:
-            print(f"💥 FATAL ERROR: {e}")
+logger.error(f'💥 FATAL ERROR: {e}')
             import traceback
 
             traceback.print_exc()
@@ -82,7 +85,7 @@ class TestOrchestrator:
         total_files = 1 + len(case_documents)
         files_data = []
 
-        print(f"🔄 Loading {total_files} files...")
+logger.info(f'🔄 Loading {total_files} files...')
 
         try:
             content, mime_type = read_file_content(intake_form)
@@ -90,7 +93,7 @@ class TestOrchestrator:
                 ("intake_form", (Path(intake_form).name, content, mime_type))
             )
         except Exception as e:
-            print(f"❌ Failed to load intake form: {e}")
+logger.error(f'❌ Failed to load intake form: {e}')
             return []
 
         for doc_path in case_documents:
@@ -100,11 +103,11 @@ class TestOrchestrator:
                     ("case_documents", (Path(doc_path).name, content, mime_type))
                 )
             except Exception as e:
-                print(f"⚠️  Failed to load {Path(doc_path).name}: {e}")
+logger.error(f'⚠️  Failed to load {Path(doc_path).name}: {e}')
                 continue
 
         total_size = sum(len(data[1][1]) for data in files_data)
-        print(f"✅ Prepared {len(files_data)} files ({total_size / 1_048_576:.1f} MB)")
+logger.info(f'✅ Prepared {len(files_data)} files ({total_size / 1048576:.1f} MB)')
         return files_data
 
     def _categorize_documents(self) -> tuple[str, list[str]]:
@@ -127,8 +130,8 @@ class TestOrchestrator:
 
         case_documents = [str(f) for f in supported_files if str(f) != intake_form]
 
-        print(f"📄 INTAKE FORM: {Path(intake_form).name}")
-        print(f"📁 CASE DOCUMENTS: {len(case_documents)} files")
+logger.info(f'📄 INTAKE FORM: {Path(intake_form).name}')
+logger.info(f'📁 CASE DOCUMENTS: {len(case_documents)} files')
         return str(intake_form), case_documents
 
     def _find_intake_form(self, file_paths: list[Path]) -> str:
@@ -149,7 +152,7 @@ class TestOrchestrator:
         try:
             response = requests.post(self.api_url, files=files_data, timeout=300)
             duration = time.time() - start_time
-            print(
+logger.info(f'✅ Request completed in {duration:.1f} seconds with status {response.status_code}')
                 f"✅ Request completed in {duration:.1f} seconds with status {response.status_code}"
             )
 
@@ -159,7 +162,7 @@ class TestOrchestrator:
                 else {"error": f"HTTP {response.status_code}", "details": response.text}
             )
         except requests.exceptions.RequestException as e:
-            print(f"❌ Request error: {e}")
+logger.error(f'❌ Request error: {e}')
             return {"error": "Request failed", "details": str(e)}
 
     def _analyze_and_save(self, result: dict[str, Any]) -> None:
@@ -179,7 +182,7 @@ class TestOrchestrator:
                 result["email"]["case_analysis_text"], f"email_content_{timestamp}.txt"
             )
 
-        print(f"📁 Results saved to: {self.output_path}")
+logger.info(f'📁 Results saved to: {self.output_path}')
 
     def _validate_response(self, response: dict[str, Any]) -> dict[str, Any]:
         """Dynamically validate response based on config."""
@@ -252,14 +255,14 @@ class TestOrchestrator:
         path = self.output_path / filename
         with open(path, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2, default=str, ensure_ascii=False)
-        print(f"📄 Saved: {filename}")
+logger.info(f'📄 Saved: {filename}')
 
     def _save_text(self, content: str, filename: str) -> None:
         """Save text content to a file."""
         path = self.output_path / filename
         with open(path, "w", encoding="utf-8") as f:
             f.write(content)
-        print(f"📧 Saved: {filename}")
+logger.info(f'📧 Saved: {filename}')
 
 
 # --- Helper Functions (can be moved to a separate utils file) ---
@@ -267,7 +270,7 @@ class TestOrchestrator:
 
 def print_banner(title: str) -> None:
     """Prints a formatted banner."""
-    print(f"\n{'=' * 80}\n  {title}\n{'=' * 80}")
+logger.info(f'\n{'=' * 80}\n  {title}\n{'=' * 80}')
 
 
 def read_file_content(file_path: str) -> tuple[bytes, str]:

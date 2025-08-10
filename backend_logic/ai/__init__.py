@@ -1,6 +1,7 @@
 """
 AI Analysis modules - modular, focused components for legal document analysis.
 """
+
 from __future__ import annotations
 
 from .ai_analyzer_refactored import AIAnalyzer

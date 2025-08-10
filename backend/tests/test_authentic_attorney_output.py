@@ -6,6 +6,9 @@ from unittest.mock import MagicMock
 import pytest
 
 from backend.utils.data_models import (
+from utils.logging_config import setup_logging
+logger = setup_logging('unknown_service')
+
     AnalyzedDocument,
     CaseAnalysisResult,
     DemandLetterEvaluation,
@@ -273,9 +276,9 @@ def test_orchestrated_devlin_style_output(tmp_path, mock_openai_client):
     )
 
     # 8. Manual inspection for tone (print output for review)
-    print("\n--- GENERATED EMAIL OUTPUT (for manual tone inspection) ---\n")
-    print(generated_text)
-    print("\n--- END GENERATED EMAIL OUTPUT ---\n")
+logger.info('\n--- GENERATED EMAIL OUTPUT (for manual tone inspection) ---\n')
+logger.info(generated_text)
+logger.info('\n--- END GENERATED EMAIL OUTPUT ---\n')
 
     # 9. Assert semantic similarity is high (substance)
     substance_score = comparison_results.get("substance", {}).get("score", 0)

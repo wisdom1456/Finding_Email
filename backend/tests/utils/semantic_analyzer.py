@@ -2,6 +2,9 @@ from __future__ import annotations
 
 from dotenv import load_dotenv
 from openai import OpenAI
+from utils.logging_config import setup_logging
+logger = setup_logging('semantic_analyzer')
+
 
 
 load_dotenv()
@@ -46,7 +49,7 @@ class SemanticAnalyzer:
                 np.linalg.norm(embedding1) * np.linalg.norm(embedding2)
             )
         except Exception as e:
-            print(f"An error occurred during embedding similarity: {e}")
+logger.error(f'An error occurred during embedding similarity: {e}')
             return 0.0
 
     def analyze_tone(self, text):
@@ -75,7 +78,7 @@ class SemanticAnalyzer:
             score = float(parts[1].split(":")[1].strip())
             return {"label": tone, "score": score}
         except Exception as e:
-            print(f"An error occurred during tone analysis: {e}")
+logger.error(f'An error occurred during tone analysis: {e}')
             # A mock response for demonstration purposes
             if "formal" in text.lower():
                 return {"label": "Formal", "score": 0.9}

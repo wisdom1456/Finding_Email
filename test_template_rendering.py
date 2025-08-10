@@ -10,6 +10,9 @@ import sys
 from datetime import datetime
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
+from utils.logging_config import setup_logging
+logger = setup_logging('unknown_service')
+
 
 
 # Mock data structures to test template rendering
@@ -151,7 +154,7 @@ def test_template_rendering():
     # Setup Jinja2 environment
     template_dir = os.path.join(os.getcwd(), "backend", "assets", "templates")
     if not os.path.exists(template_dir):
-        print(f"❌ Template directory not found: {template_dir}")
+logger.info(f'❌ Template directory not found: {template_dir}')
         return False
 
     jinja_env = Environment(
@@ -182,7 +185,7 @@ def test_template_rendering():
 
     try:
         # Test findings_email template
-        print("🧪 Testing findings_email.jinja2...")
+logger.info('🧪 Testing findings_email.jinja2...')
         main_template = jinja_env.get_template("findings_email.jinja2")
         main_html = main_template.render(
             results=template_context, current_date=template_context["current_date"]
@@ -190,39 +193,39 @@ def test_template_rendering():
 
         # Basic validation checks
         if "Legal Analysis" in main_html:
-            print("✅ Legal Analysis section found")
+logger.info('✅ Legal Analysis section found')
         else:
-            print("❌ Legal Analysis section missing")
+logger.info('❌ Legal Analysis section missing')
 
         if "Document Analysis" in main_html:
-            print("✅ Document Analysis section found")
+logger.info('✅ Document Analysis section found')
         else:
-            print("❌ Document Analysis section missing")
+logger.info('❌ Document Analysis section missing')
 
         if "Video Evidence Analysis" in main_html:
-            print("✅ Video Evidence Analysis section found")
+logger.info('✅ Video Evidence Analysis section found')
         else:
-            print("❌ Video Evidence Analysis section missing")
+logger.info('❌ Video Evidence Analysis section missing')
 
         if "Case Timeline" not in main_html:
-            print("✅ Case Timeline correctly removed from main template")
+logger.info('✅ Case Timeline correctly removed from main template')
         else:
-            print("❌ Case Timeline still present in main template")
+logger.info('❌ Case Timeline still present in main template')
 
         # Check for timestamped events
         if "00:00:15" in main_html and "00:01:30" in main_html:
-            print("✅ Timestamped events found in video analysis")
+logger.info('✅ Timestamped events found in video analysis')
         else:
-            print("❌ Timestamped events missing from video analysis")
+logger.info('❌ Timestamped events missing from video analysis')
 
         # Check for criminal analysis
         if "Miranda Rights" in main_html:
-            print("✅ Criminal analysis found")
+logger.info('✅ Criminal analysis found')
         else:
-            print("❌ Criminal analysis missing")
+logger.info('❌ Criminal analysis missing')
 
         # Test document_appendix template
-        print("\n🧪 Testing document_appendix.jinja2...")
+logger.info('\n🧪 Testing document_appendix.jinja2...')
         appendix_template = jinja_env.get_template("document_appendix.jinja2")
         appendix_html = appendix_template.render(
             results=template_context, current_date=template_context["current_date"]
@@ -230,42 +233,42 @@ def test_template_rendering():
 
         # Basic validation checks for appendix
         if "Case Timeline" in appendix_html:
-            print("✅ Case Timeline section found in appendix")
+logger.info('✅ Case Timeline section found in appendix')
         else:
-            print("❌ Case Timeline section missing from appendix")
+logger.info('❌ Case Timeline section missing from appendix')
 
         if "Service agreement signed" in appendix_html:
-            print("✅ Timeline events found in appendix")
+logger.info('✅ Timeline events found in appendix')
         else:
-            print("❌ Timeline events missing from appendix")
+logger.info('❌ Timeline events missing from appendix')
 
         if (
             "Comprehensive Video Analysis" in appendix_html
             or "Criminal Law Evidence Analysis" in appendix_html
         ):
-            print("✅ Enhanced video analysis found in appendix")
+logger.info('✅ Enhanced video analysis found in appendix')
         else:
-            print("❌ Enhanced video analysis missing from appendix")
+logger.info('❌ Enhanced video analysis missing from appendix')
 
         if "Constitutional Compliance" in appendix_html:
-            print("✅ Constitutional analysis found in appendix")
+logger.info('✅ Constitutional analysis found in appendix')
         else:
-            print("❌ Constitutional analysis missing from appendix")
+logger.info('❌ Constitutional analysis missing from appendix')
 
         # Write test output files for manual inspection
         with open("test_main_letter.html", "w") as f:
             f.write(main_html)
-        print("\n📄 Main letter test output written to: test_main_letter.html")
+logger.info('\n📄 Main letter test output written to: test_main_letter.html')
 
         with open("test_appendix.html", "w") as f:
             f.write(appendix_html)
-        print("📄 Appendix test output written to: test_appendix.html")
+logger.info('📄 Appendix test output written to: test_appendix.html')
 
-        print("\n✅ Template rendering test completed successfully!")
+logger.info('\n✅ Template rendering test completed successfully!')
         return True
 
     except Exception as e:
-        print(f"❌ Template rendering failed: {e}")
+logger.error(f'❌ Template rendering failed: {e}')
         import traceback
 
         traceback.print_exc()

@@ -14,6 +14,9 @@ import time
 from datetime import datetime
 from pathlib import Path
 from typing import Any
+from utils.logging_config import setup_logging
+logger = setup_logging('unknown_service')
+
 
 
 # Test configurations
@@ -44,18 +47,18 @@ TESTS = [
 
 def print_banner(title: str) -> None:
     """Print a formatted banner for section headers."""
-    print("\n" + "=" * 80)
-    print(f"  {title}")
-    print("=" * 80)
+logger.info('\n' + '=' * 80)
+logger.info(f'  {title}')
+logger.info('=' * 80)
 
 
 def print_test_header(test_info: dict[str, str]) -> None:
     """Print test information header."""
-    print(f"\n🧪 TEST: {test_info['name']}")
-    print(f"👤 Client: {test_info['client']}")
-    print(f"⚖️  Case Type: {test_info['case_type']}")
-    print(f"📁 Expected: {test_info['expected_docs']}")
-    print("-" * 60)
+logger.info(f'\n🧪 TEST: {test_info['name']}')
+logger.info(f'👤 Client: {test_info['client']}')
+logger.info(f'⚖️  Case Type: {test_info['case_type']}')
+logger.info(f'📁 Expected: {test_info['expected_docs']}')
+logger.info('-' * 60)
 
 
 def run_single_test(test_info: dict[str, str]) -> dict[str, Any]:
@@ -92,16 +95,16 @@ def run_single_test(test_info: dict[str, str]) -> dict[str, Any]:
         }
 
         if result.returncode == 0:
-            print(f"✅ {test_info['name']} completed successfully in {duration:.1f}s")
+logger.info(f'✅ {test_info['name']} completed successfully in {duration:.1f}s')
         else:
-            print(f"❌ {test_info['name']} failed after {duration:.1f}s")
-            print(f"Error: {result.stderr}")
+logger.error(f'❌ {test_info['name']} failed after {duration:.1f}s')
+logger.error(f'Error: {result.stderr}')
 
         return test_result
 
     except subprocess.TimeoutExpired:
         duration = time.time() - start_time
-        print(f"⏰ {test_info['name']} timed out after {duration:.1f}s")
+logger.info(f'⏰ {test_info['name']} timed out after {duration:.1f}s')
         return {
             "test_name": test_info["name"],
             "client": test_info["client"],
@@ -113,7 +116,7 @@ def run_single_test(test_info: dict[str, str]) -> dict[str, Any]:
         }
     except Exception as e:
         duration = time.time() - start_time
-        print(f"💥 {test_info['name']} crashed: {e}")
+logger.error(f'💥 {test_info['name']} crashed: {e}')
         return {
             "test_name": test_info["name"],
             "client": test_info["client"],
@@ -172,41 +175,41 @@ def generate_summary_report(results: list[dict[str, Any]]) -> None:
     successful_tests = sum(1 for r in results if r["success"])
     failed_tests = total_tests - successful_tests
 
-    print(f"📅 Report Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    print(f"🧪 Total Tests: {total_tests}")
-    print(f"✅ Successful: {successful_tests}")
-    print(f"❌ Failed: {failed_tests}")
-    print(f"📊 Success Rate: {(successful_tests / total_tests) * 100:.1f}%")
+logger.info(f'📅 Report Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}')
+logger.info(f'🧪 Total Tests: {total_tests}')
+logger.info(f'✅ Successful: {successful_tests}')
+logger.error(f'❌ Failed: {failed_tests}')
+logger.info(f'📊 Success Rate: {successful_tests / total_tests * 100:.1f}%')
 
     # Individual test results
-    print("\n📋 Individual Test Results:")
+logger.info('\n📋 Individual Test Results:')
     for i, result in enumerate(results, 1):
         status = "✅ PASS" if result["success"] else "❌ FAIL"
         duration = result["duration"]
 
-        print(f"\n  {i}. {result['test_name']} - {status}")
-        print(f"     Client: {result['client']}")
-        print(f"     Case: {result['case_type']}")
-        print(f"     Duration: {duration:.1f}s")
+logger.info(f'\n  {i}. {result['test_name']} - {status}')
+logger.info(f'     Client: {result['client']}')
+logger.info(f'     Case: {result['case_type']}')
+logger.info(f'     Duration: {duration:.1f}s')
 
         if result["success"] and result["metrics"]:
             metrics = result["metrics"]
             if "documents_processed" in metrics:
-                print(f"     Documents: {metrics['documents_processed']}")
+logger.info(f'     Documents: {metrics['documents_processed']}')
             if "email_length" in metrics:
-                print(f"     Email: {metrics['email_length']:,} characters")
+logger.info(f'     Email: {metrics['email_length']:,} characters')
             if "payload_mb" in metrics:
-                print(f"     Payload: {metrics['payload_mb']:.1f} MB")
+logger.info(f'     Payload: {metrics['payload_mb']:.1f} MB')
             if "errors" in metrics and metrics["errors"] > 0:
-                print(f"     ⚠️  Errors: {metrics['errors']}")
+logger.error(f'     ⚠️  Errors: {metrics['errors']}')
         elif not result["success"]:
             error = result.get("error", "Unknown error")
-            print(f"     Error: {error}")
+logger.error(f'     Error: {error}')
 
     # Aggregate metrics for successful tests
     successful_results = [r for r in results if r["success"]]
     if successful_results:
-        print("\n📊 Aggregate Metrics (Successful Tests):")
+logger.info('\n📊 Aggregate Metrics (Successful Tests):')
 
         total_docs = sum(
             r["metrics"].get("documents_processed", 0) for r in successful_results
@@ -219,19 +222,19 @@ def generate_summary_report(results: list[dict[str, Any]]) -> None:
         )
         total_duration = sum(r["duration"] for r in successful_results)
 
-        print(f"  📁 Total Documents Processed: {total_docs}")
-        print(f"  📧 Total Email Characters: {total_email_chars:,}")
-        print(f"  💾 Total Payload Size: {total_payload:.1f} MB")
-        print(f"  ⏱️  Total Processing Time: {total_duration:.1f}s")
+logger.info(f'  📁 Total Documents Processed: {total_docs}')
+logger.info(f'  📧 Total Email Characters: {total_email_chars:,}')
+logger.info(f'  💾 Total Payload Size: {total_payload:.1f} MB')
+logger.debug(f'  ⏱️  Total Processing Time: {total_duration:.1f}s')
 
         if total_docs > 0:
             avg_chars_per_doc = total_email_chars / total_docs
-            print(
+logger.info(f'  📊 Average Email Length per Document: {avg_chars_per_doc:.0f} chars')
                 f"  📊 Average Email Length per Document: {avg_chars_per_doc:.0f} chars"
             )
 
     # Quality indicators
-    print("\n🔍 Quality Indicators:")
+logger.info('\n🔍 Quality Indicators:')
     for result in successful_results:
         metrics = result["metrics"]
         test_name = result["test_name"]
@@ -246,19 +249,19 @@ def generate_summary_report(results: list[dict[str, Any]]) -> None:
             else:
                 quality = "🟢 Comprehensive"
 
-            print(f"  {test_name}: {quality} ({email_length:,} chars)")
+logger.info(f'  {test_name}: {quality} ({email_length:,} chars)')
 
     # Recommendations
-    print("\n💡 Recommendations:")
+logger.info('\n💡 Recommendations:')
     if failed_tests > 0:
-        print(f"  🔧 Fix {failed_tests} failed test(s) before proceeding")
+logger.error(f'  🔧 Fix {failed_tests} failed test(s) before proceeding')
 
     if successful_tests > 0:
-        print("  📧 Review generated emails for quality and professional tone")
-        print("  📋 Verify all uploaded documents are properly referenced")
-        print("  🎯 Check case-specific analysis for accuracy")
+logger.info('  📧 Review generated emails for quality and professional tone')
+logger.info('  📋 Verify all uploaded documents are properly referenced')
+logger.info('  🎯 Check case-specific analysis for accuracy')
 
-    print("  📝 Save test results for quality analysis iteration")
+logger.debug('  📝 Save test results for quality analysis iteration')
 
 
 def save_results_summary(results: list[dict[str, Any]]) -> None:
@@ -279,20 +282,20 @@ def save_results_summary(results: list[dict[str, Any]]) -> None:
     with open(summary_file, "w", encoding="utf-8") as f:
         json.dump(summary_data, f, indent=2, default=str, ensure_ascii=False)
 
-    print(f"\n💾 Results summary saved: {summary_file.name}")
+logger.info(f'\n💾 Results summary saved: {summary_file.name}')
 
 
 def main():
     """Main test runner execution."""
     print_banner("🧪 LEGAL DOCUMENT ANALYSIS - COMPREHENSIVE TEST SUITE")
-    print(f"📅 Test Session: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    print(f"🎯 Testing all {len(TESTS)} client cases with full document sets")
+logger.info(f'📅 Test Session: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}')
+logger.info(f'🎯 Testing all {len(TESTS)} client cases with full document sets')
 
     # Check if backend is running
-    print("\n🔍 Pre-flight Checks:")
-    print("  📡 Backend API: Assuming running on http://127.0.0.1:8000")
-    print(f"  📁 Test Scripts: {len(TESTS)} test files prepared")
-    print("  ⏱️  Timeout: 10 minutes per test")
+logger.info('\n🔍 Pre-flight Checks:')
+logger.info('  📡 Backend API: Assuming running on http://127.0.0.1:8000')
+logger.info(f'  📁 Test Scripts: {len(TESTS)} test files prepared')
+logger.info('  ⏱️  Timeout: 10 minutes per test')
 
     input("\n🚀 Press Enter to start comprehensive testing...")
 
@@ -306,7 +309,7 @@ def main():
 
         # Short pause between tests
         if i < len(TESTS):
-            print("\n⏸️  Pausing 5 seconds before next test...")
+logger.info('\n⏸️  Pausing 5 seconds before next test...')
             time.sleep(5)
 
     # Generate comprehensive report
@@ -319,13 +322,13 @@ def main():
     successful_tests = sum(1 for r in results if r["success"])
 
     if successful_tests == len(TESTS):
-        print("✅ All tests passed! Ready for email quality analysis.")
+logger.info('✅ All tests passed! Ready for email quality analysis.')
     else:
         failed_count = len(TESTS) - successful_tests
-        print(f"⚠️  {failed_count} test(s) failed. Review errors before proceeding.")
+logger.error(f'⚠️  {failed_count} test(s) failed. Review errors before proceeding.')
 
-    print("\n📂 Check test_results/ directories for detailed outputs")
-    print("📧 Review generated email content for quality assessment")
+logger.info('\n📂 Check test_results/ directories for detailed outputs')
+logger.info('📧 Review generated email content for quality assessment')
 
 
 if __name__ == "__main__":

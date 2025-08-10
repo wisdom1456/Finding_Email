@@ -33,6 +33,7 @@ dependencies = [
     "requests",
     "jinja2",
     "pyyaml",
+    "loguru",
 ]
 
 [project.optional-dependencies]

@@ -11,6 +11,12 @@ import re
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import List, Optional, Union
+
+from utils.logging_config import setup_logging
+
+
+logger = setup_logging("main_processor")
 
 
 # Add project root to Python path for standalone execution
@@ -92,93 +98,6 @@ def html_to_plain_text(html_content: str) -> str:
     return text.strip()
 
 
-def create_eml_file(
-    content: str, subject: str, recipient: str = "client@example.com"
-) -> str:
-    """Create EML file content from HTML."""
-    msg = MIMEMultipart("alternative")
-    msg["Subject"] = subject
-    msg["From"] = "attorney@bernhardtriley.com"
-    msg["To"] = recipient
-
-    # Create both text and HTML parts
-    text_content = html_to_plain_text(content)
-    text_part = MIMEText(text_content, "plain")
-    html_part = MIMEText(content, "html")
-
-    msg.attach(text_part)
-    msg.attach(html_part)
-
-    return msg.as_string()
-
-
-def create_docx_file(content: str, output_path: str) -> None:
-    """Create DOCX file from HTML content."""
-    if not DOCX_AVAILABLE:
-        print(f"⚠️  python-docx not available, skipping DOCX creation for {output_path}")
-        return
-
-    # Convert HTML to plain text for DOCX
-    text_content = html_to_plain_text(content)
-
-    doc = docx.Document()
-
-    # Add title
-    title = doc.add_heading("Legal Findings Letter", 0)
-    title.alignment = 1  # Center alignment
-
-    # Add content
-    for paragraph in text_content.split("\n\n"):
-        if paragraph.strip():
-            doc.add_paragraph(paragraph.strip())
-
-    doc.save(output_path)
-
-
-def create_pdf_file(content: str, output_path: str) -> None:
-    """Create PDF file from HTML content."""
-    global WEASYPRINT_AVAILABLE
-
-    # Check weasyprint availability on first use
-    if WEASYPRINT_AVAILABLE is None:
-        try:
-            import weasyprint
-
-            WEASYPRINT_AVAILABLE = True
-        except ImportError:
-            WEASYPRINT_AVAILABLE = False
-
-    if not WEASYPRINT_AVAILABLE:
-        print(f"⚠️  weasyprint not available, skipping PDF creation for {output_path}")
-        return
-
-    # Import weasyprint here to avoid module-level import issues
-    import weasyprint
-
-    # Add basic CSS for better PDF formatting
-    css = """
-    <style>
-    body {
-        font-family: Times, serif;
-        margin: 40px;
-        line-height: 1.6;
-    }
-    h1, h2, h3 {
-        color: #2c3e50;
-    }
-    h2 {
-        border-bottom: 1px solid #bdc3c7;
-        padding-bottom: 5px;
-    }
-    </style>
-    """
-
-    html_with_css = (
-        f"<!DOCTYPE html><html><head>{css}</head><body>{content}</body></html>"
-    )
-    weasyprint.HTML(string=html_with_css).write_pdf(output_path)
-
-
 def extract_case_name(analysis_result) -> str:
     """Extract case name from analysis result."""
     if hasattr(analysis_result, "intake_analysis") and analysis_result.intake_analysis:
@@ -216,16 +135,18 @@ def save_output_files(
     with open(appendix_html_path, "w", encoding="utf-8") as f:
         f.write(appendix)
 
-    print(f"HTML output files saved to: {output_path}")
-    print("Files created:")
-    print(f"  - {case_name}_findings_letter.html")
-    print(f"  - {case_name}_analysis_appendix.html")
+    logger.info(f"HTML output files saved to: {output_path}")
+    logger.info("Files created:")
+    logger.info(f"  - {case_name}_findings_letter.html")
+    logger.info(f"  - {case_name}_analysis_appendix.html")
 
 
-async def process_case_documents(output_dir: str | None = None, config_path: str | None = None) -> bool | None:
+async def process_case_documents(
+    output_dir: Optional[str] = None, config_path: Optional[str] = None
+) -> Optional[bool]:
     """
     Enhanced processing function with size-based progress tracking and cost tracking.
-    
+
     Args:
         output_dir: Directory to save output files
         config_path: Path to configuration YAML file for legal practice area-specific prompts
@@ -240,7 +161,9 @@ async def process_case_documents(output_dir: str | None = None, config_path: str
         audio_processor = AudioProcessor(openai_client)
         video_processor = VideoProcessor()
         ai_analyzer = AIAnalyzer(openai_client, doc_processor, config_path=config_path)
-        email_generator = EmailGeneratorV2(config_path=config_path, openai_api_key=openai_client.api_key)
+        email_generator = EmailGeneratorV2(
+            config_path=config_path, openai_api_key=openai_client.api_key
+        )
 
         # Initialize cost tracking
         cost_session_manager = CostSessionManager()
@@ -427,124 +350,179 @@ async def process_case_documents(output_dir: str | None = None, config_path: str
 
             processed_size = 0
 
-            # Custom progress callback for document analysis with cost tracking
+            # Enhanced concurrent analysis with progress tracking and cost monitoring
             async def analyze_with_progress():
+                import concurrent.futures
+                import functools
+
                 nonlocal processed_size
-                results = []
 
-                # Analyze documents
-                for i, doc in enumerate(case_docs):
-                    doc_size = case_doc_sizes.get(doc.file_name, 1024)
-                    current_doc_progress = (
-                        processed_size / total_case_size
-                        if total_case_size > 0
-                        else (i / len(case_docs))
+                # Use the parallelized analyze_case_documents method for concurrent processing
+                logger.info(
+                    f"MAIN PROCESSOR: 🚀 Starting concurrent analysis of {len(case_docs)} documents..."
+                )
+
+                # Initial progress update
+                tracker.update_progress(
+                    "case_analysis",
+                    0.1,
+                    f"Initializing concurrent processing of {len(case_docs)} documents",
+                )
+
+                # Pre-processing cost update
+                if st.session_state.cost_session_id:
+                    try:
+                        current_cost_summary = cost_session_manager.get_cost_summary(
+                            st.session_state.cost_session_id
+                        )
+                        if current_cost_summary and current_cost_summary.actual_costs:
+                            current_cost = float(
+                                current_cost_summary.actual_costs.total_actual_cost
+                            )
+                            st.session_state.current_processing_cost = current_cost
+                            display_processing_cost_update(current_cost)
+                    except (AttributeError, KeyError, ValueError):
+                        pass
+
+                # Use concurrent document analysis (this calls the parallelized method)
+                results = await ai_analyzer.analyze_case_documents(
+                    case_docs, analysis_result.intake_analysis
+                )
+
+                # Post-processing with ThreadPoolExecutor for I/O-bound operations
+                def process_cost_tracking_batch(result_batch):
+                    """Process cost tracking for a batch of results using ThreadPoolExecutor."""
+                    processed_results = []
+                    for result in result_batch:
+                        if st.session_state.cost_session_id and isinstance(
+                            result, AnalyzedDocument
+                        ):
+                            try:
+                                cost_session_manager.update_document_costs(
+                                    st.session_state.cost_session_id, [result]
+                                )
+                                processed_results.append(("success", result))
+                            except Exception as e:
+                                logger.error(
+                                    f"MAIN PROCESSOR: ⚠️ Cost tracking failed for {result.file_name}: {e}"
+                                )
+                                processed_results.append(("error", result))
+                        else:
+                            processed_results.append(("no_cost_tracking", result))
+                    return processed_results
+
+                # Split results into batches for concurrent processing
+                batch_size = 5
+                result_batches = [
+                    results[i : i + batch_size]
+                    for i in range(0, len(results), batch_size)
+                ]
+
+                if result_batches and st.session_state.cost_session_id:
+                    logger.debug(
+                        f"MAIN PROCESSOR: 🚀 Processing cost tracking for {len(results)} results in {len(result_batches)} batches..."
                     )
 
-                    progress_msg = (
-                        f"Processing {i + 1}/{len(case_docs)}: {doc.file_name} "
-                        f"({doc_size / 1024:.1f} KB)"
-                    )
-                    tracker.update_progress(
-                        "case_analysis",
-                        current_doc_progress,
-                        progress_msg,
-                    )
+                    # Use ThreadPoolExecutor for concurrent cost tracking operations
+                    with concurrent.futures.ThreadPoolExecutor(
+                        max_workers=3
+                    ) as executor:
+                        # Submit all batch processing tasks
+                        future_to_batch = {
+                            executor.submit(process_cost_tracking_batch, batch): batch
+                            for batch in result_batches
+                        }
 
-                    # Update real-time cost tracking before processing
-                    if st.session_state.cost_session_id:
-                        try:
-                            current_cost_summary = (
-                                cost_session_manager.get_cost_summary(
-                                    st.session_state.cost_session_id
+                        # Process completed futures
+                        for future in concurrent.futures.as_completed(future_to_batch):
+                            batch = future_to_batch[future]
+                            try:
+                                batch_results = future.result()
+                                logger.info(
+                                    f"MAIN PROCESSOR: ✅ Completed cost tracking for batch of {len(batch)} results"
+                                )
+                            except Exception as e:
+                                logger.error(
+                                    f"MAIN PROCESSOR: ❌ Cost tracking batch failed: {e}"
+                                )
+
+                # Update progress tracking with the completed results
+                tracker.update_progress(
+                    "case_analysis",
+                    0.9,
+                    f"Finalizing analysis of {len(results)} documents",
+                )
+
+                # Update final cost tracking
+                if st.session_state.cost_session_id:
+                    try:
+                        updated_cost_summary = cost_session_manager.get_cost_summary(
+                            st.session_state.cost_session_id
+                        )
+                        if updated_cost_summary and updated_cost_summary.actual_costs:
+                            updated_cost = float(
+                                updated_cost_summary.actual_costs.total_actual_cost
+                            )
+                            st.session_state.current_processing_cost = updated_cost
+                            display_processing_cost_update(updated_cost)
+                    except (AttributeError, KeyError, ValueError):
+                        pass
+
+                # Add media results to the final analysis (using ThreadPoolExecutor for I/O operations)
+                def process_media_results():
+                    """Process media results in parallel."""
+                    media_errors = []
+                    media_insights = []
+                    transcripted_media = []
+
+                    for item in processed_audio:
+                        if isinstance(item, TranscriptedMedia):
+                            transcripted_media.append(item)
+                        elif isinstance(item, MediaProcessingError):
+                            media_errors.append(
+                                AnalysisError(
+                                    source=item.source,
+                                    file_name=item.file_name,
+                                    error_message=item.error_message,
                                 )
                             )
-                            if (
-                                current_cost_summary
-                                and current_cost_summary.actual_costs
-                            ):
-                                current_cost = float(
-                                    current_cost_summary.actual_costs.total_actual_cost
-                                )
-                                st.session_state.current_processing_cost = current_cost
-                                display_processing_cost_update(current_cost)
-                        except (AttributeError, KeyError, ValueError):
-                            pass  # Continue processing even if cost update fails
 
-                    result = await ai_analyzer._analyze_single_document(
-                        doc, analysis_result.intake_analysis
-                    )
-                    results.append(result)
-
-                    # Update cost tracking after processing document
-                    if st.session_state.cost_session_id and isinstance(
-                        result, AnalyzedDocument
-                    ):
-                        try:
-                            # Update the cost session with the newly processed document
-                            cost_session_manager.update_document_costs(
-                                st.session_state.cost_session_id, [result]
-                            )
-
-                            # Get updated cost and display
-                            updated_cost_summary = (
-                                cost_session_manager.get_cost_summary(
-                                    st.session_state.cost_session_id
+                    for item in processed_video:
+                        if isinstance(item, VideoInsight):
+                            media_insights.append(item)
+                        elif isinstance(item, MediaProcessingError):
+                            media_errors.append(
+                                AnalysisError(
+                                    source=item.source,
+                                    file_name=item.file_name,
+                                    error_message=item.error_message,
                                 )
                             )
-                            if (
-                                updated_cost_summary
-                                and updated_cost_summary.actual_costs
-                            ):
-                                updated_cost = float(
-                                    updated_cost_summary.actual_costs.total_actual_cost
-                                )
-                                st.session_state.current_processing_cost = updated_cost
-                                display_processing_cost_update(updated_cost)
-                        except (AttributeError, KeyError, ValueError):
-                            pass  # Continue processing even if cost update fails
 
-                    processed_size += doc_size
-                    final_progress = (
-                        processed_size / total_case_size
-                        if total_case_size > 0
-                        else ((i + 1) / len(case_docs))
-                    )
+                    return media_errors, media_insights, transcripted_media
 
-                    tracker.update_progress(
-                        "case_analysis",
-                        final_progress,
-                        f"Completed {i + 1}/{len(case_docs)} documents",
-                    )
-
-                    if i < len(case_docs) - 1:
-                        await asyncio.sleep(3)
-
-                # Add media results to the final analysis
-                for item in processed_audio:
-                    if isinstance(item, TranscriptedMedia):
-                        analysis_result.transcripted_media.append(item)
-                    elif isinstance(item, MediaProcessingError):
-                        analysis_result.errors.append(
-                            AnalysisError(
-                                source=item.source,
-                                file_name=item.file_name,
-                                error_message=item.error_message,
-                            )
+                # Process media results concurrently if there are any
+                if processed_audio or processed_video:
+                    with concurrent.futures.ThreadPoolExecutor(
+                        max_workers=2
+                    ) as executor:
+                        media_future = executor.submit(process_media_results)
+                        media_errors, media_insights, transcripted_media = (
+                            media_future.result()
                         )
 
-                for item in processed_video:
-                    if isinstance(item, VideoInsight):
-                        analysis_result.video_insights.append(item)
-                    elif isinstance(item, MediaProcessingError):
-                        analysis_result.errors.append(
-                            AnalysisError(
-                                source=item.source,
-                                file_name=item.file_name,
-                                error_message=item.error_message,
-                            )
+                        # Add to analysis result
+                        analysis_result.errors.extend(media_errors)
+                        analysis_result.video_insights.extend(media_insights)
+                        analysis_result.transcripted_media.extend(transcripted_media)
+
+                        logger.info(
+                            f"MAIN PROCESSOR: ✅ Processed {len(transcripted_media)} audio and {len(media_insights)} video items"
                         )
 
+                logger.info(
+                    f"MAIN PROCESSOR: ✅ Completed concurrent analysis of {len(results)} documents"
+                )
                 return results
 
             case_analysis_results = await analyze_with_progress()
@@ -625,58 +603,81 @@ async def process_case_documents(output_dir: str | None = None, config_path: str
 
         # H1 DEBUG: Email generation start
         import json
-        print(f"DEBUG_H1: {json.dumps({'module': 'main_processor', 'hypothesis_id': 'H1', 'action': 'email_generation_start', 'line': 625})}")
-        
+
+        logger.debug(
+            f"DEBUG_H1: {json.dumps({'module': 'main_processor', 'hypothesis_id': 'H1', 'action': 'email_generation_start', 'line': 625})}"
+        )
+
         email_docs = email_generator.generate_email_and_analysis_docs(final_analysis)
-        
+
         # H1 DEBUG: Email generation complete - capture return value analysis
         email_docs_debug = {
-            'module': 'main_processor',
-            'hypothesis_id': 'H1',
-            'action': 'email_generation_complete',
-            'line': 627,
-            'email_docs_type': str(type(email_docs)),
-            'email_docs_keys': list(email_docs.keys()) if isinstance(email_docs, dict) else None,
-            'email_docs_length': len(str(email_docs)) if email_docs else 0,
-            'has_content': bool(email_docs)
+            "module": "main_processor",
+            "hypothesis_id": "H1",
+            "action": "email_generation_complete",
+            "line": 627,
+            "email_docs_type": str(type(email_docs)),
+            "email_docs_keys": list(email_docs.keys())
+            if isinstance(email_docs, dict)
+            else None,
+            "email_docs_length": len(str(email_docs)) if email_docs else 0,
+            "has_content": bool(email_docs),
         }
-        print(f"DEBUG_H1: {json.dumps(email_docs_debug)}")
-        
+        logger.debug(f"DEBUG_H1: {json.dumps(email_docs_debug)}")
+
         # H1 DEBUG: Critical issue - No file save operation found after email generation
-        print(f"DEBUG_H1: {json.dumps({'module': 'main_processor', 'hypothesis_id': 'H1', 'action': 'file_save_missing', 'line': 628, 'issue': 'No file write operation found after email generation'})}")
+        logger.debug(
+            f"DEBUG_H1: {json.dumps({'module': 'main_processor', 'hypothesis_id': 'H1', 'action': 'file_save_missing', 'line': 628, 'issue': 'No file write operation found after email generation'})}"
+        )
 
         # CRITICAL FIX: Add missing file save operation
         if email_docs and isinstance(email_docs, dict):
             try:
                 import os
+
                 # Ensure output directory exists
                 output_dir = "validation_output"
                 os.makedirs(output_dir, exist_ok=True)
-                
+
                 # Extract HTML content - check multiple possible keys
                 html_content = None
-                for key in ['letter_content', 'main_letter', 'rendered_email', 'html_content']:
-                    if key in email_docs and email_docs[key]:
+                for key in [
+                    "letter_content",
+                    "main_letter",
+                    "rendered_email",
+                    "html_content",
+                ]:
+                    if email_docs.get(key):
                         html_content = email_docs[key]
                         break
-                
+
                 if html_content:
                     output_file = os.path.join(output_dir, "findings_letter.html")
-                    with open(output_file, 'w', encoding='utf-8') as f:
+                    with open(output_file, "w", encoding="utf-8") as f:
                         f.write(html_content)
-                    
-                    print(f"DEBUG_FIX: {json.dumps({'module': 'main_processor', 'action': 'file_saved_successfully', 'file_path': output_file, 'content_length': len(html_content)})}")
-                    st.success(f"✅ Findings letter saved successfully to: {output_file}")
+
+                    logger.debug(
+                        f"DEBUG_FIX: {json.dumps({'module': 'main_processor', 'action': 'file_saved_successfully', 'file_path': output_file, 'content_length': len(html_content)})}"
+                    )
+                    st.success(
+                        f"✅ Findings letter saved successfully to: {output_file}"
+                    )
                 else:
-                    print(f"DEBUG_FIX: {json.dumps({'module': 'main_processor', 'action': 'file_save_failed', 'issue': 'No HTML content found in email_docs', 'available_keys': list(email_docs.keys())})}")
+                    logger.error(
+                        f"DEBUG_FIX: {json.dumps({'module': 'main_processor', 'action': 'file_save_failed', 'issue': 'No HTML content found in email_docs', 'available_keys': list(email_docs.keys())})}"
+                    )
                     st.warning("⚠️ HTML content not found in generated email data")
-                    
+
             except Exception as e:
-                error_msg = f"Failed to save findings letter: {str(e)}"
-                print(f"DEBUG_FIX: {json.dumps({'module': 'main_processor', 'action': 'file_save_error', 'error': error_msg})}")
+                error_msg = f"Failed to save findings letter: {e!s}"
+                logger.error(
+                    f"DEBUG_FIX: {json.dumps({'module': 'main_processor', 'action': 'file_save_error', 'error': error_msg})}"
+                )
                 st.error(f"❌ {error_msg}")
         else:
-            print(f"DEBUG_FIX: {json.dumps({'module': 'main_processor', 'action': 'file_save_failed', 'issue': 'email_docs is None or not a dictionary'})}")
+            logger.error(
+                f"DEBUG_FIX: {json.dumps({'module': 'main_processor', 'action': 'file_save_failed', 'issue': 'email_docs is None or not a dictionary'})}"
+            )
             st.error("❌ Email generation returned invalid data")
 
         # Update cost tracking after email generation
@@ -698,8 +699,9 @@ async def process_case_documents(output_dir: str | None = None, config_path: str
                         display_processing_cost_update(0.0)
             except (AttributeError, KeyError, ValueError, TypeError) as e:
                 # Enhanced error handling for cost tracking
-                print(f"DEBUG_COST: {json.dumps({'module': 'main_processor', 'action': 'cost_tracking_error', 'error': str(e), 'error_type': type(e).__name__})}")
-                pass
+                logger.error(
+                    f"DEBUG_COST: {json.dumps({'module': 'main_processor', 'action': 'cost_tracking_error', 'error': str(e), 'error_type': type(e).__name__})}"
+                )
 
         tracker.complete_phase(
             "email_generation", "Findings letter generated successfully"
@@ -724,7 +726,8 @@ async def process_case_documents(output_dir: str | None = None, config_path: str
                 if (
                     st.session_state.cost_summary
                     and st.session_state.cost_summary.actual_costs
-                    and st.session_state.cost_summary.actual_costs.total_actual_cost is not None
+                    and st.session_state.cost_summary.actual_costs.total_actual_cost
+                    is not None
                 ):
                     final_cost = float(
                         st.session_state.cost_summary.actual_costs.total_actual_cost
@@ -745,19 +748,21 @@ async def process_case_documents(output_dir: str | None = None, config_path: str
                             )
                 elif st.session_state.cost_summary:
                     # Handle case where cost_summary exists but actual_costs is None or incomplete
-                    st.sidebar.info("💰 Cost tracking initialized but processing not yet completed")
+                    st.sidebar.info(
+                        "💰 Cost tracking initialized but processing not yet completed"
+                    )
 
             except Exception as e:
                 st.warning(f"Could not finalize cost tracking: {e!s}")
 
         # Store results - FIXED: Use correct keys from EmailGeneratorV2
         st.session_state.final_results = final_analysis
-        
+
         # EmailGeneratorV2 returns "letter_content", not "main_letter"/"appendix"
         if email_docs and isinstance(email_docs, dict):
             # Extract the main letter content using the correct key
             main_letter_content = email_docs.get("letter_content", "")
-            
+
             # Set both main_letter and appendix to the same content since
             # the new architecture generates a single complete findings letter
             st.session_state.main_letter = main_letter_content
@@ -766,7 +771,7 @@ async def process_case_documents(output_dir: str | None = None, config_path: str
             # Fallback if email_docs is invalid
             st.session_state.main_letter = ""
             st.session_state.appendix = ""
-            
+
         st.session_state.processing_status = "completed"
 
         # Save output files if output_dir is specified
@@ -788,18 +793,18 @@ async def process_case_documents(output_dir: str | None = None, config_path: str
         return True
 
     except EmailReadabilityError as e:
-        print(f"🔍 MAIN_PROCESSOR: EmailReadabilityError caught: {e}")
+        logger.error(f"🔍 MAIN_PROCESSOR: EmailReadabilityError caught: {e}")
         st.session_state.processing_status = "failed"
         st.session_state.processing_error = str(e)
         st.error(f"Failed to generate a readable document after multiple attempts: {e}")
         return False
 
     except Exception as e:
-        print(f"🔍 MAIN_PROCESSOR: Exception caught: {e}")
-        print(f"🔍 MAIN_PROCESSOR: Exception type: {type(e)}")
+        logger.error(f"🔍 MAIN_PROCESSOR: Exception caught: {e}")
+        logger.error(f"🔍 MAIN_PROCESSOR: Exception type: {type(e)}")
         import traceback
 
-        print(f"🔍 MAIN_PROCESSOR: Full traceback: {traceback.format_exc()}")
+        logger.error(f"🔍 MAIN_PROCESSOR: Full traceback: {traceback.format_exc()}")
         st.session_state.processing_status = "failed"
         st.session_state.processing_error = str(e)
         st.error(f"An error occurred during processing: {e}")
@@ -807,8 +812,11 @@ async def process_case_documents(output_dir: str | None = None, config_path: str
 
 
 async def process_case_documents_cli(
-    intake_form_path: str, case_documents_paths: list, output_dir: str, config_path: str | None = None
-) -> bool | None:
+    intake_form_path: str,
+    case_documents_paths: List,
+    output_dir: str,
+    config_path: Optional[str] = None,
+) -> Optional[bool]:
     """
     Command-line version of the case processing function.
 
@@ -819,7 +827,7 @@ async def process_case_documents_cli(
         config_path: Path to configuration YAML file for legal practice area-specific prompts
     """
     try:
-        print("Initializing processors...")
+        logger.info("Initializing processors...")
 
         # Initialize processors
         from backend_logic.config import get_openai_api_key
@@ -831,7 +839,7 @@ async def process_case_documents_cli(
         ai_analyzer = AIAnalyzer(openai_client, doc_processor, config_path=config_path)
         email_generator = EmailGeneratorV2(openai_client, config_path=config_path)
 
-        print(f"Processing {len(case_documents_paths) + 1} files...")
+        logger.debug(f"Processing {len(case_documents_paths) + 1} files...")
 
         # Process documents
         all_file_paths = [intake_form_path, *case_documents_paths]
@@ -858,18 +866,16 @@ async def process_case_documents_cli(
 
         if not intake_doc:
             msg = "Intake form is required but was not found after processing."
-            raise ValueError(
-                msg
-            )
+            raise ValueError(msg)
 
-        print("Analyzing intake form...")
+        logger.info("Analyzing intake form...")
         analysis_result = await ai_analyzer.analyze_intake(intake_doc)
 
         if not analysis_result.intake_analysis:
             msg = "Failed to analyze intake form."
             raise ValueError(msg)
 
-        print(f"Analyzing {len(case_docs)} case documents...")
+        logger.info(f"Analyzing {len(case_docs)} case documents...")
         if case_docs:
             for doc in case_docs:
                 result = await ai_analyzer._analyze_single_document(
@@ -881,13 +887,13 @@ async def process_case_documents_cli(
                 elif isinstance(result, AnalysisError):
                     analysis_result.errors.append(result)
 
-        print("Performing final assessment...")
+        logger.info("Performing final assessment...")
         final_analysis = await ai_analyzer.perform_final_assessment(analysis_result)
 
-        print("Generating findings letter...")
+        logger.info("Generating findings letter...")
         email_docs = email_generator.generate_email_and_analysis_docs(final_analysis)
 
-        print("Saving output files...")
+        logger.info("Saving output files...")
         save_output_files(
             output_dir,
             email_docs.get("main_letter", ""),
@@ -895,15 +901,17 @@ async def process_case_documents_cli(
             final_analysis,
         )
 
-        print("✅ Case processing completed successfully!")
+        logger.debug("✅ Case processing completed successfully!")
         return True
 
     except EmailReadabilityError as e:
-        print(f"❌ EmailReadabilityError: Failed to generate a readable document after multiple attempts: {e}")
+        logger.error(
+            f"❌ EmailReadabilityError: Failed to generate a readable document after multiple attempts: {e}"
+        )
         return False
 
     except Exception as e:
-        print(f"❌ Error occurred during processing: {e}")
+        logger.error(f"❌ Error occurred during processing: {e}")
         return False
 
 
@@ -938,14 +946,14 @@ def main():
 
     # Validate input files exist
     if not os.path.exists(args.intake_form):
-        print(f"❌ Intake form not found: {args.intake_form}")
+        logger.info(f"❌ Intake form not found: {args.intake_form}")
         sys.exit(1)
 
     # Expand directories to include all files within them
     expanded_case_documents = []
     for doc_path in args.case_documents:
         if not os.path.exists(doc_path):
-            print(f"❌ Case document path not found: {doc_path}")
+            logger.info(f"❌ Case document path not found: {doc_path}")
             sys.exit(1)
 
         if os.path.isfile(doc_path):
@@ -953,7 +961,7 @@ def main():
             expanded_case_documents.append(doc_path)
         elif os.path.isdir(doc_path):
             # It's a directory, find all supported files within it
-            print(f"📁 Scanning directory for case documents: {doc_path}")
+            logger.info(f"📁 Scanning directory for case documents: {doc_path}")
             supported_extensions = [
                 ".pdf",
                 ".docx",
@@ -972,16 +980,16 @@ def main():
 
                     if file_ext in supported_extensions:
                         expanded_case_documents.append(file_path)
-                        print(f"  ✓ Found: {file}")
+                        logger.info(f"  ✓ Found: {file}")
 
             if not any(
                 os.path.join(doc_path, f) in expanded_case_documents
                 for f in os.listdir(doc_path)
                 if os.path.isfile(os.path.join(doc_path, f))
             ):
-                print(f"⚠️  No supported files found in directory: {doc_path}")
+                logger.info(f"⚠️  No supported files found in directory: {doc_path}")
         else:
-            print(f"❌ Path is neither file nor directory: {doc_path}")
+            logger.info(f"❌ Path is neither file nor directory: {doc_path}")
             sys.exit(1)
 
     # Update the case documents list with expanded paths
@@ -990,10 +998,10 @@ def main():
     # Create output directory if it doesn't exist
     os.makedirs(args.output_dir, exist_ok=True)
 
-    print("🚀 Starting Legal Document Analysis...")
-    print(f"📁 Output directory: {args.output_dir}")
-    print(f"📄 Intake form: {args.intake_form}")
-    print(f"📋 Case documents: {len(args.case_documents)} files")
+    logger.info("🚀 Starting Legal Document Analysis...")
+    logger.info(f"📁 Output directory: {args.output_dir}")
+    logger.info(f"📄 Intake form: {args.intake_form}")
+    logger.info(f"📋 Case documents: {len(args.case_documents)} files")
 
     # Run the async processing function
     success = asyncio.run(
@@ -1003,10 +1011,10 @@ def main():
     )
 
     if success:
-        print("🎉 Processing completed successfully!")
+        logger.debug("🎉 Processing completed successfully!")
         sys.exit(0)
     else:
-        print("💥 Processing failed!")
+        logger.error("💥 Processing failed!")
         sys.exit(1)
 
 

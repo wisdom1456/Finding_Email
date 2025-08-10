@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import mimetypes
 import os
+from typing import List
 
 # Import from the backend utils (to be moved to root utils later)
 from backend.utils.data_models import DocumentType, ProcessedDocument
@@ -27,7 +28,7 @@ class DocumentProcessor:
         pass
 
     def _get_document_type(
-        self, filename: str, intake_filenames: list[str]
+        self, filename: str, intake_filenames: List[str]
     ) -> DocumentType:
         """Determines if a file is an intake form or a general case document."""
         if filename in intake_filenames:
@@ -35,8 +36,8 @@ class DocumentProcessor:
         return DocumentType.CASE_DOCUMENT
 
     async def process_documents_from_streamlit(
-        self, uploaded_files, intake_filenames: list[str]
-    ) -> list[ProcessedDocument]:
+        self, uploaded_files, intake_filenames: List[str]
+    ) -> List[ProcessedDocument]:
         """
         Process documents directly from Streamlit file uploads.
 
@@ -104,8 +105,8 @@ class DocumentProcessor:
                     os.remove(temp_path)
 
     async def process_documents(
-        self, files, intake_filenames: list[str]
-    ) -> list[ProcessedDocument]:
+        self, files, intake_filenames: List[str]
+    ) -> List[ProcessedDocument]:
         """
         Legacy method for backward compatibility.
         This can be used with SavedDocument objects or adapted for other file sources.
@@ -156,8 +157,8 @@ class DocumentProcessor:
         return await asyncio.gather(*processing_tasks)
 
     async def process_documents_from_paths(
-        self, file_paths: list[str], intake_filenames: list[str]
-    ) -> list[ProcessedDocument]:
+        self, file_paths: List[str], intake_filenames: List[str]
+    ) -> List[ProcessedDocument]:
         """
         Process documents from file paths.
 

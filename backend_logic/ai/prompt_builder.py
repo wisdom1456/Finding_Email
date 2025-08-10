@@ -31,9 +31,9 @@ class PromptBuilder:
             "3. **Evidence Identification:** Recognize documentary evidence that supports or undermines legal positions\n"
             "4. **Professional Synthesis:** Organize findings to support detailed attorney analysis and client communication\n"
             "5. **Florida Practice Focus:** Consider how document contents relate to Florida legal standards and procedural requirements\n"
-            "6. **Case Development Support:** Structure analysis to facilitate comprehensive legal strategy and client counseling"
+            "6. **Case Development Support:** Structure analysis to facilitate comprehensive legal strategy and client counseling",
         )
-        
+
         return (
             "SYSTEM\n"
             f"{base_prompt}\n\n"
@@ -42,7 +42,7 @@ class PromptBuilder:
             "• Do **NOT** wrap the JSON in markdown fences.\n"
             "• Do **NOT** change key names, add keys, or emit commentary.\n"
             "• Write summaries and analysis in clear, accessible language (9th-grade reading level)\n"
-            "• Use professional partnership language ('we have analyzed' rather than 'I analyzed')\n\n"
+            "• Use direct professional language ('you have' rather than 'we have analyzed')\n\n"
             "==========================\n"
             "SOURCE INTAKE FORM (read-only)\n"
             f"{content}\n"
@@ -102,7 +102,7 @@ class PromptBuilder:
             "3. **Florida Law Context:** Consider how extracted information relates to Florida legal standards and procedural requirements\n"
             "4. **Professional Documentation:** Structure analysis to support detailed attorney findings letters and case development\n"
             "5. **Client-Ready Foundation:** Organize information for clear presentation to clients while maintaining legal precision\n"
-            "6. **Strategic Awareness:** Recognize and prioritize information based on its litigation and settlement value"
+            "6. **Strategic Awareness:** Recognize and prioritize information based on its litigation and settlement value",
         )
 
         return (
@@ -114,7 +114,7 @@ class PromptBuilder:
             "• Preserve key order.\n"
             "• PRIORITIZE analysis elements that directly relate to client's stated priorities and desired outcomes.\n"
             "• Write all content in clear, accessible language (9th-grade reading level)\n"
-            "• Use professional partnership language that emphasizes collaboration\n\n"
+            "• Use direct professional language addressing the client directly\n\n"
             "==========================\n"
             "DOCUMENT (read-only)\n"
             f"Filename: {doc.file_name}\n"
@@ -159,25 +159,30 @@ class PromptBuilder:
         base_prompt = self.config_manager.get_prompt(
             "media_summarization",
             # Fallback prompt if configuration is missing
-            "You are a UNIFIED_LEGAL_ADVISOR paralegal specializing in clear, accessible legal communication. Create a concise summary (100-150 words) of the provided media content that will be easily understood by clients without legal training.\n\n"
-            "UNIFIED_LEGAL_ADVISOR PRINCIPLES:\n"
+            "You are a senior litigation attorney specializing in clear, professional legal communication. Create a concise summary (100-150 words) of the provided media content that will be easily understood by clients without legal training.\n\n"
+            "AUTHENTIC_ATTORNEY_ADVISOR PRINCIPLES:\n"
             "• Use clear, accessible language (9th-grade reading level)\n"
             "• Focus on actionable details and key facts\n"
-            "• Emphasize professional partnership perspective ('we found,' 'our analysis shows')\n"
+            "• Use direct professional perspective ('the analysis shows,' 'the evidence indicates')\n"
             "• Maintain professional authority while being accessible\n"
-            "• Highlight evidence relevant to Florida legal matters"
+            "• Highlight evidence relevant to Florida legal matters",
         )
-        
+
         return (
             "SYSTEM\n"
             f"{base_prompt}\n\n"
             f"Provided {media_type} content for {file_name}:\n"
             f"```\n{content if isinstance(content, str) else str(content)}\n```\n\n"
-            "Create a clear, client-friendly summary that explains what we found in this evidence.\n"
+            "Create a clear, client-friendly summary that explains what the evidence shows.\n"
             "BEGIN SUMMARY."
         )
 
-    def build_final_assessment_prompt(self, analysis_data: str, timeline_content: str, video_relevance_content: str = "") -> str:
+    def build_final_assessment_prompt(
+        self,
+        analysis_data: str,
+        timeline_content: str,
+        video_relevance_content: str = "",
+    ) -> str:
         """Builds the prompt for the final legal assessment."""
         # Get prompt from configuration or use fallback
         base_prompt = self.config_manager.get_prompt(
@@ -197,7 +202,7 @@ class PromptBuilder:
             "• **Strategic Rationale:** Explain the legal and practical reasoning behind the recommendation\n"
             "• **Risk Assessment:** Address potential outcomes and strategic considerations\n"
             '• **Professional Guidance:** "This analysis reflects Florida law standards and litigation experience"\n\n'
-            "CRITICAL: Reference ONLY Florida statutes, case law, and legal precedents (e.g., Florida Statutes § 83.51(1), Florida case citations). Do NOT cite laws from other jurisdictions unless they have specific relevance to Florida legal standards."
+            "CRITICAL: Reference ONLY Florida statutes, case law, and legal precedents (e.g., Florida Statutes § 83.51(1), Florida case citations). Do NOT cite laws from other jurisdictions unless they have specific relevance to Florida legal standards.",
         )
 
         return (
@@ -207,7 +212,7 @@ class PromptBuilder:
             "• JSON only—no markdown, no commentary.\n"
             "• Do not alter key names.\n\n"
             "==========================\n"
-            "UNIFIED_LEGAL_ADVISOR EXAMPLE LETTER STYLE:\n\n"
+            "AUTHENTIC_ATTORNEY_ADVISOR EXAMPLE LETTER STYLE:\n\n"
             "Dear Mr. Price:\n\n"
             "We hope you are doing well. We wanted to follow up with a summary of our findings after completing our comprehensive review of the timeline and materials you submitted regarding the property located at 2260 Terra Cotta Cove, Apt. 110, Land O Lakes, Florida 34639, including the lease agreement, correspondence, invoices, videos and maintenance-related documentation.\n\n"
             "As we discussed, your primary concern centers on the prolonged and recurring water intrusion, inadequate remediation efforts, and the resulting conditions that have potentially rendered the unit uninhabitable. The timeline you provided documents multiple reports of water damage and potential mold spanning several months, which we have carefully analyzed under Florida law.\n\n"

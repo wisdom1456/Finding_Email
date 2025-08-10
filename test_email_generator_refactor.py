@@ -8,6 +8,9 @@ from __future__ import annotations
 
 import os
 import sys
+from utils.logging_config import setup_logging
+logger = setup_logging('unknown_service')
+
 
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -252,30 +255,30 @@ def test_debug_output(result: GenerationOutput) -> dict[str, bool]:
 
 def main():
     """Run the comprehensive test of the refactored email generator."""
-    print("=" * 80)
-    print("EMAIL GENERATOR V2 REFACTOR TEST")
-    print("=" * 80)
+logger.info('=' * 80)
+logger.info('EMAIL GENERATOR V2 REFACTOR TEST')
+logger.info('=' * 80)
 
     try:
         # Create mock client and generator
-        print("1. Initializing EmailGeneratorV2 with mock client...")
+logger.info('1. Initializing EmailGeneratorV2 with mock client...')
         create_mock_openai_client()
 
         # Skip actual initialization since we don't have the full environment
-        print("   ✅ Mock client created")
+logger.info('   ✅ Mock client created')
 
         # Create test analysis
-        print("\n2. Creating comprehensive test analysis...")
+logger.info('\n2. Creating comprehensive test analysis...')
         test_analysis = create_test_analysis()
-        print(
+logger.info(f'   ✅ Test analysis created with {len(test_analysis.analyzed_documents)} documents')
             f"   ✅ Test analysis created with {len(test_analysis.analyzed_documents)} documents"
         )
-        print(f"   📊 Client: {test_analysis.intake_analysis.client_name}")
-        print(f"   📊 Case Type: {test_analysis.intake_analysis.case_type}")
+logger.info(f'   📊 Client: {test_analysis.intake_analysis.client_name}')
+logger.info(f'   📊 Case Type: {test_analysis.intake_analysis.case_type}')
 
         # Since we can't run the actual generator without the full environment,
         # let's simulate the expected results
-        print("\n3. Simulating email generation with new architecture...")
+logger.info('\n3. Simulating email generation with new architecture...')
 
         # Simulate what the new architecture should produce
         from backend.utils.data_models import GeneratedLetter
@@ -326,55 +329,55 @@ def main():
             },
         )
 
-        print("   ✅ Email generation simulation complete")
+logger.info('   ✅ Email generation simulation complete')
 
         # Test field population
-        print("\n4. Testing template field population...")
+logger.info('\n4. Testing template field population...')
         field_tests = test_field_population(simulated_result)
 
         for test_name, passed in field_tests.items():
             status = "✅" if passed else "❌"
-            print(f"   {status} {test_name}: {'PASS' if passed else 'FAIL'}")
+logger.info(f'   {status} {test_name}: {('PASS' if passed else 'FAIL')}')
 
         # Test debug output
-        print("\n5. Testing debug output...")
+logger.debug('\n5. Testing debug output...')
         debug_tests = test_debug_output(simulated_result)
 
         for test_name, passed in debug_tests.items():
             status = "✅" if passed else "❌"
-            print(f"   {status} {test_name}: {'PASS' if passed else 'FAIL'}")
+logger.info(f'   {status} {test_name}: {('PASS' if passed else 'FAIL')}')
 
         # Summary
-        print("\n" + "=" * 80)
-        print("REFACTOR VALIDATION SUMMARY")
-        print("=" * 80)
+logger.info('\n' + '=' * 80)
+logger.info('REFACTOR VALIDATION SUMMARY')
+logger.info('=' * 80)
 
         all_field_tests_passed = all(field_tests.values())
         all_debug_tests_passed = all(debug_tests.values())
 
-        print("✅ CRITICAL BUG FIX: Template fields properly populated")
-        print("✅ NEW ARCHITECTURE: Three-stage pipeline implemented")
-        print("✅ ENHANCED MODELS: GenerationOutput and DebugOutput created")
-        print("✅ ERROR HANDLING: Robust validation and fallbacks added")
-        print("✅ FIELD VALIDATION: All required fields have content")
-        print("✅ DEBUG FRAMEWORK: Comprehensive debugging capabilities added")
+logger.error('✅ CRITICAL BUG FIX: Template fields properly populated')
+logger.info('✅ NEW ARCHITECTURE: Three-stage pipeline implemented')
+logger.debug('✅ ENHANCED MODELS: GenerationOutput and DebugOutput created')
+logger.error('✅ ERROR HANDLING: Robust validation and fallbacks added')
+logger.info('✅ FIELD VALIDATION: All required fields have content')
+logger.debug('✅ DEBUG FRAMEWORK: Comprehensive debugging capabilities added')
 
         if all_field_tests_passed and all_debug_tests_passed:
-            print("\n🎉 ALL TESTS PASSED - REFACTOR SUCCESSFUL!")
-            print("   The critical blank letter bug has been fixed.")
-            print("   All template fields are now properly populated.")
-            print(
+logger.info('\n🎉 ALL TESTS PASSED - REFACTOR SUCCESSFUL!')
+logger.error('   The critical blank letter bug has been fixed.')
+logger.info('   All template fields are now properly populated.')
+logger.info('   The new architecture provides better error handling and debugging.')
                 "   The new architecture provides better error handling and debugging."
             )
         else:
-            print("\n⚠️  Some tests failed - review required")
+logger.error('\n⚠️  Some tests failed - review required')
 
-        print("\n" + "=" * 80)
+logger.info('\n' + '=' * 80)
 
         return all_field_tests_passed and all_debug_tests_passed
 
     except Exception as e:
-        print(f"\n❌ Test failed with error: {e!s}")
+logger.error(f'\n❌ Test failed with error: {e!s}')
         import traceback
 
         traceback.print_exc()

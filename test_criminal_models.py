@@ -8,6 +8,9 @@ from __future__ import annotations
 
 import os
 import sys
+from utils.logging_config import setup_logging
+logger = setup_logging('unknown_service')
+
 
 
 # Add the project root to the Python path
@@ -27,7 +30,7 @@ from backend.utils.data_models import (
 
 def test_criminal_evidence_category():
     """Test CriminalEvidenceCategory enum values."""
-    print("Testing CriminalEvidenceCategory enum...")
+logger.info('Testing CriminalEvidenceCategory enum...')
 
     # Test all 16 categories are available
     categories = [
@@ -50,13 +53,13 @@ def test_criminal_evidence_category():
     ]
 
     assert len(categories) == 16, f"Expected 16 categories, got {len(categories)}"
-    print(f"✅ All {len(categories)} criminal evidence categories available")
+logger.info(f'✅ All {len(categories)} criminal evidence categories available')
     return True
 
 
 def test_time_range():
     """Test TimeRange model validation."""
-    print("Testing TimeRange model...")
+logger.info('Testing TimeRange model...')
 
     # Valid time range
     time_range = TimeRange(start_time="02:15", end_time="02:45", confidence=0.85)
@@ -64,13 +67,13 @@ def test_time_range():
     assert time_range.start_time == "02:15"
     assert time_range.end_time == "02:45"
     assert time_range.confidence == 0.85
-    print("✅ TimeRange model validation successful")
+logger.info('✅ TimeRange model validation successful')
     return True
 
 
 def test_criminal_evidence_item():
     """Test CriminalEvidenceItem model validation."""
-    print("Testing CriminalEvidenceItem model...")
+logger.info('Testing CriminalEvidenceItem model...')
 
     time_range = TimeRange(start_time="01:30", end_time="02:00", confidence=0.9)
 
@@ -93,13 +96,13 @@ def test_criminal_evidence_item():
     assert evidence_item.category == CriminalEvidenceCategory.FIELD_SOBRIETY_TESTS
     assert evidence_item.evidence_strength == "moderate"
     assert len(evidence_item.key_observations) == 3
-    print("✅ CriminalEvidenceItem model validation successful")
+logger.info('✅ CriminalEvidenceItem model validation successful')
     return True
 
 
 def test_criminal_video_analysis():
     """Test CriminalVideoAnalysis model."""
-    print("Testing CriminalVideoAnalysis model...")
+logger.info('Testing CriminalVideoAnalysis model...')
 
     time_range = TimeRange(start_time="00:30", end_time="01:00", confidence=0.8)
     evidence_item = CriminalEvidenceItem(
@@ -127,13 +130,13 @@ def test_criminal_video_analysis():
 
     assert len(analysis.evidence_items) == 1
     assert len(analysis.missing_categories) == 2
-    print("✅ CriminalVideoAnalysis model validation successful")
+logger.info('✅ CriminalVideoAnalysis model validation successful')
     return True
 
 
 def test_enhanced_video_insight():
     """Test EnhancedVideoInsight model with backward compatibility."""
-    print("Testing EnhancedVideoInsight model...")
+logger.info('Testing EnhancedVideoInsight model...')
 
     # Create criminal analysis
     time_range = TimeRange(start_time="00:15", end_time="00:45", confidence=0.95)
@@ -171,7 +174,7 @@ def test_enhanced_video_insight():
     assert enhanced_insight.is_criminal_case is True
     assert enhanced_insight.criminal_analysis is not None
     assert len(enhanced_insight.criminal_analysis.evidence_items) == 1
-    print("✅ EnhancedVideoInsight model validation successful")
+logger.info('✅ EnhancedVideoInsight model validation successful')
 
     # Test backward compatibility - regular VideoInsight
     regular_insight = VideoInsight(
@@ -184,13 +187,13 @@ def test_enhanced_video_insight():
 
     assert hasattr(regular_insight, "insights")
     assert not hasattr(regular_insight, "is_criminal_case")
-    print("✅ Backward compatibility with VideoInsight confirmed")
+logger.info('✅ Backward compatibility with VideoInsight confirmed')
     return True
 
 
 def test_case_analysis_result_integration():
     """Test CaseAnalysisResult integration with enhanced video insights."""
-    print("Testing CaseAnalysisResult integration...")
+logger.info('Testing CaseAnalysisResult integration...')
 
     # Create both regular and enhanced video insights
     regular_insight = VideoInsight(
@@ -236,13 +239,13 @@ def test_case_analysis_result_integration():
     assert len(case_result.video_insights) == 2
     assert isinstance(case_result.video_insights[0], VideoInsight)
     assert isinstance(case_result.video_insights[1], EnhancedVideoInsight)
-    print("✅ CaseAnalysisResult integration with mixed video insights successful")
+logger.info('✅ CaseAnalysisResult integration with mixed video insights successful')
     return True
 
 
 def run_all_tests():
     """Run all validation tests."""
-    print("🔍 Running Criminal Evidence Data Models Validation Tests\n")
+logger.info('🔍 Running Criminal Evidence Data Models Validation Tests\n')
 
     tests = [
         test_criminal_evidence_category,
@@ -262,19 +265,19 @@ def run_all_tests():
                 passed += 1
             else:
                 failed += 1
-                print(f"❌ {test.__name__} failed")
+logger.error(f'❌ {test.__name__} failed')
         except Exception as e:
             failed += 1
-            print(f"❌ {test.__name__} failed with exception: {e}")
-        print()
+logger.error(f'❌ {test.__name__} failed with exception: {e}')
+logger.info('')
 
-    print(f"📊 Test Results: {passed} passed, {failed} failed")
+logger.error(f'📊 Test Results: {passed} passed, {failed} failed')
 
     if failed == 0:
-        print("🎉 All criminal evidence data models are working correctly!")
-        print("✅ Ready for integration with video processor!")
+logger.info('🎉 All criminal evidence data models are working correctly!')
+logger.info('✅ Ready for integration with video processor!')
         return True
-    print("⚠️  Some tests failed. Please review the implementation.")
+logger.error('⚠️  Some tests failed. Please review the implementation.')
     return False
 
 

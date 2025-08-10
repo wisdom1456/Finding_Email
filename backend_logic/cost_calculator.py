@@ -7,7 +7,6 @@ API usage logs, token counts, and processing durations from various services.
 
 from __future__ import annotations
 
-from datetime import datetime
 from decimal import Decimal
 from typing import Any
 
@@ -187,7 +186,9 @@ class CostCalculator:
                     operation_type="audio_transcription",
                     units_consumed=int(actual_minutes),
                     unit_type="minutes",
-                    rate_per_unit=float(self.PRICING_RATES["openai_whisper"]["per_minute"]),
+                    rate_per_unit=float(
+                        self.PRICING_RATES["openai_whisper"]["per_minute"]
+                    ),
                     total_cost=float(whisper_cost),
                     file_name=audio.file_name,
                 )
@@ -243,7 +244,9 @@ class CostCalculator:
                     operation_type="video_processing",
                     units_consumed=int(actual_minutes),
                     unit_type="minutes",
-                    rate_per_unit=float(self.PRICING_RATES["vertex_ai_video"]["per_minute"]),
+                    rate_per_unit=float(
+                        self.PRICING_RATES["vertex_ai_video"]["per_minute"]
+                    ),
                     total_cost=float(video_cost),
                     file_name=video.file_name,
                 )
@@ -258,7 +261,9 @@ class CostCalculator:
             else:
                 # Estimate based on insights complexity
                 insight_text = (
-                    str(video.insights or "") + str(video.labels or "") + str(video.objects or "")
+                    str(video.insights or "")
+                    + str(video.labels or "")
+                    + str(video.objects or "")
                 )
                 input_tokens = 1500  # Standard prompt
                 output_tokens = max(1000, len(insight_text) // 4)
@@ -314,9 +319,11 @@ class CostCalculator:
                         operation_type="criminal_video_analysis",
                         units_consumed=criminal_tokens,
                         unit_type="tokens",
-                        rate_per_unit=float(self.PRICING_RATES["vertex_ai_gemini_flash"][
-                            "output_tokens"
-                        ]),
+                        rate_per_unit=float(
+                            self.PRICING_RATES["vertex_ai_gemini_flash"][
+                                "output_tokens"
+                            ]
+                        ),
                         total_cost=float(criminal_cost),
                         file_name=video.file_name,
                     )
@@ -376,7 +383,7 @@ class CostCalculator:
 
         # Combine all service costs into a single list
         all_service_costs = document_analysis_costs + media_processing_costs
-        
+
         return ActualCosts(
             total_actual_cost=float(total_actual_cost),
             service_costs=all_service_costs,

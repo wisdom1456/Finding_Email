@@ -7,6 +7,9 @@ from fastapi import HTTPException
 
 from backend.services.email_generator import EmailGenerator
 from backend.utils.data_models import (
+from utils.logging_config import setup_logging
+logger = setup_logging('async_processor')
+
     AnalysisError,
     AnalyzedDocument,
     CaseResults,
@@ -106,7 +109,7 @@ async def process_documents_async(
 
     except Exception as e:
         error_message = f"An unexpected error occurred: {e}"
-        print(error_message)
+logger.error(error_message)
         task_manager.fail_task(task_id, error_message)
     finally:
         shutil.rmtree(temp_dir_path)

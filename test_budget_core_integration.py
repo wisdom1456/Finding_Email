@@ -13,6 +13,11 @@ import sys
 from datetime import datetime
 from decimal import Decimal
 
+from utils.logging_config import setup_logging
+
+
+logger = setup_logging("unknown_service")
+
 
 # Add the project root to the path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -64,8 +69,8 @@ def create_sample_cost_data():
 def test_cost_session_workflow():
     """Test the complete cost session workflow with budget exports."""
 
-    print("🧪 Testing Budget Sheet Core Integration")
-    print("=" * 50)
+    logger.info("🧪 Testing Budget Sheet Core Integration")
+    logger.info("=" * 50)
 
     # Initialize cost session manager
     session_manager = CostSessionManager(session_storage_dir="test_cost_sessions")
@@ -74,23 +79,23 @@ def test_cost_session_workflow():
     documents, audio_files, video_files = create_sample_cost_data()
 
     # 1. Initialize cost session
-    print("1. Initializing cost session...")
+    logger.info("1. Initializing cost session...")
     case_id = session_manager.initialize_cost_session(
         case_id="TEST_CASE_001",
         documents=documents,
         audio_files=audio_files,
         video_files=video_files,
     )
-    print(f"   ✅ Created cost session: {case_id}")
+    logger.info(f"   ✅ Created cost session: {case_id}")
 
     # 2. Get initial cost summary
     cost_summary = session_manager.get_cost_summary(case_id)
     if cost_summary and cost_summary.cost_estimate:
         estimated_cost = cost_summary.cost_estimate.total_estimated_cost
-        print(f"   📊 Estimated cost: ${float(estimated_cost):.4f}")
+        logger.info(f"   📊 Estimated cost: ${float(estimated_cost):.4f}")
 
     # 3. Simulate actual processing costs
-    print("\n2. Simulating actual processing costs...")
+    logger.debug("\n2. Simulating actual processing costs...")
 
     # Create sample actual costs
     actual_doc_costs = [
@@ -171,9 +176,9 @@ def test_cost_session_workflow():
     session_manager.active_sessions[case_id] = cost_summary
     session_manager._save_session(case_id, cost_summary)
 
-    print(f"   ✅ Actual cost: ${float(total_actual_cost):.4f}")
+    logger.info(f"   ✅ Actual cost: ${float(total_actual_cost):.4f}")
     if cost_summary.cost_variance:
-        print(
+        logger.info(
             f"   📈 Variance: ${float(cost_summary.cost_variance):.4f} ({cost_summary.cost_variance_percentage:.2f}%)"
         )
 
@@ -183,78 +188,78 @@ def test_cost_session_workflow():
 def test_export_functionality(session_manager, case_id, cost_summary):
     """Test all export functionality."""
 
-    print("\n3. Testing export functionality...")
+    logger.info("\n3. Testing export functionality...")
 
     # Test CSV export
     try:
         csv_data = session_manager.export_session_budget(case_id, "csv")
-        print(f"   ✅ CSV export: {len(csv_data)} characters")
+        logger.info(f"   ✅ CSV export: {len(csv_data)} characters")
 
         # Verify CSV content has expected headers
         if "Case ID" in csv_data and "Service Name" in csv_data:
-            print("      CSV contains expected headers")
+            logger.info("      CSV contains expected headers")
 
     except Exception as e:
-        print(f"   ❌ CSV export failed: {e}")
+        logger.error(f"   ❌ CSV export failed: {e}")
 
     # Test JSON export
     try:
         json_data = session_manager.export_session_budget(case_id, "json")
-        print(f"   ✅ JSON export: {len(json_data)} characters")
+        logger.info(f"   ✅ JSON export: {len(json_data)} characters")
 
         # Verify JSON is valid
         import json
 
         parsed = json.loads(json_data)
         if "case_id" in parsed and "cost_estimate" in parsed:
-            print("      JSON contains expected structure")
+            logger.info("      JSON contains expected structure")
 
     except Exception as e:
-        print(f"   ❌ JSON export failed: {e}")
+        logger.error(f"   ❌ JSON export failed: {e}")
 
     # Test HTML export
     try:
         html_data = session_manager.export_session_budget(case_id, "html")
-        print(f"   ✅ HTML export: {len(html_data)} characters")
+        logger.info(f"   ✅ HTML export: {len(html_data)} characters")
 
         # Verify HTML contains expected elements
         if "<html>" in html_data and "Budget Report" in html_data:
-            print("      HTML contains expected structure")
+            logger.info("      HTML contains expected structure")
 
     except Exception as e:
-        print(f"   ❌ HTML export failed: {e}")
+        logger.error(f"   ❌ HTML export failed: {e}")
 
     # Test text export
     try:
         text_data = session_manager.export_session_budget(case_id, "text")
-        print(f"   ✅ Text export: {len(text_data)} characters")
+        logger.info(f"   ✅ Text export: {len(text_data)} characters")
 
         # Verify text contains cost information
         if "Cost Summary" in text_data and "$" in text_data:
-            print("      Text contains expected cost information")
+            logger.info("      Text contains expected cost information")
 
     except Exception as e:
-        print(f"   ❌ Text export failed: {e}")
+        logger.error(f"   ❌ Text export failed: {e}")
 
     # Test budget insights
     try:
         insights = session_manager.get_budget_insights(case_id)
-        print(
+        logger.info(
             f"   ✅ Budget insights generated: {len(insights.get('insights', []))} insights"
         )
 
         # Show sample insights
         for i, insight in enumerate(insights.get("insights", [])[:3]):
-            print(f"      {i + 1}. {insight}")
+            logger.info(f"      {i + 1}. {insight}")
 
     except Exception as e:
-        print(f"   ❌ Budget insights failed: {e}")
+        logger.error(f"   ❌ Budget insights failed: {e}")
 
 
 def test_cost_exporter_direct():
     """Test the cost exporter directly."""
 
-    print("\n4. Testing cost exporter directly...")
+    logger.info("\n4. Testing cost exporter directly...")
 
     try:
         # Create a simple cost summary for testing
@@ -298,27 +303,27 @@ def test_cost_exporter_direct():
 
         # Test budget analysis
         analysis = exporter.create_budget_analysis(test_summary)
-        print("   ✅ Budget analysis created")
-        print(f"      Cost efficiency score: {analysis['cost_efficiency_score']}")
-        print(f"      Budget compliance: {analysis['budget_compliance']}")
-        print(f"      Recommendations: {len(analysis['recommendations'])} items")
+        logger.info("   ✅ Budget analysis created")
+        logger.info(f"      Cost efficiency score: {analysis['cost_efficiency_score']}")
+        logger.info(f"      Budget compliance: {analysis['budget_compliance']}")
+        logger.info(f"      Recommendations: {len(analysis['recommendations'])} items")
 
         # Test CSV export
         csv_export = exporter.export_cost_summary_csv(test_summary)
-        print(f"   ✅ Direct CSV export: {len(csv_export)} characters")
+        logger.info(f"   ✅ Direct CSV export: {len(csv_export)} characters")
 
         # Test JSON export
         json_export = exporter.export_cost_summary_json(test_summary)
-        print(f"   ✅ Direct JSON export: {len(json_export)} characters")
+        logger.info(f"   ✅ Direct JSON export: {len(json_export)} characters")
 
         # Test HTML report generation
         html_report = exporter.generate_budget_report_html(test_summary)
-        print(f"   ✅ Direct HTML report: {len(html_report)} characters")
+        logger.info(f"   ✅ Direct HTML report: {len(html_report)} characters")
 
-        print("   ✅ Cost exporter direct tests passed")
+        logger.info("   ✅ Cost exporter direct tests passed")
 
     except Exception as e:
-        print(f"   ❌ Cost exporter direct test failed: {e}")
+        logger.error(f"   ❌ Cost exporter direct test failed: {e}")
         import traceback
 
         traceback.print_exc()
@@ -327,7 +332,7 @@ def test_cost_exporter_direct():
 def test_template_rendering():
     """Test the Jinja2 template rendering specifically."""
 
-    print("\n5. Testing template rendering...")
+    logger.info("\n5. Testing template rendering...")
 
     try:
         from jinja2 import Environment, FileSystemLoader
@@ -338,7 +343,7 @@ def test_template_rendering():
 
         # Load the budget sheet template
         template = env.get_template("budget_sheet.jinja2")
-        print("   ✅ Template loaded successfully")
+        logger.info("   ✅ Template loaded successfully")
 
         # Create test data for template
         test_data = {
@@ -373,37 +378,37 @@ def test_template_rendering():
 
         # Render template
         rendered = template.render(**test_data)
-        print(f"   ✅ Template rendered: {len(rendered)} characters")
+        logger.info(f"   ✅ Template rendered: {len(rendered)} characters")
 
         # Verify key elements are present
         if "Budget Report" in rendered and "TEMPLATE_TEST" in rendered:
-            print("      Template contains expected content")
+            logger.info("      Template contains expected content")
 
     except Exception as e:
-        print(f"   ❌ Template rendering failed: {e}")
+        logger.error(f"   ❌ Template rendering failed: {e}")
 
 
 def cleanup_test_data():
     """Clean up test data."""
 
-    print("\n6. Cleaning up test data...")
+    logger.info("\n6. Cleaning up test data...")
 
     try:
         import shutil
 
         if os.path.exists("test_cost_sessions"):
             shutil.rmtree("test_cost_sessions")
-        print("   ✅ Test data cleaned up")
+        logger.info("   ✅ Test data cleaned up")
     except Exception as e:
-        print(f"   ⚠️  Cleanup warning: {e}")
+        logger.warning(f"   ⚠️  Cleanup warning: {e}")
 
 
 def main():
     """Run the complete integration test."""
 
-    print("🎯 Budget Sheet Core Integration Test")
-    print("Testing the core budget sheet system integration")
-    print("=" * 60)
+    logger.info("🎯 Budget Sheet Core Integration Test")
+    logger.info("Testing the core budget sheet system integration")
+    logger.info("=" * 60)
 
     try:
         # Test complete workflow
@@ -421,21 +426,21 @@ def main():
         # Cleanup
         cleanup_test_data()
 
-        print("\n" + "=" * 60)
-        print("🎉 All core integration tests PASSED!")
-        print("✅ Budget sheet system is fully integrated and functional")
-        print("\nKey capabilities verified:")
-        print("• Cost estimation and tracking")
-        print("• Variance analysis and insights")
-        print("• Multi-format export (CSV, JSON, HTML, Text)")
-        print("• Professional budget report generation")
-        print("• Template rendering with Jinja2")
-        print("• Operational recommendations")
-        print("\nNote: Streamlit component requires plotly installation")
-        print("      Core functionality works without Streamlit dependency")
+        logger.info("\n" + "=" * 60)
+        logger.info("🎉 All core integration tests PASSED!")
+        logger.info("✅ Budget sheet system is fully integrated and functional")
+        logger.info("\nKey capabilities verified:")
+        logger.info("• Cost estimation and tracking")
+        logger.info("• Variance analysis and insights")
+        logger.info("• Multi-format export (CSV, JSON, HTML, Text)")
+        logger.info("• Professional budget report generation")
+        logger.info("• Template rendering with Jinja2")
+        logger.info("• Operational recommendations")
+        logger.info("\nNote: Streamlit component requires plotly installation")
+        logger.info("      Core functionality works without Streamlit dependency")
 
     except Exception as e:
-        print(f"\n❌ Integration test FAILED: {e}")
+        logger.error(f"\n❌ Integration test FAILED: {e}")
         import traceback
 
         traceback.print_exc()

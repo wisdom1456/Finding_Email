@@ -2,10 +2,16 @@
 """
 Quick test to verify fallback validation fixes.
 """
+
 from __future__ import annotations
 
 import os
 import sys
+
+from utils.logging_config import setup_logging
+
+
+logger = setup_logging("quick_validation_test")
 
 
 # Add the backend directory to Python path
@@ -20,38 +26,47 @@ from utils.validators import (
 
 def test_fallback_validation():
     """Test that fallback functions now return valid data for updated models."""
-    print("🧪 Testing fallback validation fixes...\n")
-    
+    logger.warning("🧪 Testing fallback validation fixes...\n")
+
     # Test LegalAssessment fallback
-    print("1. Testing LegalAssessment fallback...")
+    logger.warning("1. Testing LegalAssessment fallback...")
     try:
         fallback_data = create_fallback_legal_assessment()
         legal_assessment = LegalAssessment.model_validate(fallback_data)
-        print("   ✅ LegalAssessment validation successful")
-        print(f"   - demand_letter_appropriate: {legal_assessment.demand_letter_appropriate} (type: {type(legal_assessment.demand_letter_appropriate).__name__})")
-        print(f"   - case_type: {legal_assessment.case_type}")
-        assert isinstance(legal_assessment.demand_letter_appropriate, str), "demand_letter_appropriate should be string"
+        logger.info("   ✅ LegalAssessment validation successful")
+        logger.info(
+            f"   - demand_letter_appropriate: {legal_assessment.demand_letter_appropriate} (type: {type(legal_assessment.demand_letter_appropriate).__name__})"
+        )
+        logger.info(f"   - case_type: {legal_assessment.case_type}")
+        assert isinstance(legal_assessment.demand_letter_appropriate, str), (
+            "demand_letter_appropriate should be string"
+        )
     except Exception as e:
-        print(f"   ❌ LegalAssessment validation failed: {e}")
+        logger.error(f"   ❌ LegalAssessment validation failed: {e}")
         return False
-    
+
     # Test DemandLetterEvaluation fallback
-    print("\n2. Testing DemandLetterEvaluation fallback...")
+    logger.warning("\n2. Testing DemandLetterEvaluation fallback...")
     try:
         fallback_data = create_fallback_demand_letter_evaluation()
         demand_evaluation = DemandLetterEvaluation.model_validate(fallback_data)
-        print("   ✅ DemandLetterEvaluation validation successful")
-        print(f"   - is_appropriate: {demand_evaluation.is_appropriate} (type: {type(demand_evaluation.is_appropriate).__name__})")
-        print(f"   - reasoning: {demand_evaluation.reasoning[:50]}...")
-        assert isinstance(demand_evaluation.is_appropriate, str), "is_appropriate should be string"
+        logger.info("   ✅ DemandLetterEvaluation validation successful")
+        logger.info(
+            f"   - is_appropriate: {demand_evaluation.is_appropriate} (type: {type(demand_evaluation.is_appropriate).__name__})"
+        )
+        logger.info(f"   - reasoning: {demand_evaluation.reasoning[:50]}...")
+        assert isinstance(demand_evaluation.is_appropriate, str), (
+            "is_appropriate should be string"
+        )
     except Exception as e:
-        print(f"   ❌ DemandLetterEvaluation validation failed: {e}")
+        logger.error(f"   ❌ DemandLetterEvaluation validation failed: {e}")
         return False
-    
-    print("\n🎉 All fallback validation tests passed!")
-    print("✅ Boolean to string conversion successful")
-    print("✅ Pydantic validation error should be resolved")
+
+    logger.warning("\n🎉 All fallback validation tests passed!")
+    logger.info("✅ Boolean to string conversion successful")
+    logger.error("✅ Pydantic validation error should be resolved")
     return True
+
 
 if __name__ == "__main__":
     success = test_fallback_validation()

@@ -14,6 +14,9 @@ from __future__ import annotations
 import os
 import sys
 from unittest.mock import MagicMock
+from utils.logging_config import setup_logging
+logger = setup_logging('unknown_service')
+
 
 
 # Add the project root to Python path
@@ -129,7 +132,7 @@ def create_mock_case_analysis() -> CaseAnalysisResult:
 
 def test_video_analysis_formatting():
     """Test the video analysis formatting function."""
-    print("🧪 Testing video analysis formatting...")
+logger.info('🧪 Testing video analysis formatting...')
 
     # Create mock email generator
     mock_client = MagicMock()
@@ -153,21 +156,21 @@ def test_video_analysis_formatting():
 
     # Check that at least some sections are present
     if found_sections == 0:
-        print("❌ No expected sections found in formatted output")
+logger.info('❌ No expected sections found in formatted output')
         return False
 
     # Check that raw dictionary data is not present
     if "violations_detected" in formatted_output or '{"' in formatted_output:
-        print("❌ Raw dictionary data found in formatted output")
+logger.debug('❌ Raw dictionary data found in formatted output')
         return False
 
-    print("✅ Video analysis formatting test passed")
+logger.info('✅ Video analysis formatting test passed')
     return True
 
 
 def test_video_relevance_analysis():
     """Test the video relevance analysis function."""
-    print("🧪 Testing video relevance analysis...")
+logger.info('🧪 Testing video relevance analysis...')
 
     # Create mock email generator
     mock_client = MagicMock()
@@ -188,24 +191,24 @@ def test_video_relevance_analysis():
     ]
 
     if not isinstance(relevance_analysis, dict):
-        print("❌ Relevance analysis should return a dictionary")
+logger.info('❌ Relevance analysis should return a dictionary')
         return False
 
     for key in expected_keys:
         if key not in relevance_analysis:
-            print(f"❌ Missing key: {key}")
+logger.info(f'❌ Missing key: {key}')
             return False
         if not relevance_analysis[key]:
-            print(f"❌ Empty value for key: {key}")
+logger.info(f'❌ Empty value for key: {key}')
             return False
 
-    print("✅ Video relevance analysis test passed")
+logger.info('✅ Video relevance analysis test passed')
     return True
 
 
 def test_timeline_generation():
     """Test the timeline generation function."""
-    print("🧪 Testing timeline generation...")
+logger.info('🧪 Testing timeline generation...')
 
     # Create mock email generator
     mock_client = MagicMock()
@@ -216,33 +219,33 @@ def test_timeline_generation():
 
     # Check that timeline is a list
     if not isinstance(timeline, list):
-        print("❌ Timeline should return a list of events")
+logger.info('❌ Timeline should return a list of events')
         return False
 
     # Check that timeline contains events
     if len(timeline) == 0:
-        print("❌ Timeline should contain at least some events")
+logger.info('❌ Timeline should contain at least some events')
         return False
 
     # Check that events have required structure
     for event in timeline[:3]:  # Check first 3 events
         if not isinstance(event, dict):
-            print("❌ Timeline events should be dictionaries")
+logger.info('❌ Timeline events should be dictionaries')
             return False
 
         required_fields = ["date", "source", "event"]
         for field in required_fields:
             if field not in event:
-                print(f"❌ Timeline event missing field: {field}")
+logger.info(f'❌ Timeline event missing field: {field}')
                 return False
 
-    print("✅ Timeline generation test passed")
+logger.info('✅ Timeline generation test passed')
     return True
 
 
 def test_email_template_integration():
     """Test that email generator properly integrates new functions."""
-    print("🧪 Testing email template integration...")
+logger.info('🧪 Testing email template integration...')
 
     # Create mock email generator
     mock_client = MagicMock()
@@ -262,25 +265,25 @@ def test_email_template_integration():
 
         # Check that all functions return appropriate types
         if not isinstance(timeline, list):
-            print("❌ Timeline should return a list")
+logger.info('❌ Timeline should return a list')
             return False
         if not isinstance(video_relevance, dict):
-            print("❌ Video relevance should return a dict")
+logger.info('❌ Video relevance should return a dict')
             return False
         if not isinstance(video_formatting, str):
-            print("❌ Video formatting should return a string")
+logger.info('❌ Video formatting should return a string')
             return False
 
-        print("✅ Email template integration test passed")
+logger.info('✅ Email template integration test passed')
         return True
     except Exception as e:
-        print(f"❌ Email template integration failed: {e}")
+logger.error(f'❌ Email template integration failed: {e}')
         return False
 
 
 def test_template_structure():
     """Test that templates have been properly restructured."""
-    print("🧪 Testing template structure...")
+logger.info('🧪 Testing template structure...')
 
     try:
         # Check findings email template exists and has been updated
@@ -289,40 +292,40 @@ def test_template_structure():
 
         # Check for new Timeline section
         if "Timeline" not in template_content:
-            print("❌ Timeline section not found in findings template")
+logger.info('❌ Timeline section not found in findings template')
             return False
 
         # Check that Document Review section has been removed/replaced
         if "Document Review" in template_content and "Timeline" not in template_content:
-            print(
+logger.info('❌ Document Review section still present without Timeline replacement')
                 "❌ Document Review section still present without Timeline replacement"
             )
             return False
 
         # Check for video relevance integration
         if "analyze_video_relevance" not in template_content:
-            print("❌ Video relevance analysis not integrated in template")
+logger.info('❌ Video relevance analysis not integrated in template')
             return False
 
         # Check for attorney name in From field
         if "intake_analysis.attorney_name" not in template_content:
-            print("❌ Attorney name not used in From field")
+logger.info('❌ Attorney name not used in From field')
             return False
 
-        print("✅ Template structure test passed")
+logger.info('✅ Template structure test passed')
         return True
     except FileNotFoundError:
-        print("❌ Findings email template not found")
+logger.info('❌ Findings email template not found')
         return False
     except Exception as e:
-        print(f"❌ Template structure test failed: {e}")
+logger.error(f'❌ Template structure test failed: {e}')
         return False
 
 
 def run_all_tests():
     """Run all tests and report results."""
-    print("🚀 Starting Findings Letter and Video Evidence Improvements Tests")
-    print("=" * 70)
+logger.info('🚀 Starting Findings Letter and Video Evidence Improvements Tests')
+logger.info('=' * 70)
 
     tests = [
         ("Video Analysis Formatting", test_video_analysis_formatting),
@@ -336,22 +339,22 @@ def run_all_tests():
     total = len(tests)
 
     for test_name, test_func in tests:
-        print(f"\n📋 Running: {test_name}")
+logger.info(f'\n📋 Running: {test_name}')
         try:
             if test_func():
                 passed += 1
             else:
-                print(f"❌ {test_name} failed")
+logger.error(f'❌ {test_name} failed')
         except Exception as e:
-            print(f"❌ {test_name} crashed: {e}")
+logger.error(f'❌ {test_name} crashed: {e}')
 
-    print("\n" + "=" * 70)
-    print(f"🏁 Test Results: {passed}/{total} tests passed")
+logger.info('\n' + '=' * 70)
+logger.info(f'🏁 Test Results: {passed}/{total} tests passed')
 
     if passed == total:
-        print("🎉 All tests passed! The improvements are working correctly.")
+logger.info('🎉 All tests passed! The improvements are working correctly.')
         return True
-    print("⚠️  Some tests failed. Check the output above for details.")
+logger.error('⚠️  Some tests failed. Check the output above for details.')
     return False
 
 

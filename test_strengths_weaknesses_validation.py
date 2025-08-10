@@ -11,7 +11,10 @@ from __future__ import annotations
 
 import sys
 import traceback
-from unittest.mock import MagicMock, Mock
+from unittest.mock import Mock
+from utils.logging_config import setup_logging
+logger = setup_logging('unknown_service')
+
 
 
 # Import the modules we need to test
@@ -29,8 +32,8 @@ try:
     )
     from backend_logic.email_generator import EmailGeneratorV2
 except ImportError as e:
-    print(f"❌ Import error: {e}")
-    print("Make sure you're running this from the project root directory")
+logger.error(f'❌ Import error: {e}')
+logger.info("Make sure you're running this from the project root directory")
     sys.exit(1)
 
 
@@ -96,45 +99,45 @@ def create_mock_letter_with_valid_content():
 
 def test_validation_functions():
     """Test the validation functions directly."""
-    print("🧪 Testing validation functions...")
+logger.info('🧪 Testing validation functions...')
     
     # Test 1: Empty weaknesses should fail
-    print("\n📋 Test 1: Empty weaknesses validation")
+logger.info('\n📋 Test 1: Empty weaknesses validation')
     try:
         letter = create_mock_letter_with_empty_weaknesses()
         validate_email_completeness(letter)
-        print("❌ FAILED: Empty weaknesses should have triggered validation error")
+logger.error('❌ FAILED: Empty weaknesses should have triggered validation error')
         return False
     except WeaknessesValidationError as e:
-        print(f"✅ PASSED: Correctly caught empty weaknesses - {e}")
+logger.info(f'✅ PASSED: Correctly caught empty weaknesses - {e}')
     except Exception as e:
-        print(f"❌ FAILED: Unexpected error - {e}")
+logger.error(f'❌ FAILED: Unexpected error - {e}')
         return False
     
     # Test 2: Placeholder weaknesses should fail
-    print("\n📋 Test 2: Placeholder weaknesses validation")
+logger.info('\n📋 Test 2: Placeholder weaknesses validation')
     try:
         letter = create_mock_letter_with_placeholder_weaknesses()
         validate_email_completeness(letter)
-        print("❌ FAILED: Placeholder weaknesses should have triggered validation error")
+logger.error('❌ FAILED: Placeholder weaknesses should have triggered validation error')
         return False
     except WeaknessesValidationError as e:
-        print(f"✅ PASSED: Correctly caught placeholder weaknesses - {e}")
+logger.info(f'✅ PASSED: Correctly caught placeholder weaknesses - {e}')
     except Exception as e:
-        print(f"❌ FAILED: Unexpected error - {e}")
+logger.error(f'❌ FAILED: Unexpected error - {e}')
         return False
     
     # Test 3: Valid content should pass
-    print("\n📋 Test 3: Valid content validation")
+logger.info('\n📋 Test 3: Valid content validation')
     try:
         letter = create_mock_letter_with_valid_content()
         validate_email_completeness(letter)
-        print("✅ PASSED: Valid content passed validation")
+logger.info('✅ PASSED: Valid content passed validation')
     except WeaknessesValidationError as e:
-        print(f"❌ FAILED: Valid content should not trigger validation error - {e}")
+logger.error(f'❌ FAILED: Valid content should not trigger validation error - {e}')
         return False
     except Exception as e:
-        print(f"❌ FAILED: Unexpected error - {e}")
+logger.error(f'❌ FAILED: Unexpected error - {e}')
         return False
     
     return True
@@ -142,7 +145,7 @@ def test_validation_functions():
 
 def test_enhanced_prompt_structure():
     """Test that the enhanced prompt includes the required structure."""
-    print("\n🧪 Testing enhanced prompt structure...")
+logger.info('\n🧪 Testing enhanced prompt structure...')
     
     try:
         # Create a mock OpenAI client
@@ -194,37 +197,37 @@ def test_enhanced_prompt_structure():
         # Test the enhanced case assessment generation
         result = generator._generate_case_assessment_content(section_plan, mock_analysis, context)
         
-        print(f"✅ PASSED: Enhanced prompt generated content: {len(result)} characters")
+logger.info(f'✅ PASSED: Enhanced prompt generated content: {len(result)} characters')
         
         # Verify that the prompt was called with enhanced requirements
         args, kwargs = mock_client.with_options.return_value.chat.completions.create.call_args
         prompt_content = kwargs["messages"][1]["content"]
         
         if "CRITICAL REQUIREMENT: You MUST generate TWO distinct sections" in prompt_content:
-            print("✅ PASSED: Enhanced prompt includes critical requirement for two sections")
+logger.error('✅ PASSED: Enhanced prompt includes critical requirement for two sections')
         else:
-            print("❌ FAILED: Enhanced prompt missing critical requirement")
+logger.error('❌ FAILED: Enhanced prompt missing critical requirement')
             return False
             
         if "**STRENGTHS**" in prompt_content and "**POTENTIAL CHALLENGES**" in prompt_content:
-            print("✅ PASSED: Enhanced prompt includes required section headers")
+logger.info('✅ PASSED: Enhanced prompt includes required section headers')
         else:
-            print("❌ FAILED: Enhanced prompt missing required section headers")
+logger.error('❌ FAILED: Enhanced prompt missing required section headers')
             return False
         
         return True
         
     except Exception as e:
-        print(f"❌ FAILED: Error testing enhanced prompt - {e}")
+logger.error(f'❌ FAILED: Error testing enhanced prompt - {e}')
         traceback.print_exc()
         return False
 
 
 def main():
     """Run all tests."""
-    print("=" * 60)
-    print("🚀 TESTING STRENGTHS & WEAKNESSES VALIDATION")
-    print("=" * 60)
+logger.info('=' * 60)
+logger.info('🚀 TESTING STRENGTHS & WEAKNESSES VALIDATION')
+logger.info('=' * 60)
     
     all_tests_passed = True
     
@@ -236,16 +239,16 @@ def main():
     if not test_enhanced_prompt_structure():
         all_tests_passed = False
     
-    print("\n" + "=" * 60)
+logger.info('\n' + '=' * 60)
     if all_tests_passed:
-        print("🎉 ALL TESTS PASSED!")
-        print("✅ The email generator now enforces both strengths and weaknesses generation")
-        print("✅ The validation guard prevents emails with empty 'Potential Challenges' sections")
-        print("✅ The system will fail-fast when validation requirements are not met")
+logger.info('🎉 ALL TESTS PASSED!')
+logger.info('✅ The email generator now enforces both strengths and weaknesses generation')
+logger.info("✅ The validation guard prevents emails with empty 'Potential Challenges' sections")
+logger.info('✅ The system will fail-fast when validation requirements are not met')
     else:
-        print("❌ SOME TESTS FAILED!")
-        print("Please review the implementation and fix any issues.")
-    print("=" * 60)
+logger.error('❌ SOME TESTS FAILED!')
+logger.info('Please review the implementation and fix any issues.')
+logger.info('=' * 60)
     
     return 0 if all_tests_passed else 1
 

@@ -4,6 +4,9 @@ import json
 import os
 
 import requests
+from utils.logging_config import setup_logging
+logger = setup_logging('unknown_service')
+
 
 
 # Define the URL of the FastAPI synchronous endpoint
@@ -22,7 +25,7 @@ def read_file_content(file_path):
         with open(file_path, "rb") as f:
             return f.read()
     except Exception as e:
-        print(f"Error reading file {file_path}: {e}")
+logger.error(f'Error reading file {file_path}: {e}')
         return None
 
 
@@ -30,7 +33,7 @@ def read_file_content(file_path):
 files_data = []
 all_files_exist = True
 
-print("Reading intake form...")
+logger.info('Reading intake form...')
 if os.path.exists(intake_form_path):
     intake_content = read_file_content(intake_form_path)
     if intake_content:
@@ -40,17 +43,17 @@ if os.path.exists(intake_form_path):
                 (os.path.basename(intake_form_path), intake_content, "application/pdf"),
             )
         )
-        print(
+logger.info(f'✓ Intake form loaded: {os.path.basename(intake_form_path)} ({len(intake_content)} bytes)')
             f"✓ Intake form loaded: {os.path.basename(intake_form_path)} ({len(intake_content)} bytes)"
         )
     else:
-        print(f"Failed to read: {intake_form_path}")
+logger.error(f'Failed to read: {intake_form_path}')
         all_files_exist = False
 else:
-    print(f"File not found: {intake_form_path}")
+logger.info(f'File not found: {intake_form_path}')
     all_files_exist = False
 
-print("Reading case documents...")
+logger.info('Reading case documents...')
 for path in case_document_paths:
     if os.path.exists(path):
         case_content = read_file_content(path)
@@ -58,92 +61,92 @@ for path in case_document_paths:
             files_data.append(
                 ("case_documents", (os.path.basename(path), case_content, "image/jpeg"))
             )
-            print(
+logger.info(f'✓ Case document loaded: {os.path.basename(path)} ({len(case_content)} bytes)')
                 f"✓ Case document loaded: {os.path.basename(path)} ({len(case_content)} bytes)"
             )
         else:
-            print(f"Failed to read: {path}")
+logger.error(f'Failed to read: {path}')
             all_files_exist = False
     else:
-        print(f"File not found: {path}")
+logger.info(f'File not found: {path}')
         all_files_exist = False
 
 # Check if there are files to upload
 if not all_files_exist or not files_data:
-    print("One or more files were not found or could not be read. Exiting.")
+logger.info('One or more files were not found or could not be read. Exiting.')
 else:
-    print(f"\nSending request to: {url}")
-    print(f"Files to upload: {len(files_data)}")
+logger.info(f'\nSending request to: {url}')
+logger.info(f'Files to upload: {len(files_data)}')
 
     # Send the POST request with synchronous processing
     try:
         response = requests.post(url, files=files_data, timeout=300)
 
         if response.status_code == 200:
-            print("✓ Request successful! Processing completed.")
+logger.debug('✓ Request successful! Processing completed.')
 
             try:
                 result = response.json()
-                print("\n" + "=" * 60)
-                print("RESPONSE SUMMARY")
-                print("=" * 60)
+logger.info('\n' + '=' * 60)
+logger.info('RESPONSE SUMMARY')
+logger.info('=' * 60)
 
                 # Check if analysis was completed
                 if result.get("analysis"):
                     analysis = result["analysis"]
-                    print("✓ Analysis completed")
+logger.info('✓ Analysis completed')
 
                     # Check intake analysis
                     if analysis.get("intake_analysis"):
                         intake = analysis["intake_analysis"]
-                        print(
+logger.info(f'✓ Intake Analysis - Client: {intake.get('client_name', 'N/A')}')
                             f"✓ Intake Analysis - Client: {intake.get('client_name', 'N/A')}"
                         )
-                        print(f"  Case Type: {intake.get('case_type', 'N/A')}")
-                        print(f"  Urgency: {intake.get('urgency_level', 'N/A')}")
+logger.info(f'  Case Type: {intake.get('case_type', 'N/A')}')
+logger.info(f'  Urgency: {intake.get('urgency_level', 'N/A')}')
 
                     # Check case analyses
                     if analysis.get("case_analyses"):
-                        print(
+logger.info(f'✓ Case Documents Analyzed: {len(analysis['case_analyses'])}')
                             f"✓ Case Documents Analyzed: {len(analysis['case_analyses'])}"
                         )
                         for i, doc_analysis in enumerate(analysis["case_analyses"]):
-                            print(
+logger.info(f'  {i + 1}. {doc_analysis.get('document_title', 'Untitled')}')
                                 f"  {i + 1}. {doc_analysis.get('document_title', 'Untitled')}"
                             )
 
                     # Check legal assessment
                     if analysis.get("legal_assessment"):
                         legal = analysis["legal_assessment"]
-                        print(
+logger.info(f'✓ Legal Assessment - Claim Viability: {legal.get('claim_viability', 'N/A')}')
                             f"✓ Legal Assessment - Claim Viability: {legal.get('claim_viability', 'N/A')}"
                         )
 
                 # Check email generation
                 if result.get("email"):
                     email_response = result["email"]
-                    print("✓ Email Generated")
+logger.info('✓ Email Generated')
 
                     # Check download links
                     if email_response.get("download_links"):
-                        print(
+logger.info(f'✓ Download Links Created: {len(email_response['download_links'])}')
                             f"✓ Download Links Created: {len(email_response['download_links'])}"
                         )
                         for link in email_response["download_links"]:
-                            print(f"  - {link.get('file_name', 'Unknown')}")
+logger.info(f'  - {link.get('file_name', 'Unknown')}')
                     else:
-                        print("✗ No download links found")
+logger.info('✗ No download links found')
 
                     # Check case analysis text
                     if email_response.get("case_analysis_text"):
                         analysis_text = email_response["case_analysis_text"]
-                        print(
+logger.info(f'✓ Case Analysis Text Generated ({len(analysis_text)} characters)')
                             f"✓ Case Analysis Text Generated ({len(analysis_text)} characters)"
                         )
                     else:
-                        print("✗ No case analysis text found")
+logger.info('✗ No case analysis text found')
                 else:
-                    print("✗ No email response found")
+logger.info('✗ No email response found')
 
                 # Check for errors
                 if result.get("errors") or (
@@ -153,28 +156,28 @@ else:
                     if result.get("analysis") and result["analysis"].get("errors"):
                         all_errors.extend(result["analysis"]["errors"])
 
-                    print(f"\n⚠️  ERRORS FOUND: {len(all_errors)}")
+logger.error(f'\n⚠️  ERRORS FOUND: {len(all_errors)}')
                     for error in all_errors:
-                        print(
+logger.info(f'  - {error.get('source', 'Unknown')}: {error.get('error_message', 'No message')}')
                             f"  - {error.get('source', 'Unknown')}: {error.get('error_message', 'No message')}"
                         )
 
-                print("\n" + "=" * 60)
-                print("FULL RESPONSE (JSON)")
-                print("=" * 60)
-                print(json.dumps(result, indent=2, default=str))
+logger.info('\n' + '=' * 60)
+logger.info('FULL RESPONSE (JSON)')
+logger.info('=' * 60)
+logger.debug(json.dumps(result, indent=2, default=str))
 
             except json.JSONDecodeError as e:
-                print(f"✗ Failed to parse JSON response: {e}")
-                print("Raw response:")
-                print(response.text)
+logger.error(f'✗ Failed to parse JSON response: {e}')
+logger.debug('Raw response:')
+logger.info(response.text)
 
         else:
-            print(f"✗ Request failed with status code: {response.status_code}")
-            print("Response:")
-            print(response.text)
+logger.error(f'✗ Request failed with status code: {response.status_code}')
+logger.info('Response:')
+logger.info(response.text)
 
     except requests.exceptions.Timeout:
-        print("✗ Request timed out after 300 seconds")
+logger.info('✗ Request timed out after 300 seconds')
     except requests.exceptions.RequestException as e:
-        print(f"✗ An error occurred: {e}")
+logger.error(f'✗ An error occurred: {e}')

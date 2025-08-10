@@ -5,6 +5,10 @@ from email import policy
 from email.parser import BytesParser
 
 from utils.data_models import DocumentType, FileType, ProcessedDocument
+from utils.logging_config import setup_logging
+
+
+logger = setup_logging("eml_processor")
 
 
 async def process_eml(
@@ -13,7 +17,7 @@ async def process_eml(
     """
     Processes an EML file by extracting its headers and body content from a given path.
     """
-    print(f"Processing EML: {original_filename}")
+    logger.debug(f"Processing EML: {original_filename}")
 
     with open(file_path, "rb") as f:
         msg = BytesParser(policy=policy.default).parse(f)

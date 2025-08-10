@@ -1,0 +1,1259 @@
+{
+  "summary": {
+    "total_opportunities": 104,
+    "backend_opportunities": 33,
+    "high_benefit_count": 71,
+    "medium_benefit_count": 33,
+    "opportunity_types": [
+      "loop_with_io",
+      "document_processing_loop",
+      "sequential_file_operations",
+      "sequential_api_calls",
+      "sequential_awaits"
+    ]
+  },
+  "all_opportunities": [
+    {
+      "type": "loop_with_io",
+      "file": "test_error_handling_validation.py",
+      "lines": "132-199",
+      "description": "For loop with I/O operations",
+      "benefit": "High - I/O operations can be parallelized",
+      "implementation": "Use concurrent.futures.ThreadPoolExecutor or asyncio.gather()",
+      "code_snippet": "        for filename, content, _content_type in test_files:\n            start_time = time.time()\n            try:\n                # Create temporary file\n                with tempfile.NamedTemporaryFile(\n                    suffix=f\".{filename.split('.')[-1]}\", delete=False\n                ) as tmp_"
+    },
+    {
+      "type": "document_processing_loop",
+      "file": "test_error_handling_validation.py",
+      "lines": "50-55",
+      "description": "Document processing loop that could be parallelized",
+      "benefit": "High - Independent document processing is highly parallelizable",
+      "implementation": "Use multiprocessing.Pool or concurrent.futures.ProcessPoolExecutor",
+      "code_snippet": "for test in self.tests.values() if test[\"success\"])\n        failed_tests = total_tests - passed_tests\n        total_execution_time = time.time() - self.start_time\n\n        return {\n            \"total_"
+    },
+    {
+      "type": "document_processing_loop",
+      "file": "test_html_validation.py",
+      "lines": "315-320",
+      "description": "Document processing loop that could be parallelized",
+      "benefit": "High - Independent document processing is highly parallelizable",
+      "implementation": "Use multiprocessing.Pool or concurrent.futures.ProcessPoolExecutor",
+      "code_snippet": "for f in os.listdir(validation_dir) if f.startswith(\"html_output_\")]\n        metrics_files = [f for f in os.listdir(validation_dir) if f.startswith(\"validation_metrics_\")]\n        \n        if not html"
+    },
+    {
+      "type": "loop_with_io",
+      "file": "test_json_parsing.py",
+      "lines": "52-66",
+      "description": "For loop with I/O operations",
+      "benefit": "High - I/O operations can be parallelized",
+      "implementation": "Use concurrent.futures.ThreadPoolExecutor or asyncio.gather()",
+      "code_snippet": "    for i, (content, description) in enumerate(test_cases, 1):\n        print(f\"Test {i}: {description}\")\n        print(f\"Input: {content[:50]}{'...' if len(content) > 50 else ''}\")\n        \n        try:\n            result = client.parse_json_response(content)\n            if result is not None:\n     "
+    },
+    {
+      "type": "document_processing_loop",
+      "file": "test_criminal_video_integration.py",
+      "lines": "249-254",
+      "description": "Document processing loop that could be parallelized",
+      "benefit": "High - Independent document processing is highly parallelizable",
+      "implementation": "Use multiprocessing.Pool or concurrent.futures.ProcessPoolExecutor",
+      "code_snippet": "for category in CriminalEvidenceCategory]\n        assert len(actual_categories) == 16\n\n        for expected in expected_categories:\n            assert expected in actual_categories, f\"Missing category"
+    },
+    {
+      "type": "loop_with_io",
+      "file": "test_json_parsing_simple.py",
+      "lines": "50-72",
+      "description": "For loop with I/O operations",
+      "benefit": "High - I/O operations can be parallelized",
+      "implementation": "Use concurrent.futures.ThreadPoolExecutor or asyncio.gather()",
+      "code_snippet": "    for i, (content, description) in enumerate(test_cases, 1):\n        print(f\"Test {i}: {description}\")\n        print(f\"Input: {content[:50]}{'...' if len(content) > 50 else ''}\")\n        \n        try:\n            result = client.parse_json_response(content)\n            print(f\"Return type: {type(r"
+    },
+    {
+      "type": "loop_with_io",
+      "file": "dead_code_analyzer.py",
+      "lines": "164-185",
+      "description": "For loop with I/O operations",
+      "benefit": "High - I/O operations can be parallelized",
+      "implementation": "Use concurrent.futures.ThreadPoolExecutor or asyncio.gather()",
+      "code_snippet": "    for result in file_results:\n        file_path = Path(result['file'])\n        try:\n            with open(file_path, 'r', encoding='utf-8') as f:\n                content = f.read()\n                \n            # Find import statements\n            import_patterns = [\n                r'from\\s+\\S+\\s+"
+    },
+    {
+      "type": "document_processing_loop",
+      "file": "dead_code_analyzer.py",
+      "lines": "98-103",
+      "description": "Document processing loop that could be parallelized",
+      "benefit": "High - Independent document processing is highly parallelizable",
+      "implementation": "Use multiprocessing.Pool or concurrent.futures.ProcessPoolExecutor",
+      "code_snippet": "for name in definitions.keys():\n            if isinstance(name, str):\n                # Check for the name in string literals\n                patterns = [\n                    f'\"{name}\"',\n            "
+    },
+    {
+      "type": "document_processing_loop",
+      "file": "debug_normalization_issues.py",
+      "lines": "105-110",
+      "description": "Document processing loop that could be parallelized",
+      "benefit": "High - Independent document processing is highly parallelizable",
+      "implementation": "Use multiprocessing.Pool or concurrent.futures.ProcessPoolExecutor",
+      "code_snippet": "for s in sentences if s.strip()]\n    \n    print(f\"\ud83d\udcca Total sentences: {len(sentences)}\")\n    \n    # Find long sentences (>15 words)\n    long_sentences = []\n    for i, sentence in enumerate(sentences):\n"
+    },
+    {
+      "type": "document_processing_loop",
+      "file": "test_refactored_architecture.py",
+      "lines": "69-74",
+      "description": "Document processing loop that could be parallelized",
+      "benefit": "High - Independent document processing is highly parallelizable",
+      "implementation": "Use multiprocessing.Pool or concurrent.futures.ProcessPoolExecutor",
+      "code_snippet": "for p in required_placeholders if p not in master_prompt]\n        \n        if missing_placeholders:\n            print(f\"\u274c FAIL: Missing placeholders in master prompt: {missing_placeholders}\")\n        "
+    },
+    {
+      "type": "document_processing_loop",
+      "file": "test_email_generator_refactor.py",
+      "lines": "38-43",
+      "description": "Document processing loop that could be parallelized",
+      "benefit": "High - Independent document processing is highly parallelizable",
+      "implementation": "Use multiprocessing.Pool or concurrent.futures.ProcessPoolExecutor",
+      "code_snippet": "for msg in messages:\n                        if msg.get(\"role\") == \"user\":\n                            user_content = msg.get(\"content\", \"\")\n                            break\n\n                    clas"
+    },
+    {
+      "type": "sequential_api_calls",
+      "file": "parallelization_analyzer.py",
+      "lines": "61-93",
+      "description": "Function '_analyze_loop' contains 4 sequential API calls",
+      "benefit": "High - API calls can be parallelized if independent",
+      "implementation": "Use asyncio.gather() or concurrent.futures for parallel execution",
+      "code_snippet": "    def _analyze_loop(self, node, loop_type: str):\n        \"\"\"Analyze loops for parallelization opportunities\"\"\"\n        loop_body = ast.unparse(node) if hasattr(ast, 'unparse') else str(node.lineno)\n        \n        # Check for I/O operations in loop\n        io_indicators = [\n            'requests."
+    },
+    {
+      "type": "document_processing_loop",
+      "file": "parallelization_analyzer.py",
+      "lines": "76-81",
+      "description": "Document processing loop that could be parallelized",
+      "benefit": "High - Independent document processing is highly parallelizable",
+      "implementation": "Use multiprocessing.Pool or concurrent.futures.ProcessPoolExecutor",
+      "code_snippet": "for indicator in io_indicators)\n        \n        if has_io:\n            start_line = node.lineno\n            end_line = getattr(node, 'end_lineno', start_line + 5)\n            code_snippet = self._ext"
+    },
+    {
+      "type": "loop_with_io",
+      "file": "test_performance_validation.py",
+      "lines": "340-365",
+      "description": "For loop with I/O operations",
+      "benefit": "High - I/O operations can be parallelized",
+      "implementation": "Use concurrent.futures.ThreadPoolExecutor or asyncio.gather()",
+      "code_snippet": "            for iteration in range(10):\n                # Create a small test file\n                test_file = self.create_large_test_file(1, \"txt\")\n\n                class MockUploadedFile:\n                    def __init__(self, file_path, name):\n                        self.name = name\n            "
+    },
+    {
+      "type": "document_processing_loop",
+      "file": "test_performance_validation.py",
+      "lines": "74-79",
+      "description": "Document processing loop that could be parallelized",
+      "benefit": "High - Independent document processing is highly parallelizable",
+      "implementation": "Use multiprocessing.Pool or concurrent.futures.ProcessPoolExecutor",
+      "code_snippet": "for m in self.metrics.values())\n        max_memory = max(m.get(\"peak_memory\", 0) for m in self.metrics.values())\n        total_memory_delta = sum(\n            m.get(\"memory_delta\", 0) for m in self.me"
+    },
+    {
+      "type": "document_processing_loop",
+      "file": "test_video_google_api.py",
+      "lines": "101-106",
+      "description": "Document processing loop that could be parallelized",
+      "benefit": "High - Independent document processing is highly parallelizable",
+      "implementation": "Use multiprocessing.Pool or concurrent.futures.ProcessPoolExecutor",
+      "code_snippet": "for video_file in video_files:\n        size_mb = video_file.stat().st_size / (1024 * 1024)\n        print(f\"   - {video_file.name} ({size_mb:.2f} MB)\")\n\n    return video_files\n\n\nasync def test_video_pr"
+    },
+    {
+      "type": "document_processing_loop",
+      "file": "redundant_logic_analyzer.py",
+      "lines": "65-70",
+      "description": "Document processing loop that could be parallelized",
+      "benefit": "High - Independent document processing is highly parallelizable",
+      "implementation": "Use multiprocessing.Pool or concurrent.futures.ProcessPoolExecutor",
+      "code_snippet": "for item in node.body:\n            if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):\n                self._extract_function_code(item, \"method\", class_name=node.name)\n        self.generic_"
+    },
+    {
+      "type": "loop_with_io",
+      "file": "debug_pipeline_fix_validation.py",
+      "lines": "123-127",
+      "description": "For loop with I/O operations",
+      "benefit": "High - I/O operations can be parallelized",
+      "implementation": "Use concurrent.futures.ThreadPoolExecutor or asyncio.gather()",
+      "code_snippet": "            for key in ['letter_content', 'main_letter', 'rendered_email', 'html_content']:\n                if key in email_docs and email_docs[key]:\n                    html_content = email_docs[key]\n                    print(f\"DEBUG_H1: {json.dumps({'module': 'pipeline_validation', 'hypothesis_id'"
+    },
+    {
+      "type": "document_processing_loop",
+      "file": "debug_pipeline_fix_validation.py",
+      "lines": "123-128",
+      "description": "Document processing loop that could be parallelized",
+      "benefit": "High - Independent document processing is highly parallelizable",
+      "implementation": "Use multiprocessing.Pool or concurrent.futures.ProcessPoolExecutor",
+      "code_snippet": "for key in ['letter_content', 'main_letter', 'rendered_email', 'html_content']:\n                if key in email_docs and email_docs[key]:\n                    html_content = email_docs[key]\n           "
+    },
+    {
+      "type": "document_processing_loop",
+      "file": "import_analyzer.py",
+      "lines": "21-26",
+      "description": "Document processing loop that could be parallelized",
+      "benefit": "High - Independent document processing is highly parallelizable",
+      "implementation": "Use multiprocessing.Pool or concurrent.futures.ProcessPoolExecutor",
+      "code_snippet": "for alias in node.names:\n            name = alias.asname if alias.asname else alias.name\n            self.imports[name] = node.lineno\n            \n    def visit_ImportFrom(self, node):\n        module "
+    },
+    {
+      "type": "document_processing_loop",
+      "file": "test_framework_devlin.py",
+      "lines": "51-56",
+      "description": "Document processing loop that could be parallelized",
+      "benefit": "High - Independent document processing is highly parallelizable",
+      "implementation": "Use multiprocessing.Pool or concurrent.futures.ProcessPoolExecutor",
+      "code_snippet": "for file in os.listdir(docs_folder):\n        if file.endswith(\".pdf\"):\n            full_path = os.path.join(docs_folder, file)\n            pdf_files.append(full_path)\n            print(f\"   \ud83d\udcc4 Found: {"
+    },
+    {
+      "type": "document_processing_loop",
+      "file": "debug_analysis_state.py",
+      "lines": "35-40",
+      "description": "Document processing loop that could be parallelized",
+      "benefit": "High - Independent document processing is highly parallelizable",
+      "implementation": "Use multiprocessing.Pool or concurrent.futures.ProcessPoolExecutor",
+      "code_snippet": "for issue in issues:\n            print(f\"   {issue}\")\n    else:\n        print(\"\u2705 No missing await keywords found\")\n\n    return issues\n\n\ndef check_data_model_fields(file_path):\n    \"\"\"Check if CaseAnal"
+    },
+    {
+      "type": "document_processing_loop",
+      "file": "test_budget_core_integration.py",
+      "lines": "139-144",
+      "description": "Document processing loop that could be parallelized",
+      "benefit": "High - Independent document processing is highly parallelizable",
+      "implementation": "Use multiprocessing.Pool or concurrent.futures.ProcessPoolExecutor",
+      "code_snippet": "for cost in actual_doc_costs + actual_media_costs\n    )\n\n    actual_costs = ActualCosts(\n        document_analysis_costs=actual_doc_costs,\n        media_processing_costs=actual_media_costs,\n        to"
+    },
+    {
+      "type": "document_processing_loop",
+      "file": "debug_actual_normalization_content.py",
+      "lines": "39-44",
+      "description": "Document processing loop that could be parallelized",
+      "benefit": "High - Independent document processing is highly parallelizable",
+      "implementation": "Use multiprocessing.Pool or concurrent.futures.ProcessPoolExecutor",
+      "code_snippet": "for sentence in sentences:\n        clean_sentence = re.sub(r\"\\s+\", \" \", sentence.strip().lower())\n        if len(clean_sentence) > 10:  # Only count meaningful sentences\n            sentence_counts[cl"
+    },
+    {
+      "type": "document_processing_loop",
+      "file": "test_cost_performance.py",
+      "lines": "62-67",
+      "description": "Document processing loop that could be parallelized",
+      "benefit": "High - Independent document processing is highly parallelizable",
+      "implementation": "Use multiprocessing.Pool or concurrent.futures.ProcessPoolExecutor",
+      "code_snippet": "for i in range(100):\n            doc = ProcessedDocument(\n                file_name=f\"document_{i:03d}.pdf\",\n                content=\"This is a sample legal document with approximately 500 words. \"\n  "
+    },
+    {
+      "type": "document_processing_loop",
+      "file": "backend_logic/cost_calculator.py",
+      "lines": "86-91",
+      "description": "Document processing loop that could be parallelized",
+      "benefit": "High - Independent document processing is highly parallelizable",
+      "implementation": "Use multiprocessing.Pool or concurrent.futures.ProcessPoolExecutor",
+      "code_snippet": "for doc in analyzed_documents:\n            # Extract actual token usage from logs if available\n            doc_log = processing_logs.get(doc.file_name, {})\n\n            if \"token_usage\" in doc_log:\n  "
+    },
+    {
+      "type": "sequential_api_calls",
+      "file": "backend_logic/video_processor.py",
+      "lines": "88-100",
+      "description": "Function '_ensure_bucket_exists' contains 2 sequential API calls",
+      "benefit": "High - API calls can be parallelized if independent",
+      "implementation": "Use asyncio.gather() or concurrent.futures for parallel execution",
+      "code_snippet": "    def _ensure_bucket_exists(self) -> None:\n        try:\n            print(f\"VIDEO PROCESSOR: \ud83d\udd0d Checking bucket existence: {self.bucket_name}\")\n            bucket = self.storage_client.bucket(self.bucket_name)\n            if not bucket.exists():\n                print(f\"VIDEO PROCESSOR: \ud83d\udcdd Creating b"
+    },
+    {
+      "type": "loop_with_io",
+      "file": "backend_logic/main_processor.py",
+      "lines": "436-521",
+      "description": "For loop with I/O operations",
+      "benefit": "High - I/O operations can be parallelized",
+      "implementation": "Use concurrent.futures.ThreadPoolExecutor or asyncio.gather()",
+      "code_snippet": "                for i, doc in enumerate(case_docs):\n                    doc_size = case_doc_sizes.get(doc.file_name, 1024)\n                    current_doc_progress = (\n                        processed_size / total_case_size\n                        if total_case_size > 0\n                        else"
+    },
+    {
+      "type": "document_processing_loop",
+      "file": "backend_logic/main_processor.py",
+      "lines": "131-136",
+      "description": "Document processing loop that could be parallelized",
+      "benefit": "High - Independent document processing is highly parallelizable",
+      "implementation": "Use multiprocessing.Pool or concurrent.futures.ProcessPoolExecutor",
+      "code_snippet": "for paragraph in text_content.split(\"\\n\\n\"):\n        if paragraph.strip():\n            doc.add_paragraph(paragraph.strip())\n\n    doc.save(output_path)\n\n\ndef create_pdf_file(content: str, output_path: "
+    },
+    {
+      "type": "loop_with_io",
+      "file": "backend_logic/document_processor.py",
+      "lines": "52-95",
+      "description": "For loop with I/O operations",
+      "benefit": "High - I/O operations can be parallelized",
+      "implementation": "Use concurrent.futures.ThreadPoolExecutor or asyncio.gather()",
+      "code_snippet": "        for uploaded_file in uploaded_files:\n            temp_path = f\"/tmp/{uploaded_file.name}\"\n            try:\n                # Save uploaded file temporarily for processing\n                with open(temp_path, \"wb\") as f:\n                    f.write(uploaded_file.getvalue())\n\n                #"
+    },
+    {
+      "type": "document_processing_loop",
+      "file": "backend_logic/document_processor.py",
+      "lines": "52-57",
+      "description": "Document processing loop that could be parallelized",
+      "benefit": "High - Independent document processing is highly parallelizable",
+      "implementation": "Use multiprocessing.Pool or concurrent.futures.ProcessPoolExecutor",
+      "code_snippet": "for uploaded_file in uploaded_files:\n            temp_path = f\"/tmp/{uploaded_file.name}\"\n            try:\n                # Save uploaded file temporarily for processing\n                with open(tem"
+    },
+    {
+      "type": "loop_with_io",
+      "file": "backend_logic/ai_analyzer.py",
+      "lines": "411-424",
+      "description": "For loop with I/O operations",
+      "benefit": "High - I/O operations can be parallelized",
+      "implementation": "Use concurrent.futures.ThreadPoolExecutor or asyncio.gather()",
+      "code_snippet": "        for video in analysis.video_insights:\n            # Estimate tokens from video content\n            insights_content = (\n                json.dumps(video.insights, indent=2) if video.insights else \"\"\n            )\n            transcript_content = video.transcript or \"\"\n            labels_cont"
+    },
+    {
+      "type": "loop_with_io",
+      "file": "backend_logic/ai_analyzer.py",
+      "lines": "903-919",
+      "description": "For loop with I/O operations",
+      "benefit": "High - I/O operations can be parallelized",
+      "implementation": "Use concurrent.futures.ThreadPoolExecutor or asyncio.gather()",
+      "code_snippet": "        for i, doc in enumerate(documents, 1):\n            print(f\"AI ANALYZER: Processing document {i}/{total_docs}: {doc.file_name}\")\n            result = await self._analyze_single_document(doc, intake_context)\n            results.append(result)\n\n            # Log the result type\n            if i"
+    },
+    {
+      "type": "document_processing_loop",
+      "file": "backend_logic/ai_analyzer.py",
+      "lines": "411-416",
+      "description": "Document processing loop that could be parallelized",
+      "benefit": "High - Independent document processing is highly parallelizable",
+      "implementation": "Use multiprocessing.Pool or concurrent.futures.ProcessPoolExecutor",
+      "code_snippet": "for video in analysis.video_insights:\n            # Estimate tokens from video content\n            insights_content = (\n                json.dumps(video.insights, indent=2) if video.insights else \"\"\n "
+    },
+    {
+      "type": "document_processing_loop",
+      "file": "backend_logic/audio_processor.py",
+      "lines": "183-188",
+      "description": "Document processing loop that could be parallelized",
+      "benefit": "High - Independent document processing is highly parallelizable",
+      "implementation": "Use multiprocessing.Pool or concurrent.futures.ProcessPoolExecutor",
+      "code_snippet": "for seg in segments\n                        if seg.get(\"avg_logprob\")\n                    ]\n                    if confidences:\n                        # Convert log probability to confidence percenta"
+    },
+    {
+      "type": "document_processing_loop",
+      "file": "backend_logic/async_processor.py",
+      "lines": "46-51",
+      "description": "Document processing loop that could be parallelized",
+      "benefit": "High - Independent document processing is highly parallelizable",
+      "implementation": "Use multiprocessing.Pool or concurrent.futures.ProcessPoolExecutor",
+      "code_snippet": "for doc in saved_documents if doc.original_filename == intake_filename\n        ]\n        if not intake_docs_saved:\n            raise HTTPException(\n                status_code=400, detail=\"Intake form"
+    },
+    {
+      "type": "document_processing_loop",
+      "file": "backend_logic/utils.py",
+      "lines": "94-99",
+      "description": "Document processing loop that could be parallelized",
+      "benefit": "High - Independent document processing is highly parallelizable",
+      "implementation": "Use multiprocessing.Pool or concurrent.futures.ProcessPoolExecutor",
+      "code_snippet": "for desc in self.PHASE_DESCRIPTIONS.values()\n            )\n        \n        phase_info = self.PHASE_DESCRIPTIONS.get(phase_name, {})\n        title = phase_info.get(\"title\", phase_name.replace(\"_\", \" \""
+    },
+    {
+      "type": "document_processing_loop",
+      "file": "backend_logic/email_generator.py",
+      "lines": "458-463",
+      "description": "Document processing loop that could be parallelized",
+      "benefit": "High - Independent document processing is highly parallelizable",
+      "implementation": "Use multiprocessing.Pool or concurrent.futures.ProcessPoolExecutor",
+      "code_snippet": "for section_plan in plan.sections:\n            print(f\"EMAIL GENERATOR V2: Generating section: {section_plan.header}\")\n            try:\n                section_content = self._generate_section_with_va"
+    },
+    {
+      "type": "document_processing_loop",
+      "file": "backend_logic/cost_estimator.py",
+      "lines": "75-80",
+      "description": "Document processing loop that could be parallelized",
+      "benefit": "High - Independent document processing is highly parallelizable",
+      "implementation": "Use multiprocessing.Pool or concurrent.futures.ProcessPoolExecutor",
+      "code_snippet": "for doc in documents:\n            # Estimate tokens for document content\n            input_tokens = self._estimate_tokens(doc.content)\n\n            # Determine which model to use based on document siz"
+    },
+    {
+      "type": "document_processing_loop",
+      "file": "backend_logic/email_generation/services/content_extraction_service.py",
+      "lines": "32-37",
+      "description": "Document processing loop that could be parallelized",
+      "benefit": "High - Independent document processing is highly parallelizable",
+      "implementation": "Use multiprocessing.Pool or concurrent.futures.ProcessPoolExecutor",
+      "code_snippet": "for doc in analysis.analyzed_documents:\n            if hasattr(doc, \"key_information\") and doc.key_information:\n                facts.append(doc.key_information)\n\n        return facts[:5]\n\n    def ide"
+    },
+    {
+      "type": "loop_with_io",
+      "file": "backend_logic/email_generation/services/openai_integration_service.py",
+      "lines": "78-124",
+      "description": "For loop with I/O operations",
+      "benefit": "High - I/O operations can be parallelized",
+      "implementation": "Use concurrent.futures.ThreadPoolExecutor or asyncio.gather()",
+      "code_snippet": "        for attempt in range(self.max_retries):\n            try:\n                # Prepare messages\n                messages = []\n                \n                if request.system_message:\n                    messages.append({\n                        \"role\": \"system\",\n                        \"conte"
+    },
+    {
+      "type": "sequential_api_calls",
+      "file": "backend_logic/ai/prompt_builder.py",
+      "lines": "180-277",
+      "description": "Function 'build_final_assessment_prompt' contains 2 sequential API calls",
+      "benefit": "High - API calls can be parallelized if independent",
+      "implementation": "Use asyncio.gather() or concurrent.futures for parallel execution",
+      "code_snippet": "    def build_final_assessment_prompt(self, analysis_data: str, timeline_content: str, video_relevance_content: str = \"\") -> str:\n        \"\"\"Builds the prompt for the final legal assessment.\"\"\"\n        # Get prompt from configuration or use fallback\n        base_prompt = self.config_manager.get_prom"
+    },
+    {
+      "type": "loop_with_io",
+      "file": "backend_logic/ai/token_manager.py",
+      "lines": "73-86",
+      "description": "For loop with I/O operations",
+      "benefit": "High - I/O operations can be parallelized",
+      "implementation": "Use concurrent.futures.ThreadPoolExecutor or asyncio.gather()",
+      "code_snippet": "        for video in analysis.video_insights:\n            # Estimate tokens from video content\n            insights_content = (\n                json.dumps(video.insights, indent=2) if video.insights else \"\"\n            )\n            transcript_content = video.transcript or \"\"\n            labels_cont"
+    },
+    {
+      "type": "document_processing_loop",
+      "file": "backend_logic/ai/token_manager.py",
+      "lines": "73-78",
+      "description": "Document processing loop that could be parallelized",
+      "benefit": "High - Independent document processing is highly parallelizable",
+      "implementation": "Use multiprocessing.Pool or concurrent.futures.ProcessPoolExecutor",
+      "code_snippet": "for video in analysis.video_insights:\n            # Estimate tokens from video content\n            insights_content = (\n                json.dumps(video.insights, indent=2) if video.insights else \"\"\n "
+    },
+    {
+      "type": "document_processing_loop",
+      "file": "backend_logic/ai/timeline_analyzer.py",
+      "lines": "49-54",
+      "description": "Document processing loop that could be parallelized",
+      "benefit": "High - Independent document processing is highly parallelizable",
+      "implementation": "Use multiprocessing.Pool or concurrent.futures.ProcessPoolExecutor",
+      "code_snippet": "for dates in each sentence\n            dates = self._extract_dates_from_text(sentence)\n            \n            if dates:\n                for date_info in dates:\n                    event = {\n        "
+    },
+    {
+      "type": "loop_with_io",
+      "file": "backend_logic/ai/ai_analyzer_refactored.py",
+      "lines": "154-168",
+      "description": "For loop with I/O operations",
+      "benefit": "High - I/O operations can be parallelized",
+      "implementation": "Use concurrent.futures.ThreadPoolExecutor or asyncio.gather()",
+      "code_snippet": "        for i, doc in enumerate(documents, 1):\n            print(f\"AI ANALYZER: Processing document {i}/{total_docs}: {doc.file_name}\")\n            result = await self._analyze_single_document(doc, intake_context)\n            results.append(result)\n\n            # Log the result type\n            if i"
+    },
+    {
+      "type": "loop_with_io",
+      "file": "backend_logic/ai/openai_client.py",
+      "lines": "69-131",
+      "description": "For loop with I/O operations",
+      "benefit": "High - I/O operations can be parallelized",
+      "implementation": "Use concurrent.futures.ThreadPoolExecutor or asyncio.gather()",
+      "code_snippet": "        for attempt in range(self.max_retries):\n            try:\n                response = self.client.chat.completions.create(\n                    model=model,\n                    messages=[\n                        {\n                            \"role\": \"system\",\n                            \"conten"
+    },
+    {
+      "type": "document_processing_loop",
+      "file": "backend_logic/ai/openai_client.py",
+      "lines": "43-48",
+      "description": "Document processing loop that could be parallelized",
+      "benefit": "High - Independent document processing is highly parallelizable",
+      "implementation": "Use multiprocessing.Pool or concurrent.futures.ProcessPoolExecutor",
+      "code_snippet": "for JSON in markdown block\n        primary_match = re.search(r\"```(?:json)?\\s*([\\{\\[][^`]*[\\}\\]])\\s*```\", content, re.DOTALL)\n        if primary_match:\n            return primary_match.group(1)\n\n     "
+    },
+    {
+      "type": "document_processing_loop",
+      "file": "utils/data_models.py",
+      "lines": "156-161",
+      "description": "Document processing loop that could be parallelized",
+      "benefit": "High - Independent document processing is highly parallelizable",
+      "implementation": "Use multiprocessing.Pool or concurrent.futures.ProcessPoolExecutor",
+      "code_snippet": "for party in self.parties_involved]\n\n\nclass LegalAssessment(BaseModel):\n    \"\"\"Legal assessment of the case.\"\"\"\n\n    case_type: str\n    claim_viability: str\n    overall_evidence_strength: str\n    pote"
+    },
+    {
+      "type": "document_processing_loop",
+      "file": "backend/document_processor.py",
+      "lines": "100-105",
+      "description": "Document processing loop that could be parallelized",
+      "benefit": "High - Independent document processing is highly parallelizable",
+      "implementation": "Use multiprocessing.Pool or concurrent.futures.ProcessPoolExecutor",
+      "code_snippet": "for f in processed_files:\n        extracted = extract_text(f)\n        standardized = standardize_content(extracted)\n        preprocessed = preprocess_text(standardized)\n        logging.info(f\"Processe"
+    },
+    {
+      "type": "document_processing_loop",
+      "file": "backend/tests/test_velasco_comprehensive.py",
+      "lines": "86-91",
+      "description": "Document processing loop that could be parallelized",
+      "benefit": "High - Independent document processing is highly parallelizable",
+      "implementation": "Use multiprocessing.Pool or concurrent.futures.ProcessPoolExecutor",
+      "code_snippet": "for f in DOCUMENTS_PATH.iterdir() if f.is_file()]\n    print(f\"\ud83d\udcc1 Found {len(all_files)} total files\")\n\n    # Filter by supported file types\n    supported_files = []\n    skipped_files = []\n\n    for file"
+    },
+    {
+      "type": "loop_with_io",
+      "file": "backend/tests/test_video_integration.py",
+      "lines": "193-201",
+      "description": "For loop with I/O operations",
+      "benefit": "High - I/O operations can be parallelized",
+      "implementation": "Use concurrent.futures.ThreadPoolExecutor or asyncio.gather()",
+      "code_snippet": "        for video_file in video_files:\n            print(f\"\ud83d\udcf9 Processing: {video_file.name}\")\n            result = await video_processor.process_video_file(\n                file_path=str(video_file), file_name=video_file.name\n            )\n            results.append(result)\n\n            # Add small d"
+    },
+    {
+      "type": "document_processing_loop",
+      "file": "backend/tests/test_video_integration.py",
+      "lines": "193-198",
+      "description": "Document processing loop that could be parallelized",
+      "benefit": "High - Independent document processing is highly parallelizable",
+      "implementation": "Use multiprocessing.Pool or concurrent.futures.ProcessPoolExecutor",
+      "code_snippet": "for video_file in video_files:\n            print(f\"\ud83d\udcf9 Processing: {video_file.name}\")\n            result = await video_processor.process_video_file(\n                file_path=str(video_file), file_name"
+    },
+    {
+      "type": "document_processing_loop",
+      "file": "backend/tests/test_price_comprehensive.py",
+      "lines": "106-111",
+      "description": "Document processing loop that could be parallelized",
+      "benefit": "High - Independent document processing is highly parallelizable",
+      "implementation": "Use multiprocessing.Pool or concurrent.futures.ProcessPoolExecutor",
+      "code_snippet": "for folder_name in folders_to_scan:\n        folder_path = DOCUMENTS_PATH / folder_name\n        if folder_path.exists():\n            print(f\"\\n\ud83d\udcc1 Scanning: {folder_name}/\")\n\n            # Recursively fi"
+    },
+    {
+      "type": "document_processing_loop",
+      "file": "backend/tests/simple_test.py",
+      "lines": "54-59",
+      "description": "Document processing loop that could be parallelized",
+      "benefit": "High - Independent document processing is highly parallelizable",
+      "implementation": "Use multiprocessing.Pool or concurrent.futures.ProcessPoolExecutor",
+      "code_snippet": "for path in case_document_paths:\n    if os.path.exists(path):\n        case_content = read_file_content(path)\n        if case_content:\n            files_data.append(\n                (\"case_documents\", "
+    },
+    {
+      "type": "document_processing_loop",
+      "file": "backend/tests/test_media_integration.py",
+      "lines": "37-42",
+      "description": "Document processing loop that could be parallelized",
+      "benefit": "High - Independent document processing is highly parallelizable",
+      "implementation": "Use multiprocessing.Pool or concurrent.futures.ProcessPoolExecutor",
+      "code_snippet": "for spec in file_specs:\n            file_path = tmp_path / spec[\"name\"]\n            file_path.write_bytes(spec.get(\"content\", b\"fake data\"))\n            mock_file = MagicMock()\n            mock_file.n"
+    },
+    {
+      "type": "document_processing_loop",
+      "file": "backend/tests/test_devlin_comprehensive.py",
+      "lines": "99-104",
+      "description": "Document processing loop that could be parallelized",
+      "benefit": "High - Independent document processing is highly parallelizable",
+      "implementation": "Use multiprocessing.Pool or concurrent.futures.ProcessPoolExecutor",
+      "code_snippet": "for f in INPUT_PATH.iterdir() if f.is_file()]\n    print(f\"\ud83d\udcc2 Found {len(all_files)} total files in {INPUT_PATH.name}\")\n\n    supported_files = []\n    skipped_files = []\n\n    for file_path in all_files:\n"
+    },
+    {
+      "type": "loop_with_io",
+      "file": "backend/tests/run_all_tests.py",
+      "lines": "302-310",
+      "description": "For loop with I/O operations",
+      "benefit": "High - I/O operations can be parallelized",
+      "implementation": "Use concurrent.futures.ThreadPoolExecutor or asyncio.gather()",
+      "code_snippet": "    for i, test_info in enumerate(TESTS, 1):\n        print_banner(f\"RUNNING TEST {i}/{len(TESTS)}: {test_info['name']}\")\n        result = run_single_test(test_info)\n        results.append(result)\n\n        # Short pause between tests\n        if i < len(TESTS):\n            print(\"\\n\u23f8\ufe0f  Pausing 5 secon"
+    },
+    {
+      "type": "document_processing_loop",
+      "file": "backend/tests/run_all_tests.py",
+      "lines": "132-137",
+      "description": "Document processing loop that could be parallelized",
+      "benefit": "High - Independent document processing is highly parallelizable",
+      "implementation": "Use multiprocessing.Pool or concurrent.futures.ProcessPoolExecutor",
+      "code_snippet": "for line in output_lines:\n        # Extract document counts\n        if \"Documents processed:\" in line:\n            with contextlib.suppress(Exception):\n                metrics[\"documents_processed\"] ="
+    },
+    {
+      "type": "document_processing_loop",
+      "file": "backend/tests/test_badam_comprehensive.py",
+      "lines": "79-84",
+      "description": "Document processing loop that could be parallelized",
+      "benefit": "High - Independent document processing is highly parallelizable",
+      "implementation": "Use multiprocessing.Pool or concurrent.futures.ProcessPoolExecutor",
+      "code_snippet": "for f in SAMPLES_PATH.iterdir() if f.is_file()]\n    print(f\"\ud83d\udcc2 Found {len(all_files)} total files in {SAMPLES_PATH.name}\")\n\n    # Filter by supported file types\n    supported_files = []\n    skipped_fil"
+    },
+    {
+      "type": "document_processing_loop",
+      "file": "backend/tests/unit/test_ai_analyzer.py",
+      "lines": "274-279",
+      "description": "Document processing loop that could be parallelized",
+      "benefit": "High - Independent document processing is highly parallelizable",
+      "implementation": "Use multiprocessing.Pool or concurrent.futures.ProcessPoolExecutor",
+      "code_snippet": "for ext in file_extensions:\n            # Arrange\n            mock_video = Mock()\n            mock_video.name = f\"test_video{ext}\"\n            context = {\"client_name\": \"Test\", \"case_type\": \"Test\"}\n\n "
+    },
+    {
+      "type": "document_processing_loop",
+      "file": "backend/tests/unit/test_document_processor.py",
+      "lines": "358-363",
+      "description": "Document processing loop that could be parallelized",
+      "benefit": "High - Independent document processing is highly parallelizable",
+      "implementation": "Use multiprocessing.Pool or concurrent.futures.ProcessPoolExecutor",
+      "code_snippet": "for file in accepted_files:\n            text = extract_text(file)\n            standardized = standardize_content(text)\n            preprocessed = preprocess_text(standardized)\n            results.appe"
+    },
+    {
+      "type": "document_processing_loop",
+      "file": "backend/tests/unit/test_quality_validator.py",
+      "lines": "143-148",
+      "description": "Document processing loop that could be parallelized",
+      "benefit": "High - Independent document processing is highly parallelizable",
+      "implementation": "Use multiprocessing.Pool or concurrent.futures.ProcessPoolExecutor",
+      "code_snippet": "for issue in result[\"issues\"]:\n            assert isinstance(issue, str)\n\n    def test_validate_letter_score_consistency(self):\n        \"\"\"Test that the same input produces consistent scores.\"\"\"\n     "
+    },
+    {
+      "type": "sequential_api_calls",
+      "file": "backend/tests/utils/semantic_analyzer.py",
+      "lines": "30-50",
+      "description": "Function 'get_semantic_similarity' contains 2 sequential API calls",
+      "benefit": "High - API calls can be parallelized if independent",
+      "implementation": "Use asyncio.gather() or concurrent.futures for parallel execution",
+      "code_snippet": "    def get_semantic_similarity(self, text1, text2):\n        \"\"\"\n        Calculates semantic similarity between two texts using OpenAI's embeddings (>=1.0.0 API).\n        \"\"\"\n        try:\n            response1 = self.client.embeddings.create(\n                input=[text1], model=\"text-embedding-ada-"
+    },
+    {
+      "type": "document_processing_loop",
+      "file": "backend/tests/utils/test_framework.py",
+      "lines": "96-101",
+      "description": "Document processing loop that could be parallelized",
+      "benefit": "High - Independent document processing is highly parallelizable",
+      "implementation": "Use multiprocessing.Pool or concurrent.futures.ProcessPoolExecutor",
+      "code_snippet": "for doc_path in case_documents:\n            try:\n                content, mime_type = read_file_content(doc_path)\n                files_data.append(\n                    (\"case_documents\", (Path(doc_pa"
+    },
+    {
+      "type": "loop_with_io",
+      "file": "backend/tests/e2e/test_devlin_workflow.py",
+      "lines": "49-61",
+      "description": "For loop with I/O operations",
+      "benefit": "High - I/O operations can be parallelized",
+      "implementation": "Use concurrent.futures.ThreadPoolExecutor or asyncio.gather()",
+      "code_snippet": "        for doc_path in devlin_documents:\n            mock_file = Mock()\n            mock_file.name = Path(doc_path).name\n            mock_file.type = \"application/pdf\"\n            mock_file.size = 1024 * 100  # Mock 100KB files\n\n            # Mock file reading - both read() and getvalue() methods\n "
+    },
+    {
+      "type": "loop_with_io",
+      "file": "backend/tests/e2e/test_devlin_workflow.py",
+      "lines": "270-280",
+      "description": "For loop with I/O operations",
+      "benefit": "High - I/O operations can be parallelized",
+      "implementation": "Use concurrent.futures.ThreadPoolExecutor or asyncio.gather()",
+      "code_snippet": "        for expected_file in expected_html_files:\n            file_path = Path(expected_file)\n            assert file_path.exists(), f\"Expected HTML file not found: {expected_file}\"\n            assert file_path.stat().st_size > 0, f\"HTML file is empty: {expected_file}\"\n\n            # Verify HTML con"
+    },
+    {
+      "type": "document_processing_loop",
+      "file": "backend/tests/e2e/test_devlin_workflow.py",
+      "lines": "42-47",
+      "description": "Document processing loop that could be parallelized",
+      "benefit": "High - Independent document processing is highly parallelizable",
+      "implementation": "Use multiprocessing.Pool or concurrent.futures.ProcessPoolExecutor",
+      "code_snippet": "for f in pdf_files]\n\n    @pytest.fixture\n    def mock_streamlit_files(self, devlin_documents) -> list[Mock]:\n        \"\"\"Fixture providing mock Streamlit file objects for all Devlin documents.\"\"\"\n     "
+    },
+    {
+      "type": "document_processing_loop",
+      "file": "backend/utils/data_models.py",
+      "lines": "170-175",
+      "description": "Document processing loop that could be parallelized",
+      "benefit": "High - Independent document processing is highly parallelizable",
+      "implementation": "Use multiprocessing.Pool or concurrent.futures.ProcessPoolExecutor",
+      "code_snippet": "for party in self.parties_involved]\n\n\nclass LegalAssessment(BaseModel):\n    \"\"\"Legal assessment of the case.\"\"\"\n\n    case_type: str\n    claim_viability: str\n    overall_evidence_strength: str\n    pote"
+    },
+    {
+      "type": "loop_with_io",
+      "file": "components/ui_components.py",
+      "lines": "58-109",
+      "description": "For loop with I/O operations",
+      "benefit": "High - I/O operations can be parallelized",
+      "implementation": "Use concurrent.futures.ThreadPoolExecutor or asyncio.gather()",
+      "code_snippet": "        for file_path in test_folder.rglob(\"*\"):\n            if file_path.is_file() and file_path.suffix.lower() in supported_extensions:\n                # Create a mock uploaded file object\n                try:\n                    with open(file_path, \"rb\") as f:\n                        file_conten"
+    },
+    {
+      "type": "document_processing_loop",
+      "file": "components/ui_components.py",
+      "lines": "58-63",
+      "description": "Document processing loop that could be parallelized",
+      "benefit": "High - Independent document processing is highly parallelizable",
+      "implementation": "Use multiprocessing.Pool or concurrent.futures.ProcessPoolExecutor",
+      "code_snippet": "for file_path in test_folder.rglob(\"*\"):\n            if file_path.is_file() and file_path.suffix.lower() in supported_extensions:\n                # Create a mock uploaded file object\n                t"
+    },
+    {
+      "type": "sequential_file_operations",
+      "file": "test_authentic_attorney_advisor_validation.py",
+      "lines": "354-417",
+      "description": "Function 'test_ai_analyzer_framework_consistency' contains 2 file operations",
+      "benefit": "Medium - File operations can be parallelized if independent",
+      "implementation": "Use concurrent.futures.ThreadPoolExecutor for I/O-bound file operations",
+      "code_snippet": "    def test_ai_analyzer_framework_consistency(self) -> ValidationResult:\n        \"\"\"Test 5: Check AI Analyzer vs Email Generator framework consistency.\"\"\"\n        print(\"\\n\ud83d\udd04 FRAMEWORK CONSISTENCY TEST\")\n        print(\"=\" * 50)\n        \n        try:\n            # Read both modules\n            ai_ana"
+    },
+    {
+      "type": "sequential_file_operations",
+      "file": "test_html_validation.py",
+      "lines": "304-348",
+      "description": "Function 'analyze_validation_output' contains 2 file operations",
+      "benefit": "Medium - File operations can be parallelized if independent",
+      "implementation": "Use concurrent.futures.ThreadPoolExecutor for I/O-bound file operations",
+      "code_snippet": "def analyze_validation_output():\n    \"\"\"Analyze the validation output files that were generated.\"\"\"\n    print(\"\\n\ud83d\udcca Analyzing validation output files...\")\n    \n    validation_dir = \"validation_output\"\n    if not os.path.exists(validation_dir):\n        print(\"\u274c No validation output directory found\")\n "
+    },
+    {
+      "type": "sequential_file_operations",
+      "file": "test_css_fix_validation.py",
+      "lines": "45-155",
+      "description": "Function 'main' contains 2 file operations",
+      "benefit": "Medium - File operations can be parallelized if independent",
+      "implementation": "Use concurrent.futures.ThreadPoolExecutor for I/O-bound file operations",
+      "code_snippet": "def main():\n    print(\"=== CSS Fix Validation Test ===\")\n    \n    # Read the corrupted HTML sample\n    try:\n        with open(\"test_data/Findings_Letter_Amber Bell  Erik Devlin-26.html\", encoding=\"utf-8\") as f:\n            corrupted_html = f.read()\n        print(\"\u2713 Successfully loaded corrupted HTML"
+    },
+    {
+      "type": "sequential_file_operations",
+      "file": "fix_normalization_post_processor.py",
+      "lines": "132-169",
+      "description": "Function 'main' contains 2 file operations",
+      "benefit": "Medium - File operations can be parallelized if independent",
+      "implementation": "Use concurrent.futures.ThreadPoolExecutor for I/O-bound file operations",
+      "code_snippet": "def main():\n    \"\"\"Test the normalization processor.\"\"\"\n    # Read the debug content\n    try:\n        with open(\"debug_normalization_content.html\", encoding=\"utf-8\") as f:\n            html_content = f.read()\n        \n        print(\"\ud83d\udcc4 Processing normalization content...\")\n        \n        # Apply nor"
+    },
+    {
+      "type": "sequential_file_operations",
+      "file": "dead_code_analyzer.py",
+      "lines": "206-318",
+      "description": "Function 'main' contains 2 file operations",
+      "benefit": "Medium - File operations can be parallelized if independent",
+      "implementation": "Use concurrent.futures.ThreadPoolExecutor for I/O-bound file operations",
+      "code_snippet": "def main():\n    \"\"\"Main analysis function\"\"\"\n    root_dir = Path('.')\n    exclude_dirs = ['.ruff_cache', '__pycache__', '.git', 'test_data', 'validation_output']\n    \n    # Find all Python files\n    python_files = []\n    for root, dirs, files in os.walk(root_dir):\n        dirs[:] = [d for d in dirs "
+    },
+    {
+      "type": "sequential_file_operations",
+      "file": "parallelization_analyzer.py",
+      "lines": "306-425",
+      "description": "Function 'main' contains 2 file operations",
+      "benefit": "Medium - File operations can be parallelized if independent",
+      "implementation": "Use concurrent.futures.ThreadPoolExecutor for I/O-bound file operations",
+      "code_snippet": "def main():\n    \"\"\"Main analysis function\"\"\"\n    root_dir = Path('.')\n    exclude_dirs = ['.ruff_cache', '__pycache__', '.git', 'test_data', 'validation_output']\n    \n    # Find all Python files\n    python_files = []\n    for root, dirs, files in os.walk(root_dir):\n        dirs[:] = [d for d in dirs "
+    },
+    {
+      "type": "sequential_file_operations",
+      "file": "debug_actual_json_structure.py",
+      "lines": "96-167",
+      "description": "Function 'main' contains 2 file operations",
+      "benefit": "Medium - File operations can be parallelized if independent",
+      "implementation": "Use concurrent.futures.ThreadPoolExecutor for I/O-bound file operations",
+      "code_snippet": "def main():\n    \"\"\"Debug the actual JSON structure being generated.\"\"\"\n    print(\"\ud83d\udd0d Debugging Actual JSON Structure Generation\")\n    print(\"=\" * 50)\n    \n    try:\n        # Initialize generator\n        api_key = get_openai_api_key()\n        client = OpenAI(api_key=api_key)\n        generator = EmailG"
+    },
+    {
+      "type": "sequential_file_operations",
+      "file": "test_template_rendering.py",
+      "lines": "148-272",
+      "description": "Function 'test_template_rendering' contains 2 file operations",
+      "benefit": "Medium - File operations can be parallelized if independent",
+      "implementation": "Use concurrent.futures.ThreadPoolExecutor for I/O-bound file operations",
+      "code_snippet": "def test_template_rendering():\n    \"\"\"Test both templates with mock data\"\"\"\n\n    # Setup Jinja2 environment\n    template_dir = os.path.join(os.getcwd(), \"backend\", \"assets\", \"templates\")\n    if not os.path.exists(template_dir):\n        print(f\"\u274c Template directory not found: {template_dir}\")\n       "
+    },
+    {
+      "type": "sequential_awaits",
+      "file": "test_video_google_api.py",
+      "lines": "186-232",
+      "description": "Async function 'main' has 3 sequential awaits",
+      "benefit": "Medium - Sequential awaits can be parallelized if independent",
+      "implementation": "Use asyncio.gather() to run independent async operations concurrently",
+      "code_snippet": "async def main():\n    \"\"\"Main test execution function.\"\"\"\n    print(\"\ud83c\udfac Google Cloud Video Processing API Test\")\n    print(\"=\" * 50)\n\n    # Step 1: Check environment configuration\n    if not check_environment():\n        print(\"\\n\u274c Environment configuration failed. Please fix the issues above.\")\n     "
+    },
+    {
+      "type": "sequential_file_operations",
+      "file": "redundant_logic_analyzer.py",
+      "lines": "251-371",
+      "description": "Function 'main' contains 2 file operations",
+      "benefit": "Medium - File operations can be parallelized if independent",
+      "implementation": "Use concurrent.futures.ThreadPoolExecutor for I/O-bound file operations",
+      "code_snippet": "def main():\n    \"\"\"Main analysis function\"\"\"\n    root_dir = Path('.')\n    exclude_dirs = ['.ruff_cache', '__pycache__', '.git', 'test_data', 'validation_output']\n    \n    # Find all Python files\n    python_files = []\n    for root, dirs, files in os.walk(root_dir):\n        dirs[:] = [d for d in dirs "
+    },
+    {
+      "type": "sequential_file_operations",
+      "file": "import_analyzer.py",
+      "lines": "102-157",
+      "description": "Function 'main' contains 2 file operations",
+      "benefit": "Medium - File operations can be parallelized if independent",
+      "implementation": "Use concurrent.futures.ThreadPoolExecutor for I/O-bound file operations",
+      "code_snippet": "def main():\n    \"\"\"Main analysis function\"\"\"\n    root_dir = Path('.')\n    python_files = find_python_files(root_dir)\n    \n    print(f\"\ud83d\udd0d Analyzing {len(python_files)} Python files for import efficiency...\")\n    \n    results = []\n    total_unused = 0\n    files_with_unused = 0"
+    },
+    {
+      "type": "sequential_file_operations",
+      "file": "debug_validation_output.py",
+      "lines": "100-176",
+      "description": "Function 'main' contains 2 file operations",
+      "benefit": "Medium - File operations can be parallelized if independent",
+      "implementation": "Use concurrent.futures.ThreadPoolExecutor for I/O-bound file operations",
+      "code_snippet": "def main():\n    print(\"\ud83d\udd0d Debug Validation Output - Checking Template Rendering\")\n    print(\"=\"*60)\n    \n    # Initialize OpenAI client like validation harness does\n    try:\n        api_key = get_openai_api_key()\n        client = OpenAI(api_key=api_key)\n        generator = EmailGeneratorV2(client=cli"
+    },
+    {
+      "type": "sequential_file_operations",
+      "file": "test_css_fix_direct.py",
+      "lines": "134-243",
+      "description": "Function 'main' contains 2 file operations",
+      "benefit": "Medium - File operations can be parallelized if independent",
+      "implementation": "Use concurrent.futures.ThreadPoolExecutor for I/O-bound file operations",
+      "code_snippet": "def main():\n    print(\"=== Direct CSS Fix Test ===\")\n    \n    # Read the corrupted HTML sample\n    try:\n        with open(\"test_data/Findings_Letter_Amber Bell  Erik Devlin-26.html\", encoding=\"utf-8\") as f:\n            corrupted_html = f.read()\n        print(\"\u2713 Successfully loaded corrupted HTML sam"
+    },
+    {
+      "type": "sequential_file_operations",
+      "file": "test_cost_performance.py",
+      "lines": "352-434",
+      "description": "Function 'generate_performance_report' contains 2 file operations",
+      "benefit": "Medium - File operations can be parallelized if independent",
+      "implementation": "Use concurrent.futures.ThreadPoolExecutor for I/O-bound file operations",
+      "code_snippet": "    def generate_performance_report(self, total_time):\n        \"\"\"Generate a comprehensive performance report.\"\"\"\n        print(\"\\n\" + \"=\" * 50)\n        print(\"\ud83d\udccb PERFORMANCE TEST REPORT\")\n        print(\"=\" * 50)\n\n        passed_tests = 0\n        failed_tests = 0\n        warning_tests = 0\n"
+    },
+    {
+      "type": "sequential_file_operations",
+      "file": "backend_logic/main_processor.py",
+      "lines": "200-222",
+      "description": "Function 'save_output_files' contains 2 file operations",
+      "benefit": "Medium - File operations can be parallelized if independent",
+      "implementation": "Use concurrent.futures.ThreadPoolExecutor for I/O-bound file operations",
+      "code_snippet": "def save_output_files(\n    output_dir: str, main_letter: str, appendix: str, analysis_result\n) -> None:\n    \"\"\"Save HTML output files to the specified directory.\"\"\"\n    output_path = Path(output_dir)\n    output_path.mkdir(parents=True, exist_ok=True)\n\n    case_name = extract_case_name(analysis_resul"
+    },
+    {
+      "type": "sequential_awaits",
+      "file": "backend_logic/main_processor.py",
+      "lines": "431-548",
+      "description": "Async function 'analyze_with_progress' has 2 sequential awaits",
+      "benefit": "Medium - Sequential awaits can be parallelized if independent",
+      "implementation": "Use asyncio.gather() to run independent async operations concurrently",
+      "code_snippet": "            async def analyze_with_progress():\n                nonlocal processed_size\n                results = []\n\n                # Analyze documents\n                for i, doc in enumerate(case_docs):\n                    doc_size = case_doc_sizes.get(doc.file_name, 1024)\n                    curr"
+    },
+    {
+      "type": "sequential_awaits",
+      "file": "backend_logic/main_processor.py",
+      "lines": "809-907",
+      "description": "Async function 'process_case_documents_cli' has 4 sequential awaits",
+      "benefit": "Medium - Sequential awaits can be parallelized if independent",
+      "implementation": "Use asyncio.gather() to run independent async operations concurrently",
+      "code_snippet": "async def process_case_documents_cli(\n    intake_form_path: str, case_documents_paths: list, output_dir: str, config_path: str | None = None\n) -> bool | None:\n    \"\"\"\n    Command-line version of the case processing function.\n\n    Args:\n        intake_form_path: Path to the intake form file\n        c"
+    },
+    {
+      "type": "sequential_awaits",
+      "file": "backend_logic/ai_analyzer.py",
+      "lines": "894-922",
+      "description": "Async function 'analyze_case_documents' has 2 sequential awaits",
+      "benefit": "Medium - Sequential awaits can be parallelized if independent",
+      "implementation": "Use asyncio.gather() to run independent async operations concurrently",
+      "code_snippet": "    async def analyze_case_documents(\n        self, documents: list[ProcessedDocument], intake_context: EnhancedIntakeAnalysis\n    ) -> list[AnalyzedDocument | AnalysisError]:\n        \"\"\"Analyzes multiple case documents sequentially to avoid rate limiting.\"\"\"\n        results = []\n        total_docs "
+    },
+    {
+      "type": "sequential_awaits",
+      "file": "backend_logic/ai_analyzer.py",
+      "lines": "986-1459",
+      "description": "Async function 'perform_final_assessment' has 6 sequential awaits",
+      "benefit": "Medium - Sequential awaits can be parallelized if independent",
+      "implementation": "Use asyncio.gather() to run independent async operations concurrently",
+      "code_snippet": "    async def perform_final_assessment(\n        self, analysis: CaseAnalysisResult\n    ) -> CaseAnalysisResult:\n        \"\"\"Performs the final legal assessment and demand letter evaluation with graceful degradation.\"\"\"\n        if not analysis.intake_analysis or (\n            not analysis.analyzed_doc"
+    },
+    {
+      "type": "sequential_awaits",
+      "file": "backend_logic/async_processor.py",
+      "lines": "26-112",
+      "description": "Async function 'process_documents_async' has 4 sequential awaits",
+      "benefit": "Medium - Sequential awaits can be parallelized if independent",
+      "implementation": "Use asyncio.gather() to run independent async operations concurrently",
+      "code_snippet": "async def process_documents_async(\n    task_id: str,\n    saved_documents: list[SavedDocument],\n    client: OpenAI,\n    doc_processor: DocumentProcessor,\n    task_manager: TaskManager,\n    temp_dir_path: str,\n    intake_filename: str,\n) -> None:\n    \"\"\""
+    },
+    {
+      "type": "sequential_file_operations",
+      "file": "backend_logic/cost_session_manager.py",
+      "lines": "392-412",
+      "description": "Function '_save_session' contains 2 file operations",
+      "benefit": "Medium - File operations can be parallelized if independent",
+      "implementation": "Use concurrent.futures.ThreadPoolExecutor for I/O-bound file operations",
+      "code_snippet": "    def _save_session(self, case_id: str, cost_summary: CostSummary) -> None:\n        \"\"\"Save cost session to persistent storage.\"\"\"\n        session_file = os.path.join(self.session_storage_dir, f\"{case_id}.json\")\n\n        # Convert to JSON-serializable format\n        session_data = {\n            \"c"
+    },
+    {
+      "type": "sequential_file_operations",
+      "file": "backend_logic/cost_session_manager.py",
+      "lines": "414-450",
+      "description": "Function '_load_session' contains 2 file operations",
+      "benefit": "Medium - File operations can be parallelized if independent",
+      "implementation": "Use concurrent.futures.ThreadPoolExecutor for I/O-bound file operations",
+      "code_snippet": "    def _load_session(self, case_id: str) -> CostSummary | None:\n        \"\"\"Load cost session from persistent storage.\"\"\"\n        session_file = os.path.join(self.session_storage_dir, f\"{case_id}.json\")\n\n        if not os.path.exists(session_file):\n            return None\n\n        try:\n            w"
+    },
+    {
+      "type": "sequential_file_operations",
+      "file": "backend_logic/email_generation/services/json_processing_service.py",
+      "lines": "46-144",
+      "description": "Function 'generate_html_letter' contains 2 file operations",
+      "benefit": "Medium - File operations can be parallelized if independent",
+      "implementation": "Use concurrent.futures.ThreadPoolExecutor for I/O-bound file operations",
+      "code_snippet": "    def generate_html_letter(self, analysis: CaseAnalysisResult) -> str:\n        \"\"\"\n        Generate HTML letter content using the single master prompt.\n        \n        This replaces the old generate_structured_json method with a simplified\n        approach that directly generates the final HTML l"
+    },
+    {
+      "type": "sequential_awaits",
+      "file": "backend_logic/ai/ai_analyzer_refactored.py",
+      "lines": "145-171",
+      "description": "Async function 'analyze_case_documents' has 2 sequential awaits",
+      "benefit": "Medium - Sequential awaits can be parallelized if independent",
+      "implementation": "Use asyncio.gather() to run independent async operations concurrently",
+      "code_snippet": "    async def analyze_case_documents(\n        self, documents: list[ProcessedDocument], intake_context: EnhancedIntakeAnalysis\n    ) -> list[AnalyzedDocument | AnalysisError]:\n        \"\"\"Analyzes multiple case documents sequentially to avoid rate limiting.\"\"\"\n        results = []\n        total_docs "
+    },
+    {
+      "type": "sequential_file_operations",
+      "file": "backend/tests/test_velasco_comprehensive.py",
+      "lines": "482-508",
+      "description": "Function 'save_results' contains 5 file operations",
+      "benefit": "Medium - File operations can be parallelized if independent",
+      "implementation": "Use concurrent.futures.ThreadPoolExecutor for I/O-bound file operations",
+      "code_snippet": "def save_results(result: dict[str, Any], analysis_data: dict[str, Any]) -> None:\n    \"\"\"Save test results to files.\"\"\"\n    print_banner(\"\ud83d\udcbe SAVING RESULTS\")\n\n    results_dir = ensure_results_directory()\n    timestamp = datetime.now().strftime(\"%Y%m%d_%H%M%S\")\n\n    # Save full JSON response\n    json_f"
+    },
+    {
+      "type": "sequential_awaits",
+      "file": "backend/tests/test_video_integration.py",
+      "lines": "175-225",
+      "description": "Async function 'test_multiple_video_files_processing' has 2 sequential awaits",
+      "benefit": "Medium - Sequential awaits can be parallelized if independent",
+      "implementation": "Use asyncio.gather() to run independent async operations concurrently",
+      "code_snippet": "    async def test_multiple_video_files_processing(self, video_processor):\n        \"\"\"Test processing multiple video files to verify consistency.\"\"\"\n        video_dir = (\n            Path(__file__).resolve().parents[2]\n            / \"samples\"\n            / \"Price, Clifton [MetLife]\"\n            / \"S"
+    },
+    {
+      "type": "sequential_file_operations",
+      "file": "backend/tests/test_price_comprehensive.py",
+      "lines": "451-477",
+      "description": "Function 'save_results' contains 5 file operations",
+      "benefit": "Medium - File operations can be parallelized if independent",
+      "implementation": "Use concurrent.futures.ThreadPoolExecutor for I/O-bound file operations",
+      "code_snippet": "def save_results(result: dict[str, Any], analysis_data: dict[str, Any]) -> None:\n    \"\"\"Save test results to files.\"\"\"\n    print_banner(\"\ud83d\udcbe SAVING RESULTS\")\n\n    results_dir = ensure_results_directory()\n    timestamp = datetime.now().strftime(\"%Y%m%d_%H%M%S\")\n\n    # Save full JSON response\n    json_f"
+    },
+    {
+      "type": "sequential_file_operations",
+      "file": "backend/tests/test_devlin_comprehensive.py",
+      "lines": "31-37",
+      "description": "Function 'load_config' contains 2 file operations",
+      "benefit": "Medium - File operations can be parallelized if independent",
+      "implementation": "Use concurrent.futures.ThreadPoolExecutor for I/O-bound file operations",
+      "code_snippet": "def load_config() -> dict[str, Any]:\n    \"\"\"Load test configuration from JSON file.\"\"\"\n    if not CONFIG_PATH.exists():\n        msg = f\"Configuration file not found: {CONFIG_PATH}\"\n        raise FileNotFoundError(msg)\n    with open(CONFIG_PATH) as f:\n        return json.load(f)"
+    },
+    {
+      "type": "sequential_file_operations",
+      "file": "backend/tests/test_devlin_comprehensive.py",
+      "lines": "451-491",
+      "description": "Function 'analyze_and_save' contains 5 file operations",
+      "benefit": "Medium - File operations can be parallelized if independent",
+      "implementation": "Use concurrent.futures.ThreadPoolExecutor for I/O-bound file operations",
+      "code_snippet": "def analyze_and_save(result: dict[str, Any]) -> None:\n    \"\"\"Analyze the response and save all relevant artifacts.\"\"\"\n    print_banner(\"\ud83d\udcca RESPONSE ANALYSIS & SAVING\")\n\n    output_dir = ensure_output_directory()\n    timestamp = datetime.now().strftime(\"%Y%m%d_%H%M%S\")\n\n    # Save full JSON response\n "
+    },
+    {
+      "type": "sequential_file_operations",
+      "file": "backend/tests/run_all_tests.py",
+      "lines": "264-282",
+      "description": "Function 'save_results_summary' contains 2 file operations",
+      "benefit": "Medium - File operations can be parallelized if independent",
+      "implementation": "Use concurrent.futures.ThreadPoolExecutor for I/O-bound file operations",
+      "code_snippet": "def save_results_summary(results: list[dict[str, Any]]) -> None:\n    \"\"\"Save test results summary to file.\"\"\"\n    results_dir = Path(__file__).parent / \"test_results\"\n    results_dir.mkdir(exist_ok=True)\n\n    timestamp = datetime.now().strftime(\"%Y%m%d_%H%M%S\")\n    summary_file = results_dir / f\"tes"
+    },
+    {
+      "type": "sequential_awaits",
+      "file": "backend/tests/test_video_processor.py",
+      "lines": "122-142",
+      "description": "Async function 'test_file_validation_error_handling' has 2 sequential awaits",
+      "benefit": "Medium - Sequential awaits can be parallelized if independent",
+      "implementation": "Use asyncio.gather() to run independent async operations concurrently",
+      "code_snippet": "    async def test_file_validation_error_handling(\n        self, video_processor, temp_video_file\n    ):\n        \"\"\"Test error handling for invalid file size or format.\"\"\"\n        # Test size error\n        with patch(\"os.path.getsize\", return_value=video_processor.max_file_size + 1):\n            lar"
+    },
+    {
+      "type": "sequential_file_operations",
+      "file": "backend/tests/test_badam_comprehensive.py",
+      "lines": "371-397",
+      "description": "Function 'save_results' contains 5 file operations",
+      "benefit": "Medium - File operations can be parallelized if independent",
+      "implementation": "Use concurrent.futures.ThreadPoolExecutor for I/O-bound file operations",
+      "code_snippet": "def save_results(result: dict[str, Any], analysis_data: dict[str, Any]) -> None:\n    \"\"\"Save test results to files.\"\"\"\n    print_banner(\"\ud83d\udcbe SAVING RESULTS\")\n\n    results_dir = ensure_results_directory()\n    timestamp = datetime.now().strftime(\"%Y%m%d_%H%M%S\")\n\n    # Save full JSON response\n    json_f"
+    },
+    {
+      "type": "sequential_file_operations",
+      "file": "backend/tests/utils/test_framework.py",
+      "lines": "250-255",
+      "description": "Function '_save_json' contains 2 file operations",
+      "benefit": "Medium - File operations can be parallelized if independent",
+      "implementation": "Use concurrent.futures.ThreadPoolExecutor for I/O-bound file operations",
+      "code_snippet": "    def _save_json(self, data: dict[str, Any], filename: str) -> None:\n        \"\"\"Save dictionary as a JSON file.\"\"\"\n        path = self.output_path / filename\n        with open(path, \"w\", encoding=\"utf-8\") as f:\n            json.dump(data, f, indent=2, default=str, ensure_ascii=False)\n        print"
+    }
+  ],
+  "backend_opportunities": [
+    {
+      "type": "document_processing_loop",
+      "file": "backend_logic/cost_calculator.py",
+      "lines": "86-91",
+      "description": "Document processing loop that could be parallelized",
+      "benefit": "High - Independent document processing is highly parallelizable",
+      "implementation": "Use multiprocessing.Pool or concurrent.futures.ProcessPoolExecutor",
+      "code_snippet": "for doc in analyzed_documents:\n            # Extract actual token usage from logs if available\n            doc_log = processing_logs.get(doc.file_name, {})\n\n            if \"token_usage\" in doc_log:\n  "
+    },
+    {
+      "type": "sequential_api_calls",
+      "file": "backend_logic/video_processor.py",
+      "lines": "88-100",
+      "description": "Function '_ensure_bucket_exists' contains 2 sequential API calls",
+      "benefit": "High - API calls can be parallelized if independent",
+      "implementation": "Use asyncio.gather() or concurrent.futures for parallel execution",
+      "code_snippet": "    def _ensure_bucket_exists(self) -> None:\n        try:\n            print(f\"VIDEO PROCESSOR: \ud83d\udd0d Checking bucket existence: {self.bucket_name}\")\n            bucket = self.storage_client.bucket(self.bucket_name)\n            if not bucket.exists():\n                print(f\"VIDEO PROCESSOR: \ud83d\udcdd Creating b"
+    },
+    {
+      "type": "loop_with_io",
+      "file": "backend_logic/main_processor.py",
+      "lines": "436-521",
+      "description": "For loop with I/O operations",
+      "benefit": "High - I/O operations can be parallelized",
+      "implementation": "Use concurrent.futures.ThreadPoolExecutor or asyncio.gather()",
+      "code_snippet": "                for i, doc in enumerate(case_docs):\n                    doc_size = case_doc_sizes.get(doc.file_name, 1024)\n                    current_doc_progress = (\n                        processed_size / total_case_size\n                        if total_case_size > 0\n                        else"
+    },
+    {
+      "type": "document_processing_loop",
+      "file": "backend_logic/main_processor.py",
+      "lines": "131-136",
+      "description": "Document processing loop that could be parallelized",
+      "benefit": "High - Independent document processing is highly parallelizable",
+      "implementation": "Use multiprocessing.Pool or concurrent.futures.ProcessPoolExecutor",
+      "code_snippet": "for paragraph in text_content.split(\"\\n\\n\"):\n        if paragraph.strip():\n            doc.add_paragraph(paragraph.strip())\n\n    doc.save(output_path)\n\n\ndef create_pdf_file(content: str, output_path: "
+    },
+    {
+      "type": "loop_with_io",
+      "file": "backend_logic/document_processor.py",
+      "lines": "52-95",
+      "description": "For loop with I/O operations",
+      "benefit": "High - I/O operations can be parallelized",
+      "implementation": "Use concurrent.futures.ThreadPoolExecutor or asyncio.gather()",
+      "code_snippet": "        for uploaded_file in uploaded_files:\n            temp_path = f\"/tmp/{uploaded_file.name}\"\n            try:\n                # Save uploaded file temporarily for processing\n                with open(temp_path, \"wb\") as f:\n                    f.write(uploaded_file.getvalue())\n\n                #"
+    },
+    {
+      "type": "document_processing_loop",
+      "file": "backend_logic/document_processor.py",
+      "lines": "52-57",
+      "description": "Document processing loop that could be parallelized",
+      "benefit": "High - Independent document processing is highly parallelizable",
+      "implementation": "Use multiprocessing.Pool or concurrent.futures.ProcessPoolExecutor",
+      "code_snippet": "for uploaded_file in uploaded_files:\n            temp_path = f\"/tmp/{uploaded_file.name}\"\n            try:\n                # Save uploaded file temporarily for processing\n                with open(tem"
+    },
+    {
+      "type": "loop_with_io",
+      "file": "backend_logic/ai_analyzer.py",
+      "lines": "411-424",
+      "description": "For loop with I/O operations",
+      "benefit": "High - I/O operations can be parallelized",
+      "implementation": "Use concurrent.futures.ThreadPoolExecutor or asyncio.gather()",
+      "code_snippet": "        for video in analysis.video_insights:\n            # Estimate tokens from video content\n            insights_content = (\n                json.dumps(video.insights, indent=2) if video.insights else \"\"\n            )\n            transcript_content = video.transcript or \"\"\n            labels_cont"
+    },
+    {
+      "type": "loop_with_io",
+      "file": "backend_logic/ai_analyzer.py",
+      "lines": "903-919",
+      "description": "For loop with I/O operations",
+      "benefit": "High - I/O operations can be parallelized",
+      "implementation": "Use concurrent.futures.ThreadPoolExecutor or asyncio.gather()",
+      "code_snippet": "        for i, doc in enumerate(documents, 1):\n            print(f\"AI ANALYZER: Processing document {i}/{total_docs}: {doc.file_name}\")\n            result = await self._analyze_single_document(doc, intake_context)\n            results.append(result)\n\n            # Log the result type\n            if i"
+    },
+    {
+      "type": "document_processing_loop",
+      "file": "backend_logic/ai_analyzer.py",
+      "lines": "411-416",
+      "description": "Document processing loop that could be parallelized",
+      "benefit": "High - Independent document processing is highly parallelizable",
+      "implementation": "Use multiprocessing.Pool or concurrent.futures.ProcessPoolExecutor",
+      "code_snippet": "for video in analysis.video_insights:\n            # Estimate tokens from video content\n            insights_content = (\n                json.dumps(video.insights, indent=2) if video.insights else \"\"\n "
+    },
+    {
+      "type": "document_processing_loop",
+      "file": "backend_logic/audio_processor.py",
+      "lines": "183-188",
+      "description": "Document processing loop that could be parallelized",
+      "benefit": "High - Independent document processing is highly parallelizable",
+      "implementation": "Use multiprocessing.Pool or concurrent.futures.ProcessPoolExecutor",
+      "code_snippet": "for seg in segments\n                        if seg.get(\"avg_logprob\")\n                    ]\n                    if confidences:\n                        # Convert log probability to confidence percenta"
+    },
+    {
+      "type": "document_processing_loop",
+      "file": "backend_logic/async_processor.py",
+      "lines": "46-51",
+      "description": "Document processing loop that could be parallelized",
+      "benefit": "High - Independent document processing is highly parallelizable",
+      "implementation": "Use multiprocessing.Pool or concurrent.futures.ProcessPoolExecutor",
+      "code_snippet": "for doc in saved_documents if doc.original_filename == intake_filename\n        ]\n        if not intake_docs_saved:\n            raise HTTPException(\n                status_code=400, detail=\"Intake form"
+    },
+    {
+      "type": "document_processing_loop",
+      "file": "backend_logic/utils.py",
+      "lines": "94-99",
+      "description": "Document processing loop that could be parallelized",
+      "benefit": "High - Independent document processing is highly parallelizable",
+      "implementation": "Use multiprocessing.Pool or concurrent.futures.ProcessPoolExecutor",
+      "code_snippet": "for desc in self.PHASE_DESCRIPTIONS.values()\n            )\n        \n        phase_info = self.PHASE_DESCRIPTIONS.get(phase_name, {})\n        title = phase_info.get(\"title\", phase_name.replace(\"_\", \" \""
+    },
+    {
+      "type": "document_processing_loop",
+      "file": "backend_logic/email_generator.py",
+      "lines": "458-463",
+      "description": "Document processing loop that could be parallelized",
+      "benefit": "High - Independent document processing is highly parallelizable",
+      "implementation": "Use multiprocessing.Pool or concurrent.futures.ProcessPoolExecutor",
+      "code_snippet": "for section_plan in plan.sections:\n            print(f\"EMAIL GENERATOR V2: Generating section: {section_plan.header}\")\n            try:\n                section_content = self._generate_section_with_va"
+    },
+    {
+      "type": "document_processing_loop",
+      "file": "backend_logic/cost_estimator.py",
+      "lines": "75-80",
+      "description": "Document processing loop that could be parallelized",
+      "benefit": "High - Independent document processing is highly parallelizable",
+      "implementation": "Use multiprocessing.Pool or concurrent.futures.ProcessPoolExecutor",
+      "code_snippet": "for doc in documents:\n            # Estimate tokens for document content\n            input_tokens = self._estimate_tokens(doc.content)\n\n            # Determine which model to use based on document siz"
+    },
+    {
+      "type": "document_processing_loop",
+      "file": "backend_logic/email_generation/services/content_extraction_service.py",
+      "lines": "32-37",
+      "description": "Document processing loop that could be parallelized",
+      "benefit": "High - Independent document processing is highly parallelizable",
+      "implementation": "Use multiprocessing.Pool or concurrent.futures.ProcessPoolExecutor",
+      "code_snippet": "for doc in analysis.analyzed_documents:\n            if hasattr(doc, \"key_information\") and doc.key_information:\n                facts.append(doc.key_information)\n\n        return facts[:5]\n\n    def ide"
+    },
+    {
+      "type": "loop_with_io",
+      "file": "backend_logic/email_generation/services/openai_integration_service.py",
+      "lines": "78-124",
+      "description": "For loop with I/O operations",
+      "benefit": "High - I/O operations can be parallelized",
+      "implementation": "Use concurrent.futures.ThreadPoolExecutor or asyncio.gather()",
+      "code_snippet": "        for attempt in range(self.max_retries):\n            try:\n                # Prepare messages\n                messages = []\n                \n                if request.system_message:\n                    messages.append({\n                        \"role\": \"system\",\n                        \"conte"
+    },
+    {
+      "type": "sequential_api_calls",
+      "file": "backend_logic/ai/prompt_builder.py",
+      "lines": "180-277",
+      "description": "Function 'build_final_assessment_prompt' contains 2 sequential API calls",
+      "benefit": "High - API calls can be parallelized if independent",
+      "implementation": "Use asyncio.gather() or concurrent.futures for parallel execution",
+      "code_snippet": "    def build_final_assessment_prompt(self, analysis_data: str, timeline_content: str, video_relevance_content: str = \"\") -> str:\n        \"\"\"Builds the prompt for the final legal assessment.\"\"\"\n        # Get prompt from configuration or use fallback\n        base_prompt = self.config_manager.get_prom"
+    },
+    {
+      "type": "loop_with_io",
+      "file": "backend_logic/ai/token_manager.py",
+      "lines": "73-86",
+      "description": "For loop with I/O operations",
+      "benefit": "High - I/O operations can be parallelized",
+      "implementation": "Use concurrent.futures.ThreadPoolExecutor or asyncio.gather()",
+      "code_snippet": "        for video in analysis.video_insights:\n            # Estimate tokens from video content\n            insights_content = (\n                json.dumps(video.insights, indent=2) if video.insights else \"\"\n            )\n            transcript_content = video.transcript or \"\"\n            labels_cont"
+    },
+    {
+      "type": "document_processing_loop",
+      "file": "backend_logic/ai/token_manager.py",
+      "lines": "73-78",
+      "description": "Document processing loop that could be parallelized",
+      "benefit": "High - Independent document processing is highly parallelizable",
+      "implementation": "Use multiprocessing.Pool or concurrent.futures.ProcessPoolExecutor",
+      "code_snippet": "for video in analysis.video_insights:\n            # Estimate tokens from video content\n            insights_content = (\n                json.dumps(video.insights, indent=2) if video.insights else \"\"\n "
+    },
+    {
+      "type": "document_processing_loop",
+      "file": "backend_logic/ai/timeline_analyzer.py",
+      "lines": "49-54",
+      "description": "Document processing loop that could be parallelized",
+      "benefit": "High - Independent document processing is highly parallelizable",
+      "implementation": "Use multiprocessing.Pool or concurrent.futures.ProcessPoolExecutor",
+      "code_snippet": "for dates in each sentence\n            dates = self._extract_dates_from_text(sentence)\n            \n            if dates:\n                for date_info in dates:\n                    event = {\n        "
+    },
+    {
+      "type": "loop_with_io",
+      "file": "backend_logic/ai/ai_analyzer_refactored.py",
+      "lines": "154-168",
+      "description": "For loop with I/O operations",
+      "benefit": "High - I/O operations can be parallelized",
+      "implementation": "Use concurrent.futures.ThreadPoolExecutor or asyncio.gather()",
+      "code_snippet": "        for i, doc in enumerate(documents, 1):\n            print(f\"AI ANALYZER: Processing document {i}/{total_docs}: {doc.file_name}\")\n            result = await self._analyze_single_document(doc, intake_context)\n            results.append(result)\n\n            # Log the result type\n            if i"
+    },
+    {
+      "type": "loop_with_io",
+      "file": "backend_logic/ai/openai_client.py",
+      "lines": "69-131",
+      "description": "For loop with I/O operations",
+      "benefit": "High - I/O operations can be parallelized",
+      "implementation": "Use concurrent.futures.ThreadPoolExecutor or asyncio.gather()",
+      "code_snippet": "        for attempt in range(self.max_retries):\n            try:\n                response = self.client.chat.completions.create(\n                    model=model,\n                    messages=[\n                        {\n                            \"role\": \"system\",\n                            \"conten"
+    },
+    {
+      "type": "document_processing_loop",
+      "file": "backend_logic/ai/openai_client.py",
+      "lines": "43-48",
+      "description": "Document processing loop that could be parallelized",
+      "benefit": "High - Independent document processing is highly parallelizable",
+      "implementation": "Use multiprocessing.Pool or concurrent.futures.ProcessPoolExecutor",
+      "code_snippet": "for JSON in markdown block\n        primary_match = re.search(r\"```(?:json)?\\s*([\\{\\[][^`]*[\\}\\]])\\s*```\", content, re.DOTALL)\n        if primary_match:\n            return primary_match.group(1)\n\n     "
+    },
+    {
+      "type": "sequential_file_operations",
+      "file": "backend_logic/main_processor.py",
+      "lines": "200-222",
+      "description": "Function 'save_output_files' contains 2 file operations",
+      "benefit": "Medium - File operations can be parallelized if independent",
+      "implementation": "Use concurrent.futures.ThreadPoolExecutor for I/O-bound file operations",
+      "code_snippet": "def save_output_files(\n    output_dir: str, main_letter: str, appendix: str, analysis_result\n) -> None:\n    \"\"\"Save HTML output files to the specified directory.\"\"\"\n    output_path = Path(output_dir)\n    output_path.mkdir(parents=True, exist_ok=True)\n\n    case_name = extract_case_name(analysis_resul"
+    },
+    {
+      "type": "sequential_awaits",
+      "file": "backend_logic/main_processor.py",
+      "lines": "431-548",
+      "description": "Async function 'analyze_with_progress' has 2 sequential awaits",
+      "benefit": "Medium - Sequential awaits can be parallelized if independent",
+      "implementation": "Use asyncio.gather() to run independent async operations concurrently",
+      "code_snippet": "            async def analyze_with_progress():\n                nonlocal processed_size\n                results = []\n\n                # Analyze documents\n                for i, doc in enumerate(case_docs):\n                    doc_size = case_doc_sizes.get(doc.file_name, 1024)\n                    curr"
+    },
+    {
+      "type": "sequential_awaits",
+      "file": "backend_logic/main_processor.py",
+      "lines": "809-907",
+      "description": "Async function 'process_case_documents_cli' has 4 sequential awaits",
+      "benefit": "Medium - Sequential awaits can be parallelized if independent",
+      "implementation": "Use asyncio.gather() to run independent async operations concurrently",
+      "code_snippet": "async def process_case_documents_cli(\n    intake_form_path: str, case_documents_paths: list, output_dir: str, config_path: str | None = None\n) -> bool | None:\n    \"\"\"\n    Command-line version of the case processing function.\n\n    Args:\n        intake_form_path: Path to the intake form file\n        c"
+    },
+    {
+      "type": "sequential_awaits",
+      "file": "backend_logic/ai_analyzer.py",
+      "lines": "894-922",
+      "description": "Async function 'analyze_case_documents' has 2 sequential awaits",
+      "benefit": "Medium - Sequential awaits can be parallelized if independent",
+      "implementation": "Use asyncio.gather() to run independent async operations concurrently",
+      "code_snippet": "    async def analyze_case_documents(\n        self, documents: list[ProcessedDocument], intake_context: EnhancedIntakeAnalysis\n    ) -> list[AnalyzedDocument | AnalysisError]:\n        \"\"\"Analyzes multiple case documents sequentially to avoid rate limiting.\"\"\"\n        results = []\n        total_docs "
+    },
+    {
+      "type": "sequential_awaits",
+      "file": "backend_logic/ai_analyzer.py",
+      "lines": "986-1459",
+      "description": "Async function 'perform_final_assessment' has 6 sequential awaits",
+      "benefit": "Medium - Sequential awaits can be parallelized if independent",
+      "implementation": "Use asyncio.gather() to run independent async operations concurrently",
+      "code_snippet": "    async def perform_final_assessment(\n        self, analysis: CaseAnalysisResult\n    ) -> CaseAnalysisResult:\n        \"\"\"Performs the final legal assessment and demand letter evaluation with graceful degradation.\"\"\"\n        if not analysis.intake_analysis or (\n            not analysis.analyzed_doc"
+    },
+    {
+      "type": "sequential_awaits",
+      "file": "backend_logic/async_processor.py",
+      "lines": "26-112",
+      "description": "Async function 'process_documents_async' has 4 sequential awaits",
+      "benefit": "Medium - Sequential awaits can be parallelized if independent",
+      "implementation": "Use asyncio.gather() to run independent async operations concurrently",
+      "code_snippet": "async def process_documents_async(\n    task_id: str,\n    saved_documents: list[SavedDocument],\n    client: OpenAI,\n    doc_processor: DocumentProcessor,\n    task_manager: TaskManager,\n    temp_dir_path: str,\n    intake_filename: str,\n) -> None:\n    \"\"\""
+    },
+    {
+      "type": "sequential_file_operations",
+      "file": "backend_logic/cost_session_manager.py",
+      "lines": "392-412",
+      "description": "Function '_save_session' contains 2 file operations",
+      "benefit": "Medium - File operations can be parallelized if independent",
+      "implementation": "Use concurrent.futures.ThreadPoolExecutor for I/O-bound file operations",
+      "code_snippet": "    def _save_session(self, case_id: str, cost_summary: CostSummary) -> None:\n        \"\"\"Save cost session to persistent storage.\"\"\"\n        session_file = os.path.join(self.session_storage_dir, f\"{case_id}.json\")\n\n        # Convert to JSON-serializable format\n        session_data = {\n            \"c"
+    },
+    {
+      "type": "sequential_file_operations",
+      "file": "backend_logic/cost_session_manager.py",
+      "lines": "414-450",
+      "description": "Function '_load_session' contains 2 file operations",
+      "benefit": "Medium - File operations can be parallelized if independent",
+      "implementation": "Use concurrent.futures.ThreadPoolExecutor for I/O-bound file operations",
+      "code_snippet": "    def _load_session(self, case_id: str) -> CostSummary | None:\n        \"\"\"Load cost session from persistent storage.\"\"\"\n        session_file = os.path.join(self.session_storage_dir, f\"{case_id}.json\")\n\n        if not os.path.exists(session_file):\n            return None\n\n        try:\n            w"
+    },
+    {
+      "type": "sequential_file_operations",
+      "file": "backend_logic/email_generation/services/json_processing_service.py",
+      "lines": "46-144",
+      "description": "Function 'generate_html_letter' contains 2 file operations",
+      "benefit": "Medium - File operations can be parallelized if independent",
+      "implementation": "Use concurrent.futures.ThreadPoolExecutor for I/O-bound file operations",
+      "code_snippet": "    def generate_html_letter(self, analysis: CaseAnalysisResult) -> str:\n        \"\"\"\n        Generate HTML letter content using the single master prompt.\n        \n        This replaces the old generate_structured_json method with a simplified\n        approach that directly generates the final HTML l"
+    },
+    {
+      "type": "sequential_awaits",
+      "file": "backend_logic/ai/ai_analyzer_refactored.py",
+      "lines": "145-171",
+      "description": "Async function 'analyze_case_documents' has 2 sequential awaits",
+      "benefit": "Medium - Sequential awaits can be parallelized if independent",
+      "implementation": "Use asyncio.gather() to run independent async operations concurrently",
+      "code_snippet": "    async def analyze_case_documents(\n        self, documents: list[ProcessedDocument], intake_context: EnhancedIntakeAnalysis\n    ) -> list[AnalyzedDocument | AnalysisError]:\n        \"\"\"Analyzes multiple case documents sequentially to avoid rate limiting.\"\"\"\n        results = []\n        total_docs "
+    }
+  ],
+  "opportunity_types": {
+    "loop_with_io": 19,
+    "document_processing_loop": 48,
+    "sequential_file_operations": 24,
+    "sequential_api_calls": 4,
+    "sequential_awaits": 9
+  }
+}

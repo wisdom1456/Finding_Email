@@ -10,11 +10,14 @@ import asyncio
 import logging
 import os
 import sys
-import tempfile
-import time
 import traceback
 from typing import Any
+from utils.logging_config import setup_logging
+logger = setup_logging('unknown_service')
 
+
+# Import our new test utilities
+from backend.tests.utils import TestUtility
 
 # Setup logging for our tests
 logging.basicConfig(
@@ -28,91 +31,33 @@ LARGE_FILE_SIZE = 50 * 1024 * 1024  # 50MB
 CORRUPTED_PDF_HEADER = b"%PDF-1.4\n%corrupted content here"
 
 
-class ValidationResults:
-    """Stores validation test results"""
-
-    def __init__(self):
-        self.tests = {}
-        self.start_time = time.time()
-
-    def add_test(
-        self, test_name: str, success: bool, details: str, execution_time: float = 0
-    ) -> None:
-        self.tests[test_name] = {
-            "success": success,
-            "details": details,
-            "execution_time": execution_time,
-            "timestamp": time.time(),
-        }
-
-    def get_summary(self) -> dict[str, Any]:
-        total_tests = len(self.tests)
-        passed_tests = sum(1 for test in self.tests.values() if test["success"])
-        failed_tests = total_tests - passed_tests
-        total_execution_time = time.time() - self.start_time
-
-        return {
-            "total_tests": total_tests,
-            "passed": passed_tests,
-            "failed": failed_tests,
-            "success_rate": (passed_tests / total_tests * 100)
-            if total_tests > 0
-            else 0,
-            "total_execution_time": total_execution_time,
-            "details": self.tests,
-        }
-
-
 class ErrorHandlingValidator:
     """Validates error handling and robustness of the consolidated system"""
 
     def __init__(self):
-        self.results = ValidationResults()
+        self.test_util = TestUtility()
 
     def test_environment_variables(self):
         """Test behavior with missing environment variables"""
         logger.info("=== TESTING ENVIRONMENT VARIABLES ===")
 
-        start_time = time.time()
-        try:
-            # Test 1: Missing OPENAI_API_KEY
-            original_key = os.environ.get("OPENAI_API_KEY")
-            if "OPENAI_API_KEY" in os.environ:
-                del os.environ["OPENAI_API_KEY"]
+        # Setup environment without OPENAI_API_KEY
+        self.test_util.setup_test_environment({"OPENAI_API_KEY": None})
 
-            try:
-                # Try to import and initialize components
-                from openai import OpenAI
+        def test_openai_init():
+            from openai import OpenAI
+            OpenAI()  # Should fail with missing API key
+            return False  # If we get here, test failed
 
-                # This should fail gracefully
-                try:
-                    OpenAI()  # Should fail with missing API key
-                    self.results.add_test(
-                        "missing_openai_key_handling",
-                        False,
-                        "OpenAI client initialization should fail with missing API key but didn't",
-                        time.time() - start_time,
-                    )
-                except Exception as e:
-                    self.results.add_test(
-                        "missing_openai_key_handling",
-                        True,
-                        f"✅ Properly caught missing API key: {type(e).__name__}",
-                        time.time() - start_time,
-                    )
+        # Test that OpenAI initialization properly fails with missing key
+        self.test_util.expect_exception(
+            "missing_openai_key_handling",
+            Exception,
+            test_openai_init
+        )
 
-            finally:
-                # Restore original key
-                if original_key:
-                    os.environ["OPENAI_API_KEY"] = original_key
-
-        except Exception as e:
-            self.results.add_test(
-                "missing_openai_key_handling",
-                False,
-                f"❌ Unexpected error during environment variable test: {e!s}",
-                time.time() - start_time,
-            )
+        # Restore environment
+        self.test_util.restore_test_environment()
 
     def test_invalid_file_uploads(self):
         """Test error handling with invalid file uploads"""
@@ -130,252 +75,143 @@ class ErrorHandlingValidator:
         ]
 
         for filename, content, _content_type in test_files:
-            start_time = time.time()
-            try:
-                # Create temporary file
-                with tempfile.NamedTemporaryFile(
-                    suffix=f".{filename.split('.')[-1]}", delete=False
-                ) as tmp_file:
-                    tmp_file.write(content)
-                    tmp_file_path = tmp_file.name
+            # Create mock file using utility
+            mock_file, _temp_path = self.test_util.create_mock_file(filename, content, _content_type)
 
-                try:
-                    # Test file processing
-                    from backend_logic.document_processor import DocumentProcessor
+            def test_file_processing():
+                from backend_logic.document_processor import DocumentProcessor
+                processor = DocumentProcessor()
+                
+                # Process the file - should handle errors gracefully
+                asyncio.run(processor.process_documents_from_streamlit([mock_file], []))
+                
+                # For empty files, processing should fail
+                if content == b"":
+                    return False  # Empty file should have failed
+                return True  # File handled gracefully
 
-                    processor = DocumentProcessor()
-
-                    # This should handle errors gracefully
-                    try:
-                        # Simulate Streamlit file upload object
-                        class MockUploadedFile:
-                            def __init__(self, name, content):
-                                self.name = name
-                                self._content = content
-                                self.size = len(content)
-
-                            def getvalue(self):
-                                return self._content
-
-                        mock_file = MockUploadedFile(filename, content)
-                        asyncio.run(
-                            processor.process_documents_from_streamlit([mock_file], [])
-                        )
-
-                        if content == b"":  # Empty file should fail
-                            self.results.add_test(
-                                f"invalid_file_{filename}",
-                                False,
-                                f"❌ Empty file {filename} should have failed but didn't",
-                                time.time() - start_time,
-                            )
-                        else:
-                            self.results.add_test(
-                                f"invalid_file_{filename}",
-                                True,
-                                f"✅ Invalid file {filename} handled gracefully",
-                                time.time() - start_time,
-                            )
-
-                    except Exception as e:
-                        self.results.add_test(
-                            f"invalid_file_{filename}",
-                            True,
-                            f"✅ Invalid file {filename} properly rejected: {type(e).__name__}",
-                            time.time() - start_time,
-                        )
-
-                finally:
-                    # Clean up temp file
-                    if os.path.exists(tmp_file_path):
-                        os.remove(tmp_file_path)
-
-            except Exception as e:
-                self.results.add_test(
+            # Run the test with automatic timing and error handling
+            if content == b"":
+                # Empty files should raise an exception
+                self.test_util.expect_exception(
                     f"invalid_file_{filename}",
-                    False,
-                    f"❌ Unexpected error testing {filename}: {e!s}",
-                    time.time() - start_time,
+                    Exception,
+                    test_file_processing
                 )
+            else:
+                # Other invalid files should either pass or fail gracefully
+                self.test_util.run_test(f"invalid_file_{filename}", test_file_processing)
 
     def test_direct_function_call_error_handling(self):
         """Test that direct function calls handle errors properly without HTTP abstraction"""
         logger.info("=== TESTING DIRECT FUNCTION CALL ERROR HANDLING ===")
 
-        start_time = time.time()
-        try:
-            from backend_logic.ai import AIAnalyzer
-            from backend_logic.document_processor import DocumentProcessor
+        from backend_logic.ai import AIAnalyzer
+        from backend_logic.document_processor import DocumentProcessor
 
-            # Test 1: DocumentProcessor with invalid input
-            processor = DocumentProcessor()
-            try:
-                # This should raise a proper exception
-                asyncio.run(processor.process_documents_from_streamlit(None, []))
-                self.results.add_test(
-                    "direct_call_null_input",
-                    False,
-                    "❌ Null input should have raised exception but didn't",
-                    time.time() - start_time,
-                )
-            except Exception as e:
-                self.results.add_test(
-                    "direct_call_null_input",
-                    True,
-                    f"✅ Direct function call properly handled null input: {type(e).__name__}",
-                    time.time() - start_time,
-                )
+        # Test 1: DocumentProcessor with invalid input
+        processor = DocumentProcessor()
+        
+        def test_processor_null_input():
+            asyncio.run(processor.process_documents_from_streamlit(None, []))
+            return False  # Should not reach here
 
-            # Test 2: AIAnalyzer with invalid OpenAI client
-            try:
-                AIAnalyzer(None, processor)  # Invalid client
-                self.results.add_test(
-                    "direct_call_invalid_client",
-                    False,
-                    "❌ Invalid OpenAI client should have raised exception but didn't",
-                    time.time() - start_time,
-                )
-            except Exception as e:
-                self.results.add_test(
-                    "direct_call_invalid_client",
-                    True,
-                    f"✅ Direct function call properly handled invalid client: {type(e).__name__}",
-                    time.time() - start_time,
-                )
+        self.test_util.expect_exception(
+            "direct_call_null_input",
+            Exception,
+            test_processor_null_input
+        )
 
-        except Exception as e:
-            self.results.add_test(
-                "direct_function_call_error_handling",
-                False,
-                f"❌ Unexpected error in direct function call test: {e!s}",
-                time.time() - start_time,
-            )
+        # Test 2: AIAnalyzer with invalid OpenAI client
+        def test_analyzer_invalid_client():
+            AIAnalyzer(None, processor)  # Invalid client
+            return False  # Should not reach here
+
+        self.test_util.expect_exception(
+            "direct_call_invalid_client",
+            Exception,
+            test_analyzer_invalid_client
+        )
 
     def test_logging_system(self):
         """Test logging system configuration and output"""
         logger.info("=== TESTING LOGGING SYSTEM ===")
 
-        start_time = time.time()
-        try:
-            # Capture stdout to test print-based logging
-            import sys
-            from io import StringIO
+        def test_logging_output():
+            if not os.environ.get("OPENAI_API_KEY"):
+                return False  # Cannot test without API key
 
-            captured_output = StringIO()
-            original_stdout = sys.stdout
-            sys.stdout = captured_output
+            from openai import OpenAI
+            from backend_logic.ai import AIAnalyzer
 
-            try:
-                # Test that modules produce logging output
-                from openai import OpenAI
+            # Create components that should produce logging
+            client = OpenAI()
+            AIAnalyzer(client, None)
 
-                from backend_logic.ai import AIAnalyzer
+            # Test print-based logging
+logger.info('AI ANALYZER: Test logging output')
+            return True
 
-                # Create a mock that will trigger logging
-                if os.environ.get("OPENAI_API_KEY"):
-                    client = OpenAI()
-                    AIAnalyzer(client, None)
-
-                    # This should produce console output
-                    print("AI ANALYZER: Test logging output")
-
-                    # Restore stdout and check output
-                    sys.stdout = original_stdout
-                    output = captured_output.getvalue()
-
-                    if "AI ANALYZER:" in output or len(output) > 0:
-                        self.results.add_test(
-                            "logging_system_output",
-                            True,
-                            f"✅ Logging system producing output: {len(output)} characters captured",
-                            time.time() - start_time,
-                        )
-                    else:
-                        self.results.add_test(
-                            "logging_system_output",
-                            False,
-                            "❌ No logging output captured",
-                            time.time() - start_time,
-                        )
-                else:
-                    sys.stdout = original_stdout
-                    self.results.add_test(
-                        "logging_system_output",
-                        False,
-                        "❌ Cannot test logging - no OpenAI API key available",
-                        time.time() - start_time,
-                    )
-
-            finally:
-                sys.stdout = original_stdout
-
-        except Exception as e:
-            self.results.add_test(
+        # Use capture_output to test logging functionality
+        result, output = self.test_util.capture_output(test_logging_output)
+        
+        if result is False:
+            # API key not available
+            self.test_util.run_test(
                 "logging_system_output",
-                False,
-                f"❌ Error testing logging system: {e!s}",
-                time.time() - start_time,
+                lambda: False  # Explicitly mark as failed due to missing API key
+            )
+        elif "AI ANALYZER:" in output or len(output) > 0:
+            # Logging output captured successfully
+            self.test_util.run_test(
+                "logging_system_output",
+                lambda: True
+            )
+        else:
+            # No output captured
+            self.test_util.run_test(
+                "logging_system_output",
+                lambda: False
             )
 
     def test_ai_service_connectivity(self):
         """Test behavior when AI services are unavailable"""
         logger.info("=== TESTING AI SERVICE CONNECTIVITY ===")
 
-        start_time = time.time()
-        try:
-            if not os.environ.get("OPENAI_API_KEY"):
-                self.results.add_test(
-                    "ai_service_connectivity",
-                    False,
-                    "❌ Cannot test AI connectivity - no API key configured",
-                    time.time() - start_time,
-                )
-                return
+        if not os.environ.get("OPENAI_API_KEY"):
+            # Cannot test without API key
+            self.test_util.run_test(
+                "ai_service_connectivity",
+                lambda: False  # Mark as failed due to missing API key
+            )
+            return
 
+        # Setup environment with invalid API key to simulate service unavailability
+        original_key = os.environ.get("OPENAI_API_KEY")
+        self.test_util.setup_test_environment({"OPENAI_API_KEY": "invalid_key_test"})
+
+        def test_ai_request_with_invalid_key():
             from openai import OpenAI
-
             from backend_logic.ai import AIAnalyzer
             from backend_logic.document_processor import DocumentProcessor
 
-            # Test with invalid API key to simulate service unavailability
-            original_key = os.environ.get("OPENAI_API_KEY")
-            os.environ["OPENAI_API_KEY"] = "invalid_key_test"
+            client = OpenAI()
+            processor = DocumentProcessor()
+            analyzer = AIAnalyzer(client, processor)
 
-            try:
-                client = OpenAI()
-                processor = DocumentProcessor()
-                analyzer = AIAnalyzer(client, processor)
+            # This should fail with invalid API key
+            asyncio.run(analyzer._make_openai_request("test prompt", "gpt-4o-mini"))
+            return False  # Should not reach here
 
-                # Try to make a request that should fail
-                try:
-                    asyncio.run(
-                        analyzer._make_openai_request("test prompt", "gpt-4o-mini")
-                    )
-                    self.results.add_test(
-                        "ai_service_unavailable_handling",
-                        False,
-                        "❌ Invalid API key should have failed but didn't",
-                        time.time() - start_time,
-                    )
-                except Exception as e:
-                    self.results.add_test(
-                        "ai_service_unavailable_handling",
-                        True,
-                        f"✅ AI service unavailability properly handled: {type(e).__name__}",
-                        time.time() - start_time,
-                    )
+        # Test that invalid API key properly fails
+        self.test_util.expect_exception(
+            "ai_service_unavailable_handling",
+            Exception,
+            test_ai_request_with_invalid_key
+        )
 
-            finally:
-                # Restore original API key
-                os.environ["OPENAI_API_KEY"] = original_key
-
-        except Exception as e:
-            self.results.add_test(
-                "ai_service_connectivity",
-                False,
-                f"❌ Unexpected error testing AI connectivity: {e!s}",
-                time.time() - start_time,
-            )
+        # Restore original environment
+        self.test_util.restore_test_environment()
 
     def run_all_tests(self):
         """Run all validation tests"""
@@ -389,23 +225,12 @@ class ErrorHandlingValidator:
         self.test_logging_system()
         self.test_ai_service_connectivity()
 
-        # Generate summary
-        summary = self.results.get_summary()
-
-        logger.info("=" * 60)
-        logger.info("🎯 VALIDATION SUMMARY")
-        logger.info("=" * 60)
-        logger.info(f"Total Tests: {summary['total_tests']}")
-        logger.info(f"Passed: {summary['passed']}")
-        logger.info(f"Failed: {summary['failed']}")
-        logger.info(f"Success Rate: {summary['success_rate']:.1f}%")
-        logger.info(f"Total Execution Time: {summary['total_execution_time']:.2f}s")
-
-        logger.info("\n📋 DETAILED RESULTS:")
-        for test_name, result in summary["details"].items():
-            status = "✅ PASS" if result["success"] else "❌ FAIL"
-            logger.info(f"{status} {test_name}: {result['details']}")
-
+        # Generate and log summary using utility function
+        summary = self.test_util.log_summary(logger)
+        
+        # Cleanup resources
+        self.test_util.cleanup()
+        
         return summary
 
 
@@ -417,14 +242,14 @@ def main():
 
         # Exit with appropriate code
         if summary["failed"] > 0:
-            print(f"\n⚠️  {summary['failed']} tests failed. Review the issues above.")
+logger.error(f'\n⚠️  {summary['failed']} tests failed. Review the issues above.')
             sys.exit(1)
         else:
-            print(f"\n🎉 All {summary['passed']} tests passed!")
+logger.info(f'\n🎉 All {summary['passed']} tests passed!')
             sys.exit(0)
 
     except Exception as e:
-        print(f"❌ Fatal error during validation: {e}")
+logger.error(f'❌ Fatal error during validation: {e}')
         traceback.print_exc()
         sys.exit(1)
 

@@ -1,26 +1,24 @@
 from __future__ import annotations
 
 import re
-from typing import Any
+from typing import Any, Dict, List, Optional
 
 from backend.utils.data_models import (
     CaseAnalysisResult,
     GeneratedLetter,
-    GenerationContext,
-    SectionPlan,
 )
 
 
 class ContentExtractionService:
     """A service class for content extraction and fallback generation utilities."""
 
-    def __init__(self, config: dict[str, Any]):
+    def __init__(self, config: Dict[str, Any]):
         """Initialize the ContentExtractionService with the application configuration."""
         self.config = config
 
     # === EXTRACTION METHODS ===
 
-    def extract_key_facts(self, analysis: CaseAnalysisResult) -> list[str]:
+    def extract_key_facts(self, analysis: CaseAnalysisResult) -> List[str]:
         """Extract key facts for the factual summary section."""
         facts = []
         if analysis.intake_analysis and analysis.intake_analysis.key_facts:
@@ -35,10 +33,10 @@ class ContentExtractionService:
 
         return facts[:5]
 
-    def identify_emphasis_items(self, analysis: CaseAnalysisResult) -> dict[str, str]:
+    def identify_emphasis_items(self, analysis: CaseAnalysisResult) -> Dict[str, str]:
         """Identify items that should be bolded."""
         import re
-        
+
         emphasis_items = {}
 
         if analysis.intake_analysis and analysis.intake_analysis.financial_impact:
@@ -49,7 +47,7 @@ class ContentExtractionService:
 
         return emphasis_items
 
-    def extract_legal_issues(self, analysis: CaseAnalysisResult) -> list[str]:
+    def extract_legal_issues(self, analysis: CaseAnalysisResult) -> List[str]:
         """Extract legal issues for analysis section."""
         issues = []
 
@@ -64,7 +62,7 @@ class ContentExtractionService:
 
         return issues
 
-    def extract_media_evidence_points(self, analysis: CaseAnalysisResult) -> list[str]:
+    def extract_media_evidence_points(self, analysis: CaseAnalysisResult) -> List[str]:
         """Extract key points about media evidence."""
         points = []
 
@@ -76,7 +74,7 @@ class ContentExtractionService:
 
         return points
 
-    def extract_case_assessment_points(self, analysis: CaseAnalysisResult) -> list[str]:
+    def extract_case_assessment_points(self, analysis: CaseAnalysisResult) -> List[str]:
         """Extract points for case assessment section."""
         points = []
 
@@ -92,7 +90,7 @@ class ContentExtractionService:
 
         return points
 
-    def extract_recommendations(self, analysis: CaseAnalysisResult) -> list[str]:
+    def extract_recommendations(self, analysis: CaseAnalysisResult) -> List[str]:
         """Extract recommendations for next steps."""
         recommendations = []
 
@@ -140,10 +138,12 @@ class ContentExtractionService:
 
     # === CASE-SPECIFIC DETAIL EXTRACTION ===
 
-    def extract_case_specific_details(self, analysis: CaseAnalysisResult) -> dict[str, Any]:
+    def extract_case_specific_details(
+        self, analysis: CaseAnalysisResult
+    ) -> Dict[str, Any]:
         """Extract specific details from analysis for fallback content generation."""
         import re
-        
+
         details = {
             "amounts": [],
             "dates": [],
@@ -201,10 +201,10 @@ class ContentExtractionService:
 
         return details
 
-    def identify_longest_section(self, letter: GeneratedLetter) -> str | None:
+    def identify_longest_section(self, letter: GeneratedLetter) -> Optional[str]:
         """Identify the section with the most words."""
         section_word_counts = {}
-        
+
         # Define sections that can be shortened (exclude closing/greeting)
         shortenable_sections = [
             "background_summary",
@@ -213,18 +213,18 @@ class ContentExtractionService:
             "strengths",
             "challenges",
             "recommendations",
-            "next_steps"
+            "next_steps",
         ]
-        
+
         for section_key in shortenable_sections:
             content = getattr(letter, section_key, "")
             if content and content.strip():
                 word_count = len(self._strip_html_tags(content).split())
                 section_word_counts[section_key] = word_count
-        
+
         if not section_word_counts:
             return None
-            
+
         # Return the section with the most words
         longest_section = max(section_word_counts.items(), key=lambda x: x[1])
         return longest_section[0]
@@ -233,7 +233,7 @@ class ContentExtractionService:
         """Strip HTML tags and return plain text."""
         if not html_content:
             return ""
-        
+
         # Remove HTML tags using regex
         clean_text = re.sub(r"<[^>]+>", "", html_content)
         # Clean up extra whitespace

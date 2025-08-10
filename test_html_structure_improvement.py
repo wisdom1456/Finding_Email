@@ -9,6 +9,9 @@ from __future__ import annotations
 
 import os
 import sys
+from utils.logging_config import setup_logging
+logger = setup_logging('unknown_service')
+
 
 
 # Add the project root to the Python path
@@ -105,45 +108,45 @@ Third line of floating text.""",
         }
     ]
     
-    print("Testing improved _ensure_html_structure() method...")
-    print("=" * 60)
+logger.info('Testing improved _ensure_html_structure() method...')
+logger.info('=' * 60)
     
     passed_tests = 0
     failed_tests = 0
     
     for i, test_case in enumerate(test_cases, 1):
-        print(f"\nTest {i}: {test_case['name']}")
-        print(f"Input: {test_case['input']!r}")
+logger.info(f'\nTest {i}: {test_case['name']}')
+logger.info(f'Input: {test_case['input']!r}')
         
         try:
             # Call the improved method
             result = generator._ensure_html_structure(test_case["input"])
-            print(f"Output: {result!r}")
+logger.info(f'Output: {result!r}')
             
             # Check if expected content is present
             test_passed = True
             for expected in test_case["expected_contains"]:
                 if expected not in result:
-                    print(f"❌ FAIL: Expected '{expected}' not found in result")
+logger.info(f"❌ FAIL: Expected '{expected}' not found in result")
                     test_passed = False
             
             if test_passed:
-                print("✅ PASS")
+logger.info('✅ PASS')
                 passed_tests += 1
             else:
                 failed_tests += 1
                 
         except Exception as e:
-            print(f"❌ ERROR: {e}")
+logger.error(f'❌ ERROR: {e}')
             failed_tests += 1
     
-    print("\n" + "=" * 60)
-    print(f"Test Results: {passed_tests} passed, {failed_tests} failed")
+logger.info('\n' + '=' * 60)
+logger.error(f'Test Results: {passed_tests} passed, {failed_tests} failed')
     
     if failed_tests == 0:
-        print("🎉 All tests passed! The improved _ensure_html_structure() method is working correctly.")
+logger.info('🎉 All tests passed! The improved _ensure_html_structure() method is working correctly.')
         return True
-    print("⚠️  Some tests failed. Please review the implementation.")
+logger.error('⚠️  Some tests failed. Please review the implementation.')
     return False
 
 
@@ -153,9 +156,9 @@ def test_specific_edge_case():
     mock_client = OpenAI(api_key="test-key-for-testing")
     generator = EmailGeneratorV2(mock_client)
     
-    print("\n" + "=" * 60)
-    print("Testing Specific Edge Case: Text after closing </ul> tag")
-    print("=" * 60)
+logger.info('\n' + '=' * 60)
+logger.info('Testing Specific Edge Case: Text after closing </ul> tag')
+logger.info('=' * 60)
     
     # This is the specific problematic case mentioned by the user
     problematic_input = """<ul>
@@ -163,23 +166,23 @@ def test_specific_edge_case():
 <li>Second item</li>
 </ul>This text should be wrapped in paragraph tags."""
     
-    print(f"Input: {problematic_input!r}")
+logger.info(f'Input: {problematic_input!r}')
     
     result = generator._ensure_html_structure(problematic_input)
-    print(f"Output: {result!r}")
+logger.info(f'Output: {result!r}')
     
     # Check that the floating text after </ul> is properly wrapped
     if "<p>This text should be wrapped in paragraph tags.</p>" in result:
-        print("✅ SUCCESS: Floating text after </ul> is properly wrapped!")
+logger.info('✅ SUCCESS: Floating text after </ul> is properly wrapped!')
         return True
-    print("❌ FAILURE: Floating text after </ul> was not properly wrapped!")
+logger.error('❌ FAILURE: Floating text after </ul> was not properly wrapped!')
     return False
 
 
 if __name__ == "__main__":
-    print("HTML Structure Improvement Test Suite")
-    print("Testing enhanced paragraph enforcement logic")
-    print()
+logger.info('HTML Structure Improvement Test Suite')
+logger.info('Testing enhanced paragraph enforcement logic')
+logger.info('')
     
     # Run comprehensive tests
     general_tests_passed = test_html_structure_improvements()
@@ -188,10 +191,10 @@ if __name__ == "__main__":
     edge_case_passed = test_specific_edge_case()
     
     # Overall result
-    print("\n" + "=" * 60)
+logger.info('\n' + '=' * 60)
     if general_tests_passed and edge_case_passed:
-        print("🎉 ALL TESTS PASSED! The _ensure_html_structure() improvement is successful.")
+logger.info('🎉 ALL TESTS PASSED! The _ensure_html_structure() improvement is successful.')
         sys.exit(0)
     else:
-        print("❌ SOME TESTS FAILED! Please review the implementation.")
+logger.error('❌ SOME TESTS FAILED! Please review the implementation.')
         sys.exit(1)

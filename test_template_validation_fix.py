@@ -11,7 +11,10 @@ from __future__ import annotations
 
 import os
 import sys
-from unittest.mock import MagicMock, Mock
+from unittest.mock import Mock
+from utils.logging_config import setup_logging
+logger = setup_logging('unknown_service')
+
 
 
 # Add the project root to Python path
@@ -20,9 +23,9 @@ sys.path.insert(0, project_root)
 
 def test_template_validation():
     """Test the template validation fix."""
-    print("=" * 60)
-    print("TESTING TEMPLATE VALIDATION FIX")
-    print("=" * 60)
+    logger.info('=' * 60)
+    logger.info('TESTING TEMPLATE VALIDATION FIX')
+    logger.info('=' * 60)
     
     try:
         # Import the EmailGeneratorV2 class
@@ -31,7 +34,7 @@ def test_template_validation():
         from backend.utils.data_models import CaseAnalysisResult, EnhancedIntakeAnalysis
         from backend_logic.email_generator import EmailGeneratorV2
         
-        print("✅ Successfully imported required modules")
+        logger.info('✅ Successfully imported required modules')
         
         # Create a mock OpenAI client
         mock_client = Mock(spec=OpenAI)
@@ -39,9 +42,9 @@ def test_template_validation():
         # Create EmailGenerator instance (this will test template directory setup)
         try:
             generator = EmailGeneratorV2(mock_client)
-            print("✅ Successfully created EmailGeneratorV2 instance")
+            logger.info('✅ Successfully created EmailGeneratorV2 instance')
         except Exception as e:
-            print(f"❌ Failed to create EmailGeneratorV2: {e}")
+            logger.error(f'❌ Failed to create EmailGeneratorV2: {e}')
             return False
         
         # Create mock analysis data
@@ -63,10 +66,10 @@ def test_template_validation():
             video_insights=[]
         )
         
-        print("✅ Created mock analysis data")
+        logger.info('✅ Created mock analysis data')
         
         # Test 1: Valid template context (should pass)
-        print("\n--- Test 1: Valid template context ---")
+        logger.info('\n--- Test 1: Valid template context ---')
         try:
             # Mock the template rendering to avoid actual OpenAI calls
             generator.jinja_env.get_template = Mock()
@@ -76,15 +79,15 @@ def test_template_validation():
             
             # This should succeed because case_name and client_name will be populated
             result = generator.generate_email_and_analysis_docs(mock_analysis)
-            print("✅ Template rendering succeeded with valid context")
-            print(f"✅ Returned keys: {list(result.keys())}")
+            logger.info('✅ Template rendering succeeded with valid context')
+            logger.info(f'✅ Returned keys: {list(result.keys())}')
             
         except Exception as e:
-            print(f"❌ Unexpected error with valid context: {e}")
+            logger.error(f'❌ Unexpected error with valid context: {e}')
             return False
         
         # Test 2: Missing case_name (should fail with ValueError)
-        print("\n--- Test 2: Missing case_name (should fail) ---")
+        logger.info('\n--- Test 2: Missing case_name (should fail) ---')
         try:
             # Create analysis with missing case_type (which becomes case_name)
             mock_intake_missing = EnhancedIntakeAnalysis(
@@ -124,21 +127,21 @@ def test_template_validation():
                 if not var_value or (isinstance(var_value, str) and not var_value.strip()):
                     raise ValueError(f"Template context key '{var_name}' is empty or None")
             
-            print("❌ Validation should have failed but didn't")
+            logger.error("❌ Validation should have failed but didn't")
             return False
             
         except ValueError as e:
             if "empty or None" in str(e):
-                print(f"✅ Correctly caught validation error: {e}")
+                logger.error(f'✅ Correctly caught validation error: {e}')
             else:
-                print(f"❌ Wrong validation error: {e}")
+                logger.error(f'❌ Wrong validation error: {e}')
                 return False
         except Exception as e:
-            print(f"❌ Unexpected error type: {e}")
+            logger.error(f'❌ Unexpected error type: {e}')
             return False
         
         # Test 3: Missing client_name (should fail with ValueError)
-        print("\n--- Test 3: Missing client_name (should fail) ---")
+        logger.info('\n--- Test 3: Missing client_name (should fail) ---')
         try:
             template_context = {
                 "case_name": "Test Case",
@@ -154,21 +157,21 @@ def test_template_validation():
                 if not var_value or (isinstance(var_value, str) and not var_value.strip()):
                     raise ValueError(f"Template context key '{var_name}' is empty or None")
             
-            print("❌ Validation should have failed but didn't")
+logger.error("❌ Validation should have failed but didn't")
             return False
             
         except ValueError as e:
             if "empty or None" in str(e):
-                print(f"✅ Correctly caught validation error: {e}")
+logger.error(f'✅ Correctly caught validation error: {e}')
             else:
-                print(f"❌ Wrong validation error: {e}")
+logger.error(f'❌ Wrong validation error: {e}')
                 return False
         except Exception as e:
-            print(f"❌ Unexpected error type: {e}")
+logger.error(f'❌ Unexpected error type: {e}')
             return False
         
         # Test 4: Missing key entirely (should fail with ValueError)
-        print("\n--- Test 4: Missing key entirely (should fail) ---")
+        logger.info('\n--- Test 4: Missing key entirely (should fail) ---')
         try:
             template_context = {
                 "case_name": "Test Case"
@@ -184,30 +187,30 @@ def test_template_validation():
                 if not var_value or (isinstance(var_value, str) and not var_value.strip()):
                     raise ValueError(f"Template context key '{var_name}' is empty or None")
             
-            print("❌ Validation should have failed but didn't")
+logger.error("❌ Validation should have failed but didn't")
             return False
             
         except ValueError as e:
             if "missing required key" in str(e):
-                print(f"✅ Correctly caught validation error: {e}")
+                logger.error(f'✅ Correctly caught validation error: {e}')
             else:
-                print(f"❌ Wrong validation error: {e}")
+                logger.error(f'❌ Wrong validation error: {e}')
                 return False
         except Exception as e:
-            print(f"❌ Unexpected error type: {e}")
+            logger.error(f'❌ Unexpected error type: {e}')
             return False
         
-        print("\n" + "=" * 60)
-        print("🎉 ALL TESTS PASSED - Template validation fix is working correctly!")
-        print("=" * 60)
+        logger.info('\n' + '=' * 60)
+        logger.info('🎉 ALL TESTS PASSED - Template validation fix is working correctly!')
+        logger.info('=' * 60)
         return True
         
     except ImportError as e:
-        print(f"❌ Import error: {e}")
-        print("Make sure you're running this from the project root directory")
+        logger.error(f'❌ Import error: {e}')
+        logger.info("Make sure you're running this from the project root directory")
         return False
     except Exception as e:
-        print(f"❌ Unexpected error during testing: {e}")
+        logger.error(f'❌ Unexpected error during testing: {e}')
         import traceback
         traceback.print_exc()
         return False

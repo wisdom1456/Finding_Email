@@ -14,7 +14,9 @@ Usage: python test_refactored_architecture.py
 import json
 import os
 import sys
-from typing import Dict, Any
+from utils.logging_config import setup_logging
+logger = setup_logging('unknown_service')
+
 
 # Add the project root to the Python path
 sys.path.insert(0, os.path.abspath('.'))
@@ -22,7 +24,6 @@ sys.path.insert(0, os.path.abspath('.'))
 from backend.utils.data_models import CaseAnalysisResult, EnhancedIntakeAnalysis
 from backend_logic.email_generation.services.configuration_manager import ConfigurationManager
 from backend_logic.email_generation.services.json_processing_service import JsonProcessingService
-from openai import OpenAI
 
 
 def create_test_case_analysis() -> CaseAnalysisResult:
@@ -52,7 +53,7 @@ def create_test_case_analysis() -> CaseAnalysisResult:
 
 def test_configuration_loading():
     """Test that configuration loads correctly with new master prompt."""
-    print("Testing configuration loading...")
+logger.info('Testing configuration loading...')
     
     try:
         config_manager = ConfigurationManager()
@@ -61,7 +62,7 @@ def test_configuration_loading():
         # Check that master_prompt exists
         master_prompt = config.get("master_prompt")
         if not master_prompt:
-            print("❌ FAIL: master_prompt not found in configuration")
+logger.info('❌ FAIL: master_prompt not found in configuration')
             return False
         
         # Check that the master prompt contains expected placeholders
@@ -69,7 +70,7 @@ def test_configuration_loading():
         missing_placeholders = [p for p in required_placeholders if p not in master_prompt]
         
         if missing_placeholders:
-            print(f"❌ FAIL: Missing placeholders in master prompt: {missing_placeholders}")
+logger.info(f'❌ FAIL: Missing placeholders in master prompt: {missing_placeholders}')
             return False
         
         # Check that deleted keys are not present
@@ -81,19 +82,19 @@ def test_configuration_loading():
         
         present_deleted_keys = [key for key in deleted_keys if key in config]
         if present_deleted_keys:
-            print(f"⚠️  WARNING: Some deleted keys are still present: {present_deleted_keys}")
+logger.warning(f'⚠️  WARNING: Some deleted keys are still present: {present_deleted_keys}')
         
-        print("✅ Configuration loading test passed")
+logger.info('✅ Configuration loading test passed')
         return True
         
     except Exception as e:
-        print(f"❌ FAIL: Configuration loading failed: {e}")
+logger.error(f'❌ FAIL: Configuration loading failed: {e}')
         return False
 
 
 def test_case_analysis_injection():
     """Test that CaseAnalysisResult injection works correctly."""
-    print("Testing CaseAnalysisResult injection...")
+logger.info('Testing CaseAnalysisResult injection...')
     
     try:
         # Create test case analysis
@@ -103,7 +104,7 @@ def test_case_analysis_injection():
         json_data = case_analysis.model_dump_json(indent=2)
         
         if not json_data:
-            print("❌ FAIL: CaseAnalysisResult serialization failed")
+logger.error('❌ FAIL: CaseAnalysisResult serialization failed')
             return False
         
         # Test that it contains expected data
@@ -112,26 +113,26 @@ def test_case_analysis_injection():
         missing_fields = [field for field in required_fields if field not in parsed_data]
         
         if missing_fields:
-            print(f"❌ FAIL: Missing fields in serialized data: {missing_fields}")
+logger.info(f'❌ FAIL: Missing fields in serialized data: {missing_fields}')
             return False
         
-        print("✅ CaseAnalysisResult injection test passed")
+logger.info('✅ CaseAnalysisResult injection test passed')
         return True
         
     except Exception as e:
-        print(f"❌ FAIL: CaseAnalysisResult injection failed: {e}")
+logger.error(f'❌ FAIL: CaseAnalysisResult injection failed: {e}')
         return False
 
 
 def test_service_initialization():
     """Test that the refactored services can be initialized."""
-    print("Testing service initialization...")
+logger.info('Testing service initialization...')
     
     try:
         # Test ConfigurationManager
         config_manager = ConfigurationManager()
         if not config_manager.is_configured():
-            print("⚠️  WARNING: ConfigurationManager reports not configured")
+logger.warning('⚠️  WARNING: ConfigurationManager reports not configured')
         
         config = config_manager.get_config()
         
@@ -140,20 +141,20 @@ def test_service_initialization():
         json_service = JsonProcessingService(client=None, config=config)
         
         if json_service.config != config:
-            print("❌ FAIL: JsonProcessingService config not set correctly")
+logger.debug('❌ FAIL: JsonProcessingService config not set correctly')
             return False
         
-        print("✅ Service initialization test passed")
+logger.info('✅ Service initialization test passed')
         return True
         
     except Exception as e:
-        print(f"❌ FAIL: Service initialization failed: {e}")
+logger.error(f'❌ FAIL: Service initialization failed: {e}')
         return False
 
 
 def test_master_prompt_formatting():
     """Test that master prompt formatting works correctly."""
-    print("Testing master prompt formatting...")
+logger.info('Testing master prompt formatting...')
     
     try:
         config_manager = ConfigurationManager()
@@ -161,7 +162,7 @@ def test_master_prompt_formatting():
         master_prompt = config.get("master_prompt")
         
         if not master_prompt:
-            print("❌ FAIL: master_prompt not found")
+logger.info('❌ FAIL: master_prompt not found')
             return False
         
         # Create test data
@@ -179,26 +180,26 @@ def test_master_prompt_formatting():
         
         # Check that placeholders were replaced
         if "{client_name}" in formatted_prompt or "{case_type}" in formatted_prompt or "{analysis}" in formatted_prompt:
-            print("❌ FAIL: Some placeholders were not replaced in master prompt")
+logger.info('❌ FAIL: Some placeholders were not replaced in master prompt')
             return False
         
         # Check that actual values are present
         if client_name not in formatted_prompt or case_type not in formatted_prompt:
-            print("❌ FAIL: Client name or case type not found in formatted prompt")
+logger.info('❌ FAIL: Client name or case type not found in formatted prompt')
             return False
         
-        print("✅ Master prompt formatting test passed")
+logger.info('✅ Master prompt formatting test passed')
         return True
         
     except Exception as e:
-        print(f"❌ FAIL: Master prompt formatting failed: {e}")
+logger.error(f'❌ FAIL: Master prompt formatting failed: {e}')
         return False
 
 
 def main():
     """Run all validation tests."""
-    print("🔍 Validating Refactored Email Generation Architecture")
-    print("=" * 60)
+logger.debug('🔍 Validating Refactored Email Generation Architecture')
+logger.info('=' * 60)
     
     tests = [
         test_configuration_loading,
@@ -213,22 +214,22 @@ def main():
     for test in tests:
         if test():
             passed += 1
-        print()
+logger.info('')
     
-    print("=" * 60)
-    print(f"Test Results: {passed}/{total} tests passed")
+logger.info('=' * 60)
+logger.info(f'Test Results: {passed}/{total} tests passed')
     
     if passed == total:
-        print("🎉 All tests passed! The refactored architecture is working correctly.")
-        print("\nKey improvements verified:")
-        print("- ✅ Single master prompt approach implemented")
-        print("- ✅ Deleted YAML keys removed from configuration") 
-        print("- ✅ CaseAnalysisResult injection working")
-        print("- ✅ Service architecture properly refactored")
-        print("\nThe email generation pipeline has been successfully refactored!")
+logger.info('🎉 All tests passed! The refactored architecture is working correctly.')
+logger.info('\nKey improvements verified:')
+logger.info('- ✅ Single master prompt approach implemented')
+logger.info('- ✅ Deleted YAML keys removed from configuration')
+logger.info('- ✅ CaseAnalysisResult injection working')
+logger.info('- ✅ Service architecture properly refactored')
+logger.info('\nThe email generation pipeline has been successfully refactored!')
         return True
     else:
-        print(f"❌ {total - passed} tests failed. Please review the implementation.")
+logger.error(f'❌ {total - passed} tests failed. Please review the implementation.')
         return False
 
 

@@ -14,6 +14,9 @@ from __future__ import annotations
 import os
 import sys
 from datetime import datetime
+from utils.logging_config import setup_logging
+logger = setup_logging('unknown_service')
+
 
 
 # Add the project root to Python path
@@ -22,7 +25,7 @@ sys.path.insert(0, ".")
 
 def test_template_loading():
     """Test 1: Template Loading and Basic Rendering"""
-    print("🔍 TEST 1: Template Loading and Basic Rendering")
+logger.info('🔍 TEST 1: Template Loading and Basic Rendering')
 
     try:
         from jinja2 import Environment, FileSystemLoader, select_autoescape
@@ -31,23 +34,23 @@ def test_template_loading():
         project_root = os.getcwd()
         template_dir = os.path.join(project_root, "backend", "assets", "templates")
 
-        print(f"   📂 Template directory: {template_dir}")
-        print(f"   📂 Directory exists: {os.path.exists(template_dir)}")
+logger.info(f'   📂 Template directory: {template_dir}')
+logger.info(f'   📂 Directory exists: {os.path.exists(template_dir)}')
 
         if not os.path.exists(template_dir):
-            print("   ❌ Template directory not found")
+logger.info('   ❌ Template directory not found')
             return False
 
         # List available templates
         available_files = os.listdir(template_dir)
-        print(f"   📄 Available templates: {available_files}")
+logger.info(f'   📄 Available templates: {available_files}')
 
         # Check required templates exist
         required_templates = ["findings_email.jinja2", "document_appendix.jinja2"]
         missing_templates = [t for t in required_templates if t not in available_files]
 
         if missing_templates:
-            print(f"   ❌ Missing required templates: {missing_templates}")
+logger.info(f'   ❌ Missing required templates: {missing_templates}')
             return False
 
         # Initialize Jinja2 environment
@@ -59,32 +62,32 @@ def test_template_loading():
         # Test loading main template
         try:
             jinja_env.get_template("findings_email.jinja2")
-            print("   ✅ Main template (findings_email.jinja2) loaded successfully")
+logger.info('   ✅ Main template (findings_email.jinja2) loaded successfully')
         except Exception as e:
-            print(f"   ❌ Failed to load main template: {e}")
+logger.error(f'   ❌ Failed to load main template: {e}')
             return False
 
         # Test loading appendix template
         try:
             jinja_env.get_template("document_appendix.jinja2")
-            print(
+logger.info('   ✅ Appendix template (document_appendix.jinja2) loaded successfully')
                 "   ✅ Appendix template (document_appendix.jinja2) loaded successfully"
             )
         except Exception as e:
-            print(f"   ❌ Failed to load appendix template: {e}")
+logger.error(f'   ❌ Failed to load appendix template: {e}')
             return False
 
-        print("   🎉 Template loading test PASSED")
+logger.info('   🎉 Template loading test PASSED')
         return True
 
     except Exception as e:
-        print(f"   ❌ Template loading test FAILED: {e}")
+logger.error(f'   ❌ Template loading test FAILED: {e}')
         return False
 
 
 def test_data_model_compatibility():
     """Test 2: Data Model Compatibility with Template Structure"""
-    print("\n🔍 TEST 2: Data Model Compatibility")
+logger.info('\n🔍 TEST 2: Data Model Compatibility')
 
     try:
         from backend.utils.data_models import (
@@ -99,7 +102,7 @@ def test_data_model_compatibility():
         )
 
         # Test GeneratedLetter model structure
-        print("   📋 Testing GeneratedLetter model...")
+logger.info('   📋 Testing GeneratedLetter model...')
 
         test_generated_letter = GeneratedLetter(
             executive_summary="<p>Test executive summary</p>",
@@ -113,11 +116,11 @@ def test_data_model_compatibility():
             next_steps="<ul><li>Test next step 1</li><li>Test next step 2</li></ul>",
             closing_paragraph="<p>Test closing paragraph</p>",
         )
-        print("   ✅ GeneratedLetter model created successfully")
-        print(f"   📊 Fields: {list(test_generated_letter.model_fields.keys())}")
+logger.info('   ✅ GeneratedLetter model created successfully')
+logger.info(f'   📊 Fields: {list(test_generated_letter.model_fields.keys())}')
 
         # Test Enhanced Video Insight with Criminal Analysis
-        print("   📋 Testing Enhanced Video Insight with Criminal Analysis...")
+logger.info('   📋 Testing Enhanced Video Insight with Criminal Analysis...')
 
         test_time_range = TimeRange(
             start_time="00:45", end_time="01:30", confidence=0.85
@@ -157,12 +160,12 @@ def test_data_model_compatibility():
             is_criminal_case=True,
             criminal_analysis=test_criminal_analysis,
         )
-        print(
+logger.info('   ✅ Enhanced Video Insight with Criminal Analysis created successfully')
             "   ✅ Enhanced Video Insight with Criminal Analysis created successfully"
         )
 
         # Test CaseAnalysisResult with all components
-        print("   📋 Testing CaseAnalysisResult integration...")
+logger.info('   📋 Testing CaseAnalysisResult integration...')
 
         test_intake = EnhancedIntakeAnalysis(
             client_name="Test Client",
@@ -175,13 +178,13 @@ def test_data_model_compatibility():
         test_analysis = CaseAnalysisResult(
             intake_analysis=test_intake, video_insights=[test_enhanced_video]
         )
-        print("   ✅ CaseAnalysisResult with video insights created successfully")
+logger.info('   ✅ CaseAnalysisResult with video insights created successfully')
 
-        print("   🎉 Data model compatibility test PASSED")
+logger.info('   🎉 Data model compatibility test PASSED')
         return True, test_generated_letter, test_analysis
 
     except Exception as e:
-        print(f"   ❌ Data model compatibility test FAILED: {e}")
+logger.error(f'   ❌ Data model compatibility test FAILED: {e}')
         import traceback
 
         traceback.print_exc()
@@ -190,7 +193,7 @@ def test_data_model_compatibility():
 
 def test_template_rendering(generated_letter, analysis):
     """Test 3: Template Rendering with Real Data"""
-    print("\n🔍 TEST 3: Template Rendering with Real Data")
+logger.info('\n🔍 TEST 3: Template Rendering with Real Data')
 
     try:
         from jinja2 import Environment, FileSystemLoader, select_autoescape
@@ -211,14 +214,14 @@ def test_template_rendering(generated_letter, analysis):
         }
 
         # Test main template rendering
-        print("   🎨 Testing main template rendering...")
+logger.info('   🎨 Testing main template rendering...')
         main_template = jinja_env.get_template("findings_email.jinja2")
 
         try:
             main_html = main_template.render(
                 results=template_context, current_date=template_context["current_date"]
             )
-            print(
+logger.info(f'   ✅ Main template rendered successfully ({len(main_html)} characters)')
                 f"   ✅ Main template rendered successfully ({len(main_html)} characters)"
             )
 
@@ -238,31 +241,31 @@ def test_template_rendering(generated_letter, analysis):
                     missing_sections.append(section)
 
             if missing_sections:
-                print(f"   ⚠️  Missing sections in rendered output: {missing_sections}")
+logger.info(f'   ⚠️  Missing sections in rendered output: {missing_sections}')
             else:
-                print("   ✅ All expected sections found in rendered output")
+logger.info('   ✅ All expected sections found in rendered output')
 
         except Exception as e:
-            print(f"   ❌ Main template rendering failed: {e}")
+logger.error(f'   ❌ Main template rendering failed: {e}')
             return False
 
         # Test appendix template rendering
-        print("   🎨 Testing appendix template rendering...")
+logger.info('   🎨 Testing appendix template rendering...')
         appendix_template = jinja_env.get_template("document_appendix.jinja2")
 
         try:
             appendix_html = appendix_template.render(
                 results=template_context, current_date=template_context["current_date"]
             )
-            print(
+logger.info(f'   ✅ Appendix template rendered successfully ({len(appendix_html)} characters)')
                 f"   ✅ Appendix template rendered successfully ({len(appendix_html)} characters)"
             )
 
             # Check for criminal video analysis sections
             if "Criminal Law Evidence Analysis" in appendix_html:
-                print("   ✅ Criminal video analysis section found")
+logger.info('   ✅ Criminal video analysis section found')
             else:
-                print("   ⚠️  Criminal video analysis section not found")
+logger.info('   ⚠️  Criminal video analysis section not found')
 
             # Check for enhanced formatting elements
             formatting_elements = [
@@ -276,17 +279,17 @@ def test_template_rendering(generated_letter, analysis):
                 if element in appendix_html:
                     found_elements.append(element)
 
-            print(f"   📊 Enhanced formatting elements found: {found_elements}")
+logger.info(f'   📊 Enhanced formatting elements found: {found_elements}')
 
         except Exception as e:
-            print(f"   ❌ Appendix template rendering failed: {e}")
+logger.error(f'   ❌ Appendix template rendering failed: {e}')
             return False
 
-        print("   🎉 Template rendering test PASSED")
+logger.info('   🎉 Template rendering test PASSED')
         return True
 
     except Exception as e:
-        print(f"   ❌ Template rendering test FAILED: {e}")
+logger.error(f'   ❌ Template rendering test FAILED: {e}')
         import traceback
 
         traceback.print_exc()
@@ -295,11 +298,11 @@ def test_template_rendering(generated_letter, analysis):
 
 def test_ai_method_compatibility():
     """Test 4: AI Method Compatibility"""
-    print("\n🔍 TEST 4: AI Method Compatibility")
+logger.info('\n🔍 TEST 4: AI Method Compatibility')
 
     try:
         # Test that all required AI generation methods exist
-        print("   🔍 Checking EmailGenerator method signatures...")
+logger.debug('   🔍 Checking EmailGenerator method signatures...')
 
         from openai import OpenAI
 
@@ -311,9 +314,9 @@ def test_ai_method_compatibility():
             # Use a dummy API key for testing - we won't make actual API calls
             test_client = OpenAI(api_key="dummy-key-for-testing")
             EmailGenerator(test_client)
-            print("   ✅ EmailGenerator instantiated successfully")
+logger.info('   ✅ EmailGenerator instantiated successfully')
         except Exception as e:
-            print(f"   ⚠️  Could not instantiate EmailGenerator (expected in test): {e}")
+logger.info(f'   ⚠️  Could not instantiate EmailGenerator (expected in test): {e}')
 
         # Check that all required methods exist
         required_methods = [
@@ -333,9 +336,9 @@ def test_ai_method_compatibility():
             else:
                 method_check_results[method_name] = "❌ MISSING"
 
-        print("   📋 Method existence check:")
+logger.info('   📋 Method existence check:')
         for method, status in method_check_results.items():
-            print(f"      {method}: {status}")
+logger.info(f'      {method}: {status}')
 
         missing_methods = [
             method
@@ -343,15 +346,15 @@ def test_ai_method_compatibility():
             if "MISSING" in status
         ]
         if missing_methods:
-            print(f"   ❌ Missing required methods: {missing_methods}")
+logger.info(f'   ❌ Missing required methods: {missing_methods}')
             return False
-        print("   ✅ All required AI generation methods exist")
+logger.info('   ✅ All required AI generation methods exist')
 
-        print("   🎉 AI method compatibility test PASSED")
+logger.info('   🎉 AI method compatibility test PASSED')
         return True
 
     except Exception as e:
-        print(f"   ❌ AI method compatibility test FAILED: {e}")
+logger.error(f'   ❌ AI method compatibility test FAILED: {e}')
         import traceback
 
         traceback.print_exc()
@@ -360,8 +363,8 @@ def test_ai_method_compatibility():
 
 def main():
     """Run all compatibility tests"""
-    print("🧪 FINDINGS LETTER TEMPLATE & AI PROMPT COMPATIBILITY TESTS")
-    print("=" * 70)
+logger.info('🧪 FINDINGS LETTER TEMPLATE & AI PROMPT COMPATIBILITY TESTS')
+logger.info('=' * 70)
 
     test_results = {}
 
@@ -379,30 +382,30 @@ def main():
         )
     else:
         test_results["template_rendering"] = False
-        print("\n⏭️  Skipping template rendering test due to previous failures")
+logger.error('\n⏭️  Skipping template rendering test due to previous failures')
 
     # Test 4: AI Method Compatibility
     test_results["ai_method_compatibility"] = test_ai_method_compatibility()
 
     # Summary
-    print("\n📊 TEST SUMMARY")
-    print("=" * 50)
+logger.info('\n📊 TEST SUMMARY')
+logger.info('=' * 50)
 
     total_tests = len(test_results)
     passed_tests = sum(1 for result in test_results.values() if result)
 
     for test_name, result in test_results.items():
         status = "✅ PASSED" if result else "❌ FAILED"
-        print(f"   {test_name}: {status}")
+logger.info(f'   {test_name}: {status}')
 
-    print(f"\n🎯 OVERALL RESULT: {passed_tests}/{total_tests} tests passed")
+logger.info(f'\n🎯 OVERALL RESULT: {passed_tests}/{total_tests} tests passed')
 
     if passed_tests == total_tests:
-        print(
+logger.info('🎉 ALL TESTS PASSED - Template and AI prompt improvements are compatible!')
             "🎉 ALL TESTS PASSED - Template and AI prompt improvements are compatible!"
         )
         return True
-    print("⚠️  SOME TESTS FAILED - Issues detected that need attention")
+logger.error('⚠️  SOME TESTS FAILED - Issues detected that need attention')
     return False
 
 

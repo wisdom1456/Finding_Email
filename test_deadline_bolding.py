@@ -9,6 +9,9 @@ from __future__ import annotations
 
 import os
 import sys
+from utils.logging_config import setup_logging
+logger = setup_logging('unknown_service')
+
 
 
 # Add the backend directory to the Python path
@@ -20,8 +23,8 @@ from quality_validator import bold_deadlines_in_next_steps
 def test_deadline_bolding():
     """Test the deadline bolding function with various scenarios."""
     
-    print("🧪 Testing deadline bolding functionality...")
-    print("=" * 60)
+logger.info('🧪 Testing deadline bolding functionality...')
+logger.info('=' * 60)
     
     # Test Case 1: Calendar intervals that need bolding
     test_case_1 = """
@@ -32,12 +35,12 @@ def test_deadline_bolding():
     </ul>
     """
     
-    print("Test Case 1: Calendar intervals")
-    print("Input:", test_case_1.strip())
+logger.info('Test Case 1: Calendar intervals')
+logger.info('Input:' + " " + test_case_1.strip())
     result_1 = bold_deadlines_in_next_steps(test_case_1)
-    print("Output:", result_1.strip())
-    print("✅ PASS" if "<strong>within 14 days</strong>" in result_1 and "<strong>within 30 days</strong>" in result_1 and "<strong>within 7 days</strong>" in result_1 else "❌ FAIL")
-    print()
+logger.info('Output:' + " " + result_1.strip())
+logger.info('✅ PASS' if '<strong>within 14 days</strong>' in result_1 and '<strong>within 30 days</strong>' in result_1 and ('<strong>within 7 days</strong>' in result_1) else '❌ FAIL')
+logger.info('')
     
     # Test Case 2: Absolute dates that need bolding
     test_case_2 = """
@@ -48,12 +51,12 @@ def test_deadline_bolding():
     </ul>
     """
     
-    print("Test Case 2: Absolute dates")
-    print("Input:", test_case_2.strip())
+logger.info('Test Case 2: Absolute dates')
+logger.info('Input:' + " " + test_case_2.strip())
     result_2 = bold_deadlines_in_next_steps(test_case_2)
-    print("Output:", result_2.strip())
-    print("✅ PASS" if "<strong>by August 21, 2025</strong>" in result_2 and "<strong>by December 15, 2024</strong>" in result_2 else "❌ FAIL")
-    print()
+logger.info('Output:' + " " + result_2.strip())
+logger.info('✅ PASS' if '<strong>by August 21, 2025</strong>' in result_2 and '<strong>by December 15, 2024</strong>' in result_2 else '❌ FAIL')
+logger.info('')
     
     # Test Case 3: Mixed content with some already bolded
     test_case_3 = """
@@ -65,16 +68,16 @@ def test_deadline_bolding():
     </ul>
     """
     
-    print("Test Case 3: Mixed content (some already bolded)")
-    print("Input:", test_case_3.strip())
+logger.info('Test Case 3: Mixed content (some already bolded)')
+logger.info('Input:' + " " + test_case_3.strip())
     result_3 = bold_deadlines_in_next_steps(test_case_3)
-    print("Output:", result_3.strip())
+logger.info('Output:' + " " + result_3.strip())
     # Should preserve existing bold and add new bold
     has_preserved_bold = "<strong>within 21 days</strong>" in result_3
     has_new_bold_days = "<strong>within 10 days</strong>" in result_3
     has_new_bold_date = "<strong>by March 5, 2025</strong>" in result_3
-    print("✅ PASS" if has_preserved_bold and has_new_bold_days and has_new_bold_date else "❌ FAIL")
-    print()
+logger.info('✅ PASS' if has_preserved_bold and has_new_bold_days and has_new_bold_date else '❌ FAIL')
+logger.info('')
     
     # Test Case 4: No deadlines to bold
     test_case_4 = """
@@ -85,12 +88,12 @@ def test_deadline_bolding():
     </ul>
     """
     
-    print("Test Case 4: No deadlines present")
-    print("Input:", test_case_4.strip())
+logger.info('Test Case 4: No deadlines present')
+logger.info('Input:' + " " + test_case_4.strip())
     result_4 = bold_deadlines_in_next_steps(test_case_4)
-    print("Output:", result_4.strip())
-    print("✅ PASS" if result_4.strip() == test_case_4.strip() else "❌ FAIL")
-    print()
+logger.info('Output:' + " " + result_4.strip())
+logger.info('✅ PASS' if result_4.strip() == test_case_4.strip() else '❌ FAIL')
+logger.info('')
     
     # Test Case 5: Edge cases with variations
     test_case_5 = """
@@ -102,18 +105,18 @@ def test_deadline_bolding():
     </ul>
     """
     
-    print("Test Case 5: Edge cases (singular 'day', different format)")
-    print("Input:", test_case_5.strip())
+logger.info("Test Case 5: Edge cases (singular 'day', different format)")
+logger.info('Input:' + " " + test_case_5.strip())
     result_5 = bold_deadlines_in_next_steps(test_case_5)
-    print("Output:", result_5.strip())
+logger.info('Output:' + " " + result_5.strip())
     has_singular_day = "<strong>within 1 day</strong>" in result_5
     has_date_format = "<strong>by January 1, 2026</strong>" in result_5
     has_plural_days = "<strong>within 45 days</strong>" in result_5
-    print("✅ PASS" if has_singular_day and has_date_format and has_plural_days else "❌ FAIL")
-    print()
+logger.info('✅ PASS' if has_singular_day and has_date_format and has_plural_days else '❌ FAIL')
+logger.info('')
     
-    print("=" * 60)
-    print("🎯 All tests completed!")
+logger.info('=' * 60)
+logger.info('🎯 All tests completed!')
 
 
 if __name__ == "__main__":

@@ -17,6 +17,9 @@ import traceback
 from typing import Any
 
 import psutil
+from utils.logging_config import setup_logging
+logger = setup_logging('unknown_service')
+
 
 
 # Setup logging for our tests
@@ -503,14 +506,14 @@ def main():
                 critical_issues.append(f"{test_name} (slow performance)")
 
         if critical_issues:
-            print(f"\n⚠️  Performance issues detected: {', '.join(critical_issues)}")
+logger.error(f'\n⚠️  Performance issues detected: {', '.join(critical_issues)}')
             sys.exit(1)
         else:
-            print("\n🎉 All performance tests completed successfully!")
+logger.info('\n🎉 All performance tests completed successfully!')
             sys.exit(0)
 
     except Exception as e:
-        print(f"❌ Fatal error during performance validation: {e}")
+logger.error(f'❌ Fatal error during performance validation: {e}')
         traceback.print_exc()
         sys.exit(1)
 

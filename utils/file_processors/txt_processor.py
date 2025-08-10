@@ -3,6 +3,10 @@ from __future__ import annotations
 import mimetypes
 
 from utils.data_models import DocumentType, FileType, ProcessedDocument
+from utils.logging_config import setup_logging
+
+
+logger = setup_logging("txt_processor")
 
 
 async def process_txt(
@@ -11,7 +15,7 @@ async def process_txt(
     """
     Processes a TXT file by reading its content from a given path.
     """
-    print(f"Processing TXT: {original_filename}")
+    logger.debug(f"Processing TXT: {original_filename}")
 
     with open(file_path, encoding="utf-8") as f:
         content = f.read()

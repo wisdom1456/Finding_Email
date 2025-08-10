@@ -8,6 +8,9 @@ from __future__ import annotations
 import re
 
 from bs4 import BeautifulSoup
+from utils.logging_config import setup_logging
+logger = setup_logging('unknown_service')
+
 
 
 def count_normalization_issues(html_content):
@@ -55,7 +58,7 @@ def improved_normalization_fixes(html_content):
         return html_content
     
     try:
-        print("🔧 Starting improved normalization processing...")
+logger.debug('🔧 Starting improved normalization processing...')
         
         # Parse HTML to preserve structure
         soup = BeautifulSoup(html_content, "html.parser")
@@ -154,11 +157,11 @@ def improved_normalization_fixes(html_content):
                         start, end = match.span()
                         html_text = html_text[:start] + replacement + html_text[end:]
         
-        print("✅ Improved normalization processing completed")
+logger.debug('✅ Improved normalization processing completed')
         return html_text
         
     except Exception as e:
-        print(f"❌ Improved normalization processing failed: {e}")
+logger.error(f'❌ Improved normalization processing failed: {e}')
         return html_content
 
 # Test with sample content
@@ -167,22 +170,22 @@ test_html = """
 <p>The comprehensive legal analysis indicates that this matter involves significant constitutional considerations under Florida law. Legal analysis indicates that the case assessment reveals multiple potential claims. Case assessment reveals that the evidence review demonstrates substantial factual support under Florida law.</p>
 """
 
-print("🧪 Testing current normalization issues:")
-print("=" * 50)
+logger.info('🧪 Testing current normalization issues:')
+logger.info('=' * 50)
 dup_before, long_before, repeated_before = count_normalization_issues(test_html)
-print(f"BEFORE: Duplicates: {dup_before}, Long sentences: {long_before}, Repeated phrases: {repeated_before}")
+logger.info(f'BEFORE: Duplicates: {dup_before}, Long sentences: {long_before}, Repeated phrases: {repeated_before}')
 
-print("\n🔧 Applying improved normalization...")
+logger.info('\n🔧 Applying improved normalization...')
 improved_html = improved_normalization_fixes(test_html)
 
 dup_after, long_after, repeated_after = count_normalization_issues(improved_html)
-print(f"AFTER: Duplicates: {dup_after}, Long sentences: {long_after}, Repeated phrases: {repeated_after}")
+logger.info(f'AFTER: Duplicates: {dup_after}, Long sentences: {long_after}, Repeated phrases: {repeated_after}')
 
-print("\n📊 IMPROVEMENT:")
-print(f"Duplicates: {dup_before} → {dup_after} ({dup_before - dup_after} improvement)")
-print(f"Long sentences: {long_before} → {long_after} ({long_before - long_after} improvement)")
-print(f"Repeated phrases: {repeated_before} → {repeated_after} ({repeated_before - repeated_after} improvement)")
+logger.info('\n📊 IMPROVEMENT:')
+logger.info(f'Duplicates: {dup_before} → {dup_after} ({dup_before - dup_after} improvement)')
+logger.info(f'Long sentences: {long_before} → {long_after} ({long_before - long_after} improvement)')
+logger.info(f'Repeated phrases: {repeated_before} → {repeated_after} ({repeated_before - repeated_after} improvement)')
 
-print("\n📝 SAMPLE OUTPUT:")
-print("=" * 50)
-print(improved_html)
+logger.info('\n📝 SAMPLE OUTPUT:')
+logger.info('=' * 50)
+logger.info(improved_html)

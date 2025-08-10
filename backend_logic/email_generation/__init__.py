@@ -24,6 +24,7 @@ Benefits:
 - Simplified text processing (removed problematic simplification pipeline)
 - Modular architecture enabling independent service development
 """
+
 from __future__ import annotations
 
 from .email_generator_v2 import EmailGeneratorV2
@@ -48,5 +49,5 @@ __all__ = [
     "JSONArchitectureService",
     "OpenAIIntegrationService",
     "TemplateRenderingService",
-    "TextProcessingService"
+    "TextProcessingService",
 ]

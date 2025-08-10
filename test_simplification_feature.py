@@ -7,11 +7,16 @@ This script tests the two-step simplification pass that:
 2. Sends plain text to AI for simplification (Flesch ≥ 50)
 3. Replaces original content with simplified version
 """
+
 from __future__ import annotations
 
 import os
 import sys
-from datetime import datetime
+
+from utils.logging_config import setup_logging
+
+
+logger = setup_logging("unknown_service")
 
 
 # Add project root to path
@@ -24,31 +29,33 @@ from backend_logic.email_generator import EmailGeneratorV2
 
 def create_mock_openai_client():
     """Create a mock OpenAI client for testing."""
+
     class MockOpenAIClient:
         """Mock OpenAI client for testing."""
-        
+
         def with_options(self, **kwargs):
             return self
-        
+
         @property
         def chat(self):
             return self
-        
+
         @property
         def completions(self):
             return self
-        
+
         def create(self, **kwargs):
             """Return a mock simplified response."""
+
             class MockResponse:
                 def __init__(self):
                     self.choices = [MockChoice()]
                     self._request_id = "test-123"
-            
+
             class MockChoice:
                 def __init__(self):
                     self.message = MockMessage()
-            
+
             class MockMessage:
                 def __init__(self):
                     # Return simplified version of the input
@@ -57,9 +64,9 @@ def create_mock_openai_client():
 The client has a strong case based on the evidence we reviewed.
 
 We recommend taking action within 30 days to protect your legal rights."""
-            
+
             return MockResponse()
-    
+
     return MockOpenAIClient()
 
 
@@ -74,28 +81,28 @@ def create_mock_case_analysis():
         key_facts=[
             "Complex multi-party contractual relationship with sophisticated legal terminology",
             "Breach occurred through non-performance of contractual obligations pursuant to specific provisions",
-            "Substantial financial implications requiring comprehensive legal analysis"
+            "Substantial financial implications requiring comprehensive legal analysis",
         ],
         legal_claims=[
             "Breach of contract under Florida commercial code provisions",
-            "Consequential damages pursuant to contractual remedy clauses"
-        ]
+            "Consequential damages pursuant to contractual remedy clauses",
+        ],
     )
-    
+
     return CaseAnalysisResult(
         intake_analysis=mock_intake,
         analyzed_documents=[],
         video_insights=[],
         transcripted_media=[],
         legal_assessment=None,
-        demand_letter_evaluation=None
+        demand_letter_evaluation=None,
     )
 
 
 def test_html_stripping():
     """Test HTML tag stripping functionality."""
-    print("🧪 Testing HTML tag stripping...")
-    
+    logger.info("🧪 Testing HTML tag stripping...")
+
     sample_html = """
     <html>
     <body>
@@ -108,82 +115,86 @@ def test_html_stripping():
     </body>
     </html>
     """
-    
+
     # Create email generator instance with mock client
     mock_client = create_mock_openai_client()
     generator = EmailGeneratorV2(client=mock_client)
-    
+
     # Test HTML stripping
     plain_text = generator._strip_html_tags(sample_html)
-    
-    print(f"Original HTML length: {len(sample_html)} characters")
-    print(f"Plain text length: {len(plain_text)} characters")
-    print(f"Plain text: {plain_text[:200]}...")
-    
+
+    logger.info(f"Original HTML length: {len(sample_html)} characters")
+    logger.info(f"Plain text length: {len(plain_text)} characters")
+    logger.info(f"Plain text: {plain_text[:200]}...")
+
     # Verify no HTML tags remain
     assert "<" not in plain_text and ">" not in plain_text, "HTML tags still present!"
-    print("✅ HTML stripping test passed")
+    logger.info("✅ HTML stripping test passed")
 
 
 def test_simplification_prompt():
     """Test simplification prompt creation."""
-    print("\n🧪 Testing simplification prompt creation...")
-    
+    logger.info("\n🧪 Testing simplification prompt creation...")
+
     mock_client = create_mock_openai_client()
     generator = EmailGeneratorV2(client=mock_client)
-    
+
     sample_text = "This contractual dispute involves sophisticated legal provisions requiring comprehensive analysis pursuant to Florida commercial statutes."
-    
+
     prompt = generator._create_simplification_prompt(sample_text)
-    
-    print(f"Generated prompt length: {len(prompt)} characters")
-    print(f"Prompt contains Flesch requirement: {'Flesch' in prompt}")
-    print(f"Prompt contains original text: {sample_text in prompt}")
-    
+
+    logger.info(f"Generated prompt length: {len(prompt)} characters")
+    logger.info(f"Prompt contains Flesch requirement: {'Flesch' in prompt}")
+    logger.info(f"Prompt contains original text: {sample_text in prompt}")
+
     # Verify key requirements in prompt
     assert "Flesch" in prompt, "Flesch requirement missing from prompt"
     assert "≥ 50" in prompt, "Flesch ≥ 50 requirement missing"
-    assert "shorten or split" in prompt.lower(), "Sentence shortening instruction missing"
-    assert "replace complex" in prompt.lower(), "Complex word replacement instruction missing"
+    assert "shorten or split" in prompt.lower(), (
+        "Sentence shortening instruction missing"
+    )
+    assert "replace complex" in prompt.lower(), (
+        "Complex word replacement instruction missing"
+    )
     assert sample_text in prompt, "Original text missing from prompt"
-    
-    print("✅ Simplification prompt test passed")
+
+    logger.info("✅ Simplification prompt test passed")
 
 
 def test_text_to_html_conversion():
     """Test conversion of plain text back to HTML paragraphs."""
-    print("\n🧪 Testing text to HTML conversion...")
-    
+    logger.info("\n🧪 Testing text to HTML conversion...")
+
     mock_client = create_mock_openai_client()
     generator = EmailGeneratorV2(client=mock_client)
-    
+
     sample_text = """This is the first paragraph of simplified text.
 
 This is the second paragraph with simpler words and shorter sentences.
 
 This is the third paragraph maintaining legal accuracy."""
-    
+
     html_output = generator._convert_text_to_html_paragraphs(sample_text)
-    
-    print(f"HTML output: {html_output}")
-    
+
+    logger.info(f"HTML output: {html_output}")
+
     # Verify HTML structure
     assert "<p>" in html_output, "Paragraph tags missing"
     assert "</p>" in html_output, "Closing paragraph tags missing"
     assert html_output.count("<p>") == 3, "Expected 3 paragraphs"
-    
-    print("✅ Text to HTML conversion test passed")
+
+    logger.info("✅ Text to HTML conversion test passed")
 
 
 def test_integration_with_mock_client():
     """Test integration with a mock OpenAI client."""
-    print("\n🧪 Testing integration with mock OpenAI client...")
-    
+    logger.info("\n🧪 Testing integration with mock OpenAI client...")
+
     try:
         # Create generator with mock client
         mock_client = create_mock_openai_client()
         generator = EmailGeneratorV2(client=mock_client)
-        
+
         # Test HTML content
         test_html = """
         <html>
@@ -193,48 +204,51 @@ def test_integration_with_mock_client():
         </body>
         </html>
         """
-        
+
         # Test the simplification pass
         result = generator._apply_simplification_pass(test_html)
-        
-        print(f"Original HTML length: {len(test_html)} characters")
-        print(f"Simplified HTML length: {len(result)} characters")
-        print(f"Simplified content preview: {result[:300]}...")
-        
+
+        logger.info(f"Original HTML length: {len(test_html)} characters")
+        logger.info(f"Simplified HTML length: {len(result)} characters")
+        logger.info(f"Simplified content preview: {result[:300]}...")
+
         # Verify result contains HTML structure
-        assert "<html>" in result or "<p>" in result, "HTML structure missing from result"
-        print("✅ Integration test passed")
-        
+        assert "<html>" in result or "<p>" in result, (
+            "HTML structure missing from result"
+        )
+        logger.info("✅ Integration test passed")
+
     except Exception as e:
-        print(f"❌ Integration test failed: {e}")
+        logger.error(f"❌ Integration test failed: {e}")
         # This is expected without a real OpenAI client
-        print("ℹ️  This is expected when testing without real OpenAI API access")
+        logger.info("ℹ️  This is expected when testing without real OpenAI API access")
 
 
 def main():
     """Run all tests."""
-    print("🚀 Starting Email Simplification Feature Tests")
-    print("=" * 50)
-    
+    logger.info("🚀 Starting Email Simplification Feature Tests")
+    logger.info("=" * 50)
+
     try:
         test_html_stripping()
         test_simplification_prompt()
         test_text_to_html_conversion()
         test_integration_with_mock_client()
-        
-        print("\n" + "=" * 50)
-        print("✅ All tests completed successfully!")
-        print("\n📋 Implementation Summary:")
-        print("   • HTML tag stripping: ✅ Working")
-        print("   • Simplification prompt: ✅ Working")
-        print("   • Flesch ≥ 50 requirement: ✅ Included")
-        print("   • Text to HTML conversion: ✅ Working")
-        print("   • Integration pipeline: ✅ Ready")
-        print("\n🎯 The simplification feature is ready for production use!")
-        
+
+        logger.info("\n" + "=" * 50)
+        logger.info("✅ All tests completed successfully!")
+        logger.info("\n📋 Implementation Summary:")
+        logger.info("   • HTML tag stripping: ✅ Working")
+        logger.info("   • Simplification prompt: ✅ Working")
+        logger.info("   • Flesch ≥ 50 requirement: ✅ Included")
+        logger.info("   • Text to HTML conversion: ✅ Working")
+        logger.info("   • Integration pipeline: ✅ Ready")
+        logger.info("\n🎯 The simplification feature is ready for production use!")
+
     except Exception as e:
-        print(f"\n❌ Test failed: {e}")
+        logger.error(f"\n❌ Test failed: {e}")
         import traceback
+
         traceback.print_exc()
         sys.exit(1)
 

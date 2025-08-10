@@ -9,10 +9,15 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from utils.logging_config import setup_logging
+
+
+logger = setup_logging("unknown_service")
+
 
 def check_await_keywords(file_path):
     """Check for missing await keywords in async function calls."""
-    print(f"\n🔍 Checking await keywords in {file_path}")
+    logger.debug(f"\n🔍 Checking await keywords in {file_path}")
 
     with open(file_path) as f:
         content = f.read()
@@ -28,21 +33,21 @@ def check_await_keywords(file_path):
             if "await" not in line:
                 issues.append(f"Line {i}: Missing 'await' - {line.strip()}")
             else:
-                print(f"✅ Line {i}: Correct 'await' usage - {line.strip()}")
+                logger.info(f"✅ Line {i}: Correct 'await' usage - {line.strip()}")
 
     if issues:
-        print("❌ Found missing await keywords:")
+        logger.info("❌ Found missing await keywords:")
         for issue in issues:
-            print(f"   {issue}")
+            logger.info(f"   {issue}")
     else:
-        print("✅ No missing await keywords found")
+        logger.info("✅ No missing await keywords found")
 
     return issues
 
 
 def check_data_model_fields(file_path):
     """Check if CaseAnalysisResult has the required media fields."""
-    print(f"\n🔍 Checking data model fields in {file_path}")
+    logger.debug(f"\n🔍 Checking data model fields in {file_path}")
 
     with open(file_path) as f:
         content = f.read()
@@ -53,7 +58,7 @@ def check_data_model_fields(file_path):
     )
 
     if not class_match:
-        print("❌ CaseAnalysisResult class not found")
+        logger.info("❌ CaseAnalysisResult class not found")
         return False
 
     class_content = class_match.group(1)
@@ -64,16 +69,16 @@ def check_data_model_fields(file_path):
     for field in required_fields:
         if field in class_content:
             found_fields.append(field)
-            print(f"✅ Found field: {field}")
+            logger.info(f"✅ Found field: {field}")
         else:
-            print(f"❌ Missing field: {field}")
+            logger.info(f"❌ Missing field: {field}")
 
     return len(found_fields) == len(required_fields)
 
 
 def check_ai_analyzer_references(file_path):
     """Check if ai_analyzer.py references the correct media fields."""
-    print(f"\n🔍 Checking media field references in {file_path}")
+    logger.debug(f"\n🔍 Checking media field references in {file_path}")
 
     with open(file_path) as f:
         content = f.read()
@@ -89,18 +94,18 @@ def check_ai_analyzer_references(file_path):
                 references.append(f"Line {i}: {line.strip()}")
 
     if references:
-        print("✅ Found media field references:")
+        logger.info("✅ Found media field references:")
         for ref in references:
-            print(f"   {ref}")
+            logger.info(f"   {ref}")
     else:
-        print("❌ No media field references found")
+        logger.info("❌ No media field references found")
 
     return references
 
 
 def check_vertex_ai_model(file_path):
     """Check the current Vertex AI model configuration."""
-    print(f"\n🔍 Checking Vertex AI model configuration in {file_path}")
+    logger.debug(f"\n🔍 Checking Vertex AI model configuration in {file_path}")
 
     try:
         with open(file_path) as f:
@@ -117,16 +122,16 @@ def check_vertex_ai_model(file_path):
             matches = re.finditer(pattern, content)
             for match in matches:
                 line_num = content[: match.start()].count("\n") + 1
-                print(f"✅ Found model: {match.group()} at line {line_num}")
+                logger.info(f"✅ Found model: {match.group()} at line {line_num}")
 
     except FileNotFoundError:
-        print(f"❌ File not found: {file_path}")
+        logger.info(f"❌ File not found: {file_path}")
 
 
 def main():
     """Main diagnostic function."""
-    print("🧪 DIAGNOSTIC ANALYSIS: Media Processing Pipeline Issues")
-    print("=" * 60)
+    logger.debug("🧪 DIAGNOSTIC ANALYSIS: Media Processing Pipeline Issues")
+    logger.info("=" * 60)
 
     # Check files
     ai_analyzer_path = Path("backend_logic/ai_analyzer.py")
@@ -137,14 +142,14 @@ def main():
     if ai_analyzer_path.exists():
         await_issues = check_await_keywords(ai_analyzer_path)
     else:
-        print(f"❌ File not found: {ai_analyzer_path}")
+        logger.info(f"❌ File not found: {ai_analyzer_path}")
         await_issues = ["File not found"]
 
     # Issue 2: Check data model fields
     if data_models_path.exists():
         fields_correct = check_data_model_fields(data_models_path)
     else:
-        print(f"❌ File not found: {data_models_path}")
+        logger.info(f"❌ File not found: {data_models_path}")
         fields_correct = False
 
     # Issue 3: Check media field references
@@ -157,23 +162,23 @@ def main():
     if video_processor_path.exists():
         check_vertex_ai_model(video_processor_path)
     else:
-        print(f"❌ File not found: {video_processor_path}")
+        logger.info(f"❌ File not found: {video_processor_path}")
 
     # Summary
-    print("\n📊 DIAGNOSTIC SUMMARY")
-    print("=" * 30)
-    print(
+    logger.info("\n📊 DIAGNOSTIC SUMMARY")
+    logger.info("=" * 30)
+    logger.info(
         f"Await keyword issues: {len(await_issues) if isinstance(await_issues, list) else 'Unknown'}"
     )
-    print(f"Data model fields correct: {fields_correct}")
-    print(f"Media field references found: {len(references)}")
+    logger.info(f"Data model fields correct: {fields_correct}")
+    logger.info(f"Media field references found: {len(references)}")
 
     if not await_issues and fields_correct and references:
-        print("\n🎉 CONCLUSION: No issues found with the reported problems!")
-        print("The code appears to be correctly implemented.")
-        print("The issues may have been resolved or the problem lies elsewhere.")
+        logger.info("\n🎉 CONCLUSION: No issues found with the reported problems!")
+        logger.info("The code appears to be correctly implemented.")
+        logger.info("The issues may have been resolved or the problem lies elsewhere.")
     else:
-        print("\n⚠️  CONCLUSION: Issues confirmed, fixes needed.")
+        logger.info("\n⚠️  CONCLUSION: Issues confirmed, fixes needed.")
 
 
 if __name__ == "__main__":

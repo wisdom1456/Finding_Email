@@ -6,6 +6,9 @@ from __future__ import annotations
 
 import os
 import sys
+from utils.logging_config import setup_logging
+logger = setup_logging('unknown_service')
+
 
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -15,7 +18,7 @@ from backend_logic.ai.openai_client import OpenAIClient
 
 def test_json_parsing():
     """Test the new JSON parsing functionality."""
-    print("Testing JSON parsing improvements...")
+logger.debug('Testing JSON parsing improvements...')
     
     # Create a client instance
     client = OpenAIClient()
@@ -47,25 +50,25 @@ def test_json_parsing():
         ("This is just plain text with no JSON content.", "Plain text"),
     ]
     
-    print(f"\nRunning {len(test_cases)} test cases...\n")
+logger.info(f'\nRunning {len(test_cases)} test cases...\n')
     
     for i, (content, description) in enumerate(test_cases, 1):
-        print(f"Test {i}: {description}")
-        print(f"Input: {content[:50]}{'...' if len(content) > 50 else ''}")
+logger.info(f'Test {i}: {description}')
+logger.info(f'Input: {content[:50]}{('...' if len(content) > 50 else '')}')
         
         try:
             result = client.parse_json_response(content)
             if result is not None:
-                print(f"✅ Success: Parsed JSON - {type(result).__name__}")
-                print(f"   Result: {str(result)[:100]}{'...' if len(str(result)) > 100 else ''}")
+logger.info(f'✅ Success: Parsed JSON - {type(result).__name__}')
+logger.info(f'   Result: {str(result)[:100]}{('...' if len(str(result)) > 100 else '')}')
             else:
-                print("❌ Failed: Returned None")
+logger.error('❌ Failed: Returned None')
         except Exception as e:
-            print(f"🚨 Error: {e}")
+logger.error(f'🚨 Error: {e}')
         
-        print("-" * 60)
+logger.info('-' * 60)
     
-    print("JSON parsing tests completed!")
+logger.debug('JSON parsing tests completed!')
 
 if __name__ == "__main__":
     test_json_parsing()

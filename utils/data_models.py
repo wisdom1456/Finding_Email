@@ -164,7 +164,9 @@ class LegalAssessment(BaseModel):
     overall_evidence_strength: str
     potential_challenges: str
     recommended_actions: str
-    demand_letter_appropriate: bool  # Fixed: Changed from str to bool to match AI output
+    demand_letter_appropriate: (
+        bool  # Fixed: Changed from str to bool to match AI output
+    )
     urgency_assessment: str
 
 

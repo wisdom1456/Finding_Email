@@ -22,6 +22,10 @@ from backend.utils.data_models import (
     ProcessedDocument,
     ServiceCost,
 )
+from utils.logging_config import setup_logging
+
+
+logger = setup_logging("cost_session_manager")
 from backend_logic.cost_calculator import CostCalculator
 from backend_logic.cost_estimator import CostEstimator
 from backend_logic.cost_exporter import CostExporter
@@ -134,14 +138,14 @@ class CostSessionManager:
         # Populate the new categorized cost fields by aggregating from service_costs
         document_analysis_costs = []
         media_processing_costs = []
-        
+
         for cost in actual_costs.service_costs:
             # Categorize costs based on service type or operation
             if self._is_document_analysis_cost(cost):
                 document_analysis_costs.append(cost)
             elif self._is_media_processing_cost(cost):
                 media_processing_costs.append(cost)
-        
+
         # Update the ActualCosts object with categorized costs
         actual_costs.document_analysis_costs = document_analysis_costs
         actual_costs.media_processing_costs = media_processing_costs
@@ -446,7 +450,7 @@ class CostSessionManager:
             )
 
         except (json.JSONDecodeError, KeyError, ValueError) as e:
-            print(f"Error loading cost session {case_id}: {e}")
+            logger.error(f"Error loading cost session {case_id}: {e}")
             return None
 
     def _get_all_session_ids(self) -> list[str]:
@@ -529,65 +533,91 @@ class CostSessionManager:
     def _is_document_analysis_cost(self, cost: ServiceCost) -> bool:
         """
         Determine if a service cost is related to document analysis.
-        
+
         Args:
             cost: ServiceCost object to categorize
-            
+
         Returns:
             True if cost is document analysis related, False otherwise
         """
         # Check service name for document-related services
-        document_services = {"openai", "azure_openai", "anthropic", "document_processing"}
+        document_services = {
+            "openai",
+            "azure_openai",
+            "anthropic",
+            "document_processing",
+        }
         if cost.service_name.lower() in document_services:
             return True
-            
+
         # Check operation type for document analysis operations
         document_operations = {
-            "text_analysis", "document_analysis", "content_extraction",
-            "legal_analysis", "intake_analysis", "case_analysis"
+            "text_analysis",
+            "document_analysis",
+            "content_extraction",
+            "legal_analysis",
+            "intake_analysis",
+            "case_analysis",
         }
         if cost.operation_type and cost.operation_type.lower() in document_operations:
             return True
-            
+
         # Check file extensions for document types
         if cost.file_name:
             doc_extensions = {".pdf", ".docx", ".txt", ".eml"}
-            file_ext = "." + cost.file_name.split(".")[-1].lower() if "." in cost.file_name else ""
+            file_ext = (
+                "." + cost.file_name.split(".")[-1].lower()
+                if "." in cost.file_name
+                else ""
+            )
             if file_ext in doc_extensions:
                 return True
-                
+
         return False
 
     def _is_media_processing_cost(self, cost: ServiceCost) -> bool:
         """
         Determine if a service cost is related to media processing.
-        
+
         Args:
             cost: ServiceCost object to categorize
-            
+
         Returns:
             True if cost is media processing related, False otherwise
         """
         # Check service name for media-related services
-        media_services = {"google_cloud", "vertex_ai", "speech_to_text", "video_processing"}
+        media_services = {
+            "google_cloud",
+            "vertex_ai",
+            "speech_to_text",
+            "video_processing",
+        }
         if cost.service_name.lower() in media_services:
             return True
-            
+
         # Check operation type for media processing operations
         media_operations = {
-            "video_analysis", "audio_transcription", "speech_to_text",
-            "video_insights", "media_processing", "object_detection"
+            "video_analysis",
+            "audio_transcription",
+            "speech_to_text",
+            "video_insights",
+            "media_processing",
+            "object_detection",
         }
         if cost.operation_type and cost.operation_type.lower() in media_operations:
             return True
-            
+
         # Check file extensions for media types
         if cost.file_name:
             media_extensions = {".mp4", ".mov", ".avi", ".mp3", ".wav", ".m4a"}
-            file_ext = "." + cost.file_name.split(".")[-1].lower() if "." in cost.file_name else ""
+            file_ext = (
+                "." + cost.file_name.split(".")[-1].lower()
+                if "." in cost.file_name
+                else ""
+            )
             if file_ext in media_extensions:
                 return True
-                
+
         return False
 
     def export_session_budget(self, session_id: str, format: str = "csv") -> str:

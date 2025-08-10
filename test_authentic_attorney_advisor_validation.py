@@ -18,12 +18,14 @@ AUTHENTIC_ATTORNEY_ADVISOR is the actual running framework.
 """
 from __future__ import annotations
 
-import json
 import re
 import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List
+from utils.logging_config import setup_logging
+logger = setup_logging('unknown_service')
+
 
 
 # Add project root to path
@@ -37,7 +39,7 @@ try:
     from backend_logic.email_generator import EmailGeneratorV2
     MODULES_AVAILABLE = True
 except ImportError as e:
-    print(f"⚠️  Warning: Cannot import modules: {e}")
+logger.warning(f'⚠️  Warning: Cannot import modules: {e}')
     MODULES_AVAILABLE = False
 
 @dataclass
@@ -70,15 +72,15 @@ class AuthenticAttorneyAdvisorValidator:
         """Log validation result."""
         self.results.append(result)
         status = "✅ PASS" if result.passed else "❌ FAIL"
-        print(f"{status}: {result.test_name}")
+logger.info(f'{status}: {result.test_name}')
         if result.details:
             for key, value in result.details.items():
-                print(f"   {key}: {value}")
+logger.info(f'   {key}: {value}')
 
     def test_framework_identification(self) -> ValidationResult:
         """Test 1: Verify AUTHENTIC_ATTORNEY_ADVISOR is implemented."""
-        print("\n🔍 FRAMEWORK IDENTIFICATION TEST")
-        print("=" * 50)
+logger.info('\n🔍 FRAMEWORK IDENTIFICATION TEST')
+logger.info('=' * 50)
         
         if not MODULES_AVAILABLE:
             return ValidationResult(
@@ -136,8 +138,8 @@ class AuthenticAttorneyAdvisorValidator:
 
     def test_florida_law_exclusivity(self) -> ValidationResult:
         """Test 2: Validate Florida law exclusivity compliance."""
-        print("\n🏖️ FLORIDA LAW EXCLUSIVITY TEST")
-        print("=" * 50)
+logger.info('\n🏖️ FLORIDA LAW EXCLUSIVITY TEST')
+logger.info('=' * 50)
         
         if not MODULES_AVAILABLE:
             return ValidationResult(
@@ -206,8 +208,8 @@ class AuthenticAttorneyAdvisorValidator:
 
     def test_high_stakes_advice_protocol(self) -> ValidationResult:
         """Test 3: Validate High-Stakes Advice Protocol activation."""
-        print("\n⚠️  HIGH-STAKES ADVICE PROTOCOL TEST")
-        print("=" * 50)
+logger.info('\n⚠️  HIGH-STAKES ADVICE PROTOCOL TEST')
+logger.info('=' * 50)
         
         if not MODULES_AVAILABLE:
             return ValidationResult(
@@ -273,8 +275,8 @@ class AuthenticAttorneyAdvisorValidator:
 
     def test_direct_professional_tone(self) -> ValidationResult:
         """Test 4: Validate Direct Professional Tone (not collaborative)."""
-        print("\n💼 DIRECT PROFESSIONAL TONE TEST")
-        print("=" * 50)
+logger.info('\n💼 DIRECT PROFESSIONAL TONE TEST')
+logger.info('=' * 50)
         
         if not MODULES_AVAILABLE:
             return ValidationResult(
@@ -353,8 +355,8 @@ class AuthenticAttorneyAdvisorValidator:
 
     def test_ai_analyzer_framework_consistency(self) -> ValidationResult:
         """Test 5: Check AI Analyzer vs Email Generator framework consistency."""
-        print("\n🔄 FRAMEWORK CONSISTENCY TEST")
-        print("=" * 50)
+logger.info('\n🔄 FRAMEWORK CONSISTENCY TEST')
+logger.info('=' * 50)
         
         try:
             # Read both modules
@@ -418,11 +420,11 @@ class AuthenticAttorneyAdvisorValidator:
 
     def run_comprehensive_validation(self) -> Dict[str, Any]:
         """Run complete validation suite."""
-        print("🚨 AUTHENTIC_ATTORNEY_ADVISOR FRAMEWORK VALIDATION")
-        print("=" * 60)
-        print("Testing the ACTUAL implemented framework")
-        print("(NOT CLIENT_CLARITY_ADVISOR which is documented but not implemented)")
-        print("=" * 60)
+logger.info('🚨 AUTHENTIC_ATTORNEY_ADVISOR FRAMEWORK VALIDATION')
+logger.info('=' * 60)
+logger.info('Testing the ACTUAL implemented framework')
+logger.info('(NOT CLIENT_CLARITY_ADVISOR which is documented but not implemented)')
+logger.info('=' * 60)
         
         # Run all validation tests
         tests = [
@@ -505,30 +507,30 @@ def main():
     summary = validator.run_comprehensive_validation()
     
     # Print comprehensive summary
-    print("\n" + "=" * 60)
-    print("🎯 VALIDATION SUMMARY")
-    print("=" * 60)
-    print(f"Tests Run: {summary['total_tests']}")
-    print(f"Passed: {summary['passed']}")
-    print(f"Failed: {summary['failed']}")
-    print(f"Success Rate: {summary['success_rate']}")
+logger.info('\n' + '=' * 60)
+logger.info('🎯 VALIDATION SUMMARY')
+logger.info('=' * 60)
+logger.info(f'Tests Run: {summary['total_tests']}')
+logger.info(f'Passed: {summary['passed']}')
+logger.error(f'Failed: {summary['failed']}')
+logger.info(f'Success Rate: {summary['success_rate']}')
     
     if summary["critical_findings"]:
-        print("\n🚨 CRITICAL FINDINGS:")
+logger.error('\n🚨 CRITICAL FINDINGS:')
         for finding in summary["critical_findings"]:
-            print(f"   {finding}")
+logger.info(f'   {finding}')
     
-    print("\n🔍 FRAMEWORK EVIDENCE:")
+logger.info('\n🔍 FRAMEWORK EVIDENCE:')
     for evidence in summary["framework_evidence"]:
-        print(f"   ✓ {evidence}")
+logger.info(f'   ✓ {evidence}')
     
-    print("\n💡 RECOMMENDATIONS:")
+logger.info('\n💡 RECOMMENDATIONS:')
     for rec in summary["recommendations"]:
-        print(f"   {rec}")
+logger.info(f'   {rec}')
     
-    print("\n" + "=" * 60)
-    print("📋 VALIDATION COMPLETE")
-    print("=" * 60)
+logger.info('\n' + '=' * 60)
+logger.info('📋 VALIDATION COMPLETE')
+logger.info('=' * 60)
     
     return summary
 

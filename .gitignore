@@ -165,3 +165,16 @@ temp/
 *.njsproj
 *.sln
 *.sw?
+
+# Large test data files - exclude video and large PDF files to prevent git push issues
+test_data/**/*.MOV
+test_data/**/*.mov
+test_data/**/*.mp4
+test_data/**/*.MP4
+test_data/**/*.avi
+test_data/**/*.AVI
+
+# Large PDF files in test data (>10MB)
+test_data/**/Pictures of Flooding.pdf
+test_data/**/Notice to Owner.pdf
+test_data/**/Devlin - LLW Text Thread.pdf

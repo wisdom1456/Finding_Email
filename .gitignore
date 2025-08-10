@@ -10,6 +10,7 @@ config/secrets/
 *.json
 brflorida-*.json
 *-credentials.json
+brflorida-2800217d04c3.json
 
 # Python
 __pycache__/

@@ -7,6 +7,9 @@
 
 # API Keys and Secrets
 config/secrets/
+*.json
+brflorida-*.json
+*-credentials.json
 
 # Python
 __pycache__/

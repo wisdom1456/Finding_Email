@@ -1,7 +1,7 @@
 # Security Audit Report
 
-Generated: 2025-01-07  
-Tool: pip-audit  
+Generated: 2025-01-07
+Tool: pip-audit
 Status: **13 Known Vulnerabilities Found**
 
 ## Critical Vulnerabilities (Immediate Action Required)
@@ -65,7 +65,7 @@ Status: **13 Known Vulnerabilities Found**
 ### Immediate (High Priority)
 ```bash
 pip install --upgrade requests==2.32.4
-pip install --upgrade aiohttp==3.12.14  
+pip install --upgrade aiohttp==3.12.14
 pip install --upgrade h11==0.16.0
 ```
 

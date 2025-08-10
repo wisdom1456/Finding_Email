@@ -100,7 +100,7 @@ def create_mock_letter_with_valid_content():
 def test_validation_functions():
     """Test the validation functions directly."""
 logger.info('🧪 Testing validation functions...')
-    
+
     # Test 1: Empty weaknesses should fail
 logger.info('\n📋 Test 1: Empty weaknesses validation')
     try:
@@ -113,7 +113,7 @@ logger.info(f'✅ PASSED: Correctly caught empty weaknesses - {e}')
     except Exception as e:
 logger.error(f'❌ FAILED: Unexpected error - {e}')
         return False
-    
+
     # Test 2: Placeholder weaknesses should fail
 logger.info('\n📋 Test 2: Placeholder weaknesses validation')
     try:
@@ -126,7 +126,7 @@ logger.info(f'✅ PASSED: Correctly caught placeholder weaknesses - {e}')
     except Exception as e:
 logger.error(f'❌ FAILED: Unexpected error - {e}')
         return False
-    
+
     # Test 3: Valid content should pass
 logger.info('\n📋 Test 3: Valid content validation')
     try:
@@ -139,34 +139,34 @@ logger.error(f'❌ FAILED: Valid content should not trigger validation error - {
     except Exception as e:
 logger.error(f'❌ FAILED: Unexpected error - {e}')
         return False
-    
+
     return True
 
 
 def test_enhanced_prompt_structure():
     """Test that the enhanced prompt includes the required structure."""
 logger.info('\n🧪 Testing enhanced prompt structure...')
-    
+
     try:
         # Create a mock OpenAI client
         mock_client = Mock(spec=OpenAI)
-        
+
         # Mock the chat completion response
         mock_response = Mock()
         mock_response.choices = [Mock()]
         mock_response.choices[0].message.content = """
         **STRENGTHS**
         This case demonstrates clear contractual breach with strong documentation supporting our client's position.
-        
-        **POTENTIAL CHALLENGES**  
+
+        **POTENTIAL CHALLENGES**
         Opposing party may assert comparative negligence and discovery costs could be substantial.
         """
-        
+
         mock_client.with_options.return_value.chat.completions.create.return_value = mock_response
-        
+
         # Create email generator with mock client
         generator = EmailGeneratorV2(mock_client)
-        
+
         # Mock the configuration loading to avoid file dependencies
         generator.config = {
             "personas": {"CONTINUING_LEGAL_ADVISOR": "You are a legal advisor."},
@@ -175,11 +175,11 @@ logger.info('\n🧪 Testing enhanced prompt structure...')
             "golden_sample": "Sample legal writing",
             "content_rules": []
         }
-        
+
         # Create a minimal case analysis for testing
         mock_analysis = Mock(spec=CaseAnalysisResult)
         mock_analysis.model_dump_json.return_value = '{"case": "test"}'
-        
+
         # Create a mock section plan
         from backend.utils.data_models import SectionPlan
         section_plan = SectionPlan(
@@ -189,34 +189,34 @@ logger.info('\n🧪 Testing enhanced prompt structure...')
             emphasis_items={},
             content_requirements=["strengths", "challenges"]
         )
-        
+
         # Create mock context
         from backend.utils.data_models import GenerationContext
         context = GenerationContext()
-        
+
         # Test the enhanced case assessment generation
         result = generator._generate_case_assessment_content(section_plan, mock_analysis, context)
-        
+
 logger.info(f'✅ PASSED: Enhanced prompt generated content: {len(result)} characters')
-        
+
         # Verify that the prompt was called with enhanced requirements
         args, kwargs = mock_client.with_options.return_value.chat.completions.create.call_args
         prompt_content = kwargs["messages"][1]["content"]
-        
+
         if "CRITICAL REQUIREMENT: You MUST generate TWO distinct sections" in prompt_content:
 logger.error('✅ PASSED: Enhanced prompt includes critical requirement for two sections')
         else:
 logger.error('❌ FAILED: Enhanced prompt missing critical requirement')
             return False
-            
+
         if "**STRENGTHS**" in prompt_content and "**POTENTIAL CHALLENGES**" in prompt_content:
 logger.info('✅ PASSED: Enhanced prompt includes required section headers')
         else:
 logger.error('❌ FAILED: Enhanced prompt missing required section headers')
             return False
-        
+
         return True
-        
+
     except Exception as e:
 logger.error(f'❌ FAILED: Error testing enhanced prompt - {e}')
         traceback.print_exc()
@@ -228,17 +228,17 @@ def main():
 logger.info('=' * 60)
 logger.info('🚀 TESTING STRENGTHS & WEAKNESSES VALIDATION')
 logger.info('=' * 60)
-    
+
     all_tests_passed = True
-    
+
     # Test validation functions
     if not test_validation_functions():
         all_tests_passed = False
-    
+
     # Test enhanced prompt structure
     if not test_enhanced_prompt_structure():
         all_tests_passed = False
-    
+
 logger.info('\n' + '=' * 60)
     if all_tests_passed:
 logger.info('🎉 ALL TESTS PASSED!')
@@ -249,7 +249,7 @@ logger.info('✅ The system will fail-fast when validation requirements are not 
 logger.error('❌ SOME TESTS FAILED!')
 logger.info('Please review the implementation and fix any issues.')
 logger.info('=' * 60)
-    
+
     return 0 if all_tests_passed else 1
 
 

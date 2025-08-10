@@ -179,7 +179,7 @@ flowchart TD
     D --> E[Demand Letter Evaluation]
     E --> F[Professional Email Assembly]
     F --> G[Template-Based Formatting]
-    
+
     A --> |Context| C
     B --> |Specialization| C
     D --> |Challenges| F

@@ -75,10 +75,10 @@ Critical patterns discovered during comprehensive testing for handling OpenAI AP
 # Sequential document processing with delays
 for i, doc_analysis in enumerate(analysis_docs):
     logger.info(f"Processing document {i+1}/{len(analysis_docs)}: {doc_analysis.filename}")
-    
+
     # Generate email content with rate limiting
     result = await self._process_single_document(doc_analysis)
-    
+
     # Rate limiting delay between documents
     if i < len(analysis_docs) - 1:  # Don't delay after last document
         await asyncio.sleep(3)  # 3-second delay prevents rate limit violations
@@ -103,17 +103,17 @@ For documents exceeding token limits, implement intelligent truncation:
 def truncate_content(content: str, max_tokens: int = 25000) -> str:
     """Truncate content while preserving beginning and end context"""
     max_chars = max_tokens * 4  # Convert tokens to characters
-    
+
     if len(content) <= max_chars:
         return content
-    
+
     # Keep 80% from start, 20% from end
     start_chars = int(max_chars * 0.8)
     end_chars = int(max_chars * 0.2)
-    
+
     start_content = content[:start_chars]
     end_content = content[-end_chars:]
-    
+
     return f"{start_content}\n\n[CONTENT TRUNCATED]\n\n{end_content}"
 ```
 
@@ -136,19 +136,19 @@ Provide clear feedback during long-running email generation:
 async def generate_email_with_progress(self, analysis_docs: List[DocumentAnalysis]) -> EmailResponse:
     """Generate email with comprehensive progress logging"""
     total_docs = len(analysis_docs)
-    
+
     logger.info(f"Starting email generation for {total_docs} documents")
-    
+
     for i, doc_analysis in enumerate(analysis_docs):
         # Log progress with percentage
         progress = ((i + 1) / total_docs) * 100
         logger.info(f"Progress: {progress:.1f}% - Processing {doc_analysis.filename}")
-        
+
         # Process document with detailed logging
         start_time = time.time()
         result = await self._process_document(doc_analysis)
         elapsed = time.time() - start_time
-        
+
         logger.info(f"Completed {doc_analysis.filename} in {elapsed:.2f}s")
 ```
 
@@ -166,7 +166,7 @@ async def generate_with_retry(self, prompt: str, max_retries: int = 3) -> str:
                 timeout=None  # Allow unlimited time for large documents
             )
             return response.choices[0].message.content
-            
+
         except Exception as e:
             logger.warning(f"Attempt {attempt + 1} failed: {str(e)}")
             if attempt == max_retries - 1:
@@ -180,23 +180,23 @@ Patterns for handling complex cases with 40+ documents:
 ```python
 async def optimize_for_large_sets(self, documents: List[DocumentAnalysis]) -> EmailResponse:
     """Optimized processing for large document sets"""
-    
+
     # Sort documents by size for optimal processing order
     sorted_docs = sorted(documents, key=lambda d: len(d.content))
-    
+
     # Process in batches with progress tracking
     batch_size = 10
     total_batches = len(sorted_docs) // batch_size + 1
-    
+
     logger.info(f"Processing {len(sorted_docs)} documents in {total_batches} batches")
-    
+
     for batch_num in range(total_batches):
         start_idx = batch_num * batch_size
         end_idx = min(start_idx + batch_size, len(sorted_docs))
         batch = sorted_docs[start_idx:end_idx]
-        
+
         logger.info(f"Processing batch {batch_num + 1}/{total_batches}")
-        
+
         # Process batch with rate limiting
         for doc in batch:
             await self._process_document(doc)

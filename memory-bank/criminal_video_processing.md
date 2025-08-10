@@ -116,12 +116,12 @@ def _detect_criminal_case(self, video_analysis_result: Dict[str, Any]) -> bool:
         "field sobriety", "traffic stop", "dui", "dwi",
         "handcuffs", "patrol car", "booking", "custody"
     ]
-    
+
     # Check for criminal indicators in analysis content
     content_text = str(video_analysis_result).lower()
-    indicator_count = sum(1 for indicator in criminal_indicators 
+    indicator_count = sum(1 for indicator in criminal_indicators
                          if indicator in content_text)
-    
+
     return indicator_count >= 2
 ```
 
@@ -134,16 +134,16 @@ The video processor operates in two modes:
 ```python
 async def process_video(self, file_path: str, file_name: str, is_criminal_case: bool = False) -> EnhancedVideoInsight:
     """Process video with optional criminal law enhancement."""
-    
+
     # Standard video analysis
     video_insight = await self._standard_video_analysis(file_path, file_name)
-    
+
     # Enhanced criminal analysis if detected or specified
     if is_criminal_case or self._detect_criminal_case(video_insight.insights):
         criminal_analysis = await self._analyze_criminal_content(video_insight)
         video_insight.criminal_analysis = criminal_analysis
         video_insight.is_criminal_case = True
-    
+
     return video_insight
 ```
 
@@ -172,12 +172,12 @@ The AI analyzer provides enhanced context when criminal video evidence is detect
 ```python
 def _enhance_criminal_context(self, analysis: CaseAnalysisResult) -> CaseAnalysisResult:
     """Enhance analysis with criminal law context when criminal videos present."""
-    
+
     criminal_videos = [v for v in analysis.video_insights if v.is_criminal_case]
     if criminal_videos:
         # Add criminal law context to final assessment
         analysis.final_assessment += self._generate_criminal_law_addendum(criminal_videos)
-    
+
     return analysis
 ```
 
@@ -213,7 +213,7 @@ The [`document_appendix.jinja2`](backend/assets/templates/document_appendix.jinj
 ```jinja2
 {% if video.is_criminal_case and video.criminal_analysis %}
     <h3>Criminal Evidence Analysis: {{ video.file_name }}</h3>
-    
+
     <h4>Evidence Categories Analysis</h4>
     {% for evidence in video.criminal_analysis.evidence_categories %}
         <div class="evidence-category">
@@ -227,13 +227,13 @@ The [`document_appendix.jinja2`](backend/assets/templates/document_appendix.jinj
             {% endif %}
         </div>
     {% endfor %}
-    
+
     <h4>Constitutional Compliance Assessment</h4>
     {{ video.criminal_analysis.constitutional_issues|safe }}
-    
+
     <h4>Timeline Reconstruction</h4>
     <p>{{ video.criminal_analysis.timeline_summary }}</p>
-    
+
     {% if video.criminal_analysis.missing_categories %}
         <h4>Missing Evidence Categories</h4>
         <ul>
@@ -255,10 +255,10 @@ class VideoProcessor:
     async def process_video(self, file_path: str, file_name: str) -> EnhancedVideoInsight:
         # Standard analysis first
         standard_analysis = await self._analyze_with_vertex_ai(gcs_uri, file_name)
-        
+
         # Criminal case detection
         is_criminal = self._detect_criminal_case(standard_analysis)
-        
+
         if is_criminal:
             # Enhanced criminal analysis
             criminal_analysis = await self._analyze_criminal_content(standard_analysis)
@@ -280,12 +280,12 @@ async def _generate_final_assessment(self, analysis_data: Dict[str, Any]) -> str
         criminal_videos = [v for v in analysis_data['video_insights'] if v.get('is_criminal_case')]
         if criminal_videos:
             criminal_context = self._format_criminal_video_context(criminal_videos)
-    
+
     prompt = f"""
     {FINAL_ASSESSMENT_PROMPT}
-    
+
     {criminal_context}
-    
+
     Generate comprehensive legal assessment...
     """
 ```
@@ -302,7 +302,7 @@ def _format_video_data_for_template(self, video_insights: List[EnhancedVideoInsi
             'insights': video.insights,
             'is_criminal_case': video.is_criminal_case
         }
-        
+
         if video.is_criminal_case and video.criminal_analysis:
             video_data['criminal_analysis'] = {
                 'evidence_categories': video.criminal_analysis.evidence_categories,
@@ -310,9 +310,9 @@ def _format_video_data_for_template(self, video_insights: List[EnhancedVideoInsi
                 'timeline_summary': video.criminal_analysis.timeline_summary,
                 'missing_categories': video.criminal_analysis.missing_categories
             }
-        
+
         formatted_videos.append(video_data)
-    
+
     return formatted_videos
 ```
 
@@ -333,16 +333,16 @@ The [`test_criminal_video_integration.py`](backend/tests/test_criminal_video_int
 class TestCriminalVideoIntegration:
     def test_criminal_case_detection(self):
         """Test automatic criminal case detection."""
-        
+
     def test_evidence_category_analysis(self):
         """Test all 16 evidence categories."""
-        
+
     def test_constitutional_compliance_assessment(self):
         """Test 4th, 5th, 6th Amendment analysis."""
-        
+
     def test_template_integration(self):
         """Test findings letter and appendix rendering."""
-        
+
     def test_backward_compatibility(self):
         """Test standard video processing unchanged."""
 ```

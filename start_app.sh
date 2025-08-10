@@ -87,7 +87,7 @@ DESCRIPTION:
 ENVIRONMENT VARIABLES:
     Required:
         OPENAI_API_KEY     OpenAI API key for document analysis
-    
+
     Optional:
         PDFCO_API_KEY      PDF.co API key for document processing
 
@@ -97,7 +97,7 @@ PORTS:
 STOPPING SERVICES:
     To stop the application, use:
         ./kill_server.sh 8501    # Stop Streamlit app
-    
+
     Or close the terminal window manually.
 
 EXAMPLES:
@@ -131,13 +131,13 @@ check_command() {
 kill_process_on_port() {
     local port=$1
     log_step "Checking for existing processes on port $port..."
-    
+
     local pid=$(lsof -t -i:$port 2>/dev/null || true)
     if [ -n "$pid" ]; then
         log_warning "Found process $pid on port $port. Terminating..."
         kill -9 $pid 2>/dev/null || true
         sleep 1
-        
+
         # Double-check if process is still running
         if lsof -t -i:$port &> /dev/null; then
             log_error "Failed to terminate process on port $port"
@@ -153,7 +153,7 @@ kill_process_on_port() {
 
 validate_env_file() {
     log_step "Validating environment configuration..."
-    
+
     if [ ! -f ".env" ]; then
         log_error ".env file not found!"
         log_info "Please copy .env.template to .env and configure your API keys:"
@@ -161,9 +161,9 @@ validate_env_file() {
         log_info "  # Edit .env with your API keys"
         return 1
     fi
-    
+
     log_verbose "Found .env file, loading environment variables..."
-    
+
     # Load environment variables with proper parsing
     set -a  # automatically export all variables
     source .env 2>/dev/null || {
@@ -171,11 +171,11 @@ validate_env_file() {
         return 1
     }
     set +a  # disable automatic export
-    
+
     # Validate required environment variables
     local required_vars=("OPENAI_API_KEY")
     local missing_vars=()
-    
+
     for var in "${required_vars[@]}"; do
         if [ -z "${!var}" ]; then
             missing_vars+=("$var")
@@ -183,7 +183,7 @@ validate_env_file() {
             log_verbose "$var is configured"
         fi
     done
-    
+
     if [ ${#missing_vars[@]} -gt 0 ]; then
         log_error "Missing required environment variables:"
         for var in "${missing_vars[@]}"; do
@@ -192,29 +192,29 @@ validate_env_file() {
         log_info "Please update your .env file with the required values."
         return 1
     fi
-    
+
     # Validate API key format (basic check)
     if [[ ! "$OPENAI_API_KEY" =~ ^sk-proj- ]] && [[ ! "$OPENAI_API_KEY" =~ ^sk- ]]; then
         log_warning "OPENAI_API_KEY format appears invalid (should start with 'sk-' or 'sk-proj-')"
     fi
-    
+
     log_success "Environment variables validated successfully"
     return 0
 }
 
 check_dependencies() {
     log_step "Checking system dependencies..."
-    
+
     local failed=false
-    
+
     # Set required environment variables for WeasyPrint and other system dependencies
     export DYLD_LIBRARY_PATH="/opt/homebrew/lib:$DYLD_LIBRARY_PATH"
     log_verbose "Set DYLD_LIBRARY_PATH for WeasyPrint system dependencies"
-    
+
     # Check basic system requirements
     check_command "python3" "Python 3" || failed=true
     check_command "pip3" "pip (Python package manager)" || failed=true
-    
+
     # Check for Streamlit
     if ! DYLD_LIBRARY_PATH="$DYLD_LIBRARY_PATH" python3 -c "import streamlit" 2>/dev/null; then
         log_error "Streamlit not found. Install with: pip3 install streamlit"
@@ -222,19 +222,19 @@ check_dependencies() {
     else
         log_verbose "Streamlit is installed"
     fi
-    
+
     # Check for application dependencies in requirements.txt
     if [ -f "requirements.txt" ]; then
         log_verbose "Checking application dependencies..."
         local missing_packages=()
-        
+
         while IFS= read -r package; do
             # Skip empty lines and comments
             [[ -z "$package" || "$package" =~ ^#.*$ ]] && continue
-            
+
             # Extract package name (before any version specifiers)
             local pkg_name=$(echo "$package" | sed 's/[<>=!].*//' | sed 's/\[.*\]//')
-            
+
             # Map pip package names to Python import names
             local import_name="$pkg_name"
             case "$pkg_name" in
@@ -247,9 +247,9 @@ check_dependencies() {
                 "Pillow") import_name="PIL" ;;
                 "sseclient-py") import_name="sseclient" ;;
             esac
-            
+
             log_verbose "Testing import for package: $pkg_name (import as: $import_name)"
-            
+
             # Use environment variable for packages that need system libraries (like WeasyPrint)
             if ! DYLD_LIBRARY_PATH="$DYLD_LIBRARY_PATH" python3 -c "import $import_name" 2>/dev/null; then
                 log_verbose "❌ Failed to import: $pkg_name"
@@ -258,7 +258,7 @@ check_dependencies() {
                 log_verbose "✅ Successfully imported: $pkg_name"
             fi
         done < "requirements.txt"
-        
+
         if [ ${#missing_packages[@]} -gt 0 ]; then
             log_warning "Missing application dependencies:"
             for missing_pkg in "${missing_packages[@]}"; do
@@ -272,34 +272,34 @@ check_dependencies() {
     else
         log_warning "requirements.txt not found"
     fi
-    
+
     if [ "$failed" = true ]; then
         log_error "Dependency check failed. Please install missing dependencies."
         return 1
     fi
-    
+
     log_success "All dependencies satisfied"
     return 0
 }
 
 wait_for_backend() {
     log_step "Waiting for backend to become ready..."
-    
+
     local attempt=0
     local max_attempts=$((BACKEND_STARTUP_TIMEOUT / HEALTH_CHECK_INTERVAL))
-    
+
     while [ $attempt -lt $max_attempts ]; do
         log_verbose "Health check attempt $((attempt + 1))/$max_attempts"
-        
+
         if curl -s "http://localhost:$BACKEND_PORT/docs" > /dev/null 2>&1; then
             log_success "Backend is ready at http://localhost:$BACKEND_PORT"
             return 0
         fi
-        
+
         sleep $HEALTH_CHECK_INTERVAL
         attempt=$((attempt + 1))
     done
-    
+
     log_error "Backend failed to start within $BACKEND_STARTUP_TIMEOUT seconds"
     log_info "Check the backend terminal for error messages"
     return 1
@@ -307,18 +307,18 @@ wait_for_backend() {
 
 start_backend() {
     log_step "Starting FastAPI backend server..."
-    
+
     # Verify backend directory and main.py exist
     if [ ! -d "backend" ]; then
         log_error "Backend directory not found"
         return 1
     fi
-    
+
     if [ ! -f "backend/main.py" ]; then
         log_error "Backend main.py not found"
         return 1
     fi
-    
+
     # Create backend startup script with proper environment loading
     local backend_script=$(cat << 'EOF'
 #!/bin/bash
@@ -353,16 +353,16 @@ cd backend
 python3 -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 EOF
     )
-    
+
     # Check if we're on macOS for Terminal.app integration
     if check_macos; then
         log_verbose "Using macOS Terminal.app for backend"
-        
+
         # Create temporary script file
         local temp_script="/tmp/start_backend_$$"
         echo "$backend_script" > "$temp_script"
         chmod +x "$temp_script"
-        
+
         # Open new Terminal window with the backend script
         osascript << EOF
 tell application "Terminal"
@@ -375,23 +375,23 @@ EOF
         # Fallback for non-macOS systems
         echo "$backend_script" | bash &
     fi
-    
+
     # Wait for backend to be ready
     wait_for_backend || return 1
-    
+
     log_success "Backend started successfully"
     return 0
 }
 
 start_frontend() {
     log_step "Starting Streamlit application..."
-    
+
     # Verify app.py exists
     if [ ! -f "app.py" ]; then
         log_error "Application app.py not found"
         return 1
     fi
-    
+
     # Create application startup script
     local app_script=$(cat << 'EOF'
 #!/bin/bash
@@ -425,16 +425,16 @@ echo ""
 python3 -m streamlit run app.py --server.port 8501 --server.headless false
 EOF
     )
-    
+
     # Check if we're on macOS for Terminal.app integration
     if check_macos; then
         log_verbose "Using macOS Terminal.app for application"
-        
+
         # Create temporary script file
         local temp_script="/tmp/start_app_$$"
         echo "$app_script" > "$temp_script"
         chmod +x "$temp_script"
-        
+
         # Open new Terminal window with the application script
         osascript << EOF
 tell application "Terminal"
@@ -447,7 +447,7 @@ EOF
         # Fallback for non-macOS systems
         echo "$app_script" | bash &
     fi
-    
+
     log_success "Application started successfully"
     return 0
 }
@@ -462,7 +462,7 @@ cleanup() {
 main() {
     local check_only=false
     local kill_only=false
-    
+
     # Parse command line arguments
     while [[ $# -gt 0 ]]; do
         case $1 in
@@ -489,46 +489,46 @@ main() {
                 ;;
         esac
     done
-    
+
     # Set trap for cleanup
     trap cleanup EXIT
-    
+
     echo ""
     echo "🏛️  Legal Document Analysis Portal"
     echo "=================================="
     echo "Streamlit Application Environment"
     echo ""
-    
+
     # Kill existing processes if requested or as part of normal startup
     if [ "$kill_only" = true ] || [ "$check_only" = false ]; then
         kill_process_on_port $FRONTEND_PORT || exit 1
-        
+
         if [ "$kill_only" = true ]; then
             log_success "Application processes terminated"
             exit 0
         fi
     fi
-    
+
     # Validate environment and dependencies
     validate_env_file || exit 1
     check_dependencies || exit 1
-    
+
     if [ "$check_only" = true ]; then
         log_success "All checks passed. Environment is ready for startup."
         exit 0
     fi
-    
+
     # Start application
     echo ""
     log_info "🚀 Starting Legal Document Analysis Portal..."
     echo ""
-    
+
     # Start the Streamlit application
     start_application || {
         log_error "Failed to start application."
         exit 1
     }
-    
+
     echo ""
     log_success "🎉 Startup complete!"
     echo ""
@@ -544,7 +544,7 @@ main() {
     echo "🛑 To stop the application:"
     echo "  ./kill_server.sh $FRONTEND_PORT   # Stop application"
     echo ""
-    
+
     # Give final instructions
     log_info "✨ Ready for development! Check the terminal window for application output."
 }

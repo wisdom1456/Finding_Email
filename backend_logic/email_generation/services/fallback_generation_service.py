@@ -198,7 +198,7 @@ class FallbackGenerationService:
                 "general": """
 Legal Analysis for Case {case_id}:
 
-This case requires detailed legal review to identify applicable statutes, 
+This case requires detailed legal review to identify applicable statutes,
 regulations, and precedents. Key areas for analysis include:
 
 • Jurisdictional considerations
@@ -207,7 +207,7 @@ regulations, and precedents. Key areas for analysis include:
 • Statutory interpretation issues
 • Procedural requirements
 
-A comprehensive legal analysis will be provided upon completion of 
+A comprehensive legal analysis will be provided upon completion of
 fact-gathering and research phases.
                 """.strip(),
                 "contract": """

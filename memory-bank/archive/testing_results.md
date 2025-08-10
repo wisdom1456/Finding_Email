@@ -21,7 +21,7 @@ This document provides comprehensive results from the Legal Document Analysis Po
 ## Individual Test Case Results
 
 ### Test Case 1: Velasco (Personal Injury)
-**Case Type**: Personal injury with medical records and correspondence  
+**Case Type**: Personal injury with medical records and correspondence
 **Status**: ✅ **PASSED**
 
 #### Document Processing
@@ -40,7 +40,7 @@ This document provides comprehensive results from the Legal Document Analysis Po
 - **Recommendations**: Actionable legal strategies based on medical evidence
 
 ### Test Case 2: Badam (Contract Dispute)
-**Case Type**: Business contract dispute with negotiation documents  
+**Case Type**: Business contract dispute with negotiation documents
 **Status**: ✅ **PASSED**
 
 #### Document Processing
@@ -59,7 +59,7 @@ This document provides comprehensive results from the Legal Document Analysis Po
 - **Recommendations**: Strategic legal advice for contract dispute resolution
 
 ### Test Case 3: Price (Property Damage - Water Intrusion)
-**Case Type**: Complex property damage case with extensive documentation  
+**Case Type**: Complex property damage case with extensive documentation
 **Status**: ✅ **PASSED**
 
 #### Document Processing

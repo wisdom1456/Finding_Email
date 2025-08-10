@@ -180,12 +180,12 @@ try:
     # The model may return markdown fences (```json ... ```)
     clean_response = response.text.strip().replace("```json", "").replace("```", "")
     parsed_data = json.loads(clean_response)
-    
+
     summary = parsed_data.get("summary")
     transcript = parsed_data.get("transcript")
-    
+
     print(f"Summary: {summary}")
-    
+
 except (json.JSONDecodeError, AttributeError) as e:
     print(f"Error parsing JSON response: {e}")
     # Fallback to using the raw text

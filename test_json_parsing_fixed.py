@@ -18,7 +18,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 def test_json_parsing_fixed():
     """Test the fixed JSON parsing functionality."""
 logger.debug('Testing FIXED JSON parsing logic...')
-    
+
     # Replicate the JSON parsing methods locally without API key dependencies
     def _extract_json_content(content: str) -> str:
         """Replicate the extraction logic."""
@@ -34,7 +34,7 @@ logger.debug('Testing FIXED JSON parsing logic...')
         fallback_match = re.search(r"```\s*([\{\[][^`]*[\}\]])\s*```", content, re.DOTALL)
         if fallback_match:
             return fallback_match.group(1)
-            
+
         return content
 
     def parse_json_response_fixed(content: str) -> dict:
@@ -61,51 +61,51 @@ logger.debug('Testing FIXED JSON parsing logic...')
                 "error": f"JSON decode error: {e}",
                 "data": None
             }
-    
+
     # Test cases
     test_cases = [
         # Plain JSON
         ('{"key": "value", "number": 42}', "Plain JSON"),
-        
+
         # JSON in markdown code block with json label
         ('```json\n{"key": "value", "array": [1, 2, 3]}\n```', "JSON in labeled markdown"),
-        
+
         # JSON in markdown code block without label
         ('```\n{"key": "value", "nested": {"inner": "data"}}\n```', "JSON in unlabeled markdown"),
-        
+
         # JSON array
         ('[{"item": 1}, {"item": 2}]', "Plain JSON array"),
-        
+
         # JSON array in markdown
         ('```json\n[{"name": "test"}, {"name": "test2"}]\n```', "JSON array in markdown"),
-        
+
         # Empty content
         ("", "Empty content"),
-        
+
         # Invalid JSON
         ('{"invalid": json}', "Invalid JSON"),
-        
+
         # Text with no JSON
         ("This is just plain text with no JSON content.", "Plain text"),
     ]
-    
+
 logger.info(f'\nRunning {len(test_cases)} test cases...\n')
-    
+
     passed = 0
     failed = 0
-    
+
     for i, (content, description) in enumerate(test_cases, 1):
 logger.info(f'Test {i}: {description}')
 logger.info(f'Input: {content[:50]}{('...' if len(content) > 50 else '')}')
-        
+
         try:
             result = parse_json_response_fixed(content)
 logger.info(f'Return type: {type(result)}')
-            
+
             # Validate the response format
             if isinstance(result, dict) and "success" in result:
 logger.info(f"✅ Correct format: Has 'success' key = {result['success']}")
-                
+
                 if result["success"]:
 logger.info(f'   ✅ Success: {type(result['data']).__name__}')
 logger.info(f'   Data: {str(result['data'])[:100]}{('...' if len(str(result['data'])) > 100 else '')}')
@@ -120,18 +120,18 @@ logger.error('   ✅ (Expected failure)')
             else:
 logger.info("   ❌ Wrong format: Missing 'success' key")
                 failed += 1
-                
+
         except Exception as e:
 logger.error(f'🚨 Unexpected Error: {e}')
             failed += 1
-        
+
 logger.info('-' * 60)
-    
+
 logger.debug('JSON parsing tests completed!')
 logger.info(f'✅ Passed: {passed}')
 logger.error(f'❌ Failed: {failed}')
 logger.error(f'Total: {passed + failed}')
-    
+
 logger.info('\n🔍 KEY FIXES IMPLEMENTED:')
 logger.info("   ✅ parse_json_response() now returns standardized dict with 'success' key")
 logger.info('   ✅ Compatible with ai_analyzer_refactored.py expectations')

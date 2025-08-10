@@ -42,10 +42,10 @@ This document outlines a comprehensive strategy to significantly elevate the qua
 
 ```python
 SENIOR_ATTORNEY_PERSONA = """
-You are a seasoned litigation attorney with 15+ years of experience at a respected law firm. 
+You are a seasoned litigation attorney with 15+ years of experience at a respected law firm.
 Your specialty areas include:
 - Contract disputes and breach of contract claims
-- Landlord-tenant law and property disputes  
+- Landlord-tenant law and property disputes
 - Personal injury and negligence claims
 - Insurance coverage disputes
 
@@ -86,7 +86,7 @@ flowchart TD
     B --> C[Step 3: Evidence Assessment]
     C --> D[Step 4: Strategic Recommendations]
     D --> E[Step 5: Professional Assembly]
-    
+
     A --> |Context| B
     B --> |Legal Foundation| C
     C --> |Evidence Quality| D
@@ -113,12 +113,12 @@ flowchart TD
     <h2>Review</h2>
     <h3>Factual Background</h3>
     <p>{{ letter.factual_background }}</p>
-    
+
     {% if letter.legal_framework %}
     <h3>Legal Framework</h3>
     <p>{{ letter.legal_framework }}</p>
     {% endif %}
-    
+
     <h3>Analysis</h3>
     <p>{{ letter.legal_analysis }}</p>
 </div>
@@ -132,7 +132,7 @@ flowchart TD
 {% if letter.demand_letter_section and letter.demand_letter_section.is_appropriate %}
     <h3>Demand Letter Strategy</h3>
     <p>{{ letter.demand_letter_section.reasoning }}</p>
-    
+
     {% if letter.demand_letter_section.potential_outcomes %}
         <p>Based on our analysis, a demand letter could yield the following potential outcomes:</p>
         <ul>
@@ -152,16 +152,16 @@ class EnhancedEmailGenerator:
     async def generate_findings_letter(self, analysis: CombinedAnalysis) -> EnhancedFindingsLetter:
         # Step 1: Generate case summary with legal context
         case_summary = await self._generate_executive_summary(analysis)
-        
+
         # Step 2: Develop legal framework and precedent analysis
         legal_framework = await self._generate_legal_framework(analysis)
-        
+
         # Step 3: Create detailed case analysis
         detailed_analysis = await self._generate_case_analysis(analysis, legal_framework)
-        
+
         # Step 4: Develop strategic recommendations
         recommendations = await self._generate_strategic_recommendations(analysis, detailed_analysis)
-        
+
         # Step 5: Assemble professional letter
         return await self._assemble_professional_letter(
             case_summary, legal_framework, detailed_analysis, recommendations, analysis
@@ -174,15 +174,15 @@ class EnhancedEmailGenerator:
 def _build_executive_summary_prompt(self, analysis: CombinedAnalysis) -> str:
     return f"""
     {SENIOR_ATTORNEY_PERSONA}
-    
+
     Draft a concise executive summary (3-4 sentences) for a findings letter that:
     - Immediately establishes the legal matter and your professional opinion
     - Highlights the strongest aspects of the case
     - Provides client confidence while maintaining professional honesty
     - Uses sophisticated legal language appropriate for the case type
-    
+
     Case Context: {analysis.model_dump_json()}
-    
+
     Example tone: "Our office has completed a comprehensive review of your potential claims arising from [specific incident]. Based on our analysis of the available evidence and applicable legal standards, we believe you have viable grounds for pursuing [specific legal action]. While certain challenges exist that we must address strategically, the strength of your position warrants moving forward with [recommended approach]."
     """
 ```
@@ -206,7 +206,7 @@ class OutputQualityValidator:
     def validate_professional_tone(self, output: str) -> QualityScore:
         criteria = [
             "uses_confident_legal_language",
-            "includes_case_law_or_statutory_references", 
+            "includes_case_law_or_statutory_references",
             "demonstrates_strategic_thinking",
             "maintains_client_focus",
             "professional_courtesy_balance"

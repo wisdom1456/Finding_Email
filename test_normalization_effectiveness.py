@@ -17,11 +17,11 @@ def count_normalization_issues(html_content):
     """Count normalization issues like the validation harness does."""
     if not html_content:
         return 0, 0, 0
-    
+
     # Parse HTML and extract text
     soup = BeautifulSoup(html_content, "html.parser")
     text = soup.get_text()
-    
+
     # Count duplicate sentences
     sentences = re.split(r"(?<=[.!?])\s+", text)
     sentence_counts = {}
@@ -29,25 +29,25 @@ def count_normalization_issues(html_content):
         clean_sentence = re.sub(r"\s+", " ", sentence.strip().lower())
         if len(clean_sentence) > 10:  # Only count meaningful sentences
             sentence_counts[clean_sentence] = sentence_counts.get(clean_sentence, 0) + 1
-    
+
     duplicate_sentences = sum(1 for count in sentence_counts.values() if count > 1)
-    
+
     # Count long sentences (>15 words)
     long_sentences = 0
     for sentence in sentences:
         words = sentence.split()
         if len(words) > 15:
             long_sentences += 1
-    
+
     # Count repeated 3-word phrases
     words = re.findall(r"\b\w+\b", text.lower())
     phrase_counts = {}
     for i in range(len(words) - 2):
         phrase = " ".join(words[i:i+3])
         phrase_counts[phrase] = phrase_counts.get(phrase, 0) + 1
-    
+
     repeated_phrases = sum(1 for count in phrase_counts.values() if count > 2)
-    
+
     return duplicate_sentences, long_sentences, repeated_phrases
 
 def improved_normalization_fixes(html_content):
@@ -56,22 +56,22 @@ def improved_normalization_fixes(html_content):
     """
     if not html_content:
         return html_content
-    
+
     try:
 logger.debug('🔧 Starting improved normalization processing...')
-        
+
         # Parse HTML to preserve structure
         soup = BeautifulSoup(html_content, "html.parser")
-        
+
         # Get all text elements that can be modified
         for element in soup.find_all(["p", "li", "div"]):
             if element.string:
                 original_text = element.string
-                
+
                 # AGGRESSIVE sentence breaking for sentences >15 words
                 sentences = re.split(r"(?<=[.!?])\s+", original_text)
                 processed_sentences = []
-                
+
                 for sentence in sentences:
                     words = sentence.split()
                     if len(words) > 15:
@@ -83,7 +83,7 @@ logger.debug('🔧 Starting improved normalization processing...')
                             ", where ", " and ", " but ", " however "
                         ]
                         sentence_broken = False
-                        
+
                         for split_point in split_points:
                             if split_point in sentence.lower():
                                 parts = sentence.split(split_point, 1)
@@ -96,7 +96,7 @@ logger.debug('🔧 Starting improved normalization processing...')
                                         processed_sentences.append(second_part)
                                     sentence_broken = True
                                     break
-                        
+
                         # If still not broken and very long (>20 words), force break
                         if not sentence_broken and len(words) > 20:
                             mid_point = len(words) // 2
@@ -110,22 +110,22 @@ logger.debug('🔧 Starting improved normalization processing...')
                             processed_sentences.append(sentence)
                     else:
                         processed_sentences.append(sentence)
-                
+
                 # Update element text
                 new_text = " ".join(processed_sentences)
                 element.string.replace_with(new_text)
-        
+
         # Convert back to HTML string for phrase processing
         html_text = str(soup)
-        
+
         # AGGRESSIVE phrase reduction for repeated 3-word phrases
         words = re.findall(r"\b\w+\b", html_text.lower())
         phrase_counts = {}
-        
+
         for i in range(len(words) - 2):
             phrase = " ".join(words[i:i+3])
             phrase_counts[phrase] = phrase_counts.get(phrase, 0) + 1
-        
+
         # Replace repeated phrases (appearing more than 2 times) more aggressively
         for phrase, count in phrase_counts.items():
             if count > 2:
@@ -139,11 +139,11 @@ logger.debug('🔧 Starting improved normalization processing...')
                     "evidence review demonstrates": ["evidence shows", "review indicates", "analysis reveals"],
                     "florida statutes provide": ["statutes provide", "law provides", "rules state"],
                 }
-                
+
                 # Find all occurrences
                 pattern = re.compile(re.escape(phrase), re.IGNORECASE)
                 matches = list(pattern.finditer(html_text))
-                
+
                 # Replace all but first 2 instances
                 if len(matches) > 2:
                     for i, match in enumerate(matches[2:], 2):
@@ -153,13 +153,13 @@ logger.debug('🔧 Starting improved normalization processing...')
                             # Generic reduction - keep only first two words
                             words_in_phrase = phrase.split()
                             replacement = " ".join(words_in_phrase[:2])
-                        
+
                         start, end = match.span()
                         html_text = html_text[:start] + replacement + html_text[end:]
-        
+
 logger.debug('✅ Improved normalization processing completed')
         return html_text
-        
+
     except Exception as e:
 logger.error(f'❌ Improved normalization processing failed: {e}')
         return html_content

@@ -29,13 +29,13 @@ def _apply_final_formatting(self, content: str) -> str:
     """Apply minimal formatting for professional presentation."""
     if not content:
         return content
-    
+
     # Only ensure proper paragraph structure
     content = re.sub(r'([.!?])\s+([A-Z])', r'\1</p>\n<p>\2', content)
-    
+
     # Remove artificial greeting/closing additions (Lines 349-354, 364-365)
     # Let the prompts handle greetings and closings
-    
+
     return content
 ```
 
@@ -108,7 +108,7 @@ Apply same pattern to:
 ```python
 # Keep AUTHENTIC_ATTORNEY_ADVISOR as primary
 AUTHENTIC_ATTORNEY_ADVISOR = f"""
-You are a senior litigation attorney writing a professional legal analysis letter 
+You are a senior litigation attorney writing a professional legal analysis letter
 that mirrors the style of real attorney communications.
 
 {CORE_DIRECTIVES}
@@ -138,28 +138,28 @@ def _clean_ai_response(self, content: str, is_counter_intuitive: bool = False) -
     """Clean AI responses with minimal transformation."""
     if not content:
         return ""
-    
+
     # Remove markdown artifacts
     cleaned = re.sub(r'^```[a-zA-Z]*\n?', '', content, flags=re.MULTILINE)
     cleaned = re.sub(r'```$', '', cleaned, flags=re.MULTILINE)
     cleaned = re.sub(r'\*\*(.*?)\*\*', r'<strong>\1</strong>', cleaned)
     cleaned = re.sub(r'\*(.*?)\*', r'<em>\1</em>', cleaned)
-    
+
     # Fix HTML structure
     cleaned = re.sub(r'<p>\s*<p>', '<p>', cleaned)
     cleaned = re.sub(r'</p>\s*</p>', '</p>', cleaned)
     cleaned = re.sub(r'<p>\s*</p>', '', cleaned)
-    
+
     # Apply only necessary validations
     cleaned = self._validate_florida_citations(cleaned)
     cleaned = self._ensure_accessibility_formatting(cleaned)
-    
+
     if is_counter_intuitive:
         cleaned = self._apply_high_stakes_advice_protocol(cleaned)
-    
+
     # DO NOT apply collaborative transformations
     # DO NOT add artificial greetings/closings
-    
+
     return cleaned.strip()
 ```
 

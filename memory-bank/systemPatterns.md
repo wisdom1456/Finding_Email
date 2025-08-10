@@ -34,7 +34,7 @@ graph TD
         L[Vertex AI: gemini-pro-vision]
         M[Cloud Speech-to-Text]
     end
-    
+
     A -- Direct Function Calls --> B
     B -- Orchestrates --> C
     B -- Orchestrates --> D

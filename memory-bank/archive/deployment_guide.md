@@ -15,15 +15,15 @@ flowchart TB
             FastAPI[FastAPI Backend<br/>Port: Dynamic]
             ENV1[Environment Variables<br/>- OPENAI_API_KEY<br/>- PDFCO_API_KEY<br/>- CORS_ORIGINS]
         end
-        
+
         subgraph Frontend Service
             Streamlit[Streamlit Frontend<br/>Port: Dynamic]
             ENV2[Environment Variables<br/>- BACKEND_API_URL]
         end
-        
+
         Streamlit --> FastAPI
     end
-    
+
     Users[Users] --> Streamlit
 ```
 
@@ -297,7 +297,7 @@ railway restart -s frontend
 ## Cost Optimization
 
 1. **Development Environment**: Use Railway's free tier
-2. **Production**: 
+2. **Production**:
    - Start with Hobby plan ($5/month)
    - Monitor usage metrics
    - Scale only when needed

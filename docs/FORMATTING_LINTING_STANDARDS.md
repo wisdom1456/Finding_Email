@@ -230,7 +230,7 @@ After setup, validate the configuration:
 # Test linting
 ruff check . --statistics
 
-# Test formatting  
+# Test formatting
 ruff format --check .
 
 # Test pre-commit

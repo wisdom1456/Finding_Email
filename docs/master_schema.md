@@ -113,10 +113,10 @@ This document defines the comprehensive JSON schema that will serve as the contr
     }
   },
   "required": [
-    "case_name", 
-    "client_name", 
-    "greeting_line", 
-    "attorney_signature", 
+    "case_name",
+    "client_name",
+    "greeting_line",
+    "attorney_signature",
     "firm_name",
     "bridges",
     "generated_letter",

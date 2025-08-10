@@ -55,7 +55,7 @@ from backend.tests.utils.test_framework import TestOrchestrator
 def main():
     # Path to the specific test case configuration
     config_path = "backend/tests/test_results/devlin/config.yaml"
-    
+
     # Initialize and run the test
     orchestrator = TestOrchestrator(config_path)
     orchestrator.run_test()

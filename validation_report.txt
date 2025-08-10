@@ -17,8 +17,8 @@ CRITERION 1: FAIL (0/2)
   • Standard Contract Dispute: No bridges detected.
 
 CRITERION 2: FAIL (0/2)
-  • Complex Civil Rights Case: Found 0/4 required components: . Evidence: 
-  • Standard Contract Dispute: Found 0/4 required components: . Evidence: 
+  • Complex Civil Rights Case: Found 0/4 required components: . Evidence:
+  • Standard Contract Dispute: Found 0/4 required components: . Evidence:
 
 CRITERION 3: FAIL (0/2)
   • Complex Civil Rights Case: Found 1/3 required components in next steps: purpose. Evidence: Action purposes clearly stated
@@ -45,7 +45,7 @@ DETAILED CASE RESULTS
     criterion_1: ❌ FAIL
       No bridges detected.
     criterion_2: ❌ FAIL
-      Found 0/4 required components: . Evidence: 
+      Found 0/4 required components: . Evidence:
     criterion_3: ❌ FAIL
       Found 1/3 required components in next steps: purpose. Evidence: Action purposes clearly stated
     criterion_4: ✅ PASS
@@ -62,7 +62,7 @@ DETAILED CASE RESULTS
     criterion_1: ❌ FAIL
       No bridges detected.
     criterion_2: ❌ FAIL
-      Found 0/4 required components: . Evidence: 
+      Found 0/4 required components: . Evidence:
     criterion_3: ❌ FAIL
       Found 1/3 required components in next steps: purpose. Evidence: Action purposes clearly stated
     criterion_4: ✅ PASS

@@ -146,7 +146,7 @@ ignore = [
     "PD901",   # Avoid using the generic variable name `df` for DataFrames
     "COM812",  # Trailing comma missing (conflicts with formatter)
     "ISC001",  # Implicitly concatenated string literals (conflicts with formatter)
-    
+
     # Strategic ignores to reduce noise while maintaining quality
     "E501",    # Line too long (handle manually for critical cases)
     "G004",    # f-string in logging (acceptable for structured logging)
@@ -194,7 +194,7 @@ relative-imports-order = "closest-to-furthest"
 required-imports = ["from __future__ import annotations"]
 section-order = [
     "future",
-    "standard-library", 
+    "standard-library",
     "third-party",
     "first-party",
     "local-folder"

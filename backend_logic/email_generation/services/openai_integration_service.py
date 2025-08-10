@@ -201,7 +201,7 @@ class OpenAIIntegrationService:
         - Parties involved
         - Relevant factual circumstances
         - Important events or incidents
-        
+
         Focus only on facts, not legal analysis or opinions.
         """
 
@@ -235,7 +235,7 @@ class OpenAIIntegrationService:
         - Relevant legal precedents
         - Analysis of legal issues and claims
         - Strengths and weaknesses of the case
-        
+
         Provide detailed legal reasoning and cite relevant authorities where applicable.
         """
 
@@ -270,7 +270,7 @@ class OpenAIIntegrationService:
         - Physical evidence assessment
         - Evidence strengths and limitations
         - Additional evidence needs
-        
+
         Provide objective evaluation of evidence quality and relevance.
         """
 
@@ -305,7 +305,7 @@ class OpenAIIntegrationService:
         - Risk assessment and mitigation
         - Next steps and timeline
         - Alternative approaches to consider
-        
+
         Provide practical, actionable recommendations that can be implemented.
         """
 

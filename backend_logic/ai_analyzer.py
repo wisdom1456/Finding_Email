@@ -42,10 +42,10 @@ class AIAnalyzer:
     def __init__(self, client: OpenAI, doc_processor: DocumentProcessor, config_path: str | None = None) -> None:
         self.client = client
         self.doc_processor = doc_processor
-        
+
         # Load configuration
         self.config = self._load_configuration(config_path)
-        
+
         logger.info(f'AI ANALYZER: ✅ Initialized with configuration: {config_path or 'default'}')
 
     def _load_configuration(self, config_path: str | None = None) -> dict[str, Any]:
@@ -54,23 +54,23 @@ class AIAnalyzer:
             # Default to universal_legal_config.yaml for all case types
             current_dir = os.path.dirname(os.path.abspath(__file__))
             project_root = current_dir
-            
+
             # Navigate up until we find the project root
             while project_root != "/" and not (
                 os.path.exists(os.path.join(project_root, "app.py"))
                 and os.path.exists(os.path.join(project_root, "backend"))
             ):
                 project_root = os.path.dirname(project_root)
-            
+
             if project_root == "/":
                 project_root = os.getcwd()
-            
+
             config_path = os.path.join(project_root, "backend", "config", "templates", "universal_legal_config.yaml")
-        
+
         if not os.path.exists(config_path):
             logger.info(f'AI ANALYZER: ⚠️  Configuration file not found: {config_path}, using default prompts')
             return {}
-        
+
         try:
             with open(config_path, encoding="utf-8") as f:
                 config = yaml.safe_load(f)
@@ -147,7 +147,7 @@ class AIAnalyzer:
                 "5. **Florida Practice Focus:** Consider how document contents relate to Florida legal standards and procedural requirements\n"
                 "6. **Case Development Support:** Structure analysis to facilitate comprehensive legal strategy and client counseling"
             )
-        
+
         return (
             "SYSTEM\n"
             f"{base_prompt}\n\n"
@@ -272,7 +272,7 @@ class AIAnalyzer:
     ) -> str:
         """Summarizes media content using configuration-driven prompts."""
         logger.info(f'AI ANALYZER: Summarizing {media_type} for {file_name}')
-        
+
         if prompt_config:
             # Use configuration-provided prompt
             base_prompt = prompt_config
@@ -287,7 +287,7 @@ class AIAnalyzer:
                 "• Maintain professional authority while being accessible\n"
                 "• Highlight evidence relevant to Florida legal matters"
             )
-        
+
         prompt = (
             "SYSTEM\n"
             f"{base_prompt}\n\n"
@@ -829,27 +829,27 @@ class AIAnalyzer:
         # Create semaphore to limit concurrent API calls (respecting rate limits)
         # Limit to 3 concurrent requests to balance performance and rate limiting
         semaphore = asyncio.Semaphore(3)
-        
+
         async def analyze_document_with_semaphore(doc: ProcessedDocument, doc_index: int) -> tuple[int, AnalyzedDocument | AnalysisError]:
             """Analyze a single document with semaphore control and rate limiting."""
             async with semaphore:
                 logger.debug(f'AI ANALYZER: Processing document {doc_index + 1}/{total_docs}: {doc.file_name}')
-                
+
                 # Add staggered delay to avoid hitting rate limits
                 if doc_index > 0:
                     delay = (doc_index % 3) * 1.0  # 0, 1, or 2 second delays
                     if delay > 0:
                         logger.info(f'AI ANALYZER: Staggering request with {delay}s delay...')
                         await asyncio.sleep(delay)
-                
+
                 result = await self._analyze_single_document(doc, intake_context)
-                
+
                 # Log the result type
                 if isinstance(result, AnalysisError):
                     logger.error(f'AI ANALYZER: ❌ Failed to analyze {doc.file_name}: {result.error_message}')
                 else:
                     logger.info(f'AI ANALYZER: ✅ Successfully analyzed {doc.file_name}')
-                
+
                 return (doc_index, result)
 
         # Create tasks for all documents
@@ -857,11 +857,11 @@ class AIAnalyzer:
             analyze_document_with_semaphore(doc, i)
             for i, doc in enumerate(documents)
         ]
-        
+
         # Execute all tasks concurrently with asyncio.gather()
         logger.debug(f'AI ANALYZER: 🚀 Starting concurrent processing of {total_docs} documents with max 3 concurrent requests...')
         completed_results = await asyncio.gather(*tasks, return_exceptions=True)
-        
+
         # Sort results by original document order and extract the analysis results
         results = []
         for result in completed_results:
@@ -877,7 +877,7 @@ class AIAnalyzer:
                 # result is a tuple (doc_index, analysis_result)
                 _, analysis_result = result
                 results.append(analysis_result)
-        
+
         # Sort by document index to maintain order
         indexed_results = [(i, result) for i, result in enumerate(results)]
         indexed_results.sort(key=lambda x: x[0])
@@ -1367,7 +1367,7 @@ logger.error('AI ANALYZER: CRITICAL emergency fallback...')
             analysis.demand_letter_evaluation = DemandLetterEvaluation.model_validate(
                 create_fallback_demand_letter_evaluation()
             )
-            
+
             # Re-raise critical errors for upstream handling
             error_message = f"Critical final assessment failure: {critical_error}"
             raise AIAnalysisError(error_message) from critical_error

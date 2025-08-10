@@ -19,9 +19,9 @@ from backend.utils.validators import validate_next_steps_formatting
 
 def test_validate_next_steps_formatting():
     """Test the validate_next_steps_formatting function."""
-    
+
 logger.debug('Testing validate_next_steps_formatting function...')
-    
+
     # Test case 1: Valid content with <strong> tags
     valid_content = """
     <p>Based on our analysis, I recommend the following next steps:</p>
@@ -31,14 +31,14 @@ logger.debug('Testing validate_next_steps_formatting function...')
     <li>Schedule follow-up consultation</li>
     </ul>
     """
-    
+
     try:
         validate_next_steps_formatting(valid_content)
 logger.info('✅ Test 1 PASSED: Valid content with <strong> tags accepted')
     except ValueError as e:
 logger.error(f'❌ Test 1 FAILED: Valid content rejected: {e}')
         return False
-    
+
     # Test case 2: Invalid content without <strong> tags
     invalid_content = """
     <p>Based on our analysis, I recommend the following next steps:</p>
@@ -48,7 +48,7 @@ logger.error(f'❌ Test 1 FAILED: Valid content rejected: {e}')
     <li>Schedule follow-up consultation</li>
     </ul>
     """
-    
+
     try:
         validate_next_steps_formatting(invalid_content)
 logger.error('❌ Test 2 FAILED: Invalid content was accepted (should have been rejected)')
@@ -56,7 +56,7 @@ logger.error('❌ Test 2 FAILED: Invalid content was accepted (should have been 
     except ValueError as e:
 logger.info('✅ Test 2 PASSED: Invalid content correctly rejected')
 logger.error(f'   Error message: {e}')
-    
+
     # Test case 3: Empty content
     try:
         validate_next_steps_formatting("")
@@ -65,7 +65,7 @@ logger.error('❌ Test 3 FAILED: Empty content was accepted')
     except ValueError as e:
 logger.info('✅ Test 3 PASSED: Empty content correctly rejected')
 logger.error(f'   Error message: {e}')
-    
+
     # Test case 4: None content
     try:
         validate_next_steps_formatting(None)
@@ -74,26 +74,26 @@ logger.error('❌ Test 4 FAILED: None content was accepted')
     except ValueError as e:
 logger.info('✅ Test 4 PASSED: None content correctly rejected')
 logger.error(f'   Error message: {e}')
-    
+
     # Test case 5: Content with <STRONG> tags (case insensitive)
     content_with_uppercase = """
     <p>Important deadline: <STRONG>March 1, 2025</STRONG></p>
     """
-    
+
     try:
         validate_next_steps_formatting(content_with_uppercase)
 logger.info('✅ Test 5 PASSED: Case insensitive <STRONG> tags accepted')
     except ValueError as e:
 logger.error(f'❌ Test 5 FAILED: Case insensitive tags rejected: {e}')
         return False
-    
+
     return True
 
 
 def test_integration():
     """Test basic integration check (import test)."""
 logger.info('\nTesting integration...')
-    
+
     try:
         # Test that the import works correctly
         from backend_logic.email_generator import EmailGeneratorV2
@@ -107,13 +107,13 @@ logger.error(f'❌ Import test FAILED: {e}')
 def main():
     """Run all tests."""
 logger.debug('=== Next Steps Validation Test Suite ===\n')
-    
+
     # Run validation tests
     validation_passed = test_validate_next_steps_formatting()
-    
+
     # Run integration tests
     integration_passed = test_integration()
-    
+
 logger.info('\n=== Test Results ===')
     if validation_passed and integration_passed:
 logger.info('🎉 ALL TESTS PASSED!')

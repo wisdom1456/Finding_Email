@@ -239,7 +239,7 @@ With both architectural modernization and performance parallelization complete, 
 - **Inline Display**: Uses `streamlit.components.v1.html()` to display findings letter directly in the interface
 - **Download Functionality**: Provides download buttons for:
   - Findings Letter (HTML format)
-  - Document Appendix (HTML format) 
+  - Document Appendix (HTML format)
   - Case Analysis (HTML format)
 - **Cost Tracking Integration**: Includes budget sheet component for cost analysis display
 - **File Generation**: [`backend_logic/main_processor.py:648-680`](backend_logic/main_processor.py:648-680) successfully saves findings letter to `validation_output/findings_letter.html`

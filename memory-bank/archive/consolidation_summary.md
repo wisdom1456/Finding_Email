@@ -156,7 +156,7 @@ If rollback to FastAPI architecture is needed:
    cd backend
    pip install -r requirements.txt
    uvicorn main:app --reload --port 8000
-   
+
    # Frontend startup (separate terminal)
    streamlit run app.py --server.port 8501
    ```
@@ -179,7 +179,7 @@ If rollback to FastAPI architecture is needed:
 # Frontend Framework
 streamlit>=1.28.0
 
-# HTTP Client and API Integration  
+# HTTP Client and API Integration
 requests>=2.31.0
 openai>=1.3.0
 

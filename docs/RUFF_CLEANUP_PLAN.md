@@ -4,7 +4,7 @@ This document provides a detailed action plan for resolving 9 code quality issue
 
 ## Summary of Issues
 - **5 bare except clauses (E722)** in `backend/tests/run_all_tests.py`
-- **2 unused local variables (F841)** in `backend/tests/test_video_preservation.py`  
+- **2 unused local variables (F841)** in `backend/tests/test_video_preservation.py`
 - **2 unused imports (F401)** in `backend/utils/file_processors/__init__.py`
 
 ---

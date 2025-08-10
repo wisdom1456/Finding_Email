@@ -942,7 +942,7 @@ class EmailGeneratorV2:
             - All string fields must contain actual content, not placeholder text
             - Include ALL required fields from the schema
             - Ensure JSON is properly formatted and parseable
-            
+
             JSON SCHEMA STRUCTURE:
             {{
                 "case_metadata": {{
@@ -1003,7 +1003,7 @@ class EmailGeneratorV2:
             CASE INFORMATION TO PROCESS:
             Client: {client_name}
             Case Type: {case_type}
-            
+
             Full Case Analysis:
             {analysis.model_dump_json(indent=2)}
 
@@ -1563,7 +1563,7 @@ class EmailGeneratorV2:
 
         base_prompt = f"""
         Begin with a 2–3 sentence narrative bridge that frames the bullets.
-        
+
         {section_prompt}
 
         Key Facts to Emphasize:
@@ -1614,7 +1614,7 @@ class EmailGeneratorV2:
 
         base_prompt = f"""
         For each claim, output elements (bullets), application (paragraph), remedies (bullets), and a single sentence 'What this means for you' line.
-        
+
         {section_prompt}
 
         Legal Issues to Analyze:
@@ -1758,7 +1758,7 @@ class EmailGeneratorV2:
         """Generate next steps content with prioritized actions."""
         base_prompt = f"""
         For each item include: purpose, deadline, success criteria, and consequence if missed.
-        
+
         Write a recommended next steps section as an experienced Florida litigation attorney providing strategic guidance to the client.
 
         CRITICAL REQUIREMENT: Generate TWO distinct components:

@@ -28,7 +28,7 @@ graph TB
         Results[Results Tab]
         Session[Session State Management]
     end
-    
+
     subgraph "Backend Logic Modules"
         DocProc[Document Processor]
         AudioProc[Audio Processor]
@@ -38,23 +38,23 @@ graph TB
         QualityVal[Quality Validator]
         TaskMgr[Task Manager]
     end
-    
+
     subgraph "Utility Modules"
         DataModels[Data Models]
         Validators[Validators]
         FileProc[File Processors]
     end
-    
+
     subgraph "External APIs"
         OpenAI[OpenAI API]
         GoogleCloud[Google Cloud Platform]
         PDFco[PDF.co API]
     end
-    
+
     UI --> Upload
     UI --> Results
     UI --> Session
-    
+
     Upload --> DocProc
     DocProc --> AudioProc
     DocProc --> VideoProc
@@ -63,11 +63,11 @@ graph TB
     AIAnalyzer --> EmailGen
     EmailGen --> QualityVal
     QualityVal --> Results
-    
+
     DocProc --> FileProc
     AIAnalyzer --> DataModels
     EmailGen --> Validators
-    
+
     AudioProc --> OpenAI
     VideoProc --> GoogleCloud
     AIAnalyzer --> OpenAI
@@ -120,7 +120,7 @@ graph TB
 
 #### [`app.py`](app.py)
 - **Purpose**: Main application entry point and orchestration
-- **Responsibilities**: 
+- **Responsibilities**:
   - Streamlit configuration and page layout
   - Session state management
   - Component coordination
@@ -280,16 +280,16 @@ def process_case_pipeline(case_data: CaseData) -> CaseResults:
     doc_processor = DocumentProcessor()
     ai_analyzer = AIAnalyzer()
     email_generator = EmailGenerator()
-    
+
     # Process documents
     processed_docs = doc_processor.process_documents(case_data.files)
-    
+
     # Analyze case
     analysis = ai_analyzer.analyze_case(processed_docs)
-    
+
     # Generate email
     email_response = email_generator.generate_findings(analysis)
-    
+
     return CaseResults(analysis=analysis, email=email_response)
 ```
 

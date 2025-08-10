@@ -100,7 +100,7 @@ def optimize_token_usage():
 def initialize_services():
     """Production-validated service initialization sequence."""
     services = {}
-    
+
     # Initialize each service with proper error handling
     for service_name, init_func in SERVICE_INITIALIZERS.items():
         try:
@@ -109,7 +109,7 @@ def initialize_services():
         except Exception as e:
             logging.warning(f"{service_name} initialization failed: {e}")
             services[service_name] = None
-    
+
     return services
 ```
 

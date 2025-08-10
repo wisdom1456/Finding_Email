@@ -46,11 +46,11 @@ from google.cloud.aiplatform_v1 import types
 
 class TokenCounter:
     """Handles pre-computation token counting using Vertex AI API."""
-    
+
     def __init__(self, project_id: str, location: str = "us-central1"):
         self.client = aiplatform.gapic.PredictionServiceClient()
         self.endpoint = f"projects/{project_id}/locations/{location}/publishers/google/models/gemini-pro"
-    
+
     async def count_tokens(self, content: str, model: str = "gpt-4o") -> int:
         """Count tokens using Vertex AI countTokens API."""
         request = types.CountTokensRequest(
@@ -74,7 +74,7 @@ async def _validate_prompt_size_precomputation(self, analysis: CaseAnalysisResul
     """Pre-validate prompt size before construction."""
     estimated_tokens = await self._estimate_total_tokens(analysis)
     threshold = 96000  # 80% of GPT-4o context window
-    
+
     if estimated_tokens > threshold:
         print(f"AI ANALYZER: Pre-computation check failed: {estimated_tokens} > {threshold}")
         return False
@@ -98,15 +98,15 @@ flowchart TD
     B --> C[Chunk 1: Objects & Timeline]
     B --> D[Chunk 2: Transcript & Analysis]
     B --> E[Chunk 3: Content Moderation]
-    
+
     C --> F[Map: Summarize Objects]
     D --> G[Map: Summarize Transcript]
     E --> H[Map: Summarize Moderation]
-    
+
     F --> I[Reduce: Aggregate Summaries]
     G --> I
     H --> I
-    
+
     I --> J[Consolidated Video Summary]
     J --> K[Final Assessment with Reference]
 ```
@@ -116,11 +116,11 @@ flowchart TD
 ```python
 class VideoContentProcessor:
     """Handles MapReduce-style video content processing."""
-    
+
     async def process_oversized_video_insights(self, video_insights: List[VideoInsight]) -> List[ProcessedVideoSummary]:
         """Process large video insights using MapReduce pattern."""
         processed_summaries = []
-        
+
         for video in video_insights:
             if self._requires_chunking(video):
                 chunks = self._create_semantic_chunks(video)
@@ -130,13 +130,13 @@ class VideoContentProcessor:
             else:
                 # Standard processing for smaller videos
                 processed_summaries.append(await self._standard_process(video))
-        
+
         return processed_summaries
-    
+
     def _create_semantic_chunks(self, video: VideoInsight) -> List[VideoChunk]:
         """Create semantically meaningful chunks from video data."""
         chunks = []
-        
+
         # Chunk 1: Objects and Timeline
         if video.objects or video.insights.get('timeline'):
             chunks.append(VideoChunk(
@@ -147,7 +147,7 @@ class VideoContentProcessor:
                 },
                 metadata={"file_name": video.file_name, "chunk_id": 1}
             ))
-        
+
         # Chunk 2: Transcript and Summary
         if video.transcript or video.insights.get('summary'):
             chunks.append(VideoChunk(
@@ -158,7 +158,7 @@ class VideoContentProcessor:
                 },
                 metadata={"file_name": video.file_name, "chunk_id": 2}
             ))
-        
+
         return chunks
 ```
 
@@ -217,16 +217,16 @@ class ProcessedVideoSummary(BaseModel):
 ```python
 class VideoDataManager:
     """Manages persistent storage of video analysis data."""
-    
+
     def __init__(self, bucket_name: str, project_id: str):
         self.storage_client = storage.Client(project=project_id)
         self.bucket_name = bucket_name
         self.video_data_prefix = "video-analysis-data/"
-    
+
     async def store_video_insights(self, video_insight: VideoInsight) -> VideoDataReference:
         """Store full video insights and return reference."""
         video_entry_id = str(uuid.uuid4())
-        
+
         # Create persistent storage object
         persistent_data = PersistentVideoInsight(
             video_entry_id=video_entry_id,
@@ -238,13 +238,13 @@ class VideoDataManager:
             content_analysis=self._extract_content_analysis(video_insight),
             created_at=datetime.utcnow().isoformat()
         )
-        
+
         # Store in GCS
         storage_uri = await self._upload_to_storage(video_entry_id, persistent_data)
-        
+
         # Create summary for prompt inclusion
         summary = await self._generate_summary(persistent_data)
-        
+
         return VideoDataReference(
             video_entry_id=video_entry_id,
             file_name=video_insight.file_name,
@@ -253,19 +253,19 @@ class VideoDataManager:
             key_metadata=self._extract_key_metadata(video_insight),
             processing_timestamp=datetime.utcnow().isoformat()
         )
-    
+
     async def retrieve_full_video_data(self, video_entry_id: str) -> Optional[PersistentVideoInsight]:
         """Retrieve full video data for appendix generation."""
         storage_path = f"{self.video_data_prefix}{video_entry_id}.json"
-        
+
         try:
             bucket = self.storage_client.bucket(self.bucket_name)
             blob = bucket.blob(storage_path)
-            
+
             if blob.exists():
                 data = json.loads(blob.download_as_text())
                 return PersistentVideoInsight.model_validate(data)
-            
+
             return None
         except Exception as e:
             print(f"VIDEO DATA MANAGER: Error retrieving {video_entry_id}: {e}")
@@ -283,19 +283,19 @@ class VideoDataManager:
 ```python
 async def _build_final_assessment_prompt_with_references(self, analysis: CaseAnalysisResult) -> str:
     """Build assessment prompt using video references instead of full data."""
-    
+
     # Replace video insights with references
     analysis_for_prompt = analysis.model_copy(deep=True)
     video_references = []
-    
+
     for video in analysis.video_insights:
         reference = await self.video_data_manager.store_video_insights(video)
         video_references.append(reference)
-    
+
     # Use references in prompt instead of full data
     analysis_for_prompt.video_insights = []  # Clear full data
     analysis_for_prompt.video_references = video_references  # Add references
-    
+
     return self._construct_prompt_with_references(analysis_for_prompt)
 ```
 
@@ -314,27 +314,27 @@ async def _build_final_assessment_prompt_with_references(self, analysis: CaseAna
 ```python
 class EnhancedErrorRecovery:
     """Enhanced error recovery with data preservation."""
-    
-    async def handle_token_limit_error(self, 
-                                     analysis: CaseAnalysisResult, 
+
+    async def handle_token_limit_error(self,
+                                     analysis: CaseAnalysisResult,
                                      error: BadRequestError) -> CaseAnalysisResult:
         """Handle token limit errors while preserving essential data."""
-        
+
         print(f"AI ANALYZER: 🔄 Enhanced error recovery initiated")
         print(f"AI ANALYZER: 📊 Original video insights count: {len(analysis.video_insights)}")
-        
+
         # Store full video data before any processing
         preserved_references = []
         for video in analysis.video_insights:
             reference = await self.video_data_manager.store_video_insights(video)
             preserved_references.append(reference)
             print(f"AI ANALYZER: 💾 Preserved full data for {video.file_name} -> {reference.video_entry_id}")
-        
+
         # Create recovery analysis with references
         recovery_analysis = analysis.model_copy(deep=True)
         recovery_analysis.video_insights = []  # Clear large data
         recovery_analysis.video_references = preserved_references  # Add references
-        
+
         # Add recovery metadata
         recovery_analysis.processing_notes = RecoveryMetadata(
             recovery_applied=True,
@@ -343,34 +343,34 @@ class EnhancedErrorRecovery:
             video_entries_preserved=[ref.video_entry_id for ref in preserved_references],
             recovery_timestamp=datetime.utcnow().isoformat()
         )
-        
+
         return recovery_analysis
-    
-    async def generate_assessment_with_preserved_data(self, 
+
+    async def generate_assessment_with_preserved_data(self,
                                                     recovery_analysis: CaseAnalysisResult) -> CaseAnalysisResult:
         """Generate assessment using preserved video references."""
-        
+
         try:
             # Build prompt with minimal video data
             prompt = await self._build_minimal_assessment_prompt(recovery_analysis)
-            
+
             # Verify prompt size
             token_count = await self.token_counter.count_tokens(prompt)
             print(f"AI ANALYZER: 🔄 Recovery prompt tokens: {token_count}")
-            
+
             if token_count > 100000:  # Still too large
                 # Apply additional summarization
                 prompt = await self._apply_emergency_summarization(recovery_analysis)
-            
+
             # Make API call with recovery prompt
             raw_assessment = await self._make_openai_request(prompt, model="gpt-4o")
-            
+
             # Process response and attach preserved video references
             processed_analysis = self._process_recovery_assessment(raw_assessment, recovery_analysis)
-            
+
             print(f"AI ANALYZER: ✅ Recovery assessment completed with data preservation")
             return processed_analysis
-            
+
         except Exception as e:
             print(f"AI ANALYZER: ❌ Recovery assessment failed: {e}")
             return await self._apply_emergency_fallback(recovery_analysis)
@@ -389,7 +389,7 @@ class RecoveryMetadata(BaseModel):
     recovery_timestamp: str = Field(default="")
     original_token_count: Optional[int] = Field(None)
     recovered_token_count: Optional[int] = Field(None)
-    
+
 class PreservedVideoMetadata(BaseModel):
     """Key metadata preserved during recovery."""
     video_entry_id: str
@@ -414,7 +414,7 @@ class EnhancedVideoInsight(VideoInsight):
     storage_uri: Optional[str] = Field(None, description="URI to full stored data")
     is_summarized: bool = Field(default=False, description="Whether data has been summarized")
     preservation_metadata: Optional[PreservedVideoMetadata] = Field(None)
-    
+
     class Config:
         """Allow extra fields for backward compatibility."""
         extra = "allow"
@@ -427,11 +427,11 @@ class EnhancedCaseAnalysisResult(CaseAnalysisResult):
     """Enhanced case analysis with video data preservation."""
     video_references: List[VideoDataReference] = Field(default_factory=list, description="References to preserved video data")
     processing_notes: Optional[RecoveryMetadata] = Field(None, description="Recovery and processing metadata")
-    
+
     def has_preserved_video_data(self) -> bool:
         """Check if video data has been preserved."""
         return bool(self.video_references)
-    
+
     def get_video_entry_ids(self) -> List[str]:
         """Get all preserved video entry IDs."""
         return [ref.video_entry_id for ref in self.video_references]
@@ -465,62 +465,62 @@ class EnhancedCaseAnalysisResult(CaseAnalysisResult):
 ```python
 class VideoPreservationValidator:
     """Validates video preservation functionality."""
-    
+
     async def validate_short_video_path(self, video_file: str) -> ValidationResult:
         """Test short video processing path."""
         result = ValidationResult()
-        
+
         # Process video
         video_insight = await self.video_processor.process_video_file(video_file, "test_short.mov")
-        
+
         # Verify no chunking applied
         result.add_check("no_chunking_applied", not hasattr(video_insight, 'is_chunked'))
-        
+
         # Process through full pipeline
         analysis = await self.ai_analyzer.perform_final_assessment(...)
-        
+
         # Verify full data preserved in analysis
         result.add_check("full_data_in_analysis", len(analysis.video_insights) > 0)
         result.add_check("no_references_created", len(analysis.video_references) == 0)
-        
+
         return result
-    
+
     async def validate_long_video_path(self, video_file: str) -> ValidationResult:
         """Test long video processing with preservation."""
         result = ValidationResult()
-        
+
         # Process large video
         video_insight = await self.video_processor.process_video_file(video_file, "test_long.mov")
-        
+
         # Simulate token limit scenario
         analysis = CaseAnalysisResult(video_insights=[video_insight])
-        
+
         # Process through enhanced analyzer
         final_analysis = await self.enhanced_analyzer.perform_final_assessment(analysis)
-        
+
         # Verify data preservation
         result.add_check("data_preserved", final_analysis.has_preserved_video_data())
         result.add_check("references_created", len(final_analysis.video_references) > 0)
-        
+
         # Verify appendix generation
         for ref in final_analysis.video_references:
             stored_data = await self.video_data_manager.retrieve_full_video_data(ref.video_entry_id)
             result.add_check(f"data_retrievable_{ref.video_entry_id}", stored_data is not None)
-        
+
         return result
-    
+
     async def validate_appendix_generation(self, video_references: List[VideoDataReference]) -> ValidationResult:
         """Test video appendix generation with preserved data."""
         result = ValidationResult()
-        
+
         # Generate appendix using preserved data
         appendix_content = await self.email_generator.generate_video_appendix(video_references)
-        
+
         # Verify appendix quality
         result.add_check("appendix_not_empty", len(appendix_content.strip()) > 100)
         result.add_check("contains_video_references", any(ref.file_name in appendix_content for ref in video_references))
         result.add_check("contains_analysis_details", "analysis" in appendix_content.lower())
-        
+
         return result
 ```
 
@@ -554,7 +554,7 @@ class VideoPreservationValidator:
 - [ ] Create enhanced data models for video preservation
 - [ ] Set up Google Cloud Storage integration for video data
 
-### Phase 2: Core Processing (Week 2)  
+### Phase 2: Core Processing (Week 2)
 - [ ] Implement MapReduce-style video content processing
 - [ ] Create video data manager for persistent storage
 - [ ] Develop reference-based prompt construction

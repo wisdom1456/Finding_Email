@@ -81,10 +81,10 @@ class ErrorHandlingValidator:
             def test_file_processing():
                 from backend_logic.document_processor import DocumentProcessor
                 processor = DocumentProcessor()
-                
+
                 # Process the file - should handle errors gracefully
                 asyncio.run(processor.process_documents_from_streamlit([mock_file], []))
-                
+
                 # For empty files, processing should fail
                 if content == b"":
                     return False  # Empty file should have failed
@@ -111,7 +111,7 @@ class ErrorHandlingValidator:
 
         # Test 1: DocumentProcessor with invalid input
         processor = DocumentProcessor()
-        
+
         def test_processor_null_input():
             asyncio.run(processor.process_documents_from_streamlit(None, []))
             return False  # Should not reach here
@@ -154,7 +154,7 @@ logger.info('AI ANALYZER: Test logging output')
 
         # Use capture_output to test logging functionality
         result, output = self.test_util.capture_output(test_logging_output)
-        
+
         if result is False:
             # API key not available
             self.test_util.run_test(
@@ -227,10 +227,10 @@ logger.info('AI ANALYZER: Test logging output')
 
         # Generate and log summary using utility function
         summary = self.test_util.log_summary(logger)
-        
+
         # Cleanup resources
         self.test_util.cleanup()
-        
+
         return summary
 
 

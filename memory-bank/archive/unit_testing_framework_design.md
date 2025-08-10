@@ -1,4 +1,4 @@
-# Unit Testing Framework Design  
+# Unit Testing Framework Design
 **Legal Document Analysis Portal**
 
 ---
@@ -64,17 +64,17 @@ flowchart TD
 
 ## 3. Naming Conventions
 
-- **Test Modules:**  
+- **Test Modules:**
   - Prefix with `test_` (e.g., `test_main.py`, `test_framework_validation.py`)
-- **Test Classes:**  
+- **Test Classes:**
   - `Test<ClassOrFeatureName>` (e.g., `TestEmailGenerator`)
-- **Test Functions:**  
+- **Test Functions:**
   - Prefix with `test_` (e.g., `test_email_generation_valid`)
-- **Fixtures:**  
+- **Fixtures:**
   - Descriptive, lowercase, underscores for multiword (e.g., `sample_email_data`, `mock_ai_response`)
-- **Test Data Files:**  
+- **Test Data Files:**
   - Use clear, case- or feature-specific names (e.g., `landlord_tenant_config.yaml`)
-- **Utilities:**  
+- **Utilities:**
   - Place all helpers in `utils/` and prefix with their domain (e.g., `email_comparator.py`)
 
 ---
@@ -90,7 +90,7 @@ flowchart TD
 
 ### Configuration
 
-- **pytest.ini:**  
+- **pytest.ini:**
   - Centralizes test configuration (markers, options, paths).
   - Example:
     ```
@@ -102,7 +102,7 @@ flowchart TD
         slow: marks tests as slow (deselect with '-m "not slow"')
         integration: marks integration tests
     ```
-- **conftest.py:**  
+- **conftest.py:**
   - Shared fixtures, hooks, and plugins for the test suite.
   - Should not contain test functions.
   - Used for:
@@ -110,7 +110,7 @@ flowchart TD
     - Custom hooks (e.g., test setup/teardown)
     - Plugin registration
 
-- **Plugins:**  
+- **Plugins:**
   - `pytest-cov` for coverage
   - `pytest-mock` for mocking
   - Others as needed (e.g., `pytest-xdist` for parallelism)
@@ -119,15 +119,15 @@ flowchart TD
 
 ## 5. Fixture Architecture
 
-- **Scope:**  
+- **Scope:**
   - Use `function` scope for most fixtures (default, ensures isolation).
   - Use `module` or `session` scope for expensive setup (e.g., database, app context).
-- **Location:**  
+- **Location:**
   - Place global fixtures in `conftest.py`.
   - Place feature-specific fixtures in `utils/fixtures.py` or within test modules.
-- **Autouse:**  
+- **Autouse:**
   - Use `autouse=True` only for essential, non-intrusive setup (e.g., temp directory cleanup).
-- **Modularity:**  
+- **Modularity:**
   - Compose fixtures for complex setups (e.g., `sample_case_data` uses `sample_email_data`).
 - **Example:**
     ```python
@@ -145,7 +145,7 @@ flowchart TD
 
 ## 6. Parametrization Strategies
 
-- **@pytest.mark.parametrize:**  
+- **@pytest.mark.parametrize:**
   - Use for broad input coverage and edge cases.
   - Example:
     ```python
@@ -157,30 +157,30 @@ flowchart TD
     def test_email_validator(input, expected):
         assert validate_email(input) == expected
     ```
-- **Test Data Organization:**  
+- **Test Data Organization:**
   - Inline for simple cases.
   - External YAML/JSON for complex or reusable datasets (store in `templates/` or `test_data/`).
-- **Edge Cases:**  
+- **Edge Cases:**
   - Always include boundary values, empty inputs, and invalid types.
 
 ---
 
 ## 7. Implementation Guidelines
 
-- **Test Isolation:**  
+- **Test Isolation:**
   - No test should depend on another; use fixtures for shared setup.
-- **Mocking & Patching:**  
+- **Mocking & Patching:**
   - Use `pytest-mock` or `unittest.mock` for external dependencies (e.g., API calls, file I/O).
-- **Coverage:**  
+- **Coverage:**
   - Target >90% line and branch coverage for all backend code.
   - Use `pytest-cov` and enforce in CI.
-- **CI Integration:**  
+- **CI Integration:**
   - All tests must run in CI (GitHub Actions, Railway, etc.).
   - Fail builds on test or coverage failure.
-- **Documentation:**  
+- **Documentation:**
   - All test modules and fixtures must be documented with docstrings.
   - Update `README.md` with test running instructions and conventions.
-- **Maintainability:**  
+- **Maintainability:**
   - Refactor tests as code evolves; avoid duplication.
   - Use descriptive test names and assert messages.
 
@@ -222,17 +222,17 @@ backend/tests/
 
 ## 9. Design Decisions & Rationale
 
-- **Pytest Chosen:**  
+- **Pytest Chosen:**
   - Industry standard for Python, supports all required features, and integrates with CI/CD.
-- **Modular Structure:**  
+- **Modular Structure:**
   - Mirrors backend code for clarity and maintainability.
-- **Fixture-Driven:**  
+- **Fixture-Driven:**
   - Promotes DRY (Don't Repeat Yourself) and robust test setups.
-- **Parametrization:**  
+- **Parametrization:**
   - Ensures broad coverage with minimal code.
-- **Strict Naming & Organization:**  
+- **Strict Naming & Organization:**
   - Guarantees auto-discovery and clarity for all contributors.
-- **CI Enforcement:**  
+- **CI Enforcement:**
   - Maintains code quality and prevents regressions.
 
 ---

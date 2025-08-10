@@ -49,16 +49,16 @@ def test_word_count_trimming():
 
         # Test HTML content that exceeds the word limit
         test_html = """
-        <p>This is a test paragraph with many words that should exceed the target word count for trimming purposes. 
-        The paragraph contains multiple sentences that provide detailed information about various legal matters and considerations. 
+        <p>This is a test paragraph with many words that should exceed the target word count for trimming purposes.
+        The paragraph contains multiple sentences that provide detailed information about various legal matters and considerations.
         Each sentence adds to the total word count and helps us test the trimming functionality properly.</p>
-        
-        <p>This is another paragraph that continues the content and adds even more words to test the trimming system. 
-        The content should be intelligently trimmed at sentence boundaries where possible to maintain readability and structure. 
+
+        <p>This is another paragraph that continues the content and adds even more words to test the trimming system.
+        The content should be intelligently trimmed at sentence boundaries where possible to maintain readability and structure.
         The HTML structure should be preserved during the trimming process.</p>
-        
-        <p>This final paragraph adds additional content to ensure we have enough words to test the trimming mechanism thoroughly. 
-        The trimming should respect HTML tags and try to maintain proper formatting while reducing the word count to the target limit. 
+
+        <p>This final paragraph adds additional content to ensure we have enough words to test the trimming mechanism thoroughly.
+        The trimming should respect HTML tags and try to maintain proper formatting while reducing the word count to the target limit.
         This comprehensive test helps verify the functionality works as expected.</p>
         """
 

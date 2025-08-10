@@ -141,7 +141,7 @@
 ### 2. Sample Test Cases
 
 *   **`draft_content(structured_analysis)`**
-    *   **Happy Path**: 
+    *   **Happy Path**:
         ```python
         structured_analysis = {
             "summary": "Client was involved in a car accident.",
@@ -149,7 +149,7 @@
         }
         ```
         *   **Expected**: Returns a dictionary with `introduction`, `body`, and `conclusion` strings populated with relevant content.
-    *   **Edge Case**: 
+    *   **Edge Case**:
         ```python
         structured_analysis = {
             "summary": "Incomplete analysis."
@@ -191,7 +191,7 @@
 ### 2. Sample Test Cases
 
 *   **`populate_template(content_blocks, template_path)`**
-    *   **Happy Path**: 
+    *   **Happy Path**:
         ```python
         content_blocks = {"introduction": "Hello", "body": "World"}
         template_path = "valid_template.html"
@@ -246,12 +246,12 @@
 ### 2. Sample Test Cases
 
 *   **`validate_letter(letter_text)`**
-    *   **Happy Path**: 
+    *   **Happy Path**:
         ```python
         letter_text = "Dear Mr. Smith, We have reviewed your case and find that..."
         ```
         *   **Expected**: `{"score": >90, "issues": []}`.
-    *   **Edge Case**: 
+    *   **Edge Case**:
         ```python
         letter_text = "hey john, we checked ur stuff and its bad."
         ```

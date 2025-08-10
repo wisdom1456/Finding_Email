@@ -110,15 +110,15 @@ uploaded_file = st.file_uploader("Choose a file")
 if uploaded_file:
     file_content = uploaded_file.read()
     result = validate_uploaded_file(file_content, uploaded_file.name)
-    
+
     if not result.is_valid:
         st.error(f"File validation failed: {'; '.join(result.issues)}")
         return
-    
+
     if result.warnings:
         for warning in result.warnings:
             st.warning(warning)
-    
+
     # Proceed with file processing
 ```
 
@@ -128,14 +128,14 @@ if uploaded_file:
 def process_uploaded_file(file_content, filename):
     # Enhanced validation
     validation_result = validate_uploaded_file(file_content, filename)
-    
+
     if not validation_result.is_valid:
         raise FileValidationError(f"Invalid file: {'; '.join(validation_result.issues)}")
-    
+
     # Log any warnings
     for warning in validation_result.warnings:
         logger.warning(f"File validation warning: {warning}")
-    
+
     # Continue with processing
     return process_file_content(file_content, validation_result.detected_type)
 ```

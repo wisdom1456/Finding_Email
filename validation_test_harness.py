@@ -255,10 +255,10 @@ class ValidationTestHarness:
         return f"""
         <html>
         <body style="font-family: Times New Roman, serif; line-height: 1.6; color: #333;">
-        
+
         <h2>1. Factual Summary</h2>
         <p>Based on our comprehensive review of the evidence, this {test_case.name.lower()} presents compelling circumstances requiring immediate legal action. The documentation reveals clear violations that occurred on March 15, 2024, with multiple witnesses and photographic evidence supporting our client's position. Our analysis demonstrates strong grounds for pursuing both federal and state law remedies.</p>
-        
+
         <h2>2. Legal Analysis</h2>
         <p>Under Florida law and federal statutes, the defendant's actions constitute clear violations of established legal protections. The evidence meets all required elements for civil rights claims under 42 U.S.C. § 1983:</p>
         <ul>
@@ -268,13 +268,13 @@ class ValidationTestHarness:
             <li>Damages resulting from the constitutional violation</li>
         </ul>
         <p>This analysis shows the defendant's conduct directly violated our client's established rights. The application of these legal standards to our facts creates strong liability exposure. Available remedies include monetary damages, injunctive relief, and attorney fees under federal civil rights statutes. What this means for you is that we have multiple viable legal theories supporting substantial recovery.</p>
-        
+
         <h2>3. Strengths of Case</h2>
         <p>Our case benefits from exceptional evidence including security footage, witness statements, and medical documentation. The evidence creates a compelling narrative of misconduct with clear causation to documented injuries. Multiple independent sources corroborate the essential facts supporting our claims.</p>
-        
+
         <h2>4. Potential Challenges</h2>
         <p>We anticipate defenses based on qualified immunity and statute of limitations arguments. However, the continuing violation doctrine and clear constitutional violations significantly mitigate these concerns. Settlement negotiations may face initial resistance requiring strategic pressure and thorough preparation.</p>
-        
+
         <h2>5. Recommended Next Steps</h2>
         <p>Immediate action is required to preserve your legal rights and maximize recovery potential. We recommend the following steps:</p>
         <ul>
@@ -284,13 +284,13 @@ class ValidationTestHarness:
             <li>Schedule client consultation to discuss strategy parameters</li>
         </ul>
         <p>Missing these deadlines could result in lost settlement leverage and potential statute of limitations issues that may bar your claims entirely.</p>
-        
+
         <h2>6. Call to Action</h2>
         <p>Please contact our office immediately to discuss these urgent next steps and answer any questions you may have about this analysis. I am available to meet this week to review settlement parameters and litigation strategy. Do not hesitate to reach out if you need clarification on any aspect of this assessment.</p>
-        
+
         <p>Sincerely,</p>
         <p>John Attorney<br>Legal Counsel</p>
-        
+
         </body>
         </html>
         """

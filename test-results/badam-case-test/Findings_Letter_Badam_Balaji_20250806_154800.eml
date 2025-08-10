@@ -1,7 +1,7 @@
 From: attorney@bernhardtriley.com
 To: client@example.com
 Subject: Legal Review and Recommended Next Steps - Landlord-Tenant Dispute
-Date: Wed, 06 Aug 2025 15:48:00 
+Date: Wed, 06 Aug 2025 15:48:00
 Content-Type: text/html; charset=utf-8
 
 <!DOCTYPE html>
@@ -144,27 +144,27 @@ Content-Type: text/html; charset=utf-8
         </div>
 
         <!-- Background Summary Section -->
-        
+
         <div class="section">
             <h2>1. Background Summary</h2>
             <div class="legal-content">
                 <p>Based on our review, the following facts are relevant to this matter.</p>
             </div>
         </div>
-        
+
 
         <!-- Legal Analysis Section -->
-        
+
         <div class="section">
             <h2>2. Legal Analysis</h2>
             <div class="legal-content">
                 <p>Legal analysis under Florida law indicates several key considerations.</p>
             </div>
         </div>
-        
+
 
         <!-- Strengths of Your Case Section -->
-        
+
         <div class="section">
             <h2>3. Strengths of Your Case</h2>
             <div class="strengths-section">
@@ -173,10 +173,10 @@ Content-Type: text/html; charset=utf-8
                 </div>
             </div>
         </div>
-        
+
 
         <!-- Potential Challenges Section -->
-        
+
         <div class="section">
             <h2>4. Potential Challenges</h2>
             <div class="challenges-section">
@@ -185,10 +185,10 @@ Content-Type: text/html; charset=utf-8
                 </div>
             </div>
         </div>
-        
+
 
         <!-- Recommendations Section -->
-        
+
         <div class="section">
             <h2>5. Recommendations</h2>
             <div class="recommendations-section">
@@ -197,26 +197,26 @@ Content-Type: text/html; charset=utf-8
                 </div>
             </div>
         </div>
-        
+
 
         <!-- Next Steps Section -->
-        
+
         <div class="section">
             <h2>6. Next Steps</h2>
             <div class="legal-content">
                 <p>The following steps are recommended to advance your case.</p>
             </div>
         </div>
-        
+
 
         <!-- Closing Paragraph Section -->
-        
+
         <div class="section">
             <div class="legal-content">
                 <p><strong>Sincerely,</strong><br>Your Legal Team<br>Bernhardt Riley PLLC</p>
             </div>
         </div>
-        
+
 
         <!-- Footer Section -->
         <div class="footer">
@@ -227,10 +227,10 @@ Content-Type: text/html; charset=utf-8
                 <p>[Firm Address]</p>
                 <p>[Contact Information]</p>
             </div>
-            
+
             <p style="margin-top: 30px; font-size: 12px; color: #7f8c8d;">
-                <strong>Disclaimer:</strong> This analysis is based on the documents provided and represents a preliminary assessment. 
-                Additional facts may emerge that could materially affect this analysis. This communication is confidential and 
+                <strong>Disclaimer:</strong> This analysis is based on the documents provided and represents a preliminary assessment.
+                Additional facts may emerge that could materially affect this analysis. This communication is confidential and
                 subject to attorney-client privilege.
             </p>
         </div>

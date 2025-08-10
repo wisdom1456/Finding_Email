@@ -52,7 +52,7 @@ PDFCO_API_KEY=your-pdfco-api-key-here
 DEBUG=False
 LOG_LEVEL=INFO
 
-# Frontend Configuration  
+# Frontend Configuration
 BACKEND_API_URL=http://localhost:8000
 
 # CORS Configuration (update with your Railway URLs)
@@ -130,13 +130,13 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    
+
     steps:
       - uses: actions/checkout@v3
-      
+
       - name: Install Railway CLI
         run: npm install -g @railway/cli
-        
+
       - name: Deploy to Railway
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}

@@ -22,6 +22,7 @@ from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_fi
 from backend.utils.data_models import CaseAnalysisResult
 from backend_logic.config import get_openai_config
 from utils.logging_config import get_module_logger
+from services.citation_tracking_service import CitationTrackingService
 
 
 logger = get_module_logger(__name__)
@@ -41,6 +42,7 @@ class JsonProcessingService:
     def __init__(self, client: OpenAI, config: Dict[str, Any]):
         self.client = client
         self.config = config
+        self.citation_service = CitationTrackingService()
 
     def generate_html_letter(self, analysis: CaseAnalysisResult) -> str:
         """
@@ -109,8 +111,11 @@ class JsonProcessingService:
             if not master_prompt:
                 raise ValueError("Master prompt not found in configuration")
 
+            # Enhance master prompt with citation tracking instructions
+            enhanced_prompt = self.citation_service.enhance_master_prompt_with_citations(master_prompt)
+
             # Inject case analysis directly into the master prompt
-            formatted_prompt = master_prompt.format(
+            formatted_prompt = enhanced_prompt.format(
                 client_name=client_name,
                 case_type=case_type,
                 analysis=analysis.model_dump_json(indent=2),
@@ -156,12 +161,26 @@ class JsonProcessingService:
             cleaned_html = self._clean_html_response(html_response)
             validated_html = self._validate_html_structure(cleaned_html)
 
+            # Create citation map for the generated letter
+            citation_map = self.citation_service.create_citation_map(analysis, validated_html)
+            
+            # Save citation map for appendix generation
+            try:
+                citation_export = self.citation_service.export_citation_map("json")
+                with open("validation_output/citation_map.json", "w", encoding="utf-8") as f:
+                    f.write(citation_export)
+                logger.info("Citation map saved to validation_output/citation_map.json")
+            except Exception as save_error:
+                logger.warning(f"Failed to save citation map: {save_error}")
+
             logger.info(
-                "Successfully generated HTML letter",
+                "Successfully generated HTML letter with citations",
                 extra={
                     "html_length": len(validated_html),
                     "client_name": client_name,
                     "case_type": case_type,
+                    "citation_count": len(citation_map.citations),
+                    "citation_coverage": citation_map.metadata.get("citation_coverage", 0)
                 },
             )
             return validated_html
@@ -515,6 +534,24 @@ class JsonProcessingService:
         )
 
         return content
+
+    def get_citation_map(self):
+        """
+        Get the current citation map from the citation service.
+        
+        Returns:
+            Current CitationMap or None if not available
+        """
+        return self.citation_service.current_citation_map if self.citation_service else None
+
+    def get_citation_summary(self) -> Dict[str, Any]:
+        """
+        Get citation summary for the current letter.
+        
+        Returns:
+            Citation summary dictionary
+        """
+        return self.citation_service.get_citation_summary() if self.citation_service else {}
 
     @retry(
         stop=stop_after_attempt(3),

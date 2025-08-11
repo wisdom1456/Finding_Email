@@ -72,7 +72,7 @@ def initialize_session_state():
         "cost_estimate": None,
         "cost_summary": None,
         "current_processing_cost": 0.0,
-        "cost_session_id": None,
+        "cost_session_id": str(uuid.uuid4()),
         # Performance optimization settings
         "enable_caching": True,
         "enable_parallel_processing": True,

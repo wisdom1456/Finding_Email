@@ -90,6 +90,15 @@ class StructuredLogger:
             }
         self._log(LogLevel.ERROR, message, **kwargs)
     
+    def exception(self, message: str, **kwargs):
+        """Log exception with full traceback (compatible with standard logging)."""
+        kwargs['exception'] = {
+            'type': 'Exception',
+            'message': message,
+            'traceback': traceback.format_exc()
+        }
+        self._log(LogLevel.ERROR, message, **kwargs)
+    
     def critical(self, message: str, **kwargs):
         """Log critical message."""
         self._log(LogLevel.CRITICAL, message, **kwargs)

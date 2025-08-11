@@ -90,16 +90,24 @@ class ContentGenerationService:
             if not html_content:
                 raise ValueError("HTML generation returned empty content")
 
+            # Get citation map from the JsonProcessingService
+            citation_map = self.json_processing_service.get_citation_map()
+            citation_summary = self.json_processing_service.get_citation_summary()
+
             # Create response structure compatible with existing interfaces
             result = {
                 "letter_content": html_content,
                 "generated_letter": html_content,  # For backward compatibility
+                "citation_map": citation_map,  # Add citation map for appendix
+                "citation_summary": citation_summary,  # Add citation summary
                 "metadata": {
                     "architecture": "single_master_prompt",
                     "generation_method": "direct_html",
                     "content_length": len(html_content),
                     "has_error": False,
                     "is_fallback": False,
+                    "citations_tracked": citation_map is not None,
+                    "citation_count": len(citation_map.citations) if citation_map else 0,
                 },
             }
 

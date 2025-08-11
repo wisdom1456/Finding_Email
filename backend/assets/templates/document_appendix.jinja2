@@ -90,8 +90,179 @@
         <!-- Header Section -->
         <div class="header">
             <h1>Document Review Appendix</h1>
-            <p>The following documents were analyzed as part of this case review:</p>
+            <p>This appendix provides comprehensive documentation and source references for the findings letter analysis.</p>
         </div>
+
+        <!-- Findings Letter Section -->
+        {% if results.generated_letter or results.letter_content %}
+        <div style="margin-bottom: 40px; padding-bottom: 30px; border-bottom: 2px solid #333;">
+            <div class="header">
+                <h1>Complete Findings Letter</h1>
+                <p>The full text of the findings letter for your reference:</p>
+            </div>
+            
+            <div style="background-color: #f8f9fa; padding: 20px; margin: 20px 0; border-left: 4px solid #333;">
+                {% if results.generated_letter %}
+                    {{ results.generated_letter | safe }}
+                {% elif results.letter_content %}
+                    {{ results.letter_content | safe }}
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Citation References Section -->
+        {% if results.citation_map %}
+        <div style="margin-bottom: 40px; padding-bottom: 30px; border-bottom: 2px solid #333;">
+            <div class="header">
+                <h1>Citation References</h1>
+                <p>Detailed mapping of factual statements to source documents:</p>
+            </div>
+
+            <div style="margin-bottom: 20px; padding: 15px; background-color: #e8f4fd; border-left: 4px solid #2196f3;">
+                <h4>Citation Summary</h4>
+                <div class="document-meta">
+                    <div class="meta-item">
+                        <div class="meta-label">Total Citations</div>
+                        <div class="meta-value">{{ results.citation_map.citations | length }}</div>
+                    </div>
+                    <div class="meta-item">
+                        <div class="meta-label">Source Documents</div>
+                        <div class="meta-value">{{ results.citation_map.source_documents | length }}</div>
+                    </div>
+                </div>
+                <div class="document-meta">
+                    <div class="meta-item">
+                        <div class="meta-label">Citation Coverage</div>
+                        <div class="meta-value">{{ "%.1f"|format(results.citation_map.metadata.citation_coverage * 100) }}%</div>
+                    </div>
+                    <div class="meta-item">
+                        <div class="meta-label">Generation Date</div>
+                        <div class="meta-value">{{ results.citation_map.generation_timestamp.split('T')[0] }}</div>
+                    </div>
+                </div>
+            </div>
+
+            {% for citation in results.citation_map.citations %}
+            <div style="margin-bottom: 15px; padding: 15px; border: 1px solid #ddd; background-color: #fdfdfd;">
+                <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 15px; margin-bottom: 10px;">
+                    <div class="meta-item">
+                        <div class="meta-label">Citation {{ loop.index }}</div>
+                        <div class="meta-value" style="font-weight: bold; color: {% if citation.confidence == 'high' %}#27ae60{% elif citation.confidence == 'medium' %}#f39c12{% else %}#e74c3c{% endif %};">
+                            {{ citation.confidence | title }} Confidence
+                        </div>
+                    </div>
+                    <div class="meta-item">
+                        <div class="meta-label">Source Document</div>
+                        <div class="meta-value">{{ citation.source_document }}</div>
+                    </div>
+                </div>
+                
+                {% if citation.page_number %}
+                <div style="margin-bottom: 10px;">
+                    <div class="meta-label">Page Reference</div>
+                    <div class="meta-value">Page {{ citation.page_number }}</div>
+                </div>
+                {% endif %}
+                
+                <div style="margin-bottom: 10px;">
+                    <div class="meta-label">Factual Statement</div>
+                    <div style="font-style: italic; padding: 8px; background-color: #f8f9fa; border-radius: 3px; margin: 5px 0;">
+                        "{{ citation.statement }}"
+                    </div>
+                </div>
+                
+                {% if citation.context %}
+                <div style="margin-bottom: 10px;">
+                    <div class="meta-label">Source Context</div>
+                    <div style="font-size: 13px; color: #6c757d; padding: 8px; background-color: white; border-radius: 3px;">
+                        {{ citation.context }}
+                    </div>
+                </div>
+                {% endif %}
+                
+                {% if citation.document_section %}
+                <div style="margin-bottom: 10px;">
+                    <div class="meta-label">Document Section</div>
+                    <div class="meta-value">{{ citation.document_section | title }}</div>
+                </div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        <!-- Source Documents Cross-Reference -->
+        {% if results.citation_map and results.citation_map.source_documents %}
+        <div style="margin-bottom: 40px; padding-bottom: 30px; border-bottom: 2px solid #333;">
+            <div class="header">
+                <h1>Source Documents Cross-Reference</h1>
+                <p>Complete listing of documents analyzed with citation mappings:</p>
+            </div>
+
+            {% for doc in results.citation_map.source_documents %}
+            <div class="document-item">
+                <div class="document-header">
+                    <h4>{{ doc.filename }}</h4>
+                </div>
+
+                <div class="document-meta">
+                    <div class="meta-item">
+                        <div class="meta-label">Document Type</div>
+                        <div class="meta-value">{{ doc.document_type | default('Not Specified') | title }}</div>
+                    </div>
+                    <div class="meta-item">
+                        <div class="meta-label">Citations from this Document</div>
+                        <div class="meta-value">
+                            {% set doc_citations = results.citation_map.citations | selectattr('source_document', 'equalto', doc.filename) | list %}
+                            {{ doc_citations | length }} references
+                        </div>
+                    </div>
+                </div>
+
+                {% if doc.summary %}
+                <div class="document-content">
+                    <h5>Document Summary</h5>
+                    <p>{{ doc.summary }}</p>
+                </div>
+                {% endif %}
+
+                {% if doc.key_information %}
+                <div class="document-content">
+                    <h5>Key Information</h5>
+                    <p>{{ doc.key_information }}</p>
+                </div>
+                {% endif %}
+
+                {% if doc.relevance_to_case %}
+                <div class="document-content">
+                    <h5>Relevance to Case</h5>
+                    <p>{{ doc.relevance_to_case }}</p>
+                </div>
+                {% endif %}
+
+                <!-- Show citations from this document -->
+                {% set doc_citations = results.citation_map.citations | selectattr('source_document', 'equalto', doc.filename) | list %}
+                {% if doc_citations %}
+                <div class="document-content">
+                    <h5>Referenced Statements</h5>
+                    <div style="background-color: #f8f9fa; padding: 15px; margin: 10px 0; border-left: 4px solid #17a2b8;">
+                        {% for citation in doc_citations %}
+                        <div style="margin-bottom: 10px; padding: 8px; background-color: white; border-radius: 3px;">
+                            <div style="font-style: italic; margin-bottom: 5px;">"{{ citation.statement }}"</div>
+                            <div style="font-size: 12px; color: #6c757d;">
+                                Confidence: <span style="color: {% if citation.confidence == 'high' %}#27ae60{% elif citation.confidence == 'medium' %}#f39c12{% else %}#e74c3c{% endif %};">{{ citation.confidence | title }}</span>
+                                {% if citation.page_number %} | Page {{ citation.page_number }}{% endif %}
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
 
         <!-- Case Timeline Section -->
         {% if results.case_timeline %}

@@ -24,9 +24,12 @@ class FileType(str, Enum):
 
     PDF = "pdf"
     DOCX = "docx"
+    DOC = "doc"      # Legacy Microsoft Word documents
     TXT = "txt"
     EML = "eml"
-    IMAGE = "image"
+    PNG = "png"      # PNG image format
+    JPG = "jpg"      # JPEG image format
+    IMAGE = "image"  # Generic image type for other formats
     AUDIO = "audio"
     VIDEO = "video"
 

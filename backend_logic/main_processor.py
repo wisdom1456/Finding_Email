@@ -772,23 +772,34 @@ async def process_case_documents(
                     and st.session_state.cost_summary.actual_costs.total_actual_cost
                     is not None
                 ):
-                    final_cost = float(
-                        st.session_state.cost_summary.actual_costs.total_actual_cost
-                    )
-                    st.sidebar.success(f"✅ Final Processing Cost: ${final_cost:.4f}")
+                    # FIXED: Enhanced error handling for float conversion
+                    try:
+                        final_cost = float(
+                            st.session_state.cost_summary.actual_costs.total_actual_cost
+                        )
+                        st.sidebar.success(f"✅ Final Processing Cost: ${final_cost:.4f}")
+                    except (ValueError, TypeError) as e:
+                        logger.error(f"Cost conversion error: {e}, total_cost={st.session_state.cost_summary.actual_costs.total_actual_cost}")
+                        st.sidebar.warning("⚠️ Cost data format error - displaying as $0.00")
+                        st.sidebar.success("✅ Final Processing Cost: $0.0000")
 
+                    # FIXED: Enhanced error handling for variance conversion
                     if st.session_state.cost_summary.cost_variance is not None:
-                        variance = float(st.session_state.cost_summary.cost_variance)
-                        if abs(variance) <= 0.01:  # Within 1 cent
-                            st.sidebar.info("💰 Cost was exactly as estimated!")
-                        elif variance > 0:
-                            st.sidebar.warning(
-                                f"📈 Cost was ${variance:.4f} over estimate"
-                            )
-                        else:
-                            st.sidebar.info(
-                                f"📉 Cost was ${abs(variance):.4f} under estimate"
-                            )
+                        try:
+                            variance = float(st.session_state.cost_summary.cost_variance)
+                            if abs(variance) <= 0.01:  # Within 1 cent
+                                st.sidebar.info("💰 Cost was exactly as estimated!")
+                            elif variance > 0:
+                                st.sidebar.warning(
+                                    f"📈 Cost was ${variance:.4f} over estimate"
+                                )
+                            else:
+                                st.sidebar.info(
+                                    f"📉 Cost was ${abs(variance):.4f} under estimate"
+                                )
+                        except (ValueError, TypeError) as e:
+                            logger.error(f"Variance conversion error: {e}, cost_variance={st.session_state.cost_summary.cost_variance}")
+                            st.sidebar.info("💰 Cost variance data not available")
                 elif st.session_state.cost_summary:
                     # Handle case where cost_summary exists but actual_costs is None or incomplete
                     st.sidebar.info(

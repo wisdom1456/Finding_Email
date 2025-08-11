@@ -143,11 +143,16 @@ def file_upload_section():
     """Handles the file upload section, allowing folder uploads."""
     st.header("Upload Case Folder")
     uploaded_files = st.file_uploader(
-        "Select a folder or multiple files (TXT, PDF, DOCX files only)",
+        "Select a folder or multiple files (TXT, PDF, DOCX, DOC, PNG, JPG, EML files)",
         type=[
             "txt",
             "pdf",
             "docx",
+            "doc",
+            "png",
+            "jpg",
+            "jpeg",
+            "eml",
         ],
         accept_multiple_files=True,
     )

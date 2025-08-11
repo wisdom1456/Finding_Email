@@ -72,6 +72,8 @@ class EnhancedFileValidator:
         "application/msword": [".doc"],
         "text/plain": [".txt"],
         "message/rfc822": [".eml"],
+        "image/png": [".png"],
+        "image/jpeg": [".jpg", ".jpeg"],
     }
 
     # Minimum file sizes for different types (in bytes)
@@ -81,6 +83,8 @@ class EnhancedFileValidator:
         "application/msword": 512,  # Minimum for OLE structure
         "text/plain": 1,  # At least one character
         "message/rfc822": 50,  # Basic email headers
+        "image/png": 67,  # Minimum for PNG header + IHDR chunk
+        "image/jpeg": 10,  # Minimum for JPEG header
     }
 
     def __init__(self):
@@ -270,6 +274,9 @@ class EnhancedFileValidator:
             ".doc": "application/msword",
             ".txt": "text/plain",
             ".eml": "message/rfc822",
+            ".png": "image/png",
+            ".jpg": "image/jpeg",
+            ".jpeg": "image/jpeg",
         }
 
         detected_type = extension_map.get(file_extension)
@@ -323,6 +330,12 @@ class EnhancedFileValidator:
             self._validate_pdf_content(file_data, filename, issues, warnings)
         elif detected_type == "text/plain":
             self._validate_text_content(file_data, filename, issues, warnings)
+        elif detected_type == "image/png":
+            self._validate_png_content(file_data, filename, issues, warnings)
+        elif detected_type == "image/jpeg":
+            self._validate_jpg_content(file_data, filename, issues, warnings)
+        elif detected_type == "application/msword":
+            self._validate_doc_content(file_data, filename, issues, warnings)
 
     def _validate_docx_content(
         self, file_data: bytes, filename: str, issues: list[str], warnings: list[str]
@@ -510,6 +523,173 @@ class EnhancedFileValidator:
                     "filename": filename,
                     "error": str(e),
                     "validation_issue": "text_validation_error",
+                },
+            )
+
+    def _validate_png_content(
+        self, file_data: bytes, filename: str, issues: list[str], warnings: list[str]
+    ) -> None:
+        """Validate PNG file content and structure with magic number check"""
+        try:
+            # Check PNG magic number: 89 50 4E 47 0D 0A 1A 0A
+            png_signature = b'\x89\x50\x4E\x47\x0D\x0A\x1A\x0A'
+            if not file_data.startswith(png_signature):
+                issues.append("Invalid PNG magic number signature")
+                logger.error(
+                    "PNG magic number validation failed",
+                    extra={"filename": filename, "validation_issue": "invalid_png_signature"}
+                )
+                return
+
+            # Use PIL to validate PNG structure
+            from PIL import Image
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as temp_file:
+                temp_file.write(file_data)
+                temp_file.flush()
+
+                try:
+                    with Image.open(temp_file.name) as img:
+                        # Verify it's actually a PNG
+                        if img.format != 'PNG':
+                            issues.append(f"File claims to be PNG but detected as {img.format}")
+                            return
+                        
+                        # Check for basic validity
+                        width, height = img.size
+                        if width == 0 or height == 0:
+                            issues.append("PNG file has invalid dimensions")
+                        
+                        logger.debug(
+                            "PNG content validation completed",
+                            extra={
+                                "filename": filename,
+                                "dimensions": f"{width}x{height}",
+                                "mode": img.mode,
+                            },
+                        )
+
+                finally:
+                    Path(temp_file.name).unlink(missing_ok=True)
+
+        except Exception as e:
+            issues.append(f"PNG file appears to be corrupt: {e!s}")
+            logger.error(
+                "PNG corruption detected",
+                extra={
+                    "filename": filename,
+                    "error": str(e),
+                    "validation_issue": "png_corruption",
+                },
+            )
+
+    def _validate_jpg_content(
+        self, file_data: bytes, filename: str, issues: list[str], warnings: list[str]
+    ) -> None:
+        """Validate JPG file content and structure with magic number check"""
+        try:
+            # Check JPG magic number: FF D8 FF
+            if not file_data.startswith(b'\xFF\xD8\xFF'):
+                issues.append("Invalid JPEG magic number signature")
+                logger.error(
+                    "JPEG magic number validation failed",
+                    extra={"filename": filename, "validation_issue": "invalid_jpeg_signature"}
+                )
+                return
+
+            # Use PIL to validate JPEG structure
+            from PIL import Image
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as temp_file:
+                temp_file.write(file_data)
+                temp_file.flush()
+
+                try:
+                    with Image.open(temp_file.name) as img:
+                        # Verify it's actually a JPEG
+                        if img.format != 'JPEG':
+                            issues.append(f"File claims to be JPEG but detected as {img.format}")
+                            return
+                        
+                        # Check for basic validity
+                        width, height = img.size
+                        if width == 0 or height == 0:
+                            issues.append("JPEG file has invalid dimensions")
+                        
+                        logger.debug(
+                            "JPEG content validation completed",
+                            extra={
+                                "filename": filename,
+                                "dimensions": f"{width}x{height}",
+                                "mode": img.mode,
+                            },
+                        )
+
+                finally:
+                    Path(temp_file.name).unlink(missing_ok=True)
+
+        except Exception as e:
+            issues.append(f"JPEG file appears to be corrupt: {e!s}")
+            logger.error(
+                "JPEG corruption detected",
+                extra={
+                    "filename": filename,
+                    "error": str(e),
+                    "validation_issue": "jpeg_corruption",
+                },
+            )
+
+    def _validate_doc_content(
+        self, file_data: bytes, filename: str, issues: list[str], warnings: list[str]
+    ) -> None:
+        """Validate legacy DOC file content and structure with magic number check"""
+        try:
+            # Check DOC magic number: D0 CF 11 E0 A1 B1 1A E1 (OLE compound document)
+            ole_signature = b'\xD0\xCF\x11\xE0\xA1\xB1\x1A\xE1'
+            if not file_data.startswith(ole_signature):
+                issues.append("Invalid DOC magic number signature (not an OLE compound document)")
+                logger.error(
+                    "DOC magic number validation failed",
+                    extra={"filename": filename, "validation_issue": "invalid_doc_signature"}
+                )
+                return
+
+            # Try to validate with oletools if available
+            try:
+                from oletools import olefile
+                with tempfile.NamedTemporaryFile(delete=False, suffix=".doc") as temp_file:
+                    temp_file.write(file_data)
+                    temp_file.flush()
+
+                    try:
+                        if olefile.isOleFile(temp_file.name):
+                            ole = olefile.OleFileIO(temp_file.name)
+                            try:
+                                # Check for Word document streams
+                                if ole.exists('WordDocument'):
+                                    logger.debug(
+                                        "Valid legacy DOC file detected",
+                                        extra={"filename": filename, "streams": ole.listdir()}
+                                    )
+                                else:
+                                    warnings.append("OLE file may not be a valid Word document")
+                            finally:
+                                ole.close()
+                        else:
+                            issues.append("File is not a valid OLE compound document")
+                    finally:
+                        Path(temp_file.name).unlink(missing_ok=True)
+
+            except ImportError:
+                # oletools not available, just verify the magic number was correct
+                logger.debug(f"oletools not available, basic magic number validation passed for {filename}")
+                
+        except Exception as e:
+            issues.append(f"DOC file appears to be corrupt: {e!s}")
+            logger.error(
+                "DOC corruption detected",
+                extra={
+                    "filename": filename,
+                    "error": str(e),
+                    "validation_issue": "doc_corruption",
                 },
             )
 

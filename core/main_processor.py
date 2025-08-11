@@ -1016,29 +1016,44 @@ async def process_case_documents(
                     )
                 )
 
-                # Display final cost summary in sidebar
+                # Display final cost summary in sidebar with comprehensive null checking
                 if (
                     st.session_state.cost_summary
                     and st.session_state.cost_summary.actual_costs
                 ):
-                    # Fix TypeError: Add defensive null checking for total_actual_cost
+                    # FIXED: Comprehensive null checking for total_actual_cost before any operations
                     total_cost = st.session_state.cost_summary.actual_costs.total_actual_cost
-                    final_cost = float(total_cost or 0.0)  # Default to 0.0 if None
-                    st.sidebar.success(f"✅ Final Processing Cost: ${final_cost:.4f}")
+                    if total_cost is not None:
+                        try:
+                            final_cost = float(total_cost)
+                            st.sidebar.success(f"✅ Final Processing Cost: ${final_cost:.4f}")
+                        except (ValueError, TypeError) as e:
+                            logger.error(f"Cost conversion error: {e}, total_cost={total_cost}, type={type(total_cost)}")
+                            st.sidebar.warning("⚠️ Cost data format error - displaying as $0.00")
+                            final_cost = 0.0
+                            st.sidebar.success(f"✅ Final Processing Cost: ${final_cost:.4f}")
+                    else:
+                        # Handle case where total_actual_cost is None
+                        st.sidebar.info("💰 Cost tracking completed but cost data not available")
 
-                    # Fix TypeError: Add defensive null checking for cost_variance
-                    if st.session_state.cost_summary.cost_variance is not None:
-                        variance = float(st.session_state.cost_summary.cost_variance or 0.0)
-                        if abs(variance) <= 0.01:  # Within 1 cent
-                            st.sidebar.info("💰 Cost was exactly as estimated!")
-                        elif variance > 0:
-                            st.sidebar.warning(
-                                f"📈 Cost was ${variance:.4f} over estimate"
-                            )
-                        else:
-                            st.sidebar.info(
-                                f"📉 Cost was ${abs(variance):.4f} under estimate"
-                            )
+                    # FIXED: Comprehensive null checking for cost_variance before any operations
+                    cost_variance = st.session_state.cost_summary.cost_variance
+                    if cost_variance is not None:
+                        try:
+                            variance = float(cost_variance)
+                            if abs(variance) <= 0.01:  # Within 1 cent
+                                st.sidebar.info("💰 Cost was exactly as estimated!")
+                            elif variance > 0:
+                                st.sidebar.warning(
+                                    f"📈 Cost was ${variance:.4f} over estimate"
+                                )
+                            else:
+                                st.sidebar.info(
+                                    f"📉 Cost was ${abs(variance):.4f} under estimate"
+                                )
+                        except (ValueError, TypeError) as e:
+                            logger.error(f"Variance conversion error: {e}, cost_variance={cost_variance}, type={type(cost_variance)}")
+                            st.sidebar.info("💰 Cost variance data not available")
                 elif st.session_state.cost_summary:
                     # Handle case where cost_summary exists but actual_costs is None or incomplete
                     st.sidebar.info(

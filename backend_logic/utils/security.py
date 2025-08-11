@@ -20,7 +20,7 @@ MAX_FILE_SIZE = 100 * 1024 * 1024  # 100MB
 
 # Allowed file extensions (whitelist)
 ALLOWED_EXTENSIONS = {
-    '.pdf', '.doc', '.docx', '.txt', '.rtf', 
+    '.pdf', '.doc', '.docx', '.txt', '.rtf', '.eml',
     '.jpg', '.jpeg', '.png',
     '.mp3', '.wav', '.mp4', '.mov'
 }
@@ -34,6 +34,9 @@ ALLOWED_MIME_TYPES = {
     'text/plain',
     'application/rtf',
     'text/rtf',
+    # Email
+    'message/rfc822',
+    'application/octet-stream',  # Sometimes used for EML files
     # Images
     'image/jpeg',
     'image/png',
@@ -56,6 +59,8 @@ MIME_EXTENSION_MAP = {
     'text/plain': ['.txt'],
     'application/rtf': ['.rtf'],
     'text/rtf': ['.rtf'],
+    'message/rfc822': ['.eml'],
+    'application/octet-stream': ['.eml'],  # Allow for EML files with generic MIME type
     'image/jpeg': ['.jpg', '.jpeg'],
     'image/png': ['.png'],
     'audio/mpeg': ['.mp3'],

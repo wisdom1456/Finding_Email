@@ -11,8 +11,11 @@ from backend.utils.data_models import (
 )
 
 from .docx_processor import process_docx
+from .doc_processor import process_doc
 from .eml_processor import process_eml
 from .image_processor import process_image
+from .jpg_processor import process_jpg
+from .png_processor import process_png
 from .pdf_processor import process_pdf
 from .txt_processor import process_txt
 
@@ -24,12 +27,12 @@ Processor = Callable[[str, DocumentType, str], Awaitable[ProcessedDocument]]
 PROCESSOR_MAP: dict[str, Processor] = {
     "application/pdf": process_pdf,
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document": process_docx,
-    "application/msword": process_docx,
+    "application/msword": process_doc,  # Updated to use dedicated legacy DOC processor
     "message/rfc822": process_eml,
     "text/plain": process_txt,
-    "image/jpeg": process_image,
-    "image/png": process_image,
-    "image/gif": process_image,
+    "image/jpeg": process_jpg,          # Updated to use dedicated JPG processor
+    "image/png": process_png,           # Updated to use dedicated PNG processor
+    "image/gif": process_image,         # Keep generic processor for other image types
     "image/bmp": process_image,
     "image/tiff": process_image,
 }

@@ -46,172 +46,62 @@ Always close with an urgent, actionable step for the client.
 Apply the same structural and formatting rules regardless of practice area (litigation, family law, real estate, probate, etc.), adjusting only the legal concepts and terminology to match the matter type.
 
 CASE INFORMATION TO PROCESS:
-Client: Amber Bell & Erik Devlin
-Case Type: Contractor Dispute
+Client: Balaji Badam, Rajya Badam
+Case Type: Landlord-Tenant Dispute
 
 Full Case Analysis:
 {
   "intake_analysis": {
-    "client_name": "Amber Bell & Erik Devlin",
-    "attorney_name": "Bernhardt Riley",
-    "case_summary": "Amber Bell and Erik Devlin entered into a contract with LLW Construction, led by Mike Winiarek, for home renovations. They paid a total of $100,000 towards a contract price of $128,335.77. Issues arose with the quality of work, leading to ongoing communication problems and additional costs. A subcontractor has claimed non-payment, and a notice to owner was received. The clients seek financial recovery for incomplete work and reimbursement for out-of-pocket expenses.",
-    "case_type": "Contractor Dispute",
-    "urgency_level": "High",
+    "client_name": "Balaji Badam, Rajya Badam",
+    "attorney_name": "",
+    "case_summary": "Balaji and Rajya Badam own an investment property in Jacksonville, FL, leased to Breanna Herring. The tenant has consistently paid rent late and has not paid the full amount due for June 2025. The Badams are seeking to recover $5,505, which includes unpaid rent and an administrative fee for managing the situation. The tenant's lack of communication and failure to return keys has added to the stress and financial burden on the Badams.",
+    "case_type": "Landlord-Tenant Dispute",
+    "urgency_level": "Very Important",
     "client_priorities": [
-      "Financial Recovery"
+      "Recover unpaid rent and fees"
     ],
     "desired_outcomes": [
-      "Reimbursement of payments made for incomplete or substandard work (~$100,000)"
+      "Issue a demand letter for $5,505"
     ],
     "key_facts": [
-      "Contract signed on November 14, 2024.",
-      "Total contract price is $128,335.77.",
-      "Total payments made to date are $100,000.",
-      "Multiple issues with work quality noted since December 2024.",
-      "Subcontractor claims non-payment from LLW Construction."
+      "Property located at 811 Gate Run Rd, Jacksonville, FL.",
+      "Lease started late 2022, ending June 30, 2025.",
+      "Total rent due is $11,400; only $6,895 paid.",
+      "Tenant paid $1,300 in April and $500 in May.",
+      "No rent paid for June; tenant unresponsive."
     ],
     "parties_involved": [
       {
-        "name": "Amber Bell",
-        "role": "Plaintiff"
+        "name": "Balaji Badam",
+        "role": "Landlord"
       },
       {
-        "name": "Erik Devlin",
-        "role": "Plaintiff"
+        "name": "Rajya Badam",
+        "role": "Landlord"
       },
       {
-        "name": "LLW Construction",
-        "role": "Contractor"
-      },
-      {
-        "name": "Mike Winiarek",
-        "role": "Contractor Representative"
+        "name": "Breanna Herring",
+        "role": "Tenant"
       }
     ],
-    "financial_impact": "Clients have incurred significant costs due to incomplete work and are seeking reimbursement for these expenses.",
+    "financial_impact": "The situation has caused severe financial stress for the Badam family.",
     "legal_claims": [
-      "Breach of Contract",
-      "Negligence"
+      "Breach of lease agreement",
+      "Recovery of unpaid rent and fees"
     ],
-    "summary": "Amber Bell and Erik Devlin entered into a contract with LLW Construction, led by Mike Winiarek, for home renovations. They paid a total of $100,000 towards a contract price of $128,335.77. Issues arose with the quality of work, leading to ongoing communication problems and additional costs. A subcontractor has claimed non-payment, and a notice to owner was received. The clients seek financial recovery for incomplete work and reimbursement for out-of-pocket expenses.",
+    "summary": "Balaji and Rajya Badam own an investment property in Jacksonville, FL, leased to Breanna Herring. The tenant has consistently paid rent late and has not paid the full amount due for June 2025. The Badams are seeking to recover $5,505, which includes unpaid rent and an administrative fee for managing the situation. The tenant's lack of communication and failure to return keys has added to the stress and financial burden on the Badams.",
     "legal_issues": [
-      "Breach of Contract",
-      "Negligence"
+      "Breach of lease agreement",
+      "Recovery of unpaid rent and fees"
     ],
     "timeline": null,
     "parties": [
-      "Amber Bell",
-      "Erik Devlin",
-      "LLW Construction",
-      "Mike Winiarek"
+      "Balaji Badam",
+      "Rajya Badam",
+      "Breanna Herring"
     ]
   },
-  "analyzed_documents": [
-    {
-      "file_name": "Devlin-LLW_Emails_c2df606f.pdf",
-      "filename": "Devlin-LLW_Emails_c2df606f.pdf",
-      "document_type": "Email",
-      "inferred_title": "Communication Breakdown and Project Delays",
-      "analysis": null,
-      "summary": "This document contains a series of emails between Amber Bell, Erik Devlin, and representatives from LLW Construction, primarily Mike Winiarek. The emails detail ongoing issues with the renovation project at 3414 S Belcher Dr, including delays, quality concerns, and communication breakdowns. Despite a contract signed in November 2024, the project remains incomplete with significant discrepancies in timelines and work quality. The clients have paid $100,000 towards the project but face additional costs due to incomplete and substandard work. The emails highlight the clients' frustration and the contractor's inconsistent responses, underscoring the need for financial recovery and resolution of the dispute.",
-      "key_information": "Amber Bell and Erik Devlin have paid $100,000 towards a renovation contract with LLW Construction, which remains incomplete; multiple issues with work quality and delays have been documented since December 2024; communication with contractor Mike Winiarek has been inconsistent, with promises of completion not met; subcontractor claims non-payment, adding to the dispute; clients seek reimbursement for incomplete and substandard work.",
-      "relevance_to_case": "This document is crucial in demonstrating the breach of contract and negligence by LLW Construction. It provides evidence of the contractor's failure to meet agreed timelines and quality standards, supporting the clients' claim for financial recovery. The documented communication issues and subcontractor payment disputes further strengthen the case for reimbursement of the $100,000 paid and additional costs incurred due to the contractor's failures.",
-      "key_points": [],
-      "citations": [],
-      "metadata": null
-    },
-    {
-      "file_name": "Devlin_-_Pictures_of_How_House_was_Left_by_Contractor_848ea645.pdf",
-      "filename": "Devlin_-_Pictures_of_How_House_was_Left_by_Contractor_848ea645.pdf",
-      "document_type": "Image",
-      "inferred_title": "Visual Evidence of Incomplete Renovations",
-      "analysis": null,
-      "summary": "This document contains photographic evidence showing the current state of Amber Bell and Erik Devlin's home after renovations by LLW Construction. The images depict various areas of the home where work appears incomplete or substandard, supporting claims of poor workmanship. These visuals are crucial for demonstrating the extent of unfinished tasks and the quality issues that have arisen, which are central to the clients' claims for financial recovery. The photos provide tangible proof that can be used to substantiate allegations of breach of contract and negligence against the contractor.",
-      "key_information": "The photographs show incomplete and substandard work in various parts of the home; visible defects include unfinished walls, improperly installed fixtures, and incomplete flooring; these images serve as direct evidence of the contractor's failure to meet contractual obligations.",
-      "relevance_to_case": "The document is highly relevant as it provides visual proof of the incomplete and substandard work performed by LLW Construction. This evidence supports the clients' claims for financial recovery by illustrating the contractor's failure to fulfill the contract terms, thereby strengthening the case for breach of contract and negligence. The images are critical for demonstrating the need for reimbursement of the $100,000 paid for unsatisfactory work.",
-      "key_points": [],
-      "citations": [],
-      "metadata": null
-    },
-    {
-      "file_name": "Notice_to_Owner_2b75da09.pdf",
-      "filename": "Notice_to_Owner_2b75da09.pdf",
-      "document_type": "Notice",
-      "inferred_title": "Notice to Owner Regarding Subcontractor Non-Payment",
-      "analysis": null,
-      "summary": "This document is a Notice to Owner received by Amber Bell and Erik Devlin, indicating a claim of non-payment by a subcontractor involved in their home renovation project with LLW Construction. The notice serves as a formal declaration that the subcontractor has not been paid for services rendered, which may impact the property if not resolved. This notice is crucial as it highlights potential financial liabilities and underscores the issues with LLW Construction's management of subcontractor payments, directly affecting the clients' financial recovery efforts.",
-      "key_information": "The Notice to Owner indicates a subcontractor's claim of non-payment for work on Amber Bell and Erik Devlin's property; this notice could lead to a lien on the property if unresolved; it highlights issues with LLW Construction's payment practices, which are central to the clients' claims of breach of contract and negligence.",
-      "relevance_to_case": "The Notice to Owner is directly relevant to Amber Bell and Erik Devlin's case as it substantiates their claims of financial mismanagement by LLW Construction. It supports the clients' position that the contractor failed to fulfill payment obligations, which is critical for their breach of contract and negligence claims. Addressing this notice is essential to prevent further financial impact and to strengthen the case for reimbursement of the $100,000 paid for incomplete or substandard work.",
-      "key_points": [],
-      "citations": [],
-      "metadata": null
-    },
-    {
-      "file_name": "Devlin_-_Project_Management_Proposal_-_Hoffar_Holdings_LLC_6.25.25__1__a5894523.pdf",
-      "filename": "Devlin_-_Project_Management_Proposal_-_Hoffar_Holdings_LLC_6.25.25__1__a5894523.pdf",
-      "document_type": "Contract Proposal",
-      "inferred_title": "Project Management Proposal for Residential Home Completion",
-      "analysis": null,
-      "summary": "This document is a project management proposal from Hoffar Holdings LLC to Erik Devlin and Amber Bell for completing a 2,200 sq. ft. residential home. The proposal outlines the scope of work, including cabinetry, MEP systems, tile work, and interior finishes. It specifies that all materials and labor will be provided by the owner unless stated otherwise. The estimated total cost is $56,000, with a detailed payment schedule starting with a $2,000 deposit. The proposal is valid for 30 days and requires written changes. It emphasizes professional completion and property access by the client.",
-      "key_information": "The proposal involves completing a 2,200 sq. ft. home; scope includes cabinetry, MEP systems, tile work, and interior finishes; estimated total cost is $56,000; payment schedule begins with a $2,000 deposit; proposal valid for 30 days; changes must be in writing.",
-      "relevance_to_case": "This document is relevant to the client's case as it provides a baseline for comparing the scope and cost of work proposed by Hoffar Holdings LLC with the work performed by LLW Construction. It highlights the expected quality and completion standards, which can be used to demonstrate discrepancies in the work quality and financial expectations. This supports the client's claim for financial recovery and reimbursement for incomplete or substandard work.",
-      "key_points": [],
-      "citations": [],
-      "metadata": null
-    },
-    {
-      "file_name": "Devlin_-_Rebuild_Receipts_-_May___June_42242142.pdf",
-      "filename": "Devlin_-_Rebuild_Receipts_-_May___June_42242142.pdf",
-      "document_type": "Receipt",
-      "inferred_title": "Receipts for Home Renovation Purchases - May and June 2025",
-      "analysis": null,
-      "summary": "This document contains receipts for various home renovation materials purchased by Amber Bell and Erik Devlin in May and June 2025. The purchases include ceramic tiles, electrical outlets, screws, and door locks, among other items. The receipts detail the quantities, prices, and delivery information for each item, with some items being delivered directly to the client's address and others picked up in-store. The total amounts for these purchases are documented, providing evidence of the expenses incurred by the clients during their home renovation project.",
-      "key_information": "Receipts detail purchases of renovation materials including tiles, outlets, and screws; Items were delivered to Amber Bell's address or picked up in-store; Total expenses for these purchases are documented, supporting claims of financial outlay.",
-      "relevance_to_case": "These receipts substantiate the financial outlay by Amber Bell and Erik Devlin for home renovation materials, supporting their claim for reimbursement of expenses due to incomplete or substandard work by LLW Construction. The documented expenses align with the client's priority of financial recovery and provide concrete evidence of the costs incurred.",
-      "key_points": [],
-      "citations": [],
-      "metadata": null
-    },
-    {
-      "file_name": "Devlin_-_Contract_for_Construction_-_Highlighted_w_Items_not_Completed_6.9.25_72482011.pdf",
-      "filename": "Devlin_-_Contract_for_Construction_-_Highlighted_w_Items_not_Completed_6.9.25_72482011.pdf",
-      "document_type": "Contract",
-      "inferred_title": "LLW Construction Contract with Amber Bell and Erik Devlin",
-      "analysis": null,
-      "summary": "This document is a construction contract between LLW Construction, Inc. and Amber Bell and Erik Devlin for home renovations at 3414 S. Belcher Dr., Tampa, FL. The contract outlines the scope of work, payment schedule, and terms regarding construction timelines, warranties, and insurance. It includes provisions for changes in work, default by either party, and dispute resolution. The contract specifies a total price of $128,335.77, with a payment schedule tied to project milestones. Several items remain incomplete, and discrepancies in work quality have been noted. The contract also highlights Florida's Construction Lien Law, emphasizing the importance of lien releases to protect the property from claims by unpaid subcontractors.",
-      "key_information": "Contractor: LLW Construction, Inc.; Customers: Amber Bell and Erik Devlin; Property: 3414 S. Belcher Dr., Tampa, FL; Total Contract Price: $128,335.77; Payment Schedule: Tied to project milestones; Issues: Incomplete work, quality discrepancies, subcontractor non-payment; Legal Provisions: Florida Construction Lien Law, warranty, insurance, dispute resolution.",
-      "relevance_to_case": "This contract is central to the client's claims of breach of contract and negligence against LLW Construction. It establishes the agreed-upon scope of work, payment terms, and legal obligations, which are critical for demonstrating the contractor's failure to complete the project as specified. The document supports the client's pursuit of financial recovery for incomplete and substandard work, aligning with their priority of reimbursement for payments made.",
-      "key_points": [],
-      "citations": [],
-      "metadata": null
-    },
-    {
-      "file_name": "Devlin_-_LLW_Text_Thread_f30914a3.pdf",
-      "filename": "Devlin_-_LLW_Text_Thread_f30914a3.pdf",
-      "document_type": "Text Thread",
-      "inferred_title": "Communication Issues with LLW Construction",
-      "analysis": null,
-      "summary": "This document contains a series of text messages between Amber Bell, Erik Devlin, and representatives of LLW Construction, including Mike Winiarek. The messages highlight ongoing communication problems regarding the home renovation project. Amber and Erik express dissatisfaction with the quality of work and delays. They also mention additional costs incurred due to incomplete and substandard work. The text thread reveals attempts by Amber and Erik to resolve these issues, but with limited success. The document underscores the clients' frustration and the contractor's inadequate responses, which are central to their claim for financial recovery.",
-      "key_information": "Amber Bell and Erik Devlin repeatedly express dissatisfaction with the quality of work and delays; LLW Construction, led by Mike Winiarek, fails to adequately address these concerns; Amber and Erik incurred additional costs due to incomplete and substandard work; Communication issues are evident, with Amber and Erik attempting to resolve matters but facing inadequate responses from the contractor.",
-      "relevance_to_case": "This document supports the clients' position by providing evidence of communication issues and dissatisfaction with the contractor's performance, which are central to their claims of breach of contract and negligence. It highlights the financial impact on the clients due to incomplete and substandard work, aligning with their priority of financial recovery.",
-      "key_points": [],
-      "citations": [],
-      "metadata": null
-    },
-    {
-      "file_name": "Devlin_-_Certified_Letter_for_Notice_to_Owner_276bd42f.pdf",
-      "filename": "Devlin_-_Certified_Letter_for_Notice_to_Owner_276bd42f.pdf",
-      "document_type": "Certified Letter",
-      "inferred_title": "Request for Account Statement from Tibbetts Lumber Co",
-      "analysis": null,
-      "summary": "This certified letter, sent by Amber Bell and Erik Devlin to Tibbetts Lumber Co LLC, requests a detailed account statement related to their dealings with LLW Construction Inc. The letter highlights the clients' concerns about a Notice to Owner they received and their contractor's lack of response. It formally asks for a list of outstanding charges, copies of invoices, a breakdown of charges, and a record of payments to prevent a lien on their home. The urgency of the request is emphasized, with a deadline of seven business days for the response.",
-      "key_information": "Amber Bell and Erik Devlin request a detailed account statement from Tibbetts Lumber Co LLC regarding their dealings with LLW Construction Inc.; They have received a Notice to Owner and are concerned about a potential lien on their home; The letter requests a list of outstanding charges, invoices, charge breakdowns, and payment records; The urgency of the request is highlighted with a seven-day response deadline.",
-      "relevance_to_case": "This document is crucial for establishing the financial transactions between the clients and LLW Construction Inc., which directly impacts their claim for financial recovery. It supports the clients' position by documenting their proactive efforts to resolve the issue and prevent a lien, aligning with their priority of reimbursement for incomplete or substandard work.",
-      "key_points": [],
-      "citations": [],
-      "metadata": null
-    }
-  ],
+  "analyzed_documents": [],
   "legal_assessment": {
     "case_type": "General Legal Matter",
     "claim_viability": "Moderate",
@@ -243,8 +133,8 @@ Full Case Analysis:
     {
       "source": "FinalAssessment",
       "file_name": null,
-      "error_message": "System error in final assessment: 'dict' object has no attribute 'error'",
-      "details": "Error type: AttributeError, Details: 'dict' object has no attribute 'error'"
+      "error_message": "Cannot perform final assessment without intake analysis and at least one document or media file.",
+      "details": "Missing required analysis inputs."
     }
   ]
 }

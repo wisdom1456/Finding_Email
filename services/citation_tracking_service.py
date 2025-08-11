@@ -167,14 +167,6 @@ class CitationTrackingService:
                     "citations": getattr(doc_analysis, 'citations', [])
                 })
         
-        # Add case timeline as a source
-        if case_analysis.case_timeline:
-            source_docs.append({
-                "filename": "Case Timeline",
-                "document_type": "timeline",
-                "key_information": f"Timeline with {len(case_analysis.case_timeline)} events",
-                "relevance_to_case": "Chronological sequence of case events"
-            })
         
         return source_docs
 
@@ -432,3 +424,204 @@ This is essential for legal accuracy and attorney review. Every factual claim in
 """
         
         return base_prompt + citation_instructions
+
+    def generate_findings_letter_with_citations(
+        self,
+        letter_content: str,
+        case_analysis: CaseAnalysisResult
+    ) -> str:
+        """
+        Generate a findings letter with embedded citations.
+        
+        Args:
+            letter_content: Original findings letter content (without citations)
+            case_analysis: Complete case analysis for citation generation
+            
+        Returns:
+            Enhanced findings letter with citations embedded
+        """
+        logger.info("Generating findings letter with citations")
+        
+        # Create citation map
+        citation_map = self.create_citation_map(case_analysis, letter_content)
+        
+        # Create enhanced letter content with citations
+        enhanced_content = self._embed_citations_in_letter(letter_content, citation_map)
+        
+        # Add citation appendix
+        citation_appendix = self._generate_citation_appendix(citation_map)
+        
+        # Combine letter and appendix
+        final_content = f"""
+        {enhanced_content}
+        
+        <hr style="margin: 40px 0; border: 1px solid #ccc;">
+        
+        {citation_appendix}
+        """
+        
+        logger.info(
+            f"Generated findings letter with {len(citation_map.citations)} citations",
+            extra={
+                "citation_count": len(citation_map.citations),
+                "client_name": citation_map.client_name
+            }
+        )
+        
+        return final_content
+
+    def _embed_citations_in_letter(self, letter_content: str, citation_map: CitationMap) -> str:
+        """
+        Embed citation references into the letter content.
+        
+        Args:
+            letter_content: Original letter content
+            citation_map: Citation mapping data
+            
+        Returns:
+            Letter content with embedded citation references
+        """
+        enhanced_content = letter_content
+        
+        # Create a mapping of statements to citation numbers
+        citation_refs = {}
+        for i, citation in enumerate(citation_map.citations, 1):
+            citation_refs[citation.statement] = i
+        
+        # Add citation numbers to factual statements
+        for statement, ref_num in citation_refs.items():
+            # Look for the statement in the content and add superscript citation
+            if statement in enhanced_content:
+                citation_link = f'<sup><a href="#citation-{ref_num}" style="color: #0066cc; text-decoration: none;">[{ref_num}]</a></sup>'
+                enhanced_content = enhanced_content.replace(
+                    statement,
+                    f"{statement}{citation_link}",
+                    1  # Only replace first occurrence
+                )
+        
+        return enhanced_content
+
+    def _generate_citation_appendix(self, citation_map: CitationMap) -> str:
+        """
+        Generate a citation appendix with all source references.
+        
+        Args:
+            citation_map: Citation mapping data
+            
+        Returns:
+            HTML formatted citation appendix
+        """
+        appendix_html = """
+        <div style="background-color: #f8f9fa; padding: 20px; border-radius: 5px;">
+            <h3 style="color: #343a40; margin-bottom: 20px;">📚 Citations and Source References</h3>
+        """
+        
+        if not citation_map.citations:
+            appendix_html += """
+            <p style="color: #6c757d;">No specific citations were identified in this letter.</p>
+            """
+        else:
+            appendix_html += """
+            <div style="margin-bottom: 20px;">
+                <h4 style="color: #495057;">Referenced Statements</h4>
+                <ol style="padding-left: 20px;">
+            """
+            
+            for i, citation in enumerate(citation_map.citations, 1):
+                confidence_color = {
+                    "high": "#28a745",
+                    "medium": "#ffc107",
+                    "low": "#dc3545"
+                }.get(citation.confidence, "#6c757d")
+                
+                appendix_html += f"""
+                <li id="citation-{i}" style="margin-bottom: 10px;">
+                    <strong>Statement:</strong> "{citation.statement}"<br>
+                    <strong>Source:</strong> {citation.source_document}
+                    {f'<br><strong>Page:</strong> {citation.page_number}' if citation.page_number else ''}
+                    <br><strong>Confidence:</strong>
+                    <span style="color: {confidence_color}; font-weight: bold;">{citation.confidence.title()}</span>
+                    {f'<br><strong>Context:</strong> {citation.context}' if citation.context else ''}
+                </li>
+                """
+            
+            appendix_html += "</ol></div>"
+        
+        # Add source documents summary
+        appendix_html += """
+        <div style="margin-top: 30px;">
+            <h4 style="color: #495057;">Source Documents Analyzed</h4>
+            <ul style="padding-left: 20px;">
+        """
+        
+        for doc in citation_map.source_documents:
+            appendix_html += f"""
+            <li style="margin-bottom: 8px;">
+                <strong>{doc['filename']}</strong>
+                <span style="color: #6c757d;">({doc.get('document_type', 'document')})</span>
+                {f'<br><em>{doc.get("relevance_to_case", "")}</em>' if doc.get("relevance_to_case") else ''}
+            </li>
+            """
+        
+        appendix_html += """
+            </ul>
+        </div>
+        """
+        
+        # Add metadata
+        appendix_html += f"""
+        <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #dee2e6;">
+            <h4 style="color: #495057;">Citation Summary</h4>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
+                <div>
+                    <strong>Total Citations:</strong> {len(citation_map.citations)}
+                </div>
+                <div>
+                    <strong>Source Documents:</strong> {len(citation_map.source_documents)}
+                </div>
+                <div>
+                    <strong>Coverage:</strong> {citation_map.metadata.get('citation_coverage', 0):.1%}
+                </div>
+                <div>
+                    <strong>Generated:</strong> {citation_map.generation_timestamp.split('T')[0]}
+                </div>
+            </div>
+        </div>
+        </div>
+        """
+        
+        return appendix_html
+
+    def remove_citations_from_letter(self, letter_content: str) -> str:
+        """
+        Remove citation references from letter content to create a clean version.
+        
+        This method strips out citation references in formats like:
+        - [Source: filename.pdf]
+        - [Source: filename.pdf; another_file.docx]
+        
+        Args:
+            letter_content: Original letter content with citations
+            
+        Returns:
+            Clean letter content without citation references
+        """
+        import re
+        
+        # Pattern to match citation references in square brackets
+        # Matches: [Source: filename.ext], [Source: file1.ext; file2.ext], etc.
+        citation_pattern = r'\[Source:[^\]]+\]'
+        
+        # Remove citations and clean up any extra spaces
+        clean_content = re.sub(citation_pattern, '', letter_content)
+        
+        # Clean up multiple spaces that might be left after removing citations
+        clean_content = re.sub(r'\s+', ' ', clean_content)
+        
+        # Clean up any double periods or other punctuation issues
+        clean_content = re.sub(r'\.\.+', '.', clean_content)
+        
+        # Clean up spaces before punctuation
+        clean_content = re.sub(r'\s+([,.;!?])', r'\1', clean_content)
+        
+        return clean_content.strip()

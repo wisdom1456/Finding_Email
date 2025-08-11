@@ -182,13 +182,18 @@ def results_display_section():
                     # Display the main findings letter inline using components.html for complete HTML documents
                     st.subheader("Findings Letter")
                     
+                    # Clean the letter content to remove citations for display
+                    from services.citation_tracking_service import CitationTrackingService
+                    citation_service = CitationTrackingService()
+                    clean_letter = citation_service.remove_citations_from_letter(st.session_state.main_letter)
+                    
                     # Ensure proper styling for dark mode compatibility
                     styled_main_letter = f"""
                     <div style="background-color: white; color: black; padding: 20px; border-radius: 5px;">
-                        {st.session_state.main_letter}
+                        {clean_letter}
                     </div>
                     """
-                    
+
                     components.html(
                         styled_main_letter, height=800, scrolling=True
                     )
@@ -196,8 +201,8 @@ def results_display_section():
                     # Provide separate download buttons for all documents
                     st.subheader("Download Options")
 
-                    col1, col2, col3 = st.columns(3)
-                    _display_download_buttons(col1, col2, col3)
+                    col1, col2, col3, col4 = st.columns(4)
+                    _display_download_buttons(col1, col2, col3, col4)
                 else:
                     st.info("Results are available but in an unexpected format.")
 
@@ -223,20 +228,25 @@ def results_display_section():
             # Display the main findings letter inline using components.html for complete HTML documents
             st.subheader("Findings Letter")
             
+            # Clean the letter content to remove citations for display
+            from services.citation_tracking_service import CitationTrackingService
+            citation_service = CitationTrackingService()
+            clean_letter = citation_service.remove_citations_from_letter(st.session_state.main_letter)
+            
             # Ensure proper styling for dark mode compatibility
             styled_main_letter = f"""
             <div style="background-color: white; color: black; padding: 20px; border-radius: 5px;">
-                {st.session_state.main_letter}
+                {clean_letter}
             </div>
             """
-            
+
             components.html(styled_main_letter, height=800, scrolling=True)
 
             # Provide separate download buttons for all documents
             st.subheader("Download Options")
 
-            col1, col2, col3 = st.columns(3)
-            _display_download_buttons(col1, col2, col3)
+            col1, col2, col3, col4 = st.columns(4)
+            _display_download_buttons(col1, col2, col3, col4)
         else:
             st.info("Results are available but in an unexpected format.")
 
@@ -247,12 +257,16 @@ def results_display_section():
                 st.warning(f"**{error.source}**: {error.error_message}")
 
 
-def _display_download_buttons(col1, col2, col3):
-    """Helper function to display download buttons for the three document types."""
+def _display_download_buttons(col1, col2, col3, col4):
+    """Helper function to display download buttons for the four document types."""
     with col1:
         # Download button for main findings letter as HTML
         try:
-            main_letter_bytes = st.session_state.main_letter.encode("utf-8")
+            # Clean the letter content to remove citations for the standard download
+            from services.citation_tracking_service import CitationTrackingService
+            citation_service = CitationTrackingService()
+            clean_letter = citation_service.remove_citations_from_letter(st.session_state.main_letter)
+            main_letter_bytes = clean_letter.encode("utf-8")
 
             # Get client name for filename
             client_name = "Client"
@@ -338,3 +352,39 @@ def _display_download_buttons(col1, col2, col3):
             )
         except Exception as e:
             st.error(f"Error creating case analysis download: {e}")
+
+    with col4:
+        # Download button for findings letter with citations
+        try:
+            from services.citation_tracking_service import CitationTrackingService
+            
+            # Create citation service and generate letter with citations
+            citation_service = CitationTrackingService()
+            findings_with_citations = citation_service.generate_findings_letter_with_citations(
+                st.session_state.main_letter,
+                st.session_state.final_results
+            )
+            citations_bytes = findings_with_citations.encode("utf-8")
+
+            # Get client name for filename
+            client_name = "Client"
+            if (
+                st.session_state.final_results.intake_analysis
+                and st.session_state.final_results.intake_analysis.client_name
+            ):
+                client_name_raw = (
+                    st.session_state.final_results.intake_analysis.client_name
+                )
+                client_name = "".join(
+                    c for c in client_name_raw if c.isalnum() or c in " _-"
+                ).rstrip()
+
+            st.download_button(
+                label="📑 Findings Letter with Citations",
+                data=citations_bytes,
+                file_name=f"Findings_Letter_Citations_{client_name}.html",
+                mime="text/html",
+                help="Professional findings letter with embedded citations and source references",
+            )
+        except Exception as e:
+            st.error(f"Error creating citations download: {e}")

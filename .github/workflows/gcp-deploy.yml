@@ -24,21 +24,24 @@ jobs:
   build-and-deploy:
     name: Build and Deploy to GCR
     runs-on: ubuntu-latest
+    env:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
     
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
-    
-    - name: Set up Cloud SDK
-      uses: google-github-actions/setup-gcloud@v1
+
+    - name: Authenticate to Google Cloud
+      id: auth
+      uses: 'google-github-actions/auth@v0'
       with:
-        project_id: ${{ env.PROJECT_ID }}
-        service_account_key: ${{ secrets.GCP_SA_KEY }}
-        export_default_credentials: true
-    
+        credentials_json: '${{ secrets.GCP_SA_KEY }}'
+
+    - name: Set up Cloud SDK
+      uses: google-github-actions/setup-gcloud@v0
+
     - name: Configure Docker for GCR
-      run: |
-        gcloud auth configure-docker
+      run: 'gcloud auth configure-docker'
     
     - name: Set environment variables
       run: |

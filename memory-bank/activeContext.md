@@ -29,11 +29,32 @@ Successfully resolved critical ImportError that prevented application startup, i
    - Corrected indentation errors in logging statements
    - Ensured all core modules load properly
 
-### Documentation Update Initiative ✅ IN PROGRESS (2025-08-10)
+### Google Cloud Deployment Initiative ✅ COMPLETED (2025-08-11)
 
-**Objective: Update all documentation to accurately reflect the current Streamlit-only architecture**
+**Objective: Align the project's deployment with the specified Google Cloud Container Registry (GCR) path: `gcr.io/brflorida/legal-portal`**
 
-The application has been refactored from a FastAPI backend architecture to a streamlined Streamlit-only monolithic application with service-oriented internal design. Documentation is being updated to remove outdated FastAPI references and accurately describe the current architecture.
+Successfully re-architected the deployment pipeline to build and deploy a containerized version of the application to Google Cloud Run, using GCR for image storage. **DEPLOYMENT VALIDATION COMPLETED**.
+
+#### Key Implementations:
+1.  **New GCP Workflow (`.github/workflows/gcp-deploy.yml`)**: A comprehensive GitHub Actions workflow to build, test, and deploy the application to GCR and Cloud Run for both staging and production environments.
+2.  **Enhanced Dockerfile**: The root `Dockerfile` was refactored for security and optimization, using a modern Python base image, a non-root user, and a `HEALTHCHECK` instruction for Cloud Run.
+3.  **CI/CD Integration**: The main `ci-cd.yml` workflow was updated to trigger the new `gcp-deploy.yml` workflow, integrating the existing CI pipeline with the new GCP deployment process.
+4.  **Comprehensive Documentation**: Created `docs/GOOGLE_CLOUD_DEPLOYMENT.md` and updated the `README.md` and all memory-bank files to reflect the new deployment architecture.
+5.  **Deployment Fixes Applied**: Resolved critical deployment issues including:
+   - Added `libmagic-dev` dependency to Dockerfile for python-magic compatibility
+   - Included `pydantic-settings>=2.0.0` in requirements.txt
+   - Configured `OPENAI_API_KEY` secret management in GitHub Actions
+   - Fixed platform compatibility with `--platform linux/amd64` Docker builds
+   - Implemented proper secret injection for Cloud Run environment variables
+
+#### Deployment Architecture:
+- **Container Registry**: `gcr.io/brflorida/legal-portal` (Docker image storage)
+- **Cloud Run Services**:
+  - Staging: `legal-portal-staging` in `us-central1`
+  - Production: `legal-portal-production` in `us-central1`
+- **Environment Variables**: Properly configured with secrets management
+- **Health Checks**: Integrated Streamlit health endpoint monitoring
+- **Auto-scaling**: Configured with appropriate CPU/memory limits and concurrency
 
 #### Key Documentation Updates:
 1. **Memory Bank Files** - Core documentation being updated:
@@ -245,4 +266,4 @@ Current service structure under `services/` directory:
 - **Startup**: ✅ Application starts without errors
 - **CI/CD**: ✅ GitHub Actions pipeline configured
 - **Documentation**: 🔄 Update in progress
-- **Production**: ✅ Ready for deployment
+- **Production**: ✅ Ready for production deployment on GCP

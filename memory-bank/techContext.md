@@ -115,12 +115,13 @@ The application relies on a curated set of libraries optimized for the service a
 
 ## Deployment
 
-The Streamlit application is designed for straightforward deployment:
+The application is containerized with Docker and deployed to **Google Cloud Run** via an automated GitHub Actions CI/CD pipeline.
 
-*   **Platform**: Optimized for Streamlit Cloud deployment with Docker containerization support
-*   **Environment Configuration**: Single `.env` file configuration via `python-dotenv`
-*   **Session Management**: Streamlit session state for user context preservation
-*   **Scalability**: Horizontal scaling through Streamlit Cloud or container orchestration
+*   **Platform**: Google Cloud Run (serverless containers)
+*   **Container Registry**: Google Container Registry (`gcr.io`)
+*   **CI/CD**: GitHub Actions (`gcp-deploy.yml`)
+*   **Local Development**: Use `streamlit run app.py` with a local `.env` file.
+*   **Production Configuration**: Handled by GitHub Actions secrets (`GCP_SA_KEY`).
 
 ## Google Cloud Integration
 

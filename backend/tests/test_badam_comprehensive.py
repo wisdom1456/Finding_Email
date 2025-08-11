@@ -254,9 +254,9 @@ def analyze_response(result: dict[str, Any]) -> dict[str, Any]:
     print_banner("📊 RESPONSE ANALYSIS")
 
     if "error" in result:
-logger.error(f'❌ Error Response: {result['error']}')
+logger.error(f"❌ Error Response: {result['error']}")
         if "details" in result:
-logger.info(f'Details: {result['details']}')
+logger.info(f"Details: {result['details']}")
         return {"status": "error", "error": result["error"]}
 
     analysis_data = {}
@@ -276,9 +276,9 @@ logger.info(f'  ✅ Email section: {('Yes' if has_email else 'No')}')
         if "intake_analysis" in analysis:
             intake = analysis["intake_analysis"]
 logger.info('\n📄 Intake Analysis:')
-logger.info(f'  👤 Client: {intake.get('client_name', 'N/A')}')
-logger.info(f'  ⚖️  Case Type: {intake.get('case_type', 'N/A')}')
-logger.info(f'  🚨 Urgency: {intake.get('urgency_level', 'N/A')}')
+logger.info(f"  👤 Client: {intake.get('client_name', 'N/A')}")
+logger.info(f"  ⚖️  Case Type: {intake.get('case_type', 'N/A')}")
+logger.info(f"  🚨 Urgency: {intake.get('urgency_level', 'N/A')}")
 
             analysis_data["intake"] = {
                 "client_name": intake.get("client_name"),
@@ -313,8 +313,8 @@ logger.info(f'      Summary: {summary_length} characters')
         if "legal_assessment" in analysis:
             legal = analysis["legal_assessment"]
 logger.info('\n⚖️  Legal Assessment:')
-logger.info(f'  📊 Claim Viability: {legal.get('claim_viability', 'N/A')}')
-logger.info(f'  📈 Evidence Strength: {legal.get('evidence_strength', 'N/A')}')
+logger.info(f"  📊 Claim Viability: {legal.get('claim_viability', 'N/A')}")
+logger.info(f"  📈 Evidence Strength: {legal.get('evidence_strength', 'N/A')}")
 
             challenges = legal.get("potential_challenges", [])
             if challenges:

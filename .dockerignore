@@ -1,0 +1,26 @@
+# Python cache directories
+__pycache__/
+*.pyc
+
+# Ruff cache
+.ruff_cache/
+
+# Version control
+.git/
+
+# IDE directories
+.vscode/
+
+# Test directories
+test_data/
+test_results/
+test-results/
+
+# Session and output directories
+cost_sessions/
+validation_output/
+
+# Environment files (exclude all except templates and examples)
+.env*
+!.env.template
+!.env.example

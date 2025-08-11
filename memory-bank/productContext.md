@@ -70,7 +70,7 @@ The application maintains all output capabilities with enhanced reliability:
 - **Email Client Compatibility**: Direct .eml file generation for easy email client import
 - **Document Management**: Organized file handling with clear categorization and metadata through dedicated file processing services
 - **Secure Processing**: Enhanced confidential document handling with comprehensive security measures and proper validation
-- **Modern Deployment**: Streamlit application deployment optimized for scalability and reliability
+- **Modern Deployment**: Containerized application deployed to Google Cloud Run for scalability and reliability
 - **UI Preservation**: Interface design patterns maintained for seamless user experience
 
 ### Secondary Benefits

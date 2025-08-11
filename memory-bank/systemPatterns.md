@@ -2,7 +2,7 @@
 
 ## Architecture Overview
 
-The Legal Document Analysis Portal operates on a **Streamlit-based monolithic application** with a sophisticated **service-oriented internal architecture**. This architecture emphasizes modularity, maintainability, and adherence to Single Responsibility Principle while maintaining the simplicity of a single deployment unit.
+The Legal Document Analysis Portal operates on a **Streamlit-based monolithic application**, containerized for deployment on **Google Cloud Run**, with a sophisticated **service-oriented internal architecture**. This architecture emphasizes modularity, maintainability, and adherence to Single Responsibility Principle, now with the scalability and reliability of a managed cloud environment.
 
 The application features a recently implemented **service-oriented design** with the **EmailGeneratorV2 Modular Refactoring** - transforming a monolithic 5,466-line class into a lightweight orchestrator with focused service classes, achieving 94% code reduction while maintaining full backward compatibility.
 
@@ -150,25 +150,54 @@ def test_config_loading():
 
 #### CI/CD Pipeline Pattern
 
+The CI/CD pipeline is managed via GitHub Actions and orchestrated across two main workflow files:
+
+1.  **`ci-cd.yml`**: Handles testing, linting, and security scans on every push, then triggers the deployment workflow.
+2.  **`gcp-deploy.yml`**: Manages the build and deployment to Google Cloud Run for staging and production environments.
+
+*CI/CD Integration*: The `ci-cd.yml` workflow now contains a `trigger-deployment` job that dispatches the `gcp-deploy.yml` workflow, ensuring that deployments only occur after all tests and scans have passed.
+
 ```yaml
-# GitHub Actions Workflow
-name: Startup Tests
-on: [push, pull_request]
+# .github/workflows/gcp-deploy.yml (Deployment snippet)
+name: Deploy to Google Cloud Container Registry
+
+on:
+  push:
+    branches: [main, develop]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+        - staging
+        - production
+
 jobs:
-  test:
+  build-and-deploy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
-      - name: Set up Python
-        uses: actions/setup-python@v2
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: 'google-github-actions/auth@v2'
         with:
-          python-version: '3.12'
-      - name: Install dependencies
+          credentials_json: '${{ secrets.GCP_SA_KEY }}'
+
+      - name: Build and Push to Google Container Registry
+        # This step would build the docker image and push it to GCR
         run: |
-          pip install -r requirements.txt
-      - name: Run startup tests
+          # ... commands to build and push docker image
+          echo "Image pushed to gcr.io/brflorida/legal-portal"
+
+      - name: Deploy to Cloud Run
+        # This step would deploy the new image to the correct Cloud Run service
         run: |
-          python -m pytest tests/test_startup.py -v
+          # ... gcloud run deploy command
+          echo "Deployed to Cloud Run"
 ```
 
 ### Service-Oriented Internal Design

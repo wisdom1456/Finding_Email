@@ -1,6 +1,22 @@
 # Progress Log
 
-## Current Task: Application Startup Fix (2025-08-10) ✅ COMPLETED
+## Current Task: Google Cloud Deployment (2025-08-11) ✅ COMPLETED
+
+### Objective
+Align the project's deployment with the specified Google Cloud Container Registry (GCR) path: `gcr.io/brflorida/legal-portal`, and deploy the application to Google Cloud Run.
+
+### Status
+✅ **COMPLETED** - The application is now containerized and deployed to Google Cloud Run via an automated CI/CD pipeline.
+
+### Implementation Summary
+1.  **New GCP Workflow**: Created `.github/workflows/gcp-deploy.yml` for building, testing, and deploying to GCR and Cloud Run.
+2.  **Dockerfile Enhancement**: Refactored the `Dockerfile` for security and optimization.
+3.  **CI/CD Integration**: Updated `ci-cd.yml` to trigger the new GCP deployment workflow.
+4.  **Comprehensive Documentation**: Created `docs/GOOGLE_CLOUD_DEPLOYMENT.md` and updated `README.md` and all memory-bank files.
+
+---
+
+## Previous Task: Application Startup Fix (2025-08-10) ✅ COMPLETED
 
 ### Objective
 Fix critical ImportError preventing application startup and implement comprehensive testing infrastructure to prevent future startup issues.

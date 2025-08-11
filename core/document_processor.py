@@ -12,16 +12,17 @@ from backend.utils.data_models import DocumentType, ProcessedDocument
 
 # Maps file content types to their respective processing functions
 from backend.utils.file_processors import PROCESSOR_MAP
+from utils.logging_config import get_module_logger
 
 # Import security functions for secure file handling
 from utils.security import (
-    secure_filename,
-    validate_file_size,
-    validate_file_content,
+    MAX_FILE_SIZE,
     create_secure_temp_file,
-    MAX_FILE_SIZE
+    secure_filename,
+    validate_file_content,
+    validate_file_size,
 )
-from utils.logging_config import get_module_logger
+
 
 logger = get_module_logger(__name__)
 
@@ -95,21 +96,20 @@ class DocumentProcessor:
         # Third check: Pattern matching for sanitized filenames
         # Sanitized filenames have format: original_name_with_underscores_hashcode.ext
         # We need to check if the base part matches any intake filename pattern
-        import re
         
         # Extract the base part of the sanitized filename (remove hash suffix)
         # Hash is 8 characters: _a1b2c3d4
-        match = re.match(r'^(.+?)_[a-f0-9]{8}(\.[^.]+)?$', filename)
+        match = re.match(r"^(.+?)_[a-f0-9]{8}(\.[^.]+)?$", filename)
         if match:
             base_part = match.group(1).lower()
-            extension = match.group(2) if match.group(2) else ''
+            extension = match.group(2) if match.group(2) else ""
             
             # Check each intake filename to see if it could have produced this sanitized name
             for intake_name in intake_filenames:
                 # Sanitize the intake filename the same way to compare
                 # Simulate what secure_filename would do (without the hash)
-                intake_base = re.sub(r'[^a-zA-Z0-9._-]', '_', os.path.splitext(intake_name)[0])
-                intake_base = intake_base.lstrip('.').rstrip('. ').lower()
+                intake_base = re.sub(r"[^a-zA-Z0-9._-]", "_", os.path.splitext(intake_name)[0])
+                intake_base = intake_base.lstrip(".").rstrip(". ").lower()
                 
                 if base_part == intake_base or base_part.startswith(intake_base):
                     result = DocumentType.INTAKE_FORM
@@ -131,8 +131,8 @@ class DocumentProcessor:
         # Fourth check: Enhanced keyword-based detection for intake forms
         # Check if filename contains intake-related keywords
         intake_keywords = [
-            'intake', 'questionnaire', 'assessment', 'client_form', 'client_info',
-            'initial_form', 'consultation', 'new_client', 'case_intake', 'legal_intake'
+            "intake", "questionnaire", "assessment", "client_form", "client_info",
+            "initial_form", "consultation", "new_client", "case_intake", "legal_intake"
         ]
         
         # Check both original and sanitized filenames for keywords
@@ -252,7 +252,7 @@ class DocumentProcessor:
                         }
                     )
                     raise DocumentProcessingError(
-                        f"Security validation failed for '{uploaded_file.name}': {str(e)}"
+                        f"Security validation failed for '{uploaded_file.name}': {e!s}"
                     )
 
                 # TODO: Add PDF compression support for large files
@@ -311,7 +311,7 @@ class DocumentProcessor:
                         os.remove(temp_file)
                     except OSError as e:
                         logger.warning(
-                            f"Failed to remove temporary file",
+                            "Failed to remove temporary file",
                             extra={"temp_file": temp_file, "error": str(e)}
                         )
 

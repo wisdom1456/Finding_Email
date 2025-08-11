@@ -20,10 +20,12 @@ logger = get_module_logger(__name__)
 
 
 # Import the main processing function and required modules
-from core.main_processor import process_case_documents
-
 # H3 DEBUG: Architecture import confirmation - FIXED
 import json
+
+from core.main_processor import process_case_documents
+
+
 logger.info(
     f"DEBUG_H3_FIXED: {json.dumps({'module': 'test_devlin_workflow', 'hypothesis_id': 'H3', 'action': 'import_confirmation_fixed', 'imported_module': 'core.main_processor', 'line': 23, 'architecture': 'NEW_Streamlit', 'fix_applied': True})}"
 )

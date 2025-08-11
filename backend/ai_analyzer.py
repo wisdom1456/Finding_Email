@@ -36,7 +36,7 @@ def call_openai_api(prompt: str, model: str = "gpt-3.5-turbo") -> Union[str, dic
         return f"AI response for: {prompt[:50]}..."
         
     except Exception as e:
-        logging.error(f"OpenAI API call failed: {e}")
+        logging.exception(f"OpenAI API call failed: {e}")
         return {"error": str(e), "status_code": 500}
 
 
@@ -94,7 +94,7 @@ def analyze_document(document_text: str, context: dict[str, Any]) -> dict[str, A
             "summary": "Document analysis failed due to AI error.",
             "key_points": ["Analysis unavailable"],
             "ai_analysis_failed": True,
-            "error_details": response['error']
+            "error_details": response["error"]
         }
     else:
         # Successful response - parse the AI response

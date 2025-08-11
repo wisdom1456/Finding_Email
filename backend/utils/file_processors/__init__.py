@@ -10,13 +10,13 @@ from backend.utils.data_models import (
     SavedDocument,
 )
 
-from .docx_processor import process_docx
 from .doc_processor import process_doc
+from .docx_processor import process_docx
 from .eml_processor import process_eml
 from .image_processor import process_image
 from .jpg_processor import process_jpg
-from .png_processor import process_png
 from .pdf_processor import process_pdf
+from .png_processor import process_png
 from .txt_processor import process_txt
 
 

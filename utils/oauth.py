@@ -1,13 +1,17 @@
 """OAuth 2.0/OIDC integration for enterprise SSO."""
+from __future__ import annotations
+
+import json
+import logging
+import os
+import secrets
+from datetime import datetime, timedelta
+from typing import Dict, Optional
+from urllib.parse import parse_qs, urlencode, urlparse
+
 import streamlit as st
 from authlib.integrations.requests_client import OAuth2Session
-import os
-from typing import Dict, Optional
-import logging
-import json
-from datetime import datetime, timedelta
-import secrets
-from urllib.parse import urlencode, parse_qs, urlparse
+
 
 logger = logging.getLogger(__name__)
 
@@ -71,24 +75,24 @@ class OAuthProvider:
         
         # Build authorization URL
         params = {
-            'client_id': self.client_id,
-            'redirect_uri': self.redirect_uri,
-            'scope': self.config["scope"],
-            'response_type': 'code',
-            'state': state,
-            'access_type': 'offline',
-            'prompt': 'select_account'
+            "client_id": self.client_id,
+            "redirect_uri": self.redirect_uri,
+            "scope": self.config["scope"],
+            "response_type": "code",
+            "state": state,
+            "access_type": "offline",
+            "prompt": "select_account"
         }
         
         # Add provider-specific parameters
-        if self.provider == 'azure':
-            params['response_mode'] = 'query'
+        if self.provider == "azure":
+            params["response_mode"] = "query"
         
         authorization_url = f"{self.config['authorize_url']}?{urlencode(params)}"
         
         # Store state in session
-        st.session_state['oauth_state'] = state
-        st.session_state['oauth_provider'] = self.provider
+        st.session_state["oauth_state"] = state
+        st.session_state["oauth_provider"] = self.provider
         
         logger.info(f"Generated OAuth authorization URL for provider: {self.provider}")
         
@@ -97,7 +101,7 @@ class OAuthProvider:
     def handle_callback(self, code: str, state: str) -> Optional[Dict]:
         """Handle OAuth callback."""
         # Verify state for CSRF protection
-        stored_state = st.session_state.get('oauth_state')
+        stored_state = st.session_state.get("oauth_state")
         if not stored_state or stored_state != state:
             logger.error("OAuth state mismatch - possible CSRF attack")
             return None
@@ -121,16 +125,16 @@ class OAuthProvider:
             )
             
             # Store token in session
-            st.session_state['oauth_token'] = token
-            st.session_state['oauth_token_expiry'] = datetime.utcnow() + timedelta(seconds=token.get('expires_in', 3600))
+            st.session_state["oauth_token"] = token
+            st.session_state["oauth_token_expiry"] = datetime.utcnow() + timedelta(seconds=token.get("expires_in", 3600))
             
             # Get user info
             client.token = token
             
             # Handle provider-specific user info retrieval
-            if self.provider == 'azure':
+            if self.provider == "azure":
                 # Azure requires authorization header
-                headers = {'Authorization': f"Bearer {token['access_token']}"}
+                headers = {"Authorization": f"Bearer {token['access_token']}"}
                 resp = client.get(self.config["userinfo_url"], headers=headers)
             else:
                 resp = client.get(self.config["userinfo_url"])
@@ -143,7 +147,7 @@ class OAuthProvider:
             logger.info(f"OAuth login successful for user: {normalized_info.get('email')}")
             
             # Clear OAuth state
-            del st.session_state['oauth_state']
+            del st.session_state["oauth_state"]
             
             return normalized_info
             
@@ -154,44 +158,35 @@ class OAuthProvider:
     def _normalize_userinfo(self, userinfo: Dict) -> Dict:
         """Normalize user info across different providers."""
         normalized = {
-            'provider': self.provider,
-            'raw_data': userinfo
+            "provider": self.provider,
+            "raw_data": userinfo
         }
         
-        if self.provider == 'google':
+        if self.provider == "google":
             normalized.update({
-                'email': userinfo.get('email'),
-                'name': userinfo.get('name'),
-                'picture': userinfo.get('picture'),
-                'email_verified': userinfo.get('email_verified', False),
-                'sub': userinfo.get('sub')  # Unique identifier
+                "email": userinfo.get("email"),
+                "name": userinfo.get("name"),
+                "picture": userinfo.get("picture"),
+                "email_verified": userinfo.get("email_verified", False),
+                "sub": userinfo.get("sub")  # Unique identifier
             })
         
-        elif self.provider == 'azure':
+        elif self.provider == "azure":
             normalized.update({
-                'email': userinfo.get('mail') or userinfo.get('userPrincipalName'),
-                'name': userinfo.get('displayName'),
-                'picture': None,  # Azure doesn't provide picture in basic scope
-                'email_verified': True,  # Azure AD emails are verified
-                'sub': userinfo.get('id')  # Unique identifier
+                "email": userinfo.get("mail") or userinfo.get("userPrincipalName"),
+                "name": userinfo.get("displayName"),
+                "picture": None,  # Azure doesn't provide picture in basic scope
+                "email_verified": True,  # Azure AD emails are verified
+                "sub": userinfo.get("id")  # Unique identifier
             })
         
-        elif self.provider == 'okta':
+        elif self.provider == "okta" or self.provider == "auth0":
             normalized.update({
-                'email': userinfo.get('email'),
-                'name': userinfo.get('name'),
-                'picture': userinfo.get('picture'),
-                'email_verified': userinfo.get('email_verified', False),
-                'sub': userinfo.get('sub')  # Unique identifier
-            })
-        
-        elif self.provider == 'auth0':
-            normalized.update({
-                'email': userinfo.get('email'),
-                'name': userinfo.get('name'),
-                'picture': userinfo.get('picture'),
-                'email_verified': userinfo.get('email_verified', False),
-                'sub': userinfo.get('sub')  # Unique identifier
+                "email": userinfo.get("email"),
+                "name": userinfo.get("name"),
+                "picture": userinfo.get("picture"),
+                "email_verified": userinfo.get("email_verified", False),
+                "sub": userinfo.get("sub")  # Unique identifier
             })
         
         return normalized
@@ -215,8 +210,8 @@ class OAuthProvider:
             )
             
             # Update token in session
-            st.session_state['oauth_token'] = token
-            st.session_state['oauth_token_expiry'] = datetime.utcnow() + timedelta(seconds=token.get('expires_in', 3600))
+            st.session_state["oauth_token"] = token
+            st.session_state["oauth_token_expiry"] = datetime.utcnow() + timedelta(seconds=token.get("expires_in", 3600))
             
             logger.info("OAuth token refreshed successfully")
             return token
@@ -231,10 +226,10 @@ class OAuthProvider:
         # Some providers don't support token revocation
         
         revoke_urls = {
-            'google': 'https://oauth2.googleapis.com/revoke',
-            'azure': None,  # Azure doesn't have a revoke endpoint
-            'okta': f"{os.getenv('OKTA_DOMAIN')}/oauth2/v1/revoke",
-            'auth0': f"{os.getenv('AUTH0_DOMAIN')}/oauth/revoke"
+            "google": "https://oauth2.googleapis.com/revoke",
+            "azure": None,  # Azure doesn't have a revoke endpoint
+            "okta": f"{os.getenv('OKTA_DOMAIN')}/oauth2/v1/revoke",
+            "auth0": f"{os.getenv('AUTH0_DOMAIN')}/oauth/revoke"
         }
         
         revoke_url = revoke_urls.get(self.provider)
@@ -245,24 +240,23 @@ class OAuthProvider:
         try:
             import requests
             
-            if self.provider == 'google':
-                response = requests.post(revoke_url, params={'token': token})
+            if self.provider == "google":
+                response = requests.post(revoke_url, params={"token": token})
             else:
                 response = requests.post(
                     revoke_url,
                     data={
-                        'token': token,
-                        'client_id': self.client_id,
-                        'client_secret': self.client_secret
+                        "token": token,
+                        "client_id": self.client_id,
+                        "client_secret": self.client_secret
                     }
                 )
             
             if response.status_code == 200:
                 logger.info("OAuth token revoked successfully")
                 return True
-            else:
-                logger.error(f"Failed to revoke token: {response.text}")
-                return False
+            logger.error(f"Failed to revoke token: {response.text}")
+            return False
                 
         except Exception as e:
             logger.error(f"Token revocation error: {e}")
@@ -271,7 +265,7 @@ class OAuthProvider:
     @staticmethod
     def is_token_expired() -> bool:
         """Check if the OAuth token is expired."""
-        expiry = st.session_state.get('oauth_token_expiry')
+        expiry = st.session_state.get("oauth_token_expiry")
         if not expiry:
             return True
         
@@ -280,7 +274,7 @@ class OAuthProvider:
     @staticmethod
     def get_current_token() -> Optional[Dict]:
         """Get current OAuth token from session."""
-        return st.session_state.get('oauth_token')
+        return st.session_state.get("oauth_token")
 
 
 class OAuthManager:
@@ -295,10 +289,10 @@ class OAuthManager:
         """Load all configured OAuth providers."""
         # Check which providers are configured
         provider_checks = {
-            'google': 'GOOGLE_CLIENT_ID',
-            'azure': 'AZURE_CLIENT_ID',
-            'okta': 'OKTA_CLIENT_ID',
-            'auth0': 'AUTH0_CLIENT_ID'
+            "google": "GOOGLE_CLIENT_ID",
+            "azure": "AZURE_CLIENT_ID",
+            "okta": "OKTA_CLIENT_ID",
+            "auth0": "AUTH0_CLIENT_ID"
         }
         
         for provider, env_var in provider_checks.items():
@@ -322,12 +316,12 @@ class OAuthManager:
         # Check if we're handling a callback
         query_params = st.experimental_get_query_params()
         
-        if 'code' in query_params and 'state' in query_params:
-            code = query_params['code'][0]
-            state = query_params['state'][0]
+        if "code" in query_params and "state" in query_params:
+            code = query_params["code"][0]
+            state = query_params["state"][0]
             
             # Get the provider from session
-            provider_name = st.session_state.get('oauth_provider')
+            provider_name = st.session_state.get("oauth_provider")
             if not provider_name:
                 logger.error("No OAuth provider in session during callback")
                 return None

@@ -1,45 +1,46 @@
 from __future__ import annotations
 
 import asyncio
-import streamlit as st
-import uuid
-import time
 import os
+import time
+import uuid
 
-from core.main_processor import process_case_documents
-from utils.helpers import handle_file_uploads
-
-# Enhanced observability imports
-from utils.logging_config import (
-    setup_logging,
-    app_logger,
-    auth_logger,
-    document_logger,
-    performance_logger,
-    log_authentication,
-    log_document_processing,
-    log_performance_metric,
-    log_security_event,
-    audit_logger,
-    MetricsCollector
-)
-from utils.structured_logger import request_id_var, user_id_var, session_id_var
-from utils.tracing import trace, Span
-from utils.metrics import MetricsCollector
+import streamlit as st
 
 from components.ui_components import (
     case_information_form,
     file_upload_section,
     results_display_section,
 )
+from core.main_processor import process_case_documents
 
 # Import authentication modules
 from utils.auth import AuthManager, Permissions, UserRole
-from utils.session_manager import SessionManager, SessionMonitor
+from utils.helpers import handle_file_uploads
+
+# Enhanced observability imports
+from utils.logging_config import (
+    MetricsCollector,
+    app_logger,
+    audit_logger,
+    auth_logger,
+    document_logger,
+    log_authentication,
+    log_document_processing,
+    log_performance_metric,
+    log_security_event,
+    performance_logger,
+    setup_logging,
+)
+from utils.metrics import MetricsCollector
 from utils.oauth import OAuthManager
+from utils.session_manager import SessionManager, SessionMonitor
+from utils.structured_logger import request_id_var, session_id_var, user_id_var
+from utils.tracing import Span, trace
+
 
 # Initialize enhanced logging
-setup_logging(app_name="legal-portal", level=os.getenv('LOG_LEVEL', 'INFO'))
+setup_logging(app_name="legal-portal", level=os.getenv("LOG_LEVEL", "INFO"))
 
 # Initialize authentication components
 auth_manager = AuthManager()
@@ -95,9 +96,9 @@ def start_analysis():
     # Set request context
     request_id = str(uuid.uuid4())
     request_id_var.set(request_id)
-    username = st.session_state.get('username', 'unknown')
+    username = st.session_state.get("username", "unknown")
     user_id_var.set(username)
-    session_id = st.session_state.get('session_id', str(uuid.uuid4()))
+    session_id = st.session_state.get("session_id", str(uuid.uuid4()))
     session_id_var.set(session_id)
     
     # Create tracing span
@@ -108,7 +109,7 @@ def start_analysis():
                    request_id=request_id)
     
     # Record metrics
-    MetricsCollector.record_counter("analysis.started", tags={'user': username})
+    MetricsCollector.record_counter("analysis.started", tags={"user": username})
 
     intake_form = st.session_state.get("intake_form")
     case_documents = st.session_state.get("case_documents", [])
@@ -116,7 +117,7 @@ def start_analysis():
     if not intake_form:
         app_logger.warning("Analysis start failed: no intake form provided",
                           username=username)
-        MetricsCollector.record_error("analysis", tags={'reason': 'no_intake_form'})
+        MetricsCollector.record_error("analysis", tags={"reason": "no_intake_form"})
         span.log("Failed: no intake form")
         span.finish(status="error")
         st.error("An intake form is required to start the analysis.")
@@ -202,9 +203,9 @@ def show_login_page():
     st.subheader("Secure Enterprise Login")
     
     # Set request context for login page
-    if 'login_request_id' not in st.session_state:
-        st.session_state['login_request_id'] = str(uuid.uuid4())
-    request_id_var.set(st.session_state['login_request_id'])
+    if "login_request_id" not in st.session_state:
+        st.session_state["login_request_id"] = str(uuid.uuid4())
+    request_id_var.set(st.session_state["login_request_id"])
     
     # Create tabs for different login methods
     tab1, tab2, tab3 = st.tabs(["Login", "SSO Login", "Register"])
@@ -220,12 +221,12 @@ def show_login_page():
                 user_id_var.set(username)
                 session_id = str(uuid.uuid4())
                 session_id_var.set(session_id)
-                st.session_state['session_id'] = session_id
+                st.session_state["session_id"] = session_id
                 
                 # Create user session
                 user_data = {
-                    'name': name,
-                    'role': st.session_state.get('role', UserRole.VIEWER).value
+                    "name": name,
+                    "role": st.session_state.get("role", UserRole.VIEWER).value
                 }
                 session_manager.create_user_session(username, user_data)
                 
@@ -234,7 +235,7 @@ def show_login_page():
                     username=username,
                     action="login",
                     success=True,
-                    ip_address=st.session_state.get('client_ip', 'unknown')
+                    ip_address=st.session_state.get("client_ip", "unknown")
                 )
                 
                 # Log to session monitor
@@ -248,17 +249,17 @@ def show_login_page():
                     username=username or "unknown",
                     action="login",
                     success=False,
-                    ip_address=st.session_state.get('client_ip', 'unknown')
+                    ip_address=st.session_state.get("client_ip", "unknown")
                 )
                 
                 # Security event for multiple failed attempts
-                if st.session_state.get('failed_login_attempts', 0) > 3:
+                if st.session_state.get("failed_login_attempts", 0) > 3:
                     log_security_event(
                         event_type="multiple_failed_logins",
                         severity="medium",
                         description=f"Multiple failed login attempts for user {username}",
                         username=username,
-                        attempts=st.session_state.get('failed_login_attempts', 0)
+                        attempts=st.session_state.get("failed_login_attempts", 0)
                     )
     
     with tab2:
@@ -268,30 +269,30 @@ def show_login_page():
         userinfo = oauth_manager.handle_oauth_callback()
         if userinfo:
             # Process successful OAuth login
-            email = userinfo.get('email')
-            name = userinfo.get('name', email)
+            email = userinfo.get("email")
+            name = userinfo.get("name", email)
             
             # Register or update user in auth system
-            if not auth_manager.config['credentials']['usernames'].get(email):
+            if not auth_manager.config["credentials"]["usernames"].get(email):
                 auth_manager.register_user(
                     username=email,
                     email=email,
                     name=name,
                     password=secrets.token_urlsafe(32),  # Random password for SSO users
-                    role='user'
+                    role="user"
                 )
             
             # Set session state
-            st.session_state['authentication_status'] = True
-            st.session_state['username'] = email
-            st.session_state['name'] = name
-            st.session_state['role'] = auth_manager._get_user_role(email)
+            st.session_state["authentication_status"] = True
+            st.session_state["username"] = email
+            st.session_state["name"] = name
+            st.session_state["role"] = auth_manager._get_user_role(email)
             
             # Create user session
             session_manager.create_user_session(email, userinfo)
             
             # Log SSO login
-            session_monitor.log_login(email, st.session_state.get('session_id', 'unknown'))
+            session_monitor.log_login(email, st.session_state.get("session_id", "unknown"))
             
             st.success(f"Welcome, {name}!")
             st.rerun()
@@ -370,7 +371,7 @@ def show_admin_panel():
             col1, col2, col3 = st.columns(3)
             
             with col1:
-                selected_user = st.selectbox("Select User", [u['username'] for u in users])
+                selected_user = st.selectbox("Select User", [u["username"] for u in users])
             
             with col2:
                 new_role = st.selectbox("New Role", ["admin", "user", "viewer", "auditor"])
@@ -378,10 +379,10 @@ def show_admin_panel():
                     if auth_manager.update_user_role(selected_user, new_role):
                         st.success(f"Updated role for {selected_user}")
                         session_monitor.log_role_changed(
-                            selected_user, 
-                            "unknown", 
-                            new_role, 
-                            st.session_state.get('username')
+                            selected_user,
+                            "unknown",
+                            new_role,
+                            st.session_state.get("username")
                         )
                         st.rerun()
             
@@ -391,14 +392,14 @@ def show_admin_panel():
                         st.success(f"Deleted user {selected_user}")
                         session_monitor.log_user_deleted(
                             selected_user,
-                            st.session_state.get('username')
+                            st.session_state.get("username")
                         )
                         st.rerun()
             
             # Password reset
             st.divider()
             st.subheader("Password Reset")
-            reset_user = st.selectbox("User to Reset", [u['username'] for u in users], key="reset_user")
+            reset_user = st.selectbox("User to Reset", [u["username"] for u in users], key="reset_user")
             new_password = st.text_input("New Password", type="password", key="reset_password")
             if st.button("Reset Password"):
                 if auth_manager.reset_password(reset_user, new_password):
@@ -458,8 +459,8 @@ def main():
     
     # Log application startup
     app_logger.info("Legal Document Analysis Portal starting up",
-                   version=os.getenv('APP_VERSION', '1.0.0'),
-                   environment=os.getenv('ENVIRONMENT', 'development'))
+                   version=os.getenv("APP_VERSION", "1.0.0"),
+                   environment=os.getenv("ENVIRONMENT", "development"))
     
     # Record startup metric
     MetricsCollector.record_counter("app.startup")
@@ -468,16 +469,16 @@ def main():
         page_title="Legal Document Analysis Portal",
         layout="wide",
         menu_items={
-            'About': "Legal Document Analysis Portal v2.1 - Enterprise Edition with Authentication"
+            "About": "Legal Document Analysis Portal v2.1 - Enterprise Edition with Authentication"
         }
     )
 
     initialize_session_state()
     
     # Check session timeout with observability
-    if session_manager.check_session_timeout() and st.session_state.get('authentication_status'):
-        username = st.session_state.get('username', 'unknown')
-        session_id = st.session_state.get('session_id', 'unknown')
+    if session_manager.check_session_timeout() and st.session_state.get("authentication_status"):
+        username = st.session_state.get("username", "unknown")
+        session_id = st.session_state.get("session_id", "unknown")
         
         st.warning("Your session has expired. Please login again.")
         
@@ -495,17 +496,17 @@ def main():
         )
         
         # Record metric
-        MetricsCollector.record_counter("sessions.timeout", tags={'user': username})
+        MetricsCollector.record_counter("sessions.timeout", tags={"user": username})
         
         session_monitor.log_timeout(username, session_id)
-        st.session_state['authentication_status'] = False
+        st.session_state["authentication_status"] = False
     
     # AUTHENTICATION BYPASSED - Running without login requirement
     # Set up default session state for bypassed authentication
-    st.session_state['authentication_status'] = True
-    st.session_state['username'] = 'default_user'
-    st.session_state['name'] = 'User'
-    st.session_state['role'] = UserRole.ADMIN  # Give admin role for full access
+    st.session_state["authentication_status"] = True
+    st.session_state["username"] = "default_user"
+    st.session_state["name"] = "User"
+    st.session_state["role"] = UserRole.ADMIN  # Give admin role for full access
     
     # Main application content without authentication
     st.title("⚖️ Legal Document Analysis Portal")

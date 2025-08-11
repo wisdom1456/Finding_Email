@@ -49,7 +49,7 @@ async def process_jpg(
                     for tag_id in exifdata:
                         tag = TAGS.get(tag_id, tag_id)
                         data = exifdata.get(tag_id)
-                        if tag in ['Make', 'Model', 'DateTime', 'Software']:
+                        if tag in ["Make", "Model", "DateTime", "Software"]:
                             metadata_entries.append(f"{tag}: {data}")
                     if metadata_entries:
                         metadata_info = " [EXIF: " + ", ".join(metadata_entries) + "]"
@@ -59,8 +59,8 @@ async def process_jpg(
             
             # JPG-specific preprocessing
             # Convert to RGB if needed (JPG doesn't support transparency)
-            if image.mode != 'RGB':
-                image = image.convert('RGB')
+            if image.mode != "RGB":
+                image = image.convert("RGB")
             
             # Convert to grayscale for OCR
             image = image.convert("L")
@@ -85,7 +85,7 @@ async def process_jpg(
             
             # Properly format the config string for tesseract command line
             # The -c flag requires the parameter to be properly quoted to handle special characters
-            custom_config = f'--oem 3 --psm 6 -c tessedit_char_whitelist={char_whitelist}'
+            custom_config = f"--oem 3 --psm 6 -c tessedit_char_whitelist={char_whitelist}"
             
             logger.debug(f"OCR config for {original_filename}: {custom_config}")
             text_content = pytesseract.image_to_string(image, config=custom_config)

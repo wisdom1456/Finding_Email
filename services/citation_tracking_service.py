@@ -15,12 +15,13 @@ from __future__ import annotations
 
 import json
 import re
+from dataclasses import asdict, dataclass
 from typing import Any, Dict, List, Optional, Tuple
-from dataclasses import dataclass, asdict
 from uuid import uuid4
 
 from backend.utils.data_models import CaseAnalysisResult
 from utils.logging_config import get_module_logger
+
 
 logger = get_module_logger(__name__)
 
@@ -64,7 +65,7 @@ class CitationTrackingService:
         logger.info("CitationTrackingService initialized")
 
     def create_citation_map(
-        self, 
+        self,
         case_analysis: CaseAnalysisResult,
         letter_content: str
     ) -> CitationMap:
@@ -87,13 +88,13 @@ class CitationTrackingService:
         
         # Extract basic case information
         client_name = (
-            case_analysis.intake_analysis.client_name 
-            if case_analysis.intake_analysis 
+            case_analysis.intake_analysis.client_name
+            if case_analysis.intake_analysis
             else "Unknown Client"
         )
         case_type = (
-            case_analysis.intake_analysis.case_type 
-            if case_analysis.intake_analysis 
+            case_analysis.intake_analysis.case_type
+            if case_analysis.intake_analysis
             else "Legal Matter"
         )
         
@@ -150,7 +151,7 @@ class CitationTrackingService:
             source_docs.append({
                 "filename": "Client Intake Form",
                 "document_type": "intake",
-                "key_information": getattr(case_analysis.intake_analysis, 'summary', ''),
+                "key_information": getattr(case_analysis.intake_analysis, "summary", ""),
                 "relevance_to_case": "Primary case information and client details"
             })
         
@@ -159,20 +160,20 @@ class CitationTrackingService:
             for doc_analysis in case_analysis.analyzed_documents:
                 source_docs.append({
                     "filename": doc_analysis.filename,
-                    "document_type": getattr(doc_analysis, 'document_type', 'document'),
-                    "summary": getattr(doc_analysis, 'summary', ''),
-                    "key_information": getattr(doc_analysis, 'key_information', ''),
-                    "relevance_to_case": getattr(doc_analysis, 'relevance_to_case', ''),
-                    "legal_significance": getattr(doc_analysis, 'legal_significance', ''),
-                    "citations": getattr(doc_analysis, 'citations', [])
+                    "document_type": getattr(doc_analysis, "document_type", "document"),
+                    "summary": getattr(doc_analysis, "summary", ""),
+                    "key_information": getattr(doc_analysis, "key_information", ""),
+                    "relevance_to_case": getattr(doc_analysis, "relevance_to_case", ""),
+                    "legal_significance": getattr(doc_analysis, "legal_significance", ""),
+                    "citations": getattr(doc_analysis, "citations", [])
                 })
         
         
         return source_docs
 
     def _extract_citations_from_content(
-        self, 
-        letter_content: str, 
+        self,
+        letter_content: str,
         source_documents: List[Dict[str, Any]]
     ) -> List[Citation]:
         """
@@ -188,7 +189,7 @@ class CitationTrackingService:
         citations = []
         
         # Remove HTML tags for analysis
-        text_content = re.sub(r'<[^>]+>', '', letter_content)
+        text_content = re.sub(r"<[^>]+>", "", letter_content)
         
         # Split into sentences for analysis
         sentences = self._split_into_sentences(text_content)
@@ -215,7 +216,7 @@ class CitationTrackingService:
     def _split_into_sentences(self, text: str) -> List[str]:
         """Split text into sentences for citation analysis."""
         # Simple sentence splitting - could be enhanced with NLP
-        sentences = re.split(r'[.!?]+', text)
+        sentences = re.split(r"[.!?]+", text)
         return [s.strip() for s in sentences if s.strip() and len(s.strip()) > 10]
 
     def _is_factual_statement(self, sentence: str) -> bool:
@@ -231,24 +232,24 @@ class CitationTrackingService:
         # Indicators of factual statements that need citations
         factual_indicators = [
             # Dates and times
-            r'\b\d{1,2}/\d{1,2}/\d{4}\b',  # MM/DD/YYYY
-            r'\b\d{4}-\d{2}-\d{2}\b',      # YYYY-MM-DD
-            r'\b(January|February|March|April|May|June|July|August|September|October|November|December)\b',
+            r"\b\d{1,2}/\d{1,2}/\d{4}\b",  # MM/DD/YYYY
+            r"\b\d{4}-\d{2}-\d{2}\b",      # YYYY-MM-DD
+            r"\b(January|February|March|April|May|June|July|August|September|October|November|December)\b",
             
             # Monetary amounts
-            r'\$[\d,]+',
+            r"\$[\d,]+",
             
             # Specific claims
-            r'\b(according to|based on|documented in|evidenced by|stated in|reported in)\b',
+            r"\b(according to|based on|documented in|evidenced by|stated in|reported in)\b",
             
             # Contract/legal terms
-            r'\b(contract|agreement|lease|deed|policy|statute|regulation)\b',
+            r"\b(contract|agreement|lease|deed|policy|statute|regulation)\b",
             
             # Parties and entities
-            r'\b(defendant|plaintiff|client|company|corporation|LLC|Inc\.)\b',
+            r"\b(defendant|plaintiff|client|company|corporation|LLC|Inc\.)\b",
             
             # Skip opinion/recommendation statements
-            r'\b(recommend|suggest|advise|believe|opinion|should|could|might)\b'
+            r"\b(recommend|suggest|advise|believe|opinion|should|could|might)\b"
         ]
         
         # Check for factual indicators
@@ -260,8 +261,8 @@ class CitationTrackingService:
         return has_factual_content and not has_opinion_content
 
     def _find_best_source_match(
-        self, 
-        statement: str, 
+        self,
+        statement: str,
         source_documents: List[Dict[str, Any]]
     ) -> Optional[Dict[str, Any]]:
         """
@@ -309,12 +310,12 @@ class CitationTrackingService:
         fields_to_check = ["summary", "key_information", "relevance_to_case", "legal_significance"]
         
         for field in fields_to_check:
-            if field in document and document[field]:
+            if document.get(field):
                 field_content = document[field].lower()
                 
                 # Simple keyword matching - could be enhanced with semantic similarity
-                statement_words = set(re.findall(r'\b\w+\b', statement_lower))
-                field_words = set(re.findall(r'\b\w+\b', field_content))
+                statement_words = set(re.findall(r"\b\w+\b", statement_lower))
+                field_words = set(re.findall(r"\b\w+\b", field_content))
                 
                 if statement_words and field_words:
                     overlap = len(statement_words.intersection(field_words))
@@ -322,11 +323,7 @@ class CitationTrackingService:
                     score = max(score, field_score)
         
         # Boost score for specific document types
-        if "contract" in statement_lower and document.get("document_type") == "contract":
-            score += 0.2
-        elif "timeline" in statement_lower and document.get("document_type") == "timeline":
-            score += 0.2
-        elif "intake" in statement_lower and document.get("document_type") == "intake":
+        if ("contract" in statement_lower and document.get("document_type") == "contract") or ("timeline" in statement_lower and document.get("document_type") == "timeline") or ("intake" in statement_lower and document.get("document_type") == "intake"):
             score += 0.2
         
         return min(score, 1.0)  # Cap at 1.0
@@ -342,7 +339,7 @@ class CitationTrackingService:
         Returns:
             Coverage percentage (0.0 to 1.0)
         """
-        text_content = re.sub(r'<[^>]+>', '', letter_content)
+        text_content = re.sub(r"<[^>]+>", "", letter_content)
         sentences = self._split_into_sentences(text_content)
         factual_sentences = [s for s in sentences if self._is_factual_statement(s)]
         
@@ -392,8 +389,7 @@ class CitationTrackingService:
         
         if format == "json":
             return json.dumps(asdict(self.current_citation_map), indent=2, default=str)
-        else:
-            return asdict(self.current_citation_map)
+        return asdict(self.current_citation_map)
 
     def enhance_master_prompt_with_citations(self, base_prompt: str) -> str:
         """
@@ -610,18 +606,18 @@ This is essential for legal accuracy and attorney review. Every factual claim in
         
         # Pattern to match citation references in square brackets
         # Matches: [Source: filename.ext], [Source: file1.ext; file2.ext], etc.
-        citation_pattern = r'\[Source:[^\]]+\]'
+        citation_pattern = r"\[Source:[^\]]+\]"
         
         # Remove citations and clean up any extra spaces
-        clean_content = re.sub(citation_pattern, '', letter_content)
+        clean_content = re.sub(citation_pattern, "", letter_content)
         
         # Clean up multiple spaces that might be left after removing citations
-        clean_content = re.sub(r'\s+', ' ', clean_content)
+        clean_content = re.sub(r"\s+", " ", clean_content)
         
         # Clean up any double periods or other punctuation issues
-        clean_content = re.sub(r'\.\.+', '.', clean_content)
+        clean_content = re.sub(r"\.\.+", ".", clean_content)
         
         # Clean up spaces before punctuation
-        clean_content = re.sub(r'\s+([,.;!?])', r'\1', clean_content)
+        clean_content = re.sub(r"\s+([,.;!?])", r"\1", clean_content)
         
         return clean_content.strip()

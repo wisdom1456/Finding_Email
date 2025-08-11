@@ -532,7 +532,7 @@ class EnhancedFileValidator:
         """Validate PNG file content and structure with magic number check"""
         try:
             # Check PNG magic number: 89 50 4E 47 0D 0A 1A 0A
-            png_signature = b'\x89\x50\x4E\x47\x0D\x0A\x1A\x0A'
+            png_signature = b"\x89\x50\x4E\x47\x0D\x0A\x1A\x0A"
             if not file_data.startswith(png_signature):
                 issues.append("Invalid PNG magic number signature")
                 logger.error(
@@ -550,7 +550,7 @@ class EnhancedFileValidator:
                 try:
                     with Image.open(temp_file.name) as img:
                         # Verify it's actually a PNG
-                        if img.format != 'PNG':
+                        if img.format != "PNG":
                             issues.append(f"File claims to be PNG but detected as {img.format}")
                             return
                         
@@ -588,7 +588,7 @@ class EnhancedFileValidator:
         """Validate JPG file content and structure with magic number check"""
         try:
             # Check JPG magic number: FF D8 FF
-            if not file_data.startswith(b'\xFF\xD8\xFF'):
+            if not file_data.startswith(b"\xFF\xD8\xFF"):
                 issues.append("Invalid JPEG magic number signature")
                 logger.error(
                     "JPEG magic number validation failed",
@@ -605,7 +605,7 @@ class EnhancedFileValidator:
                 try:
                     with Image.open(temp_file.name) as img:
                         # Verify it's actually a JPEG
-                        if img.format != 'JPEG':
+                        if img.format != "JPEG":
                             issues.append(f"File claims to be JPEG but detected as {img.format}")
                             return
                         
@@ -643,7 +643,7 @@ class EnhancedFileValidator:
         """Validate legacy DOC file content and structure with magic number check"""
         try:
             # Check DOC magic number: D0 CF 11 E0 A1 B1 1A E1 (OLE compound document)
-            ole_signature = b'\xD0\xCF\x11\xE0\xA1\xB1\x1A\xE1'
+            ole_signature = b"\xD0\xCF\x11\xE0\xA1\xB1\x1A\xE1"
             if not file_data.startswith(ole_signature):
                 issues.append("Invalid DOC magic number signature (not an OLE compound document)")
                 logger.error(
@@ -664,7 +664,7 @@ class EnhancedFileValidator:
                             ole = olefile.OleFileIO(temp_file.name)
                             try:
                                 # Check for Word document streams
-                                if ole.exists('WordDocument'):
+                                if ole.exists("WordDocument"):
                                     logger.debug(
                                         "Valid legacy DOC file detected",
                                         extra={"filename": filename, "streams": ole.listdir()}

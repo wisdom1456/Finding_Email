@@ -1,11 +1,14 @@
 """Metrics collection for observability."""
+from __future__ import annotations
+
+import json
+import threading
 import time
-from typing import Dict, List, Optional
+from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-import json
-from collections import defaultdict
-import threading
+from typing import Dict, List, Optional
+
 
 @dataclass
 class Metric:
@@ -113,28 +116,28 @@ class MetricsCollector:
         """Export metrics to monitoring system."""
         # Calculate aggregates
         stats = {
-            'timestamp': datetime.utcnow().isoformat(),
-            'counters': dict(self.counters),
-            'gauges': dict(self.gauges),
-            'timers': {}
+            "timestamp": datetime.utcnow().isoformat(),
+            "counters": dict(self.counters),
+            "gauges": dict(self.gauges),
+            "timers": {}
         }
         
         # Calculate timer statistics
         for name, values in self.timers.items():
             if values:
-                stats['timers'][name] = {
-                    'count': len(values),
-                    'min': min(values) * 1000,
-                    'max': max(values) * 1000,
-                    'avg': (sum(values) / len(values)) * 1000,
-                    'p50': self._percentile(values, 50) * 1000,
-                    'p95': self._percentile(values, 95) * 1000,
-                    'p99': self._percentile(values, 99) * 1000
+                stats["timers"][name] = {
+                    "count": len(values),
+                    "min": min(values) * 1000,
+                    "max": max(values) * 1000,
+                    "avg": (sum(values) / len(values)) * 1000,
+                    "p50": self._percentile(values, 50) * 1000,
+                    "p95": self._percentile(values, 95) * 1000,
+                    "p99": self._percentile(values, 99) * 1000
                 }
         
         # Export to file (can be replaced with external service)
-        with open('logs/metrics.json', 'a') as f:
-            f.write(json.dumps(stats) + '\n')
+        with open("logs/metrics.json", "a") as f:
+            f.write(json.dumps(stats) + "\n")
         
         # Clear old metrics (keep last hour)
         cutoff = datetime.utcnow() - timedelta(hours=1)

@@ -1,22 +1,25 @@
 """Structured logging with observability features."""
-import logging
+from __future__ import annotations
+
 import json
+import logging
+import os
 import sys
-import traceback
-from datetime import datetime
-from typing import Dict, Any, Optional
-from functools import wraps
 import time
+import traceback
 import uuid
 from contextvars import ContextVar
+from datetime import datetime
 from enum import Enum
-import os
+from functools import wraps
 from pathlib import Path
+from typing import Any, Dict, Optional
+
 
 # Context variables for request tracking
-request_id_var: ContextVar[str] = ContextVar('request_id', default='')
-user_id_var: ContextVar[str] = ContextVar('user_id', default='')
-session_id_var: ContextVar[str] = ContextVar('session_id', default='')
+request_id_var: ContextVar[str] = ContextVar("request_id", default="")
+user_id_var: ContextVar[str] = ContextVar("user_id", default="")
+session_id_var: ContextVar[str] = ContextVar("session_id", default="")
 
 class LogLevel(Enum):
     """Log levels with numeric values."""
@@ -57,15 +60,15 @@ class StructuredLogger:
     def _get_context(self) -> Dict[str, Any]:
         """Get contextual information for logs."""
         return {
-            'timestamp': datetime.utcnow().isoformat(),
-            'logger': self.name,
-            'request_id': request_id_var.get(),
-            'user_id': user_id_var.get(),
-            'session_id': session_id_var.get(),
-            'environment': os.getenv('ENVIRONMENT', 'development'),
-            'service': 'legal-document-portal',
-            'version': os.getenv('APP_VERSION', '1.0.0'),
-            'host': os.getenv('HOSTNAME', 'localhost')
+            "timestamp": datetime.utcnow().isoformat(),
+            "logger": self.name,
+            "request_id": request_id_var.get(),
+            "user_id": user_id_var.get(),
+            "session_id": session_id_var.get(),
+            "environment": os.getenv("ENVIRONMENT", "development"),
+            "service": "legal-document-portal",
+            "version": os.getenv("APP_VERSION", "1.0.0"),
+            "host": os.getenv("HOSTNAME", "localhost")
         }
     
     def debug(self, message: str, **kwargs):
@@ -83,19 +86,19 @@ class StructuredLogger:
     def error(self, message: str, exception: Optional[Exception] = None, **kwargs):
         """Log error message with optional exception."""
         if exception:
-            kwargs['exception'] = {
-                'type': type(exception).__name__,
-                'message': str(exception),
-                'traceback': traceback.format_exc()
+            kwargs["exception"] = {
+                "type": type(exception).__name__,
+                "message": str(exception),
+                "traceback": traceback.format_exc()
             }
         self._log(LogLevel.ERROR, message, **kwargs)
     
     def exception(self, message: str, **kwargs):
         """Log exception with full traceback (compatible with standard logging)."""
-        kwargs['exception'] = {
-            'type': 'Exception',
-            'message': message,
-            'traceback': traceback.format_exc()
+        kwargs["exception"] = {
+            "type": "Exception",
+            "message": message,
+            "traceback": traceback.format_exc()
         }
         self._log(LogLevel.ERROR, message, **kwargs)
     
@@ -106,10 +109,10 @@ class StructuredLogger:
     def audit(self, action: str, resource: str, outcome: str, **kwargs):
         """Log audit event for compliance."""
         audit_data = {
-            'action': action,
-            'resource': resource,
-            'outcome': outcome,
-            'audit': True,
+            "action": action,
+            "resource": resource,
+            "outcome": outcome,
+            "audit": True,
             **kwargs
         }
         self._log(LogLevel.AUDIT, f"AUDIT: {action} on {resource}", **audit_data)
@@ -118,9 +121,9 @@ class StructuredLogger:
         """Internal logging method."""
         log_data = {
             **self._get_context(),
-            'level': level.name,
-            'message': message,
-            'data': kwargs
+            "level": level.name,
+            "message": message,
+            "data": kwargs
         }
         
         # Use appropriate logging level
@@ -138,7 +141,7 @@ class StructuredLogger:
                 request_id = str(uuid.uuid4())
                 request_id_var.set(request_id)
                 
-                self.info(f"Starting {operation}", 
+                self.info(f"Starting {operation}",
                          operation=operation,
                          function=func.__name__)
                 
@@ -184,28 +187,28 @@ class JSONFormatter(logging.Formatter):
         """Format log record as JSON."""
         # Parse the JSON message if it's already formatted
         try:
-            if hasattr(record, 'msg') and isinstance(record.msg, str):
-                if record.msg.startswith('{'):
+            if hasattr(record, "msg") and isinstance(record.msg, str):
+                if record.msg.startswith("{"):
                     return record.msg
         except:
             pass
         
         # Otherwise create JSON structure
         log_data = {
-            'timestamp': datetime.utcnow().isoformat(),
-            'level': record.levelname,
-            'logger': record.name,
-            'message': record.getMessage(),
-            'module': record.module,
-            'function': record.funcName,
-            'line': record.lineno
+            "timestamp": datetime.utcnow().isoformat(),
+            "level": record.levelname,
+            "logger": record.name,
+            "message": record.getMessage(),
+            "module": record.module,
+            "function": record.funcName,
+            "line": record.lineno
         }
         
         if record.exc_info:
-            log_data['exception'] = {
-                'type': record.exc_info[0].__name__,
-                'message': str(record.exc_info[1]),
-                'traceback': self.formatException(record.exc_info)
+            log_data["exception"] = {
+                "type": record.exc_info[0].__name__,
+                "message": str(record.exc_info[1]),
+                "traceback": self.formatException(record.exc_info)
             }
         
         return json.dumps(log_data)

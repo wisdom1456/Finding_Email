@@ -2,11 +2,13 @@
 """
 Targeted validation tests for the three critical error fixes.
 """
+from __future__ import annotations
 
-import sys
 import os
-import uuid
+import sys
 import traceback
+import uuid
+
 
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -17,8 +19,9 @@ def test_cost_session_id_fix():
     
     try:
         # Import the session state initialization function
-        from app import initialize_session_state
         import streamlit as st
+
+        from app import initialize_session_state
         
         # Mock streamlit session state
         class MockSessionState:
@@ -38,14 +41,14 @@ def test_cost_session_id_fix():
                 return self._state.get(key, default)
         
         # Replace st.session_state temporarily
-        original_session_state = getattr(st, 'session_state', None)
+        original_session_state = getattr(st, "session_state", None)
         st.session_state = MockSessionState()
         
         # Test the initialization
         initialize_session_state()
         
         # Verify cost_session_id is now a proper UUID, not None
-        cost_session_id = st.session_state.get('cost_session_id')
+        cost_session_id = st.session_state.get("cost_session_id")
         
         assert cost_session_id is not None, "cost_session_id should not be None"
         assert isinstance(cost_session_id, str), "cost_session_id should be a string"
@@ -81,8 +84,8 @@ def test_structured_logger_exception_method():
         logger = StructuredLogger("test_logger", "INFO")
         
         # Verify the exception method exists
-        assert hasattr(logger, 'exception'), "StructuredLogger should have exception method"
-        assert callable(getattr(logger, 'exception')), "exception method should be callable"
+        assert hasattr(logger, "exception"), "StructuredLogger should have exception method"
+        assert callable(logger.exception), "exception method should be callable"
         
         # Test calling the exception method
         try:
@@ -107,7 +110,7 @@ def test_ai_analyzer_error_handling():
     print("\n🧪 Testing Priority 3: AI analyzer error handling...")
     
     try:
-        from backend.ai_analyzer import establish_context, analyze_document
+        from backend.ai_analyzer import analyze_document, establish_context
         
         # Test with empty input to trigger error condition
         print("   Testing establish_context with empty input...")
@@ -115,14 +118,14 @@ def test_ai_analyzer_error_handling():
         
         # Verify it handles the error gracefully
         assert isinstance(error_context, dict), "Should return dict even on error"
-        assert error_context.get('ai_analysis_failed') == True, "Should indicate AI analysis failed"
+        assert error_context.get("ai_analysis_failed") == True, "Should indicate AI analysis failed"
         
         print("   Testing analyze_document with empty input...")
         error_analysis = analyze_document("", {"case_type": "test"})
         
         # Verify it handles the error gracefully
         assert isinstance(error_analysis, dict), "Should return dict even on error"
-        assert error_analysis.get('ai_analysis_failed') == True, "Should indicate AI analysis failed"
+        assert error_analysis.get("ai_analysis_failed") == True, "Should indicate AI analysis failed"
         
         print("✅ CONFIRMED: AI analyzer error handling already fixed")
         print("   Uses dict key access instead of attribute access for error objects")
@@ -133,8 +136,7 @@ def test_ai_analyzer_error_handling():
         if "'dict' object has no attribute 'error'" in str(e):
             print(f"❌ FAILED: AI analyzer still has the AttributeError bug: {e}")
             return False
-        else:
-            raise
+        raise
     except Exception as e:
         print(f"❌ FAILED: AI analyzer test failed: {e}")
         traceback.print_exc()

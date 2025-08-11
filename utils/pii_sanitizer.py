@@ -7,11 +7,12 @@ as well as legal-specific information like case numbers, court names, and legal 
 
 CRITICAL: PII sanitization is ALWAYS enabled in production and cannot be disabled.
 """
+from __future__ import annotations
 
-import re
-from typing import List, Tuple, Dict, Optional, Pattern
 import hashlib
+import re
 from functools import lru_cache
+from typing import Dict, List, Optional, Pattern, Tuple
 
 
 class PIISanitizer:
@@ -30,185 +31,185 @@ class PIISanitizer:
     PII_PATTERNS: List[Tuple[Pattern, str, str]] = [
         # Personal Identifiers
         (
-            re.compile(r'\b(?:SSN|Social Security Number|Social Security #|SS#)[:\s]*(\d{3}[-.\s]?\d{2}[-.\s]?\d{4})\b', re.IGNORECASE),
-            '[SSN_REDACTED]',
-            'Social Security Numbers with labels'
+            re.compile(r"\b(?:SSN|Social Security Number|Social Security #|SS#)[:\s]*(\d{3}[-.\s]?\d{2}[-.\s]?\d{4})\b", re.IGNORECASE),
+            "[SSN_REDACTED]",
+            "Social Security Numbers with labels"
         ),
         (
-            re.compile(r'\b(?<!\d)(\d{3}[-.\s]?\d{2}[-.\s]?\d{4})(?!\d)\b'),
-            '[SSN]',
-            'Social Security Numbers without labels'
+            re.compile(r"\b(?<!\d)(\d{3}[-.\s]?\d{2}[-.\s]?\d{4})(?!\d)\b"),
+            "[SSN]",
+            "Social Security Numbers without labels"
         ),
         (
-            re.compile(r'\b(?:EIN|Employer Identification Number|Tax ID)[:\s]*(\d{2}[-.\s]?\d{7})\b', re.IGNORECASE),
-            '[EIN_REDACTED]',
-            'Employer Identification Numbers'
+            re.compile(r"\b(?:EIN|Employer Identification Number|Tax ID)[:\s]*(\d{2}[-.\s]?\d{7})\b", re.IGNORECASE),
+            "[EIN_REDACTED]",
+            "Employer Identification Numbers"
         ),
         (
-            re.compile(r'\b(?:DOB|Date of Birth|Birth Date|Born)[:\s]*(\d{1,2}[-/]\d{1,2}[-/]\d{2,4})\b', re.IGNORECASE),
-            '[DOB_REDACTED]',
-            'Dates of Birth with labels'
+            re.compile(r"\b(?:DOB|Date of Birth|Birth Date|Born)[:\s]*(\d{1,2}[-/]\d{1,2}[-/]\d{2,4})\b", re.IGNORECASE),
+            "[DOB_REDACTED]",
+            "Dates of Birth with labels"
         ),
         (
-            re.compile(r'\b(?:DL|Driver\'s License|Driver License|License #)[:\s]*([A-Z]\d{3}[-\s]?\d{4}[-\s]?\d{4}[-\s]?\d{4}|\d{7,12}|[A-Z]{1,2}\d{5,8})\b', re.IGNORECASE),
-            '[DL_NUMBER_REDACTED]',
-            'Driver License Numbers'
+            re.compile(r"\b(?:DL|Driver\'s License|Driver License|License #)[:\s]*([A-Z]\d{3}[-\s]?\d{4}[-\s]?\d{4}[-\s]?\d{4}|\d{7,12}|[A-Z]{1,2}\d{5,8})\b", re.IGNORECASE),
+            "[DL_NUMBER_REDACTED]",
+            "Driver License Numbers"
         ),
         (
-            re.compile(r'\b(?:Passport|Passport Number|Passport #)[:\s]*([A-Z]{1,2}\d{6,9})\b', re.IGNORECASE),
-            '[PASSPORT_REDACTED]',
-            'Passport Numbers'
+            re.compile(r"\b(?:Passport|Passport Number|Passport #)[:\s]*([A-Z]{1,2}\d{6,9})\b", re.IGNORECASE),
+            "[PASSPORT_REDACTED]",
+            "Passport Numbers"
         ),
         
         # Names (multiple strategies for different formats)
         (
-            re.compile(r'\b(?:Mr\.|Mrs\.|Ms\.|Dr\.|Prof\.)\s+[A-Z][a-z]+(?:\s+[A-Z]\.?\s*)?(?:\s+[A-Z][a-z]+)+\b'),
-            '[CLIENT_NAME]',
-            'Names with titles'
+            re.compile(r"\b(?:Mr\.|Mrs\.|Ms\.|Dr\.|Prof\.)\s+[A-Z][a-z]+(?:\s+[A-Z]\.?\s*)?(?:\s+[A-Z][a-z]+)+\b"),
+            "[CLIENT_NAME]",
+            "Names with titles"
         ),
         (
-            re.compile(r'\b[A-Z][a-z]+(?:\s+[A-Z]\.?\s*)?(?:\s+[A-Z][a-z]+){1,3}\b'),
-            '[PERSON_NAME]',
-            'Full names without titles'
+            re.compile(r"\b[A-Z][a-z]+(?:\s+[A-Z]\.?\s*)?(?:\s+[A-Z][a-z]+){1,3}\b"),
+            "[PERSON_NAME]",
+            "Full names without titles"
         ),
         (
-            re.compile(r'(?:Plaintiff|Defendant|Petitioner|Respondent|Appellant|Appellee)[:\s]+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)', re.IGNORECASE),
-            r'\g<0>: [PARTY_NAME_REDACTED]',
-            'Legal party names'
+            re.compile(r"(?:Plaintiff|Defendant|Petitioner|Respondent|Appellant|Appellee)[:\s]+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)", re.IGNORECASE),
+            r"\g<0>: [PARTY_NAME_REDACTED]",
+            "Legal party names"
         ),
         
         # Financial Information
         (
-            re.compile(r'\b(?:Account|Acct|Acc)\.?\s*(?:No\.?|Number|#)?\s*[:\s]*(\d{8,17})\b', re.IGNORECASE),
-            '[ACCOUNT_NUMBER]',
-            'Bank account numbers'
+            re.compile(r"\b(?:Account|Acct|Acc)\.?\s*(?:No\.?|Number|#)?\s*[:\s]*(\d{8,17})\b", re.IGNORECASE),
+            "[ACCOUNT_NUMBER]",
+            "Bank account numbers"
         ),
         (
-            re.compile(r'\b(?:Routing|ABA|RTN)\.?\s*(?:No\.?|Number|#)?\s*[:\s]*(\d{9})\b', re.IGNORECASE),
-            '[ROUTING_NUMBER]',
-            'Bank routing numbers'
+            re.compile(r"\b(?:Routing|ABA|RTN)\.?\s*(?:No\.?|Number|#)?\s*[:\s]*(\d{9})\b", re.IGNORECASE),
+            "[ROUTING_NUMBER]",
+            "Bank routing numbers"
         ),
         (
-            re.compile(r'\b(?:4\d{3}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}|5[1-5]\d{2}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}|3[47]\d{2}[\s-]?\d{6}[\s-]?\d{5}|6011[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4})\b'),
-            '[CREDIT_CARD]',
-            'Credit card numbers'
+            re.compile(r"\b(?:4\d{3}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}|5[1-5]\d{2}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}|3[47]\d{2}[\s-]?\d{6}[\s-]?\d{5}|6011[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4})\b"),
+            "[CREDIT_CARD]",
+            "Credit card numbers"
         ),
         (
-            re.compile(r'\$\s*[\d,]+(?:\.\d{2})?(?:\s*(?:USD|dollars?|million|thousand|hundred))?', re.IGNORECASE),
-            '[MONETARY_AMOUNT]',
-            'Monetary amounts'
+            re.compile(r"\$\s*[\d,]+(?:\.\d{2})?(?:\s*(?:USD|dollars?|million|thousand|hundred))?", re.IGNORECASE),
+            "[MONETARY_AMOUNT]",
+            "Monetary amounts"
         ),
         
         # Contact Information
         (
-            re.compile(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'),
-            '[EMAIL]',
-            'Email addresses'
+            re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b"),
+            "[EMAIL]",
+            "Email addresses"
         ),
         (
-            re.compile(r'(?:\+?1[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}(?:\s*(?:ext|x|extension)\.?\s*\d{1,5})?', re.IGNORECASE),
-            '[PHONE]',
-            'Phone numbers with extensions'
+            re.compile(r"(?:\+?1[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}(?:\s*(?:ext|x|extension)\.?\s*\d{1,5})?", re.IGNORECASE),
+            "[PHONE]",
+            "Phone numbers with extensions"
         ),
         (
-            re.compile(r'\b(?:Fax|Facsimile)[:\s]*(?:\+?1[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}\b', re.IGNORECASE),
-            '[FAX_NUMBER]',
-            'Fax numbers'
+            re.compile(r"\b(?:Fax|Facsimile)[:\s]*(?:\+?1[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}\b", re.IGNORECASE),
+            "[FAX_NUMBER]",
+            "Fax numbers"
         ),
         
         # Addresses (comprehensive patterns)
         (
-            re.compile(r'\b\d{1,5}\s+(?:[NSEW]\.?\s+)?[A-Za-z\s]+(?:Street|St\.?|Avenue|Ave\.?|Road|Rd\.?|Boulevard|Blvd\.?|Lane|Ln\.?|Drive|Dr\.?|Court|Ct\.?|Place|Pl\.?|Circle|Cir\.?|Trail|Trl\.?|Way|Parkway|Pkwy\.?|Highway|Hwy\.?|Plaza|Square|Sq\.?)(?:\s+(?:Suite|Ste\.?|Apt\.?|Unit|#)\s*\d+[A-Za-z]?)?\b', re.IGNORECASE),
-            '[STREET_ADDRESS]',
-            'Street addresses with unit numbers'
+            re.compile(r"\b\d{1,5}\s+(?:[NSEW]\.?\s+)?[A-Za-z\s]+(?:Street|St\.?|Avenue|Ave\.?|Road|Rd\.?|Boulevard|Blvd\.?|Lane|Ln\.?|Drive|Dr\.?|Court|Ct\.?|Place|Pl\.?|Circle|Cir\.?|Trail|Trl\.?|Way|Parkway|Pkwy\.?|Highway|Hwy\.?|Plaza|Square|Sq\.?)(?:\s+(?:Suite|Ste\.?|Apt\.?|Unit|#)\s*\d+[A-Za-z]?)?\b", re.IGNORECASE),
+            "[STREET_ADDRESS]",
+            "Street addresses with unit numbers"
         ),
         (
-            re.compile(r'\b(?:P\.?O\.?\s*Box|Post Office Box)\s*\d+\b', re.IGNORECASE),
-            '[PO_BOX]',
-            'PO Box addresses'
+            re.compile(r"\b(?:P\.?O\.?\s*Box|Post Office Box)\s*\d+\b", re.IGNORECASE),
+            "[PO_BOX]",
+            "PO Box addresses"
         ),
         (
-            re.compile(r'\b\d{5}(?:[-\s]\d{4})?\b'),
-            '[ZIP_CODE]',
-            'ZIP codes'
+            re.compile(r"\b\d{5}(?:[-\s]\d{4})?\b"),
+            "[ZIP_CODE]",
+            "ZIP codes"
         ),
         
         # Legal-Specific Information
         (
-            re.compile(r'(?:Case|Docket|File|Matter|Cause)\.?\s*(?:No\.?|Number|#)?\s*[:\s]*([A-Z0-9]{2,}[-\s]?[A-Z0-9]+(?:[-\s][A-Z0-9]+)*)', re.IGNORECASE),
-            '[CASE_NUMBER]',
-            'Legal case numbers'
+            re.compile(r"(?:Case|Docket|File|Matter|Cause)\.?\s*(?:No\.?|Number|#)?\s*[:\s]*([A-Z0-9]{2,}[-\s]?[A-Z0-9]+(?:[-\s][A-Z0-9]+)*)", re.IGNORECASE),
+            "[CASE_NUMBER]",
+            "Legal case numbers"
         ),
         (
-            re.compile(r'(?:Index|Indictment|Citation)\.?\s*(?:No\.?|Number|#)?\s*[:\s]*(\d+[-/]?\d+)', re.IGNORECASE),
-            '[LEGAL_INDEX_NUMBER]',
-            'Legal index/indictment numbers'
+            re.compile(r"(?:Index|Indictment|Citation)\.?\s*(?:No\.?|Number|#)?\s*[:\s]*(\d+[-/]?\d+)", re.IGNORECASE),
+            "[LEGAL_INDEX_NUMBER]",
+            "Legal index/indictment numbers"
         ),
         (
-            re.compile(r'\b(?:United States|U\.S\.|US|State of [A-Z][a-z]+|County of [A-Z][a-z]+)\s+(?:District|Circuit|Superior|Municipal|County|State|Federal|Bankruptcy|Tax|Family|Probate|Juvenile|Criminal|Civil)\s+Court\b', re.IGNORECASE),
-            '[COURT_NAME]',
-            'Court names with jurisdiction'
+            re.compile(r"\b(?:United States|U\.S\.|US|State of [A-Z][a-z]+|County of [A-Z][a-z]+)\s+(?:District|Circuit|Superior|Municipal|County|State|Federal|Bankruptcy|Tax|Family|Probate|Juvenile|Criminal|Civil)\s+Court\b", re.IGNORECASE),
+            "[COURT_NAME]",
+            "Court names with jurisdiction"
         ),
         (
-            re.compile(r'\b(?:Judge|Justice|Magistrate|Hon\.|Honorable)\s+[A-Z][a-z]+(?:\s+[A-Z]\.?\s*)?(?:\s+[A-Z][a-z]+)+\b', re.IGNORECASE),
-            '[JUDGE_NAME]',
-            'Judge names'
+            re.compile(r"\b(?:Judge|Justice|Magistrate|Hon\.|Honorable)\s+[A-Z][a-z]+(?:\s+[A-Z]\.?\s*)?(?:\s+[A-Z][a-z]+)+\b", re.IGNORECASE),
+            "[JUDGE_NAME]",
+            "Judge names"
         ),
         (
-            re.compile(r'(?:Attorney|Counsel|Lawyer|Esq\.|Esquire)[:\s]+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)', re.IGNORECASE),
-            '[ATTORNEY_NAME]',
-            'Attorney names'
+            re.compile(r"(?:Attorney|Counsel|Lawyer|Esq\.|Esquire)[:\s]+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)", re.IGNORECASE),
+            "[ATTORNEY_NAME]",
+            "Attorney names"
         ),
         (
-            re.compile(r'(?:Law Firm|Law Office|Legal Services|Attorneys at Law)[:\s]*([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*(?:\s+(?:LLP|LLC|PC|PA|PLLC|P\.C\.|P\.A\.))?)', re.IGNORECASE),
-            '[LAW_FIRM]',
-            'Law firm names'
+            re.compile(r"(?:Law Firm|Law Office|Legal Services|Attorneys at Law)[:\s]*([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*(?:\s+(?:LLP|LLC|PC|PA|PLLC|P\.C\.|P\.A\.))?)", re.IGNORECASE),
+            "[LAW_FIRM]",
+            "Law firm names"
         ),
         (
-            re.compile(r'(?:Bar|License|Attorney)\.?\s*(?:No\.?|Number|#)?\s*[:\s]*(\d{5,10})', re.IGNORECASE),
-            '[BAR_NUMBER]',
-            'Bar/Attorney license numbers'
+            re.compile(r"(?:Bar|License|Attorney)\.?\s*(?:No\.?|Number|#)?\s*[:\s]*(\d{5,10})", re.IGNORECASE),
+            "[BAR_NUMBER]",
+            "Bar/Attorney license numbers"
         ),
         
         # Medical Information (often in legal documents)
         (
-            re.compile(r'(?:Patient|Medical Record|MRN|Medical Record Number)[:\s]*([A-Z0-9]{5,15})', re.IGNORECASE),
-            '[MEDICAL_RECORD_NUMBER]',
-            'Medical record numbers'
+            re.compile(r"(?:Patient|Medical Record|MRN|Medical Record Number)[:\s]*([A-Z0-9]{5,15})", re.IGNORECASE),
+            "[MEDICAL_RECORD_NUMBER]",
+            "Medical record numbers"
         ),
         (
-            re.compile(r'(?:Policy|Insurance|Member ID|Subscriber ID)[:\s]*([A-Z0-9]{8,20})', re.IGNORECASE),
-            '[INSURANCE_ID]',
-            'Insurance policy numbers'
+            re.compile(r"(?:Policy|Insurance|Member ID|Subscriber ID)[:\s]*([A-Z0-9]{8,20})", re.IGNORECASE),
+            "[INSURANCE_ID]",
+            "Insurance policy numbers"
         ),
         (
-            re.compile(r'(?:Diagnosis|ICD-10|ICD-9|CPT Code)[:\s]*([A-Z]\d{2}(?:\.\d{1,2})?)', re.IGNORECASE),
-            '[MEDICAL_CODE]',
-            'Medical diagnosis codes'
+            re.compile(r"(?:Diagnosis|ICD-10|ICD-9|CPT Code)[:\s]*([A-Z]\d{2}(?:\.\d{1,2})?)", re.IGNORECASE),
+            "[MEDICAL_CODE]",
+            "Medical diagnosis codes"
         ),
         
         # Vehicle Information
         (
-            re.compile(r'(?:VIN|Vehicle Identification Number)[:\s]*([A-Z0-9]{17})', re.IGNORECASE),
-            '[VIN]',
-            'Vehicle Identification Numbers'
+            re.compile(r"(?:VIN|Vehicle Identification Number)[:\s]*([A-Z0-9]{17})", re.IGNORECASE),
+            "[VIN]",
+            "Vehicle Identification Numbers"
         ),
         (
-            re.compile(r'(?:License Plate|Plate Number|Tag)[:\s]*([A-Z0-9]{1,3}[-\s]?[A-Z0-9]{1,4})', re.IGNORECASE),
-            '[LICENSE_PLATE]',
-            'License plate numbers'
+            re.compile(r"(?:License Plate|Plate Number|Tag)[:\s]*([A-Z0-9]{1,3}[-\s]?[A-Z0-9]{1,4})", re.IGNORECASE),
+            "[LICENSE_PLATE]",
+            "License plate numbers"
         ),
         
         # Business Information
         (
-            re.compile(r'(?:Corporation|Corp\.|Inc\.|LLC|LLP|Ltd\.|Company|Co\.)\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*', re.IGNORECASE),
-            '[BUSINESS_NAME]',
-            'Business entity names'
+            re.compile(r"(?:Corporation|Corp\.|Inc\.|LLC|LLP|Ltd\.|Company|Co\.)\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*", re.IGNORECASE),
+            "[BUSINESS_NAME]",
+            "Business entity names"
         ),
         (
-            re.compile(r'(?:doing business as|d/b/a|DBA)[:\s]+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)', re.IGNORECASE),
-            '[DBA_NAME]',
-            'DBA business names'
+            re.compile(r"(?:doing business as|d/b/a|DBA)[:\s]+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)", re.IGNORECASE),
+            "[DBA_NAME]",
+            "DBA business names"
         ),
     ]
     
@@ -224,7 +225,7 @@ class PIISanitizer:
         
         # Compile all patterns once for performance
         self._compiled_patterns = [
-            (pattern, replacement, desc) 
+            (pattern, replacement, desc)
             for pattern, replacement, desc in self.PII_PATTERNS
         ]
         
@@ -344,9 +345,8 @@ class PIISanitizer:
         if level.upper() == "DEBUG":
             # Less aggressive sanitization for debugging
             return self.sanitize(message)
-        else:
-            # More aggressive sanitization for production logs
-            return self.anonymize_for_api(message)
+        # More aggressive sanitization for production logs
+        return self.anonymize_for_api(message)
     
     def get_pattern_stats(self) -> Dict[str, int]:
         """
@@ -373,9 +373,9 @@ class PIISanitizer:
         """
         # Quick checks for common PII patterns that should not exist after sanitization
         dangerous_patterns = [
-            r'\b\d{3}[-.\s]?\d{2}[-.\s]?\d{4}\b',  # SSN
-            r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b',  # Email
-            r'\b(?:4\d{3}|5[1-5]\d{2}|3[47]\d{2}|6011)[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}\b',  # Credit cards
+            r"\b\d{3}[-.\s]?\d{2}[-.\s]?\d{4}\b",  # SSN
+            r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b",  # Email
+            r"\b(?:4\d{3}|5[1-5]\d{2}|3[47]\d{2}|6011)[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}\b",  # Credit cards
         ]
         
         for pattern in dangerous_patterns:
@@ -435,8 +435,8 @@ def sanitize_for_api(content: str) -> str:
 
 # Export public interface
 __all__ = [
-    'PIISanitizer',
-    'sanitize_text',
-    'sanitize_for_logging',
-    'sanitize_for_api'
+    "PIISanitizer",
+    "sanitize_for_api",
+    "sanitize_for_logging",
+    "sanitize_text"
 ]

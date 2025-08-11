@@ -17,18 +17,13 @@ This replaces the complex multi-prompt pipeline with a single, authoritative mas
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, Optional, List, Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import Any, Callable, Dict, List, Optional
 
 from openai import OpenAI
 
 from backend.utils.data_models import CaseAnalysisResult
 from backend_logic.utils.logging_config import get_module_logger
-
-# Import performance optimization modules
-from utils.api_optimizer import OpenAIOptimizer
-from utils.cache_manager import CacheManager, DocumentCache
-
 from services.configuration_manager import ConfigurationManager
 from services.content_generation_service import ContentGenerationService
 from services.fallback_generation_service import FallbackGenerationService
@@ -36,13 +31,16 @@ from services.json_processing_service import JsonProcessingService
 from services.template_rendering_service import TemplateRenderingService
 from services.text_processing_service import TextProcessingService
 
+# Import performance optimization modules
+from utils.api_optimizer import OpenAIOptimizer
+from utils.cache_manager import CacheManager, DocumentCache
+
 
 logger = get_module_logger(__name__)
 
 
 class EmailReadabilityError(Exception):
     """Exception raised when email generation fails to produce readable content."""
-    pass
 
 
 class EmailGeneratorV2:

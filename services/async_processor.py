@@ -14,7 +14,8 @@ from backend.utils.data_models import (
 from backend_logic.ai import AIAnalyzer
 from utils.logging_config import setup_logging
 
-logger = setup_logging('async_processor')
+
+logger = setup_logging("async_processor")
 
 
 if TYPE_CHECKING:

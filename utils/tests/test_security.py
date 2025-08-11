@@ -5,28 +5,29 @@ This module provides comprehensive tests for file upload security functions,
 including path traversal prevention, file size enforcement, content validation,
 and secure filename sanitization.
 """
+from __future__ import annotations
 
 import os
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 # Import the security module
 from backend_logic.utils.security import (
-    secure_filename,
-    validate_file_size,
-    validate_file_content,
-    validate_total_upload_size,
-    create_secure_temp_file,
-    validate_file_path,
-    sanitize_path_component,
-    get_safe_upload_path,
-    MAX_FILE_SIZE,
     ALLOWED_EXTENSIONS,
-    ALLOWED_MIME_TYPES
+    ALLOWED_MIME_TYPES,
+    MAX_FILE_SIZE,
+    create_secure_temp_file,
+    get_safe_upload_path,
+    sanitize_path_component,
+    secure_filename,
+    validate_file_content,
+    validate_file_path,
+    validate_file_size,
+    validate_total_upload_size,
 )
 
 
@@ -51,7 +52,7 @@ class TestSecureFilename(unittest.TestCase):
             self.assertNotIn("/", safe_name)
             self.assertNotIn("\\", safe_name)
             # Should contain a timestamp hash
-            self.assertRegex(safe_name, r'.*_[a-f0-9]{8}.*')
+            self.assertRegex(safe_name, r".*_[a-f0-9]{8}.*")
     
     def test_command_injection_prevention(self):
         """Test that command injection characters are sanitized."""
@@ -104,13 +105,13 @@ class TestSecureFilename(unittest.TestCase):
             original_ext = Path(valid_name).suffix
             self.assertTrue(safe_name.endswith(original_ext.lower()))
             # Should add timestamp hash
-            self.assertRegex(safe_name, r'.*_[a-f0-9]{8}.*')
+            self.assertRegex(safe_name, r".*_[a-f0-9]{8}.*")
     
     def test_empty_filename_handling(self):
         """Test handling of empty or None filenames."""
-        self.assertRegex(secure_filename(""), r'^unnamed_[a-f0-9]{8}$')
-        self.assertRegex(secure_filename(None), r'^unnamed_[a-f0-9]{8}$')
-        self.assertRegex(secure_filename("   "), r'^file_[a-f0-9]{8}$')
+        self.assertRegex(secure_filename(""), r"^unnamed_[a-f0-9]{8}$")
+        self.assertRegex(secure_filename(None), r"^unnamed_[a-f0-9]{8}$")
+        self.assertRegex(secure_filename("   "), r"^file_[a-f0-9]{8}$")
     
     def test_long_filename_truncation(self):
         """Test that very long filenames are truncated."""
@@ -160,7 +161,7 @@ class TestFileValidation(unittest.TestCase):
         with self.assertRaises(ValueError):
             validate_file_size(file_data, max_size=1024)
     
-    @patch('backend_logic.utils.security.magic')
+    @patch("backend_logic.utils.security.magic")
     def test_content_validation_success(self, mock_magic):
         """Test successful content validation."""
         # Mock magic to return PDF mime type
@@ -173,7 +174,7 @@ class TestFileValidation(unittest.TestCase):
         self.assertEqual(mime_type, "application/pdf")
         self.assertEqual(ext, ".pdf")
     
-    @patch('backend_logic.utils.security.magic')
+    @patch("backend_logic.utils.security.magic")
     def test_content_validation_extension_mismatch(self, mock_magic):
         """Test content validation with extension mismatch."""
         # Mock magic to return PDF mime type
@@ -185,7 +186,7 @@ class TestFileValidation(unittest.TestCase):
             validate_file_content(pdf_data, "document.txt")
         self.assertIn("does not match detected content type", str(cm.exception))
     
-    @patch('backend_logic.utils.security.magic')
+    @patch("backend_logic.utils.security.magic")
     def test_content_validation_forbidden_type(self, mock_magic):
         """Test content validation with forbidden file type."""
         # Mock magic to return executable mime type
@@ -196,7 +197,7 @@ class TestFileValidation(unittest.TestCase):
             validate_file_content(exe_data, "malware.exe")
         self.assertIn("is not allowed", str(cm.exception))
     
-    @patch('backend_logic.utils.security.magic')
+    @patch("backend_logic.utils.security.magic")
     def test_content_validation_disguised_file(self, mock_magic):
         """Test detection of disguised files (e.g., EXE renamed to PDF)."""
         # Mock magic to detect executable despite .pdf extension
@@ -289,7 +290,7 @@ class TestPathSecurity(unittest.TestCase):
         # Normal case
         path = get_safe_upload_path(base_dir, "document.pdf")
         self.assertTrue(path.startswith(base_dir))
-        self.assertRegex(path, r'.*document_[a-f0-9]{8}\.pdf$')
+        self.assertRegex(path, r".*document_[a-f0-9]{8}\.pdf$")
         
         # With subfolder
         path = get_safe_upload_path(base_dir, "document.pdf", "client_docs")
@@ -304,7 +305,7 @@ class TestPathSecurity(unittest.TestCase):
 class TestSecureTempFile(unittest.TestCase):
     """Test cases for secure temporary file creation."""
     
-    @patch('backend_logic.utils.security.magic')
+    @patch("backend_logic.utils.security.magic")
     def test_create_secure_temp_file(self, mock_magic):
         """Test secure temporary file creation."""
         # Mock magic to return PDF mime type
@@ -319,7 +320,7 @@ class TestSecureTempFile(unittest.TestCase):
             self.assertTrue(os.path.exists(temp_path))
             
             # File should contain the data
-            with open(temp_path, 'rb') as f:
+            with open(temp_path, "rb") as f:
                 self.assertEqual(f.read(), file_data)
             
             # File should have restrictive permissions (owner only)
@@ -332,7 +333,7 @@ class TestSecureTempFile(unittest.TestCase):
             if os.path.exists(temp_path):
                 os.remove(temp_path)
     
-    @patch('backend_logic.utils.security.magic')
+    @patch("backend_logic.utils.security.magic")
     def test_create_secure_temp_file_validation_failure(self, mock_magic):
         """Test that temp file creation fails with invalid content."""
         # Mock magic to return executable mime type
@@ -348,7 +349,7 @@ class TestSecureTempFile(unittest.TestCase):
 class TestIntegration(unittest.TestCase):
     """Integration tests for security functions working together."""
     
-    @patch('backend_logic.utils.security.magic')
+    @patch("backend_logic.utils.security.magic")
     def test_complete_upload_security_flow(self, mock_magic):
         """Test complete secure upload flow."""
         # Mock magic to return PDF mime type

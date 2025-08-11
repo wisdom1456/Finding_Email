@@ -4,15 +4,18 @@ Async Streamlit Helper Module
 Enables async operations and parallel processing in Streamlit applications
 to keep the UI responsive during long-running operations.
 """
+from __future__ import annotations
+
+import asyncio
+import logging
+import time
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
+from contextlib import contextmanager
+from functools import wraps
+from typing import Any, Callable, Dict, Generator, List, Optional
 
 import streamlit as st
-import asyncio
-from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor, as_completed
-from typing import Callable, Any, List, Optional, Generator, Dict
-import time
-import logging
-from functools import wraps
-from contextlib import contextmanager
+
 
 # Configure logger
 logger = logging.getLogger(__name__)
@@ -41,9 +44,8 @@ class AsyncStreamlit:
             if asyncio.iscoroutinefunction(func):
                 future = asyncio.ensure_future(func(*args, **kwargs))
                 return loop.run_until_complete(future)
-            else:
-                # Not an async function, just call it
-                return func(*args, **kwargs)
+            # Not an async function, just call it
+            return func(*args, **kwargs)
         except RuntimeError:
             # No loop running, create a new one
             if asyncio.iscoroutinefunction(func):
@@ -96,7 +98,7 @@ class AsyncStreamlit:
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             # Submit all tasks
             futures = {}
-            for i, (task, args, kwargs) in enumerate(zip(tasks, task_args, task_kwargs)):
+            for i, (task, args, kwargs) in enumerate(zip(tasks, task_args, task_kwargs, strict=False)):
                 future = executor.submit(task, *args, **kwargs)
                 futures[future] = i
             
@@ -210,8 +212,7 @@ class AsyncStreamlit:
                 if asyncio.iscoroutinefunction(func):
                     loop = asyncio.get_event_loop()
                     return await loop.run_in_executor(None, cached_func, *args, **kwargs)
-                else:
-                    return cached_func(*args, **kwargs)
+                return cached_func(*args, **kwargs)
             
             return wrapper
         return decorator

@@ -593,11 +593,11 @@ def handle_file_uploads():
     """
     from backend_logic.utils.logging_config import get_module_logger
     from backend_logic.utils.security import (
-        secure_filename,
-        validate_file_size,
-        validate_file_content,
+        ALLOWED_EXTENSIONS,
         MAX_FILE_SIZE,
-        ALLOWED_EXTENSIONS
+        secure_filename,
+        validate_file_content,
+        validate_file_size,
     )
 
     logger = get_module_logger(__name__)
@@ -624,7 +624,7 @@ def handle_file_uploads():
                 file_size = len(file_data)
                 total_size += file_size
             except ValueError as e:
-                st.error(f"❌ {uploaded_file.name}: {str(e)}")
+                st.error(f"❌ {uploaded_file.name}: {e!s}")
                 logger.error(
                     "File size validation failed",
                     extra={
@@ -670,7 +670,7 @@ def handle_file_uploads():
                 )
                 
             except ValueError as e:
-                st.error(f"❌ {uploaded_file.name}: {str(e)}")
+                st.error(f"❌ {uploaded_file.name}: {e!s}")
                 logger.error(
                     "File content validation failed",
                     extra={

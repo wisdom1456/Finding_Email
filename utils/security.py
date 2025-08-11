@@ -5,66 +5,69 @@ This module provides comprehensive security functions for handling file uploads,
 including path traversal prevention, file size enforcement, content type validation,
 and secure filename sanitization.
 """
+from __future__ import annotations
 
+import hashlib
 import os
 import re
 import tempfile
-import hashlib
 import time
 from pathlib import Path
-from typing import Optional, BinaryIO, Tuple
+from typing import BinaryIO, Optional, Tuple
+
 import magic
+
 
 # Maximum file size: 100MB
 MAX_FILE_SIZE = 100 * 1024 * 1024  # 100MB
 
 # Allowed file extensions (whitelist)
 ALLOWED_EXTENSIONS = {
-    '.pdf', '.doc', '.docx', '.txt', '.rtf', 
-    '.jpg', '.jpeg', '.png',
-    '.mp3', '.wav', '.mp4', '.mov'
+    ".pdf", ".doc", ".docx", ".txt", ".rtf",
+    ".jpg", ".jpeg", ".png",
+    ".mp3", ".wav", ".mp4", ".mov"
 }
 
 # Allowed MIME types (whitelist)
 ALLOWED_MIME_TYPES = {
     # Documents
-    'application/pdf',
-    'application/msword',
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    'text/plain',
-    'application/rtf',
-    'text/rtf',
+    "application/pdf",
+    "application/msword",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "text/plain",
+    "application/rtf",
+    "text/rtf",
     # Images
-    'image/jpeg',
-    'image/png',
+    "image/jpeg",
+    "image/png",
     # Audio
-    'audio/mpeg',
-    'audio/wav',
-    'audio/x-wav',
-    'audio/wave',
+    "audio/mpeg",
+    "audio/wav",
+    "audio/x-wav",
+    "audio/wave",
     # Video
-    'video/mp4',
-    'video/quicktime',
-    'video/x-msvideo'
+    "video/mp4",
+    "video/quicktime",
+    "video/x-msvideo"
 }
 
 # MIME type to extension mapping for validation
 MIME_EXTENSION_MAP = {
-    'application/pdf': ['.pdf'],
-    'application/msword': ['.doc'],
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx'],
-    'text/plain': ['.txt'],
-    'application/rtf': ['.rtf'],
-    'text/rtf': ['.rtf'],
-    'image/jpeg': ['.jpg', '.jpeg'],
-    'image/png': ['.png'],
-    'audio/mpeg': ['.mp3'],
-    'audio/wav': ['.wav'],
-    'audio/x-wav': ['.wav'],
-    'audio/wave': ['.wav'],
-    'video/mp4': ['.mp4'],
-    'video/quicktime': ['.mov'],
-    'video/x-msvideo': ['.avi']
+    "application/pdf": [".pdf"],
+    "application/msword": [".doc"],
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": [".docx"],
+    "text/plain": [".txt"],
+    "application/rtf": [".rtf"],
+    "text/rtf": [".rtf"],
+    "image/jpeg": [".jpg", ".jpeg"],
+    "image/png": [".png"],
+    "audio/mpeg": [".mp3"],
+    "audio/wav": [".wav"],
+    "audio/x-wav": [".wav"],
+    "audio/wave": [".wav"],
+    "video/mp4": [".mp4"],
+    "video/quicktime": [".mov"],
+    "video/x-msvideo": [".avi"]
 }
 
 
@@ -104,10 +107,10 @@ def secure_filename(filename: str) -> str:
     
     # Remove any non-alphanumeric characters except dots, dashes, underscores
     # This prevents command injection and special character issues
-    cleaned_name = re.sub(r'[^a-zA-Z0-9._-]', '_', name)
+    cleaned_name = re.sub(r"[^a-zA-Z0-9._-]", "_", name)
     
     # Remove leading dots (hidden files) and trailing dots/spaces
-    cleaned_name = cleaned_name.lstrip('.').rstrip('. ')
+    cleaned_name = cleaned_name.lstrip(".").rstrip(". ")
     
     # Ensure filename is not empty after cleaning
     if not cleaned_name:
@@ -190,7 +193,7 @@ def validate_file_content(file_data: bytes, filename: str) -> Tuple[str, str]:
     try:
         mime_type = magic.from_buffer(file_data, mime=True)
     except Exception as e:
-        raise ValueError(f"Unable to determine file content type: {str(e)}")
+        raise ValueError(f"Unable to determine file content type: {e!s}")
     
     # Check if detected MIME type is allowed
     if mime_type not in ALLOWED_MIME_TYPES:
@@ -255,9 +258,9 @@ def create_secure_temp_file(file_data: bytes, filename: str) -> str:
     try:
         with tempfile.NamedTemporaryFile(
             delete=False,
-            prefix='secure_',
+            prefix="secure_",
             suffix=ext,
-            mode='wb'
+            mode="wb"
         ) as tmp_file:
             tmp_file.write(file_data)
             tmp_path = tmp_file.name
@@ -267,8 +270,8 @@ def create_secure_temp_file(file_data: bytes, filename: str) -> str:
         
         return tmp_path
         
-    except (OSError, IOError) as e:
-        raise OSError(f"Failed to create secure temporary file: {str(e)}")
+    except OSError as e:
+        raise OSError(f"Failed to create secure temporary file: {e!s}")
 
 
 def validate_file_path(file_path: str, base_dir: str) -> bool:
@@ -312,13 +315,13 @@ def sanitize_path_component(component: str) -> str:
         Sanitized component safe for filesystem use
     """
     # Remove any path separators
-    component = component.replace('/', '_').replace('\\', '_')
+    component = component.replace("/", "_").replace("\\", "_")
     
     # Remove dangerous characters
-    component = re.sub(r'[^a-zA-Z0-9._-]', '_', component)
+    component = re.sub(r"[^a-zA-Z0-9._-]", "_", component)
     
     # Remove leading/trailing dots and spaces
-    component = component.strip('. ')
+    component = component.strip(". ")
     
     # Ensure not empty
     if not component:
@@ -367,15 +370,15 @@ def get_safe_upload_path(base_dir: str, filename: str, subfolder: Optional[str] 
 
 # Export public interface
 __all__ = [
-    'secure_filename',
-    'validate_file_size',
-    'validate_file_content',
-    'validate_total_upload_size',
-    'create_secure_temp_file',
-    'validate_file_path',
-    'sanitize_path_component',
-    'get_safe_upload_path',
-    'MAX_FILE_SIZE',
-    'ALLOWED_EXTENSIONS',
-    'ALLOWED_MIME_TYPES'
+    "ALLOWED_EXTENSIONS",
+    "ALLOWED_MIME_TYPES",
+    "MAX_FILE_SIZE",
+    "create_secure_temp_file",
+    "get_safe_upload_path",
+    "sanitize_path_component",
+    "secure_filename",
+    "validate_file_content",
+    "validate_file_path",
+    "validate_file_size",
+    "validate_total_upload_size"
 ]

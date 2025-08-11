@@ -51,10 +51,10 @@ async def process_doc(
             try:
                 import subprocess
                 result = subprocess.run(
-                    ['antiword', file_path], 
-                    capture_output=True, 
-                    text=True, 
-                    timeout=30
+                    ["antiword", file_path],
+                    capture_output=True,
+                    text=True,
+                    timeout=30, check=False
                 )
                 if result.returncode == 0 and result.stdout.strip():
                     text_content = result.stdout
@@ -82,8 +82,8 @@ async def process_doc(
                     
                     # Method 4: Try oletools for OLE compound document parsing
                     try:
-                        from oletools.olevba import VBA_Parser
                         from oletools import olefile
+                        from oletools.olevba import VBA_Parser
                         
                         if olefile.isOleFile(file_path):
                             # This is a basic OLE file reader - more sophisticated parsing would be needed
@@ -100,7 +100,7 @@ async def process_doc(
                         try:
                             import textract
                             raw_text = textract.process(file_path)
-                            text_content = raw_text.decode('utf-8', errors='ignore')
+                            text_content = raw_text.decode("utf-8", errors="ignore")
                             extraction_method = "textract"
                             if text_content.strip():
                                 logger.info(f"Successfully extracted text from DOC using textract: {original_filename}")
@@ -115,15 +115,15 @@ async def process_doc(
         # Clean up extracted text
         if text_content:
             # Remove excessive whitespace while preserving structure
-            lines = [line.strip() for line in text_content.split('\n')]
-            text_content = '\n'.join(line for line in lines if line)
+            lines = [line.strip() for line in text_content.split("\n")]
+            text_content = "\n".join(line for line in lines if line)
             
             # Add extraction method info for debugging
             text_content += f"\n\n[Extracted using: {extraction_method}]"
             
     except Exception as e:
         logger.error(f"Error processing legacy DOC {original_filename}: {e}")
-        text_content = f"Error extracting text from legacy DOC {original_filename}: {str(e)}"
+        text_content = f"Error extracting text from legacy DOC {original_filename}: {e!s}"
 
     content_type, _ = mimetypes.guess_type(file_path)
     file_size = os.path.getsize(file_path) if os.path.exists(file_path) else 0

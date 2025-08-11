@@ -7,18 +7,24 @@ This test validates the complete citation tracking system including:
 - Appendix generation with full letter text and detailed references
 - Integration with the email generation workflow
 """
+from __future__ import annotations
 
+import json
 import os
 import sys
-import json
-from unittest.mock import Mock, MagicMock
-from typing import Dict, Any
+from typing import Any, Dict
+from unittest.mock import MagicMock, Mock
+
 
 # Add project root to path for imports
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from services.citation_tracking_service import CitationTrackingService, Citation, CitationMap
 from backend.utils.data_models import CaseAnalysisResult
+from services.citation_tracking_service import (
+    Citation,
+    CitationMap,
+    CitationTrackingService,
+)
 
 
 def create_mock_case_analysis() -> CaseAnalysisResult:
@@ -27,7 +33,7 @@ def create_mock_case_analysis() -> CaseAnalysisResult:
     # Create mock intake analysis
     mock_intake = Mock()
     mock_intake.client_name = "John Smith"
-    mock_intake.case_type = "Contract Dispute" 
+    mock_intake.case_type = "Contract Dispute"
     mock_intake.summary = "Client seeking review of construction contract dispute"
     
     # Create mock document analyses
@@ -57,7 +63,7 @@ def create_mock_case_analysis() -> CaseAnalysisResult:
             "source": "Construction_Contract.pdf"
         },
         {
-            "date": "2024-05-20", 
+            "date": "2024-05-20",
             "event": "First delay notification",
             "source": "Email_Communications.pdf"
         }
@@ -297,13 +303,13 @@ def run_integration_test():
             json.dump(test_output, f, indent=2)
         
         print("\n🎉 Integration test completed successfully!")
-        print(f"📄 Test results saved to validation_output/citation_test_results.json")
+        print("📄 Test results saved to validation_output/citation_test_results.json")
         print(f"📊 Summary: {test_output['total_citations']} citations, {test_output['citation_coverage']:.1%} coverage")
         
         return True
         
     except Exception as e:
-        print(f"\n❌ Integration test failed: {str(e)}")
+        print(f"\n❌ Integration test failed: {e!s}")
         import traceback
         traceback.print_exc()
         return False

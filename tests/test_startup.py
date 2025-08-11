@@ -5,10 +5,12 @@ This module tests that all major components of the application can be imported
 successfully without errors. This helps catch import errors early in the
 development process.
 """
+from __future__ import annotations
 
 import sys
 import unittest
 from pathlib import Path
+
 
 # Add project root to path
 project_root = Path(__file__).parent.parent
@@ -21,10 +23,13 @@ class TestStartupImports(unittest.TestCase):
     def test_core_modules_import(self):
         """Test that core modules can be imported."""
         try:
+            from core.ai_analyzer import AIAnalyzer
             from core.document_processor import DocumentProcessor
             from core.email_generator import EmailGeneratorV2, EmailReadabilityError
-            from core.ai_analyzer import AIAnalyzer
-            from core.main_processor import process_case_documents, process_case_documents_cli
+            from core.main_processor import (
+                process_case_documents,
+                process_case_documents_cli,
+            )
             
             # Verify classes/functions exist
             self.assertTrue(callable(DocumentProcessor))
@@ -42,15 +47,15 @@ class TestStartupImports(unittest.TestCase):
         """Test that backend modules can be imported."""
         try:
             from backend.utils.data_models import (
-                CaseAnalysisResult,
                 AnalysisError,
                 AnalyzedDocument,
+                CaseAnalysisResult,
                 DocumentType,
                 MediaProcessingError,
                 TranscriptedMedia,
                 VideoInsight,
             )
-            from backend.utils.validators import validate_file_type, validate_file_size
+            from backend.utils.validators import validate_file_size, validate_file_type
             
             # Verify classes exist
             self.assertTrue(callable(CaseAnalysisResult))
@@ -66,13 +71,13 @@ class TestStartupImports(unittest.TestCase):
         """Test that service modules can be imported."""
         try:
             from services.audio_processor import AudioProcessor
-            from services.video_processor import VideoProcessor
             from services.configuration_manager import ConfigurationManager
             from services.content_generation_service import ContentGenerationService
             from services.fallback_generation_service import FallbackGenerationService
             from services.json_processing_service import JsonProcessingService
             from services.template_rendering_service import TemplateRenderingService
             from services.text_processing_service import TextProcessingService
+            from services.video_processor import VideoProcessor
             
             # Verify classes exist
             self.assertTrue(callable(AudioProcessor))
@@ -86,17 +91,17 @@ class TestStartupImports(unittest.TestCase):
     def test_utils_modules_import(self):
         """Test that utility modules can be imported."""
         try:
-            from utils.logging_config import setup_logging
+            from utils.file_processors.docx_processor import DOCXProcessor
+            from utils.file_processors.eml_processor import EMLProcessor
+            from utils.file_processors.image_processor import ImageProcessor
+            from utils.file_processors.pdf_processor import PDFProcessor
+            from utils.file_processors.txt_processor import TXTProcessor
             from utils.helpers import (
                 ProgressTracker,
                 calculate_document_sizes,
                 display_processing_cost_update,
             )
-            from utils.file_processors.pdf_processor import PDFProcessor
-            from utils.file_processors.docx_processor import DOCXProcessor
-            from utils.file_processors.txt_processor import TXTProcessor
-            from utils.file_processors.eml_processor import EMLProcessor
-            from utils.file_processors.image_processor import ImageProcessor
+            from utils.logging_config import setup_logging
             
             # Verify functions/classes exist
             self.assertTrue(callable(setup_logging))
@@ -111,9 +116,9 @@ class TestStartupImports(unittest.TestCase):
         """Test that backend_logic modules can be imported."""
         try:
             from backend_logic.config import get_openai_api_key
+            from backend_logic.cost_estimator import CostEstimator
             from backend_logic.cost_session_manager import CostSessionManager
             from backend_logic.email_generator import EmailGenerator
-            from backend_logic.cost_estimator import CostEstimator
             
             # Verify functions/classes exist
             self.assertTrue(callable(get_openai_api_key))
@@ -127,8 +132,8 @@ class TestStartupImports(unittest.TestCase):
     def test_components_import(self):
         """Test that UI components can be imported."""
         try:
-            from components.ui_components import render_case_info_form
             from components.budget_sheet import render_budget_sheet
+            from components.ui_components import render_case_info_form
             
             # Verify functions exist
             self.assertTrue(callable(render_case_info_form))
@@ -151,7 +156,6 @@ class TestStartupImports(unittest.TestCase):
             if "streamlit_authenticator" in str(e):
                 print(f"⚠️ Expected missing dependency: {e}")
                 # This is expected - streamlit_authenticator needs to be installed
-                pass
             else:
                 # Unexpected import error
                 self.fail(f"Unexpected import error in app module: {e}")
@@ -183,11 +187,11 @@ class TestCriticalImports(unittest.TestCase):
         """Test that main processor functions can be imported."""
         try:
             from core.main_processor import (
+                extract_case_name,
+                html_to_plain_text,
                 process_case_documents,
                 process_case_documents_cli,
-                extract_case_name,
                 save_output_files,
-                html_to_plain_text,
             )
             
             # Verify all are callable
@@ -205,10 +209,10 @@ class TestCriticalImports(unittest.TestCase):
         """Test that core/__init__.py exports work correctly."""
         try:
             from core import (
+                AIAnalyzer,
                 DocumentProcessor,
                 EmailGeneratorV2,
                 EmailReadabilityError,
-                AIAnalyzer,
                 process_case_documents,
                 process_case_documents_cli,
             )

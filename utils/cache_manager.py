@@ -4,16 +4,18 @@ Cache Manager Module
 Provides caching functionality for expensive operations with file-based 
 and optional Redis support.
 """
+from __future__ import annotations
 
-import pickle
 import hashlib
-from pathlib import Path
-from typing import Any, Optional, Union, Dict
-from datetime import datetime, timedelta
 import json
-from functools import wraps
 import logging
 import os
+import pickle
+from datetime import datetime, timedelta
+from functools import wraps
+from pathlib import Path
+from typing import Any, Dict, Optional, Union
+
 
 # Configure logger
 logger = logging.getLogger(__name__)
@@ -46,8 +48,8 @@ class CacheManager:
         if use_redis and REDIS_AVAILABLE:
             try:
                 self.redis_client = redis.Redis(
-                    host=os.getenv('REDIS_HOST', 'localhost'),
-                    port=int(os.getenv('REDIS_PORT', 6379)),
+                    host=os.getenv("REDIS_HOST", "localhost"),
+                    port=int(os.getenv("REDIS_PORT", 6379)),
                     decode_responses=False,  # We'll handle encoding/decoding
                     socket_connect_timeout=5,
                     socket_timeout=5
@@ -64,8 +66,8 @@ class CacheManager:
     def cache_key(self, *args, **kwargs) -> str:
         """Generate cache key from arguments"""
         key_data = {
-            'args': args,
-            'kwargs': kwargs
+            "args": args,
+            "kwargs": kwargs
         }
         key_str = json.dumps(key_data, sort_keys=True, default=str)
         return hashlib.md5(key_str.encode()).hexdigest()
@@ -89,7 +91,7 @@ class CacheManager:
             file_age = datetime.now() - datetime.fromtimestamp(cache_file.stat().st_mtime)
             if file_age < timedelta(hours=24):
                 try:
-                    with open(cache_file, 'rb') as f:
+                    with open(cache_file, "rb") as f:
                         logger.debug(f"Cache hit (file): {key[:8]}...")
                         return pickle.load(f)
                 except Exception as e:
@@ -130,7 +132,7 @@ class CacheManager:
         # Save to file cache
         cache_file = self.cache_dir / f"{key}.pkl"
         try:
-            with open(cache_file, 'wb') as f:
+            with open(cache_file, "wb") as f:
                 pickle.dump(value, f)
             logger.debug(f"Cached to file: {key[:8]}...")
         except Exception as e:

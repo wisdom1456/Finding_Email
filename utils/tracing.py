@@ -1,16 +1,19 @@
 """Distributed tracing support."""
+from __future__ import annotations
+
+import json
 import uuid
 from contextvars import ContextVar
-from typing import Optional, Dict, Any
 from datetime import datetime
-import json
 from functools import wraps
 from pathlib import Path
+from typing import Any, Dict, Optional
+
 
 # Tracing context
-trace_id_var: ContextVar[str] = ContextVar('trace_id', default='')
-span_id_var: ContextVar[str] = ContextVar('span_id', default='')
-parent_span_id_var: ContextVar[str] = ContextVar('parent_span_id', default='')
+trace_id_var: ContextVar[str] = ContextVar("trace_id", default="")
+span_id_var: ContextVar[str] = ContextVar("span_id", default="")
+parent_span_id_var: ContextVar[str] = ContextVar("parent_span_id", default="")
 
 class Span:
     """Represents a trace span."""
@@ -36,9 +39,9 @@ class Span:
     def log(self, message: str, **kwargs):
         """Add log to span."""
         self.logs.append({
-            'timestamp': datetime.utcnow().isoformat(),
-            'message': message,
-            'fields': kwargs
+            "timestamp": datetime.utcnow().isoformat(),
+            "message": message,
+            "fields": kwargs
         })
     
     def set_tag(self, key: str, value: Any):
@@ -54,26 +57,26 @@ class Span:
     def _export(self):
         """Export span data."""
         span_data = {
-            'trace_id': self.trace_id,
-            'span_id': self.span_id,
-            'parent_span_id': self.parent_span_id,
-            'name': self.name,
-            'operation': self.operation,
-            'start_time': self.start_time.isoformat(),
-            'end_time': self.end_time.isoformat() if self.end_time else None,
-            'duration_ms': (self.end_time - self.start_time).total_seconds() * 1000 if self.end_time else None,
-            'tags': self.tags,
-            'logs': self.logs,
-            'status': self.status
+            "trace_id": self.trace_id,
+            "span_id": self.span_id,
+            "parent_span_id": self.parent_span_id,
+            "name": self.name,
+            "operation": self.operation,
+            "start_time": self.start_time.isoformat(),
+            "end_time": self.end_time.isoformat() if self.end_time else None,
+            "duration_ms": (self.end_time - self.start_time).total_seconds() * 1000 if self.end_time else None,
+            "tags": self.tags,
+            "logs": self.logs,
+            "status": self.status
         }
         
         # Ensure logs directory exists
-        log_dir = Path('logs')
+        log_dir = Path("logs")
         log_dir.mkdir(exist_ok=True)
         
         # Export to file (can be replaced with Jaeger/Zipkin)
-        with open(log_dir / 'traces.json', 'a') as f:
-            f.write(json.dumps(span_data) + '\n')
+        with open(log_dir / "traces.json", "a") as f:
+            f.write(json.dumps(span_data) + "\n")
 
 def trace(operation: str):
     """Decorator for tracing functions."""
@@ -83,7 +86,7 @@ def trace(operation: str):
             span = Span(
                 name=func.__name__,
                 operation=operation,
-                tags={'function': func.__name__, 'module': func.__module__}
+                tags={"function": func.__name__, "module": func.__module__}
             )
             
             try:

@@ -183,7 +183,9 @@ def results_display_section():
                     st.subheader("Findings Letter")
                     
                     # Clean the letter content to remove citations for display
-                    from services.citation_tracking_service import CitationTrackingService
+                    from services.citation_tracking_service import (
+                        CitationTrackingService,
+                    )
                     citation_service = CitationTrackingService()
                     clean_letter = citation_service.remove_citations_from_letter(st.session_state.main_letter)
                     

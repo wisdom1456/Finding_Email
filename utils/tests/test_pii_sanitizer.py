@@ -6,18 +6,19 @@ specifically designed for legal data protection. Tests cover all PII patterns
 including SSNs, credit cards, legal case numbers, court names, attorney information,
 and other sensitive legal data.
 """
+from __future__ import annotations
 
 import unittest
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 # Import the PII sanitizer module
 from backend_logic.utils.pii_sanitizer import (
     PIISanitizer,
-    sanitize_text,
+    sanitize_for_api,
     sanitize_for_logging,
-    sanitize_for_api
+    sanitize_text,
 )
 
 
@@ -472,7 +473,7 @@ class TestAPIAndLoggingSanitization(unittest.TestCase):
         
         # Sanitize only specific keys
         result = self.sanitizer.sanitize_dict(
-            input_dict, 
+            input_dict,
             keys_to_sanitize=["client_name", "ssn"]
         )
         

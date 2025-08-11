@@ -9,7 +9,7 @@ import asyncio
 import os
 import re
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime, timezone
 from pathlib import Path
 from typing import List, Optional, Union
 
@@ -40,18 +40,18 @@ from backend.utils.data_models import (
     TranscriptedMedia,
     VideoInsight,
 )
-from core.ai_analyzer import AIAnalyzer
-from services.audio_processor import AudioProcessor
 from backend_logic.config import get_openai_api_key
 from backend_logic.cost_session_manager import CostSessionManager
+from core.ai_analyzer import AIAnalyzer
 from core.document_processor import DocumentProcessor
 from core.email_generator import EmailGeneratorV2, EmailReadabilityError
+from services.audio_processor import AudioProcessor
+from services.video_processor import VideoProcessor
 from utils.helpers import (
     ProgressTracker,
     calculate_document_sizes,
     display_processing_cost_update,
 )
-from services.video_processor import VideoProcessor
 
 
 # Optional imports with fallbacks for testing
@@ -112,7 +112,7 @@ def extract_case_name(analysis_result) -> str:
             return case_name.lower()
 
     # Fallback to timestamp-based name
-    return f"case_{int(datetime.now(timezone.utc).timestamp())}"
+    return f"case_{int(datetime.now(UTC).timestamp())}"
 
 
 def _generate_document_appendix(case_analysis) -> str:
@@ -132,8 +132,9 @@ def _generate_document_appendix(case_analysis) -> str:
         Rendered HTML content for the document appendix
     """
     try:
-        from jinja2 import Environment, FileSystemLoader
         from pathlib import Path
+
+        from jinja2 import Environment, FileSystemLoader
         
         # Locate the template
         template_dir = Path("backend/assets/templates")
@@ -153,12 +154,12 @@ def _generate_document_appendix(case_analysis) -> str:
         if case_analysis.analyzed_documents:
             for doc in case_analysis.analyzed_documents:
                 # Try to extract timeline events from document content
-                if hasattr(doc, 'timeline_events') and doc.timeline_events:
+                if hasattr(doc, "timeline_events") and doc.timeline_events:
                     for event in doc.timeline_events:
                         case_timeline.append({
-                            'date': getattr(event, 'date', 'Unknown'),
-                            'event': getattr(event, 'description', getattr(event, 'event', 'Event recorded')),
-                            'source': doc.file_name or doc.filename
+                            "date": getattr(event, "date", "Unknown"),
+                            "event": getattr(event, "description", getattr(event, "event", "Event recorded")),
+                            "source": doc.file_name or doc.filename
                         })
         
         # Ensure all analyzed documents have proper data structures for template rendering
@@ -167,52 +168,52 @@ def _generate_document_appendix(case_analysis) -> str:
             for doc in case_analysis.analyzed_documents:
                 # Create a safe document structure for template rendering
                 safe_doc = {
-                    'filename': getattr(doc, 'file_name', getattr(doc, 'filename', 'Unknown Document')),
-                    'file_name': getattr(doc, 'file_name', getattr(doc, 'filename', 'Unknown Document')),
-                    'document_type': getattr(doc, 'document_type', 'Not Specified'),
-                    'inferred_title': getattr(doc, 'inferred_title', 'Not Available'),
-                    'summary': getattr(doc, 'summary', 'No summary available.'),
-                    'key_information': getattr(doc, 'key_information', 'No key information identified.'),
-                    'relevance_to_case': getattr(doc, 'relevance_to_case', 'Relevance not determined.'),
-                    'legal_significance': getattr(doc, 'legal_significance', None),
-                    'citations': []
+                    "filename": getattr(doc, "file_name", getattr(doc, "filename", "Unknown Document")),
+                    "file_name": getattr(doc, "file_name", getattr(doc, "filename", "Unknown Document")),
+                    "document_type": getattr(doc, "document_type", "Not Specified"),
+                    "inferred_title": getattr(doc, "inferred_title", "Not Available"),
+                    "summary": getattr(doc, "summary", "No summary available."),
+                    "key_information": getattr(doc, "key_information", "No key information identified."),
+                    "relevance_to_case": getattr(doc, "relevance_to_case", "Relevance not determined."),
+                    "legal_significance": getattr(doc, "legal_significance", None),
+                    "citations": []
                 }
                 
                 # Safely handle citations - ensure it's always a list
-                if hasattr(doc, 'citations') and doc.citations:
+                if hasattr(doc, "citations") and doc.citations:
                     if isinstance(doc.citations, list):
-                        safe_doc['citations'] = doc.citations
+                        safe_doc["citations"] = doc.citations
                     elif isinstance(doc.citations, str):
                         # If citations is a string, convert to single citation entry
-                        safe_doc['citations'] = [{
-                            'text': doc.citations,
-                            'page_number': None,
-                            'context': 'Document content',
-                            'significance': 'Referenced in document'
+                        safe_doc["citations"] = [{
+                            "text": doc.citations,
+                            "page_number": None,
+                            "context": "Document content",
+                            "significance": "Referenced in document"
                         }]
                     else:
                         # Handle other types by converting to string
-                        safe_doc['citations'] = [{
-                            'text': str(doc.citations),
-                            'page_number': None,
-                            'context': 'Document metadata',
-                            'significance': 'Extracted information'
+                        safe_doc["citations"] = [{
+                            "text": str(doc.citations),
+                            "page_number": None,
+                            "context": "Document metadata",
+                            "significance": "Extracted information"
                         }]
                 
                 safe_analyzed_documents.append(safe_doc)
         
         # Create a safe analysis structure for template rendering
-        safe_analysis = type('SafeAnalysis', (), {
-            'analyzed_documents': safe_analyzed_documents,
-            'video_insights': getattr(case_analysis, 'video_insights', []) or []
+        safe_analysis = type("SafeAnalysis", (), {
+            "analyzed_documents": safe_analyzed_documents,
+            "video_insights": getattr(case_analysis, "video_insights", []) or []
         })()
         
         # Prepare template context with safe data structures
         template_context = {
-            'results': {
-                'case_timeline': case_timeline,
-                'analysis': safe_analysis,
-                'format_video_analysis': lambda video: _format_video_analysis_for_template(video)
+            "results": {
+                "case_timeline": case_timeline,
+                "analysis": safe_analysis,
+                "format_video_analysis": lambda video: _format_video_analysis_for_template(video)
             }
         }
         
@@ -266,10 +267,10 @@ def _generate_basic_appendix(case_analysis) -> str:
     # Add analyzed documents
     if case_analysis.analyzed_documents:
         for doc in case_analysis.analyzed_documents:
-            filename = getattr(doc, 'file_name', getattr(doc, 'filename', 'Unknown Document'))
-            summary = getattr(doc, 'summary', 'No summary available.')
-            key_info = getattr(doc, 'key_information', 'No key information identified.')
-            relevance = getattr(doc, 'relevance_to_case', 'Relevance not determined.')
+            filename = getattr(doc, "file_name", getattr(doc, "filename", "Unknown Document"))
+            summary = getattr(doc, "summary", "No summary available.")
+            key_info = getattr(doc, "key_information", "No key information identified.")
+            relevance = getattr(doc, "relevance_to_case", "Relevance not determined.")
             
             html_content += f"""
         <div class="document-item">
@@ -287,14 +288,14 @@ def _generate_basic_appendix(case_analysis) -> str:
         """
     
     # Add video insights if available
-    if hasattr(case_analysis, 'video_insights') and case_analysis.video_insights:
+    if hasattr(case_analysis, "video_insights") and case_analysis.video_insights:
         html_content += """
         <div style="margin-top: 40px; padding-top: 30px; border-top: 2px solid #333;">
             <h2>Video Evidence Analysis</h2>
         """
         
         for video in case_analysis.video_insights:
-            video_name = getattr(video, 'file_name', 'Unknown Video')
+            video_name = getattr(video, "file_name", "Unknown Video")
             html_content += f"""
             <div class="document-item">
                 <div class="document-header">{video_name}</div>
@@ -329,12 +330,12 @@ def _format_video_analysis_for_template(video) -> str:
     analysis_parts = []
     
     # Add insights if available
-    if hasattr(video, 'insights') and video.insights:
+    if hasattr(video, "insights") and video.insights:
         insights = video.insights
-        if hasattr(insights, 'summary') and insights.summary:
+        if hasattr(insights, "summary") and insights.summary:
             analysis_parts.append(f"<p><strong>Summary:</strong> {insights.summary}</p>")
         
-        if hasattr(insights, 'key_findings') and insights.key_findings:
+        if hasattr(insights, "key_findings") and insights.key_findings:
             findings_list = "<ul>"
             for finding in insights.key_findings:
                 findings_list += f"<li>{finding}</li>"
@@ -342,7 +343,7 @@ def _format_video_analysis_for_template(video) -> str:
             analysis_parts.append(f"<p><strong>Key Findings:</strong></p>{findings_list}")
     
     # Add transcript if available
-    if hasattr(video, 'transcript') and video.transcript:
+    if hasattr(video, "transcript") and video.transcript:
         analysis_parts.append(f"<p><strong>Transcript:</strong> {video.transcript[:500]}{'...' if len(video.transcript) > 500 else ''}</p>")
     
     return "".join(analysis_parts) if analysis_parts else "<p>Video analysis completed.</p>"
@@ -418,7 +419,7 @@ async def process_case_documents(
         # Generate case ID for cost tracking
         case_id = (
             st.session_state.case_info.get("caseReference", "")
-            or f"case_{int(datetime.now(timezone.utc).timestamp())}"
+            or f"case_{int(datetime.now(UTC).timestamp())}"
         )
 
         # Initialize cost session if we have a cost estimate
@@ -526,7 +527,7 @@ async def process_case_documents(
                 error_type="ConfigurationError",
             )
         
-        if video_processor and hasattr(video_processor, 'enabled') and video_processor.enabled:
+        if video_processor and hasattr(video_processor, "enabled") and video_processor.enabled:
             video_processing_task = asyncio.gather(
                 *[
                     video_processor.process_video_from_streamlit(f, f.name)

@@ -21,8 +21,8 @@ from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_fi
 
 from backend.utils.data_models import CaseAnalysisResult
 from backend_logic.config import get_openai_config
-from utils.logging_config import get_module_logger
 from services.citation_tracking_service import CitationTrackingService
+from utils.logging_config import get_module_logger
 
 
 logger = get_module_logger(__name__)

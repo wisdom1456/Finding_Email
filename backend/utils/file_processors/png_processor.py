@@ -40,13 +40,13 @@ async def process_png(
             
             # PNG-specific preprocessing
             # Handle transparency by converting RGBA to RGB with white background
-            if image.mode in ('RGBA', 'LA'):
+            if image.mode in ("RGBA", "LA"):
                 # Create a white background image
-                background = Image.new('RGB', image.size, (255, 255, 255))
-                if image.mode == 'RGBA':
+                background = Image.new("RGB", image.size, (255, 255, 255))
+                if image.mode == "RGBA":
                     background.paste(image, mask=image.split()[-1])  # Use alpha channel as mask
                 else:  # LA mode
-                    background.paste(image.convert('RGB'))
+                    background.paste(image.convert("RGB"))
                 image = background
             
             # Convert to grayscale for better OCR results on PNG

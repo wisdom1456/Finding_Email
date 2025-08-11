@@ -4,17 +4,20 @@ OpenAI API Optimizer Module
 Provides optimized OpenAI API client with concurrency, caching, and rate limiting.
 Designed to improve throughput by 3-5x through parallel processing.
 """
+from __future__ import annotations
 
 import asyncio
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import List, Dict, Any, Optional, Callable
-from functools import lru_cache
 import hashlib
 import json
-import time
-from dataclasses import dataclass
-from openai import OpenAI
 import logging
+import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from dataclasses import dataclass
+from functools import lru_cache
+from typing import Any, Callable, Dict, List, Optional
+
+from openai import OpenAI
+
 
 # Configure logger
 logger = logging.getLogger(__name__)
@@ -220,7 +223,7 @@ class OpenAIOptimizer:
                     logger.error(f"API call failed for prompt {idx}: {e}")
                     # Create error result
                     results[idx] = APICallResult(
-                        content=f"Error: {str(e)}",
+                        content=f"Error: {e!s}",
                         model=model,
                         tokens_used=0,
                         latency=0,
@@ -293,5 +296,5 @@ class OpenAIOptimizer:
     
     def __del__(self):
         """Cleanup executor on deletion"""
-        if hasattr(self, 'executor'):
+        if hasattr(self, "executor"):
             self.executor.shutdown(wait=False)

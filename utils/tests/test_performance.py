@@ -1,8 +1,13 @@
 """Performance benchmark tests."""
+from __future__ import annotations
+
+import time
+
 import pytest
+
 from utils.api_optimizer import OpenAIOptimizer
 from utils.cache_manager import CacheManager
-import time
+
 
 @pytest.fixture
 def api_optimizer():

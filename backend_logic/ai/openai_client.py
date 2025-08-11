@@ -21,6 +21,7 @@ from typing import Any, Dict, List, Optional
 
 import openai
 from openai import OpenAI
+import httpx
 
 
 logger = logging.getLogger(__name__)
@@ -30,8 +31,26 @@ class OpenAIClient:
     """Handles all OpenAI API interactions and response processing."""
 
     def __init__(self):
-        """Initialize OpenAI client."""
-        self.client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        """Initialize OpenAI client with proper timeout and connection settings."""
+        # Configure HTTP client with appropriate timeouts for cloud environments
+        http_client = httpx.Client(
+            timeout=httpx.Timeout(
+                connect=10.0,    # Connection timeout
+                read=60.0,       # Read timeout
+                write=30.0,      # Write timeout
+                pool=120.0       # Pool timeout
+            ),
+            limits=httpx.Limits(
+                max_connections=100,
+                max_keepalive_connections=20
+            )
+        )
+        
+        self.client = OpenAI(
+            api_key=os.getenv("OPENAI_API_KEY"),
+            http_client=http_client,
+            max_retries=3
+        )
         self.default_model = "gpt-4o"
         self.fallback_model = "gpt-4o-mini"
         self.max_retries = 3

@@ -1,8 +1,9 @@
 name: CI/CD Pipeline
 
 on:
-  push:
-    branches: [main, develop]
+  # TEMPORARILY DISABLED FOR CRITICAL SYNTAX FIX DEPLOYMENT
+  # push:
+  #   branches: [main, develop]
   pull_request:
     branches: [main]
   workflow_dispatch:

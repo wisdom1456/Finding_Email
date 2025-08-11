@@ -1,8 +1,9 @@
 name: CI
 
 on:
-  push:
-    branches: [ main ]
+  # TEMPORARILY DISABLED FOR CRITICAL SYNTAX FIX DEPLOYMENT
+  # push:
+  #   branches: [ main ]
   pull_request:
     branches: [ main ]
 

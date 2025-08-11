@@ -46,7 +46,7 @@ class AIAnalyzer:
         # Load configuration
         self.config = self._load_configuration(config_path)
 
-        logger.info(f'AI ANALYZER: ✅ Initialized with configuration: {config_path or "default"}')
+        logger.info(f"AI ANALYZER: ✅ Initialized with configuration: {config_path or 'default'}")
 
     def _load_configuration(self, config_path: str | None = None) -> dict[str, Any]:
         """Load configuration from YAML file."""

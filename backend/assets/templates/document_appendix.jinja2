@@ -155,6 +155,28 @@
                 <h5>Legal Significance</h5>
                 <p>{{ document.legal_significance }}</p>
                 {% endif %}
+
+                {% if document.citations %}
+                <h5>Document Citations</h5>
+                <div style="background-color: #f8f9fa; padding: 15px; margin: 10px 0; border-left: 4px solid #17a2b8;">
+                    {% for citation in document.citations %}
+                    <div style="margin-bottom: 10px; padding: 8px; background-color: white; border-radius: 3px;">
+                        {% if citation.page_number %}
+                        <div style="font-weight: bold; color: #2c3e50; margin-bottom: 5px;">Page {{ citation.page_number }}</div>
+                        {% endif %}
+                        {% if citation.text %}
+                        <div style="font-style: italic; margin-bottom: 5px;">"{{ citation.text }}"</div>
+                        {% endif %}
+                        {% if citation.context %}
+                        <div style="font-size: 13px; color: #6c757d;">{{ citation.context }}</div>
+                        {% endif %}
+                        {% if citation.significance %}
+                        <div style="font-size: 13px; color: #28a745; margin-top: 5px;"><strong>Significance:</strong> {{ citation.significance }}</div>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
             </div>
         </div>
         {% endfor %}

@@ -9,10 +9,10 @@ from typing import Any, Dict, Optional
 
 import yaml
 
-from utils.logging_config import setup_logging
+from utils.logging_config import get_module_logger
 
 
-logger = setup_logging("config_manager")
+logger = get_module_logger(__name__)
 
 
 class ConfigManager:

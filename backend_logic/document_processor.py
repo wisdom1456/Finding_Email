@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import mimetypes
 import os
+import tempfile
 from typing import List
 
 # Import from the backend utils (to be moved to root utils later)
@@ -10,6 +11,18 @@ from backend.utils.data_models import DocumentType, ProcessedDocument
 
 # Maps file content types to their respective processing functions
 from backend.utils.file_processors import PROCESSOR_MAP
+
+# Import security functions for secure file handling
+from backend_logic.utils.security import (
+    secure_filename,
+    validate_file_size,
+    validate_file_content,
+    create_secure_temp_file,
+    MAX_FILE_SIZE
+)
+from backend_logic.utils.logging_config import get_module_logger
+
+logger = get_module_logger(__name__)
 
 
 class DocumentProcessingError(Exception):
@@ -31,15 +44,32 @@ class DocumentProcessor:
         self, filename: str, intake_filenames: List[str]
     ) -> DocumentType:
         """Determines if a file is an intake form or a general case document."""
-        if filename in intake_filenames:
-            return DocumentType.INTAKE_FORM
-        return DocumentType.CASE_DOCUMENT
+        # H3 DEBUG: Document classification entry (OLD logic)
+        import json
+        logger.info(
+            f"DEBUG_H3: {json.dumps({'module': 'backend_logic.document_processor', 'hypothesis_id': 'H3', 'action': 'classification_entry', 'line': 44, 'filename': filename, 'intake_filenames': intake_filenames, 'architecture': 'OLD_FastAPI'})}"
+        )
+        
+        classification_result = DocumentType.INTAKE_FORM if filename in intake_filenames else DocumentType.CASE_DOCUMENT
+        
+        # H3 DEBUG: Document classification exit (OLD logic)
+        logger.info(
+            f"DEBUG_H3: {json.dumps({'module': 'backend_logic.document_processor', 'hypothesis_id': 'H3', 'action': 'classification_exit', 'line': 49, 'filename': filename, 'result': classification_result.name, 'match_found': filename in intake_filenames, 'architecture': 'OLD_FastAPI'})}"
+        )
+        
+        return classification_result
 
     async def process_documents_from_streamlit(
         self, uploaded_files, intake_filenames: List[str]
     ) -> List[ProcessedDocument]:
         """
-        Process documents directly from Streamlit file uploads.
+        Process documents directly from Streamlit file uploads with enhanced security.
+
+        Security features:
+        - Secure filename sanitization to prevent path traversal
+        - File size validation and enforcement
+        - Content type validation with magic number detection
+        - Secure temporary file creation with restricted permissions
 
         Args:
             uploaded_files: List of Streamlit UploadedFile objects
@@ -49,60 +79,109 @@ class DocumentProcessor:
             List of ProcessedDocument objects
         """
         processing_tasks = []
+        temp_files = []  # Track temp files for cleanup
 
         for uploaded_file in uploaded_files:
-            temp_path = f"/tmp/{uploaded_file.name}"
             try:
-                # Save uploaded file temporarily for processing
-                with open(temp_path, "wb") as f:
-                    f.write(uploaded_file.getvalue())
+                # Read file data
+                file_data = uploaded_file.getvalue()
+                
+                # Apply security validations
+                try:
+                    # Validate file size
+                    validate_file_size(file_data, MAX_FILE_SIZE)
+                    
+                    # Sanitize filename
+                    original_name = uploaded_file.name
+                    sanitized_name = secure_filename(original_name)
+                    
+                    # Validate content type
+                    mime_type, file_ext = validate_file_content(file_data, sanitized_name)
+                    
+                    # Create secure temporary file
+                    temp_path = create_secure_temp_file(file_data, sanitized_name)
+                    temp_files.append(temp_path)
+                    
+                    logger.info(
+                        "File passed security validation",
+                        extra={
+                            "original_name": original_name,
+                            "sanitized_name": sanitized_name,
+                            "mime_type": mime_type,
+                            "file_size": len(file_data),
+                        }
+                    )
+                    
+                except ValueError as e:
+                    logger.error(
+                        f"Security validation failed for file '{uploaded_file.name}'",
+                        extra={
+                            "error": str(e),
+                            "file_name": uploaded_file.name,
+                        }
+                    )
+                    raise DocumentProcessingError(
+                        f"Security validation failed for '{uploaded_file.name}': {str(e)}"
+                    )
 
                 # TODO: Add PDF compression support for large files
-                # if uploaded_file.name.lower().endswith('.pdf'):
+                # if sanitized_name.lower().endswith('.pdf'):
                 #     file = await self.pdf_compressor.compress_pdf_if_needed(file)
 
-                doc_type = self._get_document_type(uploaded_file.name, intake_filenames)
-                content_type, _ = mimetypes.guess_type(uploaded_file.name)
+                doc_type = self._get_document_type(sanitized_name, intake_filenames)
+                content_type, _ = mimetypes.guess_type(sanitized_name)
 
                 processor = PROCESSOR_MAP.get(content_type)
                 if not processor:
-                    # Fallback for incorrect mimetypes
-                    if uploaded_file.name.endswith(".pdf"):
+                    # Fallback for incorrect mimetypes using sanitized name
+                    if sanitized_name.endswith(".pdf"):
                         processor = PROCESSOR_MAP.get("application/pdf")
-                    elif uploaded_file.name.endswith(".docx"):
+                    elif sanitized_name.endswith(".docx"):
                         processor = PROCESSOR_MAP.get(
                             "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                         )
-                    elif uploaded_file.name.endswith(".doc"):
+                    elif sanitized_name.endswith(".doc"):
                         processor = PROCESSOR_MAP.get("application/msword")
-                    elif uploaded_file.name.endswith(".txt"):
+                    elif sanitized_name.endswith(".txt"):
                         processor = PROCESSOR_MAP.get("text/plain")
-                    elif uploaded_file.name.endswith(".eml"):
+                    elif sanitized_name.endswith(".eml"):
                         processor = PROCESSOR_MAP.get("message/rfc822")
 
                 if not processor:
-                    msg = f"No processor available for file '{uploaded_file.name}' with content type '{content_type}'"
+                    msg = f"No processor available for file '{sanitized_name}' with content type '{content_type}'"
                     raise DocumentProcessingError(msg)
 
+                # Use sanitized name for processing
                 processing_tasks.append(
-                    processor(temp_path, doc_type, uploaded_file.name)
+                    processor(temp_path, doc_type, sanitized_name)
                 )
 
             except Exception as e:
-                # Clean up temp file on error
-                if os.path.exists(temp_path):
-                    os.remove(temp_path)
+                # Clean up temp files on error
+                for temp_file in temp_files:
+                    if os.path.exists(temp_file):
+                        try:
+                            os.remove(temp_file)
+                        except OSError:
+                            pass  # Best effort cleanup
+                            
                 msg = f"Error processing file '{uploaded_file.name}': {e!s}"
+                logger.error(msg, extra={"error": str(e), "file_name": uploaded_file.name})
                 raise DocumentProcessingError(msg)
 
         try:
             return await asyncio.gather(*processing_tasks)
         finally:
-            # Clean up temporary files
-            for uploaded_file in uploaded_files:
-                temp_path = f"/tmp/{uploaded_file.name}"
-                if os.path.exists(temp_path):
-                    os.remove(temp_path)
+            # Clean up all temporary files
+            for temp_file in temp_files:
+                if os.path.exists(temp_file):
+                    try:
+                        os.remove(temp_file)
+                    except OSError as e:
+                        logger.warning(
+                            f"Failed to remove temporary file",
+                            extra={"temp_file": temp_file, "error": str(e)}
+                        )
 
     async def process_documents(
         self, files, intake_filenames: List[str]

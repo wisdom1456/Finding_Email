@@ -13,15 +13,20 @@ from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 
-from utils.logging_config import setup_logging
+from utils.logging_config import get_module_logger
 
 
-logger = setup_logging("e2e_test_devlin_workflow")
+logger = get_module_logger(__name__)
 
 
 # Import the main processing function and required modules
-from backend_logic.main_processor import process_case_documents
+from core.main_processor import process_case_documents
 
+# H3 DEBUG: Architecture import confirmation - FIXED
+import json
+logger.info(
+    f"DEBUG_H3_FIXED: {json.dumps({'module': 'test_devlin_workflow', 'hypothesis_id': 'H3', 'action': 'import_confirmation_fixed', 'imported_module': 'core.main_processor', 'line': 23, 'architecture': 'NEW_Streamlit', 'fix_applied': True})}"
+)
 
 # Test configuration
 DEVLIN_TEST_DATA_DIR = "test_data/Devlin, Erik [MetLife]/Shared Folder with Client/Shared with Bernhardt Riley"
@@ -121,8 +126,8 @@ class TestDevlinWorkflow:
         }
 
     @pytest.mark.asyncio
-    @patch("backend_logic.main_processor.st")
-    @patch("backend_logic.main_processor.OpenAI")
+    @patch("core.main_processor.st")
+    @patch("core.main_processor.OpenAI")
     async def test_devlin_complete_workflow(
         self, mock_openai_class, mock_st, mock_session_state, output_directory
     ):

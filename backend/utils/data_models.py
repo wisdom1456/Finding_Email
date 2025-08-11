@@ -96,6 +96,16 @@ class VideoInsight(BaseModel):
     timestamp: datetime = Field(default_factory=datetime.now)
 
 
+class DocumentCitation(BaseModel):
+    """Citation reference for document facts."""
+
+    fact: str
+    source_document: str
+    page_number: Optional[int] = None
+    confidence: float
+    context: Optional[str] = None
+
+
 class AnalyzedDocument(BaseModel):
     """Analyzed case document."""
 
@@ -108,6 +118,7 @@ class AnalyzedDocument(BaseModel):
     key_information: Optional[str] = None
     relevance_to_case: Optional[str] = None
     key_points: List[str] = Field(default_factory=list)
+    citations: List[DocumentCitation] = Field(default_factory=list)
     metadata: Optional[Dict[str, Any]] = None
 
     def model_post_init(self, __context: Any) -> None:

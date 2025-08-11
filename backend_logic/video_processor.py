@@ -18,10 +18,10 @@ from tenacity import (
     wait_exponential,
 )
 
-from utils.logging_config import setup_logging
+from utils.logging_config import get_module_logger
 
 
-logger = setup_logging("video_processor")
+logger = get_module_logger(__name__)
 from vertexai.generative_models import GenerativeModel, Part
 
 from backend.utils.data_models import (
@@ -51,6 +51,7 @@ class VideoProcessor:
         project_id: str | None = None,
         bucket_name: str | None = None,
         temp_folder: str = "temp-videos",
+        skip_initialization: bool = False,
     ) -> None:
         from .config import get_settings
 
@@ -58,24 +59,68 @@ class VideoProcessor:
 
         self.project_id = project_id or settings.gcp_project_id
         self.bucket_name = bucket_name or settings.gcp_bucket_name
+        self.temp_folder = temp_folder
+        self.enabled = False
+        self.storage_client = None
+        self.speech_client = None
+        self.vertex_model = None
+
+        # Allow skipping initialization for applications without video processing needs
+        if skip_initialization:
+            logger.info(
+                "VIDEO PROCESSOR: Skipping Google Cloud initialization (skip_initialization=True)"
+            )
+            return
+
+        # Check if Google Cloud configuration is available
+        if not settings.video_processing_enabled:
+            logger.warning(
+                "VIDEO PROCESSOR: Google Cloud credentials not configured. Video processing will be disabled."
+            )
+            logger.info(
+                "VIDEO PROCESSOR: To enable video processing, set the following environment variables:"
+            )
+            logger.info("  - GCP_PROJECT_ID: Your Google Cloud Project ID")
+            logger.info("  - GCP_BUCKET_NAME: Your Google Cloud Storage bucket name")
+            logger.info("  - GOOGLE_APPLICATION_CREDENTIALS: Path to your service account JSON file")
+            return
 
         if not self.project_id or not self.bucket_name:
-            msg = "GCP_PROJECT_ID and GCP_BUCKET_NAME must be set in environment variables."
-            raise VideoProcessingError(msg)
+            logger.warning(
+                "VIDEO PROCESSOR: GCP_PROJECT_ID and GCP_BUCKET_NAME are required for video processing."
+            )
+            return
 
-        self.temp_folder = temp_folder
-
+        # Try to initialize Google Cloud clients
         try:
+            # Check if credentials file exists if specified
+            if settings.google_application_credentials:
+                import os
+                if not os.path.exists(settings.google_application_credentials):
+                    logger.warning(
+                        f"VIDEO PROCESSOR: Credentials file not found: {settings.google_application_credentials}"
+                    )
+                    logger.info(
+                        "VIDEO PROCESSOR: Video processing will be disabled. Other document processing features remain available."
+                    )
+                    return
+
             vertexai.init(project=self.project_id, location="us-central1")
             self.storage_client = storage.Client(project=self.project_id)
             self.speech_client = speech.SpeechClient()
             self.vertex_model = GenerativeModel("gemini-2.5-flash")
+            self.enabled = True
             logger.info(
-                "VIDEO PROCESSOR: Vertex AI and other Google Cloud clients initialized successfully."
+                "VIDEO PROCESSOR: ✅ Google Cloud clients initialized successfully. Video processing is enabled."
             )
         except Exception as e:
-            msg = f"Failed to initialize Google Cloud clients: {e}"
-            raise VideoProcessingError(msg)
+            logger.warning(
+                f"VIDEO PROCESSOR: Failed to initialize Google Cloud clients: {e}"
+            )
+            logger.info(
+                "VIDEO PROCESSOR: Video processing will be disabled. Other document processing features remain available."
+            )
+            # Don't raise an exception - allow the application to continue without video processing
 
         self.supported_formats = {
             "video/mp4",
@@ -91,6 +136,9 @@ class VideoProcessor:
         self._ensure_bucket_exists()
 
     def _ensure_bucket_exists(self) -> None:
+        if not self.enabled or not self.storage_client:
+            return
+            
         try:
             logger.debug(
                 f"VIDEO PROCESSOR: 🔍 Checking bucket existence: {self.bucket_name}"
@@ -105,8 +153,8 @@ class VideoProcessor:
                     f"VIDEO PROCESSOR: ✅ Using existing bucket: {self.bucket_name}"
                 )
         except Exception as e:
-            msg = f"Could not access or create storage bucket: {e}"
-            raise VideoProcessingError(msg)
+            logger.warning(f"VIDEO PROCESSOR: Could not access or create storage bucket: {e}")
+            self.enabled = False
 
     def _validate_video_file(self, file_path: str, file_name: str) -> None:
         if not os.path.exists(file_path):
@@ -439,6 +487,15 @@ CONSTITUTIONAL FOCUS: Emphasize 4th Amendment (search/seizure), 5th Amendment (s
     async def process_video_file(
         self, file_path: str, file_name: str, is_criminal_case: bool = False
     ) -> VideoInsight | EnhancedVideoInsight | MediaProcessingError:
+        # Check if video processing is enabled
+        if not self.enabled:
+            return MediaProcessingError(
+                source="VideoProcessor",
+                file_name=file_name,
+                error_message="Video processing is disabled. Google Cloud credentials are not configured.",
+                error_type="ConfigurationError",
+            )
+        
         gcs_uri = None
         try:
             logger.debug(f"VIDEO PROCESSOR: Processing video file: {file_name}")
@@ -545,6 +602,15 @@ CONSTITUTIONAL FOCUS: Emphasize 4th Amendment (search/seizure), 5th Amendment (s
     async def process_video_from_streamlit(
         self, uploaded_file, file_name: str, is_criminal_case: bool = False
     ) -> VideoInsight | EnhancedVideoInsight | MediaProcessingError:
+        # Check if video processing is enabled
+        if not self.enabled:
+            return MediaProcessingError(
+                source="VideoProcessor",
+                file_name=file_name,
+                error_message="Video processing is disabled. Google Cloud credentials are not configured.",
+                error_type="ConfigurationError",
+            )
+        
         with tempfile.NamedTemporaryFile(
             delete=False, suffix=os.path.splitext(file_name)[1]
         ) as temp_file:

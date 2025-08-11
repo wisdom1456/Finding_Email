@@ -12,10 +12,10 @@ from backend.utils.data_models import (
     FileType,
     ProcessedDocument,
 )
-from utils.logging_config import setup_logging
+from backend_logic.utils.logging_config import get_module_logger
 
 
-logger = setup_logging("docx_processor")
+logger = get_module_logger(__name__)
 
 
 async def process_docx(

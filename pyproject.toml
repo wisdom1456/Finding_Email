@@ -50,8 +50,8 @@ dev = [
 line-length = 88
 indent-width = 4
 
-# Assume Python 3.9+
-target-version = "py39"
+# Assume Python 3.11+
+target-version = "py311"
 
 # Include all Python files
 include = ["*.py", "*.pyi", "**/pyproject.toml"]
@@ -80,6 +80,7 @@ exclude = [
     "node_modules",
     "venv",
     ".env*",
+    "backend_logic",  # Old directory structure being replaced
 ]
 
 [tool.ruff.lint]

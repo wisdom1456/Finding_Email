@@ -13,10 +13,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Optional, Union
 
-from utils.logging_config import setup_logging
+from utils.logging_config import get_module_logger
 
 
-logger = setup_logging("main_processor")
+logger = get_module_logger(__name__)
 
 
 # Add project root to Python path for standalone execution
@@ -159,7 +159,22 @@ async def process_case_documents(
         openai_client = OpenAI(api_key=get_openai_api_key())
         doc_processor = DocumentProcessor()
         audio_processor = AudioProcessor(openai_client)
-        video_processor = VideoProcessor()
+        
+        # Initialize video processor with graceful fallback
+        video_processor = None
+        try:
+            from backend_logic.config import get_settings
+            settings = get_settings()
+            
+            if settings.video_processing_enabled:
+                video_processor = VideoProcessor()
+                logger.info("Video processor initialized successfully")
+            else:
+                logger.info("Video processing disabled - Google Cloud credentials not configured")
+        except Exception as e:
+            logger.warning(f"Could not initialize video processor: {e}")
+            logger.info("Continuing without video processing support")
+        
         ai_analyzer = AIAnalyzer(openai_client, doc_processor, config_path=config_path)
         email_generator = EmailGeneratorV2(
             config_path=config_path, openai_api_key=openai_client.api_key
@@ -256,12 +271,31 @@ async def process_case_documents(
                 for f in audio_files
             ]
         )
-        video_processing_task = asyncio.gather(
-            *[
-                video_processor.process_video_from_streamlit(f, f.name)
-                for f in video_files
-            ]
-        )
+        # Only process videos if video processor is available
+        async def create_video_error(file_name):
+            from backend.utils.data_models import MediaProcessingError
+            return MediaProcessingError(
+                source="VideoProcessor",
+                file_name=file_name,
+                error_message="Video processing is disabled. Google Cloud credentials are not configured.",
+                error_type="ConfigurationError",
+            )
+        
+        if video_processor and hasattr(video_processor, 'enabled') and video_processor.enabled:
+            video_processing_task = asyncio.gather(
+                *[
+                    video_processor.process_video_from_streamlit(f, f.name)
+                    for f in video_files
+                ]
+            )
+        else:
+            # Return MediaProcessingError for each video file when processor is unavailable
+            video_processing_task = asyncio.gather(
+                *[
+                    create_video_error(f.name)
+                    for f in video_files
+                ]
+            )
 
         processed_docs, processed_audio, processed_video = await asyncio.gather(
             doc_processing_task, audio_processing_task, video_processing_task
@@ -282,8 +316,17 @@ async def process_case_documents(
             if doc.document_type != DocumentType.INTAKE_FORM
         ]
 
+        # H3 DEBUG: Intake validation failure point (OLD logic)
+        import json
+        logger.info(
+            f"DEBUG_H3: {json.dumps({'module': 'backend_logic.main_processor', 'hypothesis_id': 'H3', 'action': 'intake_validation_check', 'line': 319, 'intake_doc_found': bool(intake_doc), 'processed_docs_count': len(processed_docs), 'processed_doc_types': [doc.document_type.name for doc in processed_docs], 'architecture': 'OLD_FastAPI'})}"
+        )
+        
         if not intake_doc:
             msg = "Intake form is required but was not found after processing."
+            logger.error(
+                f"DEBUG_H3: {json.dumps({'module': 'backend_logic.main_processor', 'hypothesis_id': 'H3', 'action': 'intake_validation_failure', 'line': 321, 'error_message': msg, 'architecture': 'OLD_FastAPI'})}"
+            )
             raise ValueError(msg)
 
         total_processed = (
@@ -835,7 +878,20 @@ async def process_case_documents_cli(
         openai_client = OpenAI(api_key=get_openai_api_key())
         doc_processor = DocumentProcessor()
         AudioProcessor(openai_client)
-        VideoProcessor()
+        
+        # Try to initialize video processor but don't fail if credentials are missing
+        try:
+            from backend_logic.config import get_settings
+            settings = get_settings()
+            
+            if settings.video_processing_enabled:
+                VideoProcessor()
+                logger.info("Video processor initialized for CLI mode")
+            else:
+                logger.info("Video processing disabled in CLI mode - Google Cloud credentials not configured")
+        except Exception as e:
+            logger.warning(f"Could not initialize video processor in CLI mode: {e}")
+        
         ai_analyzer = AIAnalyzer(openai_client, doc_processor, config_path=config_path)
         email_generator = EmailGeneratorV2(openai_client, config_path=config_path)
 

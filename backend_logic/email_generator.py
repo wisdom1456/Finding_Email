@@ -3330,7 +3330,7 @@ class EmailGeneratorV2:
         <head>
             <title>Legal Findings Letter - {client_name}</title>
             <style>
-                body {{ font-family: Times, serif; margin: 40px; line-height: 1.6; }}
+                body {{ font-family: Times, serif; margin: 40px; line-height: 1.6; background-color: white; color: black; }}
                 .header {{ text-align: center; margin-bottom: 30px; }}
                 h1 {{ color: #2c3e50; }}
                 h2 {{ color: #34495e; border-bottom: 1px solid #bdc3c7; padding-bottom: 5px; }}
@@ -3364,7 +3364,7 @@ class EmailGeneratorV2:
         <head>
             <title>Case Analysis Appendix - {client_name}</title>
             <style>
-                body {{ font-family: Times, serif; margin: 40px; line-height: 1.6; }}
+                body {{ font-family: Times, serif; margin: 40px; line-height: 1.6; background-color: white; color: black; }}
                 .header {{ text-align: center; margin-bottom: 30px; }}
                 h1 {{ color: #2c3e50; }}
             </style>

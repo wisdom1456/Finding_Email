@@ -138,11 +138,17 @@ class Settings(BaseSettings):
 
     @field_validator("google_application_credentials")
     @classmethod
-    def validate_credentials_file(cls, v):
-        """Validate that the Google credentials file exists if provided."""
-        if v and not os.path.exists(v):
-            msg = f"Google credentials file not found: {v}"
-            raise ValueError(msg)
+    def validate_credentials_file(cls, v, values):
+        """
+        Validate that the Google credentials file exists only when absolutely necessary.
+        This validator is now very lenient to allow application startup without credentials.
+        """
+        # Skip validation if no value provided
+        if not v:
+            return v
+            
+        # Skip validation if file doesn't exist - we'll handle this at runtime when needed
+        # This allows the application to start up without requiring the credentials file
         return v
 
     @property

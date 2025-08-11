@@ -274,11 +274,9 @@ def validate_next_steps_formatting(content: str) -> None:
         )
 
     # Log successful validation for debugging
-
-
-logger.debug(
-    "VALIDATORS: Next steps formatting validation passed - <strong> tags found"
-)
+    logger.debug(
+        "VALIDATORS: Next steps formatting validation passed - <strong> tags found"
+    )
 
 
 def validate_section_output(output_content: str, output_format: str) -> None:

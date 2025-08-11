@@ -176,8 +176,16 @@ def results_display_section():
                 if st.session_state.main_letter and st.session_state.appendix:
                     # Display the main findings letter inline using components.html for complete HTML documents
                     st.subheader("Findings Letter")
+                    
+                    # Ensure proper styling for dark mode compatibility
+                    styled_main_letter = f"""
+                    <div style="background-color: white; color: black; padding: 20px; border-radius: 5px;">
+                        {st.session_state.main_letter}
+                    </div>
+                    """
+                    
                     components.html(
-                        st.session_state.main_letter, height=800, scrolling=True
+                        styled_main_letter, height=800, scrolling=True
                     )
 
                     # Provide separate download buttons for all documents
@@ -209,7 +217,15 @@ def results_display_section():
         elif st.session_state.main_letter and st.session_state.appendix:
             # Display the main findings letter inline using components.html for complete HTML documents
             st.subheader("Findings Letter")
-            components.html(st.session_state.main_letter, height=800, scrolling=True)
+            
+            # Ensure proper styling for dark mode compatibility
+            styled_main_letter = f"""
+            <div style="background-color: white; color: black; padding: 20px; border-radius: 5px;">
+                {st.session_state.main_letter}
+            </div>
+            """
+            
+            components.html(styled_main_letter, height=800, scrolling=True)
 
             # Provide separate download buttons for all documents
             st.subheader("Download Options")

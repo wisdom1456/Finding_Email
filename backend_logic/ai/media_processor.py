@@ -7,10 +7,10 @@ from __future__ import annotations
 import os
 from typing import Any, Dict, List, Optional
 
-from utils.logging_config import setup_logging
+from utils.logging_config import get_module_logger
 
 
-logger = setup_logging("media_processor")
+logger = get_module_logger(__name__)
 
 
 # Optional imports with fallback handling

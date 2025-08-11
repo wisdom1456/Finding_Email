@@ -1,6 +1,6 @@
 # Legal Document Analysis Portal
 
-A sophisticated **Streamlit-based monolithic application** that automates the processing of legal case documents through advanced AI integration and professional output generation. The portal features a service-oriented internal architecture achieving **14.3x performance improvement** over baseline.
+A sophisticated **Streamlit-based monolithic application**, containerized and deployed on **Google Cloud Run**, that automates the processing of legal case documents through advanced AI integration and professional output generation. The portal features a service-oriented internal architecture achieving **14.3x performance improvement** over baseline.
 
 ## 🚀 Key Features
 
@@ -90,43 +90,45 @@ A sophisticated **Streamlit-based monolithic application** that automates the pr
 └── memory-bank/             # Project knowledge base
 ```
 
-## 🚀 Getting Started
+## 🚀 Getting Started (Local Development)
 
 ### Prerequisites
-- Python 3.12+
+- Python 3.11+ (as per Dockerfile)
+- Docker
 - Google Cloud account (for video/audio processing)
 - OpenAI API key
 
 ### Installation
 
-1. Clone the repository:
-```bash
-git clone https://github.com/yourusername/legal-document-portal.git
-cd legal-document-portal
-```
+1.  Clone the repository:
+    ```bash
+    git clone https://github.com/yourusername/legal-document-portal.git
+    cd legal-document-portal
+    ```
 
-2. Install dependencies:
-```bash
-pip install -r requirements.txt
-```
+2.  Install dependencies:
+    ```bash
+    pip install -r requirements.txt
+    ```
 
-3. Configure environment variables:
-```bash
-cp .env.example .env
-# Edit .env with your API keys and configuration
-```
+3.  Configure environment variables for local use:
+    ```bash
+    cp .env.example .env
+    # Edit .env with your API keys and configuration
+    ```
 
-4. Run the application:
-```bash
-streamlit run app.py
-```
+4.  Run the application locally:
+    ```bash
+    streamlit run app.py
+    ```
+    The application will be available at `http://localhost:8501`.
 
-The application will be available at `http://localhost:8501`
+For production deployment, see the [Deployment](#-deployment) section below.
 
 ## ⚙️ Configuration
 
-### Environment Variables
-Create a `.env` file with:
+### Local Environment Variables
+For local development, create a `.env` file with:
 ```env
 # OpenAI Configuration
 OPENAI_API_KEY=your_api_key_here
@@ -149,6 +151,21 @@ Configure performance in the Streamlit sidebar:
 - **Caching**: Enable/disable with statistics
 - **Concurrent Requests**: 1-20 workers
 - **Cache Management**: Clear cache option
+
+## 🚀 Deployment
+
+This project is configured for automated deployment to **Google Cloud Run** via GitHub Actions.
+
+### CI/CD Pipeline
+- **Continuous Integration**: On every push, the pipeline runs security scans (`Trivy`) and unit/integration tests (`pytest`).
+- **Continuous Deployment**:
+    - Pushes to `develop` branch automatically deploy to the **staging** environment.
+    - Pushes to `main` branch automatically deploy to the **production** environment.
+
+### Production Secrets
+Production and staging secrets (e.g., `GCP_SA_KEY`) are managed in GitHub repository secrets and are not stored in `.env` files.
+
+For detailed setup instructions, see the **[Google Cloud Deployment Guide](docs/GOOGLE_CLOUD_DEPLOYMENT.md)**.
 
 ## 📊 Performance Metrics
 
@@ -187,6 +204,7 @@ pytest --cov=. --cov-report=html
 
 ## 📚 Documentation
 
+- [Google Cloud Deployment Guide](docs/GOOGLE_CLOUD_DEPLOYMENT.md) - **New**: Deployment to GCR and Cloud Run
 - [Architecture Documentation](docs/ARCHITECTURE.md) - System design and components
 - [Security Implementation](docs/SECURITY.md) - Security measures and compliance
 - [Performance Optimizations](docs/PERFORMANCE.md) - Performance improvements and benchmarks
@@ -242,14 +260,15 @@ For support, please contact:
 
 ## 🎯 Status
 
-- **Architecture**: ✅ Streamlit-only monolithic application
+- **Architecture**: ✅ Containerized Streamlit application
 - **Performance**: ✅ 14.3x improvement achieved
 - **Security**: ✅ Comprehensive measures implemented
-- **Testing**: ✅ 100% integration test success
-- **Production**: ✅ Ready for deployment
+- **Deployment**: ✅ Automated CI/CD to Google Cloud Run
+- **Production**: ✅ Ready for production deployment on GCP
 
 ---
 
 **Last Updated**: 2025-08-10  
 **Version**: 2.0.0  
 **Status**: Production Ready
+<!-- Triggering CI/CD for staging deployment validation. -->

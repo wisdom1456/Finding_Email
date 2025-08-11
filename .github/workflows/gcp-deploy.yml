@@ -38,8 +38,8 @@ jobs:
       id: auth
       uses: 'google-github-actions/auth@v2'
       with:
-        workload_identity_provider: 'projects/951939988528/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider'
-        service_account: 'github-actions-sa@brflorida.iam.gserviceaccount.com'
+        workload_identity_provider: 'projects/891496644205/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider'
+        service_account: 'br-findings@brflorida.iam.gserviceaccount.com'
 
     - name: Set up Cloud SDK
       uses: google-github-actions/setup-gcloud@v2
@@ -64,6 +64,7 @@ jobs:
     - name: Build Docker image
       run: |
         docker build \
+          --no-cache \
           --build-arg ENVIRONMENT=${{ env.ENVIRONMENT }} \
           --tag ${{ env.FULL_IMAGE_NAME }} \
           --tag ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.IMAGE_NAME }}:${{ github.sha }} \

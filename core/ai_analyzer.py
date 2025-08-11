@@ -47,6 +47,7 @@ class AIAnalyzer:
         self.config = self._load_configuration(config_path)
 
         logger.info(f"AI ANALYZER: ✅ Initialized with configuration: {config_path or 'default'}")
+        # Force deployment cache refresh
 
     def _load_configuration(self, config_path: str | None = None) -> dict[str, Any]:
         """Load configuration from YAML file."""

@@ -46,7 +46,7 @@ class AIAnalyzer:
         # Load configuration
         self.config = self._load_configuration(config_path)
 
-        logger.info(f'AI ANALYZER: ✅ Initialized with configuration: {config_path or 'default'}')
+        logger.info(f"AI ANALYZER: ✅ Initialized with configuration: {config_path or 'default'}")
 
     def _load_configuration(self, config_path: str | None = None) -> dict[str, Any]:
         """Load configuration from YAML file."""
@@ -754,12 +754,12 @@ class AIAnalyzer:
             logger.info('AI ANALYZER: 🔍 Making OpenAI request with gpt-4o-mini...')
             raw_analysis = await self._make_openai_request(prompt, model="gpt-4o-mini")
             logger.info(f'AI ANALYZER: 🔍 OpenAI response received, type: {type(raw_analysis)}')
-            logger.info(f'AI ANALYZER: 🔍 Raw analysis keys: {(list(raw_analysis.keys()) if isinstance(raw_analysis, dict) else 'Not a dict')}')
+            logger.info(f"AI ANALYZER: 🔍 Raw analysis keys: {(list(raw_analysis.keys()) if isinstance(raw_analysis, dict) else 'Not a dict')}")
 
             logger.debug('AI ANALYZER: 🔍 Preprocessing AI output...')
             processed_analysis = preprocess_ai_output(raw_analysis)
             logger.info(f'AI ANALYZER: 🔍 Processed analysis type: {type(processed_analysis)}')
-            logger.info(f'AI ANALYZER: 🔍 Processed analysis keys: {(list(processed_analysis.keys()) if isinstance(processed_analysis, dict) else 'Not a dict')}')
+            logger.info(f"AI ANALYZER: 🔍 Processed analysis keys: {(list(processed_analysis.keys()) if isinstance(processed_analysis, dict) else 'Not a dict')}")
 
             logger.debug('AI ANALYZER: 🔍 Validating with EnhancedIntakeAnalysis schema...')
             analysis.intake_analysis = EnhancedIntakeAnalysis.model_validate(
@@ -797,7 +797,7 @@ class AIAnalyzer:
             )
         except Exception as unexpected_error:
             logger.info(f'AI ANALYZER: ❌ UNEXPECTED ERROR during intake analysis: {type(unexpected_error).__name__} - {unexpected_error}')
-            logger.error(f'AI ANALYZER: 🔍 Error context: intake_doc={(intake_doc.file_name if intake_doc else 'None')}')
+            logger.error(f"AI ANALYZER: 🔍 Error context: intake_doc={(intake_doc.file_name if intake_doc else 'None')}")
             analysis.errors.append(
                 AnalysisError(
                     source="IntakeAnalysis",
@@ -1209,7 +1209,7 @@ class AIAnalyzer:
                 msg = "No response received from OpenAI API"
                 raise ValueError(msg)
 
-            logger.info(f'AI ANALYZER: Raw assessment keys: {(list(raw_assessment.keys()) if isinstance(raw_assessment, dict) else 'Not a dict')}')
+            logger.info(f"AI ANALYZER: Raw assessment keys: {(list(raw_assessment.keys()) if isinstance(raw_assessment, dict) else 'Not a dict')}")
 
             # Process legal assessment with graceful degradation
             if "legal_assessment" in raw_assessment:

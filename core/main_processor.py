@@ -389,7 +389,9 @@ async def process_case_documents(
         st.session_state.processing_error = None
 
         # Initialize processors
-        openai_client = OpenAI(api_key=get_openai_api_key())
+        from backend_logic.ai.openai_client import OpenAIClient
+        openai_client_wrapper = OpenAIClient(api_key=get_openai_api_key())
+        openai_client = openai_client_wrapper.client  # Get the properly configured client
         doc_processor = DocumentProcessor()
         audio_processor = AudioProcessor(openai_client)
         
@@ -1140,8 +1142,10 @@ async def process_case_documents_cli(
 
         # Initialize processors
         from backend_logic.config import get_openai_api_key
+        from backend_logic.ai.openai_client import OpenAIClient
 
-        openai_client = OpenAI(api_key=get_openai_api_key())
+        openai_client_wrapper = OpenAIClient(api_key=get_openai_api_key())
+        openai_client = openai_client_wrapper.client  # Get the properly configured client
         doc_processor = DocumentProcessor()
         AudioProcessor(openai_client)
         

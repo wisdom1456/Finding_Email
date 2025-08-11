@@ -24,6 +24,9 @@ jobs:
   build-and-deploy:
     name: Build and Deploy to GCR
     runs-on: ubuntu-latest
+    permissions:
+     contents: 'read'
+     id-token: 'write'
     env:
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
     

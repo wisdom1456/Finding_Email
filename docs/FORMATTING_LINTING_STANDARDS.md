@@ -1,3 +1,10 @@
+---
+title: Formatting and Linting Standards
+version: 1.0
+last_updated: 2025-08-11
+owner: @franklin
+status: canonical
+---
 # Formatting & Linting Standards
 
 This document outlines the formatting and linting standards for the Legal Document Analysis Portal project, based on modern Ruff-based tooling.

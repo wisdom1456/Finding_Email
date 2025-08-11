@@ -1,3 +1,10 @@
+---
+title: Comprehensive Risk Assessment Report
+version: 1.0
+last_updated: 2025-08-11
+owner: @franklin
+status: canonical
+---
 # Comprehensive Risk Assessment Report
 ## Legal Document Analysis Portal Refactor
 

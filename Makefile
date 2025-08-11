@@ -1,35 +1,40 @@
-.PHONY: help install lint format test security clean
+# Makefile for the Finding Emails project
 
+# Set the Python interpreter
+PYTHON = python3
+
+# Set the source directory
+SRC = app
+
+# Set the test directory
+TESTS = tests
+
+# Default command
+all: help
+
+# Help command
 help:
-	@echo "Available commands:"
-	@echo "  install    Install dependencies"
-	@echo "  lint       Run linting checks"
-	@echo "  format     Format code"
-	@echo "  test       Run tests"
-	@echo "  security   Run security scans"
-	@echo "  clean      Clean up generated files"
+	@echo "Makefile for the Finding Emails project"
+	@echo ""
+	@echo "Usage:"
+	@echo "  make help        - Show this help message"
+	@echo "  make run         - Run the main application"
+	@echo "  make test        - Run the test suite"
+	@echo "  make clean       - Remove all temporary files"
+	@echo ""
 
-install:
-	pip install -r requirements.txt
-	pip install -r requirements-dev.txt
-	pre-commit install
+# Run the main application
+run:
+	@echo "Running the main application..."
+	@$(PYTHON) -m $(SRC).main
 
-lint:
-	ruff check . --fix
-
-format:
-	ruff format .
-
+# Run the test suite
 test:
-	pytest utils/tests/ --cov=utils --cov=core --cov=services
+	@echo "Running the test suite..."
+	@PYTHONPATH=. $(PYTHON) -m unittest discover -s $(TESTS)
 
-security:
-	bandit -r core/ services/ utils/
-	safety check
-	pip-audit
-
+# Remove all temporary files
 clean:
-	find . -type d -name "__pycache__" -exec rm -rf {} +
-	find . -type f -name "*.pyc" -delete
-	rm -rf .pytest_cache .ruff_cache .coverage coverage.xml htmlcov/
-	rm -rf .cache/ benchmark.json bandit-report.json
+	@echo "Removing all temporary files..."
+	@find . -type f -name "*.py[co]" -delete
+	@find . -type d -name "__pycache__" -delete

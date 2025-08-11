@@ -1,0 +1,581 @@
+- .dockerignore
+- .pre-commit-config.yaml
+- BACKEND_CONSOLIDATION_SUMMARY.md
+- CLEANUP_FILES_TO_REMOVE.md
+- CLEANUP_RESULTS_REPORT.md
+- CURRENT_FILE_TREE.md
+- Dockerfile
+- Findings_Email_Workflow_Review.md
+- Makefile
+- PROJECT_FILE_TREE.md
+- README.md
+- app.py
+- assets/
+- backend/
+  - __init__.py
+  - ai_analyzer.py
+  - assets/
+    - templates/
+      - budget_sheet.jinja2
+      - document_appendix.jinja2
+  - config/
+    - README.md
+    - templates/
+      - contractor_dispute_config.yaml
+      - universal_legal_config.yaml
+  - delivery.py
+  - document_processor.py
+  - email_generator.py
+  - quality_validator.py
+  - quick_validation_test.py
+  - template_assembler.py
+  - tests/
+    - README.md
+    - TESTING_ARCHITECTURE.md
+    - __init__.py
+    - conftest.py
+    - e2e/
+      - __init__.py
+      - test_devlin_workflow.py
+    - migration_guide.md
+    - pytest.ini
+    - run_all_tests.py
+    - templates/
+      - contractor_dispute_config.yaml
+      - general_legal_config.yaml
+      - landlord_tenant_config.yaml
+    - test_ai_analyzer.py
+    - test_audio_processor.py
+    - test_authentic_attorney_output.py
+    - test_badam_comprehensive.py
+    - test_devlin_comprehensive.py
+    - test_email_generator_v2.py
+    - test_framework_validation.py
+    - test_media_integration.py
+    - test_price_comprehensive.py
+    - test_results/
+      - QUALITY_IMPROVEMENT_REPORT.md
+      - devlin/
+        - config.yaml
+        - input/
+          - Attaching a Document Instructions.pdf
+          - Devlin - Certified Letter for Notice to Owner.pdf
+          - Devlin - Contract for Construction - Highlighted w Items not Completed 6.9.25.pdf
+          - Devlin - Intake for Contractor Dispute.pdf
+          - Devlin - Pictures of How House was Left by Contractor.pdf
+          - Devlin - Project Management Proposal - Hoffar Holdings LLC 6.25.25 (1).pdf
+          - Devlin - Rebuild Receipts - May & June.pdf
+          - Devlin-LLW Emails.pdf
+          - Documents Needed to Proceed.pdf
+          - Intake for Contractor Dispute _Fillable_ 1.pdf
+        - output/
+          - comprehensive_comparison_analysis.md
+          - generated_email_consolidated.txt
+        - reference/
+          - Devlin_Findings_Email.rtf
+          - reference_email.rtf
+    - test_velasco_comprehensive.py
+    - test_video_integration.py
+    - test_video_preservation.py
+    - test_video_processor.py
+    - unit/
+      - __init__.py
+      - test_ai_analyzer.py
+      - test_delivery.py
+      - test_document_processor.py
+      - test_email_generator.py
+      - test_quality_validator.py
+      - test_template_assembler.py
+    - utils/
+      - __init__.py
+      - email_comparator.py
+      - rtf_processor.py
+      - semantic_analyzer.py
+      - test_framework.py
+      - test_utils.py
+  - utils/
+    - __init__.py
+    - data_models.py
+    - enhanced_file_validator.py
+    - file_processors/
+      - __init__.py
+      - doc_processor.py
+      - docx_processor.py
+      - eml_processor.py
+      - image_processor.py
+      - jpg_processor.py
+      - pdf_processor.py
+      - png_processor.py
+      - txt_processor.py
+    - validators.py
+- backend_backup/
+  - __init__.py
+  - ai_analyzer.py
+  - assets/
+    - templates/
+      - budget_sheet.jinja2
+      - document_appendix.jinja2
+  - config/
+    - README.md
+    - templates/
+      - contractor_dispute_config.yaml
+      - universal_legal_config.yaml
+  - config.py
+  - delivery.py
+  - document_processor.py
+  - email_generator.py
+  - quality_validator.py
+  - quick_validation_test.py
+  - template_assembler.py
+  - tests/
+    - __init__.py
+    - conftest.py
+    - migration_guide.md
+    - pytest.ini
+    - run_all_tests.py
+    - test_ai_analyzer.py
+    - test_audio_processor.py
+    - test_authentic_attorney_output.py
+    - test_badam_comprehensive.py
+    - test_devlin_comprehensive.py
+    - test_email_generator_v2.py
+    - test_framework_validation.py
+    - test_media_integration.py
+    - test_price_comprehensive.py
+    - test_velasco_comprehensive.py
+    - test_video_integration.py
+    - test_video_preservation.py
+    - test_video_processor.py
+    - TESTING_ARCHITECTURE.md
+    - e2e/
+      - __init__.py
+      - test_devlin_workflow.py
+    - templates/
+      - contractor_dispute_config.yaml
+      - general_legal_config.yaml
+      - landlord_tenant_config.yaml
+    - test_results/
+      - QUALITY_IMPROVEMENT_REPORT.md
+      - devlin/
+        - config.yaml
+        - input/
+          - Attaching a Document Instructions.pdf
+          - Devlin - Certified Letter for Notice to Owner.pdf
+          - Devlin - Contract for Construction - Highlighted w Items not Completed 6.9.25.pdf
+          - Devlin - Intake for Contractor Dispute.pdf
+          - Devlin - LLW Text Thread.pdf
+          - Devlin - Pictures of How House was Left by Contractor.pdf
+          - Devlin - Project Management Proposal - Hoffar Holdings LLC 6.25.25 (1).pdf
+          - Devlin - Rebuild Receipts - May & June.pdf
+          - Devlin-LLW Emails.pdf
+          - Documents Needed to Proceed.pdf
+          - Intake for Contractor Dispute _Fillable_ 1.pdf
+        - output/
+          - comprehensive_comparison_analysis.md
+          - generated_email_consolidated.txt
+        - reference/
+          - Devlin_Findings_Email.rtf
+          - reference_email.rtf
+    - unit/
+      - __init__.py
+      - test_ai_analyzer.py
+      - test_delivery.py
+      - test_document_processor.py
+      - test_email_generator.py
+      - test_quality_validator.py
+      - test_template_assembler.py
+    - utils/
+      - __init__.py
+      - email_comparator.py
+      - rtf_processor.py
+      - semantic_analyzer.py
+      - test_framework.py
+      - test_utils.py
+  - utils/
+    - __init__.py
+    - data_models.py
+    - enhanced_file_validator.py
+    - validators.py
+    - file_processors/
+      - __init__.py
+      - doc_processor.py
+      - docx_processor.py
+      - eml_processor.py
+      - image_processor.py
+      - jpg_processor.py
+      - pdf_processor.py
+      - png_processor.py
+      - txt_processor.py
+- backend_logic_backup/
+  - __init__.py
+  - ai_analyzer.py
+  - async_processor.py
+  - audio_processor.py
+  - cost_estimator.py
+  - cost_exporter.py
+  - cost_session_manager.py
+  - document_processor.py
+  - email_generator_backup.py
+  - email_generator.py
+  - email_generator.py.bak
+  - ai/
+    - __init__.py
+    - ai_analyzer_refactored.py
+    - config_manager.py
+    - media_processor.py
+    - openai_client.py
+    - prompt_builder.py
+    - timeline_analyzer.py
+    - token_manager.py
+  - email_generation/
+    - email_generator_v2.py
+    - services/
+  - tests/
+  - utils/
+    - tests/
+- components/
+  - __init__.py
+  - budget_sheet.py
+  - ui_components.py
+- config/
+  - auth_config.yaml
+  - settings.py
+- core/
+  - __init__.py
+  - ai_analyzer.py
+  - ai_analyzer_refactored.py
+  - config_manager.py
+  - document_processor.py
+  - email_generator.py
+  - main_processor.py
+  - media_processor.py
+  - openai_client.py
+  - prompt_builder.py
+  - timeline_analyzer.py
+  - token_manager.py
+- cost_sessions/
+- docs/
+  - ARCHITECTURE.md
+  - AUTHENTIC_ATTORNEY_IMPLEMENTATION_PLAN.md
+  - CITATION_ENHANCEMENT_IMPLEMENTATION.md
+  - CLIENT_CLARITY_ADVISOR_IMPLEMENTATION.md
+  - COMPREHENSIVE_RISK_ASSESSMENT_REPORT.md
+  - COST_TRACKING_TEST_REPORT.md
+  - FINAL_ARCHITECTURAL_REFINEMENT_PLAN.md
+  - FINAL_EFFICIENCY_REPORT.md
+  - FINAL_VALIDATION_REPORT.md
+  - FORMATTING_LINTING_STANDARDS.md
+  - GOOGLE_CLOUD_DEPLOYMENT.md
+  - ORCHESTRATOR_EMAIL_GENERATOR_FIX.md
+  - PERFORMANCE.md
+  - PERFORMANCE_VALIDATION_REPORT.md
+  - PROMPT_IMPROVEMENT_PLAN.md
+  - RUFF_CLEANUP_PLAN.md
+  - SECURITY.md
+  - SECURITY_AUDIT_REPORT.md
+  - SECURITY_IMPROVEMENTS.md
+  - VALIDATION_CHECKLIST.md
+  - enhanced_file_validation.md
+  - master_schema.md
+  - refactoring_plan.md
+- index.html
+- memory-bank/
+  - activeContext.md
+  - archive/
+    - consolidation_summary.md
+    - deployment_guide.md
+    - email_generation_patterns.md
+    - findings_email_enhancement_plan.md
+    - lessons_learned.md
+    - phase1_consolidation_analysis.md
+    - production_readiness_summary.md
+    - project_consolidation_plan.md
+    - prompt_engineering_enhancement_plan.md
+    - railway_configuration_files.md
+    - testing_plan.md
+    - testing_results.md
+    - unit_testing_framework_design.md
+    - workflow_redesign_plan.md
+  - client_clarity_advisor_framework.md
+  - criminal_video_processing.md
+  - debugging_lessons_learned.md
+  - optimization_recommendations.md
+  - performance_bottleneck_report.md
+  - productContext.md
+  - progress.md
+  - projectbrief.md
+  - systemPatterns.md
+  - techContext.md
+  - vertex_ai_video_analysis.md
+  - video_preservation_plan.md
+- monitoring_dashboard.py
+- pyproject.toml
+- requirements-dev.txt
+- requirements.txt
+- services/
+  - __init__.py
+  - async_processor.py
+  - audio_processor.py
+  - citation_tracking_service.py
+  - config_and_template_loader.py
+  - configuration_manager.py
+  - content_extraction_service.py
+  - content_formatting_service.py
+  - content_generation_service.py
+  - email_generator_core.py
+  - email_generator_v2.py
+  - fallback_generation_service.py
+  - json_architecture_service.py
+  - json_processing_service.py
+  - openai_integration_service.py
+  - prompt_and_api_service.py
+  - services/
+    - __init__.py
+    - config_and_template_loader.py
+    - configuration_manager.py
+    - content_extraction_service.py
+    - content_formatting_service.py
+    - content_generation_service.py
+    - email_generator_core.py
+    - fallback_generation_service.py
+    - json_architecture_service.py
+    - json_processing_service.py
+    - openai_integration_service.py
+    - prompt_and_api_service.py
+    - shared_utils.py
+    - template_rendering_service.py
+    - text_processing_service.py
+  - shared_utils.py
+  - template_rendering_service.py
+  - text_processing_service.py
+  - video_processor.py
+- start_app.sh
+- start_servers.sh
+- test-results/
+  - Case_Analysis_Clifton Price-6.html
+  - Document_Appendix_Clifton Price-10.html
+  - Findings_Letter_Clifton Price-6.html
+  - badam-case-test/
+    - Analysis_Summary_Badam_Balaji_20250806_154800.json
+    - Case_Analysis_Badam_Balaji_20250806_154800.txt
+    - Document_Appendix_Badam_Balaji_20250806_154800.html
+    - Findings_Letter_Badam_Balaji_20250806_154800.eml
+  - test_case_1_output.json
+  - test_case_2_output.json
+  - test_case_3_output.json
+  - test_case_4_output.json
+- test_appendix_fix.py
+- test_citation_enhancement.py
+- test_critical_fixes.py
+- test_data/
+  - Badam, Balaji [MetLife]/
+    - Client Docs/
+      - 3. Residential Lease_811_Gate Run Rd_Signed.pdf
+      - 811-Gate-Run-Rd-Florida-Eviction-Notice-to-Quit-Form.pdf
+      - Badam  - Intake Form.pdf
+      - Badam - Correspondence - Email Message.pdf
+      - Badam - Correspondence - Text Message.pdf
+      - Badam - Eviction Notice.pdf
+      - Badam - Lease agreement.pdf
+      - Badam - Property Deed.pdf
+      - Gmail - Eviction Notice - Email May 28.pdf
+      - Gmail - Re_ MOVE OUT - email from Breanna and response from Balaji.pdf
+      - Intake (General) - Balaji Badam.pdf
+      - Property Deed.pdf
+      - Regions Mortgage Payment - May 2025.pdf
+      - Rental Payments Jan - June 2025 - Wells Fargo.pdf
+      - imessage - Breanna communication 1.jpg
+      - imessage - Breanna communication 2.jpg
+      - imessage - Breanna communication 3.jpg
+      - imessage - Breanna communication 4.jpg
+      - imessage - Breanna communication 5.jpg
+      - imessage - Breanna communication 6.jpg
+    - Drafts/
+    - Shared Folder with Client/
+      - Shared with Bernhardt Riley/
+        - 3. Residential Lease_811_Gate Run Rd_Signed.pdf
+        - 811-Gate-Run-Rd-Florida-Eviction-Notice-to-Quit-Form.pdf
+        - Badam  - Intake Form.pdf
+        - Badam - Correspondence - Email Message.pdf
+        - Badam - Correspondence - Text Message.pdf
+        - Badam - Eviction Notice.pdf
+        - Badam - Lease agreement.pdf
+        - Badam - Property Deed.pdf
+        - Gmail - Eviction Notice - Email May 28.pdf
+        - Gmail - Re_ MOVE OUT - email from Breanna and response from Balaji.pdf
+        - Intake (General) - Balaji Badam.pdf
+        - Property Deed.pdf
+        - Regions Mortgage Payment - May 2025.pdf
+        - Rental Payments Jan - June 2025 - Wells Fargo.pdf
+        - imessage - Breanna communication 1.jpg
+        - imessage - Breanna communication 2.jpg
+        - imessage - Breanna communication 3.jpg
+        - imessage - Breanna communication 4.jpg
+        - imessage - Breanna communication 5.jpg
+        - imessage - Breanna communication 6.jpg
+  - Case_Analysis_Amber Bell  Erik Devlin-12.html
+  - Devlin, Erik [MetLife]/
+    - Client Docs/
+      - Attaching a Document Instructions.pdf
+      - Devlin - Contract for Construction - Highlighted w Items not Completed 6.9.25.pdf
+      - Devlin - Intake for Contractor Dispute.pdf
+      - Devlin-LLW Emails.pdf
+      - Documents Needed to Proceed.pdf
+      - Intake for Contractor Dispute _Fillable_ 1.pdf
+    - Drafts/
+    - Shared Folder with Client/
+      - Shared with Bernhardt Riley/
+        - Devlin - Certified Letter for Notice to Owner.pdf
+        - Devlin - Contract for Construction - Highlighted w Items not Completed 6.9.25.pdf
+        - Devlin - Intake for Contractor Dispute.pdf
+        - Devlin - Pictures of How House was Left by Contractor.pdf
+        - Devlin - Project Management Proposal - Hoffar Holdings LLC 6.25.25 (1).pdf
+        - Devlin - Rebuild Receipts - May & June.pdf
+        - Devlin-LLW Emails.pdf
+  - Devlin_Findings_Email.rtf
+  - Findings Letter Template.docx
+  - Findings_Clifton Price.eml
+  - Findings_Letter_Amber Bell  Erik Devlin-26.html
+  - Findings_Miguel Velasco Rachael Taft.eml
+  - Intake (General) - Alan Ivarson.pdf
+  - Intake (General) - Balaji Badam.pdf
+  - Intake (General) - Clifton Price.pdf
+  - Intake - Miguel and Rachael.pdf
+  - Price, Clifton [MetLife]/
+    - Drafts/
+    - Shared Folder with Client/
+      - Shared with Bernhardt Riley/
+        - 2024 Pictures Videos/
+          - 08-05-2024 Picture 1.png
+          - 08-05-2024 Picture 2.png
+          - 08-05-2024 Picture 3.jpg
+          - 09-19-2024 Picture 1.jpg
+        - 2025 Pictures Videos/
+          - 03-16-2025 Picture 1.jpg
+          - 03-16-2025 Picture 2.jpg
+          - 03-17-2025 Maintenance Request.jpg
+          - 06-11-2025 Picture 1.jpg
+          - 06-11-2025 Picture 2.jpg
+          - 06-11-2025 Picture 3.jpg
+          - 06-11-2025 Picture 4.jpg
+          - 06-11-2025 Picture 5.jpg
+          - 06-11-2025 Picture 6.jpg
+          - 06-11-2025 Picture 7.jpg
+        - Concrobium/
+          - Concrobium 1.jpg
+          - Concrobium 2.jpg
+          - Concrobium Safety Data Sheet.pdf
+          - Concrobium Technical Data.pdf
+        - Emails/
+          - 6-13-2025 Release.eml
+          - 6-20-2025 1 Follow-Up Request Regarding Water Intrusion and Interior Repairs.eml
+          - 6-20-2025 2 baseboards and walls concern.eml
+          - 6-20-2025 3 Follow-Up Request Regarding Water Intrusion and Interior Repairs.eml
+          - 6-23-2025 4 Water intrusion follow up.eml
+          - 6-23-2025 5 Follow-Up Request Regarding Water Intrusion and Interior Repairs.eml
+          - 6-24-2025 6 Water intrusion follow up.eml
+          - 6-24-2025 7 Follow-Up Request Regarding Water Intrusion and Interior Repairs.eml
+          - 6-24-2025 8 Water intrusion follow up.eml
+        - Intake and Timeline/
+          - Intake (General) - Clifton Price.pdf
+          - Timeline - Clifton Price-udpated.docx
+          - Timeline - Clifton Price.docx
+        - July 9 update/
+          - 7-9-2025 Picture 1.jpg
+          - 7-9-2025 Picture 2.jpg
+          - Timeline - Clifton Price.docx
+        - Lease/
+          - 2025-2026 Lease.pdf
+        - Texts/
+          - Texts 1.PNG
+          - Texts 2.PNG
+          - Texts 3.PNG
+          - Texts 4.PNG
+          - Texts 5.PNG
+          - Texts 6.PNG
+          - Texts 7.PNG
+        - Work Orders/
+          - 08-06-2024 Work Order 698907.pdf
+          - 09-25-2024 Work Order 747424.pdf
+          - 12-16-2024 Work Order 769159.pdf
+  - Velasco, Miguel [MetLife]/
+    - Drafts/
+    - Shared Folder with Client/
+      - Shared with Bernhardt Riley/
+        - 142 Property Disclosure.pdf
+        - 5287-1737993084-insuredestimatecopy.pdf
+        - Explaining of issues.pdf
+        - Intake - Miguel and Rachael.pdf
+        - Screenshot of Page.png
+  - processed_css_fixed_sample.html
+- test_results/
+  - devlin_manual_run/
+    - amber_bell_erik_devlin_analysis_appendix.html
+    - amber_bell_erik_devlin_findings_letter.eml
+    - amber_bell_erik_devlin_findings_letter.html
+    - amber_bell_erik_devlin_findings_letter.txt
+    - generated_findings_letter_v2.html
+    - generated_findings_letter_v3.html
+    - generated_findings_letter_v4.html
+- tests/
+  - test_performance_optimizations.py
+  - test_startup.py
+- utils/
+  - __init__.py
+  - api_optimizer.py
+  - async_streamlit.py
+  - audit_logger.py
+  - auth.py
+  - cache_manager.py
+  - cost_calculator.py
+  - cost_estimator.py
+  - cost_exporter.py
+  - cost_session_manager.py
+  - data_models.py
+  - enhanced_file_validator.py
+  - file_processors/
+    - __init__.py
+    - doc_processor.py
+    - docx_processor.py
+    - eml_processor.py
+    - image_processor.py
+    - jpg_processor.py
+    - pdf_processor.py
+    - png_processor.py
+    - txt_processor.py
+  - helpers.py
+  - logging_config.py
+  - metrics.py
+  - oauth.py
+  - pii_sanitizer.py
+  - security.py
+  - session_manager.py
+  - structured_logger.py
+  - tests/
+    - test_performance.py
+    - test_pii_sanitizer.py
+    - test_security.py
+  - tracing.py
+  - validators.py
+- validation_output/
+  - amber_bell_erik_devlin_analysis_appendix.html
+  - amber_bell_erik_devlin_findings_letter.html
+  - balaji_badam_rajya_badam_analysis_appendix.html
+  - balaji_badam_rajya_badam_findings_letter.html
+  - case_analysis_john_doe_20250808_141623.json
+  - citation_map.json
+  - citation_test_results.json
+  - clifton_price_analysis_appendix.html
+  - clifton_price_findings_letter.html
+  - document_appendix.html
+  - erik_devlin_analysis_appendix.html
+  - erik_devlin_findings_letter.html
+  - final_analysis_data.json
+  - final_prompt.txt
+  - findings_letter.html
+  - html_output_john_doe_20250808_141623.html
+  - miguel_velasco_rachael_taft_analysis_appendix.html
+  - miguel_velasco_rachael_taft_findings_letter.html
+  - test_appendix_output.html
+  - validation_error.json
+  - validation_report.json

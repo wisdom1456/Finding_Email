@@ -1,3 +1,10 @@
+---
+title: Citation Enhancement Implementation
+version: 1.0
+last_updated: 2025-08-11
+owner: @franklin
+status: canonical
+---
 # Citation Enhancement Implementation
 
 ## Overview

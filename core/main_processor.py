@@ -13,7 +13,7 @@ from datetime import UTC, datetime, timezone
 from pathlib import Path
 from typing import List, Optional, Union
 
-from utils.logging_config import get_module_logger
+from legal_portal.core.logging_config import get_module_logger
 
 
 logger = get_module_logger(__name__)
@@ -32,7 +32,7 @@ from email.mime.text import MIMEText
 import streamlit as st
 from openai import OpenAI
 
-from backend.utils.data_models import (
+from legal_portal.core.data_models import (
     AnalysisError,
     AnalyzedDocument,
     DocumentType,
@@ -40,14 +40,14 @@ from backend.utils.data_models import (
     TranscriptedMedia,
     VideoInsight,
 )
-from backend_logic.config import get_openai_api_key
-from backend_logic.cost_session_manager import CostSessionManager
-from core.ai_analyzer import AIAnalyzer
-from core.document_processor import DocumentProcessor
-from core.email_generator import EmailGeneratorV2, EmailReadabilityError
-from services.audio_processor import AudioProcessor
-from services.video_processor import VideoProcessor
-from utils.helpers import (
+from config.default import get_openai_api_key
+from legal_portal.core.cost_session_manager import CostSessionManager
+from legal_portal.core.ai_analyzer import AIAnalyzer
+from legal_portal.core.document_processor import DocumentProcessor
+from legal_portal.core.email_generator import EmailGeneratorV2, EmailReadabilityError
+from legal_portal.core.audio_processor import AudioProcessor
+from legal_portal.core.video_processor import VideoProcessor
+from legal_portal.core.helpers import (
     ProgressTracker,
     calculate_document_sizes,
     display_processing_cost_update,
@@ -389,7 +389,7 @@ async def process_case_documents(
         st.session_state.processing_error = None
 
         # Initialize processors
-        from backend_logic.ai.openai_client import OpenAIClient
+        from legal_portal.core.openai_client import OpenAIClient
         openai_client_wrapper = OpenAIClient()
         openai_client = openai_client_wrapper.client  # Get the properly configured client
         doc_processor = DocumentProcessor()
@@ -398,7 +398,7 @@ async def process_case_documents(
         # Initialize video processor with graceful fallback
         video_processor = None
         try:
-            from backend_logic.config import get_settings
+            from config.default import get_settings
             settings = get_settings()
             
             if settings.video_processing_enabled:
@@ -517,7 +517,7 @@ async def process_case_documents(
         )
         # Only process videos if video processor is available
         async def create_video_error(file_name):
-            from backend.utils.data_models import MediaProcessingError
+            from legal_portal.core.data_models import MediaProcessingError
             return MediaProcessingError(
                 source="VideoProcessor",
                 file_name=file_name,
@@ -1137,8 +1137,8 @@ async def process_case_documents_cli(
         logger.info("Initializing processors...")
 
         # Initialize processors
-        from backend_logic.config import get_openai_api_key
-        from backend_logic.ai.openai_client import OpenAIClient
+        from config.default import get_openai_api_key
+        from legal_portal.core.openai_client import OpenAIClient
 
         openai_client_wrapper = OpenAIClient()
         openai_client = openai_client_wrapper.client  # Get the properly configured client
@@ -1147,7 +1147,7 @@ async def process_case_documents_cli(
         
         # Try to initialize video processor but don't fail if credentials are missing
         try:
-            from backend_logic.config import get_settings
+            from config.default import get_settings
             settings = get_settings()
             
             if settings.video_processing_enabled:

@@ -1,3 +1,10 @@
+---
+title: Enhanced File Validation
+version: 1.0
+last_updated: 2025-08-11
+owner: @franklin
+status: canonical
+---
 # Enhanced File Validation Documentation
 
 ## Overview

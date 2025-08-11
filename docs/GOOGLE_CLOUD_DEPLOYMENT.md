@@ -1,3 +1,10 @@
+---
+title: Google Cloud Deployment
+version: 1.0
+last_updated: 2025-08-11
+owner: @franklin
+status: canonical
+---
 # Google Cloud Deployment Guide
 
 This document explains how to deploy the Legal Document Analysis Portal to Google Cloud Container Registry (`gcr.io/brflorida/legal-portal`) using the automated CI/CD pipeline.

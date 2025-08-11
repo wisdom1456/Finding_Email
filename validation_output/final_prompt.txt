@@ -46,168 +46,307 @@ Always close with an urgent, actionable step for the client.
 Apply the same structural and formatting rules regardless of practice area (litigation, family law, real estate, probate, etc.), adjusting only the legal concepts and terminology to match the matter type.
 
 CASE INFORMATION TO PROCESS:
-Client: Amber Bell & Erik Devlin
-Case Type: Contractor Dispute
+Client: Balaji Badam, Rajya Badam
+Case Type: Landlord-Tenant Dispute
 
 Full Case Analysis:
 {
   "intake_analysis": {
-    "client_name": "Amber Bell & Erik Devlin",
-    "attorney_name": "Bernhardt Riley",
-    "case_summary": "Amber Bell and Erik Devlin entered into a contract with LLW Construction, led by Mike Winiarek, for home renovations totaling $128,335.77. They paid $100,000 but encountered significant issues with the quality and completion of the work. Despite multiple payments and ongoing communication attempts, the contractor has not addressed the problems. A subcontractor has also claimed non-payment from LLW Construction. The clients seek financial recovery for incomplete work and additional costs incurred.",
-    "case_type": "Contractor Dispute",
-    "urgency_level": "High",
+    "client_name": "Balaji Badam, Rajya Badam",
+    "attorney_name": "",
+    "case_summary": "Balaji and Rajya Badam own an investment property in Jacksonville, FL, leased to Breanna Herring. The tenant has consistently paid rent late and has not paid for June 2025. The landlords seek to recover $5,505, which includes unpaid rent and administrative fees. This situation has caused significant financial stress for the Badams.",
+    "case_type": "Landlord-Tenant Dispute",
+    "urgency_level": "Very Important",
     "client_priorities": [
-      "Financial Recovery"
+      "Recover unpaid rent and fees"
     ],
     "desired_outcomes": [
-      "Reimbursement of payments made for incomplete or substandard work (~$100,000)",
-      "Compensation for additional costs incurred to correct or complete the work"
+      "Issue a demand letter for $5,505"
     ],
     "key_facts": [
-      "Contract signed on November 14, 2024.",
-      "Total contract price is $128,335.77.",
-      "Paid $100,000 towards the contract.",
-      "Multiple issues with work quality noted in December 2024.",
-      "Subcontractor claims non-payment from LLW Construction."
+      "Property located at 811 Gate Run Rd, Jacksonville, FL.",
+      "Lease started in late 2022, ending June 30, 2025.",
+      "Tenant has paid only $6,895 of the $11,400 total rent due.",
+      "Tenant paid $1,300 in April and $500 in May 2025.",
+      "No rent paid for June 2025; tenant unresponsive."
     ],
     "parties_involved": [
       {
-        "name": "Amber Bell",
-        "role": "Plaintiff"
+        "name": "Balaji Badam",
+        "role": "Landlord"
       },
       {
-        "name": "Erik Devlin",
-        "role": "Plaintiff"
+        "name": "Rajya Badam",
+        "role": "Landlord"
       },
       {
-        "name": "LLW Construction",
-        "role": "Contractor"
-      },
-      {
-        "name": "Mike Winiarek",
-        "role": "Contractor Representative"
+        "name": "Breanna Herring",
+        "role": "Tenant"
       }
     ],
-    "financial_impact": "Clients have paid $100,000 for incomplete work and seek reimbursement and compensation for additional repair costs.",
+    "financial_impact": "The situation has caused severe financial stress for the Badams.",
     "legal_claims": [
-      "Breach of Contract",
-      "Negligence"
+      "Breach of lease agreement",
+      "Unpaid rent",
+      "Recovery of administrative fees"
     ],
-    "summary": "Amber Bell and Erik Devlin entered into a contract with LLW Construction, led by Mike Winiarek, for home renovations totaling $128,335.77. They paid $100,000 but encountered significant issues with the quality and completion of the work. Despite multiple payments and ongoing communication attempts, the contractor has not addressed the problems. A subcontractor has also claimed non-payment from LLW Construction. The clients seek financial recovery for incomplete work and additional costs incurred.",
+    "summary": "Balaji and Rajya Badam own an investment property in Jacksonville, FL, leased to Breanna Herring. The tenant has consistently paid rent late and has not paid for June 2025. The landlords seek to recover $5,505, which includes unpaid rent and administrative fees. This situation has caused significant financial stress for the Badams.",
     "legal_issues": [
-      "Breach of Contract",
-      "Negligence"
+      "Breach of lease agreement",
+      "Unpaid rent",
+      "Recovery of administrative fees"
     ],
     "timeline": null,
     "parties": [
-      "Amber Bell",
-      "Erik Devlin",
-      "LLW Construction",
-      "Mike Winiarek"
+      "Balaji Badam",
+      "Rajya Badam",
+      "Breanna Herring"
     ]
   },
   "analyzed_documents": [
     {
-      "file_name": "Devlin-LLW_Emails_0ddf00de.pdf",
-      "filename": "Devlin-LLW_Emails_0ddf00de.pdf",
+      "file_name": "3._Residential_Lease_811_Gate_Run_Rd_Signed_7524394d.pdf",
+      "filename": "3._Residential_Lease_811_Gate_Run_Rd_Signed_7524394d.pdf",
+      "document_type": "Residential Lease Agreement",
+      "inferred_title": "Residential Lease Agreement for 811 Gate Run Rd",
+      "analysis": null,
+      "summary": "This document is a signed residential lease agreement between Balaji and Rajya Badam as landlords and Breanna Herring as the tenant for the property located at 811 Gate Run Rd, Jacksonville, FL. The lease outlines the terms of the rental, including the total rent due, payment schedule, obligations of both parties, and provisions for late fees and maintenance responsibilities. The lease is set for a term ending on June 30, 2025, and includes specific clauses regarding unpaid rent and tenant responsibilities.",
+      "key_information": "Lease between Balaji and Rajya Badam (landlords) and Breanna Herring (tenant); Property located at 811 Gate Run Rd, Jacksonville, FL; Total rent due is $11,400; Tenant has paid $6,895; No rent paid for June 2025; Lease term ends June 30, 2025.",
+      "relevance_to_case": "This lease agreement is crucial for the Badams' case as it establishes the terms of the rental arrangement, including the total rent due and the tenant's obligations. The document supports the claim for unpaid rent and administrative fees, directly aligning with the client's priority to recover $5,505. It provides a legal basis for issuing a demand letter to the tenant for the outstanding amount.",
+      "key_points": [],
+      "citations": [],
+      "metadata": null
+    },
+    {
+      "file_name": "811-Gate-Run-Rd-Florida-Eviction-Notice-to-Quit-Form_03bdb859.pdf",
+      "filename": "811-Gate-Run-Rd-Florida-Eviction-Notice-to-Quit-Form_03bdb859.pdf",
+      "document_type": "Eviction Notice",
+      "inferred_title": "Eviction Notice for Breanna Herring at 811 Gate Run Rd",
+      "analysis": null,
+      "summary": "This document is an eviction notice issued to Breanna Herring, the tenant at 811 Gate Run Rd, Jacksonville, FL. The notice demands payment of $3,600 for past rent and late fees, with a total amount due of $5,505. The notice specifies a 3-day period for payment or vacating the premises. It outlines the consequences of noncompliance, including potential legal action for possession and rent recovery. The notice is signed by the landlord, Rajya Badam, and includes payment instructions via a Zelle account. The document serves as a formal demand for payment and a warning of possible eviction proceedings.",
+      "key_information": "The eviction notice demands $3,600 for past rent and late fees; the total amount due is $5,505; payment must be made within 3 days or the tenant must vacate; the notice is signed by landlord Rajya Badam; payment instructions are provided for a Zelle account.",
+      "relevance_to_case": "This eviction notice directly supports the client's priority of recovering unpaid rent and fees by formally demanding payment from the tenant, Breanna Herring. It aligns with the client's desired outcome of issuing a demand letter for $5,505, reinforcing the legal basis for potential eviction and rent recovery proceedings. The document's details, including the amount owed and payment instructions, are crucial for enforcing the lease agreement and addressing the financial stress caused by the tenant's nonpayment.",
+      "key_points": [],
+      "citations": [],
+      "metadata": null
+    },
+    {
+      "file_name": "Badam__-_Intake_Form_6f9ce2ce.pdf",
+      "filename": "Badam__-_Intake_Form_6f9ce2ce.pdf",
+      "document_type": "Intake Form",
+      "inferred_title": "Landlord-Tenant Dispute Intake Form",
+      "analysis": null,
+      "summary": "Balaji and Rajya Badam, owners of an investment property in Jacksonville, FL, are experiencing issues with their tenant, Breanna Herring. The tenant has consistently paid rent late and has failed to pay for June 2025. The Badams are seeking to recover $5,505, which includes unpaid rent and administrative fees due to the tenant's non-responsiveness and breach of the lease agreement. This situation has caused significant financial stress for the Badams, and they have classified the urgency of this matter as very important.",
+      "key_information": "Balaji and Rajya Badam own a property at 811 Gate Run Rd, Jacksonville, FL; leased to Breanna Herring with a lease term ending June 30, 2025; tenant has paid only $6,895 of the $11,400 total rent due; tenant paid $1,300 in April and $500 in May 2025; no rent paid for June 2025; tenant is unresponsive; landlords seek to recover $5,505 including unpaid rent and administrative fees.",
+      "relevance_to_case": "This document is crucial for establishing the facts of the landlord-tenant dispute, highlighting the tenant's breach of the lease agreement and the financial impact on the landlords. It supports the client's priority to recover unpaid rent and fees by providing a clear account of the tenant's payment history and the outstanding balance. The document also underscores the urgency of the situation, aligning with the client's desired outcome to issue a demand letter for $5,505.",
+      "key_points": [],
+      "citations": [],
+      "metadata": null
+    },
+    {
+      "file_name": "Badam_-_Correspondence_-_Email_Message_9ddfc157.pdf",
+      "filename": "Badam_-_Correspondence_-_Email_Message_9ddfc157.pdf",
       "document_type": "Email",
-      "inferred_title": "Communication Breakdown in Home Renovation Project",
+      "inferred_title": "Tenant Correspondence Regarding Unpaid Rent",
       "analysis": null,
-      "summary": "This document contains a series of emails between Amber Bell, Erik Devlin, and representatives from LLW Construction, primarily Mike Winiarek, regarding a home renovation project. The emails reveal ongoing issues with the quality and completion of the work, including delays, poor workmanship, and lack of communication from the contractor. Despite paying $100,000 towards the contract, the clients express frustration over unmet timelines and unresolved construction problems. The document highlights the clients' attempts to seek updates and solutions, as well as their financial strain due to the project's delays. The emails also mention a subcontractor's claim of non-payment, further complicating the situation.",
-      "key_information": "Amber Bell and Erik Devlin paid $100,000 towards a renovation contract with LLW Construction; significant issues with work quality and completion have been noted; there is a lack of communication and accountability from the contractor, Mike Winiarek; subcontractor claims non-payment from LLW Construction; clients are experiencing financial strain due to project delays and are seeking reimbursement and compensation.",
-      "relevance_to_case": "This document supports the clients' claims of breach of contract and negligence by LLW Construction. It provides evidence of the contractor's failure to complete the work as agreed and the resulting financial impact on the clients. The emails demonstrate the clients' repeated attempts to resolve issues and the contractor's inadequate response, which is crucial for establishing the contractor's liability and the clients' entitlement to financial recovery.",
+      "summary": "The document is an email correspondence related to the landlord-tenant dispute between Balaji and Rajya Badam and their tenant, Breanna Herring. The email likely contains communication from or about the tenant regarding the unpaid rent for June 2025. The landlords are seeking to recover $5,505, which includes unpaid rent and administrative fees. This document is crucial for understanding the tenant's position or lack of response, which impacts the landlords' financial situation and their legal strategy to issue a demand letter.",
+      "key_information": "The email pertains to the ongoing issue of unpaid rent for June 2025; Breanna Herring, the tenant, has been unresponsive to requests for payment; the landlords, Balaji and Rajya Badam, are experiencing financial stress due to the unpaid rent; the total amount sought for recovery is $5,505, including administrative fees.",
+      "relevance_to_case": "This email is directly relevant to the Badams' case as it may contain evidence of the tenant's acknowledgment of the debt or lack of response, which supports the landlords' claim of breach of lease agreement. It is crucial for justifying the issuance of a demand letter for the recovery of $5,505, aligning with the client's priorities to recover unpaid rent and fees.",
       "key_points": [],
       "citations": [],
       "metadata": null
     },
     {
-      "file_name": "Devlin_-_Pictures_of_How_House_was_Left_by_Contractor_2a3bdf79.pdf",
-      "filename": "Devlin_-_Pictures_of_How_House_was_Left_by_Contractor_2a3bdf79.pdf",
+      "file_name": "Badam_-_Correspondence_-_Text_Message_1822f15c.pdf",
+      "filename": "Badam_-_Correspondence_-_Text_Message_1822f15c.pdf",
+      "document_type": "Correspondence",
+      "inferred_title": "Text Message Correspondence Regarding Unpaid Rent",
+      "analysis": null,
+      "summary": "This document appears to be a text message correspondence related to the landlord-tenant dispute involving Balaji and Rajya Badam and their tenant, Breanna Herring. The document is expected to contain communication attempts by the landlords to address the issue of unpaid rent and fees totaling $5,505. The tenant has been unresponsive, particularly regarding the unpaid rent for June 2025. This correspondence is crucial for establishing a pattern of communication and attempts to resolve the issue amicably before pursuing legal action.",
+      "key_information": "The document likely contains text messages between the landlords and the tenant regarding unpaid rent; the tenant, Breanna Herring, has been unresponsive to requests for payment; the landlords are seeking to recover $5,505, which includes unpaid rent and administrative fees.",
+      "relevance_to_case": "This correspondence is relevant as it may provide evidence of the landlords' attempts to communicate and resolve the issue of unpaid rent with the tenant, Breanna Herring. It supports the client's position by documenting the tenant's unresponsiveness and the landlords' efforts to recover the owed amount, which is critical for issuing a demand letter and potentially pursuing further legal action.",
+      "key_points": [],
+      "citations": [],
+      "metadata": null
+    },
+    {
+      "file_name": "Badam_-_Eviction_Notice_504e908a.pdf",
+      "filename": "Badam_-_Eviction_Notice_504e908a.pdf",
+      "document_type": "Eviction Notice",
+      "inferred_title": "Eviction Notice for Breanna Herring",
+      "analysis": null,
+      "summary": "This eviction notice, dated May 28, 2025, is addressed to Breanna Deshae Herring, the tenant at 811 Gate Run Rd, Jacksonville, FL. It demands payment of $3,600 for past rent and late fees for May 2025, with a total amount due of $1,700 for rent and $200 for late fees. The notice specifies that payment must be made within 3 days to avoid eviction. The landlord, Rajya Badam, has provided payment instructions via a Zelle account. The notice also warns of legal proceedings for noncompliance, which could result in a judgment against the tenant. The document includes an affidavit of service section, which is currently incomplete.",
+      "key_information": "The eviction notice is dated May 28, 2025, and is addressed to Breanna Deshae Herring; the property in question is located at 811 Gate Run Rd, Jacksonville, FL; the notice demands $3,600 for past rent and late fees, with $1,700 due for rent and $200 for late fees; payment is required within 3 days to avoid eviction; payment instructions are provided for a Zelle account; the landlord is Rajya Badam.",
+      "relevance_to_case": "This document is crucial for the Badams' case as it formally demands the unpaid rent and fees from the tenant, Breanna Herring. It supports the client's priority of recovering $5,505 by establishing a legal basis for eviction due to nonpayment. The notice outlines the financial obligations of the tenant and provides a timeline for compliance, aligning with the client's desired outcome of issuing a demand letter for the outstanding amount.",
+      "key_points": [],
+      "citations": [],
+      "metadata": null
+    },
+    {
+      "file_name": "Badam_-_Lease_agreement_17df3ebf.pdf",
+      "filename": "Badam_-_Lease_agreement_17df3ebf.pdf",
+      "document_type": "Lease Agreement",
+      "inferred_title": "Residential Lease Agreement Between Badam and Herring",
+      "analysis": null,
+      "summary": "This lease agreement outlines the terms between Balaji and Rajya Badam as landlords and Breanna Herring as the tenant for the property located at 811 Gate Run Rd, Jacksonville, FL. The lease commenced in late 2022 and is set to end on June 30, 2025. It details the rental amount, payment schedule, and obligations of both parties, including maintenance responsibilities and conditions for termination. The tenant has failed to pay rent for June 2025, contributing to the landlords' financial distress.",
+      "key_information": "Lease between Balaji and Rajya Badam and Breanna Herring; property located at 811 Gate Run Rd, Jacksonville, FL; lease term from late 2022 to June 30, 2025; total rent due is $11,400; tenant has paid $6,895; no payment for June 2025; landlords seek recovery of $5,505.",
+      "relevance_to_case": "This document is crucial as it establishes the terms of the lease and the obligations of the tenant, Breanna Herring. The failure to pay rent for June 2025 constitutes a breach of the lease agreement, directly supporting the Badams' claim for recovery of unpaid rent and administrative fees totaling $5,505. This aligns with the client's priority to recover unpaid rent and fees, facilitating the issuance of a demand letter.",
+      "key_points": [],
+      "citations": [],
+      "metadata": null
+    },
+    {
+      "file_name": "Badam_-_Property_Deed_e61ee550.pdf",
+      "filename": "Badam_-_Property_Deed_e61ee550.pdf",
+      "document_type": "Property Deed",
+      "inferred_title": "Property Deed for 811 Gate Run Rd, Jacksonville, FL",
+      "analysis": null,
+      "summary": "This property deed outlines the ownership of the investment property located at 811 Gate Run Rd, Jacksonville, FL, by Balaji and Rajya Badam. The deed confirms their legal rights as landlords of the property currently leased to Breanna Herring. The document serves as evidence of ownership, which is crucial in any legal proceedings related to the landlord-tenant dispute. The deed does not contain specific details about the lease agreement or financial transactions but establishes the Badams' authority to enforce lease terms and seek recovery of unpaid rent and fees.",
+      "key_information": "The property deed confirms Balaji and Rajya Badam as the legal owners of 811 Gate Run Rd, Jacksonville, FL; the deed establishes their authority to manage the property and enforce lease agreements; it serves as foundational evidence in the landlord-tenant dispute with Breanna Herring.",
+      "relevance_to_case": "The property deed is critical to establishing the Badams' legal ownership and authority over the property, which supports their position in recovering unpaid rent and fees from Breanna Herring. It provides the necessary legal foundation to issue a demand letter and pursue further legal action if required.",
+      "key_points": [],
+      "citations": [],
+      "metadata": null
+    },
+    {
+      "file_name": "Gmail_-_Eviction_Notice_-_Email_May_28_efa542b3.pdf",
+      "filename": "Gmail_-_Eviction_Notice_-_Email_May_28_efa542b3.pdf",
+      "document_type": "Email",
+      "inferred_title": "Eviction Notice and Rent Demand for 811 Gate Run Rd",
+      "analysis": null,
+      "summary": "This email from Ravi Badam serves as an eviction notice to Breanna Herring for non-payment of rent for the property located at 811 Gate Run Rd, Jacksonville, FL. The email outlines the tenant's failure to pay rent for May 2025 and mentions accumulated late fees. Ravi Badam emphasizes the financial strain caused by the tenant's non-compliance and indicates that eviction proceedings will commence if the outstanding rent and fees are not paid. The email also highlights the urgency of the situation and the need for immediate action to avoid eviction.",
+      "key_information": "Ravi Badam issued an eviction notice to Breanna Herring for non-payment of May 2025 rent; the tenant owes $1,700 for May rent and $2,000 in accumulated late fees; Ravi Badam is under financial strain due to the tenant's non-compliance; eviction proceedings are imminent if the tenant does not pay immediately.",
+      "relevance_to_case": "This document directly supports the client's position by providing evidence of the tenant's breach of the lease agreement due to non-payment of rent and accumulated late fees. It underscores the urgency of recovering the unpaid rent and fees, aligning with the client's priority to issue a demand letter for $5,505. The email also highlights the financial impact on the landlords, reinforcing the need for legal action to recover the owed amounts.",
+      "key_points": [],
+      "citations": [],
+      "metadata": null
+    },
+    {
+      "file_name": "Gmail_-_Re__MOVE_OUT_-_email_from_Breanna_and_response_from_Balaji_19569aa9.pdf",
+      "filename": "Gmail_-_Re__MOVE_OUT_-_email_from_Breanna_and_response_from_Balaji_19569aa9.pdf",
+      "document_type": "Email",
+      "inferred_title": "Tenant Move-Out and Rent Payment Discussion",
+      "analysis": null,
+      "summary": "This email exchange between Balaji Badam and Breanna Herring discusses the tenant's intention to move out before the lease ends and the landlord's request for overdue rent payments. Breanna provides formal notice of her move-out date, citing unresolved air conditioning issues, while Balaji emphasizes the financial strain caused by unpaid rent and requests any possible payment to avoid immediate eviction. The communication highlights the tenant's acknowledgment of the move-out and the landlord's effort to recover unpaid rent, which is crucial for the landlord's financial stability.",
+      "key_information": "Breanna Herring intends to move out on May 11th, 2025, with cleaning completed by May 13th; Balaji Badam requests payment of overdue rent to avoid immediate eviction; Breanna acknowledges previous discussions about her employment status affecting rent payments; Balaji expresses financial strain due to unpaid rent and mortgage obligations.",
+      "relevance_to_case": "This document supports the client's position by confirming the tenant's early move-out notice and the landlord's attempt to recover unpaid rent. It highlights the tenant's acknowledgment of financial obligations and the landlord's financial distress, aligning with the client's priority to recover $5,505 in unpaid rent and fees.",
+      "key_points": [],
+      "citations": [],
+      "metadata": null
+    },
+    {
+      "file_name": "imessage_-_Breanna_communication_1_e2ef5588.jpg",
+      "filename": "imessage_-_Breanna_communication_1_e2ef5588.jpg",
       "document_type": "Image",
-      "inferred_title": "Evidence of Incomplete and Substandard Work by Contractor",
+      "inferred_title": "Tenant Payment Reminder and Late Fee Notice",
       "analysis": null,
-      "summary": "This document contains photographic evidence of the condition in which LLW Construction left the home of Amber Bell and Erik Devlin. The images depict various areas of the house where work remains incomplete or has been performed poorly, supporting claims of substandard workmanship. These visuals are crucial in demonstrating the contractor's failure to fulfill the terms of the renovation contract, which was valued at $128,335.77. Despite paying $100,000, the clients have been left with significant issues that require additional expenses to resolve.",
-      "key_information": "Photographs show incomplete and substandard work by LLW Construction; Images highlight areas requiring further repairs; Visual evidence supports claims of breach of contract and negligence.",
-      "relevance_to_case": "The photographic evidence directly supports Amber Bell and Erik Devlin's claims for financial recovery by visually documenting the incomplete and substandard work performed by LLW Construction. This evidence is critical in establishing the breach of contract and negligence claims, aligning with the clients' priorities of reimbursement for payments made and compensation for additional repair costs.",
+      "summary": "This image captures a text message from the landlords to the tenant, Breanna Herring, regarding overdue rent payments. The landlords remind Breanna that only one payment of $1,300 was received in April, and an additional $500 was sent on May 5th. They emphasize that full payment was due by the 15th of each month and mention accumulating late fees. The message also includes a request for a phone call to discuss the matter further. This communication highlights the tenant's failure to adhere to the agreed payment schedule, contributing to the landlords' financial distress.",
+      "key_information": "The landlords received only $1,300 in April and $500 in May from the tenant; full payment was due by the 15th of each month; late fees are accumulating; the landlords request a phone call to discuss the issue.",
+      "relevance_to_case": "This document supports the client's position by providing evidence of the tenant's failure to meet payment obligations, which is central to the landlords' claim for unpaid rent and fees. It underscores the need for a demand letter to recover the outstanding $5,505, aligning with the client's priorities and desired outcomes.",
       "key_points": [],
       "citations": [],
       "metadata": null
     },
     {
-      "file_name": "Notice_to_Owner_803b8392.pdf",
-      "filename": "Notice_to_Owner_803b8392.pdf",
-      "document_type": "Notice",
-      "inferred_title": "Notice to Owner Regarding Construction Payment Issues",
+      "file_name": "imessage_-_Breanna_communication_2_d21a5d3c.jpg",
+      "filename": "imessage_-_Breanna_communication_2_d21a5d3c.jpg",
+      "document_type": "Image",
+      "inferred_title": "Tenant's Request for Grace Period",
       "analysis": null,
-      "summary": "This document serves as a formal notice to Amber Bell and Erik Devlin regarding potential claims against their property due to non-payment issues involving LLW Construction. It highlights the subcontractor's claim of non-payment, which could lead to a lien on the property. The notice underscores the importance of resolving payment disputes to avoid legal complications. It is crucial for Amber Bell and Erik Devlin to address these issues promptly to protect their financial interests and property rights.",
-      "key_information": "The notice informs Amber Bell and Erik Devlin of a subcontractor's claim of non-payment by LLW Construction; it warns of potential liens against their property; it emphasizes the need for immediate action to resolve payment disputes; it serves as a formal alert to potential legal and financial consequences.",
-      "relevance_to_case": "This document is highly relevant to Amber Bell and Erik Devlin's case as it directly relates to their financial recovery priorities. It highlights the subcontractor's non-payment claim, which supports their breach of contract and negligence claims against LLW Construction. Addressing this notice is crucial to prevent further financial loss and to strengthen their position in seeking reimbursement and compensation for incomplete and substandard work.",
+      "summary": "The document is a screenshot of a text message from Breanna Herring, the tenant, to the landlords. Breanna apologizes for any inconvenience caused by her previous call and explains that she is dealing with the loss of her child. She expresses her intention to pay the outstanding rent and fees, mentioning her current financial struggles and her plan to use unemployment benefits to catch up on payments. Breanna requests understanding and assures this will be the last time she asks for leniency. She also offers to provide screenshots as proof of her situation.",
+      "key_information": "Breanna Herring apologizes for any inconvenience caused by her call; she is dealing with the loss of her child and financial struggles; she intends to pay the outstanding rent and fees using unemployment benefits; she requests understanding and assures this will be the last time she asks for leniency; she offers to provide proof of her situation.",
+      "relevance_to_case": "This document highlights the tenant's acknowledgment of the unpaid rent and her intention to pay, which supports the landlords' claim for recovery of unpaid rent and fees. However, it also introduces potential mitigating circumstances that may affect the landlords' strategy in pursuing immediate legal action. The tenant's request for leniency and offer to provide proof of her situation could be considered in settlement discussions or when drafting the demand letter.",
       "key_points": [],
       "citations": [],
       "metadata": null
     },
     {
-      "file_name": "Devlin_-_Project_Management_Proposal_-_Hoffar_Holdings_LLC_6.25.25__1__b9019b31.pdf",
-      "filename": "Devlin_-_Project_Management_Proposal_-_Hoffar_Holdings_LLC_6.25.25__1__b9019b31.pdf",
-      "document_type": "Proposal",
-      "inferred_title": "Project Management Proposal for Hoffar Holdings LLC",
+      "file_name": "imessage_-_Breanna_communication_3_6fb9d4b0.jpg",
+      "filename": "imessage_-_Breanna_communication_3_6fb9d4b0.jpg",
+      "document_type": "Image",
+      "inferred_title": "Tenant Rent Payment Request",
       "analysis": null,
-      "summary": "This document is a project management proposal from Hoffar Holdings LLC to Erik Devlin and Amber Bell for completing a 2,200 sq. ft. residential home. The proposal outlines the scope of work, including cabinetry, mechanical, electrical, plumbing, tile work, and interior finishes. The estimated total cost is $56,000, with a payment schedule starting with a $2,000 deposit. The proposal emphasizes professional completion and requires written changes. It is valid for 30 days from June 25, 2025. The project is to start as soon as possible with an estimated duration of 4-8 weeks.",
-      "key_information": "The proposal is for completing a 2,200 sq. ft. home; scope includes cabinetry, MEP systems, tile work, and interior finishes; estimated total cost is $56,000; payment schedule includes a $2,000 deposit and progress payments; proposal valid for 30 days from June 25, 2025; project start is ASAP with a 4-8 week duration.",
-      "relevance_to_case": "This proposal is relevant as it provides a benchmark for the scope and cost of completing the unfinished work left by LLW Construction. It can be used to demonstrate the additional costs incurred by the clients to rectify the incomplete or substandard work, supporting their claim for financial recovery and compensation. The document outlines the expected quality and timeline, which can be contrasted with the performance of LLW Construction to establish breach of contract and negligence.",
+      "summary": "This image captures a communication from the landlords to the tenant, Breanna Herring, regarding overdue rent and fees. The message specifies that the tenant must pay $1,700 for May 2025 rent and clear $2,000 in late fees by May 27, 2025. The landlords are seeking to recover these amounts due to non-payment, which aligns with their goal of issuing a demand letter for $5,505. The tenant's failure to pay has contributed to financial stress for the landlords, Balaji and Rajya Badam, who own the property in Jacksonville, FL.",
+      "key_information": "The tenant, Breanna Herring, is requested to pay $1,700 for May 2025 rent by May 27, 2025; an additional $2,000 in late fees is also due; the communication emphasizes the urgency of payment to avoid further action.",
+      "relevance_to_case": "This document directly supports the client's priority of recovering unpaid rent and fees by providing evidence of the tenant's non-compliance with payment terms. It substantiates the landlords' claim for a total of $5,505, which includes the overdue rent and late fees, and justifies the issuance of a demand letter as part of their legal strategy.",
       "key_points": [],
       "citations": [],
       "metadata": null
     },
     {
-      "file_name": "Devlin_-_Rebuild_Receipts_-_May___June_bd33630c.pdf",
-      "filename": "Devlin_-_Rebuild_Receipts_-_May___June_bd33630c.pdf",
-      "document_type": "Receipt",
-      "inferred_title": "May and June 2025 Purchase Receipts for Home Renovations",
+      "file_name": "imessage_-_Breanna_communication_4_8a28d125.jpg",
+      "filename": "imessage_-_Breanna_communication_4_8a28d125.jpg",
+      "document_type": "Image",
+      "inferred_title": "Breanna Herring Communication",
       "analysis": null,
-      "summary": "This document contains detailed receipts for various purchases made by Amber Bell and Erik Devlin in May and June 2025. The items purchased include tiles, electrical outlets, screws, door locks, and other renovation materials. The receipts show multiple transactions with different vendors, including Amazon and Floor & Decor, with a total expenditure of several hundred dollars. These purchases were likely intended for home renovation projects, which are central to the ongoing dispute with LLW Construction regarding incomplete and substandard work.",
-      "key_information": "Amber Bell made several purchases for home renovation materials in May and June 2025; items include tiles, electrical outlets, and screws; total expenditure across receipts is significant; purchases were made from vendors like Amazon and Floor & Decor; these materials are related to the renovation project with LLW Construction.",
-      "relevance_to_case": "The receipts document the additional costs incurred by Amber Bell and Erik Devlin for materials likely intended to address the incomplete or substandard work by LLW Construction. This supports their claim for compensation for additional expenses necessary to complete or correct the renovation work, aligning with their priority of financial recovery.",
+      "summary": "The document appears to be an image of a text message exchange involving Breanna Herring. The content is not fully visible or legible, making it difficult to extract specific details. However, the document may contain communication relevant to the landlord-tenant dispute between Balaji and Rajya Badam and their tenant, Breanna Herring. The landlords are seeking to recover unpaid rent and fees totaling $5,505. This document could potentially provide evidence of communication attempts or acknowledgments related to the unpaid rent.",
+      "key_information": "The image contains a partial view of a text message exchange involving Breanna Herring; the content is not fully visible or legible, limiting the extraction of specific details.",
+      "relevance_to_case": "This document may support the client's position by providing evidence of communication attempts with the tenant, Breanna Herring, regarding unpaid rent. It could be used to demonstrate the landlords' efforts to resolve the issue and the tenant's potential lack of response, which is critical for the demand letter and any subsequent legal actions.",
       "key_points": [],
       "citations": [],
       "metadata": null
     },
     {
-      "file_name": "Devlin_-_Contract_for_Construction_-_Highlighted_w_Items_not_Completed_6.9.25_119b55f5.pdf",
-      "filename": "Devlin_-_Contract_for_Construction_-_Highlighted_w_Items_not_Completed_6.9.25_119b55f5.pdf",
-      "document_type": "Contract",
-      "inferred_title": "Construction Contract Between LLW Construction and Devlin/Bell",
+      "file_name": "imessage_-_Breanna_communication_5_08778dae.jpg",
+      "filename": "imessage_-_Breanna_communication_5_08778dae.jpg",
+      "document_type": "Image",
+      "inferred_title": "Breanna Herring iMessage Communication",
       "analysis": null,
-      "summary": "This construction contract outlines the agreement between LLW Construction and Amber Bell and Erik Devlin for home renovations at 3414 S. Belcher Dr., Tampa, FL. The contract specifies a total price of $128,335.77, with a detailed payment schedule and work scope. It includes provisions for changes in work, warranties, insurance, and default by either party. The contract emphasizes the importance of Florida's Construction Lien Law and the need for lien releases before payments. Despite the contract's terms, significant work remains incomplete, and a subcontractor claims non-payment, leading to a dispute over the $100,000 already paid by the clients.",
-      "key_information": "The contract is dated November 14, 2024, between LLW Construction and Amber Bell and Erik Devlin for renovations at 3414 S. Belcher Dr., Tampa, FL; Total contract price is $128,335.77 with a payment schedule linked to construction milestones; Florida's Construction Lien Law is highlighted, requiring lien releases before payments; The contract includes clauses on changes, warranties, insurance, and defaults; Significant work remains incomplete, and a subcontractor claims non-payment, despite $100,000 already paid by the clients.",
-      "relevance_to_case": "This contract is central to the client's claim for financial recovery due to incomplete and substandard work. It establishes the agreed terms and conditions, including the total contract price and payment schedule, which are crucial for proving breach of contract. The document supports the client's position by highlighting the contractor's obligations and the protections under Florida's Construction Lien Law, which have not been fulfilled. The contract's provisions on default and changes in work are particularly relevant to the client's claims for reimbursement and compensation for additional repair costs.",
+      "summary": "This image appears to capture a screenshot of an iMessage conversation involving Breanna Herring. The timestamps indicate messages were sent on May 28, June 1, and June 3, but the content of the messages is not visible. The document may suggest attempts to communicate with the tenant, Breanna Herring, regarding the unpaid rent and fees. However, without visible content, the document's direct contribution to the case is limited.",
+      "key_information": "The image shows timestamps of messages sent on May 28, June 1, and June 3; the content of the messages is not visible; the communication is related to Breanna Herring.",
+      "relevance_to_case": "This document potentially demonstrates attempts to communicate with the tenant, Breanna Herring, about the unpaid rent and fees. However, the lack of visible message content limits its direct evidentiary value. It may support the landlords' claim of unresponsiveness from the tenant, aligning with their priority to recover unpaid rent and fees.",
       "key_points": [],
       "citations": [],
       "metadata": null
     },
     {
-      "file_name": "Devlin_-_LLW_Text_Thread_5f1e33c1.pdf",
-      "filename": "Devlin_-_LLW_Text_Thread_5f1e33c1.pdf",
-      "document_type": "Text Thread",
-      "inferred_title": "Communication Between Clients and Contractor",
+      "file_name": "imessage_-_Breanna_communication_6_2f794516.jpg",
+      "filename": "imessage_-_Breanna_communication_6_2f794516.jpg",
+      "document_type": "Image",
+      "inferred_title": "Breanna Herring's Unresponsive Communication",
       "analysis": null,
-      "summary": "The document contains a series of text messages between Amber Bell, Erik Devlin, and representatives of LLW Construction, including Mike Winiarek. The messages detail the clients' repeated attempts to address issues with the quality and completion of the contracted home renovations. Despite having paid $100,000 towards the contract, the clients express dissatisfaction with the work performed and request corrective actions. The contractor's responses are either non-committal or indicate delays, contributing to the clients' frustration and financial concerns. The document also references a subcontractor's claim of non-payment, highlighting potential financial mismanagement by LLW Construction.",
-      "key_information": "Amber Bell and Erik Devlin repeatedly contacted LLW Construction about incomplete and substandard work; they paid $100,000 but the work remains unfinished; LLW Construction, led by Mike Winiarek, has not resolved the issues; a subcontractor claims non-payment, suggesting financial mismanagement by LLW Construction.",
-      "relevance_to_case": "This document supports the clients' claims of breach of contract and negligence by providing evidence of their attempts to resolve issues with LLW Construction and the contractor's failure to complete the work satisfactorily. It highlights the financial impact on the clients, aligning with their priority of financial recovery for payments made and additional costs incurred. The subcontractor's claim of non-payment further underscores potential financial mismanagement by the contractor, strengthening the clients' position in seeking reimbursement and compensation.",
+      "summary": "The image captures a segment of communication, presumably between the landlords and the tenant, Breanna Herring. The content suggests a lack of response from the tenant regarding unpaid rent for June 2025. This unresponsiveness is critical as it highlights the tenant's failure to engage in dialogue about the overdue payments, which is central to the landlords' claim for recovering $5,505 in unpaid rent and fees. The document underscores the urgency and importance of addressing the financial stress caused to the landlords due to the tenant's non-compliance with the lease agreement.",
+      "key_information": "The tenant, Breanna Herring, is unresponsive to communications regarding unpaid rent for June 2025; this lack of response is crucial as it demonstrates the tenant's disregard for addressing the overdue payments, which are part of the $5,505 the landlords seek to recover.",
+      "relevance_to_case": "This document supports the client's position by evidencing the tenant's unresponsiveness, which is a significant factor in the landlords' claim for unpaid rent and fees. It highlights the tenant's breach of the lease agreement and strengthens the case for issuing a demand letter to recover the $5,505 owed, aligning with the client's priorities and desired outcomes.",
       "key_points": [],
       "citations": [],
       "metadata": null
     },
     {
-      "file_name": "Devlin_-_Certified_Letter_for_Notice_to_Owner_52199d45.pdf",
-      "filename": "Devlin_-_Certified_Letter_for_Notice_to_Owner_52199d45.pdf",
-      "document_type": "Certified Letter",
-      "inferred_title": "Request for Account Statement from Tibbetts Lumber Co",
+      "file_name": "Property_Deed_d9b369c3.pdf",
+      "filename": "Property_Deed_d9b369c3.pdf",
+      "document_type": "Property Deed",
+      "inferred_title": "Property Deed for 811 Gate Run Rd, Jacksonville, FL",
       "analysis": null,
-      "summary": "Amber Bell and Erik Devlin sent a certified letter to Tibbetts Lumber Co LLC requesting a detailed account statement related to their dealings with LLW Construction Inc. They are seeking information on outstanding charges, invoices, and payment history to prevent a lien on their home. The letter emphasizes urgency, asking for the documents within seven business days. This request follows a Notice to Owner and unresponsive behavior from their contractor, Mike Winiarek of LLW Construction, regarding the matter.",
-      "key_information": "Amber Bell and Erik Devlin request a detailed account statement from Tibbetts Lumber Co LLC to prevent a lien on their home; they seek information on outstanding charges, invoices, and payment history related to LLW Construction Inc.; the request follows a Notice to Owner and unresponsiveness from contractor Mike Winiarek.",
-      "relevance_to_case": "This document supports the clients' position by demonstrating their proactive efforts to gather financial information necessary for resolving their contractor dispute. It highlights their concern about potential liens and their attempts to communicate with involved parties, which aligns with their priority of financial recovery and reimbursement for incomplete or substandard work.",
+      "summary": "This property deed pertains to the investment property located at 811 Gate Run Rd, Jacksonville, FL, owned by Balaji and Rajya Badam. The document establishes their legal ownership, which is crucial for asserting their rights as landlords in the ongoing dispute with tenant Breanna Herring. The tenant has failed to pay the agreed rent for June 2025, contributing to a total outstanding amount of $5,505. The deed supports the landlords' position in recovering unpaid rent and fees, as it confirms their ownership and right to enforce the lease terms.",
+      "key_information": "The property deed confirms Balaji and Rajya Badam as the legal owners of 811 Gate Run Rd, Jacksonville, FL; this ownership is critical for enforcing lease terms against tenant Breanna Herring; the tenant has not paid rent for June 2025, contributing to a total outstanding amount of $5,505.",
+      "relevance_to_case": "The property deed is essential in establishing the Badams' legal ownership of the property, which is a prerequisite for enforcing the lease agreement and recovering unpaid rent and fees from the tenant. This document supports the client's priority to issue a demand letter for $5,505, as it confirms their right to take legal action against the tenant for breach of lease agreement and unpaid rent.",
+      "key_points": [],
+      "citations": [],
+      "metadata": null
+    },
+    {
+      "file_name": "Regions_Mortgage_Payment_-_May_2025_d66bb7be.pdf",
+      "filename": "Regions_Mortgage_Payment_-_May_2025_d66bb7be.pdf",
+      "document_type": "Financial Statement",
+      "inferred_title": "May 2025 Mortgage Payment Record",
+      "analysis": null,
+      "summary": "This document is a financial statement detailing the mortgage payment for May 2025. It outlines the payment history and current status of the mortgage account associated with the property at 811 Gate Run Rd, Jacksonville, FL. The document may include information about the amount paid, due dates, and any outstanding balances. It serves as a record of financial transactions related to the property, which is currently under a lease agreement with tenant Breanna Herring.",
+      "key_information": "The document records the mortgage payment for May 2025; it details the payment amount and any outstanding balance; it is linked to the property at 811 Gate Run Rd, Jacksonville, FL, which is leased to Breanna Herring.",
+      "relevance_to_case": "This document supports the client's position by providing evidence of financial obligations related to the property. It highlights the importance of recovering unpaid rent and fees to meet these obligations, aligning with the client's priority to issue a demand letter for $5,505. The financial stress caused by the tenant's non-payment is underscored by the need to maintain mortgage payments.",
+      "key_points": [],
+      "citations": [],
+      "metadata": null
+    },
+    {
+      "file_name": "Rental_Payments_Jan_-_June_2025_-_Wells_Fargo_1307aee7.pdf",
+      "filename": "Rental_Payments_Jan_-_June_2025_-_Wells_Fargo_1307aee7.pdf",
+      "document_type": "Bank Statement",
+      "inferred_title": "Breanna Herring's Rental Payment History Jan-June 2025",
+      "analysis": null,
+      "summary": "This bank statement from Wells Fargo details the rental payments made by Breanna Herring to Balaji and Rajya Badam from January to June 2025. The document shows a total of $6,895 in payments, with specific amounts and dates for each transaction. Notably, there is no payment recorded for June 2025, which aligns with the landlords' claim of unpaid rent for that month. The statement provides a clear financial record that supports the landlords' demand for the outstanding balance of $5,505, which includes unpaid rent and administrative fees.",
+      "key_information": "The statement shows a total of $6,895 in payments from Breanna Herring via Zelle; payments were made on 01/09/25 ($800), 01/24/25 ($900), 02/10/25 ($495), 02/20/25 ($1,205), 03/10/25 ($615), 03/25/25 ($1,080), 04/21/25 ($1,300), and 05/05/25 ($500); no payment is recorded for June 2025.",
+      "relevance_to_case": "This document supports the landlords' claim of unpaid rent for June 2025, as it confirms no payment was made by Breanna Herring for that month. It substantiates the financial shortfall and justifies the demand for $5,505, aligning with the client's priorities to recover unpaid rent and fees.",
       "key_points": [],
       "citations": [],
       "metadata": null

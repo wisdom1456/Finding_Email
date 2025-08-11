@@ -46,6 +46,7 @@ class DocumentProcessor:
     ) -> DocumentType:
         """
         Determines if a file is an intake form or a general case document.
+        Enhanced with case-insensitive matching and keyword detection.
         
         Args:
             filename: The sanitized filename (may include hash suffix)
@@ -55,36 +56,41 @@ class DocumentProcessor:
         Returns:
             DocumentType.INTAKE_FORM if the file is an intake form, otherwise DocumentType.CASE_DOCUMENT
         """
-        # First check: Try with original filename if provided
-        if original_filename and original_filename in intake_filenames:
-            result = DocumentType.INTAKE_FORM
-            logger.info(
-                "Document categorization success - matched original filename",
-                extra={
-                    "module": "document_processor",
-                    "hypothesis_id": "document_categorization_success",
-                    "original_filename": original_filename,
-                    "sanitized_filename": filename,
-                    "assigned_type": result.name,
-                    "action": "document_type_assignment"
-                }
-            )
-            return result
+        # First check: Try with original filename if provided (case-insensitive)
+        if original_filename:
+            for intake_name in intake_filenames:
+                if original_filename.lower() == intake_name.lower():
+                    result = DocumentType.INTAKE_FORM
+                    logger.info(
+                        "Document categorization success - matched original filename",
+                        extra={
+                            "module": "document_processor",
+                            "hypothesis_id": "document_categorization_success",
+                            "original_filename": original_filename,
+                            "sanitized_filename": filename,
+                            "matched_intake": intake_name,
+                            "assigned_type": result.name,
+                            "action": "document_type_assignment"
+                        }
+                    )
+                    return result
         
-        # Second check: Direct match with sanitized filename (unlikely but check anyway)
-        if filename in intake_filenames:
-            result = DocumentType.INTAKE_FORM
-            logger.info(
-                "Document categorization success - direct match",
-                extra={
-                    "module": "document_processor",
-                    "hypothesis_id": "document_categorization_success",
-                    "sanitized_filename": filename,
-                    "assigned_type": result.name,
-                    "action": "document_type_assignment"
-                }
-            )
-            return result
+        # Second check: Direct match with sanitized filename (case-insensitive)
+        for intake_name in intake_filenames:
+            if filename.lower() == intake_name.lower():
+                result = DocumentType.INTAKE_FORM
+                logger.info(
+                    "Document categorization success - direct match",
+                    extra={
+                        "module": "document_processor",
+                        "hypothesis_id": "document_categorization_success",
+                        "sanitized_filename": filename,
+                        "matched_intake": intake_name,
+                        "assigned_type": result.name,
+                        "action": "document_type_assignment"
+                    }
+                )
+                return result
         
         # Third check: Pattern matching for sanitized filenames
         # Sanitized filenames have format: original_name_with_underscores_hashcode.ext
@@ -95,7 +101,7 @@ class DocumentProcessor:
         # Hash is 8 characters: _a1b2c3d4
         match = re.match(r'^(.+?)_[a-f0-9]{8}(\.[^.]+)?$', filename)
         if match:
-            base_part = match.group(1)
+            base_part = match.group(1).lower()
             extension = match.group(2) if match.group(2) else ''
             
             # Check each intake filename to see if it could have produced this sanitized name
@@ -103,7 +109,7 @@ class DocumentProcessor:
                 # Sanitize the intake filename the same way to compare
                 # Simulate what secure_filename would do (without the hash)
                 intake_base = re.sub(r'[^a-zA-Z0-9._-]', '_', os.path.splitext(intake_name)[0])
-                intake_base = intake_base.lstrip('.').rstrip('. ')
+                intake_base = intake_base.lstrip('.').rstrip('. ').lower()
                 
                 if base_part == intake_base or base_part.startswith(intake_base):
                     result = DocumentType.INTAKE_FORM
@@ -122,12 +128,41 @@ class DocumentProcessor:
                     )
                     return result
         
+        # Fourth check: Enhanced keyword-based detection for intake forms
+        # Check if filename contains intake-related keywords
+        intake_keywords = [
+            'intake', 'questionnaire', 'assessment', 'client_form', 'client_info',
+            'initial_form', 'consultation', 'new_client', 'case_intake', 'legal_intake'
+        ]
+        
+        # Check both original and sanitized filenames for keywords
+        filenames_to_check = [filename.lower()]
+        if original_filename:
+            filenames_to_check.append(original_filename.lower())
+        
+        for file_to_check in filenames_to_check:
+            for keyword in intake_keywords:
+                if keyword in file_to_check:
+                    result = DocumentType.INTAKE_FORM
+                    logger.info(
+                        "Document categorization success - keyword match",
+                        extra={
+                            "module": "document_processor",
+                            "hypothesis_id": "document_categorization_success",
+                            "filename_checked": file_to_check,
+                            "matched_keyword": keyword,
+                            "assigned_type": result.name,
+                            "action": "document_type_assignment"
+                        }
+                    )
+                    return result
+        
         # Default: Not an intake form
         result = DocumentType.CASE_DOCUMENT
         
-        # DEBUG LOG: Track document categorization
+        # DEBUG LOG: Track document categorization failure
         logger.info(
-            "Document categorization debug",
+            "Document categorization debug - defaulting to case document",
             extra={
                 "module": "document_processor",
                 "hypothesis_id": "document_categorization_check",

@@ -155,8 +155,8 @@ class CitationTrackingService:
             })
         
         # Add document analyses
-        if case_analysis.document_analyses:
-            for doc_analysis in case_analysis.document_analyses:
+        if case_analysis.analyzed_documents:
+            for doc_analysis in case_analysis.analyzed_documents:
                 source_docs.append({
                     "filename": doc_analysis.filename,
                     "document_type": getattr(doc_analysis, 'document_type', 'document'),

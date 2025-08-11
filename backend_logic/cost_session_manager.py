@@ -155,18 +155,15 @@ class CostSessionManager:
 
         # Calculate variance if estimate exists
         if cost_summary.cost_estimate:
-            cost_summary.cost_variance = (
-                actual_costs.total_actual_cost
-                - cost_summary.cost_estimate.estimated_cost
-            )
-
-            if cost_summary.cost_estimate.estimated_cost > 0:
+            # Ensure total_actual_cost is not None
+            actual_cost = actual_costs.total_actual_cost or 0.0
+            estimated_cost = cost_summary.cost_estimate.estimated_cost or 0.0
+            
+            cost_summary.cost_variance = actual_cost - estimated_cost
+            
+            if estimated_cost > 0:
                 cost_summary.cost_variance_percentage = float(
-                    (
-                        cost_summary.cost_variance
-                        / cost_summary.cost_estimate.estimated_cost
-                    )
-                    * 100
+                    (cost_summary.cost_variance / estimated_cost) * 100
                 )
             else:
                 cost_summary.cost_variance_percentage = 0.0

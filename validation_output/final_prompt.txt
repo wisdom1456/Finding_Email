@@ -1,28 +1,28 @@
-You are a senior legal writing assistant to a Florida law firm partner.
-Using the Case Analysis JSON provided below and the Example Letter as a style, tone, and pacing reference, draft a client-ready letter for:
+You are a senior legal writing assistant to a law firm partner.
 
-Amber Bell & Erik Devlin
+Using the Case Analysis JSON below and the Example Letter as the definitive style, tone, and pacing reference, draft a **client-ready letter** for Amber Bell & Erik Devlin.
 
-**Case Analysis Data:**
-{
+Inputs:
+- Case Analysis Data: {
   "intake_analysis": {
     "client_name": "Amber Bell & Erik Devlin",
     "attorney_name": "Bernhardt Riley",
-    "case_summary": "Amber Bell and Erik Devlin contracted LLW Construction, led by Mike Winiarek, for home renovations totaling $128,335.77. They have paid $100,000 but encountered significant issues with the work quality and completion. Despite multiple payments and ongoing communication attempts, the contractor has not addressed their concerns. A subcontractor has claimed non-payment from LLW Construction, and a notice to owner has been received, indicating potential lien issues. The clients seek financial recovery for incomplete work and additional costs incurred.",
+    "case_summary": "Amber Bell and Erik Devlin contracted LLW Construction, led by Mike Winiarek, for home renovations totaling $128,335.77. They have paid $100,000 but encountered significant issues with the work quality and completion. Despite multiple payments and ongoing communication attempts, the contractor has not resolved these issues. A subcontractor has also claimed non-payment from the contractor, indicating further complications. The clients seek financial recovery for incomplete work and additional costs incurred.",
     "case_type": "Contractor Dispute",
     "urgency_level": "High",
     "client_priorities": [
       "Financial Recovery"
     ],
     "desired_outcomes": [
-      "Reimbursement of payments made for incomplete or substandard work (~$100,000)."
+      "Reimbursement of payments made for incomplete or substandard work (~$100,000).",
+      "Compensation for additional costs incurred to correct or complete the work."
     ],
     "key_facts": [
       "Contract signed on November 14, 2024.",
-      "Total contract price is $128,335.77.",
-      "Paid $100,000 towards the contract.",
+      "Total contract price: $128,335.77.",
+      "Total paid to date: $100,000.",
       "Multiple issues with work quality noted since December 2024.",
-      "Received notice to owner with lien verbiage."
+      "Subcontractor claims non-payment from LLW Construction."
     ],
     "parties_involved": [
       {
@@ -39,18 +39,18 @@ Amber Bell & Erik Devlin
       },
       {
         "name": "Mike Winiarek",
-        "role": "Contractor"
+        "role": "Defendant"
       }
     ],
-    "financial_impact": "Clients have paid $100,000 and seek reimbursement for incomplete work and additional repair costs.",
+    "financial_impact": "Clients have paid $100,000 towards a $128,335.77 contract, with potential additional costs for repairs.",
     "legal_claims": [
-      "Breach of Contract",
-      "Negligence"
+      "Breach of contract for failure to perform work as agreed.",
+      "Possible claims for damages due to incomplete or substandard work."
     ],
-    "summary": "Amber Bell and Erik Devlin contracted LLW Construction, led by Mike Winiarek, for home renovations totaling $128,335.77. They have paid $100,000 but encountered significant issues with the work quality and completion. Despite multiple payments and ongoing communication attempts, the contractor has not addressed their concerns. A subcontractor has claimed non-payment from LLW Construction, and a notice to owner has been received, indicating potential lien issues. The clients seek financial recovery for incomplete work and additional costs incurred.",
+    "summary": "Amber Bell and Erik Devlin contracted LLW Construction, led by Mike Winiarek, for home renovations totaling $128,335.77. They have paid $100,000 but encountered significant issues with the work quality and completion. Despite multiple payments and ongoing communication attempts, the contractor has not resolved these issues. A subcontractor has also claimed non-payment from the contractor, indicating further complications. The clients seek financial recovery for incomplete work and additional costs incurred.",
     "legal_issues": [
-      "Breach of Contract",
-      "Negligence"
+      "Breach of contract for failure to perform work as agreed.",
+      "Possible claims for damages due to incomplete or substandard work."
     ],
     "timeline": null,
     "parties": [
@@ -60,137 +60,346 @@ Amber Bell & Erik Devlin
       "Mike Winiarek"
     ]
   },
-  "analyzed_documents": [],
+  "analyzed_documents": [
+    {
+      "file_name": "Devlin_-_Project_Management_Proposal_-_Hoffar_Holdings_LLC_6.25.25__1__9d474fb0.pdf",
+      "filename": "Devlin_-_Project_Management_Proposal_-_Hoffar_Holdings_LLC_6.25.25__1__9d474fb0.pdf",
+      "document_type": "Contract Proposal",
+      "inferred_title": "Hoffar Holdings Project Management Proposal for Devlin and Bell",
+      "analysis": null,
+      "summary": "This document is a project management proposal from Hoffar Holdings LLC to Erik Devlin and Amber Bell for completing a 2,200 sq. ft. residential home. The proposal outlines the scope of work, including cabinetry, mechanical, electrical, plumbing, tile work, and interior finishes. The estimated total cost is $56,000, with a payment schedule starting with a $2,000 deposit. The proposal emphasizes quality control and code compliance, with a flexible timeline of 4-8 weeks. Terms include professional completion of work, property access, and written change requests. The proposal is valid for 30 days from June 25, 2025.",
+      "key_information": "The proposal is for completing a 2,200 sq. ft. home; scope includes cabinetry, MEP systems, tile work, and interior finishes; estimated total cost is $56,000; payment schedule starts with a $2,000 deposit and includes progress payments; project timeline is 4-8 weeks; proposal valid for 30 days from June 25, 2025.",
+      "relevance_to_case": "This document is relevant as it provides a benchmark for the scope and cost of completing the unfinished home, which can be used to assess the reasonableness of the costs incurred by Amber Bell and Erik Devlin with LLW Construction. It highlights the expected quality and compliance standards, which may contrast with the alleged substandard work by LLW Construction. This proposal could support claims for financial recovery by demonstrating alternative completion costs and timelines.",
+      "key_points": [],
+      "citations": [],
+      "metadata": null
+    },
+    {
+      "file_name": "Devlin_-_Contract_for_Construction_-_Highlighted_w_Items_not_Completed_6.9.25_c7152b78.pdf",
+      "filename": "Devlin_-_Contract_for_Construction_-_Highlighted_w_Items_not_Completed_6.9.25_c7152b78.pdf",
+      "document_type": "Contract",
+      "inferred_title": "Construction Contract Between LLW Construction and Devlin/Bell",
+      "analysis": null,
+      "summary": "This contract outlines the agreement between LLW Construction, Inc. and Erik Devlin and Amber Bell for renovation work at their property in Tampa, Florida. The contract specifies the scope of work, payment schedule, and responsibilities of both parties. It includes provisions for changes in work, warranties, insurance, and default by either party. The total contract price is $128,335.77, with a detailed payment schedule linked to construction milestones. The document highlights several incomplete items and discrepancies, such as missing installations and unresolved issues, which are critical to the clients' claims of breach of contract and financial recovery.",
+      "key_information": "The contract is between LLW Construction and Erik Devlin and Amber Bell for renovations at 3414 S. Belcher Dr., Tampa, FL; Total contract price is $128,335.77, with $100,000 already paid by the clients; Several items remain incomplete or substandard, including missing installations and unresolved issues; The contract includes a payment schedule tied to construction milestones; The document highlights potential breaches of contract by LLW Construction, including non-payment to subcontractors.",
+      "relevance_to_case": "This contract is central to the clients' claims of breach of contract against LLW Construction. It provides the basis for their financial recovery efforts, detailing the agreed scope of work, payment terms, and responsibilities. The highlighted incomplete items and discrepancies support the clients' position that LLW Construction failed to fulfill its contractual obligations, justifying their pursuit of reimbursement and compensation for additional costs incurred.",
+      "key_points": [],
+      "citations": [],
+      "metadata": null
+    },
+    {
+      "file_name": "Devlin_-_Certified_Letter_for_Notice_to_Owner_1755e713.pdf",
+      "filename": "Devlin_-_Certified_Letter_for_Notice_to_Owner_1755e713.pdf",
+      "document_type": "Certified Letter",
+      "inferred_title": "Request for Account Statement from Tibbetts Lumber Co",
+      "analysis": null,
+      "summary": "Amber Bell and Erik Devlin sent a certified letter to Tibbetts Lumber Co LLC requesting a detailed account statement, invoices, and payment history related to their dealings with LLW Construction Inc. This request was prompted by a Notice to Owner and the lack of response from their contractor, Mike Winiarek. The letter emphasizes the urgency of the request to prevent a lien on their home and seeks documentation within seven business days. The communication highlights the clients' proactive steps to resolve financial discrepancies and protect their property interests.",
+      "key_information": "Amber Bell and Erik Devlin requested a detailed account statement from Tibbetts Lumber Co LLC due to a Notice to Owner; they have not received responses from their contractor, Mike Winiarek; the request includes all outstanding charges, invoices, charge breakdowns, and payment records; urgency is emphasized to prevent a lien on their home.",
+      "relevance_to_case": "This document supports the clients' position by demonstrating their proactive efforts to obtain financial documentation necessary for resolving their dispute with LLW Construction. It underscores the urgency and seriousness of the situation, aligning with their priority of financial recovery and preventing further financial harm, such as a lien on their property.",
+      "key_points": [],
+      "citations": [],
+      "metadata": null
+    }
+  ],
   "legal_assessment": {
     "case_type": "General Legal Matter",
     "claim_viability": "Moderate",
     "overall_evidence_strength": "Under Review",
     "potential_challenges": "We are currently reviewing the available evidence and will provide a detailed assessment of potential challenges as our analysis continues. This may include procedural considerations, evidentiary requirements, and strategic factors that could impact case outcomes.",
-    "recommended_actions": "We recommend gathering additional documentation and evidence to strengthen your position. Our team will continue analyzing the materials you have provided and will update you with specific next steps as our review progresses.",
+    "recommended_actions": [
+      "Gather additional documentation and evidence to strengthen your position",
+      "Continue analyzing the materials provided for case development",
+      "Update strategy as review progresses and new information becomes available"
+    ],
     "demand_letter_appropriate": true,
     "urgency_assessment": "Standard"
   },
   "demand_letter_evaluation": {
     "is_appropriate": true,
-    "reasoning": "Based on our preliminary review, a demand letter appears to be an appropriate next step. This approach allows us to formally communicate your position and may facilitate resolution without the need for litigation. We will work with you to craft a demand letter that effectively presents your case and requests appropriate remedies.",
+    "reasoning": "A demand letter is appropriate as it formally notifies LLW Construction of the breach and provides an opportunity to resolve the matter without litigation. It also serves as a record of the clients' efforts to settle the dispute amicably.",
     "potential_outcomes": [
-      "Settlement negotiations may begin",
-      "Opposing party may respond with counter-proposals",
-      "Matter may be resolved without litigation",
-      "Foundation established for potential legal action if needed"
+      "LLW Construction agrees to complete the work or provide compensation.",
+      "LLW Construction disputes the claims, leading to potential litigation.",
+      "No response from LLW Construction, necessitating further legal action."
     ],
     "relevant_statutes": [
-      "Florida Statutes - General Contract Law",
-      "Florida Civil Practice Rules"
+      "Florida Construction Lien Law (Chapter 713)",
+      "Florida Breach of Contract Law"
     ]
   },
   "final_analysis": null,
   "findings_letter_content": null,
   "transcripted_media": [],
   "video_insights": [],
-  "errors": [
-    {
-      "source": "FinalAssessment",
-      "file_name": null,
-      "error_message": "Cannot perform final assessment without intake analysis and at least one document or media file.",
-      "details": "Missing required analysis inputs."
-    }
-  ],
+  "errors": [],
   "case_timeline": []
 }
+- Example Letter (style reference): Subject: Legal Review and Recommended Next Steps – LLW Construction, Inc. Dispute
 
-**Tone, Style, and Pacing Requirements:**
-- Match the tone, sentence structure, and feel of the Example Letter exactly:
-  * Professional, measured, and fact-focused.
-  * Avoid strong or speculative language that could overstate the client’s chances of success.
-  * Present facts neutrally, then explain their legal relevance.
-  * Use plain language explanations of legal concepts.
-  * Pace the content with short paragraphs and bullet points for clarity.
-- When discussing remedies or potential outcomes, phrase cautiously (e.g., “you may be entitled to…” instead of “you will recover…”).
-- Avoid dramatic or alarmist language, but clearly explain risks.
-- Maintain the same balance between factual description, legal explanation, and practical guidance seen in the Example Letter.
+Good afternoon Mr. Devlin and Ms. Bell,
 
-**Completeness Guardrails:**
-- Include all key facts from the analysis: address/location, cause/background, total contract or claim amount, all payments with dates, timeline of events, key admissions, specific defects/issues, third-party notices, and relevant evidence.
-- Do not add unsupported legal claims; label potential claims as such and explain what facts would be needed to pursue them.
-- Always include procedural requirements (deadlines, notice periods, prerequisites) where applicable.
+I hope this message finds you well. Following our review of your documents and our recent discussion, I am providing a summary of the situation involving LLW Construction, Inc., along with legal considerations and our recommendations for moving forward.
 
-**Required Structure (in this exact order):**
+1. FACTUAL SUMMARY
 
+Based on our review, we understand that the issues began after you engaged LLW Construction, Inc. to complete repairs to your home located at 3414 South Belcher Drive, Tampa, FL 33629, following damage from Hurricane Helene. The total contract amount was $128,355.77, of which $100,000 has already been paid.
+
+Despite this substantial payment:
+  • The contractor has not completed the project.
+  • The work performed has been substandard, including serious construction defects such as improper bathroom framing requiring you to reconstruct it yourself.
+  • Since January, the contractor’s only communications have been requests for more money, despite minimal progress.
+  • The contractor has stated they are out of funds and require additional payment to continue.
+Additionally, you have received a Notice to Owner from a subcontractor for over $3,000, indicating they were not paid by the contractor for their work.
+
+2. IMPLIED WARRANTY & CONSTRUCTION DEFECTS (Fla. Stat. Chapter 558)
+
+Under Florida law, an implied warranty exists that all work will be performed in a competent and workmanlike manner. You may have claims under this implied warranty due to:
+  • Defective or incomplete construction
+  • Failure to meet industry standards
+  • Structural and functional deficiencies
+Florida Statutes, Chapter 558, requires the following steps before pursuing litigation:
+  • You must provide 60 days’ written notice to the contractor identifying the defects and giving them an opportunity to repair.
+  • The contractor then has 45 days to respond with a proposed repair plan and timeline.
+  • You cannot file suit without completing this statutory notice-and-opportunity-to-repair process.
+
+3. BREACH OF CONTRACT CLAIM
+
+You may also have a breach of contract claim. To prevail, you must show:
+  1. A valid contract exists (which it does),
+  2. A material breach occurred (e.g., failure to complete or properly perform the work),
+  3. You have sustained damages as a result.
+The contractor’s failure to perform as agreed, including leaving work unfinished and failing to meet specifications, supports a potential cause of action for breach of contract. You may be entitled to:
+  • Monetary damages
+  • Cost of hiring a replacement contractor
+  • Reimbursement for subcontractor payments
+  • Other remedies under the contract and Florida law
+
+4. LIENS AND NOTICE TO OWNER (Fla. Stat. § 713.02 and § 713.06)
+
+Subcontractors who have not been paid have the right to file a mechanic’s lien against your property:
+  • The Notice to Owner you received is a statutory prerequisite to filing such a lien.
+  • If not resolved, the subcontractor may proceed to record a lien, which can cloud title to your property and create additional legal exposure.
+  • Even if you have already paid the general contractor, Florida law may still hold you liable for unpaid amounts to subcontractors.
+
+You may need to pay the subcontractor directly to avoid a lien and then seek reimbursement from LLW Construction.
+
+5. RECOMMENDED NEXT STEPS
+
+We recommend the following course of action:
+
+A. Issue a Letter of Representation and Demand Letter:
+Our firm can send a formal letter of representation and demand letter to LLW Construction on your behalf. This letter will:
+  • Demand that the contractor complete the project as agreed;
+  • Provide formal notice under Chapter 558;
+  • Seek reimbursement for payments you’ve made or will make to subcontractors;
+  • Initiate a resolution process that may avoid litigation and protect your property rights.
+
+B. Pay the Subcontractor to Avoid a Lien (and Potential Foreclosure Risk):
+
+You have received a Notice to Owner from a subcontractor who has not been paid by LLW Construction. This notice is the first step toward filing a construction lien against your property. In Florida, once a lien is recorded, the subcontractor may initiate a foreclosure action to enforce the lien and recover the amount owed. While this is not always immediate, the risk should not be taken lightly—foreclosure of a construction lien can ultimately lead to the forced sale of your home if not resolved.
+
+To protect your property interest and avoid this outcome, we recommend that you consider paying the subcontractor directly the amount owed—approximately $3,000+—to satisfy the underlying debt. This action would:
+  • Prevent the recording of a lien or facilitate its removal if already recorded;
+  • Avoid legal fees, interest, and costs that would accrue if the subcontractor proceeds with litigation;
+  • Protect your property title from encumbrances, which could impact your ability to refinance or sell;
+  • Allow you to maintain control over the dispute and avoid being caught in the middle of a payment conflict between the contractor and subcontractor.
+
+If you proceed with payment, we strongly advise:
+  • Obtaining a written release of lien or lien waiver from the subcontractor;
+  • Retaining proof of payment (cancelled check, receipt, signed acknowledgment);
+  • Using this payment as part of your damages claim in pursuing reimbursement from LLW Construction, who failed in their contractual obligation to pay their vendors.
+This proactive step helps mitigate your risk and strengthens your position in any forthcoming demand or legal action against the contractor.
+
+C. Schedule a Call:
+Please let us know if you would like us to proceed with drafting and sending the above-referenced letters. We would also be happy to schedule a call to discuss any questions you may have.
+
+Thank you, and we remain committed to protecting your interests throughout this process.
+
+
+——— AUDIENCE & PURPOSE ———
+- Audience: non-lawyer clients who need clear, practical guidance.
+- Objective: neutrally summarize facts, explain applicable legal considerations plainly, and lay out prudent next steps with realistic expectations.
+
+——— TONE, STYLE, AND PACING (ENFORCED) ———
+- Mirror the Example Letter's cadence:
+  * Professional, measured, fact-focused; no advocacy or hype.
+  * Plain English with brief first-mention definitions for legal terms.
+  * Cautious modality: "may," "can," "could," "appears to," "based on," "subject to," "we recommend," "you may be entitled to."
+  * Avoid absolute predictions and combative phrasing; no exclamation marks.
+- Rhythm:
+  * Paragraphs: 1–4 sentences each.
+  * Sentences: generally 12–22 words; active voice.
+  * Use bullets sparingly for facts, remedies, and timelines.
+- Balance: present facts neutrally, state the law plainly, flag risks without alarmism, and connect recommendations to a procedural or strategic purpose.
+
+——— SCOPE, JURISDICTION & COMPLETENESS ———
+- Tailor discussion to None and None when provided.
+- Cite statutes/rules **only if** included in {
+  "intake_analysis": {
+    "client_name": "Amber Bell & Erik Devlin",
+    "attorney_name": "Bernhardt Riley",
+    "case_summary": "Amber Bell and Erik Devlin contracted LLW Construction, led by Mike Winiarek, for home renovations totaling $128,335.77. They have paid $100,000 but encountered significant issues with the work quality and completion. Despite multiple payments and ongoing communication attempts, the contractor has not resolved these issues. A subcontractor has also claimed non-payment from the contractor, indicating further complications. The clients seek financial recovery for incomplete work and additional costs incurred.",
+    "case_type": "Contractor Dispute",
+    "urgency_level": "High",
+    "client_priorities": [
+      "Financial Recovery"
+    ],
+    "desired_outcomes": [
+      "Reimbursement of payments made for incomplete or substandard work (~$100,000).",
+      "Compensation for additional costs incurred to correct or complete the work."
+    ],
+    "key_facts": [
+      "Contract signed on November 14, 2024.",
+      "Total contract price: $128,335.77.",
+      "Total paid to date: $100,000.",
+      "Multiple issues with work quality noted since December 2024.",
+      "Subcontractor claims non-payment from LLW Construction."
+    ],
+    "parties_involved": [
+      {
+        "name": "Amber Bell",
+        "role": "Plaintiff"
+      },
+      {
+        "name": "Erik Devlin",
+        "role": "Plaintiff"
+      },
+      {
+        "name": "LLW Construction",
+        "role": "Defendant"
+      },
+      {
+        "name": "Mike Winiarek",
+        "role": "Defendant"
+      }
+    ],
+    "financial_impact": "Clients have paid $100,000 towards a $128,335.77 contract, with potential additional costs for repairs.",
+    "legal_claims": [
+      "Breach of contract for failure to perform work as agreed.",
+      "Possible claims for damages due to incomplete or substandard work."
+    ],
+    "summary": "Amber Bell and Erik Devlin contracted LLW Construction, led by Mike Winiarek, for home renovations totaling $128,335.77. They have paid $100,000 but encountered significant issues with the work quality and completion. Despite multiple payments and ongoing communication attempts, the contractor has not resolved these issues. A subcontractor has also claimed non-payment from the contractor, indicating further complications. The clients seek financial recovery for incomplete work and additional costs incurred.",
+    "legal_issues": [
+      "Breach of contract for failure to perform work as agreed.",
+      "Possible claims for damages due to incomplete or substandard work."
+    ],
+    "timeline": null,
+    "parties": [
+      "Amber Bell",
+      "Erik Devlin",
+      "LLW Construction",
+      "Mike Winiarek"
+    ]
+  },
+  "analyzed_documents": [
+    {
+      "file_name": "Devlin_-_Project_Management_Proposal_-_Hoffar_Holdings_LLC_6.25.25__1__9d474fb0.pdf",
+      "filename": "Devlin_-_Project_Management_Proposal_-_Hoffar_Holdings_LLC_6.25.25__1__9d474fb0.pdf",
+      "document_type": "Contract Proposal",
+      "inferred_title": "Hoffar Holdings Project Management Proposal for Devlin and Bell",
+      "analysis": null,
+      "summary": "This document is a project management proposal from Hoffar Holdings LLC to Erik Devlin and Amber Bell for completing a 2,200 sq. ft. residential home. The proposal outlines the scope of work, including cabinetry, mechanical, electrical, plumbing, tile work, and interior finishes. The estimated total cost is $56,000, with a payment schedule starting with a $2,000 deposit. The proposal emphasizes quality control and code compliance, with a flexible timeline of 4-8 weeks. Terms include professional completion of work, property access, and written change requests. The proposal is valid for 30 days from June 25, 2025.",
+      "key_information": "The proposal is for completing a 2,200 sq. ft. home; scope includes cabinetry, MEP systems, tile work, and interior finishes; estimated total cost is $56,000; payment schedule starts with a $2,000 deposit and includes progress payments; project timeline is 4-8 weeks; proposal valid for 30 days from June 25, 2025.",
+      "relevance_to_case": "This document is relevant as it provides a benchmark for the scope and cost of completing the unfinished home, which can be used to assess the reasonableness of the costs incurred by Amber Bell and Erik Devlin with LLW Construction. It highlights the expected quality and compliance standards, which may contrast with the alleged substandard work by LLW Construction. This proposal could support claims for financial recovery by demonstrating alternative completion costs and timelines.",
+      "key_points": [],
+      "citations": [],
+      "metadata": null
+    },
+    {
+      "file_name": "Devlin_-_Contract_for_Construction_-_Highlighted_w_Items_not_Completed_6.9.25_c7152b78.pdf",
+      "filename": "Devlin_-_Contract_for_Construction_-_Highlighted_w_Items_not_Completed_6.9.25_c7152b78.pdf",
+      "document_type": "Contract",
+      "inferred_title": "Construction Contract Between LLW Construction and Devlin/Bell",
+      "analysis": null,
+      "summary": "This contract outlines the agreement between LLW Construction, Inc. and Erik Devlin and Amber Bell for renovation work at their property in Tampa, Florida. The contract specifies the scope of work, payment schedule, and responsibilities of both parties. It includes provisions for changes in work, warranties, insurance, and default by either party. The total contract price is $128,335.77, with a detailed payment schedule linked to construction milestones. The document highlights several incomplete items and discrepancies, such as missing installations and unresolved issues, which are critical to the clients' claims of breach of contract and financial recovery.",
+      "key_information": "The contract is between LLW Construction and Erik Devlin and Amber Bell for renovations at 3414 S. Belcher Dr., Tampa, FL; Total contract price is $128,335.77, with $100,000 already paid by the clients; Several items remain incomplete or substandard, including missing installations and unresolved issues; The contract includes a payment schedule tied to construction milestones; The document highlights potential breaches of contract by LLW Construction, including non-payment to subcontractors.",
+      "relevance_to_case": "This contract is central to the clients' claims of breach of contract against LLW Construction. It provides the basis for their financial recovery efforts, detailing the agreed scope of work, payment terms, and responsibilities. The highlighted incomplete items and discrepancies support the clients' position that LLW Construction failed to fulfill its contractual obligations, justifying their pursuit of reimbursement and compensation for additional costs incurred.",
+      "key_points": [],
+      "citations": [],
+      "metadata": null
+    },
+    {
+      "file_name": "Devlin_-_Certified_Letter_for_Notice_to_Owner_1755e713.pdf",
+      "filename": "Devlin_-_Certified_Letter_for_Notice_to_Owner_1755e713.pdf",
+      "document_type": "Certified Letter",
+      "inferred_title": "Request for Account Statement from Tibbetts Lumber Co",
+      "analysis": null,
+      "summary": "Amber Bell and Erik Devlin sent a certified letter to Tibbetts Lumber Co LLC requesting a detailed account statement, invoices, and payment history related to their dealings with LLW Construction Inc. This request was prompted by a Notice to Owner and the lack of response from their contractor, Mike Winiarek. The letter emphasizes the urgency of the request to prevent a lien on their home and seeks documentation within seven business days. The communication highlights the clients' proactive steps to resolve financial discrepancies and protect their property interests.",
+      "key_information": "Amber Bell and Erik Devlin requested a detailed account statement from Tibbetts Lumber Co LLC due to a Notice to Owner; they have not received responses from their contractor, Mike Winiarek; the request includes all outstanding charges, invoices, charge breakdowns, and payment records; urgency is emphasized to prevent a lien on their home.",
+      "relevance_to_case": "This document supports the clients' position by demonstrating their proactive efforts to obtain financial documentation necessary for resolving their dispute with LLW Construction. It underscores the urgency and seriousness of the situation, aligning with their priority of financial recovery and preventing further financial harm, such as a lien on their property.",
+      "key_points": [],
+      "citations": [],
+      "metadata": null
+    }
+  ],
+  "legal_assessment": {
+    "case_type": "General Legal Matter",
+    "claim_viability": "Moderate",
+    "overall_evidence_strength": "Under Review",
+    "potential_challenges": "We are currently reviewing the available evidence and will provide a detailed assessment of potential challenges as our analysis continues. This may include procedural considerations, evidentiary requirements, and strategic factors that could impact case outcomes.",
+    "recommended_actions": [
+      "Gather additional documentation and evidence to strengthen your position",
+      "Continue analyzing the materials provided for case development",
+      "Update strategy as review progresses and new information becomes available"
+    ],
+    "demand_letter_appropriate": true,
+    "urgency_assessment": "Standard"
+  },
+  "demand_letter_evaluation": {
+    "is_appropriate": true,
+    "reasoning": "A demand letter is appropriate as it formally notifies LLW Construction of the breach and provides an opportunity to resolve the matter without litigation. It also serves as a record of the clients' efforts to settle the dispute amicably.",
+    "potential_outcomes": [
+      "LLW Construction agrees to complete the work or provide compensation.",
+      "LLW Construction disputes the claims, leading to potential litigation.",
+      "No response from LLW Construction, necessitating further legal action."
+    ],
+    "relevant_statutes": [
+      "Florida Construction Lien Law (Chapter 713)",
+      "Florida Breach of Contract Law"
+    ]
+  },
+  "final_analysis": null,
+  "findings_letter_content": null,
+  "transcripted_media": [],
+  "video_insights": [],
+  "errors": [],
+  "case_timeline": []
+} or black-letter law clearly applies; otherwise, describe requirements in plain English.
+- Do **not** invent claims or add headings not supported by `analysis.legal_issues`.
+
+——— REQUIRED STRUCTURE (FOLLOW EXACT ORDER/LABELS FROM THE EXAMPLE LETTER) ———
 1. **Document Title:**
-   # Legal Review and Recommended Next Steps – Amber Bell and Erik Devlin contracted LLW Construction, led by Mike Winiarek, for home renovations totaling $128,335.77. They have paid $100,000 but encountered significant issues with the work quality and completion. Despite multiple payments and ongoing communication attempts, the contractor has not addressed their concerns. A subcontractor has claimed non-payment from LLW Construction, and a notice to owner has been received, indicating potential lien issues. The clients seek financial recovery for incomplete work and additional costs incurred.
+   # Legal Review and Recommended Next Steps – Amber Bell and Erik Devlin contracted LLW Construction, led by Mike Winiarek, for home renovations totaling $128,335.77. They have paid $100,000 but encountered significant issues with the work quality and completion. Despite multiple payments and ongoing communication attempts, the contractor has not resolved these issues. A subcontractor has also claimed non-payment from the contractor, indicating further complications. The clients seek financial recovery for incomplete work and additional costs incurred.
 
 2. **Salutation:**
    Good afternoon Amber Bell & Erik Devlin,
 
 3. **Opening paragraph:**
-   - Identify reviewed documents (contracts, correspondence, notices, photos, receipts, proposals, expert reports).
-   - State the letter will provide a factual summary, a legal analysis tailored to the jurisdiction and practice area, and recommended next steps.
+   - Identify the materials reviewed (e.g., contracts, correspondence, notices, photos, receipts, proposals, reports).
+   - State that the letter provides a factual summary, jurisdiction-appropriate legal considerations, and recommended next steps.
 
 4. **FACTUAL SUMMARY**
-   - Present a chronological bullet list using all available factual data in the JSON, explicitly including:
-     * Address/location
-     * Cause/background of dispute
-     * Contract/price and payment history (amounts + dates)
-     * Specific defects or performance failures
-     * Key admissions/statements by other parties
-     * Notices from third parties
-     * Relevant proposals, estimates, or expert findings
-
-5. **LEGAL ISSUES**
-   - For each legal issue in `analysis.legal_issues`, create a **capitalized subheading** and include:
-     ### [ISSUE NAME]
-     **Legal Standard:** Define the elements/rule and cite relevant statutes or authorities.
-     **Application to Facts:** Apply the law directly to the facts, neutrally explaining how they relate.
-     **Defenses/Risks:** Identify likely defenses, counterarguments, or procedural hurdles.
-     **Remedies/Damages:** List specific possible remedies (cost to complete, reimbursements, statutory fees) while using cautious language (“may be entitled to”).
-     **Procedural Requirements:** If applicable, include notice/cure periods, filing deadlines, and pre-suit steps.
-
-6. **RECOMMENDED NEXT STEPS**
-   - For each item in `analysis.recommended_next_steps`, create a subheading and:
-     * State the action plainly.
-     * Explain why it is important and what it achieves procedurally or strategically.
-     * Include any documentation steps (e.g., obtain lien waiver, retain proof of payment, preserve correspondence).
-     * Note relevant deadlines.
-
-7. **Closing paragraph:**
-   Invite the client to confirm next steps, offer to discuss questions, and reaffirm the firm’s commitment.
-
-8. **Signature:**
-   **Sincerely,**
-   Bernhardt Riley PLLC
-
-**Markdown Formatting Requirements:**
-- Output well-structured Markdown:
-  * `#` for main title
-  * `##` for FACTUAL SUMMARY, LEGAL ISSUES, RECOMMENDED NEXT STEPS
-  * `###` for subheadings
-  * Bulleted lists with `*`
-  * **Bold** for emphasis, *italics* for citations
-  * Dates formatted as Month DD, YYYY; currency formatted as $X,XXX.XX
-  * No HTML or code block formatting
-
-**Final Quality Checklist:**
-- Does the tone match the Example Letter — calm, factual, balanced?
-- Are all facts from {
+   - Begin with: "Based on our review, we understand the following."
+   - Present a **chronological** bullet list drawing from all relevant fields in {
   "intake_analysis": {
     "client_name": "Amber Bell & Erik Devlin",
     "attorney_name": "Bernhardt Riley",
-    "case_summary": "Amber Bell and Erik Devlin contracted LLW Construction, led by Mike Winiarek, for home renovations totaling $128,335.77. They have paid $100,000 but encountered significant issues with the work quality and completion. Despite multiple payments and ongoing communication attempts, the contractor has not addressed their concerns. A subcontractor has claimed non-payment from LLW Construction, and a notice to owner has been received, indicating potential lien issues. The clients seek financial recovery for incomplete work and additional costs incurred.",
+    "case_summary": "Amber Bell and Erik Devlin contracted LLW Construction, led by Mike Winiarek, for home renovations totaling $128,335.77. They have paid $100,000 but encountered significant issues with the work quality and completion. Despite multiple payments and ongoing communication attempts, the contractor has not resolved these issues. A subcontractor has also claimed non-payment from the contractor, indicating further complications. The clients seek financial recovery for incomplete work and additional costs incurred.",
     "case_type": "Contractor Dispute",
     "urgency_level": "High",
     "client_priorities": [
       "Financial Recovery"
     ],
     "desired_outcomes": [
-      "Reimbursement of payments made for incomplete or substandard work (~$100,000)."
+      "Reimbursement of payments made for incomplete or substandard work (~$100,000).",
+      "Compensation for additional costs incurred to correct or complete the work."
     ],
     "key_facts": [
       "Contract signed on November 14, 2024.",
-      "Total contract price is $128,335.77.",
-      "Paid $100,000 towards the contract.",
+      "Total contract price: $128,335.77.",
+      "Total paid to date: $100,000.",
       "Multiple issues with work quality noted since December 2024.",
-      "Received notice to owner with lien verbiage."
+      "Subcontractor claims non-payment from LLW Construction."
     ],
     "parties_involved": [
       {
@@ -207,18 +416,18 @@ Amber Bell & Erik Devlin
       },
       {
         "name": "Mike Winiarek",
-        "role": "Contractor"
+        "role": "Defendant"
       }
     ],
-    "financial_impact": "Clients have paid $100,000 and seek reimbursement for incomplete work and additional repair costs.",
+    "financial_impact": "Clients have paid $100,000 towards a $128,335.77 contract, with potential additional costs for repairs.",
     "legal_claims": [
-      "Breach of Contract",
-      "Negligence"
+      "Breach of contract for failure to perform work as agreed.",
+      "Possible claims for damages due to incomplete or substandard work."
     ],
-    "summary": "Amber Bell and Erik Devlin contracted LLW Construction, led by Mike Winiarek, for home renovations totaling $128,335.77. They have paid $100,000 but encountered significant issues with the work quality and completion. Despite multiple payments and ongoing communication attempts, the contractor has not addressed their concerns. A subcontractor has claimed non-payment from LLW Construction, and a notice to owner has been received, indicating potential lien issues. The clients seek financial recovery for incomplete work and additional costs incurred.",
+    "summary": "Amber Bell and Erik Devlin contracted LLW Construction, led by Mike Winiarek, for home renovations totaling $128,335.77. They have paid $100,000 but encountered significant issues with the work quality and completion. Despite multiple payments and ongoing communication attempts, the contractor has not resolved these issues. A subcontractor has also claimed non-payment from the contractor, indicating further complications. The clients seek financial recovery for incomplete work and additional costs incurred.",
     "legal_issues": [
-      "Breach of Contract",
-      "Negligence"
+      "Breach of contract for failure to perform work as agreed.",
+      "Possible claims for damages due to incomplete or substandard work."
     ],
     "timeline": null,
     "parties": [
@@ -228,49 +437,409 @@ Amber Bell & Erik Devlin
       "Mike Winiarek"
     ]
   },
-  "analyzed_documents": [],
+  "analyzed_documents": [
+    {
+      "file_name": "Devlin_-_Project_Management_Proposal_-_Hoffar_Holdings_LLC_6.25.25__1__9d474fb0.pdf",
+      "filename": "Devlin_-_Project_Management_Proposal_-_Hoffar_Holdings_LLC_6.25.25__1__9d474fb0.pdf",
+      "document_type": "Contract Proposal",
+      "inferred_title": "Hoffar Holdings Project Management Proposal for Devlin and Bell",
+      "analysis": null,
+      "summary": "This document is a project management proposal from Hoffar Holdings LLC to Erik Devlin and Amber Bell for completing a 2,200 sq. ft. residential home. The proposal outlines the scope of work, including cabinetry, mechanical, electrical, plumbing, tile work, and interior finishes. The estimated total cost is $56,000, with a payment schedule starting with a $2,000 deposit. The proposal emphasizes quality control and code compliance, with a flexible timeline of 4-8 weeks. Terms include professional completion of work, property access, and written change requests. The proposal is valid for 30 days from June 25, 2025.",
+      "key_information": "The proposal is for completing a 2,200 sq. ft. home; scope includes cabinetry, MEP systems, tile work, and interior finishes; estimated total cost is $56,000; payment schedule starts with a $2,000 deposit and includes progress payments; project timeline is 4-8 weeks; proposal valid for 30 days from June 25, 2025.",
+      "relevance_to_case": "This document is relevant as it provides a benchmark for the scope and cost of completing the unfinished home, which can be used to assess the reasonableness of the costs incurred by Amber Bell and Erik Devlin with LLW Construction. It highlights the expected quality and compliance standards, which may contrast with the alleged substandard work by LLW Construction. This proposal could support claims for financial recovery by demonstrating alternative completion costs and timelines.",
+      "key_points": [],
+      "citations": [],
+      "metadata": null
+    },
+    {
+      "file_name": "Devlin_-_Contract_for_Construction_-_Highlighted_w_Items_not_Completed_6.9.25_c7152b78.pdf",
+      "filename": "Devlin_-_Contract_for_Construction_-_Highlighted_w_Items_not_Completed_6.9.25_c7152b78.pdf",
+      "document_type": "Contract",
+      "inferred_title": "Construction Contract Between LLW Construction and Devlin/Bell",
+      "analysis": null,
+      "summary": "This contract outlines the agreement between LLW Construction, Inc. and Erik Devlin and Amber Bell for renovation work at their property in Tampa, Florida. The contract specifies the scope of work, payment schedule, and responsibilities of both parties. It includes provisions for changes in work, warranties, insurance, and default by either party. The total contract price is $128,335.77, with a detailed payment schedule linked to construction milestones. The document highlights several incomplete items and discrepancies, such as missing installations and unresolved issues, which are critical to the clients' claims of breach of contract and financial recovery.",
+      "key_information": "The contract is between LLW Construction and Erik Devlin and Amber Bell for renovations at 3414 S. Belcher Dr., Tampa, FL; Total contract price is $128,335.77, with $100,000 already paid by the clients; Several items remain incomplete or substandard, including missing installations and unresolved issues; The contract includes a payment schedule tied to construction milestones; The document highlights potential breaches of contract by LLW Construction, including non-payment to subcontractors.",
+      "relevance_to_case": "This contract is central to the clients' claims of breach of contract against LLW Construction. It provides the basis for their financial recovery efforts, detailing the agreed scope of work, payment terms, and responsibilities. The highlighted incomplete items and discrepancies support the clients' position that LLW Construction failed to fulfill its contractual obligations, justifying their pursuit of reimbursement and compensation for additional costs incurred.",
+      "key_points": [],
+      "citations": [],
+      "metadata": null
+    },
+    {
+      "file_name": "Devlin_-_Certified_Letter_for_Notice_to_Owner_1755e713.pdf",
+      "filename": "Devlin_-_Certified_Letter_for_Notice_to_Owner_1755e713.pdf",
+      "document_type": "Certified Letter",
+      "inferred_title": "Request for Account Statement from Tibbetts Lumber Co",
+      "analysis": null,
+      "summary": "Amber Bell and Erik Devlin sent a certified letter to Tibbetts Lumber Co LLC requesting a detailed account statement, invoices, and payment history related to their dealings with LLW Construction Inc. This request was prompted by a Notice to Owner and the lack of response from their contractor, Mike Winiarek. The letter emphasizes the urgency of the request to prevent a lien on their home and seeks documentation within seven business days. The communication highlights the clients' proactive steps to resolve financial discrepancies and protect their property interests.",
+      "key_information": "Amber Bell and Erik Devlin requested a detailed account statement from Tibbetts Lumber Co LLC due to a Notice to Owner; they have not received responses from their contractor, Mike Winiarek; the request includes all outstanding charges, invoices, charge breakdowns, and payment records; urgency is emphasized to prevent a lien on their home.",
+      "relevance_to_case": "This document supports the clients' position by demonstrating their proactive efforts to obtain financial documentation necessary for resolving their dispute with LLW Construction. It underscores the urgency and seriousness of the situation, aligning with their priority of financial recovery and preventing further financial harm, such as a lien on their property.",
+      "key_points": [],
+      "citations": [],
+      "metadata": null
+    }
+  ],
   "legal_assessment": {
     "case_type": "General Legal Matter",
     "claim_viability": "Moderate",
     "overall_evidence_strength": "Under Review",
     "potential_challenges": "We are currently reviewing the available evidence and will provide a detailed assessment of potential challenges as our analysis continues. This may include procedural considerations, evidentiary requirements, and strategic factors that could impact case outcomes.",
-    "recommended_actions": "We recommend gathering additional documentation and evidence to strengthen your position. Our team will continue analyzing the materials you have provided and will update you with specific next steps as our review progresses.",
+    "recommended_actions": [
+      "Gather additional documentation and evidence to strengthen your position",
+      "Continue analyzing the materials provided for case development",
+      "Update strategy as review progresses and new information becomes available"
+    ],
     "demand_letter_appropriate": true,
     "urgency_assessment": "Standard"
   },
   "demand_letter_evaluation": {
     "is_appropriate": true,
-    "reasoning": "Based on our preliminary review, a demand letter appears to be an appropriate next step. This approach allows us to formally communicate your position and may facilitate resolution without the need for litigation. We will work with you to craft a demand letter that effectively presents your case and requests appropriate remedies.",
+    "reasoning": "A demand letter is appropriate as it formally notifies LLW Construction of the breach and provides an opportunity to resolve the matter without litigation. It also serves as a record of the clients' efforts to settle the dispute amicably.",
     "potential_outcomes": [
-      "Settlement negotiations may begin",
-      "Opposing party may respond with counter-proposals",
-      "Matter may be resolved without litigation",
-      "Foundation established for potential legal action if needed"
+      "LLW Construction agrees to complete the work or provide compensation.",
+      "LLW Construction disputes the claims, leading to potential litigation.",
+      "No response from LLW Construction, necessitating further legal action."
     ],
     "relevant_statutes": [
-      "Florida Statutes - General Contract Law",
-      "Florida Civil Practice Rules"
+      "Florida Construction Lien Law (Chapter 713)",
+      "Florida Breach of Contract Law"
     ]
   },
   "final_analysis": null,
   "findings_letter_content": null,
   "transcripted_media": [],
   "video_insights": [],
-  "errors": [
+  "errors": [],
+  "case_timeline": []
+}. Include, where available:
+     * Address/location
+     * Background/cause of dispute or loss
+     * Contract/price or claim amounts and **all payments with dates**
+     * Specific defects/performance issues or contested facts (concrete examples)
+     * Opposing-party admissions/statements
+     * Third-party notices (e.g., liens, agency notices) with amounts/dates
+     * Proposals/estimates/experts with amounts
+   - Use **absolute dates** when provided (e.g., "January 10, 2025").
+
+5. **LEGAL ISSUES**
+   - For each issue in `analysis.legal_issues`, create an **ALL-CAPS heading** (include a statute in parentheses only if provided in {
+  "intake_analysis": {
+    "client_name": "Amber Bell & Erik Devlin",
+    "attorney_name": "Bernhardt Riley",
+    "case_summary": "Amber Bell and Erik Devlin contracted LLW Construction, led by Mike Winiarek, for home renovations totaling $128,335.77. They have paid $100,000 but encountered significant issues with the work quality and completion. Despite multiple payments and ongoing communication attempts, the contractor has not resolved these issues. A subcontractor has also claimed non-payment from the contractor, indicating further complications. The clients seek financial recovery for incomplete work and additional costs incurred.",
+    "case_type": "Contractor Dispute",
+    "urgency_level": "High",
+    "client_priorities": [
+      "Financial Recovery"
+    ],
+    "desired_outcomes": [
+      "Reimbursement of payments made for incomplete or substandard work (~$100,000).",
+      "Compensation for additional costs incurred to correct or complete the work."
+    ],
+    "key_facts": [
+      "Contract signed on November 14, 2024.",
+      "Total contract price: $128,335.77.",
+      "Total paid to date: $100,000.",
+      "Multiple issues with work quality noted since December 2024.",
+      "Subcontractor claims non-payment from LLW Construction."
+    ],
+    "parties_involved": [
+      {
+        "name": "Amber Bell",
+        "role": "Plaintiff"
+      },
+      {
+        "name": "Erik Devlin",
+        "role": "Plaintiff"
+      },
+      {
+        "name": "LLW Construction",
+        "role": "Defendant"
+      },
+      {
+        "name": "Mike Winiarek",
+        "role": "Defendant"
+      }
+    ],
+    "financial_impact": "Clients have paid $100,000 towards a $128,335.77 contract, with potential additional costs for repairs.",
+    "legal_claims": [
+      "Breach of contract for failure to perform work as agreed.",
+      "Possible claims for damages due to incomplete or substandard work."
+    ],
+    "summary": "Amber Bell and Erik Devlin contracted LLW Construction, led by Mike Winiarek, for home renovations totaling $128,335.77. They have paid $100,000 but encountered significant issues with the work quality and completion. Despite multiple payments and ongoing communication attempts, the contractor has not resolved these issues. A subcontractor has also claimed non-payment from the contractor, indicating further complications. The clients seek financial recovery for incomplete work and additional costs incurred.",
+    "legal_issues": [
+      "Breach of contract for failure to perform work as agreed.",
+      "Possible claims for damages due to incomplete or substandard work."
+    ],
+    "timeline": null,
+    "parties": [
+      "Amber Bell",
+      "Erik Devlin",
+      "LLW Construction",
+      "Mike Winiarek"
+    ]
+  },
+  "analyzed_documents": [
     {
-      "source": "FinalAssessment",
-      "file_name": null,
-      "error_message": "Cannot perform final assessment without intake analysis and at least one document or media file.",
-      "details": "Missing required analysis inputs."
+      "file_name": "Devlin_-_Project_Management_Proposal_-_Hoffar_Holdings_LLC_6.25.25__1__9d474fb0.pdf",
+      "filename": "Devlin_-_Project_Management_Proposal_-_Hoffar_Holdings_LLC_6.25.25__1__9d474fb0.pdf",
+      "document_type": "Contract Proposal",
+      "inferred_title": "Hoffar Holdings Project Management Proposal for Devlin and Bell",
+      "analysis": null,
+      "summary": "This document is a project management proposal from Hoffar Holdings LLC to Erik Devlin and Amber Bell for completing a 2,200 sq. ft. residential home. The proposal outlines the scope of work, including cabinetry, mechanical, electrical, plumbing, tile work, and interior finishes. The estimated total cost is $56,000, with a payment schedule starting with a $2,000 deposit. The proposal emphasizes quality control and code compliance, with a flexible timeline of 4-8 weeks. Terms include professional completion of work, property access, and written change requests. The proposal is valid for 30 days from June 25, 2025.",
+      "key_information": "The proposal is for completing a 2,200 sq. ft. home; scope includes cabinetry, MEP systems, tile work, and interior finishes; estimated total cost is $56,000; payment schedule starts with a $2,000 deposit and includes progress payments; project timeline is 4-8 weeks; proposal valid for 30 days from June 25, 2025.",
+      "relevance_to_case": "This document is relevant as it provides a benchmark for the scope and cost of completing the unfinished home, which can be used to assess the reasonableness of the costs incurred by Amber Bell and Erik Devlin with LLW Construction. It highlights the expected quality and compliance standards, which may contrast with the alleged substandard work by LLW Construction. This proposal could support claims for financial recovery by demonstrating alternative completion costs and timelines.",
+      "key_points": [],
+      "citations": [],
+      "metadata": null
+    },
+    {
+      "file_name": "Devlin_-_Contract_for_Construction_-_Highlighted_w_Items_not_Completed_6.9.25_c7152b78.pdf",
+      "filename": "Devlin_-_Contract_for_Construction_-_Highlighted_w_Items_not_Completed_6.9.25_c7152b78.pdf",
+      "document_type": "Contract",
+      "inferred_title": "Construction Contract Between LLW Construction and Devlin/Bell",
+      "analysis": null,
+      "summary": "This contract outlines the agreement between LLW Construction, Inc. and Erik Devlin and Amber Bell for renovation work at their property in Tampa, Florida. The contract specifies the scope of work, payment schedule, and responsibilities of both parties. It includes provisions for changes in work, warranties, insurance, and default by either party. The total contract price is $128,335.77, with a detailed payment schedule linked to construction milestones. The document highlights several incomplete items and discrepancies, such as missing installations and unresolved issues, which are critical to the clients' claims of breach of contract and financial recovery.",
+      "key_information": "The contract is between LLW Construction and Erik Devlin and Amber Bell for renovations at 3414 S. Belcher Dr., Tampa, FL; Total contract price is $128,335.77, with $100,000 already paid by the clients; Several items remain incomplete or substandard, including missing installations and unresolved issues; The contract includes a payment schedule tied to construction milestones; The document highlights potential breaches of contract by LLW Construction, including non-payment to subcontractors.",
+      "relevance_to_case": "This contract is central to the clients' claims of breach of contract against LLW Construction. It provides the basis for their financial recovery efforts, detailing the agreed scope of work, payment terms, and responsibilities. The highlighted incomplete items and discrepancies support the clients' position that LLW Construction failed to fulfill its contractual obligations, justifying their pursuit of reimbursement and compensation for additional costs incurred.",
+      "key_points": [],
+      "citations": [],
+      "metadata": null
+    },
+    {
+      "file_name": "Devlin_-_Certified_Letter_for_Notice_to_Owner_1755e713.pdf",
+      "filename": "Devlin_-_Certified_Letter_for_Notice_to_Owner_1755e713.pdf",
+      "document_type": "Certified Letter",
+      "inferred_title": "Request for Account Statement from Tibbetts Lumber Co",
+      "analysis": null,
+      "summary": "Amber Bell and Erik Devlin sent a certified letter to Tibbetts Lumber Co LLC requesting a detailed account statement, invoices, and payment history related to their dealings with LLW Construction Inc. This request was prompted by a Notice to Owner and the lack of response from their contractor, Mike Winiarek. The letter emphasizes the urgency of the request to prevent a lien on their home and seeks documentation within seven business days. The communication highlights the clients' proactive steps to resolve financial discrepancies and protect their property interests.",
+      "key_information": "Amber Bell and Erik Devlin requested a detailed account statement from Tibbetts Lumber Co LLC due to a Notice to Owner; they have not received responses from their contractor, Mike Winiarek; the request includes all outstanding charges, invoices, charge breakdowns, and payment records; urgency is emphasized to prevent a lien on their home.",
+      "relevance_to_case": "This document supports the clients' position by demonstrating their proactive efforts to obtain financial documentation necessary for resolving their dispute with LLW Construction. It underscores the urgency and seriousness of the situation, aligning with their priority of financial recovery and preventing further financial harm, such as a lien on their property.",
+      "key_points": [],
+      "citations": [],
+      "metadata": null
     }
   ],
+  "legal_assessment": {
+    "case_type": "General Legal Matter",
+    "claim_viability": "Moderate",
+    "overall_evidence_strength": "Under Review",
+    "potential_challenges": "We are currently reviewing the available evidence and will provide a detailed assessment of potential challenges as our analysis continues. This may include procedural considerations, evidentiary requirements, and strategic factors that could impact case outcomes.",
+    "recommended_actions": [
+      "Gather additional documentation and evidence to strengthen your position",
+      "Continue analyzing the materials provided for case development",
+      "Update strategy as review progresses and new information becomes available"
+    ],
+    "demand_letter_appropriate": true,
+    "urgency_assessment": "Standard"
+  },
+  "demand_letter_evaluation": {
+    "is_appropriate": true,
+    "reasoning": "A demand letter is appropriate as it formally notifies LLW Construction of the breach and provides an opportunity to resolve the matter without litigation. It also serves as a record of the clients' efforts to settle the dispute amicably.",
+    "potential_outcomes": [
+      "LLW Construction agrees to complete the work or provide compensation.",
+      "LLW Construction disputes the claims, leading to potential litigation.",
+      "No response from LLW Construction, necessitating further legal action."
+    ],
+    "relevant_statutes": [
+      "Florida Construction Lien Law (Chapter 713)",
+      "Florida Breach of Contract Law"
+    ]
+  },
+  "final_analysis": null,
+  "findings_letter_content": null,
+  "transcripted_media": [],
+  "video_insights": [],
+  "errors": [],
   "case_timeline": []
-} included where relevant?
-- Is each legal issue broken into Standard → Application → Defenses → Remedies?
-- Are procedural steps and deadlines clearly stated?
-- Are remedies described cautiously (“may be entitled to”)?
-- Are risks explained without alarmism but with clarity?
-- Are next steps concrete, with documentation guidance where needed?
+}).
+   - Under each heading, write **1–3 short narrative paragraphs** that:
+     * Explain the governing rule in plain English (define any key term briefly on first mention).
+     * Weave in the client's facts to show how the rule relates.
+     * Note clear defenses/risks or procedural hurdles within the same narrative.
+     * If the issue has required steps or timelines (e.g., notice prerequisites, claims-made deadlines), state the steps and **exact time frames** if known.
+     * Where helpful, add a short bullet list of **specific remedies or exposures**, using cautious phrasing ("you may be entitled to…," "the other party may face…").
+   - If liens/encumbrances appear: explain title/closing/refinance impacts, potential enforcement/foreclosure risk where applicable, possible owner exposure despite payment to an intermediary if jurisdictionally relevant, and the need for lien waivers/releases when recommending payment.
+   - If insurance is implicated: note any notice/proof-of-loss requirements and timing (if provided), coordination risks between claims, and the importance of preserving photos, invoices, and expert reports.
+
+6. **RECOMMENDED NEXT STEPS**
+   - For each item in `analysis.recommended_next_steps`, use **lettered sub-sections** mirroring the Example Letter:
+     ### A. [Step Heading]
+     Write **2–5 sentences** in a single narrative paragraph that:
+     - States the action plainly,
+     - Briefly explains the procedural/legal purpose,
+     - Identifies key documentation to obtain or preserve,
+     - Notes relevant deadlines/time frames and who is responsible.
+     **Do not** use sublabels like "What to do," "Why it matters," "Documentation," or "Timing." Embed these points in the paragraph.
+     Repeat for B., C., etc., as needed.
+
+7. **Closing paragraph:**
+   Invite the client to confirm next steps, offer a call to discuss questions, and reaffirm the firm's commitment.
+
+8. **Signature:**
+   **Sincerely,**
+   Bernhardt Riley PLLC
+
+Optional Appendix (include only if False is true or clearly helpful):
+**Document Review Appendix**
+- Case: Amber Bell and Erik Devlin contracted LLW Construction, led by Mike Winiarek, for home renovations totaling $128,335.77. They have paid $100,000 but encountered significant issues with the work quality and completion. Despite multiple payments and ongoing communication attempts, the contractor has not resolved these issues. A subcontractor has also claimed non-payment from the contractor, indicating further complications. The clients seek financial recovery for incomplete work and additional costs incurred.
+- Bullet list of key files reviewed with one-line relevance summaries.
+
+——— FORMATTING REQUIREMENTS (MARKDOWN) ———
+- Output clean Markdown only (no HTML and no code fences in the final letter).
+- Use:
+  * `#` for the document title,
+  * `##` for major sections (FACTUAL SUMMARY, LEGAL ISSUES, RECOMMENDED NEXT STEPS),
+  * `###` for subheadings (including A./B./C. in Next Steps),
+  * `*` for bullets,
+  * **Bold** for emphasis; *italics* for short citations/case names.
+- Dates as "Month DD, YYYY."
+- Currency as $X,XXX.XX (e.g., $128,355.77).
+
+——— LENGTH & OUTPUT CONTROL ———
+- Target length: **900–1,200 words** unless unusually complex.
+- Prioritize clarity and completeness; avoid repetition.
+
+——— MISSING DATA & FALLBACK BEHAVIOR ———
+- Do **not** invent facts. If a commonly expected detail is missing (e.g., payment dates/amounts, notice dates), either omit that micro-detail or add a single neutral line noting what would be helpful to confirm (e.g., "If available, the date of the agency notice will determine the filing deadline.").
+
+——— FINAL QUALITY CHECKLIST (SILENT) ———
+- Voice mirrors the Example Letter (measured, client-facing, plain English, no overpromising).
+- All material facts from {
+  "intake_analysis": {
+    "client_name": "Amber Bell & Erik Devlin",
+    "attorney_name": "Bernhardt Riley",
+    "case_summary": "Amber Bell and Erik Devlin contracted LLW Construction, led by Mike Winiarek, for home renovations totaling $128,335.77. They have paid $100,000 but encountered significant issues with the work quality and completion. Despite multiple payments and ongoing communication attempts, the contractor has not resolved these issues. A subcontractor has also claimed non-payment from the contractor, indicating further complications. The clients seek financial recovery for incomplete work and additional costs incurred.",
+    "case_type": "Contractor Dispute",
+    "urgency_level": "High",
+    "client_priorities": [
+      "Financial Recovery"
+    ],
+    "desired_outcomes": [
+      "Reimbursement of payments made for incomplete or substandard work (~$100,000).",
+      "Compensation for additional costs incurred to correct or complete the work."
+    ],
+    "key_facts": [
+      "Contract signed on November 14, 2024.",
+      "Total contract price: $128,335.77.",
+      "Total paid to date: $100,000.",
+      "Multiple issues with work quality noted since December 2024.",
+      "Subcontractor claims non-payment from LLW Construction."
+    ],
+    "parties_involved": [
+      {
+        "name": "Amber Bell",
+        "role": "Plaintiff"
+      },
+      {
+        "name": "Erik Devlin",
+        "role": "Plaintiff"
+      },
+      {
+        "name": "LLW Construction",
+        "role": "Defendant"
+      },
+      {
+        "name": "Mike Winiarek",
+        "role": "Defendant"
+      }
+    ],
+    "financial_impact": "Clients have paid $100,000 towards a $128,335.77 contract, with potential additional costs for repairs.",
+    "legal_claims": [
+      "Breach of contract for failure to perform work as agreed.",
+      "Possible claims for damages due to incomplete or substandard work."
+    ],
+    "summary": "Amber Bell and Erik Devlin contracted LLW Construction, led by Mike Winiarek, for home renovations totaling $128,335.77. They have paid $100,000 but encountered significant issues with the work quality and completion. Despite multiple payments and ongoing communication attempts, the contractor has not resolved these issues. A subcontractor has also claimed non-payment from the contractor, indicating further complications. The clients seek financial recovery for incomplete work and additional costs incurred.",
+    "legal_issues": [
+      "Breach of contract for failure to perform work as agreed.",
+      "Possible claims for damages due to incomplete or substandard work."
+    ],
+    "timeline": null,
+    "parties": [
+      "Amber Bell",
+      "Erik Devlin",
+      "LLW Construction",
+      "Mike Winiarek"
+    ]
+  },
+  "analyzed_documents": [
+    {
+      "file_name": "Devlin_-_Project_Management_Proposal_-_Hoffar_Holdings_LLC_6.25.25__1__9d474fb0.pdf",
+      "filename": "Devlin_-_Project_Management_Proposal_-_Hoffar_Holdings_LLC_6.25.25__1__9d474fb0.pdf",
+      "document_type": "Contract Proposal",
+      "inferred_title": "Hoffar Holdings Project Management Proposal for Devlin and Bell",
+      "analysis": null,
+      "summary": "This document is a project management proposal from Hoffar Holdings LLC to Erik Devlin and Amber Bell for completing a 2,200 sq. ft. residential home. The proposal outlines the scope of work, including cabinetry, mechanical, electrical, plumbing, tile work, and interior finishes. The estimated total cost is $56,000, with a payment schedule starting with a $2,000 deposit. The proposal emphasizes quality control and code compliance, with a flexible timeline of 4-8 weeks. Terms include professional completion of work, property access, and written change requests. The proposal is valid for 30 days from June 25, 2025.",
+      "key_information": "The proposal is for completing a 2,200 sq. ft. home; scope includes cabinetry, MEP systems, tile work, and interior finishes; estimated total cost is $56,000; payment schedule starts with a $2,000 deposit and includes progress payments; project timeline is 4-8 weeks; proposal valid for 30 days from June 25, 2025.",
+      "relevance_to_case": "This document is relevant as it provides a benchmark for the scope and cost of completing the unfinished home, which can be used to assess the reasonableness of the costs incurred by Amber Bell and Erik Devlin with LLW Construction. It highlights the expected quality and compliance standards, which may contrast with the alleged substandard work by LLW Construction. This proposal could support claims for financial recovery by demonstrating alternative completion costs and timelines.",
+      "key_points": [],
+      "citations": [],
+      "metadata": null
+    },
+    {
+      "file_name": "Devlin_-_Contract_for_Construction_-_Highlighted_w_Items_not_Completed_6.9.25_c7152b78.pdf",
+      "filename": "Devlin_-_Contract_for_Construction_-_Highlighted_w_Items_not_Completed_6.9.25_c7152b78.pdf",
+      "document_type": "Contract",
+      "inferred_title": "Construction Contract Between LLW Construction and Devlin/Bell",
+      "analysis": null,
+      "summary": "This contract outlines the agreement between LLW Construction, Inc. and Erik Devlin and Amber Bell for renovation work at their property in Tampa, Florida. The contract specifies the scope of work, payment schedule, and responsibilities of both parties. It includes provisions for changes in work, warranties, insurance, and default by either party. The total contract price is $128,335.77, with a detailed payment schedule linked to construction milestones. The document highlights several incomplete items and discrepancies, such as missing installations and unresolved issues, which are critical to the clients' claims of breach of contract and financial recovery.",
+      "key_information": "The contract is between LLW Construction and Erik Devlin and Amber Bell for renovations at 3414 S. Belcher Dr., Tampa, FL; Total contract price is $128,335.77, with $100,000 already paid by the clients; Several items remain incomplete or substandard, including missing installations and unresolved issues; The contract includes a payment schedule tied to construction milestones; The document highlights potential breaches of contract by LLW Construction, including non-payment to subcontractors.",
+      "relevance_to_case": "This contract is central to the clients' claims of breach of contract against LLW Construction. It provides the basis for their financial recovery efforts, detailing the agreed scope of work, payment terms, and responsibilities. The highlighted incomplete items and discrepancies support the clients' position that LLW Construction failed to fulfill its contractual obligations, justifying their pursuit of reimbursement and compensation for additional costs incurred.",
+      "key_points": [],
+      "citations": [],
+      "metadata": null
+    },
+    {
+      "file_name": "Devlin_-_Certified_Letter_for_Notice_to_Owner_1755e713.pdf",
+      "filename": "Devlin_-_Certified_Letter_for_Notice_to_Owner_1755e713.pdf",
+      "document_type": "Certified Letter",
+      "inferred_title": "Request for Account Statement from Tibbetts Lumber Co",
+      "analysis": null,
+      "summary": "Amber Bell and Erik Devlin sent a certified letter to Tibbetts Lumber Co LLC requesting a detailed account statement, invoices, and payment history related to their dealings with LLW Construction Inc. This request was prompted by a Notice to Owner and the lack of response from their contractor, Mike Winiarek. The letter emphasizes the urgency of the request to prevent a lien on their home and seeks documentation within seven business days. The communication highlights the clients' proactive steps to resolve financial discrepancies and protect their property interests.",
+      "key_information": "Amber Bell and Erik Devlin requested a detailed account statement from Tibbetts Lumber Co LLC due to a Notice to Owner; they have not received responses from their contractor, Mike Winiarek; the request includes all outstanding charges, invoices, charge breakdowns, and payment records; urgency is emphasized to prevent a lien on their home.",
+      "relevance_to_case": "This document supports the clients' position by demonstrating their proactive efforts to obtain financial documentation necessary for resolving their dispute with LLW Construction. It underscores the urgency and seriousness of the situation, aligning with their priority of financial recovery and preventing further financial harm, such as a lien on their property.",
+      "key_points": [],
+      "citations": [],
+      "metadata": null
+    }
+  ],
+  "legal_assessment": {
+    "case_type": "General Legal Matter",
+    "claim_viability": "Moderate",
+    "overall_evidence_strength": "Under Review",
+    "potential_challenges": "We are currently reviewing the available evidence and will provide a detailed assessment of potential challenges as our analysis continues. This may include procedural considerations, evidentiary requirements, and strategic factors that could impact case outcomes.",
+    "recommended_actions": [
+      "Gather additional documentation and evidence to strengthen your position",
+      "Continue analyzing the materials provided for case development",
+      "Update strategy as review progresses and new information becomes available"
+    ],
+    "demand_letter_appropriate": true,
+    "urgency_assessment": "Standard"
+  },
+  "demand_letter_evaluation": {
+    "is_appropriate": true,
+    "reasoning": "A demand letter is appropriate as it formally notifies LLW Construction of the breach and provides an opportunity to resolve the matter without litigation. It also serves as a record of the clients' efforts to settle the dispute amicably.",
+    "potential_outcomes": [
+      "LLW Construction agrees to complete the work or provide compensation.",
+      "LLW Construction disputes the claims, leading to potential litigation.",
+      "No response from LLW Construction, necessitating further legal action."
+    ],
+    "relevant_statutes": [
+      "Florida Construction Lien Law (Chapter 713)",
+      "Florida Breach of Contract Law"
+    ]
+  },
+  "final_analysis": null,
+  "findings_letter_content": null,
+  "transcripted_media": [],
+  "video_insights": [],
+  "errors": [],
+  "case_timeline": []
+} included (address, amounts, dates, admissions, notices, proposals/estimates).
+- Legal analysis is narrative; timelines/requirements stated plainly where applicable.
+- Lien/encumbrance impacts and insurance coordination addressed when present.
+- Next steps use A./B./C. narrative paragraphs with no sublabels.
+- No extra/unlisted causes of action or headings added.
+- Dates/currency formatted correctly; headings and bullets follow the rules above.
 
 **Example Letter for Style Reference:**
 Subject: Legal Review and Recommended Next Steps – LLW Construction, Inc. Dispute

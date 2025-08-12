@@ -82,7 +82,7 @@ master_prompt: |
 
   8. **Signature:**
      **Sincerely,**
-     {firm_name | default:"Bernhardt Riley PLLC"}
+     {analysis.firm_name}
 
   Optional Appendix (include only if {analysis.include_appendix} is true or clearly helpful):
   **Document Review Appendix**

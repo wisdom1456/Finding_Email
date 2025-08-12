@@ -10,8 +10,186 @@
   },
   "actual_costs": {
     "total_actual_cost": 0.0,
-    "service_costs": [],
-    "document_analysis_costs": [],
+    "service_costs": [
+      {
+        "service_name": "OpenAI GPT-4o",
+        "cost": 0.0,
+        "details": null,
+        "operation_type": "document_analysis",
+        "units_consumed": 0,
+        "unit_type": "tokens",
+        "rate_per_unit": 5e-06,
+        "total_cost": 0.0,
+        "file_name": "Devlin-LLW_Emails_a753c807.pdf"
+      },
+      {
+        "service_name": "OpenAI GPT-4o",
+        "cost": 0.0,
+        "details": null,
+        "operation_type": "document_analysis",
+        "units_consumed": 0,
+        "unit_type": "tokens",
+        "rate_per_unit": 5e-06,
+        "total_cost": 0.0,
+        "file_name": "Devlin_-_Pictures_of_How_House_was_Left_by_Contractor_6b60d838.pdf"
+      },
+      {
+        "service_name": "OpenAI GPT-4o",
+        "cost": 0.0,
+        "details": null,
+        "operation_type": "document_analysis",
+        "units_consumed": 0,
+        "unit_type": "tokens",
+        "rate_per_unit": 5e-06,
+        "total_cost": 0.0,
+        "file_name": "Notice_to_Owner_06a2f165.pdf"
+      },
+      {
+        "service_name": "OpenAI GPT-4o",
+        "cost": 0.0,
+        "details": null,
+        "operation_type": "document_analysis",
+        "units_consumed": 0,
+        "unit_type": "tokens",
+        "rate_per_unit": 5e-06,
+        "total_cost": 0.0,
+        "file_name": "Devlin_-_Project_Management_Proposal_-_Hoffar_Holdings_LLC_6.25.25__1__08229577.pdf"
+      },
+      {
+        "service_name": "OpenAI GPT-4o",
+        "cost": 0.0,
+        "details": null,
+        "operation_type": "document_analysis",
+        "units_consumed": 0,
+        "unit_type": "tokens",
+        "rate_per_unit": 5e-06,
+        "total_cost": 0.0,
+        "file_name": "Devlin_-_Rebuild_Receipts_-_May___June_da9e536f.pdf"
+      },
+      {
+        "service_name": "OpenAI GPT-4o",
+        "cost": 0.0,
+        "details": null,
+        "operation_type": "document_analysis",
+        "units_consumed": 0,
+        "unit_type": "tokens",
+        "rate_per_unit": 5e-06,
+        "total_cost": 0.0,
+        "file_name": "Devlin_-_Contract_for_Construction_-_Highlighted_w_Items_not_Completed_6.9.25_9b0f9d02.pdf"
+      },
+      {
+        "service_name": "OpenAI GPT-4o",
+        "cost": 0.0,
+        "details": null,
+        "operation_type": "document_analysis",
+        "units_consumed": 0,
+        "unit_type": "tokens",
+        "rate_per_unit": 5e-06,
+        "total_cost": 0.0,
+        "file_name": "Devlin_-_LLW_Text_Thread_810ebe9d.pdf"
+      },
+      {
+        "service_name": "OpenAI GPT-4o",
+        "cost": 0.0,
+        "details": null,
+        "operation_type": "document_analysis",
+        "units_consumed": 0,
+        "unit_type": "tokens",
+        "rate_per_unit": 5e-06,
+        "total_cost": 0.0,
+        "file_name": "Devlin_-_Certified_Letter_for_Notice_to_Owner_981b8ec0.pdf"
+      }
+    ],
+    "document_analysis_costs": [
+      {
+        "service_name": "OpenAI GPT-4o",
+        "cost": 0.0,
+        "details": null,
+        "operation_type": "document_analysis",
+        "units_consumed": 0,
+        "unit_type": "tokens",
+        "rate_per_unit": 5e-06,
+        "total_cost": 0.0,
+        "file_name": "Devlin-LLW_Emails_a753c807.pdf"
+      },
+      {
+        "service_name": "OpenAI GPT-4o",
+        "cost": 0.0,
+        "details": null,
+        "operation_type": "document_analysis",
+        "units_consumed": 0,
+        "unit_type": "tokens",
+        "rate_per_unit": 5e-06,
+        "total_cost": 0.0,
+        "file_name": "Devlin_-_Pictures_of_How_House_was_Left_by_Contractor_6b60d838.pdf"
+      },
+      {
+        "service_name": "OpenAI GPT-4o",
+        "cost": 0.0,
+        "details": null,
+        "operation_type": "document_analysis",
+        "units_consumed": 0,
+        "unit_type": "tokens",
+        "rate_per_unit": 5e-06,
+        "total_cost": 0.0,
+        "file_name": "Notice_to_Owner_06a2f165.pdf"
+      },
+      {
+        "service_name": "OpenAI GPT-4o",
+        "cost": 0.0,
+        "details": null,
+        "operation_type": "document_analysis",
+        "units_consumed": 0,
+        "unit_type": "tokens",
+        "rate_per_unit": 5e-06,
+        "total_cost": 0.0,
+        "file_name": "Devlin_-_Project_Management_Proposal_-_Hoffar_Holdings_LLC_6.25.25__1__08229577.pdf"
+      },
+      {
+        "service_name": "OpenAI GPT-4o",
+        "cost": 0.0,
+        "details": null,
+        "operation_type": "document_analysis",
+        "units_consumed": 0,
+        "unit_type": "tokens",
+        "rate_per_unit": 5e-06,
+        "total_cost": 0.0,
+        "file_name": "Devlin_-_Rebuild_Receipts_-_May___June_da9e536f.pdf"
+      },
+      {
+        "service_name": "OpenAI GPT-4o",
+        "cost": 0.0,
+        "details": null,
+        "operation_type": "document_analysis",
+        "units_consumed": 0,
+        "unit_type": "tokens",
+        "rate_per_unit": 5e-06,
+        "total_cost": 0.0,
+        "file_name": "Devlin_-_Contract_for_Construction_-_Highlighted_w_Items_not_Completed_6.9.25_9b0f9d02.pdf"
+      },
+      {
+        "service_name": "OpenAI GPT-4o",
+        "cost": 0.0,
+        "details": null,
+        "operation_type": "document_analysis",
+        "units_consumed": 0,
+        "unit_type": "tokens",
+        "rate_per_unit": 5e-06,
+        "total_cost": 0.0,
+        "file_name": "Devlin_-_LLW_Text_Thread_810ebe9d.pdf"
+      },
+      {
+        "service_name": "OpenAI GPT-4o",
+        "cost": 0.0,
+        "details": null,
+        "operation_type": "document_analysis",
+        "units_consumed": 0,
+        "unit_type": "tokens",
+        "rate_per_unit": 5e-06,
+        "total_cost": 0.0,
+        "file_name": "Devlin_-_Certified_Letter_for_Notice_to_Owner_981b8ec0.pdf"
+      }
+    ],
     "media_processing_costs": []
   },
   "cost_variance": null,

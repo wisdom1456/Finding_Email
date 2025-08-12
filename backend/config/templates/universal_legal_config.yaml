@@ -126,7 +126,7 @@ template_path: "backend/assets/templates"
 openai:
   model: "gpt-4o"
   temperature: 0.3
-  max_tokens: 4000
+  max_tokens: 12000
   timeout: 30
   max_retries: 2
 

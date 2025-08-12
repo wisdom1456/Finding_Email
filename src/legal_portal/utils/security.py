@@ -26,6 +26,7 @@ ALLOWED_EXTENSIONS = {
     ".docx",
     ".txt",
     ".rtf",
+    ".eml",
     ".jpg",
     ".jpeg",
     ".png",
@@ -44,6 +45,9 @@ ALLOWED_MIME_TYPES = {
     "text/plain",
     "application/rtf",
     "text/rtf",
+    # Email files
+    "message/rfc822",
+    "text/plain",  # Some .eml files may be detected as text/plain
     # Images
     "image/jpeg",
     "image/png",
@@ -63,9 +67,10 @@ MIME_EXTENSION_MAP = {
     "application/pdf": [".pdf"],
     "application/msword": [".doc"],
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document": [".docx"],
-    "text/plain": [".txt"],
+    "text/plain": [".txt", ".eml"],  # .eml files may be detected as text/plain
     "application/rtf": [".rtf"],
     "text/rtf": [".rtf"],
+    "message/rfc822": [".eml"],  # Standard MIME type for .eml files
     "image/jpeg": [".jpg", ".jpeg"],
     "image/png": [".png"],
     "audio/mpeg": [".mp3"],
@@ -407,3 +412,51 @@ __all__ = [
     "validate_file_size",
     "validate_total_upload_size",
 ]
+
+
+
+import json
+from pathlib import Path
+import streamlit as st
+
+def check_pin():
+    """Checks if the user has entered a valid PIN."""
+    pins_file = Path(__file__).parent.parent / "config" / "pins.json"
+    if not pins_file.exists():
+        st.error("PIN file not found. Please contact an administrator.")
+        return False
+
+    with open(pins_file, "r") as f:
+        pins_data = json.load(f)
+        allowed_pins = pins_data.get("pins", [])
+
+    if "pin_approved" not in st.session_state:
+        st.session_state["pin_approved"] = False
+
+    if st.session_state["pin_approved"]:
+        return True
+
+    if "pin_attempts" not in st.session_state:
+        st.session_state["pin_attempts"] = 0
+    
+    if st.session_state["pin_attempts"] >= 3:
+        st.error("You have exceeded the maximum number of PIN attempts.")
+        return False
+
+    st.header("PIN Required")
+    user_pin = st.text_input("Please enter your PIN to continue:", type="password")
+
+    if user_pin:
+        if user_pin in allowed_pins:
+            st.session_state["pin_approved"] = True
+            st.rerun()
+        else:
+            st.session_state["pin_attempts"] += 1
+            remaining_attempts = 3 - st.session_state["pin_attempts"]
+            if remaining_attempts > 0:
+                st.warning(f"Invalid PIN. You have {remaining_attempts} attempts remaining.")
+            else:
+                st.error("You have exceeded the maximum number of PIN attempts.")
+            return False
+    
+    return False

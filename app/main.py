@@ -12,6 +12,7 @@ from legal_portal.core.auth import AuthManager, UserRole
 from legal_portal.core.oauth import OAuthManager
 from legal_portal.services.main_processor import process_case_documents
 from legal_portal.utils.helpers import handle_file_uploads
+from legal_portal.utils.security import check_pin
 
 # Enhanced observability imports
 from legal_portal.utils.logging_config import (
@@ -429,6 +430,9 @@ def show_admin_panel():
 @trace("application.main")
 def main():
     """Run the main Streamlit application with comprehensive observability."""
+    if not check_pin():
+        return  # Stop execution if PIN is not valid
+    
     # Application startup metrics
     # app_start_time = time.time()  # Unused variable removed
 

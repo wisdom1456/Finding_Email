@@ -53,7 +53,7 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
 EXPOSE $PORT
 
 # Run the Streamlit application with production optimizations
-CMD streamlit run app.py \
+CMD streamlit run app/main.py \
     --server.port=$PORT \
     --server.address=0.0.0.0 \
     --server.headless=true \

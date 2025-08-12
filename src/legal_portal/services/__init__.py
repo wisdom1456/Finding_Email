@@ -1,5 +1,3 @@
-"""
-Legal Portal Package
-"""
+"""Legal Portal Package."""
 
 __version__ = "1.0.0"

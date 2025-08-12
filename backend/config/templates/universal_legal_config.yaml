@@ -1,0 +1,54 @@
+# Universal Legal Configuration for Document Analysis Portal
+# This configuration supports the single master prompt architecture
+
+# Master prompt for direct HTML generation
+master_prompt: |
+  You are a legal expert generating a professional findings letter for a client. 
+  
+  Client: {client_name}
+  Case Type: {case_type}
+  
+  Based on the following case analysis data, generate a complete HTML findings letter:
+  
+  {analysis}
+  
+  Requirements:
+  - Generate complete HTML document with proper structure
+  - Include professional legal language appropriate for client communication
+  - Summarize key findings, legal analysis, and recommendations
+  - Use clear headings and organized sections
+  - Include factual summary, legal analysis, strengths, challenges, and next steps
+  - Ensure the content is legally sound and professional
+  
+  Return only the complete HTML document, ready for client delivery.
+
+# Template directory configuration
+template_path: "backend/assets/templates"
+
+# OpenAI Configuration
+openai:
+  model: "gpt-4o"
+  temperature: 0.3
+  max_tokens: 4000
+  timeout: 30
+  max_retries: 2
+
+# Document processing settings
+document_processing:
+  max_file_size_mb: 10
+  supported_formats:
+    - pdf
+    - docx
+    - doc
+    - txt
+    - eml
+    - png
+    - jpg
+    - jpeg
+
+# Output configuration
+output:
+  default_directory: "validation_output"
+  file_formats:
+    - html
+    - json

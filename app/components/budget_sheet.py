@@ -1,5 +1,4 @@
-"""
-Budget Sheet Component for Legal Document Analysis Portal
+"""Budget Sheet Component for Legal Document Analysis Portal.
 
 This component provides Streamlit UI elements for displaying cost summaries,
 budget analysis, and export functionality for operational analysis.
@@ -15,18 +14,15 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
-
-from utils.data_models import ServiceCost
-from utils.cost_exporter import CostExporter
-
+from legal_portal.core.data_models import ServiceCost
+from legal_portal.utils.cost_exporter import CostExporter
 
 if TYPE_CHECKING:
-    from utils.data_models import ActualCosts, CostSummary
+    from legal_portal.core.data_models import ActualCosts, CostSummary
 
 
 class BudgetSheetComponent:
-    """
-    Streamlit component for budget sheet display and export.
+    """Streamlit component for budget sheet display and export.
 
     Provides comprehensive cost visualization, analysis, and export capabilities
     for legal case budget monitoring and operational insights.
@@ -37,11 +33,12 @@ class BudgetSheetComponent:
         self.cost_exporter = CostExporter()
 
     def display_budget_summary(self, cost_summary: CostSummary) -> None:
-        """
-        Display budget summary in Streamlit interface.
+        """Display budget summary in Streamlit interface.
 
         Args:
+        ----
             cost_summary: CostSummary object containing budget data
+
         """
         st.header("📊 Budget Summary")
 
@@ -64,11 +61,7 @@ class BudgetSheetComponent:
                 )
 
             with col3:
-                variance = (
-                    float(cost_summary.cost_variance)
-                    if cost_summary.cost_variance
-                    else 0.0
-                )
+                variance = float(cost_summary.cost_variance) if cost_summary.cost_variance else 0.0
                 variance_pct = cost_summary.cost_variance_percentage or 0.0
 
                 st.metric(
@@ -111,19 +104,18 @@ class BudgetSheetComponent:
             self._display_variance_analysis(cost_summary)
 
     def display_cost_breakdown_chart(self, cost_summary: CostSummary) -> None:
-        """
-        Display cost breakdown as interactive charts.
+        """Display cost breakdown as interactive charts.
 
         Args:
+        ----
             cost_summary: CostSummary object to visualize
+
         """
         st.header("📈 Cost Breakdown Analysis")
 
         # Service-level breakdown
         if cost_summary.actual_costs:
-            service_breakdown = self._generate_service_breakdown(
-                cost_summary.actual_costs
-            )
+            service_breakdown = self._generate_service_breakdown(cost_summary.actual_costs)
 
             if service_breakdown:
                 # Pie chart for service distribution
@@ -141,9 +133,7 @@ class BudgetSheetComponent:
                         title="Cost Distribution by Service",
                         color_discrete_sequence=px.colors.qualitative.Set3,
                     )
-                    fig_pie.update_traces(
-                        textposition="inside", textinfo="percent+label"
-                    )
+                    fig_pie.update_traces(textposition="inside", textinfo="percent+label")
                     fig_pie.update_layout(showlegend=True, height=400)
                     st.plotly_chart(fig_pie, use_container_width=True)
 
@@ -174,11 +164,12 @@ class BudgetSheetComponent:
             self._display_cost_comparison_chart(cost_summary)
 
     def create_export_buttons(self, cost_summary: CostSummary) -> None:
-        """
-        Create export buttons for different formats.
+        """Create export buttons for different formats.
 
         Args:
+        ----
             cost_summary: CostSummary object to export
+
         """
         st.header("📥 Export Budget Report")
 
@@ -205,9 +196,7 @@ class BudgetSheetComponent:
                 )
 
         with col3:
-            if st.button(
-                "🌐 Export HTML", help="Export professional HTML budget report"
-            ):
+            if st.button("🌐 Export HTML", help="Export professional HTML budget report"):
                 html_data = self.cost_exporter.generate_budget_report_html(cost_summary)
                 st.download_button(
                     label="Download HTML",
@@ -227,11 +216,12 @@ class BudgetSheetComponent:
                 )
 
     def display_variance_analysis(self, cost_summary: CostSummary) -> None:
-        """
-        Display variance analysis with visual indicators.
+        """Display variance analysis with visual indicators.
 
         Args:
+        ----
             cost_summary: CostSummary object containing variance data
+
         """
         if cost_summary.cost_variance is None:
             return
@@ -259,11 +249,12 @@ class BudgetSheetComponent:
                 st.error(f"• {risk}")
 
     def display_detailed_cost_tables(self, cost_summary: CostSummary) -> None:
-        """
-        Display detailed cost breakdown tables.
+        """Display detailed cost breakdown tables.
 
         Args:
+        ----
             cost_summary: CostSummary object to display
+
         """
         st.header("📋 Detailed Cost Breakdown")
 
@@ -341,9 +332,7 @@ class BudgetSheetComponent:
 
     def _generate_service_breakdown(self, actual_costs: ActualCosts) -> dict[str, Any]:
         """Generate service-wise cost breakdown."""
-        all_costs = (
-            actual_costs.document_analysis_costs + actual_costs.media_processing_costs
-        )
+        all_costs = actual_costs.document_analysis_costs + actual_costs.media_processing_costs
 
         service_totals = {}
         for cost in all_costs:
@@ -354,7 +343,7 @@ class BudgetSheetComponent:
                     "operations": set(),
                 }
 
-            service_totals[cost.service_name]["total_cost"] += cost.total_cost
+            service_totals[cost.service_name]["total_cost"] += Decimal(str(cost.total_cost))
             service_totals[cost.service_name]["units_consumed"] += cost.units_consumed
             service_totals[cost.service_name]["operations"].add(cost.operation_type)
 
@@ -365,9 +354,7 @@ class BudgetSheetComponent:
                 "total_cost": float(data["total_cost"]),
                 "units_consumed": data["units_consumed"],
                 "operations": list(data["operations"]),
-                "percentage": float(
-                    (data["total_cost"] / actual_costs.total_actual_cost) * 100
-                )
+                "percentage": float((data["total_cost"] / actual_costs.total_actual_cost) * 100)
                 if actual_costs.total_actual_cost > 0
                 else 0.0,
             }
@@ -377,9 +364,7 @@ class BudgetSheetComponent:
     def _display_category_breakdown(self, actual_costs: ActualCosts) -> None:
         """Display document vs media cost breakdown."""
         doc_cost = sum(cost.total_cost for cost in actual_costs.document_analysis_costs)
-        media_cost = sum(
-            cost.total_cost for cost in actual_costs.media_processing_costs
-        )
+        media_cost = sum(cost.total_cost for cost in actual_costs.media_processing_costs)
         total_cost = doc_cost + media_cost
 
         if total_cost > 0:
@@ -464,11 +449,7 @@ class BudgetSheetComponent:
             df_costs,
             hide_index=True,
             use_container_width=True,
-            column_config={
-                "Total Cost": st.column_config.NumberColumn(
-                    "Total Cost", format="$%.4f"
-                )
-            },
+            column_config={"Total Cost": st.column_config.NumberColumn("Total Cost", format="$%.4f")},
         )
 
         # Total

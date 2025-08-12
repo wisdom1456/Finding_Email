@@ -1,5 +1,4 @@
-"""
-Configuration Management Module
+"""Configuration Management Module.
 
 This module provides a type-safe, centralized configuration system using Pydantic.
 All environment variables are defined here with proper validation and documentation.
@@ -7,21 +6,18 @@ All environment variables are defined here with proper validation and documentat
 
 from __future__ import annotations
 
-import os
 from typing import Dict, Optional, Union
 
 from dotenv import load_dotenv
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings
 
-
 # Load environment variables from .env file
 load_dotenv()
 
 
 class Settings(BaseSettings):
-    """
-    Application settings loaded from environment variables.
+    """Application settings loaded from environment variables.
 
     This class provides type-safe access to all configuration values
     with automatic validation and helpful error messages.
@@ -139,14 +135,13 @@ class Settings(BaseSettings):
     @field_validator("google_application_credentials")
     @classmethod
     def validate_credentials_file(cls, v, values):
-        """
-        Validate that the Google credentials file exists only when absolutely necessary.
+        """Validate that the Google credentials file exists only when absolutely necessary.
         This validator is now very lenient to allow application startup without credentials.
         """
         # Skip validation if no value provided
         if not v:
             return v
-            
+
         # Skip validation if file doesn't exist - we'll handle this at runtime when needed
         # This allows the application to start up without requiring the credentials file
         return v
@@ -181,14 +176,15 @@ settings = Settings()
 
 
 def get_settings() -> Settings:
-    """
-    Get the global settings instance.
+    """Get the global settings instance.
 
     This function provides a way to access settings that can be easily
     mocked in tests or replaced with different configurations.
 
-    Returns:
+    Returns
+    -------
         Settings: The configured settings instance
+
     """
     return settings
 
@@ -203,22 +199,23 @@ def get_openai_api_key() -> str:
     """Get the OpenAI API key with validation."""
     if not settings.openai_api_key:
         msg = (
-            "OPENAI_API_KEY is required but not set. "
-            "Please check your .env file or environment variables."
+            "OPENAI_API_KEY is required but not set. " "Please check your .env file or environment variables."
         )
         raise ValueError(msg)
     return settings.openai_api_key
 
 
 def get_google_cloud_config() -> tuple[str, str, str]:
-    """
-    Get Google Cloud configuration for video processing.
+    """Get Google Cloud configuration for video processing.
 
-    Returns:
+    Returns
+    -------
         tuple: (project_id, bucket_name, credentials_path)
 
-    Raises:
+    Raises
+    ------
         ValueError: If Google Cloud configuration is incomplete
+
     """
     if not settings.has_google_cloud_config:
         missing = []
@@ -243,11 +240,12 @@ def get_google_cloud_config() -> tuple[str, str, str]:
 
 
 def get_openai_config() -> Dict[str, Union[float, int, str]]:
-    """
-    Get OpenAI configuration for content generation.
+    """Get OpenAI configuration for content generation.
 
-    Returns:
+    Returns
+    -------
         dict: OpenAI configuration parameters
+
     """
     return {
         "model": settings.openai_model,

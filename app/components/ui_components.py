@@ -1,6 +1,4 @@
-"""
-UI Components for the Legal Document Analysis Portal.
-"""
+"""UI components for the Legal Document Analysis Portal."""
 
 from __future__ import annotations
 
@@ -11,7 +9,7 @@ import streamlit.components.v1 as components
 
 
 def case_information_form():
-    """Renders the case information form in the sidebar."""
+    """Render the case information form in the sidebar."""
     st.sidebar.header("Case Information")
 
     # Test Data Button
@@ -37,7 +35,7 @@ def case_information_form():
 
 
 def load_devlin_test_case():
-    """Loads the Devlin test case data and files - manual analysis start required."""
+    """Load the Devlin test case data and files (manual analysis start required)."""
     try:
         # Set default case information
         st.session_state.case_info = {
@@ -128,9 +126,7 @@ def load_devlin_test_case():
 
         if uploaded_files:
             st.session_state.uploaded_files = uploaded_files
-            st.sidebar.success(
-                f"✅ Loaded {len(uploaded_files)} test files and case information"
-            )
+            st.sidebar.success(f"✅ Loaded {len(uploaded_files)} test files and case information")
             st.sidebar.info("📋 Ready for analysis - click 'Start Analysis' when ready")
         else:
             st.sidebar.error("No supported files found in test directory")
@@ -140,7 +136,7 @@ def load_devlin_test_case():
 
 
 def file_upload_section():
-    """Handles the file upload section, allowing folder uploads."""
+    """Handle the file upload section, allowing folder uploads."""
     st.header("Upload Case Folder")
     uploaded_files = st.file_uploader(
         "Select a folder or multiple files (TXT, PDF, DOCX, DOC, PNG, JPG, EML files)",
@@ -161,34 +157,33 @@ def file_upload_section():
 
 
 def results_display_section():
-    """Displays the final results and download links."""
+    """Display the final results and download links."""
     if st.session_state.final_results:
         st.header("Results")
 
         # Display cost summary first if available
         if st.session_state.cost_summary:
-            from components.budget_sheet import BudgetSheetComponent
+            from app.components.budget_sheet import BudgetSheetComponent
 
             budget_component = BudgetSheetComponent()
 
             # Create tabs for results organization
-            tab1, tab2, tab3 = st.tabs(
-                ["📄 Documents", "💰 Cost Analysis", "📊 Detailed Breakdown"]
-            )
+            tab1, tab2, tab3 = st.tabs(["📄 Documents", "💰 Cost Analysis", "📊 Detailed Breakdown"])
 
             with tab1:
                 # Check if we have the new two-document format
                 if st.session_state.main_letter and st.session_state.appendix:
                     # Display the main findings letter inline using components.html for complete HTML documents
                     st.subheader("Findings Letter")
-                    
+
                     # Clean the letter content to remove citations for display
-                    from services.citation_tracking_service import (
+                    from legal_portal.services.citation_tracking_service import (
                         CitationTrackingService,
                     )
+
                     citation_service = CitationTrackingService()
                     clean_letter = citation_service.remove_citations_from_letter(st.session_state.main_letter)
-                    
+
                     # Ensure proper styling for dark mode compatibility
                     styled_main_letter = f"""
                     <div style="background-color: white; color: black; padding: 20px; border-radius: 5px;">
@@ -196,9 +191,7 @@ def results_display_section():
                     </div>
                     """
 
-                    components.html(
-                        styled_main_letter, height=800, scrolling=True
-                    )
+                    components.html(styled_main_letter, height=800, scrolling=True)
 
                     # Provide separate download buttons for all documents
                     st.subheader("Download Options")
@@ -211,30 +204,25 @@ def results_display_section():
             with tab2:
                 # Display budget summary and charts
                 budget_component.display_budget_summary(st.session_state.cost_summary)
-                budget_component.display_cost_breakdown_chart(
-                    st.session_state.cost_summary
-                )
-                budget_component.display_variance_analysis(
-                    st.session_state.cost_summary
-                )
+                budget_component.display_cost_breakdown_chart(st.session_state.cost_summary)
+                budget_component.display_variance_analysis(st.session_state.cost_summary)
 
             with tab3:
                 # Display detailed cost tables and export options
-                budget_component.display_detailed_cost_tables(
-                    st.session_state.cost_summary
-                )
+                budget_component.display_detailed_cost_tables(st.session_state.cost_summary)
                 budget_component.create_export_buttons(st.session_state.cost_summary)
 
         # Original display without cost tracking
         elif st.session_state.main_letter and st.session_state.appendix:
             # Display the main findings letter inline using components.html for complete HTML documents
             st.subheader("Findings Letter")
-            
+
             # Clean the letter content to remove citations for display
-            from services.citation_tracking_service import CitationTrackingService
+            from legal_portal.services.citation_tracking_service import CitationTrackingService
+
             citation_service = CitationTrackingService()
             clean_letter = citation_service.remove_citations_from_letter(st.session_state.main_letter)
-            
+
             # Ensure proper styling for dark mode compatibility
             styled_main_letter = f"""
             <div style="background-color: white; color: black; padding: 20px; border-radius: 5px;">
@@ -260,12 +248,13 @@ def results_display_section():
 
 
 def _display_download_buttons(col1, col2, col3, col4):
-    """Helper function to display download buttons for the four document types."""
+    """Display download buttons for the four document types."""
     with col1:
         # Download button for main findings letter as HTML
         try:
             # Clean the letter content to remove citations for the standard download
-            from services.citation_tracking_service import CitationTrackingService
+            from legal_portal.services.citation_tracking_service import CitationTrackingService
+
             citation_service = CitationTrackingService()
             clean_letter = citation_service.remove_citations_from_letter(st.session_state.main_letter)
             main_letter_bytes = clean_letter.encode("utf-8")
@@ -276,12 +265,8 @@ def _display_download_buttons(col1, col2, col3, col4):
                 st.session_state.final_results.intake_analysis
                 and st.session_state.final_results.intake_analysis.client_name
             ):
-                client_name_raw = (
-                    st.session_state.final_results.intake_analysis.client_name
-                )
-                client_name = "".join(
-                    c for c in client_name_raw if c.isalnum() or c in " _-"
-                ).rstrip()
+                client_name_raw = st.session_state.final_results.intake_analysis.client_name
+                client_name = "".join(c for c in client_name_raw if c.isalnum() or c in " _-").rstrip()
 
             st.download_button(
                 label="📧 Findings Letter",
@@ -304,12 +289,8 @@ def _display_download_buttons(col1, col2, col3, col4):
                 st.session_state.final_results.intake_analysis
                 and st.session_state.final_results.intake_analysis.client_name
             ):
-                client_name_raw = (
-                    st.session_state.final_results.intake_analysis.client_name
-                )
-                client_name = "".join(
-                    c for c in client_name_raw if c.isalnum() or c in " _-"
-                ).rstrip()
+                client_name_raw = st.session_state.final_results.intake_analysis.client_name
+                client_name = "".join(c for c in client_name_raw if c.isalnum() or c in " _-").rstrip()
 
             st.download_button(
                 label="📎 Document Appendix",
@@ -327,9 +308,7 @@ def _display_download_buttons(col1, col2, col3, col4):
             from utils import generate_case_analysis_html
 
             # Generate the HTML case analysis document
-            case_analysis_html = generate_case_analysis_html(
-                st.session_state.final_results
-            )
+            case_analysis_html = generate_case_analysis_html(st.session_state.final_results)
             case_analysis_bytes = case_analysis_html.encode("utf-8")
 
             # Get client name for filename
@@ -338,12 +317,8 @@ def _display_download_buttons(col1, col2, col3, col4):
                 st.session_state.final_results.intake_analysis
                 and st.session_state.final_results.intake_analysis.client_name
             ):
-                client_name_raw = (
-                    st.session_state.final_results.intake_analysis.client_name
-                )
-                client_name = "".join(
-                    c for c in client_name_raw if c.isalnum() or c in " _-"
-                ).rstrip()
+                client_name_raw = st.session_state.final_results.intake_analysis.client_name
+                client_name = "".join(c for c in client_name_raw if c.isalnum() or c in " _-").rstrip()
 
             st.download_button(
                 label="📄 Case Analysis",
@@ -358,13 +333,12 @@ def _display_download_buttons(col1, col2, col3, col4):
     with col4:
         # Download button for findings letter with citations
         try:
-            from services.citation_tracking_service import CitationTrackingService
-            
+            from legal_portal.services.citation_tracking_service import CitationTrackingService
+
             # Create citation service and generate letter with citations
             citation_service = CitationTrackingService()
             findings_with_citations = citation_service.generate_findings_letter_with_citations(
-                st.session_state.main_letter,
-                st.session_state.final_results
+                st.session_state.main_letter, st.session_state.final_results
             )
             citations_bytes = findings_with_citations.encode("utf-8")
 
@@ -374,12 +348,8 @@ def _display_download_buttons(col1, col2, col3, col4):
                 st.session_state.final_results.intake_analysis
                 and st.session_state.final_results.intake_analysis.client_name
             ):
-                client_name_raw = (
-                    st.session_state.final_results.intake_analysis.client_name
-                )
-                client_name = "".join(
-                    c for c in client_name_raw if c.isalnum() or c in " _-"
-                ).rstrip()
+                client_name_raw = st.session_state.final_results.intake_analysis.client_name
+                client_name = "".join(c for c in client_name_raw if c.isalnum() or c in " _-").rstrip()
 
             st.download_button(
                 label="📑 Findings Letter with Citations",

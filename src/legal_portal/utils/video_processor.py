@@ -49,7 +49,7 @@ class VideoProcessor:
         temp_folder: str = "temp-videos",
         skip_initialization: bool = False,
     ) -> None:
-        from config.default import get_settings
+        from legal_portal.config.default import get_settings
 
         settings = get_settings()
 

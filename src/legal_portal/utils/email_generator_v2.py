@@ -30,10 +30,10 @@ from legal_portal.services.text_processing_service import TextProcessingService
 # Import performance optimization modules
 from legal_portal.utils.api_optimizer import OpenAIOptimizer
 from legal_portal.utils.cache_manager import CacheManager, DocumentCache
-from legal_portal.utils.logging_config import setup_logging
+from legal_portal.utils.logging_config import get_module_logger
 from openai import OpenAI
 
-logger = setup_logging("email_generator_v2")
+logger = get_module_logger(__name__)
 
 
 logger = logging.getLogger(__name__)

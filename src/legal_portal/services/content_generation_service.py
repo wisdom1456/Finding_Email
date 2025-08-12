@@ -77,11 +77,52 @@ class ContentGenerationService:
             Complete generated document structure with HTML content
 
         """
+        import json
+        from datetime import datetime
+
+        # DEBUG LOG: Entry point for hypothesis #6
+        entry_debug_log = {
+            "module": "ContentGenerationService",
+            "method": "generate_email_and_analysis_docs",
+            "hypothesis_id": "service_call_dependency",
+            "stage": "entry",
+            "timestamp": datetime.now().isoformat(),
+            "case_analysis_provided": case_analysis is not None,
+            "json_processing_service_available": self.json_processing_service is not None,
+            "config_provided": config is not None,
+        }
+        logger.info(f"HYPOTHESIS_DEBUG: {json.dumps(entry_debug_log)}")
+
         logger.info("Starting email and analysis document generation with new architecture")
 
         try:
+            # DEBUG LOG: Before calling JsonProcessingService for hypothesis #6
+            before_service_call_log = {
+                "module": "ContentGenerationService",
+                "method": "generate_email_and_analysis_docs",
+                "hypothesis_id": "service_call_dependency",
+                "stage": "before_json_processing_service_call",
+                "timestamp": datetime.now().isoformat(),
+                "service_method": "generate_html_letter",
+                "case_analysis_valid": case_analysis is not None,
+            }
+            logger.info(f"HYPOTHESIS_DEBUG: {json.dumps(before_service_call_log)}")
+
             # Use the refactored JsonProcessingService to generate HTML directly
             html_content = self.json_processing_service.generate_html_letter(case_analysis)
+
+            # DEBUG LOG: After JsonProcessingService call for hypothesis #6
+            after_service_call_log = {
+                "module": "ContentGenerationService",
+                "method": "generate_email_and_analysis_docs",
+                "hypothesis_id": "service_call_dependency",
+                "stage": "after_json_processing_service_call",
+                "timestamp": datetime.now().isoformat(),
+                "html_content_received": html_content is not None,
+                "html_content_length": len(html_content) if html_content else 0,
+                "html_content_type": type(html_content).__name__,
+            }
+            logger.info(f"HYPOTHESIS_DEBUG: {json.dumps(after_service_call_log)}")
 
             if not html_content:
                 raise ValueError("HTML generation returned empty content")

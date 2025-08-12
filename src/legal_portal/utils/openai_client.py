@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import json
 
-from legal_portal.utils.logging_config import setup_logging
+from legal_portal.utils.logging_config import get_module_logger
 
-logger = setup_logging("openai_client")
+logger = get_module_logger(__name__)
 
 
 # Add logging for debugging

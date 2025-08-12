@@ -1,14 +1,14 @@
 cookie:
   expiry_days: 30
-  key: -N8AGMikvN1huMz-QRdnqKR4RV2ecBo8YioSdOKtKrM
+  key: qEcJpc_Nj4jGgfk2I8BPMTsCT2qBdXqmFbkZm11WJCE
   name: legal_portal_auth
 credentials:
   usernames:
     admin:
       email: admin@example.com
       name: Administrator
-      password: $2b$12$SbjvZPnZcoM2Uf.sMHB42ecNKqdN2eNJYrHROu9/tlSkpimnIgowK
+      password: $2b$12$zlvJ8dxGuYkYV5TGhNtWYOpbyxBC5Ko0XWWxCNpzVhqVJo/jPvS8G
       role: admin
-jwt_secret: n_2dNu84pgvEHQhBy99pF4Mfh4EY2TiJre3XZMbIgXk
+jwt_secret: lZsHGZfM4_BE5ZWyhwIK4cx_GmeYiQER43JubRyuBPk
 preauthorized:
   emails: []

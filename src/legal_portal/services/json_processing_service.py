@@ -4,6 +4,8 @@ import os
 import re
 from typing import Any, Dict, Optional
 
+import markdown2
+from legal_portal.config.default import get_openai_config
 from legal_portal.core.data_models import CaseAnalysisResult
 from legal_portal.services.citation_tracking_service import CitationTrackingService
 from legal_portal.utils.logging_config import get_module_logger
@@ -21,8 +23,6 @@ from openai import (
     UnprocessableEntityError,
 )
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_fixed
-
-from config.default import get_openai_config
 
 logger = get_module_logger(__name__)
 
@@ -57,6 +57,23 @@ class JsonProcessingService:
             Generated HTML letter content
 
         """
+        import json
+        from datetime import datetime
+
+        # DEBUG LOG: Entry point for hypothesis #1
+        entry_debug_log = {
+            "module": "JsonProcessingService",
+            "method": "generate_html_letter",
+            "hypothesis_id": "exception_handling_fallback",
+            "stage": "entry",
+            "timestamp": datetime.now().isoformat(),
+            "analysis_provided": analysis is not None,
+            "has_intake_analysis": analysis.intake_analysis is not None if analysis else False,
+            "has_legal_assessment": analysis.legal_assessment is not None if analysis else False,
+            "config_available": self.config is not None,
+        }
+        logger.info(f"HYPOTHESIS_DEBUG: {json.dumps(entry_debug_log)}")
+
         try:
             logger.info("Starting HTML letter generation using master prompt")
 
@@ -98,17 +115,101 @@ class JsonProcessingService:
 
             # Get the master prompt from configuration
             master_prompt = self.config.get("master_prompt")
+
+            # DEBUG LOG: Master prompt configuration check for hypothesis #1
+            config_debug_log = {
+                "module": "JsonProcessingService",
+                "method": "generate_html_letter",
+                "hypothesis_id": "exception_handling_fallback",
+                "stage": "master_prompt_config_check",
+                "timestamp": datetime.now().isoformat(),
+                "master_prompt_exists": master_prompt is not None,
+                "master_prompt_length": len(master_prompt) if master_prompt else 0,
+                "config_keys": list(self.config.keys()) if self.config else [],
+                "config_available": self.config is not None,
+            }
+            logger.info(f"HYPOTHESIS_DEBUG: {json.dumps(config_debug_log)}")
+
             if not master_prompt:
+                # DEBUG LOG: Missing master prompt - this will trigger fallback
+                missing_prompt_log = {
+                    "module": "JsonProcessingService",
+                    "method": "generate_html_letter",
+                    "hypothesis_id": "exception_handling_fallback",
+                    "stage": "master_prompt_missing",
+                    "timestamp": datetime.now().isoformat(),
+                    "error": "Master prompt not found in configuration",
+                    "will_trigger_fallback": True,
+                }
+                logger.error(f"HYPOTHESIS_DEBUG: {json.dumps(missing_prompt_log)}")
                 raise ValueError("Master prompt not found in configuration")
 
             # Enhance master prompt with citation tracking instructions
             enhanced_prompt = self.citation_service.enhance_master_prompt_with_citations(master_prompt)
 
-            # Inject case analysis directly into the master prompt
+            # Prepare data for master prompt template
+            # The template expects analysis object with attributes, not JSON string
+            analysis_data = analysis.model_dump()
+
+            # Create analysis object that template can access with dot notation
+            class AnalysisProxy:
+                def __init__(self, data):
+                    self.client_name = data.get("intake_analysis", {}).get("client_name", client_name)
+                    self.matter_name = data.get("intake_analysis", {}).get("case_summary", case_type)
+                    self._raw_data = data
+
+                @property
+                def practice_area(self):
+                    return self._raw_data.get("practice_area")
+
+                @property
+                def legal_issues(self):
+                    return self._raw_data.get("legal_issues")
+
+                @property
+                def recommended_next_steps(self):
+                    return self._raw_data.get("recommended_next_steps")
+
+                @property
+                def jurisdiction(self):
+                    return self._raw_data.get("jurisdiction")
+
+                @property
+                def include_appendix(self):
+                    return self._raw_data.get("include_appendix", False)
+
+                @property
+                def firm_name(self):
+                    # The AI's JSON output might not contain 'firm_name'.
+                    # Provide a reliable default value if it's missing.
+                    return self._raw_data.get("firm_name", "Bernhardt Riley PLLC")
+
+                def model_dump_json(self, indent=2):
+                    import json
+
+                    return json.dumps(self._raw_data, indent=indent)
+
+                def __str__(self):
+                    """Return JSON serialized data when object is used in string context."""
+                    import json
+
+                    return json.dumps(self._raw_data, indent=2)
+
+                def __repr__(self):
+                    """Return JSON serialized data for debugging."""
+                    return self.__str__()
+
+            analysis_proxy = AnalysisProxy(analysis_data)
+
+            # Find example letter content or provide placeholder
+            example_letter_content = self.config.get(
+                "example_letter_content",
+                "[Example letter content not configured - using template guidelines]",
+            )
+
+            # Inject case analysis with proper data structure for template
             formatted_prompt = enhanced_prompt.format(
-                client_name=client_name,
-                case_type=case_type,
-                analysis=analysis.model_dump_json(indent=2),
+                analysis=analysis_proxy, example_letter_content=example_letter_content
             )
 
             logger.debug(
@@ -139,15 +240,93 @@ class JsonProcessingService:
                     },
                 )
 
-            logger.info("Making OpenAI request with master prompt")
-            html_response = self._make_openai_request(formatted_prompt)
+            logger.info("Making OpenAI request with master prompt for Markdown generation")
+            markdown_response = self._make_openai_request(formatted_prompt)
 
-            if not html_response or not html_response.strip():
-                raise ValueError("OpenAI returned empty response for HTML generation")
+            # DEBUG LOG: Raw OpenAI response for hypothesis #1 and #2
+            raw_response_debug_log = {
+                "module": "JsonProcessingService",
+                "method": "generate_html_letter",
+                "hypothesis_id": "openai_api_response_issue",
+                "stage": "raw_openai_response",
+                "timestamp": datetime.now().isoformat(),
+                "markdown_response_received": markdown_response is not None,
+                "markdown_response_length": len(markdown_response) if markdown_response else 0,
+                "markdown_response_type": type(markdown_response).__name__ if markdown_response else "None",
+                "markdown_response_preview": markdown_response[:500] if markdown_response else None,
+                "markdown_response_stripped": bool(markdown_response and markdown_response.strip())
+                if markdown_response
+                else False,
+            }
+            logger.info(f"HYPOTHESIS_DEBUG: {json.dumps(raw_response_debug_log)}")
 
-            # Clean and validate the HTML response
-            cleaned_html = self._clean_html_response(html_response)
-            validated_html = self._validate_html_structure(cleaned_html)
+            # CAPTURE RAW RESPONSE: Save the raw OpenAI response to file
+            try:
+                with open("validation_output/raw_openai_response.txt", "w", encoding="utf-8") as f:
+                    f.write(str(markdown_response) if markdown_response else "None")
+                logger.info(
+                    "Saved raw OpenAI response to file",
+                    extra={
+                        "file_path": "validation_output/raw_openai_response.txt",
+                        "response_length": len(str(markdown_response)) if markdown_response else 0,
+                    },
+                )
+            except Exception as save_error:
+                logger.warning(
+                    "Failed to save raw OpenAI response to file",
+                    extra={
+                        "error": str(save_error),
+                        "error_type": type(save_error).__name__,
+                    },
+                )
+
+            # DEBUG LOG: OpenAI response validation for hypothesis #2
+            response_debug_log = {
+                "module": "JsonProcessingService",
+                "method": "generate_html_letter",
+                "hypothesis_id": "exception_handling_fallback",
+                "stage": "openai_response_check",
+                "timestamp": datetime.now().isoformat(),
+                "markdown_response_received": markdown_response is not None,
+                "markdown_response_length": len(markdown_response) if markdown_response else 0,
+                "markdown_response_stripped": bool(markdown_response and markdown_response.strip())
+                if markdown_response
+                else False,
+                "will_raise_error": not (markdown_response and markdown_response.strip()),
+            }
+            logger.info(f"HYPOTHESIS_DEBUG: {json.dumps(response_debug_log)}")
+
+            if not markdown_response or not markdown_response.strip():
+                error_msg = "OpenAI returned empty response for Markdown generation"
+                logger.error(f"Empty OpenAI response detected: {error_msg}")
+                raise ValueError(error_msg)
+
+            # CAPTURE MARKDOWN: Save the raw Markdown response to file
+            try:
+                with open("validation_output/raw_markdown_response.md", "w", encoding="utf-8") as f:
+                    f.write(str(markdown_response) if markdown_response else "")
+                logger.info(
+                    "Saved raw Markdown response to file",
+                    extra={
+                        "file_path": "validation_output/raw_markdown_response.md",
+                        "response_length": len(str(markdown_response)) if markdown_response else 0,
+                    },
+                )
+            except Exception as save_error:
+                logger.warning(
+                    "Failed to save raw Markdown response to file",
+                    extra={
+                        "error": str(save_error),
+                        "error_type": type(save_error).__name__,
+                    },
+                )
+
+            # Convert Markdown to HTML using the new converter
+            logger.info("Converting Markdown response to HTML")
+            validated_html = self._convert_markdown_to_html(markdown_response)
+
+            # Validate the converted HTML structure
+            validated_html = self._validate_html_structure(validated_html)
 
             # Create citation map for the generated letter
             citation_map = self.citation_service.create_citation_map(analysis, validated_html)
@@ -161,6 +340,41 @@ class JsonProcessingService:
             except Exception as save_error:
                 logger.warning(f"Failed to save citation map: {save_error}")
 
+            # DEBUG LOG: Final HTML content before return for hypothesis #3 and #7
+            final_html_debug_log = {
+                "module": "JsonProcessingService",
+                "method": "generate_html_letter",
+                "hypothesis_id": "return_value_processing_issue",
+                "stage": "final_html_before_return",
+                "timestamp": datetime.now().isoformat(),
+                "validated_html_length": len(validated_html),
+                "validated_html_not_empty": bool(validated_html and validated_html.strip()),
+                "validated_html_preview": validated_html[:500] if validated_html else None,
+                "client_name": client_name,
+                "case_type": case_type,
+            }
+            logger.info(f"HYPOTHESIS_DEBUG: {json.dumps(final_html_debug_log)}")
+
+            # CAPTURE FINAL HTML: Save the final validated HTML to file
+            try:
+                with open("validation_output/final_validated_html.html", "w", encoding="utf-8") as f:
+                    f.write(validated_html if validated_html else "")
+                logger.info(
+                    "Saved final validated HTML to file",
+                    extra={
+                        "file_path": "validation_output/final_validated_html.html",
+                        "html_length": len(validated_html) if validated_html else 0,
+                    },
+                )
+            except Exception as save_error:
+                logger.warning(
+                    "Failed to save final validated HTML to file",
+                    extra={
+                        "error": str(save_error),
+                        "error_type": type(save_error).__name__,
+                    },
+                )
+
             logger.info(
                 "Successfully generated HTML letter with citations",
                 extra={
@@ -173,9 +387,36 @@ class JsonProcessingService:
             )
             return validated_html
 
-        except Exception as e:
+        except ValueError as e:
+            # Handle specific case where OpenAI returns empty response
+            if "OpenAI returned empty response" in str(e):
+                logger.error(
+                    "OpenAI API returned empty response - this may be temporary",
+                    extra={
+                        "client_name": client_name,
+                        "case_type": case_type,
+                        "error_type": type(e).__name__,
+                        "should_retry": True,
+                    },
+                )
+                # Re-raise for potential retry logic at higher level
+                raise e
+            else:
+                # Other ValueError issues are configuration/data problems - use fallback
+                logger.exception(
+                    "Configuration or data validation error - using fallback",
+                    extra={
+                        "client_name": client_name,
+                        "case_type": case_type,
+                        "error_type": type(e).__name__,
+                    },
+                )
+                return self._generate_fallback_html(client_name, case_type, str(e))
+
+        except (KeyError, AttributeError, TypeError) as e:
+            # Data structure or configuration issues - use fallback
             logger.exception(
-                "HTML letter generation failed",
+                "Data structure or configuration issue - using fallback",
                 extra={
                     "client_name": client_name,
                     "case_type": case_type,
@@ -184,8 +425,114 @@ class JsonProcessingService:
             )
             return self._generate_fallback_html(client_name, case_type, str(e))
 
+        except Exception as e:
+            # Unexpected errors - log thoroughly and re-raise for proper handling
+            logger.exception(
+                "Unexpected error in HTML letter generation",
+                extra={
+                    "client_name": client_name,
+                    "case_type": case_type,
+                    "error_type": type(e).__name__,
+                    "should_investigate": True,
+                },
+            )
+            # Re-raise unexpected errors instead of silently falling back
+            raise e
+
+    def _convert_markdown_to_html(self, markdown_content: str) -> str:
+        """Convert Markdown content to clean HTML.
+
+        Args:
+        ----
+            markdown_content: Markdown text from OpenAI response
+
+        Returns:
+        -------
+            Well-formatted HTML content
+
+        """
+        if not markdown_content:
+            return ""
+
+        # Clean the markdown content first - remove any code fences or extra formatting
+        cleaned_markdown = self._clean_markdown_response(markdown_content)
+
+        # Configure markdown2 with appropriate extras for legal documents
+        extras = [
+            "fenced-code-blocks",
+            "tables",
+            "break-on-newline",
+            "cuddled-lists",
+            "metadata",
+            "smarty-pants",
+        ]
+
+        try:
+            # Convert markdown to HTML
+            html_content = markdown2.markdown(cleaned_markdown, extras=extras)
+
+            # Wrap in a legal-letter container div for styling consistency
+            wrapped_html = f'<div class="legal-letter">\n{html_content}\n</div>'
+
+            # Ensure proper HTML structure
+            if not wrapped_html.startswith("<html"):
+                wrapped_html = f"<html>\n<body>\n{wrapped_html}\n</body>\n</html>"
+
+            logger.debug(
+                "Successfully converted Markdown to HTML",
+                extra={
+                    "markdown_length": len(cleaned_markdown),
+                    "html_length": len(wrapped_html),
+                    "method": "_convert_markdown_to_html",
+                },
+            )
+
+            return wrapped_html
+
+        except Exception as e:
+            logger.error(
+                "Failed to convert Markdown to HTML",
+                extra={
+                    "error": str(e),
+                    "error_type": type(e).__name__,
+                    "markdown_preview": cleaned_markdown[:200] if cleaned_markdown else None,
+                    "method": "_convert_markdown_to_html",
+                },
+            )
+            # Return a fallback HTML structure if conversion fails
+            return self._generate_minimal_fallback_html()
+
+    def _clean_markdown_response(self, response_text: str) -> str:
+        """Clean OpenAI response to extract valid Markdown.
+
+        Args:
+        ----
+            response_text: Raw OpenAI response
+
+        Returns:
+        -------
+            Cleaned Markdown content
+
+        """
+        if not response_text:
+            return ""
+
+        # Remove any code fences that might wrap the content
+        cleaned = re.sub(r"^```markdown\s*", "", response_text.strip(), flags=re.MULTILINE)
+        cleaned = re.sub(r"^```\s*", "", cleaned, flags=re.MULTILINE)
+        cleaned = re.sub(r"\s*```$", "", cleaned, flags=re.MULTILINE)
+        cleaned = cleaned.strip()
+
+        # Remove any HTML tags that might have been included accidentally
+        cleaned = re.sub(r"<[^>]+>", "", cleaned)
+
+        return cleaned
+
     def _clean_html_response(self, response_text: str) -> str:
         """Clean OpenAI response to extract valid HTML.
+
+        NOTE: This method is deprecated in favor of Markdown processing.
+        Kept for backward compatibility.
 
         Args:
         ----

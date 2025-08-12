@@ -19,9 +19,9 @@ from legal_portal.core.data_models import (
     ProcessedDocument,
     ServiceCost,
 )
-from legal_portal.utils.logging_config import setup_logging
+from legal_portal.utils.logging_config import get_module_logger
 
-logger = setup_logging("cost_session_manager")
+logger = get_module_logger(__name__)
 from legal_portal.utils.cost_calculator import CostCalculator
 from legal_portal.utils.cost_estimator import CostEstimator
 from legal_portal.utils.cost_exporter import CostExporter

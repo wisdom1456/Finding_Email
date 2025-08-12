@@ -25,6 +25,18 @@
         *   Addressed multiple `TypeError`s in tests by refining `unittest.mock` configurations for `st.session_state` attributes.
     *   **Test Suite Passing:** The test suite now successfully passes with 11 tests, providing a stable baseline for future development.
 
+### HTML Formatting Enhancement (Q4 2025)
+
+*   **Objective**: Implement reliable Markdown-to-HTML post-processing for consistent HTML formatting
+*   **Status**: **Completed**
+*   **Key Outcomes**:
+    *   **Markdown-to-HTML Pipeline**: Successfully implemented two-step process where AI generates Markdown and application converts to clean HTML
+    *   **Enhanced Configuration**: Updated master prompt to request structured Markdown output with clear formatting guidelines
+    *   **New Dependencies**: Added `markdown2>=2.4.0` library for robust Markdown processing
+    *   **Improved Reliability**: Eliminated HTML formatting inconsistencies by separating content generation from presentation logic
+    *   **Subject Line Cleanup**: Removed redundant subject line as specified in requirements
+    *   **Validation Testing**: Confirmed new pipeline works correctly with existing test infrastructure
+
 ## 2. Next Steps & Future Work
 
 ### Foundational Improvements

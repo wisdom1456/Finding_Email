@@ -48,16 +48,41 @@ class ConfigurationManager:
 
         This method loads the email generation configuration from the specified
         YAML file, with fallback to default location if not specified.
+        Uses proper project root resolution like AIAnalyzer to ensure config is found.
         """
         if self.config_path is None:
-            # Default configuration path
-            self.config_path = "backend/config/templates/universal_legal_config.yaml"
+            # Find project root using the same logic as AIAnalyzer
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            project_root = current_dir
+
+            # Navigate up until we find the project root
+            while project_root != "/" and not (
+                os.path.exists(os.path.join(project_root, "app.py"))
+                and os.path.exists(os.path.join(project_root, "backend"))
+            ):
+                project_root = os.path.dirname(project_root)
+
+            if project_root == "/":
+                project_root = os.getcwd()
+
+            self.config_path = os.path.join(
+                project_root, "backend", "config", "templates", "universal_legal_config.yaml"
+            )
+            logger.info(f"Resolved config path using project root: {self.config_path}")
 
         try:
             if os.path.exists(self.config_path):
                 with open(self.config_path, encoding="utf-8") as file:
                     self.config = yaml.safe_load(file) or {}
                 logger.info(f"Configuration loaded successfully from {self.config_path}")
+                logger.info(f"Configuration keys loaded: {list(self.config.keys())}")
+
+                # Verify master_prompt is loaded
+                master_prompt = self.config.get("master_prompt")
+                if master_prompt:
+                    logger.info(f"✅ Master prompt loaded successfully ({len(master_prompt)} characters)")
+                else:
+                    logger.warning("⚠️ Master prompt not found in loaded configuration")
             else:
                 logger.warning(f"Configuration file not found: {self.config_path}")
                 self.config = {}

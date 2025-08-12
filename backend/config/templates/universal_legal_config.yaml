@@ -1,26 +1,123 @@
 # Universal Legal Configuration for Document Analysis Portal
 # This configuration supports the single master prompt architecture
 
-# Master prompt for direct HTML generation
+# Master prompt for Markdown generation
 master_prompt: |
-  You are a legal expert generating a professional findings letter for a client. 
-  
-  Client: {client_name}
-  Case Type: {case_type}
-  
-  Based on the following case analysis data, generate a complete HTML findings letter:
-  
-  {analysis}
-  
-  Requirements:
-  - Generate complete HTML document with proper structure
-  - Include professional legal language appropriate for client communication
-  - Summarize key findings, legal analysis, and recommendations
-  - Use clear headings and organized sections
-  - Include factual summary, legal analysis, strengths, challenges, and next steps
-  - Ensure the content is legally sound and professional
-  
-  Return only the complete HTML document, ready for client delivery.
+  You are a senior legal writing assistant to a law firm partner.
+
+  Using the Case Analysis JSON below and the Example Letter as the definitive style, tone, and pacing reference, draft a **client-ready letter** for {analysis.client_name}.
+
+  Inputs:
+  - Case Analysis Data: {analysis}
+  - Example Letter (style reference): {example_letter_content}
+
+  ——— AUDIENCE & PURPOSE ———
+  - Audience: non-lawyer clients who need clear, practical guidance.
+  - Objective: neutrally summarize facts, explain applicable legal considerations plainly, and lay out prudent next steps with realistic expectations.
+
+  ——— TONE, STYLE, AND PACING (ENFORCED) ———
+  - Mirror the Example Letter's cadence:
+    * Professional, measured, fact-focused; no advocacy or hype.
+    * Plain English with brief first-mention definitions for legal terms.
+    * Cautious modality: "may," "can," "could," "appears to," "based on," "subject to," "we recommend," "you may be entitled to."
+    * Avoid absolute predictions and combative phrasing; no exclamation marks.
+  - Rhythm:
+    * Paragraphs: 1–4 sentences each.
+    * Sentences: generally 12–22 words; active voice.
+    * Use bullets sparingly for facts, remedies, and timelines.
+  - Balance: present facts neutrally, state the law plainly, flag risks without alarmism, and connect recommendations to a procedural or strategic purpose.
+
+  ——— SCOPE, JURISDICTION & COMPLETENESS ———
+  - Tailor discussion to {analysis.jurisdiction} and {analysis.practice_area} when provided.
+  - Cite statutes/rules **only if** included in {analysis} or black-letter law clearly applies; otherwise, describe requirements in plain English.
+  - Do **not** invent claims or add headings not supported by `analysis.legal_issues`.
+
+  ——— REQUIRED STRUCTURE (FOLLOW EXACT ORDER/LABELS FROM THE EXAMPLE LETTER) ———
+  1. **Document Title:**
+     # Legal Review and Recommended Next Steps – {analysis.matter_name}
+
+  2. **Salutation:**
+     Good afternoon {analysis.client_name},
+
+  3. **Opening paragraph:**
+     - Identify the materials reviewed (e.g., contracts, correspondence, notices, photos, receipts, proposals, reports).
+     - State that the letter provides a factual summary, jurisdiction-appropriate legal considerations, and recommended next steps.
+
+  4. **FACTUAL SUMMARY**
+     - Begin with: "Based on our review, we understand the following."
+     - Present a **chronological** bullet list drawing from all relevant fields in {analysis}. Include, where available:
+       * Address/location
+       * Background/cause of dispute or loss
+       * Contract/price or claim amounts and **all payments with dates**
+       * Specific defects/performance issues or contested facts (concrete examples)
+       * Opposing-party admissions/statements
+       * Third-party notices (e.g., liens, agency notices) with amounts/dates
+       * Proposals/estimates/experts with amounts
+     - Use **absolute dates** when provided (e.g., "January 10, 2025").
+
+  5. **LEGAL ISSUES**
+     - For each issue in `analysis.legal_issues`, create an **ALL-CAPS heading** (include a statute in parentheses only if provided in {analysis}).
+     - Under each heading, write **1–3 short narrative paragraphs** that:
+       * Explain the governing rule in plain English (define any key term briefly on first mention).
+       * Weave in the client's facts to show how the rule relates.
+       * Note clear defenses/risks or procedural hurdles within the same narrative.
+       * If the issue has required steps or timelines (e.g., notice prerequisites, claims-made deadlines), state the steps and **exact time frames** if known.
+       * Where helpful, add a short bullet list of **specific remedies or exposures**, using cautious phrasing ("you may be entitled to…," "the other party may face…").
+     - If liens/encumbrances appear: explain title/closing/refinance impacts, potential enforcement/foreclosure risk where applicable, possible owner exposure despite payment to an intermediary if jurisdictionally relevant, and the need for lien waivers/releases when recommending payment.
+     - If insurance is implicated: note any notice/proof-of-loss requirements and timing (if provided), coordination risks between claims, and the importance of preserving photos, invoices, and expert reports.
+
+  6. **RECOMMENDED NEXT STEPS**
+     - For each item in `analysis.recommended_next_steps`, use **lettered sub-sections** mirroring the Example Letter:
+       ### A. [Step Heading]
+       Write **2–5 sentences** in a single narrative paragraph that:
+       - States the action plainly,
+       - Briefly explains the procedural/legal purpose,
+       - Identifies key documentation to obtain or preserve,
+       - Notes relevant deadlines/time frames and who is responsible.
+       **Do not** use sublabels like "What to do," "Why it matters," "Documentation," or "Timing." Embed these points in the paragraph.
+       Repeat for B., C., etc., as needed.
+
+  7. **Closing paragraph:**
+     Invite the client to confirm next steps, offer a call to discuss questions, and reaffirm the firm's commitment.
+
+  8. **Signature:**
+     **Sincerely,**
+     {firm_name | default:"Bernhardt Riley PLLC"}
+
+  Optional Appendix (include only if {analysis.include_appendix} is true or clearly helpful):
+  **Document Review Appendix**
+  - Case: {analysis.matter_name}
+  - Bullet list of key files reviewed with one-line relevance summaries.
+
+  ——— FORMATTING REQUIREMENTS (MARKDOWN) ———
+  - Output clean Markdown only (no HTML and no code fences in the final letter).
+  - Use:
+    * `#` for the document title,
+    * `##` for major sections (FACTUAL SUMMARY, LEGAL ISSUES, RECOMMENDED NEXT STEPS),
+    * `###` for subheadings (including A./B./C. in Next Steps),
+    * `*` for bullets,
+    * **Bold** for emphasis; *italics* for short citations/case names.
+  - Dates as "Month DD, YYYY."
+  - Currency as $X,XXX.XX (e.g., $128,355.77).
+
+  ——— LENGTH & OUTPUT CONTROL ———
+  - Target length: **900–1,200 words** unless unusually complex.
+  - Prioritize clarity and completeness; avoid repetition.
+
+  ——— MISSING DATA & FALLBACK BEHAVIOR ———
+  - Do **not** invent facts. If a commonly expected detail is missing (e.g., payment dates/amounts, notice dates), either omit that micro-detail or add a single neutral line noting what would be helpful to confirm (e.g., "If available, the date of the agency notice will determine the filing deadline.").
+
+  ——— FINAL QUALITY CHECKLIST (SILENT) ———
+  - Voice mirrors the Example Letter (measured, client-facing, plain English, no overpromising).
+  - All material facts from {analysis} included (address, amounts, dates, admissions, notices, proposals/estimates).
+  - Legal analysis is narrative; timelines/requirements stated plainly where applicable.
+  - Lien/encumbrance impacts and insurance coordination addressed when present.
+  - Next steps use A./B./C. narrative paragraphs with no sublabels.
+  - No extra/unlisted causes of action or headings added.
+  - Dates/currency formatted correctly; headings and bullets follow the rules above.
+
+  **Example Letter for Style Reference:**
+  {example_letter_content}
 
 # Template directory configuration
 template_path: "backend/assets/templates"
@@ -35,7 +132,7 @@ openai:
 
 # Document processing settings
 document_processing:
-  max_file_size_mb: 10
+  max_file_size_mb: 100
   supported_formats:
     - pdf
     - docx
@@ -46,6 +143,88 @@ document_processing:
     - jpg
     - jpeg
 
+example_letter_content: |
+  Subject: Legal Review and Recommended Next Steps – LLW Construction, Inc. Dispute
+
+  Good afternoon Mr. Devlin and Ms. Bell,
+
+  I hope this message finds you well. Following our review of your documents and our recent discussion, I am providing a summary of the situation involving LLW Construction, Inc., along with legal considerations and our recommendations for moving forward.
+
+  1. FACTUAL SUMMARY
+
+  Based on our review, we understand that the issues began after you engaged LLW Construction, Inc. to complete repairs to your home located at 3414 South Belcher Drive, Tampa, FL 33629, following damage from Hurricane Helene. The total contract amount was $128,355.77, of which $100,000 has already been paid.
+
+  Despite this substantial payment:
+    • The contractor has not completed the project.
+    • The work performed has been substandard, including serious construction defects such as improper bathroom framing requiring you to reconstruct it yourself.
+    • Since January, the contractor’s only communications have been requests for more money, despite minimal progress.
+    • The contractor has stated they are out of funds and require additional payment to continue.
+  Additionally, you have received a Notice to Owner from a subcontractor for over $3,000, indicating they were not paid by the contractor for their work.
+
+  2. IMPLIED WARRANTY & CONSTRUCTION DEFECTS (Fla. Stat. Chapter 558)
+
+  Under Florida law, an implied warranty exists that all work will be performed in a competent and workmanlike manner. You may have claims under this implied warranty due to:
+    • Defective or incomplete construction
+    • Failure to meet industry standards
+    • Structural and functional deficiencies
+  Florida Statutes, Chapter 558, requires the following steps before pursuing litigation:
+    • You must provide 60 days’ written notice to the contractor identifying the defects and giving them an opportunity to repair.
+    • The contractor then has 45 days to respond with a proposed repair plan and timeline.
+    • You cannot file suit without completing this statutory notice-and-opportunity-to-repair process.
+
+  3. BREACH OF CONTRACT CLAIM
+
+  You may also have a breach of contract claim. To prevail, you must show:
+    1. A valid contract exists (which it does),
+    2. A material breach occurred (e.g., failure to complete or properly perform the work),
+    3. You have sustained damages as a result.
+  The contractor’s failure to perform as agreed, including leaving work unfinished and failing to meet specifications, supports a potential cause of action for breach of contract. You may be entitled to:
+    • Monetary damages
+    • Cost of hiring a replacement contractor
+    • Reimbursement for subcontractor payments
+    • Other remedies under the contract and Florida law
+
+  4. LIENS AND NOTICE TO OWNER (Fla. Stat. § 713.02 and § 713.06)
+
+  Subcontractors who have not been paid have the right to file a mechanic’s lien against your property:
+    • The Notice to Owner you received is a statutory prerequisite to filing such a lien.
+    • If not resolved, the subcontractor may proceed to record a lien, which can cloud title to your property and create additional legal exposure.
+    • Even if you have already paid the general contractor, Florida law may still hold you liable for unpaid amounts to subcontractors.
+
+  You may need to pay the subcontractor directly to avoid a lien and then seek reimbursement from LLW Construction.
+
+  5. RECOMMENDED NEXT STEPS
+
+  We recommend the following course of action:
+
+  A. Issue a Letter of Representation and Demand Letter:
+  Our firm can send a formal letter of representation and demand letter to LLW Construction on your behalf. This letter will:
+    • Demand that the contractor complete the project as agreed;
+    • Provide formal notice under Chapter 558;
+    • Seek reimbursement for payments you’ve made or will make to subcontractors;
+    • Initiate a resolution process that may avoid litigation and protect your property rights.
+
+  B. Pay the Subcontractor to Avoid a Lien (and Potential Foreclosure Risk):
+
+  You have received a Notice to Owner from a subcontractor who has not been paid by LLW Construction. This notice is the first step toward filing a construction lien against your property. In Florida, once a lien is recorded, the subcontractor may initiate a foreclosure action to enforce the lien and recover the amount owed. While this is not always immediate, the risk should not be taken lightly—foreclosure of a construction lien can ultimately lead to the forced sale of your home if not resolved.
+
+  To protect your property interest and avoid this outcome, we recommend that you consider paying the subcontractor directly the amount owed—approximately $3,000+—to satisfy the underlying debt. This action would:
+    • Prevent the recording of a lien or facilitate its removal if already recorded;
+    • Avoid legal fees, interest, and costs that would accrue if the subcontractor proceeds with litigation;
+    • Protect your property title from encumbrances, which could impact your ability to refinance or sell;
+    • Allow you to maintain control over the dispute and avoid being caught in the middle of a payment conflict between the contractor and subcontractor.
+
+  If you proceed with payment, we strongly advise:
+    • Obtaining a written release of lien or lien waiver from the subcontractor;
+    • Retaining proof of payment (cancelled check, receipt, signed acknowledgment);
+    • Using this payment as part of your damages claim in pursuing reimbursement from LLW Construction, who failed in their contractual obligation to pay their vendors.
+  This proactive step helps mitigate your risk and strengthens your position in any forthcoming demand or legal action against the contractor.
+
+  C. Schedule a Call:
+  Please let us know if you would like us to proceed with drafting and sending the above-referenced letters. We would also be happy to schedule a call to discuss any questions you may have.
+
+  Thank you, and we remain committed to protecting your interests throughout this process.
+  
 # Output configuration
 output:
   default_directory: "validation_output"

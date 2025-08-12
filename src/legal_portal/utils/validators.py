@@ -7,10 +7,10 @@ import json
 import re
 from typing import Any, Callable, TypeVar
 
-from legal_portal.utils.logging_config import setup_logging
+from legal_portal.utils.logging_config import get_module_logger
 from pydantic import BaseModel, ValidationError
 
-logger = setup_logging("validators")
+logger = get_module_logger(__name__)
 
 
 T = TypeVar("T", bound=BaseModel)

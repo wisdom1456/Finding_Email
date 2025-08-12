@@ -639,99 +639,61 @@ class AIAnalyzer:
         if prompt_config:
             base_prompt = prompt_config
         else:
-            # Fallback to default prompt if configuration is missing
-            base_prompt = (
-                "You are a seasoned Florida litigation attorney with 15+ years of experience conducting comprehensive case assessments and providing strategic legal analysis. You are preparing the legal analysis foundation that will support a detailed findings letter to your client.\n\n"
-                "ATTORNEY ANALYSIS STANDARDS:\n"
-                "1. **Professional Legal Authority:** Provide analysis with the depth and expertise expected from a senior litigation attorney\n"
-                "2. **Florida Law Mastery:** Reference specific Florida statutes with proper citations (e.g., Florida Statutes § 83.51(1)) and demonstrate deep knowledge of Florida jurisprudence\n"
-                "3. **Strategic Legal Assessment:** Evaluate claim viability, evidence strength, and litigation prospects with the judgment of an experienced practitioner\n"
-                "4. **Client-Focused Analysis:** Structure findings to support clear, authoritative client communication while maintaining legal precision\n"
-                "5. **Professional Objectivity:** Provide balanced assessment of strengths and challenges based on Florida law and litigation realities\n"
-                "6. **Case Development Strategy:** Consider both immediate legal remedies and long-term strategic options under Florida law\n\n"
-                "PROFESSIONAL ASSESSMENT PROTOCOL: When addressing complex or counterintuitive legal strategies:\n"
-                '• **Professional Context:** "Based on my experience with Florida [relevant area] law..."\n'
-                "• **Legal Foundation:** Cite specific Florida statutes, case law, or procedural requirements\n"
-                "• **Strategic Rationale:** Explain the legal and practical reasoning behind the recommendation\n"
-                "• **Risk Assessment:** Address potential outcomes and strategic considerations\n"
-                '• **Professional Guidance:** "This analysis reflects Florida law standards and litigation experience"\n\n'
-                "CRITICAL: Reference ONLY Florida statutes, case law, and legal precedents (e.g., Florida Statutes § 83.51(1), Florida case citations). Do NOT cite laws from other jurisdictions unless they have specific relevance to Florida legal standards."
-            )
+            # New analytical prompt approach with compatible JSON output structure
+            final_assessment_prompt = """
+You are a senior legal writing assistant to a Florida law firm partner.
+Using the Case Analysis provided below, generate a structured JSON object containing the legal review and recommended next steps.
 
-        return (
-            "SYSTEM\n"
-            f"{base_prompt}\n\n"
-            'Output a single JSON object with exactly two top-level keys: `"legal_assessment"` and `"demand_letter_evaluation"`—nothing else.\n\n'
-            "• JSON only—no markdown, no commentary.\n"
-            "• Do not alter key names.\n\n"
-            "==========================\n"
-            "AUTHENTIC_ATTORNEY_ADVISOR EXAMPLE LETTER STYLE:\n\n"
-            "Dear Mr. Price:\n\n"
-            "We hope you are doing well. We wanted to follow up with a summary of our findings after completing our comprehensive review of the timeline and materials you submitted regarding the property located at 2260 Terra Cotta Cove, Apt. 110, Land O Lakes, Florida 34639, including the lease agreement, correspondence, invoices, videos and maintenance-related documentation.\n\n"
-            "As we discussed, your primary concern centers on the prolonged and recurring water intrusion, inadequate remediation efforts, and the resulting conditions that have potentially rendered the unit uninhabitable. The timeline you provided documents multiple reports of water damage and potential mold spanning several months, which we have carefully analyzed under Florida law.\n\n"
-            "You advised that you moved into the unit on or about August 1, 2024, and within days began experiencing issues involving water intrusion in the bedroom after rainfall. Maintenance initially attributed the flooding to improper grading and dug a temporary trench, but subsequent rains continued to result in pooling, wall saturation, and elevated moisture levels.\n\n"
-            "Over the following months, including September and October 2024, water continued to enter the unit. You explained that you submitted multiple maintenance requests and had professional services, such as ServPro, document unsafe moisture levels which could lead to mold development. You relayed that, despite ongoing communication and photographic evidence, the property management team delayed effective repairs, with contractors often failing to complete the necessary work or denying the severity of the problem.\n\n"
-            "Here are the key points of our analysis under Florida law:\n\n"
-            "• We believe the recurring water intrusion and subsequent mold exposure may rise to the level of a constructive eviction, which under Florida law arises when conditions are so intolerable that the tenant is forced to vacate.\n\n"
-            "• Pursuant to Florida Statutes § 83.51(1), landlords are required to maintain rental premises in compliance with building, housing, and health codes, and where no codes apply, in good repair and fit for human habitation.\n\n"
-            "• Our analysis of the evidence supports a potential breach of the implied warranty of habitability, as your timeline and third-party reports confirm the unit is likely unsafe and inadequately maintained under Florida standards.\n\n"
-            "• Your documented efforts to notify management and allow a reasonable opportunity to cure strengthen your position that the landlord could be in violation of lease agreement under Florida landlord-tenant law.\n\n"
-            "At this juncture, we believe the most appropriate course of action is to issue a formal demand letter requesting that the landlord take corrective measures to address the longstanding water intrusion and suspected mold conditions. Specifically, we recommend that you demand the landlord:\n\n"
-            "• Regrade the foundational land surrounding the apartment to prevent further flooding and water intrusion into the unit;\n\n"
-            "• Retain a licensed mold assessor to conduct a full indoor air quality and mold inspection of the premises, with a written assessment report issued to you promptly; and\n\n"
-            "• If the mold assessment confirms the presence of mold, the landlord must retain a licensed mold remediation specialist to perform remediation of all affected areas identified in the assessment report, with all remediation work to be completed no later than fifteen (15) days following the issuance of the mold assessment.\n\n"
-            "We believe this approach may lead to a joint resolution that includes mutual waivers and a clear release of future liability.\n\n"
-            "Please let us know if you would like us to proceed with a draft of the demand letter, or whether you would prefer that we first set a phone call to discuss our review and recommendations for next steps. For your consideration, we have attached a letter outlining the demand letter process, including a detailed explanation of its purpose and what to anticipate upon issuance.\n\n"
-            "We're committed to achieving the best possible outcome for your case.\n\n"
-            "Thank you,\n"
-            "Chevonne Christian, Esq.\n"
-            "Civil Division Attorney\n"
-            "==========================\n\n"
-            "COMBINED ANALYSIS (read-only)\n"
-            f"{analysis_for_prompt.model_dump_json(indent=2)}\n"
-            "==========================\n\n"
-            "CASE TIMELINE\n"
-            f"{timeline_content}\n"
-            "==========================\n\n"
-            "VIDEO RELEVANCE ANALYSIS\n"
-            f"{video_relevance_content}\n"
-            "==========================\n\n"
-            "SCHEMAS\n"
-            "LegalAssessment:\n"
-            "{\n"
-            '  "case_type": "Case Type",\n'
-            '  "claim_viability": "Claim Viability",\n'
-            '  "overall_evidence_strength": "Strength",\n'
-            '  "potential_challenges": "A clear description of potential challenges, using bullet points or narrative as appropriate for clarity. Follow the style of the example letter above.",\n'
-            '  "recommended_actions": "Recommended next steps, using bullet points or narrative as appropriate for clarity. Follow the style of the example letter above.",\n'
-            '  "demand_letter_appropriate": true,\n'
-            '  "urgency_assessment": "Urgency"\n'
-            "}\n"
-            "DemandLetterEvaluation:\n"
-            "{\n"
-            '  "is_appropriate": true,\n'
-            '  "reasoning": "Reasoning in the style of the example letter above",\n'
-            '  "potential_outcomes": ["Outcome 1"],\n'
-            '  "relevant_statutes": ["Statute 1 - cite only local jurisdiction statutes"]\n'
-            "}\n"
-            "==========================\n\n"
-            "CONSTRUCTION RULES\n"
-            "1.  **Follow the example letter style exactly.** Your tone should be clear, concise, and professional like a real attorney communicating with a client.\n"
-            "2.  **Use simple language** that a non-lawyer can easily understand. Avoid overly academic or verbose language.\n"
-            "3.  **Use bullet points** for key findings and recommendations to improve readability, as shown in the example.\n"
-            "4.  **Pay attention to jurisdiction** - cite only relevant local statutes (e.g., Florida Statutes § 83.51(1)). Do NOT invent or misapply laws from other states.\n"
-            '5.  `claim_viability`: pick "Strong", "Moderate", or "Weak".\n'
-            "6.  `demand_letter_appropriate`: true if pre-suit demand adds leverage.\n"
-            "7.  If `demand_letter_evaluation.is_appropriate` is **false**, set\n"
-            '    `"reasoning": ""`, `"potential_outcomes": []`, `"relevant_statutes": []`.\n'
-            "8.  **Timeline Integration**: Consider the chronological timeline of events when assessing case strength and recommended actions.\n"
-            "9.  **Video Evidence Integration**: Factor in the video relevance analysis when evaluating evidence strength and case strategy.\n"
-            "10. **Write directly and to the point** following the professional but accessible style demonstrated in the example letter.\n\n"
-            "VALIDATION\n"
-            "• Must parse as JSON.\n"
-            "• Floats with two decimals.\n"
-            "• Key order per schema.\n\n"
-            "BEGIN."
+**Rules:**
+
+1.  **Data Integrity:**
+    *   Use only facts in the Case Analysis.
+    *   Do not add any facts, names, dates, or statutes not in the record.
+    *   If amounts or names differ across documents:
+        *   Use the executed contract figure/entity if available.
+        *   Otherwise, note the conflict in the Factual Summary.
+
+2.  **Florida Law Use:**
+    *   Include Florida statutes only when clearly applicable (e.g., Ch. 558 for defects; Ch. 713 for liens).
+    *   If uncertain, explain the rule in plain English without naming a statute.
+
+**Output Schema:**
+Produce a single, validated JSON object. Do not include any other text or markdown. The JSON object should have exactly two top-level keys: "legal_assessment" and "demand_letter_evaluation".
+
+{{
+  "legal_assessment": {{
+    "case_type": "The type of legal case based on the analysis",
+    "claim_viability": "Strong, Moderate, or Weak - based on the strength of legal claims",
+    "overall_evidence_strength": "Assessment of the overall strength of available evidence",
+    "potential_challenges": "A clear description of potential challenges, risks, and defensive positions the opposing party might take",
+    "recommended_actions": "Recommended next steps and strategic actions, formatted as clear, actionable guidance",
+    "demand_letter_appropriate": true,
+    "urgency_assessment": "High, Medium, or Low - based on time-sensitive factors and statute of limitations"
+  }},
+  "demand_letter_evaluation": {{
+    "is_appropriate": true,
+    "reasoning": "Detailed explanation of why a demand letter is or is not appropriate in this case, considering the facts and legal strategy",
+    "potential_outcomes": ["Array of potential outcomes from sending a demand letter"],
+    "relevant_statutes": ["Array of relevant Florida statutes that apply to this matter"]
+  }}
+}}
+
+**Case Analysis Data:**
+{analysis_for_prompt}
+
+**Case Timeline:**
+{timeline_content}
+
+**Video Relevance Analysis:**
+{video_relevance_content}
+
+BEGIN.
+"""
+
+        return final_assessment_prompt.format(
+            analysis_for_prompt=analysis_for_prompt.model_dump_json(indent=2),
+            timeline_content=timeline_content,
+            video_relevance_content=video_relevance_content,
         )
 
     async def analyze_intake(self, intake_doc: ProcessedDocument) -> CaseAnalysisResult:
@@ -827,7 +789,16 @@ class AIAnalyzer:
         logger.error(f"AI ANALYZER: 🔍 Error count: {len(analysis.errors)}")
         if analysis.errors:
             for i, error in enumerate(analysis.errors):
-                logger.error(f"AI ANALYZER: 🔍   Error {i + 1}: {error.error_message}")
+                # Handle both AnalysisError objects and dictionary responses
+                if hasattr(error, "error_message"):
+                    error_msg = error.error_message
+                elif isinstance(error, dict) and "error_message" in error:
+                    error_msg = error["error_message"]
+                elif isinstance(error, dict) and "error" in error:
+                    error_msg = error["error"]
+                else:
+                    error_msg = str(error)
+                logger.error(f"AI ANALYZER: 🔍   Error {i + 1}: {error_msg}")
         logger.info("AI ANALYZER: 🔍 === END DIAGNOSTIC LOGGING ===")
         return analysis
 

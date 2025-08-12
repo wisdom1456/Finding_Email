@@ -190,7 +190,7 @@ class LegalAssessment(BaseModel):
     claim_viability: str
     overall_evidence_strength: str
     potential_challenges: str
-    recommended_actions: str
+    recommended_actions: List[str]  # Fixed: Changed from str to List[str] to match AI output
     demand_letter_appropriate: (
         bool  # Fixed: Changed from str to bool to match AI output
     )

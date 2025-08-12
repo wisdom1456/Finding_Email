@@ -8,7 +8,8 @@
       ],
       "alwaysAllow": [
         "create_entities",
-        "add_observations"
+        "add_observations",
+        "read_graph"
       ]
     }
   }

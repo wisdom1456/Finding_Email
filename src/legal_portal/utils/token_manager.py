@@ -6,9 +6,9 @@ import json
 from typing import Any
 
 import tiktoken
-from legal_portal.utils.logging_config import setup_logging
+from legal_portal.utils.logging_config import get_module_logger
 
-logger = setup_logging("token_manager")
+logger = get_module_logger(__name__)
 
 
 class TokenManager:

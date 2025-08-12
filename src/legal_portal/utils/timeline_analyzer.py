@@ -9,9 +9,9 @@ from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
 import dateutil.parser as date_parser
-from legal_portal.utils.logging_config import setup_logging
+from legal_portal.utils.logging_config import get_module_logger
 
-logger = setup_logging("timeline_analyzer")
+logger = get_module_logger(__name__)
 
 
 # Configure logger for timeline analyzer debugging

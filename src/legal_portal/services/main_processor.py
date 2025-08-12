@@ -1005,8 +1005,8 @@ async def process_case_documents(
         if output_dir:
             save_output_files(
                 output_dir,
-                email_docs.get("main_letter", ""),
-                email_docs.get("appendix", ""),
+                email_docs.get("letter_content", ""),
+                appendix_content,
                 final_analysis,
             )
 
@@ -1067,7 +1067,7 @@ async def process_case_documents_cli(
 
         # Try to initialize video processor but don't fail if credentials are missing
         try:
-            from config.default import get_settings
+            from legal_portal.config.default import get_settings
 
             settings = get_settings()
 

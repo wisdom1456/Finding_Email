@@ -15,24 +15,19 @@ from typing import NamedTuple
 
 import docx
 import fitz  # PyMuPDF
+from legal_portal.utils.logging_config import get_module_logger
 
-from legal_portal.utils.logging_config import setup_logging
-
-logger = setup_logging("enhanced_file_validator")
+logger = get_module_logger(__name__)
 
 # Optional import for python-magic (fallback to extension-based validation if not available)
 try:
     import magic
 
     MAGIC_AVAILABLE = True
-    logger.info(
-        "python-magic library available - enhanced magic number validation enabled"
-    )
+    logger.info("python-magic library available - enhanced magic number validation enabled")
 except ImportError:
     MAGIC_AVAILABLE = False
-    logger.warning(
-        "python-magic library not available - falling back to extension-based validation"
-    )
+    logger.warning("python-magic library not available - falling back to extension-based validation")
 
 
 class ValidationResult(NamedTuple):
@@ -62,9 +57,7 @@ class EnhancedFileValidator:
     # Supported file types and their magic number signatures
     SUPPORTED_TYPES = {
         "application/pdf": [".pdf"],
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document": [
-            ".docx"
-        ],
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document": [".docx"],
         "application/msword": [".doc"],
         "text/plain": [".txt"],
         "message/rfc822": [".eml"],
@@ -91,26 +84,24 @@ class EnhancedFileValidator:
         if self.magic_available:
             try:
                 self.magic_mime = magic.Magic(mime=True)
-                logger.info(
-                    "Enhanced file validator initialized with magic number support"
-                )
+                logger.info("Enhanced file validator initialized with magic number support")
             except Exception as e:
                 logger.warning(f"Failed to initialize python-magic: {e}")
                 self.magic_available = False
 
         if not self.magic_available:
-            logger.info(
-                "Enhanced file validator initialized with extension-based validation only"
-            )
+            logger.info("Enhanced file validator initialized with extension-based validation only")
 
     def validate_file(self, file_data: bytes, filename: str) -> ValidationResult:
         """Comprehensive file validation including magic numbers and corruption detection.
 
         Args:
+        ----
             file_data: Raw file content as bytes
             filename: Original filename for extension checking
 
         Returns:
+        -------
             ValidationResult with validation status and details
 
         """
@@ -119,9 +110,7 @@ class EnhancedFileValidator:
             extra={
                 "filename": filename,
                 "file_size": len(file_data),
-                "validation_type": "enhanced_with_magic"
-                if MAGIC_AVAILABLE
-                else "extension_based",
+                "validation_type": "enhanced_with_magic" if MAGIC_AVAILABLE else "extension_based",
             },
         )
 
@@ -151,17 +140,13 @@ class EnhancedFileValidator:
 
             # Magic number validation if available
             if self.magic_available and self.magic_mime:
-                detected_type = self._validate_magic_numbers(
-                    file_data, file_extension, issues, warnings
-                )
+                detected_type = self._validate_magic_numbers(file_data, file_extension, issues, warnings)
             else:
                 detected_type = self._validate_extension_only(file_extension, issues)
 
             # Type-specific validation
             if detected_type:
-                self._validate_file_content(
-                    file_data, detected_type, filename, issues, warnings
-                )
+                self._validate_file_content(file_data, detected_type, filename, issues, warnings)
                 self._validate_minimum_size(file_data, detected_type, issues)
 
             # Determine overall validation result
@@ -188,9 +173,7 @@ class EnhancedFileValidator:
                     },
                 )
 
-            return ValidationResult(
-                is_valid, detected_type, file_size, issues, warnings
-            )
+            return ValidationResult(is_valid, detected_type, file_size, issues, warnings)
 
         except Exception as e:
             error_msg = f"Validation error: {e!s}"
@@ -235,9 +218,7 @@ class EnhancedFileValidator:
             # Check if extension matches detected type
             expected_extensions = self.SUPPORTED_TYPES[detected_mime]
             if file_extension not in expected_extensions:
-                if file_extension in [
-                    ext for exts in self.SUPPORTED_TYPES.values() for ext in exts
-                ]:
+                if file_extension in [ext for exts in self.SUPPORTED_TYPES.values() for ext in exts]:
                     # Extension is supported but doesn't match content
                     issues.append(
                         f"File extension '{file_extension}' does not match detected type '{detected_mime}'. "
@@ -245,9 +226,7 @@ class EnhancedFileValidator:
                     )
                 else:
                     # Extension is not supported at all
-                    warnings.append(
-                        f"Unusual file extension '{file_extension}' for type '{detected_mime}'"
-                    )
+                    warnings.append(f"Unusual file extension '{file_extension}' for type '{detected_mime}'")
 
             return detected_mime
 
@@ -259,9 +238,7 @@ class EnhancedFileValidator:
             )
             return self._validate_extension_only(file_extension, issues)
 
-    def _validate_extension_only(
-        self, file_extension: str, issues: list[str]
-    ) -> str | None:
+    def _validate_extension_only(self, file_extension: str, issues: list[str]) -> str | None:
         """Fallback validation using file extension only"""
         # Map extensions to MIME types
         extension_map = {
@@ -287,9 +264,7 @@ class EnhancedFileValidator:
 
         return detected_type
 
-    def _validate_minimum_size(
-        self, file_data: bytes, detected_type: str, issues: list[str]
-    ) -> None:
+    def _validate_minimum_size(self, file_data: bytes, detected_type: str, issues: list[str]) -> None:
         """Validate file meets minimum size requirements"""
         file_size = len(file_data)
         min_size = self.MIN_FILE_SIZES.get(detected_type, 1)
@@ -317,10 +292,7 @@ class EnhancedFileValidator:
         warnings: list[str],
     ) -> None:
         """Validate file content for corruption and emptiness"""
-        if (
-            detected_type
-            == "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-        ):
+        if detected_type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
             self._validate_docx_content(file_data, filename, issues, warnings)
         elif detected_type == "application/pdf":
             self._validate_pdf_content(file_data, filename, issues, warnings)
@@ -348,9 +320,7 @@ class EnhancedFileValidator:
                     document = docx.Document(temp_file.name)
 
                     # Check if document has any readable content
-                    paragraph_texts = [
-                        para.text.strip() for para in document.paragraphs
-                    ]
+                    paragraph_texts = [para.text.strip() for para in document.paragraphs]
                     non_empty_paragraphs = [text for text in paragraph_texts if text]
 
                     if not non_empty_paragraphs:
@@ -364,9 +334,7 @@ class EnhancedFileValidator:
                                         table_content.append(cell_text)
 
                         if not table_content:
-                            warnings.append(
-                                "DOCX file appears to be empty (no readable text content)"
-                            )
+                            warnings.append("DOCX file appears to be empty (no readable text content)")
                             logger.warning(
                                 "Empty DOCX content detected",
                                 extra={
@@ -434,9 +402,7 @@ class EnhancedFileValidator:
                                 total_text_length += len(text)
 
                             if total_text_length == 0:
-                                warnings.append(
-                                    "PDF file contains no extractable text (may be image-only)"
-                                )
+                                warnings.append("PDF file contains no extractable text (may be image-only)")
                                 logger.info(
                                     "PDF with no extractable text",
                                     extra={
@@ -533,12 +499,13 @@ class EnhancedFileValidator:
                 issues.append("Invalid PNG magic number signature")
                 logger.error(
                     "PNG magic number validation failed",
-                    extra={"filename": filename, "validation_issue": "invalid_png_signature"}
+                    extra={"filename": filename, "validation_issue": "invalid_png_signature"},
                 )
                 return
 
             # Use PIL to validate PNG structure
             from PIL import Image
+
             with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as temp_file:
                 temp_file.write(file_data)
                 temp_file.flush()
@@ -588,12 +555,13 @@ class EnhancedFileValidator:
                 issues.append("Invalid JPEG magic number signature")
                 logger.error(
                     "JPEG magic number validation failed",
-                    extra={"filename": filename, "validation_issue": "invalid_jpeg_signature"}
+                    extra={"filename": filename, "validation_issue": "invalid_jpeg_signature"},
                 )
                 return
 
             # Use PIL to validate JPEG structure
             from PIL import Image
+
             with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as temp_file:
                 temp_file.write(file_data)
                 temp_file.flush()
@@ -644,13 +612,14 @@ class EnhancedFileValidator:
                 issues.append("Invalid DOC magic number signature (not an OLE compound document)")
                 logger.error(
                     "DOC magic number validation failed",
-                    extra={"filename": filename, "validation_issue": "invalid_doc_signature"}
+                    extra={"filename": filename, "validation_issue": "invalid_doc_signature"},
                 )
                 return
 
             # Try to validate with oletools if available
             try:
                 from oletools import olefile
+
                 with tempfile.NamedTemporaryFile(delete=False, suffix=".doc") as temp_file:
                     temp_file.write(file_data)
                     temp_file.flush()
@@ -663,7 +632,7 @@ class EnhancedFileValidator:
                                 if ole.exists("WordDocument"):
                                     logger.debug(
                                         "Valid legacy DOC file detected",
-                                        extra={"filename": filename, "streams": ole.listdir()}
+                                        extra={"filename": filename, "streams": ole.listdir()},
                                     )
                                 else:
                                     warnings.append("OLE file may not be a valid Word document")
@@ -695,10 +664,12 @@ def validate_uploaded_file(file_data: bytes, filename: str) -> ValidationResult:
     """Convenience function to validate an uploaded file.
 
     Args:
+    ----
         file_data: Raw file content as bytes
         filename: Original filename
 
     Returns:
+    -------
         ValidationResult with validation status and details
 
     """
@@ -710,10 +681,12 @@ def is_file_valid(file_data: bytes, filename: str) -> bool:
     """Simple boolean check for file validity.
 
     Args:
+    ----
         file_data: Raw file content as bytes
         filename: Original filename
 
     Returns:
+    -------
         True if file passes all validation checks
 
     """

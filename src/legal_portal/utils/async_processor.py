@@ -11,11 +11,11 @@ from legal_portal.core.data_models import (
     SavedDocument,
 )
 from legal_portal.services.services.email_generator import EmailGenerator
-from legal_portal.utils.logging_config import setup_logging
+from legal_portal.utils.logging_config import get_module_logger
 
 from core import AIAnalyzer
 
-logger = setup_logging("async_processor")
+logger = get_module_logger(__name__)
 
 
 if TYPE_CHECKING:

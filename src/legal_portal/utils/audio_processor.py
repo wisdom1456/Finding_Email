@@ -4,7 +4,7 @@ import os
 import tempfile
 
 import magic
-from legal_portal.utils.logging_config import setup_logging
+from legal_portal.utils.logging_config import get_module_logger
 from openai import APIError, APITimeoutError, OpenAI, RateLimitError
 from tenacity import (
     retry,
@@ -13,7 +13,7 @@ from tenacity import (
     wait_exponential,
 )
 
-logger = setup_logging("audio_processor")
+logger = get_module_logger(__name__)
 
 from legal_portal.core.data_models import (
     FileMetadata,

@@ -1,5 +1,4 @@
-"""Validation utilities for AI analysis responses.
-"""
+"""Validation utilities for AI analysis responses."""
 
 from __future__ import annotations
 
@@ -100,9 +99,17 @@ def create_fallback_legal_assessment() -> dict[str, Any]:
         "case_type": "General Legal Matter",
         "claim_viability": "Moderate",
         "overall_evidence_strength": "Under Review",
-        "potential_challenges": "We are currently reviewing the available evidence and will provide a detailed assessment of potential challenges as our analysis continues. This may include procedural considerations, evidentiary requirements, and strategic factors that could impact case outcomes.",
-        "recommended_actions": "We recommend gathering additional documentation and evidence to strengthen your position. Our team will continue analyzing the materials you have provided and will update you with specific next steps as our review progresses.",
-        "demand_letter_appropriate": "Yes",
+        "potential_challenges": (
+            "We are currently reviewing the available evidence and will provide a detailed assessment of "
+            "potential challenges as our analysis continues. This may include procedural considerations, "
+            "evidentiary requirements, and strategic factors that could impact case outcomes."
+        ),
+        "recommended_actions": [
+            "Gather additional documentation and evidence to strengthen your position",
+            "Continue analyzing the materials provided for case development",
+            "Update strategy as review progresses and new information becomes available",
+        ],
+        "demand_letter_appropriate": True,
         "urgency_assessment": "Standard",
     }
 
@@ -116,8 +123,13 @@ def create_fallback_demand_letter_evaluation() -> dict[str, Any]:
 
     """
     return {
-        "is_appropriate": "Yes",
-        "reasoning": "Based on our preliminary review, a demand letter appears to be an appropriate next step. This approach allows us to formally communicate your position and may facilitate resolution without the need for litigation. We will work with you to craft a demand letter that effectively presents your case and requests appropriate remedies.",
+        "is_appropriate": True,
+        "reasoning": (
+            "Based on our preliminary review, a demand letter appears to be an appropriate next step. "
+            "This approach allows us to formally communicate your position and may facilitate resolution "
+            "without the need for litigation. We will work with you to craft a demand letter that "
+            "effectively presents your case and requests appropriate remedies."
+        ),
         "potential_outcomes": [
             "Settlement negotiations may begin",
             "Opposing party may respond with counter-proposals",
@@ -167,7 +179,7 @@ def validate_json_response(response: str) -> dict[str, Any]:
 
     except json.JSONDecodeError as e:
         msg = f"Invalid JSON response: {e}"
-        raise ValueError(msg)
+        raise ValueError(msg) from e
 
 
 def ensure_required_fields(data: dict[str, Any], required_fields: list[str]) -> dict[str, Any]:
@@ -312,7 +324,7 @@ def validate_section_output(output_content: str, output_format: str) -> None:
             logger.info(f"VALIDATORS: JSON format validation passed for content length {len(output_content)}")
         except json.JSONDecodeError as e:
             logger.error(f"VALIDATORS: JSON validation failed - {e}")
-            raise ValueError(f"Invalid JSON format: {e}")
+            raise ValueError(f"Invalid JSON format: {e}") from e
 
     elif output_format == "html":
         # Check if the content contains at least one HTML tag structure

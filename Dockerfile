@@ -8,7 +8,8 @@ ARG ENVIRONMENT=production
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     ENVIRONMENT=${ENVIRONMENT} \
-    PORT=8080
+    PORT=8080 \
+    PYTHONPATH=/app:/app/src:/app/app
 
 # Create non-root user for security
 RUN groupadd --gid 1000 appuser && \

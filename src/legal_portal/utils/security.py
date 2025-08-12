@@ -7,6 +7,7 @@ and secure filename sanitization.
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 import re
 import tempfile
@@ -15,6 +16,7 @@ from pathlib import Path
 from typing import Optional, Tuple
 
 import magic
+import streamlit as st
 
 # Maximum file size: 100MB
 MAX_FILE_SIZE = 100 * 1024 * 1024  # 100MB
@@ -47,7 +49,6 @@ ALLOWED_MIME_TYPES = {
     "text/rtf",
     # Email files
     "message/rfc822",
-    "text/plain",  # Some .eml files may be detected as text/plain
     # Images
     "image/jpeg",
     "image/png",
@@ -215,7 +216,7 @@ def validate_file_content(file_data: bytes, filename: str) -> Tuple[str, str]:
     try:
         mime_type = magic.from_buffer(file_data, mime=True)
     except Exception as e:
-        raise ValueError(f"Unable to determine file content type: {e!s}")
+        raise ValueError(f"Unable to determine file content type: {e!s}") from e
 
     # Check if detected MIME type is allowed
     if mime_type not in ALLOWED_MIME_TYPES:
@@ -293,7 +294,7 @@ def create_secure_temp_file(file_data: bytes, filename: str) -> str:
         return tmp_path
 
     except OSError as e:
-        raise OSError(f"Failed to create secure temporary file: {e!s}")
+        raise OSError(f"Failed to create secure temporary file: {e!s}") from e
 
 
 def validate_file_path(file_path: str, base_dir: str) -> bool:
@@ -414,13 +415,8 @@ __all__ = [
 ]
 
 
-
-import json
-from pathlib import Path
-import streamlit as st
-
 def check_pin():
-    """Checks if the user has entered a valid PIN."""
+    """Check if the user has entered a valid PIN."""
     pins_file = Path(__file__).parent.parent / "config" / "pins.json"
     if not pins_file.exists():
         st.error("PIN file not found. Please contact an administrator.")
@@ -438,7 +434,7 @@ def check_pin():
 
     if "pin_attempts" not in st.session_state:
         st.session_state["pin_attempts"] = 0
-    
+
     if st.session_state["pin_attempts"] >= 3:
         st.error("You have exceeded the maximum number of PIN attempts.")
         return False
@@ -458,5 +454,5 @@ def check_pin():
             else:
                 st.error("You have exceeded the maximum number of PIN attempts.")
             return False
-    
+
     return False

@@ -1,0 +1,3 @@
+# This file is used by gcloud to ignore files when deploying.
+# We need to explicitly include the pins.json file.
+!src/legal_portal/config/pins.json

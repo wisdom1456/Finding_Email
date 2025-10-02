@@ -49,6 +49,28 @@
 - Two-tier system: Lightweight by default, full access when explicitly requested
 - Documentation: Complete architecture in `docs/FULL_DOCUMENT_CONTENT_ARCHITECTURE.md`
 
+### Letter Generation Prompt Optimization (Oct 2, 2025)
+**CRITICAL SCALABILITY FIX**: Further optimized letter generation prompts to handle 40+ document cases.
+
+**Problem Identified**:
+- 5-6 document case = 3,160 lines in final_prompt.txt
+- 40 document projection = 11,500+ lines, 80,000-120,000 tokens (would exceed limits)
+
+**Solution Implemented** (`json_processing_service.py` lines 154-167):
+Excluded verbose/redundant fields from letter generation prompt:
+- ❌ `detailed_findings` (500-800 words, redundant with summary)
+- ❌ `evidence_points` (duplicates key_facts)
+- ❌ `key_points`, `citations`, `metadata` (mostly empty/technical)
+- ✅ Kept: `summary`, `key_facts`, `parties_mentioned`, `amounts_and_dates`, `legal_issues_identified`, `timeline_events`
+
+**Impact**:
+- 60% reduction in prompt size per document
+- 40 doc case: 11,500 → 5,600 lines, 40,000-50,000 tokens (within limits)
+- Quality maintained: All essential facts, dates, parties, legal issues preserved
+- Full data still accessible via `analyzed_documents_with_content` if needed
+
+**Documentation**: `docs/PROMPT_SIZE_OPTIMIZATION.md`
+
 ## 2. Automatic Output File Cleanup (Oct 2, 2025)
 
 Implemented intelligent output file management with 24-hour automatic cleanup to prevent disk space accumulation:

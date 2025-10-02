@@ -491,12 +491,12 @@ def main():
     with col1:
         st.caption("AI-Powered Legal Document Analysis")
     with col2:
-        if st.session_state.performance_mode == "optimized":
+        if st.session_state.get("performance_mode", "optimized") == "optimized":
             st.success("🚀 Performance Mode: ON")
         else:
             st.info("🐢 Standard Mode")
     with col3:
-        if st.session_state.enable_caching:
+        if st.session_state.get("enable_caching", True):
             st.success("💾 Caching: ON")
         else:
             st.warning("💾 Caching: OFF")
@@ -509,7 +509,7 @@ def main():
         performance_mode = st.selectbox(
             "Processing Mode",
             ["optimized", "standard"],
-            index=0 if st.session_state.performance_mode == "optimized" else 1,
+            index=0 if st.session_state.get("performance_mode", "optimized") == "optimized" else 1,
             help="Optimized mode uses parallel processing and caching for 3-5x faster processing",
         )
         st.session_state.performance_mode = performance_mode
@@ -517,22 +517,22 @@ def main():
         # Enable/disable optimizations
         st.session_state.enable_caching = st.checkbox(
             "Enable Caching",
-            value=st.session_state.enable_caching,
+            value=st.session_state.get("enable_caching", True),
             help="Cache API responses and document analysis for faster repeated processing",
         )
 
         st.session_state.enable_parallel_processing = st.checkbox(
             "Enable Parallel Processing",
-            value=st.session_state.enable_parallel_processing,
+            value=st.session_state.get("enable_parallel_processing", True),
             help="Process multiple documents concurrently for faster analysis",
         )
 
-        if st.session_state.enable_parallel_processing:
+        if st.session_state.get("enable_parallel_processing", True):
             st.session_state.max_concurrent_requests = st.slider(
                 "Max Concurrent Requests",
                 min_value=1,
                 max_value=20,
-                value=st.session_state.max_concurrent_requests,
+                value=st.session_state.get("max_concurrent_requests", 10),
                 help="Maximum number of concurrent API requests",
             )
 
@@ -568,8 +568,9 @@ def main():
 
         elif st.session_state.processing_status == "active":
             st.info("⚡ Analysis is currently in progress...")
-            if st.session_state.performance_mode == "optimized":
-                st.caption(f"Processing with {st.session_state.max_concurrent_requests} concurrent workers")
+            if st.session_state.get("performance_mode", "optimized") == "optimized":
+                max_workers = st.session_state.get("max_concurrent_requests", 10)
+                st.caption(f"Processing with {max_workers} concurrent workers")
 
         # Show any processing errors
         if st.session_state.processing_status == "failed" and st.session_state.processing_error:

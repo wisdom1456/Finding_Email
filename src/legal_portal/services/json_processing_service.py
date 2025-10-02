@@ -149,9 +149,21 @@ class JsonProcessingService:
 
             # Prepare data for master prompt template
             # The template expects analysis object with attributes, not JSON string
-            # Exclude original_content to prevent token overflow (can access via analyzed_documents_with_content if needed)
+            # Exclude original_content AND verbose fields to prevent token overflow
+            # For letter generation, we only need concise summaries
             analysis_data = analysis.model_dump(
-                exclude={"analyzed_documents": {"__all__": {"original_content"}}}
+                exclude={
+                    "analyzed_documents": {
+                        "__all__": {
+                            "original_content",  # Full document text (too large)
+                            "detailed_findings",  # 500-800 words per doc (redundant with summary)
+                            "evidence_points",  # Detailed evidence list (covered in key_facts)
+                            "key_points",  # Often empty or redundant
+                            "citations",  # Often empty or redundant
+                            "metadata",  # Technical metadata not needed for letter
+                        }
+                    }
+                }
             )
 
             # Create analysis object that template can access with dot notation
@@ -629,9 +641,13 @@ class JsonProcessingService:
         """
         return f"""<html>
 <body>
-<p>We have completed our review of your {case_type.lower()} matter. Due to a technical issue during document generation, we are providing this preliminary communication.</p>
+<p>We have completed our review of your {case_type.lower()} matter. Due to a
+technical issue during document generation, we are providing this preliminary
+communication.</p>
 
-<p>We are currently analyzing the details of your case and will provide a comprehensive findings letter within 24 hours. Our initial review indicates that your matter requires immediate attention and strategic consideration.</p>
+<p>We are currently analyzing the details of your case and will provide a
+comprehensive findings letter within 24 hours. Our initial review indicates
+that your matter requires immediate attention and strategic consideration.</p>
 
 <p><strong>Immediate Next Steps:</strong></p>
 <ul>
@@ -640,9 +656,12 @@ class JsonProcessingService:
 <li>Do not take any action regarding this matter until we provide guidance</li>
 </ul>
 
-<p>If you have urgent questions or concerns, please contact our office immediately. We are committed to providing you with thorough legal guidance and will resolve this technical issue promptly.</p>
+<p>If you have urgent questions or concerns, please contact our office
+immediately. We are committed to providing you with thorough legal guidance
+and will resolve this technical issue promptly.</p>
 
-<p>Thank you for your patience as we ensure you receive the most accurate and comprehensive legal analysis possible.</p>
+<p>Thank you for your patience as we ensure you receive the most accurate and
+comprehensive legal analysis possible.</p>
 </body>
 </html>"""
 

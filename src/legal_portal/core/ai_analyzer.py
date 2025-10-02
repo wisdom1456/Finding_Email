@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import os
 from typing import TYPE_CHECKING, Any
@@ -17,6 +18,7 @@ from legal_portal.core.data_models import (
     LegalAssessment,
     ProcessedDocument,
 )
+from legal_portal.utils.cache_manager import DocumentCache
 from legal_portal.utils.logging_config import get_module_logger
 from openai import APIError, APITimeoutError, BadRequestError, OpenAI, RateLimitError
 from pydantic import ValidationError
@@ -38,15 +40,25 @@ class AIAnalyzer:
     """Handles all interactions with the OpenAI API for document analysis."""
 
     def __init__(
-        self, client: OpenAI, doc_processor: DocumentProcessor, config_path: str | None = None
+        self,
+        client: OpenAI,
+        doc_processor: DocumentProcessor,
+        config_path: str | None = None,
+        enable_caching: bool = True,
     ) -> None:
         self.client = client
         self.doc_processor = doc_processor
+        self.enable_caching = enable_caching
+
+        # Initialize document cache
+        self.document_cache = DocumentCache() if enable_caching else None
 
         # Load configuration
         self.config = self._load_configuration(config_path)
 
-        logger.info(f"AI ANALYZER: ✅ Initialized with configuration: {config_path or 'default'}")
+        logger.info(
+            f"AI ANALYZER: ✅ Initialized with configuration: {config_path or 'default'}, caching={enable_caching}"
+        )
         # Force deployment cache refresh
 
     def _load_configuration(self, config_path: str | None = None) -> dict[str, Any]:
@@ -220,43 +232,50 @@ class AIAnalyzer:
             "Return **one—and only one—valid JSON object** that matches the\n"
             "`AnalyzedDocument` schema below.\n\n"
             "• JSON only—no markdown, no extra text.\n"
-            "• Preserve key order.\n"
-            "• PRIORITIZE analysis elements that directly relate to client's stated priorities and desired outcomes.\n"
+            "• Extract comprehensive detail from the document - this analysis will be used instead of the full content.\n"
+            "• PRIORITIZE information that relates to client's stated priorities and desired outcomes.\n"
             "• Write all content in clear, accessible language (9th-grade reading level)\n"
             "• Use direct professional language addressing the client directly\n\n"
             "==========================\n"
-            "DOCUMENT (read-only)\n"
+            "DOCUMENT TO ANALYZE\n"
             f"Filename: {doc.file_name}\n"
-            f"Content: {doc.content}\n"
+            f"Type: {doc.file_type or 'unknown'}\n"
+            f"Size: {getattr(doc.metadata, 'size', 'unknown')} bytes\n\n"
+            f"Content:\n{doc.content}\n"
             "==========================\n"
-            "CLIENT PRIORITIES FOR THIS ANALYSIS:\n"
-            f"• Priorities: {client_priorities_str}\n"
-            f"• Desired Outcomes: {desired_outcomes_str}\n"
-            f"• Case Type: {ctx.case_type or 'Not specified'}\n"
-            f"• Urgency Level: {ctx.urgency_level or 'Not specified'}\n"
-            "==========================\n"
-            "FULL INTAKE CONTEXT\n"
+            "CASE CONTEXT (Client Priorities & Details)\n"
             f"{ctx.model_dump_json(indent=2)}\n"
             "==========================\n\n"
             "SCHEMA — AnalyzedDocument\n"
             "{\n"
-            '  "file_name": "The original filename of the document.",\n'
-            "  \"document_type\": \"The type of document (e.g., 'Contract', 'Email', 'Image').\",\n"
-            '  "inferred_title": "A meaningful, non-repetitive title for the document (less than 15 words).",\n'
-            '  "summary": "A concise, value-driven summary of the document\'s content (100-150 words).",\n'
-            '  "key_information": "A single consolidated string containing the most critical information. Format as a paragraph, NOT a list. If multiple points exist, separate them with semicolons within the string.",\n'
-            '  "relevance_to_case": "A clear explanation of how this document supports or undermines the client\'s position, referencing specific case priorities."\n'
+            '  "file_name": "The exact filename provided.",\n'
+            "  \"document_type\": \"The type of document (e.g., 'Contract', 'Email', 'Receipt', 'Photos', 'Correspondence').\",\n"
+            '  "inferred_title": "A meaningful, descriptive title (max 15 words).",\n'
+            '  "summary": "Executive summary of the document (250-400 words) covering: what it is, key content, and why it matters.",\n'
+            '  "detailed_findings": "Comprehensive analysis (500-800 words) extracting all relevant facts, statements, commitments, issues, and evidence. Be thorough.",\n'
+            '  "key_facts": ["Array of 10-20 specific factual statements extracted from the document. Each should be concrete and verifiable."],\n'
+            '  "evidence_points": ["Array of evidentiary items (e.g., \'Contractor admitted incomplete work in email dated 5/15/25\', \'Contract specifies $128,335.77 total cost\')"],\n'
+            '  "parties_mentioned": [{"name": "Person/Company Name", "role": "Their role/relationship", "context": "What they did/said in this document"}],\n'
+            '  "amounts_and_dates": [{"type": "payment|deadline|incident|meeting", "amount_or_date": "The specific amount or date", "description": "What this relates to"}],\n'
+            '  "legal_issues_identified": ["Array of potential legal issues or implications raised by this document (e.g., \'Breach of contract\', \'Statute of limitations concern\')"],\n'
+            '  "key_information": "Legacy field: Single paragraph with most critical points separated by semicolons.",\n'
+            '  "relevance_to_case": "How this document supports or undermines the client\'s position, referencing specific case priorities.",\n'
+            '  "timeline_events": [{"date": "YYYY-MM-DD or approximate", "description": "Event description"}]\n'
             "}\n"
             "==========================\n\n"
-            "CONSTRUCTION RULES\n"
-            "1.  `file_name`: Must be the exact filename provided.\n"
-            "2.  `inferred_title`: Create a meaningful and non-repetitive title. Do not just repeat the filename.\n"
-            "3.  `summary`: Must be concise and value-driven, focusing on the most important aspects of the document.\n"
-            "4.  `key_information`: Extract the most critical information as a bulleted list string.\n"
-            "5.  `relevance_to_case`: Clearly articulate the document's relevance to the overall case strategy and client goals.\n\n"
+            "EXTRACTION RULES\n"
+            "1.  **Be Comprehensive**: Extract MORE detail, not less. This replaces the full document in later analysis.\n"
+            "2.  **Structured Data**: Populate ALL array fields with relevant information. Aim for completeness.\n"
+            "3.  **Key Facts**: Extract 10-20 specific, verifiable facts. Don't summarize—extract actual statements.\n"
+            "4.  **Evidence Points**: Identify anything that could support or refute legal claims.\n"
+            "5.  **Parties**: Extract everyone mentioned with their role and context.\n"
+            "6.  **Amounts/Dates**: Capture all financial figures and important dates with full context.\n"
+            "7.  **Legal Issues**: Identify any legal implications even if not explicitly stated.\n"
+            "8.  **Summary vs Detailed**: Summary is overview; detailed_findings is exhaustive extraction.\n\n"
             "VALIDATION\n"
             "• Must parse as JSON.\n"
-            "• All strings double-quoted.\n\n"
+            "• All strings double-quoted.\n"
+            "• Arrays can be empty [] if no relevant data exists.\n\n"
             "BEGIN."
         )
 
@@ -691,7 +710,9 @@ BEGIN.
 """
 
         return final_assessment_prompt.format(
-            analysis_for_prompt=analysis_for_prompt.model_dump_json(indent=2),
+            analysis_for_prompt=analysis_for_prompt.model_dump_json(
+                indent=2, exclude={"analyzed_documents": {"__all__": {"original_content"}}}
+            ),
             timeline_content=timeline_content,
             video_relevance_content=video_relevance_content,
         )
@@ -901,8 +922,34 @@ BEGIN.
     async def _analyze_single_document(
         self, document: ProcessedDocument, intake_context: EnhancedIntakeAnalysis
     ) -> AnalyzedDocument | AnalysisError:
-        """Analyzes a single case document, returning structured data or an error."""
+        """Analyzes a single case document, returning structured data or an error.
+
+        Uses per-document caching based on content hash for automatic cache invalidation.
+        """
         try:
+            # Generate cache key based on document content + filename
+            if self.enable_caching and self.document_cache:
+                # Create hash from content + filename for unique identification
+                content_for_hash = f"{document.file_name}:{document.content}"
+                doc_hash = hashlib.md5(content_for_hash.encode()).hexdigest()
+                cache_key = f"doc:{doc_hash}"
+
+                # Check cache
+                logger.debug(
+                    f"🔍 Checking cache for document: {document.file_name} (hash: {doc_hash[:8]}...)"
+                )
+                cached_result = self.document_cache.get_document_analysis(cache_key)
+
+                if cached_result:
+                    logger.info(f"✅ Cache HIT for document: {document.file_name} - skipping AI analysis")
+                    # Reconstruct AnalyzedDocument from cached dict
+                    analyzed_doc = AnalyzedDocument.model_validate(cached_result)
+                    # Restore original content
+                    analyzed_doc.original_content = document.content
+                    return analyzed_doc
+                else:
+                    logger.info(f"❌ Cache MISS for document: {document.file_name} - analyzing with AI")
+
             # Check document size and truncate if necessary
             truncated_content = self._truncate_content_if_needed(document.content)
 
@@ -924,7 +971,25 @@ BEGIN.
                 logger.info(f"AI ANALYZER: 🔄 Using gpt-4o-mini for large document: {document.file_name}")
 
             raw_analysis = await self._make_openai_request(prompt, model=model_to_use)
-            return AnalyzedDocument.model_validate(raw_analysis)
+            analyzed_doc = AnalyzedDocument.model_validate(raw_analysis)
+
+            # Preserve original document content for downstream reference
+            analyzed_doc.original_content = document.content
+            logger.debug(
+                f"Attached original content ({len(document.content)} chars) to analyzed document: {document.file_name}"
+            )
+
+            # Cache the result
+            if self.enable_caching and self.document_cache:
+                try:
+                    # Convert to dict for caching (without original_content to save space)
+                    cache_data = analyzed_doc.model_dump(exclude={"original_content"})
+                    self.document_cache.cache_document_analysis(cache_key, cache_data)
+                    logger.info(f"💾 Cached analysis for document: {document.file_name}")
+                except Exception as cache_error:
+                    logger.warning(f"Failed to cache document analysis: {cache_error}")
+
+            return analyzed_doc
         except (AIAnalysisError, ValidationError) as e:
             details = str(e) if isinstance(e, AIAnalysisError) else str(e.errors())
             return AnalysisError(
@@ -1474,50 +1539,64 @@ def generate_case_timeline(analysis: CaseAnalysisResult) -> list[dict[str, Any]]
     try:
         timeline_events = []
 
-        # Extract events from documents
+        # Extract events from documents - prioritize timeline_events field
         if analysis.analyzed_documents:
             for doc in analysis.analyzed_documents:
-                # Look for date patterns in key information and summary
-                text_content = f"{doc.summary or ''} {getattr(doc, 'key_information', '') or ''} {getattr(doc, 'relevance_to_case', '') or ''}"
-
-                # Simple date extraction (can be enhanced with more sophisticated parsing)
-                import re
-
-                date_patterns = [
-                    r"\b(\d{1,2}/\d{1,2}/\d{4})\b",  # MM/DD/YYYY
-                    r"\b(\d{1,2}-\d{1,2}-\d{4})\b",  # MM-DD-YYYY
-                    r"\b(January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},?\s+\d{4}\b",  # Month DD, YYYY
-                    r"\b(\d{4}-\d{2}-\d{2})\b",  # YYYY-MM-DD
-                ]
-
-                for pattern in date_patterns:
-                    dates = re.findall(pattern, text_content, re.IGNORECASE)
-                    for date_match in dates[:3]:  # Limit to 3 dates per document
-                        # Extract surrounding context
-                        date_str = (
-                            date_match
-                            if isinstance(date_match, str)
-                            else date_match[0]
-                            if isinstance(date_match, tuple)
-                            else str(date_match)
-                        )
-                        context_start = max(0, text_content.lower().find(date_str.lower()) - 50)
-                        context_end = min(
-                            len(text_content),
-                            text_content.lower().find(date_str.lower()) + len(date_str) + 100,
-                        )
-                        context = text_content[context_start:context_end].strip()
-
+                # First, use timeline_events if available (from our new field)
+                if hasattr(doc, "timeline_events") and doc.timeline_events:
+                    for event in doc.timeline_events:
                         timeline_events.append(
                             {
-                                "date": date_str,
+                                "date": event.get("date", "Unknown"),
                                 "source": f"Document: {doc.file_name}",
                                 "source_type": "document",
-                                "event": context,
-                                "importance": "medium",
-                                "sort_date": _parse_date_for_sorting(date_str),
+                                "event": event.get("description", "Event recorded"),
+                                "importance": "high",  # Higher importance since AI extracted it
+                                "sort_date": _parse_date_for_sorting(event.get("date", "Unknown")),
                             }
                         )
+                else:
+                    # Fallback to regex-based extraction for documents without timeline_events
+                    text_content = f"{doc.summary or ''} {getattr(doc, 'key_information', '') or ''} {getattr(doc, 'relevance_to_case', '') or ''}"
+
+                    # Simple date extraction (can be enhanced with more sophisticated parsing)
+                    import re
+
+                    date_patterns = [
+                        r"\b(\d{1,2}/\d{1,2}/\d{4})\b",  # MM/DD/YYYY
+                        r"\b(\d{1,2}-\d{1,2}-\d{4})\b",  # MM-DD-YYYY
+                        r"\b(January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},?\s+\d{4}\b",  # Month DD, YYYY
+                        r"\b(\d{4}-\d{2}-\d{2})\b",  # YYYY-MM-DD
+                    ]
+
+                    for pattern in date_patterns:
+                        dates = re.findall(pattern, text_content, re.IGNORECASE)
+                        for date_match in dates[:3]:  # Limit to 3 dates per document
+                            # Extract surrounding context
+                            date_str = (
+                                date_match
+                                if isinstance(date_match, str)
+                                else date_match[0]
+                                if isinstance(date_match, tuple)
+                                else str(date_match)
+                            )
+                            context_start = max(0, text_content.lower().find(date_str.lower()) - 50)
+                            context_end = min(
+                                len(text_content),
+                                text_content.lower().find(date_str.lower()) + len(date_str) + 100,
+                            )
+                            context = text_content[context_start:context_end].strip()
+
+                            timeline_events.append(
+                                {
+                                    "date": date_str,
+                                    "source": f"Document: {doc.file_name}",
+                                    "source_type": "document",
+                                    "event": context,
+                                    "importance": "medium",
+                                    "sort_date": _parse_date_for_sorting(date_str),
+                                }
+                            )
 
         # Extract events from video analysis
         if analysis.video_insights:

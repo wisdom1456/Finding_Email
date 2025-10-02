@@ -60,6 +60,8 @@ class EnhancedFileValidator:
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document": [".docx"],
         "application/msword": [".doc"],
         "text/plain": [".txt"],
+        "text/csv": [".csv"],
+        "application/csv": [".csv"],
         "message/rfc822": [".eml"],
         "image/png": [".png"],
         "image/jpeg": [".jpg", ".jpeg"],
@@ -71,6 +73,8 @@ class EnhancedFileValidator:
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document": 500,  # Minimum for ZIP structure
         "application/msword": 512,  # Minimum for OLE structure
         "text/plain": 1,  # At least one character
+        "text/csv": 1,  # At least one character
+        "application/csv": 1,  # At least one character
         "message/rfc822": 50,  # Basic email headers
         "image/png": 67,  # Minimum for PNG header + IHDR chunk
         "image/jpeg": 10,  # Minimum for JPEG header
@@ -246,6 +250,7 @@ class EnhancedFileValidator:
             ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
             ".doc": "application/msword",
             ".txt": "text/plain",
+            ".csv": "text/csv",
             ".eml": "message/rfc822",
             ".png": "image/png",
             ".jpg": "image/jpeg",
@@ -298,6 +303,8 @@ class EnhancedFileValidator:
             self._validate_pdf_content(file_data, filename, issues, warnings)
         elif detected_type == "text/plain":
             self._validate_text_content(file_data, filename, issues, warnings)
+        elif detected_type in ("text/csv", "application/csv"):
+            self._validate_csv_content(file_data, filename, issues, warnings)
         elif detected_type == "image/png":
             self._validate_png_content(file_data, filename, issues, warnings)
         elif detected_type == "image/jpeg":
@@ -598,6 +605,88 @@ class EnhancedFileValidator:
                     "filename": filename,
                     "error": str(e),
                     "validation_issue": "jpeg_corruption",
+                },
+            )
+
+    def _validate_csv_content(
+        self, file_data: bytes, filename: str, issues: list[str], warnings: list[str]
+    ) -> None:
+        """Validate CSV file content and structure"""
+        try:
+            import csv
+            from io import StringIO
+
+            # Try to decode as UTF-8
+            try:
+                text_content = file_data.decode("utf-8").strip()
+            except UnicodeDecodeError:
+                # Try other common encodings
+                for encoding in ["latin-1", "cp1252", "iso-8859-1"]:
+                    try:
+                        text_content = file_data.decode(encoding).strip()
+                        warnings.append(f"CSV file decoded using {encoding} encoding")
+                        break
+                    except UnicodeDecodeError:
+                        continue
+                else:
+                    issues.append("CSV file contains invalid character encoding")
+                    return
+
+            if not text_content:
+                warnings.append("CSV file appears to be empty")
+                logger.warning(
+                    "Empty CSV file detected",
+                    extra={
+                        "filename": filename,
+                        "file_size": len(file_data),
+                        "validation_issue": "empty_csv_content",
+                    },
+                )
+                return
+
+            # Try to parse CSV content
+            try:
+                csv_reader = csv.reader(StringIO(text_content))
+                rows = list(csv_reader)
+
+                if not rows:
+                    warnings.append("CSV file has no rows")
+                elif len(rows) == 1:
+                    warnings.append("CSV file has only header row (no data)")
+
+                # Check for consistent column count
+                if rows:
+                    column_counts = [len(row) for row in rows]
+                    if len(set(column_counts)) > 1:
+                        warnings.append("CSV file has inconsistent column counts across rows")
+
+                logger.debug(
+                    "CSV content validation completed",
+                    extra={
+                        "filename": filename,
+                        "row_count": len(rows),
+                        "column_count": len(rows[0]) if rows else 0,
+                    },
+                )
+            except csv.Error as e:
+                issues.append(f"CSV file parsing error: {e!s}")
+                logger.error(
+                    "CSV parsing error",
+                    extra={
+                        "filename": filename,
+                        "error": str(e),
+                        "validation_issue": "csv_parsing_error",
+                    },
+                )
+
+        except Exception as e:
+            issues.append(f"CSV file validation failed: {e!s}")
+            logger.error(
+                "CSV file validation error",
+                extra={
+                    "filename": filename,
+                    "error": str(e),
+                    "validation_issue": "csv_validation_error",
                 },
             )
 

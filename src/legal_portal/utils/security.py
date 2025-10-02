@@ -36,6 +36,7 @@ ALLOWED_EXTENSIONS = {
     ".wav",
     ".mp4",
     ".mov",
+    ".csv",
 }
 
 # Allowed MIME types (whitelist)
@@ -47,6 +48,8 @@ ALLOWED_MIME_TYPES = {
     "text/plain",
     "application/rtf",
     "text/rtf",
+    "text/csv",
+    "application/csv",
     # Email files
     "message/rfc822",
     # Images
@@ -71,6 +74,8 @@ MIME_EXTENSION_MAP = {
     "text/plain": [".txt", ".eml"],  # .eml files may be detected as text/plain
     "application/rtf": [".rtf"],
     "text/rtf": [".rtf"],
+    "text/csv": [".csv"],
+    "application/csv": [".csv"],
     "message/rfc822": [".eml"],  # Standard MIME type for .eml files
     "image/jpeg": [".jpg", ".jpeg"],
     "image/png": [".png"],

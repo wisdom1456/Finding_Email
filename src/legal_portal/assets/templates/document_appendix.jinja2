@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document Appendix - Case Review</title>
+    <style>
+        body {
+            font-family: 'Times New Roman', Times, serif;
+            line-height: 1.6;
+            color: #333;
+            margin: 0;
+            padding: 40px;
+            background-color: #ffffff;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+            padding-bottom: 20px;
+            border-bottom: 3px solid #2c3e50;
+        }
+        
+        .header h1 {
+            color: #2c3e50;
+            font-size: 28px;
+            margin-bottom: 10px;
+        }
+        
+        .header p {
+            color: #7f8c8d;
+            font-size: 14px;
+        }
+        
+        .section {
+            margin-bottom: 40px;
+        }
+        
+        .section h2 {
+            color: #2c3e50;
+            font-size: 22px;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 8px;
+            margin-bottom: 20px;
+        }
+        
+        .document-item {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 5px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .document-item.intake-doc {
+            border-left: 5px solid #3498db;
+            background-color: #e8f4f8;
+        }
+        
+        .document-header {
+            font-size: 18px;
+            font-weight: bold;
+            color: #2c3e50;
+            margin-bottom: 12px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #bdc3c7;
+        }
+        
+        .document-metadata {
+            font-size: 13px;
+            color: #7f8c8d;
+            margin-bottom: 10px;
+            font-style: italic;
+        }
+        
+        .document-content p {
+            margin: 10px 0;
+        }
+        
+        .document-content strong {
+            color: #34495e;
+        }
+        
+        .timeline {
+            background-color: #ecf0f1;
+            padding: 20px;
+            border-radius: 5px;
+            margin-bottom: 30px;
+        }
+        
+        .timeline-item {
+            padding: 10px;
+            border-left: 3px solid #3498db;
+            margin-left: 20px;
+            margin-bottom: 15px;
+            background-color: #ffffff;
+        }
+        
+        .timeline-date {
+            font-weight: bold;
+            color: #2c3e50;
+        }
+        
+        .timeline-source {
+            font-size: 12px;
+            color: #7f8c8d;
+            font-style: italic;
+        }
+        
+        .citation {
+            background-color: #fff3cd;
+            border-left: 3px solid #ffc107;
+            padding: 10px;
+            margin: 10px 0;
+            font-size: 14px;
+        }
+        
+        .video-analysis {
+            background-color: #f0f8ff;
+            border: 1px solid #87ceeb;
+            border-radius: 5px;
+            padding: 15px;
+            margin-bottom: 15px;
+        }
+        
+        .badge {
+            display: inline-block;
+            padding: 3px 8px;
+            font-size: 12px;
+            font-weight: bold;
+            border-radius: 3px;
+            margin-right: 5px;
+        }
+        
+        .badge-intake {
+            background-color: #3498db;
+            color: white;
+        }
+        
+        .badge-document {
+            background-color: #95a5a6;
+            color: white;
+        }
+        
+        .badge-video {
+            background-color: #9b59b6;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>📎 Document Appendix</h1>
+        <p>Comprehensive Document Review and Analysis</p>
+    </div>
+
+    <div class="section">
+        <h2>📄 Document Analysis</h2>
+        
+        {% if results.analysis.analyzed_documents and results.analysis.analyzed_documents|length > 0 %}
+            {% for doc in results.analysis.analyzed_documents %}
+            <div class="document-item {% if doc.document_type == 'intake_form' %}intake-doc{% endif %}">
+                <div class="document-header">
+                    {% if doc.document_type == 'intake_form' %}
+                        <span class="badge badge-intake">INTAKE FORM</span>
+                    {% else %}
+                        <span class="badge badge-document">CASE DOCUMENT</span>
+                    {% endif %}
+                    {{ doc.filename or doc.file_name }}
+                </div>
+                
+                {% if doc.inferred_title and doc.inferred_title != 'Not Available' %}
+                <div class="document-metadata">{{ doc.inferred_title }}</div>
+                {% endif %}
+                
+                <div class="document-content">
+                    {% if doc.summary %}
+                    <p><strong>Summary:</strong> {{ doc.summary }}</p>
+                    {% endif %}
+                    
+                    {% if doc.key_information %}
+                    <p><strong>Key Information:</strong> {{ doc.key_information }}</p>
+                    {% endif %}
+                    
+                    {% if doc.relevance_to_case %}
+                    <p><strong>Relevance to Case:</strong> {{ doc.relevance_to_case }}</p>
+                    {% endif %}
+                    
+                    {% if doc.legal_significance %}
+                    <p><strong>Legal Significance:</strong> {{ doc.legal_significance }}</p>
+                    {% endif %}
+                    
+                    {% if doc.citations and doc.citations|length > 0 %}
+                    <div style="margin-top: 15px;">
+                        <strong>Citations:</strong>
+                        {% for citation in doc.citations %}
+                        <div class="citation">
+                            {{ citation.text or citation }}
+                            {% if citation.page_number %}
+                            <span style="color: #7f8c8d;">(Page {{ citation.page_number }})</span>
+                            {% endif %}
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        {% else %}
+            <div class="document-item">
+                <p>No documents were analyzed for this case review.</p>
+            </div>
+        {% endif %}
+    </div>
+
+    {% if results.analysis.video_insights and results.analysis.video_insights|length > 0 %}
+    <div class="section">
+        <h2>🎥 Video Evidence Analysis</h2>
+        {% for video in results.analysis.video_insights %}
+        <div class="video-analysis">
+            <div class="document-header">
+                <span class="badge badge-video">VIDEO</span>
+                {{ video.file_name or 'Unknown Video' }}
+            </div>
+            <div class="document-content">
+                {{ results.format_video_analysis(video)|safe }}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <div class="section" style="margin-top: 50px; padding-top: 20px; border-top: 2px solid #dee2e6;">
+        <p style="text-align: center; color: #7f8c8d; font-size: 12px;">
+            Document Appendix Generated: {{ results.generation_timestamp or 'N/A' }}<br>
+            This appendix contains a comprehensive review of all case documents analyzed.
+        </p>
+    </div>
+</body>
+</html>
+

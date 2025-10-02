@@ -28,6 +28,7 @@ class FileType(str, Enum):
     EML = "eml"
     PNG = "png"  # PNG image format
     JPG = "jpg"  # JPEG image format
+    CSV = "csv"  # CSV file format
     IMAGE = "image"  # Generic image type for other formats
     AUDIO = "audio"
     VIDEO = "video"
@@ -109,19 +110,35 @@ class DocumentCitation(BaseModel):
 
 
 class AnalyzedDocument(BaseModel):
-    """Analyzed case document."""
+    """Analyzed case document with enhanced detail extraction."""
 
     file_name: str
     filename: Optional[str] = None  # Alias for file_name for backward compatibility
     document_type: Optional[str] = None
     inferred_title: Optional[str] = None
+
+    # Summary fields (expanded for more detail)
+    summary: Optional[str] = None  # Now 250-400 words instead of 100-150
+    detailed_findings: Optional[str] = None  # Comprehensive 500-800 word analysis
+
+    # Structured extraction fields (enhanced)
+    key_facts: List[str] = Field(default_factory=list)  # Specific factual points (10-20 items)
+    evidence_points: List[str] = Field(default_factory=list)  # Evidentiary items
+    parties_mentioned: List[Dict[str, str]] = Field(default_factory=list)  # People/entities in doc
+    amounts_and_dates: List[Dict[str, str]] = Field(default_factory=list)  # Financial/temporal data
+    legal_issues_identified: List[str] = Field(default_factory=list)  # Legal implications
+
+    # Legacy fields for backward compatibility
     analysis: Optional[str] = None
-    summary: Optional[str] = None
     key_information: Optional[str] = None
     relevance_to_case: Optional[str] = None
     key_points: List[str] = Field(default_factory=list)
     citations: List[DocumentCitation] = Field(default_factory=list)
     metadata: Optional[Dict[str, Any]] = None
+    timeline_events: List[Dict[str, str]] = Field(default_factory=list)
+
+    # Full content preserved for reference (not sent in prompts)
+    original_content: Optional[str] = None
 
     def model_post_init(self, __context: Any) -> None:
         """Post-init to handle backward compatibility."""

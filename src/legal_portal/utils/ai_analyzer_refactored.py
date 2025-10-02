@@ -219,7 +219,15 @@ class AIAnalyzer:
                 else:
                     raise AIAnalysisError(f"Failed to parse JSON response: {json_response.get('error')}")
 
-            return AnalyzedDocument.model_validate(raw_analysis)
+            analyzed_doc = AnalyzedDocument.model_validate(raw_analysis)
+
+            # Preserve original document content for downstream reference
+            analyzed_doc.original_content = document.content
+            logger.debug(
+                f"Attached original content ({len(document.content)} chars) to analyzed document: {document.file_name}"
+            )
+
+            return analyzed_doc
 
         except (AIAnalysisError, Exception) as e:
             details = str(e)

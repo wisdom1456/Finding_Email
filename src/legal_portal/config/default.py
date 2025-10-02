@@ -84,9 +84,37 @@ class Settings(BaseSettings):
     )
 
     openai_max_tokens: int = Field(
-        4000,
+        12000,
         alias="OPENAI_MAX_TOKENS",
         description="Maximum tokens for OpenAI responses",
+    )
+
+    # ==================================================
+    # OUTPUT AND CACHE CONFIGURATION
+    # ==================================================
+
+    use_cache_for_outputs: bool = Field(
+        True,
+        alias="USE_CACHE_FOR_OUTPUTS",
+        description="Store generated documents in cache instead of files (auto-cleanup after 24 hours)",
+    )
+
+    output_retention_hours: int = Field(
+        24,
+        alias="OUTPUT_RETENTION_HOURS",
+        description="Number of hours to retain output files before cleanup",
+    )
+
+    debug_mode: bool = Field(
+        False,
+        alias="DEBUG_MODE",
+        description="Enable debug mode (keeps diagnostic files, disables auto-cleanup)",
+    )
+
+    validation_output_dir: str = Field(
+        "validation_output",
+        alias="VALIDATION_OUTPUT_DIR",
+        description="Directory for diagnostic output files",
     )
 
     # ==================================================

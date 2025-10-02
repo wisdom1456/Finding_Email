@@ -10,7 +10,9 @@ echo "Shutting down old server processes..."
 
 # Load environment variables from .env file
 if [ -f .env ]; then
-  export $(cat .env | xargs)
+  set -a
+  source .env
+  set +a
 fi
 
 # Start the FastAPI backend in the background

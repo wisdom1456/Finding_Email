@@ -142,6 +142,18 @@ class EmailGeneratorV2:
 
         """
         logger.info("Starting email generation with new single master prompt architecture")
+        logger.info(f"Cache enabled: {self.enable_caching}")
+
+        # Check cache first if caching is enabled
+        if self.enable_caching:
+            doc_hash = self._get_document_hash(case_analysis)
+            logger.info(f"🔍 Cache lookup: checking for document hash {doc_hash}")
+            cached_result = self.document_cache.get_document_analysis(doc_hash)
+            if cached_result:
+                logger.info(f"✅ Cache hit! Returning cached result for document {doc_hash[:8]}...")
+                cached_result.setdefault("metadata", {})["cache_hit"] = True
+                return cached_result
+            logger.info(f"❌ Cache miss for document {doc_hash} - generating fresh content")
 
         try:
             # Validate that we have the necessary services
@@ -218,6 +230,29 @@ class EmailGeneratorV2:
             )
 
             logger.info("Email generation completed successfully with new architecture")
+
+            # Cache the result if caching is enabled (but only if it's a valid result, not an error)
+            if self.enable_caching:
+                try:
+                    # Validate result before caching - don't cache error responses
+                    letter_content = result.get("letter_content", "")
+                    is_error_response = (
+                        "technical issue during document generation" in letter_content
+                        or len(letter_content) < 500  # Error responses are typically short
+                    )
+
+                    if is_error_response:
+                        logger.warning("⚠️  Skipping cache storage - error response detected")
+                        result.setdefault("metadata", {})["cache_skipped"] = True
+                    else:
+                        doc_hash = self._get_document_hash(case_analysis)
+                        self.document_cache.cache_document_analysis(doc_hash, result)
+                        logger.info(f"✅ Cached successful result for document {doc_hash[:8]}...")
+                except Exception as cache_error:
+                    logger.warning(f"Failed to cache result (continuing without caching): {cache_error}")
+                    # Mark that caching failed so we don't try to use it
+                    result.setdefault("metadata", {})["cache_failed"] = True
+
             return result
 
         except Exception as e:
@@ -485,12 +520,19 @@ class EmailGeneratorV2:
         key_data = {
             "client_name": getattr(case_analysis.intake_analysis, "client_name", ""),
             "case_type": getattr(case_analysis.intake_analysis, "case_type", ""),
-            "document_count": len(case_analysis.document_analyses) if case_analysis.document_analyses else 0,
+            "document_count": len(case_analysis.analyzed_documents)
+            if case_analysis.analyzed_documents
+            else 0,
             # Add more fields as needed for uniqueness
         }
 
         key_str = json.dumps(key_data, sort_keys=True)
-        return hashlib.md5(key_str.encode()).hexdigest()
+        doc_hash = hashlib.md5(key_str.encode()).hexdigest()
+
+        logger.debug(f"Cache key generation: {key_data}")
+        logger.debug(f"Generated hash: {doc_hash}")
+
+        return doc_hash
 
     def clear_cache(self):
         """Clear all cached results."""

@@ -83,24 +83,26 @@ class CacheManager:
 
         # Fall back to file cache
         cache_file = self.cache_dir / f"{key}.pkl"
+        logger.info(f"🔍 Cache: Checking file {cache_file}, exists={cache_file.exists()}")
         if cache_file.exists():
             # Check if not expired (24 hours by default)
             file_age = datetime.now() - datetime.fromtimestamp(cache_file.stat().st_mtime)
+            logger.info(f"🔍 Cache: File age={file_age}, expired={file_age >= timedelta(hours=24)}")
             if file_age < timedelta(hours=24):
                 try:
                     with open(cache_file, "rb") as f:
-                        logger.debug(f"Cache hit (file): {key[:8]}...")
+                        logger.info(f"✅ Cache hit (file): {key[:8]}...")
                         return pickle.load(f)
                 except Exception as e:
-                    logger.debug(f"File cache read failed: {e}")
+                    logger.warning(f"❌ File cache read failed: {e}")
             else:
-                logger.debug(f"Cache expired (file): {key[:8]}...")
+                logger.info(f"⏰ Cache expired (file): {key[:8]}...")
                 try:
                     cache_file.unlink()  # Remove expired cache file
                 except:
                     pass
 
-        logger.debug(f"Cache miss: {key[:8]}...")
+        logger.info(f"❌ Cache miss: {key[:8]}...")
         return None
 
     def set(self, key: str, value: Any, ttl: int = 86400):
@@ -338,3 +340,72 @@ class DocumentCache:
         """Retrieve cached API response"""
         key = f"api_response:{model}:{prompt_hash}"
         return self.cache.get(key)
+
+    def cache_generated_document(self, case_id: str, doc_type: str, content: str):
+        """Cache generated documents with 24-hour TTL
+
+        Args:
+        ----
+            case_id: Unique case identifier
+            doc_type: 'findings_letter', 'appendix', or 'case_analysis'
+            content: HTML content to cache
+
+        """
+        key = f"generated_doc:{case_id}:{doc_type}"
+        self.cache.set(key, content, ttl=86400)  # 24 hours
+        logger.info(f"Cached generated document: {case_id}:{doc_type}")
+
+    def get_generated_document(self, case_id: str, doc_type: str) -> Optional[str]:
+        """Retrieve cached generated document
+
+        Args:
+        ----
+            case_id: Unique case identifier
+            doc_type: 'findings_letter', 'appendix', or 'case_analysis'
+
+        Returns:
+        -------
+            Cached HTML content if available, None otherwise
+
+        """
+        key = f"generated_doc:{case_id}:{doc_type}"
+        return self.cache.get(key)
+
+
+def cleanup_validation_output(validation_dir: str = "validation_output", max_age_hours: int = 24) -> int:
+    """Remove old files from validation_output directory
+
+    Args:
+    ----
+        validation_dir: Path to validation output directory
+        max_age_hours: Maximum age in hours for files (default 24)
+
+    Returns:
+    -------
+        Number of files cleaned
+
+    """
+    output_path = Path(validation_dir)
+    if not output_path.exists():
+        logger.debug(f"Validation output directory does not exist: {validation_dir}")
+        return 0
+
+    now = datetime.now()
+    max_age = timedelta(hours=max_age_hours)
+    cleaned = 0
+
+    for file_path in output_path.glob("*"):
+        if file_path.is_file():
+            try:
+                file_age = now - datetime.fromtimestamp(file_path.stat().st_mtime)
+                if file_age > max_age:
+                    file_path.unlink()
+                    cleaned += 1
+                    logger.info(f"Cleaned expired file: {file_path.name} (age: {file_age})")
+            except Exception as e:
+                logger.debug(f"Failed to clean file {file_path}: {e}")
+
+    if cleaned > 0:
+        logger.info(f"Cleaned {cleaned} expired files from {validation_dir}")
+
+    return cleaned

@@ -26,6 +26,7 @@ if __name__ == "__main__":
 # Additional imports for file output functionality
 
 import streamlit as st
+from legal_portal.config.default import get_settings
 from legal_portal.core.ai_analyzer import AIAnalyzer
 from legal_portal.core.data_models import (
     AnalysisError,
@@ -37,6 +38,7 @@ from legal_portal.core.data_models import (
 )
 from legal_portal.core.document_processor import DocumentProcessor
 from legal_portal.utils.audio_processor import AudioProcessor
+from legal_portal.utils.cache_manager import DocumentCache, cleanup_validation_output
 from legal_portal.utils.cost_session_manager import CostSessionManager
 from legal_portal.utils.email_generator import EmailReadabilityError
 from legal_portal.utils.email_generator_v2 import EmailGeneratorV2
@@ -153,16 +155,32 @@ def _generate_document_appendix(case_analysis) -> str:
                     for event in doc.timeline_events:
                         case_timeline.append(
                             {
-                                "date": getattr(event, "date", "Unknown"),
-                                "event": getattr(
-                                    event, "description", getattr(event, "event", "Event recorded")
-                                ),
+                                "date": event.get("date", "Unknown"),
+                                "event": event.get("description", "Event recorded"),
                                 "source": doc.file_name or doc.filename,
                             }
                         )
 
         # Ensure all analyzed documents have proper data structures for template rendering
+        # Start with intake document if available
         safe_analyzed_documents = []
+
+        # Add intake document FIRST
+        if case_analysis.intake_analysis:
+            intake_doc = {
+                "filename": "Intake Form",
+                "file_name": "Intake Form",
+                "document_type": "intake_form",
+                "inferred_title": "Client Intake Document",
+                "summary": getattr(case_analysis.intake_analysis, "case_summary", "Intake form processed."),
+                "key_information": f"Client: {getattr(case_analysis.intake_analysis, 'client_name', 'Unknown')}",
+                "relevance_to_case": "Primary case information and client background",
+                "legal_significance": getattr(case_analysis.intake_analysis, "case_type", None),
+                "citations": [],
+            }
+            safe_analyzed_documents.append(intake_doc)
+
+        # Then add case documents
         if case_analysis.analyzed_documents:
             for doc in case_analysis.analyzed_documents:
                 # Create a safe document structure for template rendering
@@ -216,11 +234,14 @@ def _generate_document_appendix(case_analysis) -> str:
         )()
 
         # Prepare template context with safe data structures
+        from datetime import datetime
+
         template_context = {
             "results": {
                 "case_timeline": case_timeline,
                 "analysis": safe_analysis,
                 "format_video_analysis": lambda video: _format_video_analysis_for_template(video),
+                "generation_timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             }
         }
 
@@ -273,7 +294,23 @@ def _generate_basic_appendix(case_analysis) -> str:
         </div>
     """
 
-    # Add analyzed documents
+    # Add intake document FIRST
+    if case_analysis.intake_analysis:
+        intake_summary = getattr(case_analysis.intake_analysis, "case_summary", "Intake form processed.")
+        client_name = getattr(case_analysis.intake_analysis, "client_name", "Unknown")
+        case_type = getattr(case_analysis.intake_analysis, "case_type", "Legal Matter")
+
+        html_content += f"""
+        <div class="document-item" style="border-left: 4px solid #3498db;">
+            <div class="document-header">📋 Intake Form (Primary Document)</div>
+            <p><strong>Client:</strong> {client_name}</p>
+            <p><strong>Case Type:</strong> {case_type}</p>
+            <p><strong>Summary:</strong> {intake_summary}</p>
+            <p><strong>Relevance to Case:</strong> Primary case information and client background</p>
+        </div>
+        """
+
+    # Add analyzed case documents
     if case_analysis.analyzed_documents:
         for doc in case_analysis.analyzed_documents:
             filename = getattr(doc, "file_name", getattr(doc, "filename", "Unknown Document"))
@@ -289,7 +326,8 @@ def _generate_basic_appendix(case_analysis) -> str:
             <p><strong>Relevance to Case:</strong> {relevance}</p>
         </div>
             """
-    else:
+
+    if not case_analysis.intake_analysis and not case_analysis.analyzed_documents:
         html_content += """
         <div class="document-item">
             <p>No documents were analyzed for this case review.</p>
@@ -363,26 +401,42 @@ def _format_video_analysis_for_template(video) -> str:
 
 
 def save_output_files(output_dir: str, main_letter: str, appendix: str, analysis_result) -> None:
-    """Save HTML output files to the specified directory."""
-    output_path = Path(output_dir)
-    output_path.mkdir(parents=True, exist_ok=True)
+    """Save HTML output files to the specified directory or cache.
 
+    Based on configuration, files can be:
+    - Saved to disk (traditional method)
+    - Stored in cache with 24-hour TTL (automatic cleanup)
+    """
+    settings = get_settings()
     case_name = extract_case_name(analysis_result)
+    case_id = case_name.replace(" ", "_").lower()
 
-    # Save main findings letter as HTML
-    letter_html_path = output_path / f"{case_name}_findings_letter.html"
-    with open(letter_html_path, "w", encoding="utf-8") as f:
-        f.write(main_letter)
+    # Use cache for outputs if configured
+    if settings.use_cache_for_outputs:
+        doc_cache = DocumentCache()
+        doc_cache.cache_generated_document(case_id, "findings_letter", main_letter)
+        doc_cache.cache_generated_document(case_id, "appendix", appendix)
+        logger.info(f"✅ Documents cached for case: {case_id} (auto-cleanup after 24 hours)")
 
-    # Save analysis appendix as HTML
-    appendix_html_path = output_path / f"{case_name}_analysis_appendix.html"
-    with open(appendix_html_path, "w", encoding="utf-8") as f:
-        f.write(appendix)
+    # Always save to disk if output_dir is specified (for debugging or explicit file saves)
+    if output_dir:
+        output_path = Path(output_dir)
+        output_path.mkdir(parents=True, exist_ok=True)
 
-    logger.info(f"HTML output files saved to: {output_path}")
-    logger.info("Files created:")
-    logger.info(f"  - {case_name}_findings_letter.html")
-    logger.info(f"  - {case_name}_analysis_appendix.html")
+        # Save main findings letter as HTML
+        letter_html_path = output_path / f"{case_name}_findings_letter.html"
+        with open(letter_html_path, "w", encoding="utf-8") as f:
+            f.write(main_letter)
+
+        # Save analysis appendix as HTML
+        appendix_html_path = output_path / f"{case_name}_analysis_appendix.html"
+        with open(appendix_html_path, "w", encoding="utf-8") as f:
+            f.write(appendix)
+
+        logger.info(f"📁 HTML output files saved to: {output_path}")
+        logger.info("Files created:")
+        logger.info(f"  - {case_name}_findings_letter.html")
+        logger.info(f"  - {case_name}_analysis_appendix.html")
 
 
 async def process_case_documents(
@@ -399,6 +453,15 @@ async def process_case_documents(
     try:
         st.session_state.processing_status = "active"
         st.session_state.processing_error = None
+
+        # Run cleanup on startup (unless in debug mode)
+        settings = get_settings()
+        if not settings.debug_mode:
+            cleaned = cleanup_validation_output(
+                validation_dir=settings.validation_output_dir, max_age_hours=settings.output_retention_hours
+            )
+            if cleaned > 0:
+                logger.info(f"🧹 Cleaned {cleaned} old files from {settings.validation_output_dir}")
 
         # Initialize processors
         from legal_portal.utils.openai_client import OpenAIClient
@@ -423,8 +486,26 @@ async def process_case_documents(
             logger.warning(f"Could not initialize video processor: {e}")
             logger.info("Continuing without video processing support")
 
-        ai_analyzer = AIAnalyzer(openai_client, doc_processor, config_path=config_path)
-        email_generator = EmailGeneratorV2(config_path=config_path, openai_api_key=openai_client.api_key)
+        # Get performance settings from session state
+        enable_caching = st.session_state.get("enable_caching", True)
+        max_concurrent = st.session_state.get("max_concurrent_requests", 10)
+
+        # Initialize AI analyzer with caching settings
+        ai_analyzer = AIAnalyzer(
+            openai_client, doc_processor, config_path=config_path, enable_caching=enable_caching
+        )
+
+        # Initialize email generator with performance settings
+        logger.info(
+            f"Initializing EmailGeneratorV2 with caching={enable_caching}, max_concurrent={max_concurrent}"
+        )
+
+        email_generator = EmailGeneratorV2(
+            config_path=config_path,
+            openai_api_key=openai_client.api_key,
+            enable_caching=enable_caching,
+            max_concurrent_requests=max_concurrent,
+        )
 
         # Initialize cost tracking
         cost_session_manager = CostSessionManager()
@@ -838,6 +919,31 @@ async def process_case_documents(
 
         email_docs = email_generator.generate_email_and_analysis_docs(final_analysis)
 
+        # Track cache statistics
+        cache_hit = email_docs.get("metadata", {}).get("cache_hit", False) if email_docs else False
+        cache_failed = email_docs.get("metadata", {}).get("cache_failed", False) if email_docs else False
+
+        if cache_hit:
+            logger.info("✅ Cache hit! Email generation completed instantly from cache")
+        elif cache_failed:
+            logger.warning("⚠️ Cache storage failed (pickle error) - continuing without cache")
+        else:
+            logger.info("📝 Generated fresh email content (no cache)")
+
+        # Update session state with cache statistics
+        # Initialize if not exists or if None
+        if "cache_stats" not in st.session_state or st.session_state.cache_stats is None:
+            st.session_state.cache_stats = {"hits": 0, "misses": 0, "cache_hit_rate": 0.0}
+
+        if cache_hit:
+            st.session_state.cache_stats["hits"] += 1
+        else:
+            st.session_state.cache_stats["misses"] += 1
+
+        total = st.session_state.cache_stats["hits"] + st.session_state.cache_stats["misses"]
+        hit_rate = st.session_state.cache_stats["hits"] / total if total > 0 else 0
+        st.session_state.cache_stats["cache_hit_rate"] = hit_rate
+
         # H1 DEBUG: Email generation complete - capture return value analysis
         email_docs_debug = {
             "module": "main_processor",
@@ -848,6 +954,7 @@ async def process_case_documents(
             "email_docs_keys": list(email_docs.keys()) if isinstance(email_docs, dict) else None,
             "email_docs_length": len(str(email_docs)) if email_docs else 0,
             "has_content": bool(email_docs),
+            "cache_hit": cache_hit,
         }
         logger.debug(f"DEBUG_H1: {json.dumps(email_docs_debug)}")
 
@@ -1079,8 +1186,11 @@ async def process_case_documents_cli(
         except Exception as e:
             logger.warning(f"Could not initialize video processor in CLI mode: {e}")
 
-        ai_analyzer = AIAnalyzer(openai_client, doc_processor, config_path=config_path)
-        email_generator = EmailGeneratorV2(config_path=config_path, openai_api_key=openai_client.api_key)
+        # CLI mode - enable caching by default for optimal performance
+        ai_analyzer = AIAnalyzer(openai_client, doc_processor, config_path=config_path, enable_caching=True)
+        email_generator = EmailGeneratorV2(
+            config_path=config_path, openai_api_key=openai_client.api_key, enable_caching=True
+        )
 
         logger.debug(f"Processing {len(case_documents_paths) + 1} files...")
 

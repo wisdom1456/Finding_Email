@@ -149,14 +149,19 @@ class JsonProcessingService:
 
             # Prepare data for master prompt template
             # The template expects analysis object with attributes, not JSON string
-            analysis_data = analysis.model_dump()
+            # Exclude original_content to prevent token overflow (can access via analyzed_documents_with_content if needed)
+            analysis_data = analysis.model_dump(
+                exclude={"analyzed_documents": {"__all__": {"original_content"}}}
+            )
 
             # Create analysis object that template can access with dot notation
             class AnalysisProxy:
                 def __init__(self, data):
                     self.client_name = data.get("intake_analysis", {}).get("client_name", client_name)
                     self.matter_name = data.get("intake_analysis", {}).get("case_summary", case_type)
-                    self._raw_data = data
+                    self._raw_data = data  # Already has original_content excluded
+                    # Store full documents separately for optional access
+                    self._full_documents = analysis.analyzed_documents
 
                 @property
                 def practice_area(self):
@@ -183,6 +188,15 @@ class JsonProcessingService:
                     # The AI's JSON output might not contain 'firm_name'.
                     # Provide a reliable default value if it's missing.
                     return self._raw_data.get("firm_name", "Bernhardt Riley PLLC")
+
+                @property
+                def analyzed_documents_with_content(self):
+                    """Returns analyzed documents with their full original content for reference.
+
+                    Use this property when the prompt needs access to full document text.
+                    By default, the serialized data excludes original_content to prevent token overflow.
+                    """
+                    return self._full_documents
 
                 def model_dump_json(self, indent=2):
                     import json

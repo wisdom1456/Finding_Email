@@ -139,7 +139,7 @@ def file_upload_section():
     """Handle the file upload section, allowing folder uploads."""
     st.header("Upload Case Folder")
     uploaded_files = st.file_uploader(
-        "Select a folder or multiple files (TXT, PDF, DOCX, DOC, PNG, JPG, EML files)",
+        "Select a folder or multiple files (TXT, PDF, DOCX, DOC, PNG, JPG, EML, CSV files)",
         type=[
             "txt",
             "pdf",
@@ -149,6 +149,7 @@ def file_upload_section():
             "jpg",
             "jpeg",
             "eml",
+            "csv",
         ],
         accept_multiple_files=True,
     )
@@ -184,14 +185,14 @@ def results_display_section():
                     citation_service = CitationTrackingService()
                     clean_letter = citation_service.remove_citations_from_letter(st.session_state.main_letter)
 
-                    # Ensure proper styling for dark mode compatibility
+                    # Ensure proper styling for dark mode compatibility with full width display
                     styled_main_letter = f"""
-                    <div style="background-color: white; color: black; padding: 20px; border-radius: 5px;">
+                    <div style="background-color: white; color: black; padding: 20px; border-radius: 5px; max-width: 100%; width: 100%;">
                         {clean_letter}
                     </div>
                     """
 
-                    components.html(styled_main_letter, height=800, scrolling=True)
+                    components.html(styled_main_letter, height=800, scrolling=True, width=None)
 
                     # Provide separate download buttons for all documents
                     st.subheader("Download Options")
@@ -223,14 +224,14 @@ def results_display_section():
             citation_service = CitationTrackingService()
             clean_letter = citation_service.remove_citations_from_letter(st.session_state.main_letter)
 
-            # Ensure proper styling for dark mode compatibility
+            # Ensure proper styling for dark mode compatibility with full width display
             styled_main_letter = f"""
-            <div style="background-color: white; color: black; padding: 20px; border-radius: 5px;">
+            <div style="background-color: white; color: black; padding: 20px; border-radius: 5px; max-width: 100%; width: 100%;">
                 {clean_letter}
             </div>
             """
 
-            components.html(styled_main_letter, height=800, scrolling=True)
+            components.html(styled_main_letter, height=800, scrolling=True, width=None)
 
             # Provide separate download buttons for all documents
             st.subheader("Download Options")

@@ -8,6 +8,7 @@ from legal_portal.core.data_models import (
     ProcessedDocument,
 )
 
+from .csv_processor import process_csv
 from .doc_processor import process_doc
 from .docx_processor import process_docx
 from .eml_processor import process_eml
@@ -27,6 +28,8 @@ PROCESSOR_MAP: dict[str, Processor] = {
     "application/msword": process_doc,  # Updated to use dedicated legacy DOC processor
     "message/rfc822": process_eml,
     "text/plain": process_txt,
+    "text/csv": process_csv,
+    "application/csv": process_csv,
     "image/jpeg": process_jpg,  # Updated to use dedicated JPG processor
     "image/png": process_png,  # Updated to use dedicated PNG processor
     "image/gif": process_image,  # Keep generic processor for other image types

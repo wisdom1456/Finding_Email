@@ -49,7 +49,34 @@
 - Two-tier system: Lightweight by default, full access when explicitly requested
 - Documentation: Complete architecture in `docs/FULL_DOCUMENT_CONTENT_ARCHITECTURE.md`
 
-## 2. CSV File Support Added
+## 2. Automatic Output File Cleanup (Oct 2, 2025)
+
+Implemented intelligent output file management with 24-hour automatic cleanup to prevent disk space accumulation:
+
+### Architecture
+- **Two-Tier Storage**: Session memory (immediate) + Cache storage (24h TTL)
+- **Smart Caching**: Generated documents cached via `DocumentCache` with automatic expiration
+- **Diagnostic Preservation**: Optional retention of debug files in `validation_output/`
+- **Configurable Cleanup**: Environment-based control via `USE_CACHE_FOR_OUTPUTS`, `OUTPUT_RETENTION_HOURS`, `DEBUG_MODE`
+
+### Implementation Details
+- **Cache Manager Enhanced**: Added `cache_generated_document()` and `cleanup_validation_output()` functions
+- **Configuration**: New settings in `config/default.py` for output behavior control
+- **Main Processor**: Modified `save_output_files()` to use cache; added startup cleanup routine
+- **Default Behavior**: Production mode enables 24-hour auto-cleanup; debug mode preserves all files
+
+### Benefits
+- ✅ No disk space accumulation from old output files
+- ✅ Downloads available during active sessions (via session state)
+- ✅ Automatic cleanup on startup (configurable retention period)
+- ✅ Debug mode for troubleshooting (preserves diagnostic files)
+
+### Documentation
+- Complete guide: `docs/OUTPUT_FILE_MANAGEMENT.md`
+- Configuration examples for production, debug, and development modes
+- API usage examples and troubleshooting guide
+
+## 3. CSV File Support Added
 
 CSV file support has been fully integrated into the legal document processing system:
 1.  **Security Layer**: Added `.csv` to allowed extensions and MIME types (`text/csv`, `application/csv`) in `security.py`

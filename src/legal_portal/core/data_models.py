@@ -1,480 +1,210 @@
-"""Data models for the Legal Document Analysis Portal.
-"""
-
 from __future__ import annotations
 
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import List, Optional
 
 from pydantic import BaseModel, Field
 
+# ============================================================================
+# Enumerations
+# ============================================================================
 
-# Enums
+
 class DocumentType(str, Enum):
-    """Type of document being processed."""
+    """Valid document types for processing."""
 
     INTAKE_FORM = "intake_form"
     CASE_DOCUMENT = "case_document"
+    EVIDENCE = "evidence"
+    CORRESPONDENCE = "correspondence"
+    CONTRACT = "contract"
+    LEGAL_BRIEF = "legal_brief"
+    OTHER = "other"
 
 
 class FileType(str, Enum):
-    """Type of file format."""
+    """Supported file types for document processing."""
 
-    PDF = "pdf"
-    DOCX = "docx"
-    DOC = "doc"  # Legacy Microsoft Word documents
-    TXT = "txt"
-    EML = "eml"
-    PNG = "png"  # PNG image format
-    JPG = "jpg"  # JPEG image format
-    CSV = "csv"  # CSV file format
-    IMAGE = "image"  # Generic image type for other formats
-    AUDIO = "audio"
-    VIDEO = "video"
+    PDF = "application/pdf"
+    DOCX = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    DOC = "application/msword"
+    TXT = "text/plain"
+    CSV = "text/csv"
+    EML = "message/rfc822"
+    JPG = "image/jpeg"
+    PNG = "image/png"
+    GIF = "image/gif"
+    BMP = "image/bmp"
+    TIFF = "image/tiff"
 
 
-# Basic data models
+# ============================================================================
+# Data Models
+# ============================================================================
+
+
 class FileMetadata(BaseModel):
-    """Metadata for processed files."""
+    """Metadata about a processed file."""
 
-    filename: str
-    size: int
-    created_at: datetime = Field(default_factory=datetime.now)
+    file_name: str
+    file_type: FileType
+    file_size: int
+    uploaded_at: datetime = Field(default_factory=datetime.now)
+    processing_time_ms: Optional[float] = None
+
+    model_config = {"populate_by_name": True}
+
+    def __init__(self, **data):
+        """Override to handle legacy field names (filename -> file_name, size -> file_size)."""
+        # Map legacy field names to new names
+        if "filename" in data and "file_name" not in data:
+            data["file_name"] = data.pop("filename")
+        if "size" in data and "file_size" not in data:
+            data["file_size"] = data.pop("size")
+
+        # Ensure file_type is set if not provided (use a default)
+        if "file_type" not in data:
+            # Try to infer from file_name extension
+            file_name = data.get("file_name", "")
+            if file_name.lower().endswith(".pdf"):
+                data["file_type"] = FileType.PDF
+            elif file_name.lower().endswith((".docx",)):
+                data["file_type"] = FileType.DOCX
+            elif file_name.lower().endswith(".doc"):
+                data["file_type"] = FileType.DOC
+            elif file_name.lower().endswith(".txt"):
+                data["file_type"] = FileType.TXT
+            elif file_name.lower().endswith((".png",)):
+                data["file_type"] = FileType.PNG
+            elif file_name.lower().endswith((".jpg", ".jpeg")):
+                data["file_type"] = FileType.JPG
+            elif file_name.lower().endswith(".csv"):
+                data["file_type"] = FileType.CSV
+            elif file_name.lower().endswith(".eml"):
+                data["file_type"] = FileType.EML
+            else:
+                data["file_type"] = FileType.PDF  # Default fallback
+
+        super().__init__(**data)
 
 
 class ProcessedDocument(BaseModel):
-    """Represents a processed document."""
+    """Represents a document after content extraction."""
 
     file_name: str
     content: str
     document_type: DocumentType
-    file_type: Optional[FileType] = None
-    metadata: Optional[FileMetadata] = None
+    metadata: FileMetadata
+    page_count: Optional[int] = None
+    extraction_method: Optional[str] = None
+    extracted_at: datetime = Field(default_factory=datetime.now)
 
 
-class SavedDocument(BaseModel):
-    """Represents a saved document."""
-
-    file_path: str
-    original_filename: str
-    document_type: DocumentType
-    metadata: Optional[FileMetadata] = None
-
-
-class AnalysisError(BaseModel):
-    """Represents an error during analysis."""
+class ProcessingError(BaseModel):
+    """Represents an error that occurred during processing."""
 
     source: str
-    file_name: Optional[str] = None
+    error_type: str
     error_message: str
-    details: Optional[str] = None
-
-
-class AIAnalysisError(Exception):
-    """Exception raised for AI analysis errors."""
-
-
-class MediaProcessingError(BaseModel):
-    """Error during media processing."""
-
-    source: str
-    file_name: str
-    error_message: str
-
-
-class TranscriptedMedia(BaseModel):
-    """Transcripted audio/video content."""
-
-    file_name: str
-    transcript: str
-    duration: Optional[float] = None
-
-
-class VideoInsight(BaseModel):
-    """Video analysis insights."""
-
-    file_name: str
-    insights: str
     timestamp: datetime = Field(default_factory=datetime.now)
 
 
-class DocumentCitation(BaseModel):
-    """Citation reference for document facts."""
+class ProcessingResult(BaseModel):
+    """Result of the complete document processing workflow.
 
-    fact: str
-    source_document: str
-    page_number: Optional[int] = None
-    confidence: float
-    context: Optional[str] = None
+    This is the model returned by the decoupled process_case_documents function.
+    """
+
+    # Core outputs
+    main_letter: str = Field(description="HTML content of the generated findings letter")
+    document_summaries: str = Field(description="Text summaries of all analyzed documents")
+    case_analysis: str = Field(description="Detailed case analysis content")
+
+    # Metadata
+    status: str = Field(description="Processing status: 'completed', 'partial', or 'failed'")
+    processing_time_seconds: Optional[float] = None
+    processed_at: datetime = Field(default_factory=datetime.now)
+
+    # Optional details
+    intake_content: Optional[str] = None
+    document_count: int = 0
+    errors: List[ProcessingError] = Field(default_factory=list)
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "main_letter": "<html>...</html>",
+                "document_summaries": "Document 1: ...",
+                "case_analysis": "Analysis of case...",
+                "status": "completed",
+                "document_count": 5,
+                "errors": [],
+            }
+        }
 
 
-class AnalyzedDocument(BaseModel):
-    """Analyzed case document with enhanced detail extraction."""
-
-    file_name: str
-    filename: Optional[str] = None  # Alias for file_name for backward compatibility
-    document_type: Optional[str] = None
-    inferred_title: Optional[str] = None
-
-    # Summary fields (expanded for more detail)
-    summary: Optional[str] = None  # Now 250-400 words instead of 100-150
-    detailed_findings: Optional[str] = None  # Comprehensive 500-800 word analysis
-
-    # Structured extraction fields (enhanced)
-    key_facts: List[str] = Field(default_factory=list)  # Specific factual points (10-20 items)
-    evidence_points: List[str] = Field(default_factory=list)  # Evidentiary items
-    parties_mentioned: List[Dict[str, str]] = Field(default_factory=list)  # People/entities in doc
-    amounts_and_dates: List[Dict[str, str]] = Field(default_factory=list)  # Financial/temporal data
-    legal_issues_identified: List[str] = Field(default_factory=list)  # Legal implications
-
-    # Legacy fields for backward compatibility
-    analysis: Optional[str] = None
-    key_information: Optional[str] = None
-    relevance_to_case: Optional[str] = None
-    key_points: List[str] = Field(default_factory=list)
-    citations: List[DocumentCitation] = Field(default_factory=list)
-    metadata: Optional[Dict[str, Any]] = None
-    timeline_events: List[Dict[str, str]] = Field(default_factory=list)
-
-    # Full content preserved for reference (not sent in prompts)
-    original_content: Optional[str] = None
-
-    def model_post_init(self, __context: Any) -> None:
-        """Post-init to handle backward compatibility."""
-        # Ensure filename matches file_name for backward compatibility
-        if not self.filename and self.file_name:
-            self.filename = self.file_name
-        elif self.filename and not self.file_name:
-            self.file_name = self.filename
+# ============================================================================
+# Legacy Models (for compatibility)
+# ============================================================================
 
 
 class IntakeAnalysis(BaseModel):
-    """Analysis of intake form."""
+    """Analysis results from the intake form."""
 
-    summary: str
-    key_facts: List[str] = Field(default_factory=list)
-    legal_issues: List[str] = Field(default_factory=list)
-
-
-class PartyInvolved(BaseModel):
-    """Party involved in the case."""
-
-    name: str
-    role: str
-
-
-class EnhancedIntakeAnalysis(BaseModel):
-    """Enhanced analysis of intake form."""
-
-    client_name: str
-    attorney_name: str
-    case_summary: str
-    case_type: str
-    urgency_level: str
+    client_name: Optional[str] = None
+    attorney_name: Optional[str] = None
+    case_type: Optional[str] = None
+    case_summary: Optional[str] = None
+    urgency_level: Optional[str] = None
     client_priorities: List[str] = Field(default_factory=list)
     desired_outcomes: List[str] = Field(default_factory=list)
-    key_facts: List[str] = Field(default_factory=list)
-    parties_involved: List[PartyInvolved] = Field(default_factory=list)
-    financial_impact: str
-    legal_claims: List[str] = Field(default_factory=list)
 
-    # Legacy fields for backward compatibility
-    summary: Optional[str] = None
-    legal_issues: Optional[List[str]] = None
-    timeline: Optional[str] = None
-    parties: Optional[List[str]] = None
 
-    def model_post_init(self, __context: Any) -> None:
-        """Post-init to handle backward compatibility."""
-        # Map case_summary to summary for backward compatibility
-        if not self.summary and self.case_summary:
-            self.summary = self.case_summary
+class AnalyzedDocument(BaseModel):
+    """Analysis results for a single document."""
 
-        # Map legal_claims to legal_issues for backward compatibility
-        if not self.legal_issues and self.legal_claims:
-            self.legal_issues = self.legal_claims
-
-        # Map parties_involved to parties for backward compatibility
-        if not self.parties and self.parties_involved:
-            self.parties = [party.name for party in self.parties_involved]
+    file_name: str
+    document_type: str
+    inferred_title: Optional[str] = None
+    summary: str
+    relevance_to_case: str
+    key_information: Optional[str] = None
 
 
 class LegalAssessment(BaseModel):
     """Legal assessment of the case."""
 
-    case_type: str
-    claim_viability: str
-    overall_evidence_strength: str
-    potential_challenges: str
-    recommended_actions: List[str]  # Fixed: Changed from str to List[str] to match AI output
-    demand_letter_appropriate: (
-        bool  # Fixed: Changed from str to bool to match AI output
-    )
-    urgency_assessment: str
-
-
-class DemandLetterEvaluation(BaseModel):
-    """Evaluation for demand letter."""
-
-    is_appropriate: bool  # Fixed: Changed from str to bool to match AI output
-    reasoning: str
-    potential_outcomes: List[str] = Field(default_factory=list)
-    relevant_statutes: List[str] = Field(default_factory=list)
-
-
-class FinalAnalysis(BaseModel):
-    """Final analysis result."""
-
-    case_summary: str
-    recommendations: str
-    next_steps: List[str] = Field(default_factory=list)
+    claim_viability: Optional[str] = None
+    overall_evidence_strength: Optional[str] = None
+    potential_challenges: List[str] = Field(default_factory=list)
+    recommended_actions: List[str] = Field(default_factory=list)
 
 
 class CaseAnalysisResult(BaseModel):
-    """Complete case analysis result."""
-
-    intake_analysis: Optional[EnhancedIntakeAnalysis] = None
-    analyzed_documents: List[AnalyzedDocument] = Field(default_factory=list)
-    legal_assessment: Optional[LegalAssessment] = None
-    demand_letter_evaluation: Optional[DemandLetterEvaluation] = None
-    final_analysis: Optional[FinalAnalysis] = None
-    findings_letter_content: Optional[FindingsLetterContent] = None
-    transcripted_media: List[TranscriptedMedia] = Field(default_factory=list)
-    video_insights: List[VideoInsight] = Field(default_factory=list)
-    errors: List[AnalysisError] = Field(default_factory=list)
-    case_timeline: List[Dict[str, str]] = Field(default_factory=list)  # Fix missing case_timeline attribute
-
-
-class AnalysisResult(BaseModel):
-    """Analysis result for testing and backward compatibility."""
+    """Complete case analysis result (legacy format)."""
 
     intake_analysis: Optional[IntakeAnalysis] = None
     analyzed_documents: List[AnalyzedDocument] = Field(default_factory=list)
-    transcripted_media: List[TranscriptedMedia] = Field(default_factory=list)
-    video_insights: List[VideoInsight] = Field(default_factory=list)
-    errors: List[AnalysisError] = Field(default_factory=list)
+    legal_assessment: Optional[LegalAssessment] = None
+    errors: List[ProcessingError] = Field(default_factory=list)
 
 
-# Cost tracking models
 class ServiceCost(BaseModel):
-    """Cost for a specific service."""
+    """Cost breakdown for a specific service operation."""
 
     service_name: str
     cost: float
-    details: Optional[str] = None
-    operation_type: Optional[str] = None
-    units_consumed: Optional[int] = None
-    unit_type: Optional[str] = None
-    rate_per_unit: Optional[float] = None
-    total_cost: Optional[float] = None
-    file_name: Optional[str] = None
-
-    def model_post_init(self, __context: Any) -> None:
-        """Post-init to handle backward compatibility."""
-        if self.total_cost is None:
-            self.total_cost = self.cost
-        if self.units_consumed is None:
-            self.units_consumed = 0
-        if self.operation_type is None:
-            self.operation_type = "N/A"
-
-
-class ActualCosts(BaseModel):
-    """Actual costs incurred."""
-
-    total_actual_cost: Optional[float] = 0.0  # Fix: Make nullable with default
-    service_costs: List[ServiceCost] = Field(default_factory=list)
-    document_analysis_costs: List[ServiceCost] = Field(default_factory=list)
-    media_processing_costs: List[ServiceCost] = Field(default_factory=list)
-
-    def model_post_init(self, __context: Any) -> None:
-        """Post-init to ensure total_actual_cost is never None."""
-        if self.total_actual_cost is None:
-            self.total_actual_cost = 0.0
+    operation_type: str
+    details: Optional[dict] = None
 
 
 class CostEstimate(BaseModel):
-    """Cost estimate for processing."""
+    """Estimated cost for processing."""
 
-    estimated_cost: float
-    breakdown: Dict[str, float] = Field(default_factory=dict)
+    total_input_tokens: int = 0
+    total_output_tokens: int = 0
+    estimated_cost_usd: float = 0.0
+    model_used: str = "gpt-4"
 
-
-class CostSummary(BaseModel):
-    """Summary of costs."""
-
-    case_id: str
-    cost_estimate: Optional[CostEstimate] = None
-    actual_costs: Optional[ActualCosts] = None
-    cost_variance: Optional[float] = None
-    cost_variance_percentage: Optional[float] = None
-
-
-# Email generation models
-class SectionPlan(BaseModel):
-    """Plan for generating a specific section of the email."""
-
-    number: int
-    header: str
-    key_points: List[str] = Field(default_factory=list)
-    emphasis_items: Dict[str, str] = Field(default_factory=dict)
-    content_requirements: List[str] = Field(default_factory=list)
-    legal_citation: Optional[str] = None
-
-
-class EmailStructurePlan(BaseModel):
-    """Overall structure plan for email generation."""
-
-    subject_line: str
-    greeting: str
-    sections: List[SectionPlan]
-    closing: str
-    case_context: Dict[str, Any] = Field(default_factory=dict)
-
-
-class GenerationContext(BaseModel):
-    """Context tracking for email generation process."""
-
-    greeting_given: bool = False
-    closing_given: bool = False
-    client_name_mentioned: bool = False
-    section_numbers_used: List[int] = Field(default_factory=list)
-    current_section: Optional[str] = None
-
-
-class GeneratedLetter(BaseModel):
-    """Final generated letter with all sections."""
-
-    executive_summary: str = ""
-    background_summary: str = ""
-    analysis_and_position: str = ""
-    media_summary: str = ""
-    video_analysis_appendix: str = ""
-    strengths: str = ""
-    challenges: str = ""
-    recommendations: str = ""
-    next_steps: str = ""
-    closing_paragraph: str = ""
-
-
-class LegacyGeneratedLetter(BaseModel):
-    """Legacy generated letter content (for backward compatibility)."""
-
-    subject: str
-    body: str
-    attachments: List[str] = Field(default_factory=list)
-
-
-class EnhancedFindingsLetter(BaseModel):
-    """Enhanced findings letter."""
-
-    content: str
-    metadata: Dict[str, Any] = Field(default_factory=dict)
-
-
-class QualityScore(BaseModel):
-    """Quality assessment score."""
-
-    overall_score: float
-    details: Dict[str, float] = Field(default_factory=dict)
-
-
-# Video processing models
-class CriminalEvidenceCategory(str, Enum):
-    """Categories for criminal evidence."""
-
-    DRIVING_PATTERN_REASON_STOP = "Driving Pattern & Reason for Stop"
-    EMERGENCY_LIGHTS_PULLOVER = "Emergency Lights & Vehicle Pullover"
-    INITIAL_ROADSIDE_APPROACH = "Initial Roadside Approach & Observations"
-    PRELIMINARY_QUESTIONING = "Preliminary Questioning & Admissions"
-    EXIT_ORDER_PRE_TEST = "Exit Order & Pre-Test Observations"
-    FIELD_SOBRIETY_TESTS = "Field Sobriety Tests"
-    PORTABLE_BREATH_TEST = "Portable Breath Test"
-    ARREST_DECISION_HANDCUFFING = "Arrest Decision & Handcuffing"
-    MIRANDA_WARNINGS = "Miranda Warnings & Custodial Interrogation"
-    IMPLIED_CONSENT_CHEMICAL_TEST = "Implied Consent & Chemical Test Request"
-    CHEMICAL_TEST_ADMINISTRATION = "Chemical Test Administration"
-    TRANSPORT_TO_STATION = "Transport to Station/Jail"
-    BOOKING_PROCESSING = "Booking & Processing"
-    RIGHT_TO_COUNSEL = "Right to Counsel & Phone Calls"
-    POST_BOOKING_OBSERVATION = "Post-Booking Observation & Medical"
-    VEHICLE_TOW_INVENTORY = "Vehicle Tow & Inventory Search"
-
-
-class TimeRange(BaseModel):
-    """Time range for video analysis."""
-
-    start_time: str
-    end_time: str
-    confidence: float = 0.5
-
-
-class CriminalEvidenceItem(BaseModel):
-    """Criminal evidence item from video analysis."""
-
-    category: CriminalEvidenceCategory
-    time_range: TimeRange
-    description: str
-    key_observations: List[str] = Field(default_factory=list)
-    legal_significance: str = ""
-    constitutional_issues: List[str] = Field(default_factory=list)
-    evidence_strength: str = "moderate"
-
-
-class CriminalVideoAnalysis(BaseModel):
-    """Complete criminal video analysis."""
-
-    evidence_items: List[CriminalEvidenceItem] = Field(default_factory=list)
-    timeline_summary: str = ""
-    constitutional_compliance_overview: str = ""
-    missing_categories: List[CriminalEvidenceCategory] = Field(default_factory=list)
-
-
-class EnhancedVideoInsight(BaseModel):
-    """Enhanced video insights."""
-
-    file_name: str
-    insights: Any
-    transcript: str = ""
-    metadata: Optional[FileMetadata] = None
-    labels: List[str] = Field(default_factory=list)
-    objects: List[str] = Field(default_factory=list)
-    text_annotations: List[str] = Field(default_factory=list)
-    duration: Optional[float] = None
-    confidence: Optional[float] = None
-    criminal_analysis: Optional[CriminalVideoAnalysis] = None
-    is_criminal_case: bool = False
-
-
-class FindingsLetterContent(BaseModel):
-    """Complete structured content for the findings letter generated by AI in JSON mode."""
-
-    factual_summary: str = Field(
-        description="A comprehensive factual summary of the case including client information, case type, and key circumstances"
-    )
-    legal_analysis: str = Field(
-        description="Detailed legal analysis including Florida law references, claim viability, and evidence strength assessment"
-    )
-    strengths_of_case: str = Field(
-        description="Analysis of the strongest aspects of the client's position with specific supporting evidence"
-    )
-    challenges_and_risks: str = Field(
-        description="Potential challenges, weaknesses, or risks that could impact the case outcome"
-    )
-    recommended_next_steps: str = Field(
-        description="Specific actionable recommendations for how to proceed with the case"
-    )
-    demand_letter_analysis: str = Field(
-        description="Assessment of whether a demand letter is appropriate and potential outcomes"
-    )
-
-
-# Additional helper models
-class CaseResults(BaseModel):
-    """Results from case processing."""
-
-    case_id: str
-    analysis_result: CaseAnalysisResult
-    generated_documents: Dict[str, str] = Field(default_factory=dict)
-    processing_time: Optional[float] = None
+    model_config = {"protected_namespaces": ()}  # Allow 'model_' prefix

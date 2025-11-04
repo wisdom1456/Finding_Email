@@ -1,1357 +1,259 @@
-"""Main processing module for the Legal Document Analysis Portal.
-"""
-
 from __future__ import annotations
 
-import argparse
-import asyncio
-import os
-import re
-import sys
-from datetime import UTC, datetime
-from pathlib import Path
-from typing import List, Optional
+import time
+from typing import Any, List
 
+from legal_portal.core.data_models import ProcessingError, ProcessingResult
+from legal_portal.core.document_processor import DocumentProcessor
+from legal_portal.services.json_processing_service import JsonProcessingService
 from legal_portal.utils.logging_config import get_module_logger
+from legal_portal.utils.openai_client import OpenAIClient
 
 logger = get_module_logger(__name__)
 
 
-# Add project root to Python path for standalone execution
-if __name__ == "__main__":
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    project_root = os.path.dirname(current_dir)
-    sys.path.insert(0, project_root)
-
-# Additional imports for file output functionality
-
-import streamlit as st
-from legal_portal.config.default import get_settings
-from legal_portal.core.ai_analyzer import AIAnalyzer
-from legal_portal.core.data_models import (
-    AnalysisError,
-    AnalyzedDocument,
-    DocumentType,
-    MediaProcessingError,
-    TranscriptedMedia,
-    VideoInsight,
-)
-from legal_portal.core.document_processor import DocumentProcessor
-from legal_portal.utils.audio_processor import AudioProcessor
-from legal_portal.utils.cache_manager import DocumentCache, cleanup_validation_output
-from legal_portal.utils.cost_session_manager import CostSessionManager
-from legal_portal.utils.email_generator import EmailReadabilityError
-from legal_portal.utils.email_generator_v2 import EmailGeneratorV2
-from legal_portal.utils.helpers import (
-    ProgressTracker,
-    calculate_document_sizes,
-    display_processing_cost_update,
-)
-from legal_portal.utils.video_processor import VideoProcessor
-
-# Optional imports with fallbacks for testing
-try:
-    import html2text
-
-    HTML2TEXT_AVAILABLE = True
-except ImportError:
-    HTML2TEXT_AVAILABLE = False
-
-try:
-    import docx
-    from docx.shared import Inches
-
-    DOCX_AVAILABLE = True
-except ImportError:
-    DOCX_AVAILABLE = False
-
-# Don't import weasyprint at module level to avoid dependency issues
-WEASYPRINT_AVAILABLE = None  # Will be checked when needed
-
-
-def html_to_plain_text(html_content: str) -> str:
-    """Convert HTML content to plain text."""
-    if HTML2TEXT_AVAILABLE:
-        h = html2text.HTML2Text()
-        h.ignore_links = True
-        h.ignore_images = True
-        return h.handle(html_content)
-    # Simple fallback HTML stripping
-    import re
-
-    # Remove HTML tags
-    text = re.sub(r"<[^>]+>", "", html_content)
-    # Replace HTML entities
-    text = text.replace("&nbsp;", " ")
-    text = text.replace("&amp;", "&")
-    text = text.replace("&lt;", "<")
-    text = text.replace("&gt;", ">")
-    text = text.replace("&quot;", '"')
-    # Clean up whitespace
-    text = re.sub(r"\s+", " ", text)
-    return text.strip()
-
-
-def extract_case_name(analysis_result) -> str:
-    """Extract case name from analysis result."""
-    if hasattr(analysis_result, "intake_analysis") and analysis_result.intake_analysis:
-        if (
-            hasattr(analysis_result.intake_analysis, "client_name")
-            and analysis_result.intake_analysis.client_name
-        ):
-            # Clean the client name for use as filename
-            case_name = analysis_result.intake_analysis.client_name
-            # Remove special characters and spaces
-            case_name = re.sub(r"[^\w\s-]", "", case_name)
-            case_name = re.sub(r"[-\s]+", "_", case_name)
-            return case_name.lower()
-
-    # Fallback to timestamp-based name
-    return f"case_{int(datetime.now(UTC).timestamp())}"
-
-
-def _generate_document_appendix(case_analysis) -> str:
-    """Generate a distinct document appendix using the Jinja2 template.
-
-    This creates a detailed document review appendix containing:
-    - Case timeline from analyzed documents
-    - Detailed document analysis for each file
-    - Video evidence analysis
-    - Media transcriptions
-
-    Args:
-    ----
-        case_analysis: Complete CaseAnalysisResult from document processing
-
-    Returns:
-    -------
-        Rendered HTML content for the document appendix
-
-    """
-    try:
-        from pathlib import Path
-
-        from jinja2 import Environment, FileSystemLoader
-
-        # Locate the template
-        template_dir = Path("src/legal_portal/assets/templates")
-        if not template_dir.exists():
-            # Try alternative locations
-            template_dir = Path("assets/templates")
-            if not template_dir.exists():
-                logger.warning("Template directory not found, generating basic appendix")
-                return _generate_basic_appendix(case_analysis)
-
-        # Set up Jinja2 environment
-        env = Environment(loader=FileSystemLoader(template_dir))
-        template = env.get_template("document_appendix.jinja2")
-
-        # Extract case timeline from document analyses
-        case_timeline = []
-        if case_analysis.analyzed_documents:
-            for doc in case_analysis.analyzed_documents:
-                # Try to extract timeline events from document content
-                if hasattr(doc, "timeline_events") and doc.timeline_events:
-                    for event in doc.timeline_events:
-                        case_timeline.append(
-                            {
-                                "date": event.get("date", "Unknown"),
-                                "event": event.get("description", "Event recorded"),
-                                "source": doc.file_name or doc.filename,
-                            }
-                        )
-
-        # Ensure all analyzed documents have proper data structures for template rendering
-        # Start with intake document if available
-        safe_analyzed_documents = []
-
-        # Add intake document FIRST
-        if case_analysis.intake_analysis:
-            intake_doc = {
-                "filename": "Intake Form",
-                "file_name": "Intake Form",
-                "document_type": "intake_form",
-                "inferred_title": "Client Intake Document",
-                "summary": getattr(case_analysis.intake_analysis, "case_summary", "Intake form processed."),
-                "key_information": f"Client: {getattr(case_analysis.intake_analysis, 'client_name', 'Unknown')}",
-                "relevance_to_case": "Primary case information and client background",
-                "legal_significance": getattr(case_analysis.intake_analysis, "case_type", None),
-                "citations": [],
-            }
-            safe_analyzed_documents.append(intake_doc)
-
-        # Then add case documents
-        if case_analysis.analyzed_documents:
-            for doc in case_analysis.analyzed_documents:
-                # Create a safe document structure for template rendering
-                safe_doc = {
-                    "filename": getattr(doc, "file_name", getattr(doc, "filename", "Unknown Document")),
-                    "file_name": getattr(doc, "file_name", getattr(doc, "filename", "Unknown Document")),
-                    "document_type": getattr(doc, "document_type", "Not Specified"),
-                    "inferred_title": getattr(doc, "inferred_title", "Not Available"),
-                    "summary": getattr(doc, "summary", "No summary available."),
-                    "key_information": getattr(doc, "key_information", "No key information identified."),
-                    "relevance_to_case": getattr(doc, "relevance_to_case", "Relevance not determined."),
-                    "legal_significance": getattr(doc, "legal_significance", None),
-                    "citations": [],
-                }
-
-                # Safely handle citations - ensure it's always a list
-                if hasattr(doc, "citations") and doc.citations:
-                    if isinstance(doc.citations, list):
-                        safe_doc["citations"] = doc.citations
-                    elif isinstance(doc.citations, str):
-                        # If citations is a string, convert to single citation entry
-                        safe_doc["citations"] = [
-                            {
-                                "text": doc.citations,
-                                "page_number": None,
-                                "context": "Document content",
-                                "significance": "Referenced in document",
-                            }
-                        ]
-                    else:
-                        # Handle other types by converting to string
-                        safe_doc["citations"] = [
-                            {
-                                "text": str(doc.citations),
-                                "page_number": None,
-                                "context": "Document metadata",
-                                "significance": "Extracted information",
-                            }
-                        ]
-
-                safe_analyzed_documents.append(safe_doc)
-
-        # Create a safe analysis structure for template rendering
-        safe_analysis = type(
-            "SafeAnalysis",
-            (),
-            {
-                "analyzed_documents": safe_analyzed_documents,
-                "video_insights": getattr(case_analysis, "video_insights", []) or [],
-            },
-        )()
-
-        # Prepare template context with safe data structures
-        from datetime import datetime
-
-        template_context = {
-            "results": {
-                "case_timeline": case_timeline,
-                "analysis": safe_analysis,
-                "format_video_analysis": lambda video: _format_video_analysis_for_template(video),
-                "generation_timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            }
-        }
-
-        # Render the template
-        rendered_html = template.render(**template_context)
-
-        logger.info("Document appendix generated successfully using Jinja2 template")
-        return rendered_html
-
-    except Exception as e:
-        logger.error(f"Failed to generate appendix using template: {e}")
-        return _generate_basic_appendix(case_analysis)
-
-
-def _generate_basic_appendix(case_analysis) -> str:
-    """Generate a basic HTML appendix when template rendering fails.
-
-    Args:
-    ----
-        case_analysis: Complete CaseAnalysisResult from document processing
-
-    Returns:
-    -------
-        Basic HTML content for the document appendix
-
-    """
-    client_name = "Unknown Client"
-    if case_analysis.intake_analysis and case_analysis.intake_analysis.client_name:
-        client_name = case_analysis.intake_analysis.client_name
-
-    html_content = f"""
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Document Review Appendix - {client_name}</title>
-        <style>
-            body {{ font-family: 'Times New Roman', Times, serif; line-height: 1.6; color: #333; margin: 40px; }}
-            .header {{ border-bottom: 2px solid #333; padding-bottom: 20px; margin-bottom: 30px; }}
-            .document-item {{ border: 1px solid #ddd; margin-bottom: 20px; padding: 20px; }}
-            .document-header {{ font-weight: bold; color: #333; border-bottom: 1px solid #ddd; padding-bottom: 10px; margin-bottom: 15px; }}
-        </style>
-    </head>
-    <body>
-        <div class="header">
-            <h1>Document Review Appendix</h1>
-            <p>Case: {client_name}</p>
-            <p>The following documents were analyzed as part of this case review:</p>
-        </div>
-    """
-
-    # Add intake document FIRST
-    if case_analysis.intake_analysis:
-        intake_summary = getattr(case_analysis.intake_analysis, "case_summary", "Intake form processed.")
-        client_name = getattr(case_analysis.intake_analysis, "client_name", "Unknown")
-        case_type = getattr(case_analysis.intake_analysis, "case_type", "Legal Matter")
-
-        html_content += f"""
-        <div class="document-item" style="border-left: 4px solid #3498db;">
-            <div class="document-header">📋 Intake Form (Primary Document)</div>
-            <p><strong>Client:</strong> {client_name}</p>
-            <p><strong>Case Type:</strong> {case_type}</p>
-            <p><strong>Summary:</strong> {intake_summary}</p>
-            <p><strong>Relevance to Case:</strong> Primary case information and client background</p>
-        </div>
-        """
-
-    # Add analyzed case documents
-    if case_analysis.analyzed_documents:
-        for doc in case_analysis.analyzed_documents:
-            filename = getattr(doc, "file_name", getattr(doc, "filename", "Unknown Document"))
-            summary = getattr(doc, "summary", "No summary available.")
-            key_info = getattr(doc, "key_information", "No key information identified.")
-            relevance = getattr(doc, "relevance_to_case", "Relevance not determined.")
-
-            html_content += f"""
-        <div class="document-item">
-            <div class="document-header">{filename}</div>
-            <p><strong>Summary:</strong> {summary}</p>
-            <p><strong>Key Information:</strong> {key_info}</p>
-            <p><strong>Relevance to Case:</strong> {relevance}</p>
-        </div>
-            """
-
-    if not case_analysis.intake_analysis and not case_analysis.analyzed_documents:
-        html_content += """
-        <div class="document-item">
-            <p>No documents were analyzed for this case review.</p>
-        </div>
-        """
-
-    # Add video insights if available
-    if hasattr(case_analysis, "video_insights") and case_analysis.video_insights:
-        html_content += """
-        <div style="margin-top: 40px; padding-top: 30px; border-top: 2px solid #333;">
-            <h2>Video Evidence Analysis</h2>
-        """
-
-        for video in case_analysis.video_insights:
-            video_name = getattr(video, "file_name", "Unknown Video")
-            html_content += f"""
-            <div class="document-item">
-                <div class="document-header">{video_name}</div>
-                <p>Video analysis was performed on this evidence file.</p>
-            </div>
-            """
-
-        html_content += "</div>"
-
-    html_content += """
-    </body>
-    </html>
-    """
-
-    logger.info("Basic document appendix generated as fallback")
-    return html_content
-
-
-def _format_video_analysis_for_template(video) -> str:
-    """Format video analysis data for template display.
-
-    Args:
-    ----
-        video: Video insight object
-
-    Returns:
-    -------
-        Formatted HTML string for video analysis
-
-    """
-    if not video:
-        return ""
-
-    analysis_parts = []
-
-    # Add insights if available
-    if hasattr(video, "insights") and video.insights:
-        insights = video.insights
-        if hasattr(insights, "summary") and insights.summary:
-            analysis_parts.append(f"<p><strong>Summary:</strong> {insights.summary}</p>")
-
-        if hasattr(insights, "key_findings") and insights.key_findings:
-            findings_list = "<ul>"
-            for finding in insights.key_findings:
-                findings_list += f"<li>{finding}</li>"
-            findings_list += "</ul>"
-            analysis_parts.append(f"<p><strong>Key Findings:</strong></p>{findings_list}")
-
-    # Add transcript if available
-    if hasattr(video, "transcript") and video.transcript:
-        analysis_parts.append(
-            f"<p><strong>Transcript:</strong> {video.transcript[:500]}{'...' if len(video.transcript) > 500 else ''}</p>"
-        )
-
-    return "".join(analysis_parts) if analysis_parts else "<p>Video analysis completed.</p>"
-
-
-def save_output_files(output_dir: str, main_letter: str, appendix: str, analysis_result) -> None:
-    """Save HTML output files to the specified directory or cache.
-
-    Based on configuration, files can be:
-    - Saved to disk (traditional method)
-    - Stored in cache with 24-hour TTL (automatic cleanup)
-    """
-    settings = get_settings()
-    case_name = extract_case_name(analysis_result)
-    case_id = case_name.replace(" ", "_").lower()
-
-    # Use cache for outputs if configured
-    if settings.use_cache_for_outputs:
-        doc_cache = DocumentCache()
-        doc_cache.cache_generated_document(case_id, "findings_letter", main_letter)
-        doc_cache.cache_generated_document(case_id, "appendix", appendix)
-        logger.info(f"✅ Documents cached for case: {case_id} (auto-cleanup after 24 hours)")
-
-    # Always save to disk if output_dir is specified (for debugging or explicit file saves)
-    if output_dir:
-        output_path = Path(output_dir)
-        output_path.mkdir(parents=True, exist_ok=True)
-
-        # Save main findings letter as HTML
-        letter_html_path = output_path / f"{case_name}_findings_letter.html"
-        with open(letter_html_path, "w", encoding="utf-8") as f:
-            f.write(main_letter)
-
-        # Save analysis appendix as HTML
-        appendix_html_path = output_path / f"{case_name}_analysis_appendix.html"
-        with open(appendix_html_path, "w", encoding="utf-8") as f:
-            f.write(appendix)
-
-        logger.info(f"📁 HTML output files saved to: {output_path}")
-        logger.info("Files created:")
-        logger.info(f"  - {case_name}_findings_letter.html")
-        logger.info(f"  - {case_name}_analysis_appendix.html")
-
-
 async def process_case_documents(
-    output_dir: Optional[str] = None, config_path: Optional[str] = None
-) -> Optional[bool]:
-    """Enhanced processing function with size-based progress tracking and cost tracking.
+    intake_form: Any,
+    case_documents: List[Any],
+    case_info: dict = None,
+) -> ProcessingResult:
+    """Decoupled document processing workflow.
+
+    Simplified 2-call workflow:
+    1. Extract intake data + summarize case documents (AI Call #1)
+    2. Generate findings letter (AI Call #2)
 
     Args:
     ----
-        output_dir: Directory to save output files
-        config_path: Path to configuration YAML file for legal practice area-specific prompts
+        intake_form: File-like object containing the intake form
+        case_documents: List of file-like objects containing case documents
+        case_info: Optional dictionary with case metadata (client name, attorney, etc.)
 
+    Returns:
+    -------
+        ProcessingResult: Structured result containing the generated letter and analysis
+
+    Raises:
+    ------
+        ValueError: If required inputs are missing or processing fails
+        Exception: For unexpected errors during processing
     """
+    start_time = time.time()
+    errors = []
+
     try:
-        st.session_state.processing_status = "active"
-        st.session_state.processing_error = None
-
-        # Run cleanup on startup (unless in debug mode)
-        settings = get_settings()
-        if not settings.debug_mode:
-            cleaned = cleanup_validation_output(
-                validation_dir=settings.validation_output_dir, max_age_hours=settings.output_retention_hours
-            )
-            if cleaned > 0:
-                logger.info(f"🧹 Cleaned {cleaned} old files from {settings.validation_output_dir}")
-
-        # Initialize processors
-        from legal_portal.utils.openai_client import OpenAIClient
-
+        # 1. Initialize services
+        logger.info("Initializing processing services...")
         openai_client_wrapper = OpenAIClient()
-        openai_client = openai_client_wrapper.client  # Get the properly configured client
+        openai_client = openai_client_wrapper.client
         doc_processor = DocumentProcessor()
-        audio_processor = AudioProcessor(openai_client)
+        json_processing_service = JsonProcessingService(client=openai_client, config={})
 
-        # Initialize video processor with graceful fallback
-        video_processor = None
-        try:
-            config_manager = ConfigurationManager()
-            settings = config_manager.get_settings()
+        # 2. Validate inputs
+        if not intake_form:
+            raise ValueError("An intake form is required for the analysis.")
 
-            if settings.video_processing_enabled:
-                video_processor = VideoProcessor()
-                logger.info("Video processor initialized successfully")
-            else:
-                logger.info("Video processing disabled - Google Cloud credentials not configured")
-        except Exception as e:
-            logger.warning(f"Could not initialize video processor: {e}")
-            logger.info("Continuing without video processing support")
+        # Case documents are optional - intake form alone is sufficient for preliminary analysis
+        if not case_documents or len(case_documents) == 0:
+            logger.info(
+                "No case documents provided - will process intake form only for preliminary analysis."
+            )
 
-        # Get performance settings from session state
-        enable_caching = st.session_state.get("enable_caching", True)
-        max_concurrent = st.session_state.get("max_concurrent_requests", 10)
-
-        # Initialize AI analyzer with caching settings
-        ai_analyzer = AIAnalyzer(
-            openai_client, doc_processor, config_path=config_path, enable_caching=enable_caching
+        # 3. Process intake form to extract data
+        logger.info("Processing intake form...")
+        intake_files = [intake_form]
+        processed_intake = await doc_processor.process_documents_from_streamlit(
+            intake_files,
+            intake_filenames=[intake_form.name if hasattr(intake_form, "name") else "intake.pdf"],
         )
 
-        # Initialize email generator with performance settings
+        if not processed_intake:
+            raise ValueError("Failed to process intake form.")
+
+        intake_content = processed_intake[0].content
+        logger.info(f"Intake form processed: {len(intake_content)} characters")
+
+        # Log data context for quality assurance
+        logger.info(f"CONTEXT CHECK - Intake preview: {intake_content[:200]}...")
+
+        # 4. Process all case documents to extract text (if any provided)
+        logger.info(f"Processing {len(case_documents)} case documents...")
+
+        if case_documents:
+            processed_case_docs = await doc_processor.process_documents_from_streamlit(
+                case_documents, intake_filenames=[]
+            )
+
+            if not processed_case_docs:
+                logger.warning(
+                    "No case documents were successfully processed, but continuing with intake only."
+                )
+                processed_case_docs = []
+        else:
+            logger.info("No case documents provided - processing intake form only.")
+            processed_case_docs = []
+
+        logger.info(f"Processed {len(processed_case_docs)} case documents")
+
+        # 5. AI Call #1: Generate contextual document summaries
+        logger.info("AI Call #1: Generating document summaries with intake context...")
         logger.info(
-            f"Initializing EmailGeneratorV2 with caching={enable_caching}, max_concurrent={max_concurrent}"
+            f"CONTEXT CHECK - Passing {len(intake_content)} chars of intake + {len(processed_case_docs)} docs to summarization"
         )
 
-        email_generator = EmailGeneratorV2(
-            config_path=config_path,
-            openai_api_key=openai_client.api_key,
-            enable_caching=enable_caching,
-            max_concurrent_requests=max_concurrent,
+        document_summaries = await _generate_document_summaries(
+            openai_client, intake_content, processed_case_docs
         )
 
-        # Initialize cost tracking
-        cost_session_manager = CostSessionManager()
+        logger.info(f"Document summaries generated: {len(document_summaries)} characters")
+        logger.info(f"CONTEXT CHECK - Summaries preview: {document_summaries[:200]}...")
 
-        # Generate case ID for cost tracking
-        case_id = (
-            st.session_state.case_info.get("caseReference", "")
-            or f"case_{int(datetime.now(UTC).timestamp())}"
-        )
-
-        # Always initialize cost_session_id to prevent AttributeError
-        if "cost_estimate" in st.session_state and st.session_state.cost_estimate:
-            st.session_state.cost_session_id = cost_session_manager.initialize_cost_session(
-                case_id=case_id,
-                documents=[],
-                audio_files=[],
-                video_files=[],
-            )
-            # Since we are re-initializing, we might need to update with the existing estimate.
-            # This part of the logic will be reviewed in a subsequent task.
-        else:
-            # Initialize to None when no cost estimate exists
-            st.session_state.cost_session_id = None
-
-        # Enhanced progress tracking setup
-        progress_container = st.container()
-        with progress_container:
-            progress_bar = st.progress(0)
-            status_text = st.empty()
-            detail_text = st.empty()
-
-        tracker = ProgressTracker(progress_bar, status_text, detail_text)
-
-        # Calculate document sizes for progress tracking
-        all_files = []
-        if st.session_state.intake_form:
-            all_files.append(st.session_state.intake_form)
-        all_files.extend(st.session_state.case_documents)
-
-        doc_sizes = calculate_document_sizes(all_files)
-        total_size = sum(doc_sizes.values())
-        case_doc_sizes = {
-            name: size
-            for name, size in doc_sizes.items()
-            if name != (st.session_state.intake_form.name if st.session_state.intake_form else None)
-        }
-        total_case_size = sum(case_doc_sizes.values())
-
-        # Phase 1: Document Processing
-        tracker.set_phase(
-            "document_processing",
-            f"Processing {len(all_files)} files ({total_size / 1024:.1f} KB total)",
-        )
-
-        # Separate files by type
-        doc_files = []
-        audio_files = []
-        video_files = []
-        for f in all_files:
-            file_type = f.type.lower()
-            if "audio" in file_type:
-                audio_files.append(f)
-            elif "video" in file_type:
-                video_files.append(f)
-            else:
-                doc_files.append(f)
-
-        intake_filenames = [st.session_state.intake_form.name] if st.session_state.intake_form else []
-
-        # DEBUG LOG: Track session state filename retrieval
+        # 6. AI Call #2: Generate findings letter
+        logger.info("AI Call #2: Generating findings letter...")
         logger.info(
-            "Session state intake filename retrieval debug",
-            extra={
-                "module": "main_processor",
-                "hypothesis_id": "session_state_filename_retrieval",
-                "intake_filenames": intake_filenames,
-                "session_state_intake_form_name": st.session_state.intake_form.name
-                if st.session_state.intake_form
-                else None,
-                "session_state_has_intake_form": bool(st.session_state.intake_form),
-                "action": "building_intake_filenames_list",
-            },
+            f"CONTEXT CHECK - Passing {len(intake_content)} chars intake + {len(document_summaries)} chars summaries to letter generation"
         )
 
-        # Process documents, audio, and video in parallel
-        doc_processing_task = doc_processor.process_documents_from_streamlit(doc_files, intake_filenames)
-        audio_processing_task = asyncio.gather(
-            *[audio_processor.process_audio_from_streamlit(f, f.name) for f in audio_files]
+        findings_letter_html = json_processing_service.generate_html_letter(
+            intake_data=intake_content,
+            document_summaries=document_summaries,
         )
 
-        # Only process videos if video processor is available
-        async def create_video_error(file_name):
-            from legal_portal.core.data_models import MediaProcessingError
+        logger.info(f"CONTEXT CHECK - Generated letter length: {len(findings_letter_html)} chars")
 
-            return MediaProcessingError(
-                source="VideoProcessor",
-                file_name=file_name,
-                error_message="Video processing is disabled. Google Cloud credentials are not configured.",
-                error_type="ConfigurationError",
-            )
+        # 7. Calculate processing time
+        processing_time = time.time() - start_time
 
-        if video_processor and hasattr(video_processor, "enabled") and video_processor.enabled:
-            video_processing_task = asyncio.gather(
-                *[video_processor.process_video_from_streamlit(f, f.name) for f in video_files]
-            )
-        else:
-            # Return MediaProcessingError for each video file when processor is unavailable
-            video_processing_task = asyncio.gather(*[create_video_error(f.name) for f in video_files])
+        # 8. Create and return the result object
+        logger.info(f"Successfully completed document processing in {processing_time:.2f}s")
 
-        processed_docs, processed_audio, processed_video = await asyncio.gather(
-            doc_processing_task, audio_processing_task, video_processing_task
+        return ProcessingResult(
+            main_letter=findings_letter_html,
+            document_summaries=document_summaries,
+            case_analysis=document_summaries,  # For backward compatibility
+            status="completed",
+            processing_time_seconds=processing_time,
+            intake_content=intake_content,
+            document_count=len(processed_case_docs),
+            errors=errors,
         )
 
-        # Separate intake and case documents
-        intake_doc = next(
-            (doc for doc in processed_docs if doc.document_type == DocumentType.INTAKE_FORM),
-            None,
+    except ValueError as e:
+        # Known validation errors
+        logger.error(f"Validation error during document processing: {e}")
+        processing_time = time.time() - start_time
+
+        error = ProcessingError(
+            source="main_processor",
+            error_type="ValidationError",
+            error_message=str(e),
         )
-        case_docs = [doc for doc in processed_docs if doc.document_type != DocumentType.INTAKE_FORM]
+        errors.append(error)
 
-        # DEBUG LOG: Track final intake validation failure
-        logger.info(
-            "Final intake validation debug",
-            extra={
-                "module": "main_processor",
-                "hypothesis_id": "intake_validation_failure",
-                "intake_doc_found": bool(intake_doc),
-                "processed_documents_count": len(processed_docs),
-                "processed_document_types": [doc.document_type.name for doc in processed_docs],
-                "processed_document_filenames": [doc.file_name for doc in processed_docs],
-                "intake_filenames_used": intake_filenames,
-                "action": "final_intake_validation",
-            },
+        return ProcessingResult(
+            main_letter="<html><body><p>Processing failed due to validation error.</p></body></html>",
+            document_summaries="",
+            case_analysis="",
+            status="failed",
+            processing_time_seconds=processing_time,
+            document_count=0,
+            errors=errors,
         )
-
-        if not intake_doc:
-            msg = "Intake form is required but was not found after processing."
-            raise ValueError(msg)
-
-        total_processed = len(processed_docs) + len(processed_audio) + len(processed_video)
-        tracker.complete_phase(
-            "document_processing",
-            f"Successfully processed {total_processed} files",
-        )
-
-        # Phase 2: Intake Analysis
-        tracker.set_phase("intake_analysis", f"Analyzing intake form: {intake_doc.file_name}")
-
-        # Update cost tracking before intake analysis
-        if st.session_state.cost_session_id:
-            try:
-                current_cost_summary = cost_session_manager.get_cost_summary(st.session_state.cost_session_id)
-                if current_cost_summary and current_cost_summary.actual_costs:
-                    current_cost = float(current_cost_summary.actual_costs.total_actual_cost)
-                    st.session_state.current_processing_cost = current_cost
-                    display_processing_cost_update(current_cost)
-            except Exception:
-                pass
-
-        analysis_result = await ai_analyzer.analyze_intake(intake_doc)
-
-        if not analysis_result.intake_analysis:
-            msg = "Failed to analyze intake form."
-            raise ValueError(msg)
-
-        # Update cost tracking after intake analysis
-        if st.session_state.cost_session_id:
-            try:
-                updated_cost_summary = cost_session_manager.get_cost_summary(st.session_state.cost_session_id)
-                if updated_cost_summary and updated_cost_summary.actual_costs:
-                    updated_cost = float(updated_cost_summary.actual_costs.total_actual_cost)
-                    st.session_state.current_processing_cost = updated_cost
-                    display_processing_cost_update(updated_cost)
-            except Exception:
-                pass
-
-        tracker.complete_phase("intake_analysis", "Intake analysis completed")
-
-        # Phase 3: Case Document Analysis (Size-based progress)
-        if case_docs or processed_audio or processed_video:
-            num_docs = len(case_docs)
-            num_audio = len(processed_audio)
-            num_video = len(processed_video)
-            tracker.set_phase(
-                "case_analysis",
-                f"Starting analysis of {num_docs} documents, {num_audio} audio files, "
-                f"and {num_video} video files",
-            )
-
-            processed_size = 0
-
-            # Enhanced concurrent analysis with progress tracking and cost monitoring
-            async def analyze_with_progress():
-                import concurrent.futures
-
-                nonlocal processed_size
-
-                # Use the parallelized analyze_case_documents method for concurrent processing
-                logger.info(
-                    f"MAIN PROCESSOR: 🚀 Starting concurrent analysis of {len(case_docs)} documents..."
-                )
-
-                # Initial progress update
-                tracker.update_progress(
-                    "case_analysis",
-                    0.1,
-                    f"Initializing concurrent processing of {len(case_docs)} documents",
-                )
-
-                # Pre-processing cost update
-                if st.session_state.cost_session_id:
-                    try:
-                        current_cost_summary = cost_session_manager.get_cost_summary(
-                            st.session_state.cost_session_id
-                        )
-                        if current_cost_summary and current_cost_summary.actual_costs:
-                            current_cost = float(current_cost_summary.actual_costs.total_actual_cost)
-                            st.session_state.current_processing_cost = current_cost
-                            display_processing_cost_update(current_cost)
-                    except (AttributeError, KeyError, ValueError):
-                        pass
-
-                # Use concurrent document analysis (this calls the parallelized method)
-                results = await ai_analyzer.analyze_case_documents(case_docs, analysis_result.intake_analysis)
-
-                # Post-processing with ThreadPoolExecutor for I/O-bound operations
-                def process_cost_tracking_batch(result_batch):
-                    """Process cost tracking for a batch of results using ThreadPoolExecutor."""
-                    processed_results = []
-                    for result in result_batch:
-                        if st.session_state.cost_session_id and isinstance(result, AnalyzedDocument):
-                            try:
-                                cost_session_manager.update_document_costs(
-                                    st.session_state.cost_session_id, [result]
-                                )
-                                processed_results.append(("success", result))
-                            except Exception as e:
-                                logger.error(
-                                    f"MAIN PROCESSOR: ⚠️ Cost tracking failed for {result.file_name}: {e}"
-                                )
-                                processed_results.append(("error", result))
-                        else:
-                            processed_results.append(("no_cost_tracking", result))
-                    return processed_results
-
-                # Split results into batches for concurrent processing
-                batch_size = 5
-                result_batches = [results[i : i + batch_size] for i in range(0, len(results), batch_size)]
-
-                if result_batches and st.session_state.cost_session_id:
-                    logger.debug(
-                        f"MAIN PROCESSOR: 🚀 Processing cost tracking for {len(results)} results in {len(result_batches)} batches..."
-                    )
-
-                    # Use ThreadPoolExecutor for concurrent cost tracking operations
-                    with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
-                        # Submit all batch processing tasks
-                        future_to_batch = {
-                            executor.submit(process_cost_tracking_batch, batch): batch
-                            for batch in result_batches
-                        }
-
-                        # Process completed futures
-                        for future in concurrent.futures.as_completed(future_to_batch):
-                            batch = future_to_batch[future]
-                            try:
-                                batch_results = future.result()
-                                logger.info(
-                                    f"MAIN PROCESSOR: ✅ Completed cost tracking for batch of {len(batch)} results"
-                                )
-                            except Exception as e:
-                                logger.error(f"MAIN PROCESSOR: ❌ Cost tracking batch failed: {e}")
-
-                # Update progress tracking with the completed results
-                tracker.update_progress(
-                    "case_analysis",
-                    0.9,
-                    f"Finalizing analysis of {len(results)} documents",
-                )
-
-                # Update final cost tracking
-                if st.session_state.cost_session_id:
-                    try:
-                        updated_cost_summary = cost_session_manager.get_cost_summary(
-                            st.session_state.cost_session_id
-                        )
-                        if updated_cost_summary and updated_cost_summary.actual_costs:
-                            updated_cost = float(updated_cost_summary.actual_costs.total_actual_cost)
-                            st.session_state.current_processing_cost = updated_cost
-                            display_processing_cost_update(updated_cost)
-                    except (AttributeError, KeyError, ValueError):
-                        pass
-
-                # Add media results to the final analysis (using ThreadPoolExecutor for I/O operations)
-                def process_media_results():
-                    """Process media results in parallel."""
-                    media_errors = []
-                    media_insights = []
-                    transcripted_media = []
-
-                    for item in processed_audio:
-                        if isinstance(item, TranscriptedMedia):
-                            transcripted_media.append(item)
-                        elif isinstance(item, MediaProcessingError):
-                            media_errors.append(
-                                AnalysisError(
-                                    source=item.source,
-                                    file_name=item.file_name,
-                                    error_message=item.error_message,
-                                )
-                            )
-
-                    for item in processed_video:
-                        if isinstance(item, VideoInsight):
-                            media_insights.append(item)
-                        elif isinstance(item, MediaProcessingError):
-                            media_errors.append(
-                                AnalysisError(
-                                    source=item.source,
-                                    file_name=item.file_name,
-                                    error_message=item.error_message,
-                                )
-                            )
-
-                    return media_errors, media_insights, transcripted_media
-
-                # Process media results concurrently if there are any
-                if processed_audio or processed_video:
-                    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
-                        media_future = executor.submit(process_media_results)
-                        media_errors, media_insights, transcripted_media = media_future.result()
-
-                        # Add to analysis result
-                        analysis_result.errors.extend(media_errors)
-                        analysis_result.video_insights.extend(media_insights)
-                        analysis_result.transcripted_media.extend(transcripted_media)
-
-                        logger.info(
-                            f"MAIN PROCESSOR: ✅ Processed {len(transcripted_media)} audio and {len(media_insights)} video items"
-                        )
-
-                logger.info(f"MAIN PROCESSOR: ✅ Completed concurrent analysis of {len(results)} documents")
-                return results
-
-            case_analysis_results = await analyze_with_progress()
-
-            # Process results
-            for res in case_analysis_results:
-                if isinstance(res, AnalyzedDocument):
-                    analysis_result.analyzed_documents.append(res)
-                elif isinstance(res, AnalysisError):
-                    analysis_result.errors.append(res)
-
-            media_count = len(processed_audio) + len(processed_video)
-            tracker.complete_phase(
-                "case_analysis",
-                f"Analyzed {len(case_docs)} documents and {media_count} media files successfully",
-            )
-        else:
-            tracker.complete_phase("case_analysis", "No case documents or media to analyze")
-
-        # Phase 4: Final Assessment
-        tracker.set_phase("final_assessment", "Performing comprehensive legal assessment")
-
-        # Update cost tracking before final assessment
-        if st.session_state.cost_session_id:
-            try:
-                current_cost_summary = cost_session_manager.get_cost_summary(st.session_state.cost_session_id)
-                if current_cost_summary and current_cost_summary.actual_costs:
-                    current_cost = float(current_cost_summary.actual_costs.total_actual_cost)
-                    st.session_state.current_processing_cost = current_cost
-                    display_processing_cost_update(current_cost)
-            except (AttributeError, KeyError, ValueError):
-                pass
-
-        final_analysis = await ai_analyzer.perform_final_assessment(analysis_result)
-
-        # Update cost tracking after final assessment
-        if st.session_state.cost_session_id:
-            try:
-                updated_cost_summary = cost_session_manager.get_cost_summary(st.session_state.cost_session_id)
-                if updated_cost_summary and updated_cost_summary.actual_costs:
-                    updated_cost = float(updated_cost_summary.actual_costs.total_actual_cost)
-                    st.session_state.current_processing_cost = updated_cost
-                    display_processing_cost_update(updated_cost)
-            except (AttributeError, KeyError, ValueError):
-                pass
-
-        tracker.complete_phase("final_assessment", "Legal assessment completed")
-
-        # Phase 5: Email Generation
-        tracker.set_phase("email_generation", "Generating professional findings letter")
-
-        # Update cost tracking before email generation
-        if st.session_state.cost_session_id:
-            try:
-                current_cost_summary = cost_session_manager.get_cost_summary(st.session_state.cost_session_id)
-                if current_cost_summary and current_cost_summary.actual_costs:
-                    current_cost = float(current_cost_summary.actual_costs.total_actual_cost)
-                    st.session_state.current_processing_cost = current_cost
-                    display_processing_cost_update(current_cost)
-            except (AttributeError, KeyError, ValueError):
-                pass
-
-        # H1 DEBUG: Email generation start
-        import json
-
-        logger.debug(
-            f"DEBUG_H1: {json.dumps({'module': 'main_processor', 'hypothesis_id': 'H1', 'action': 'email_generation_start', 'line': 625})}"
-        )
-
-        email_docs = email_generator.generate_email_and_analysis_docs(final_analysis)
-
-        # Track cache statistics
-        cache_hit = email_docs.get("metadata", {}).get("cache_hit", False) if email_docs else False
-        cache_failed = email_docs.get("metadata", {}).get("cache_failed", False) if email_docs else False
-
-        if cache_hit:
-            logger.info("✅ Cache hit! Email generation completed instantly from cache")
-        elif cache_failed:
-            logger.warning("⚠️ Cache storage failed (pickle error) - continuing without cache")
-        else:
-            logger.info("📝 Generated fresh email content (no cache)")
-
-        # Update session state with cache statistics
-        # Initialize if not exists or if None
-        if "cache_stats" not in st.session_state or st.session_state.cache_stats is None:
-            st.session_state.cache_stats = {"hits": 0, "misses": 0, "cache_hit_rate": 0.0}
-
-        if cache_hit:
-            st.session_state.cache_stats["hits"] += 1
-        else:
-            st.session_state.cache_stats["misses"] += 1
-
-        total = st.session_state.cache_stats["hits"] + st.session_state.cache_stats["misses"]
-        hit_rate = st.session_state.cache_stats["hits"] / total if total > 0 else 0
-        st.session_state.cache_stats["cache_hit_rate"] = hit_rate
-
-        # H1 DEBUG: Email generation complete - capture return value analysis
-        email_docs_debug = {
-            "module": "main_processor",
-            "hypothesis_id": "H1",
-            "action": "email_generation_complete",
-            "line": 627,
-            "email_docs_type": str(type(email_docs)),
-            "email_docs_keys": list(email_docs.keys()) if isinstance(email_docs, dict) else None,
-            "email_docs_length": len(str(email_docs)) if email_docs else 0,
-            "has_content": bool(email_docs),
-            "cache_hit": cache_hit,
-        }
-        logger.debug(f"DEBUG_H1: {json.dumps(email_docs_debug)}")
-
-        # H1 DEBUG: Critical issue - No file save operation found after email generation
-        logger.debug(
-            f"DEBUG_H1: {json.dumps({'module': 'main_processor', 'hypothesis_id': 'H1', 'action': 'file_save_missing', 'line': 628, 'issue': 'No file write operation found after email generation'})}"
-        )
-
-        # CRITICAL FIX: Add missing file save operation
-        if email_docs and isinstance(email_docs, dict):
-            try:
-                import os
-
-                # Ensure output directory exists
-                output_dir = "validation_output"
-                os.makedirs(output_dir, exist_ok=True)
-
-                # Extract HTML content - check multiple possible keys
-                html_content = None
-                for key in [
-                    "letter_content",
-                    "main_letter",
-                    "rendered_email",
-                    "html_content",
-                ]:
-                    if email_docs.get(key):
-                        html_content = email_docs[key]
-                        break
-
-                if html_content:
-                    output_file = os.path.join(output_dir, "findings_letter.html")
-                    with open(output_file, "w", encoding="utf-8") as f:
-                        f.write(html_content)
-
-                    logger.debug(
-                        f"DEBUG_FIX: {json.dumps({'module': 'main_processor', 'action': 'file_saved_successfully', 'file_path': output_file, 'content_length': len(html_content)})}"
-                    )
-                    st.success(f"✅ Findings letter saved successfully to: {output_file}")
-                else:
-                    logger.error(
-                        f"DEBUG_FIX: {json.dumps({'module': 'main_processor', 'action': 'file_save_failed', 'issue': 'No HTML content found in email_docs', 'available_keys': list(email_docs.keys())})}"
-                    )
-                    st.warning("⚠️ HTML content not found in generated email data")
-
-            except Exception as e:
-                error_msg = f"Failed to save findings letter: {e!s}"
-                logger.error(
-                    f"DEBUG_FIX: {json.dumps({'module': 'main_processor', 'action': 'file_save_error', 'error': error_msg})}"
-                )
-                st.error(f"❌ {error_msg}")
-        else:
-            logger.error(
-                f"DEBUG_FIX: {json.dumps({'module': 'main_processor', 'action': 'file_save_failed', 'issue': 'email_docs is None or not a dictionary'})}"
-            )
-            st.error("❌ Email generation returned invalid data")
-
-        # Update cost tracking after email generation
-        if st.session_state.cost_session_id:
-            try:
-                updated_cost_summary = cost_session_manager.get_cost_summary(st.session_state.cost_session_id)
-                if updated_cost_summary and updated_cost_summary.actual_costs:
-                    # Fix TypeError: Add null checking for total_actual_cost
-                    total_cost = updated_cost_summary.actual_costs.total_actual_cost
-                    if total_cost is not None:
-                        updated_cost = float(total_cost)
-                        st.session_state.current_processing_cost = updated_cost
-                        display_processing_cost_update(updated_cost)
-                    else:
-                        # Default to 0.0 if cost is None
-                        st.session_state.current_processing_cost = 0.0
-                        display_processing_cost_update(0.0)
-            except (AttributeError, KeyError, ValueError, TypeError) as e:
-                # Enhanced error handling for cost tracking
-                logger.error(
-                    f"DEBUG_COST: {json.dumps({'module': 'main_processor', 'action': 'cost_tracking_error', 'error': str(e), 'error_type': type(e).__name__})}"
-                )
-
-        tracker.complete_phase("email_generation", "Findings letter generated successfully")
-
-        # Finalize cost tracking
-        if st.session_state.cost_session_id:
-            try:
-                # Update cost session with actual results
-                cost_summary = cost_session_manager.update_actual_costs(
-                    st.session_state.cost_session_id, final_analysis
-                )
-
-                # Finalize the session
-                st.session_state.cost_summary = cost_session_manager.finalize_cost_session(
-                    st.session_state.cost_session_id
-                )
-
-                # Display final cost summary in sidebar with comprehensive null checking
-                if st.session_state.cost_summary and st.session_state.cost_summary.actual_costs:
-                    # FIXED: Comprehensive null checking for total_actual_cost before any operations
-                    total_cost = st.session_state.cost_summary.actual_costs.total_actual_cost
-                    if total_cost is not None:
-                        try:
-                            final_cost = float(total_cost)
-                            st.sidebar.success(f"✅ Final Processing Cost: ${final_cost:.4f}")
-                        except (ValueError, TypeError) as e:
-                            logger.error(
-                                f"Cost conversion error: {e}, total_cost={total_cost}, type={type(total_cost)}"
-                            )
-                            st.sidebar.warning("⚠️ Cost data format error - displaying as $0.00")
-                            final_cost = 0.0
-                            st.sidebar.success(f"✅ Final Processing Cost: ${final_cost:.4f}")
-                    else:
-                        # Handle case where total_actual_cost is None
-                        st.sidebar.info("💰 Cost tracking completed but cost data not available")
-
-                    # FIXED: Comprehensive null checking for cost_variance before any operations
-                    cost_variance = st.session_state.cost_summary.cost_variance
-                    if cost_variance is not None:
-                        try:
-                            variance = float(cost_variance)
-                            if abs(variance) <= 0.01:  # Within 1 cent
-                                st.sidebar.info("💰 Cost was exactly as estimated!")
-                            elif variance > 0:
-                                st.sidebar.warning(f"📈 Cost was ${variance:.4f} over estimate")
-                            else:
-                                st.sidebar.info(f"📉 Cost was ${abs(variance):.4f} under estimate")
-                        except (ValueError, TypeError) as e:
-                            logger.error(
-                                f"Variance conversion error: {e}, cost_variance={cost_variance}, type={type(cost_variance)}"
-                            )
-                            st.sidebar.info("💰 Cost variance data not available")
-                elif st.session_state.cost_summary:
-                    # Handle case where cost_summary exists but actual_costs is None or incomplete
-                    st.sidebar.info("💰 Cost tracking initialized but processing not yet completed")
-
-            except Exception as e:
-                st.warning(f"Could not finalize cost tracking: {e!s}")
-
-        # Store results - FIXED: Use correct keys from EmailGeneratorV2
-        st.session_state.final_results = final_analysis
-
-        # EmailGeneratorV2 returns "letter_content", not "main_letter"/"appendix"
-        if email_docs and isinstance(email_docs, dict):
-            # Extract the main letter content using the correct key
-            main_letter_content = email_docs.get("letter_content", "")
-            st.session_state.main_letter = main_letter_content
-
-            # Generate distinct appendix content using the template and case data
-            appendix_content = _generate_document_appendix(final_analysis)
-            st.session_state.appendix = appendix_content
-        else:
-            # Fallback if email_docs is invalid
-            st.session_state.main_letter = ""
-            st.session_state.appendix = ""
-
-        st.session_state.processing_status = "completed"
-
-        # Save output files if output_dir is specified
-        if output_dir:
-            save_output_files(
-                output_dir,
-                email_docs.get("letter_content", ""),
-                appendix_content,
-                final_analysis,
-            )
-
-        # Final success message
-        status_text.text("**Analysis Complete!** (100.0%)")
-        detail_text.text(
-            f"Successfully processed {len(all_files)} documents totaling {total_size / 1024:.1f} KB"
-        )
-        st.success("Document analysis completed successfully!")
-
-        return True
-
-    except EmailReadabilityError as e:
-        logger.error(f"🔍 MAIN_PROCESSOR: EmailReadabilityError caught: {e}")
-        st.session_state.processing_status = "failed"
-        st.session_state.processing_error = str(e)
-        st.error(f"Failed to generate a readable document after multiple attempts: {e}")
-        return False
 
     except Exception as e:
-        logger.error(f"🔍 MAIN_PROCESSOR: Exception caught: {e}")
-        logger.error(f"🔍 MAIN_PROCESSOR: Exception type: {type(e)}")
-        import traceback
+        # Unexpected errors
+        logger.exception(f"Unexpected error during document processing: {e}")
+        processing_time = time.time() - start_time
 
-        logger.error(f"🔍 MAIN_PROCESSOR: Full traceback: {traceback.format_exc()}")
-        st.session_state.processing_status = "failed"
-        st.session_state.processing_error = str(e)
-        st.error(f"An error occurred during processing: {e}")
-        return False
+        error = ProcessingError(
+            source="main_processor",
+            error_type=type(e).__name__,
+            error_message=str(e),
+        )
+        errors.append(error)
+
+        return ProcessingResult(
+            main_letter="<html><body><p>Processing failed due to an unexpected error.</p></body></html>",
+            document_summaries="",
+            case_analysis="",
+            status="failed",
+            processing_time_seconds=processing_time,
+            document_count=0,
+            errors=errors,
+        )
 
 
-async def process_case_documents_cli(
-    intake_form_path: str,
-    case_documents_paths: List,
-    output_dir: str,
-    config_path: Optional[str] = None,
-) -> Optional[bool]:
-    """Command-line version of the case processing function.
+async def _generate_document_summaries(openai_client, intake_content: str, case_documents: list) -> str:
+    """AI Call #1: Generate contextual summaries of case documents.
 
     Args:
     ----
-        intake_form_path: Path to the intake form file
-        case_documents_paths: List of paths to case document files
-        output_dir: Directory to save output files
-        config_path: Path to configuration YAML file for legal practice area-specific prompts
+        openai_client: OpenAI client instance
+        intake_content: Extracted text from intake form
+        case_documents: List of ProcessedDocument objects (can be empty)
 
+    Returns:
+    -------
+        Formatted string containing document summaries (or intake-only analysis if no documents)
     """
-    try:
-        logger.info("Initializing processors...")
+    # Handle case with no documents - analyze intake form only
+    if not case_documents:
+        prompt = f"""You are a legal document analyst. Given the client intake information below, provide a comprehensive analysis of the case based solely on the intake information provided.
 
-        # Initialize processors
-        from legal_portal.utils.openai_client import OpenAIClient
+INTAKE INFORMATION:
+{intake_content[:3000]}  # Limit intake to ~3000 chars to save tokens
 
-        openai_client_wrapper = OpenAIClient()
-        openai_client = openai_client_wrapper.client  # Get the properly configured client
-        doc_processor = DocumentProcessor()
-        AudioProcessor(openai_client)
+---
+OUTPUT FORMAT:
+Based on the intake information, provide:
+1. Case Overview (parties involved, nature of the dispute)
+2. Key Facts and Timeline
+3. Legal Issues Identified
+4. Potential Claims or Defenses
+5. Information Gaps (what additional documents would be helpful)
 
-        # Try to initialize video processor but don't fail if credentials are missing
-        try:
-            from legal_portal.config.default import get_settings
-
-            settings = get_settings()
-
-            if settings.video_processing_enabled:
-                VideoProcessor()
-                logger.info("Video processor initialized for CLI mode")
-            else:
-                logger.info("Video processing disabled in CLI mode - Google Cloud credentials not configured")
-        except Exception as e:
-            logger.warning(f"Could not initialize video processor in CLI mode: {e}")
-
-        # CLI mode - enable caching by default for optimal performance
-        ai_analyzer = AIAnalyzer(openai_client, doc_processor, config_path=config_path, enable_caching=True)
-        email_generator = EmailGeneratorV2(
-            config_path=config_path, openai_api_key=openai_client.api_key, enable_caching=True
-        )
-
-        logger.debug(f"Processing {len(case_documents_paths) + 1} files...")
-
-        # Process documents
-        all_file_paths = [intake_form_path, *case_documents_paths]
-        intake_filenames = [Path(intake_form_path).name]
-
-        processed_docs = await doc_processor.process_documents_from_paths(all_file_paths, intake_filenames)
-
-        # Separate intake and case documents
-        intake_doc = next(
-            (doc for doc in processed_docs if doc.document_type == DocumentType.INTAKE_FORM),
-            None,
-        )
-        case_docs = [doc for doc in processed_docs if doc.document_type != DocumentType.INTAKE_FORM]
-
-        if not intake_doc:
-            msg = "Intake form is required but was not found after processing."
-            raise ValueError(msg)
-
-        logger.info("Analyzing intake form...")
-        analysis_result = await ai_analyzer.analyze_intake(intake_doc)
-
-        if not analysis_result.intake_analysis:
-            msg = "Failed to analyze intake form."
-            raise ValueError(msg)
-
-        logger.info(f"Analyzing {len(case_docs)} case documents...")
-        if case_docs:
-            for doc in case_docs:
-                result = await ai_analyzer._analyze_single_document(doc, analysis_result.intake_analysis)
-                # Add the analyzed document to the results
-                if isinstance(result, AnalyzedDocument):
-                    analysis_result.analyzed_documents.append(result)
-                elif isinstance(result, AnalysisError):
-                    analysis_result.errors.append(result)
-
-        logger.info("Performing final assessment...")
-        final_analysis = await ai_analyzer.perform_final_assessment(analysis_result)
-
-        logger.info("Generating findings letter...")
-        email_docs = email_generator.generate_email_and_analysis_docs(final_analysis)
-
-        logger.info("Saving output files...")
-        save_output_files(
-            output_dir,
-            email_docs.get("main_letter", ""),
-            email_docs.get("appendix", ""),
-            final_analysis,
-        )
-
-        logger.debug("✅ Case processing completed successfully!")
-        return True
-
-    except EmailReadabilityError as e:
-        logger.error(
-            f"❌ EmailReadabilityError: Failed to generate a readable document after multiple attempts: {e}"
-        )
-        return False
-
-    except Exception as e:
-        logger.error(f"❌ Error occurred during processing: {e}")
-        return False
-
-
-def main():
-    """Command-line interface for the main processor."""
-    parser = argparse.ArgumentParser(description="Legal Document Analysis Portal - Case Processing Tool")
-    parser.add_argument(
-        "--output_dir",
-        type=str,
-        required=True,
-        help="Directory where output files should be saved",
-    )
-    parser.add_argument("--intake_form", type=str, required=True, help="Path to the intake form file")
-    parser.add_argument(
-        "--case_documents",
-        type=str,
-        nargs="+",
-        default=[],
-        help="Paths to case document files or directories containing case documents",
-    )
-    parser.add_argument(
-        "--config_path",
-        type=str,
-        help="Path to configuration YAML file for legal practice area-specific prompts",
-    )
-
-    args = parser.parse_args()
-
-    # Validate input files exist
-    if not os.path.exists(args.intake_form):
-        logger.info(f"❌ Intake form not found: {args.intake_form}")
-        sys.exit(1)
-
-    # Expand directories to include all files within them
-    expanded_case_documents = []
-    for doc_path in args.case_documents:
-        if not os.path.exists(doc_path):
-            logger.info(f"❌ Case document path not found: {doc_path}")
-            sys.exit(1)
-
-        if os.path.isfile(doc_path):
-            # It's a file, add it directly
-            expanded_case_documents.append(doc_path)
-        elif os.path.isdir(doc_path):
-            # It's a directory, find all supported files within it
-            logger.info(f"📁 Scanning directory for case documents: {doc_path}")
-            supported_extensions = [
-                ".pdf",
-                ".docx",
-                ".doc",
-                ".txt",
-                ".eml",
-                ".jpg",
-                ".jpeg",
-                ".png",
-            ]
-
-            for root, _dirs, files in os.walk(doc_path):
-                for file in files:
-                    file_path = os.path.join(root, file)
-                    file_ext = os.path.splitext(file)[1].lower()
-
-                    if file_ext in supported_extensions:
-                        expanded_case_documents.append(file_path)
-                        logger.info(f"  ✓ Found: {file}")
-
-            if not any(
-                os.path.join(doc_path, f) in expanded_case_documents
-                for f in os.listdir(doc_path)
-                if os.path.isfile(os.path.join(doc_path, f))
-            ):
-                logger.info(f"⚠️  No supported files found in directory: {doc_path}")
-        else:
-            logger.info(f"❌ Path is neither file nor directory: {doc_path}")
-            sys.exit(1)
-
-    # Update the case documents list with expanded paths
-    args.case_documents = expanded_case_documents
-
-    # Create output directory if it doesn't exist
-    os.makedirs(args.output_dir, exist_ok=True)
-
-    logger.info("🚀 Starting Legal Document Analysis...")
-    logger.info(f"📁 Output directory: {args.output_dir}")
-    logger.info(f"📄 Intake form: {args.intake_form}")
-    logger.info(f"📋 Case documents: {len(args.case_documents)} files")
-
-    # Run the async processing function
-    success = asyncio.run(
-        process_case_documents_cli(args.intake_form, args.case_documents, args.output_dir, args.config_path)
-    )
-
-    if success:
-        logger.debug("🎉 Processing completed successfully!")
-        sys.exit(0)
+Keep the analysis thorough but concise. Focus on legally significant information.
+"""
     else:
-        logger.error("💥 Processing failed!")
-        sys.exit(1)
+        # Build the summarization prompt for documents
+        prompt = f"""You are a legal document analyst. Given the client intake information below, summarize the following case documents. Focus on key facts, dates, parties, amounts, obligations, issues, and evidence relevant to the case.
 
+INTAKE INFORMATION:
+{intake_content[:3000]}  # Limit intake to ~3000 chars to save tokens
 
-if __name__ == "__main__":
-    main()
+---
+CASE DOCUMENTS TO SUMMARIZE:
+
+"""
+
+        for i, doc in enumerate(case_documents, 1):
+            prompt += f"\n--- Document {i}: {doc.file_name} ---\n"
+            # Limit each document to reasonable size
+            content_preview = doc.content[:8000] if len(doc.content) > 8000 else doc.content
+            prompt += f"{content_preview}\n"
+
+        prompt += """
+---
+OUTPUT FORMAT:
+For each document, provide:
+1. Document Name
+2. Document Type (contract, correspondence, disclosure, evidence, etc.)
+3. Key Facts (parties, dates, amounts, obligations)
+4. Issues/Problems Identified
+5. Relevance to Case
+
+Keep summaries concise but thorough. Focus on legally significant information.
+"""
+
+    # Make the API call
+    response = openai_client.chat.completions.create(
+        model="gpt-4o",  # Use GPT-4o for fast, reliable, high-quality summarization
+        messages=[
+            {"role": "system", "content": "You are a precise legal document analyst."},
+            {"role": "user", "content": prompt},
+        ],
+        max_tokens=4000,  # GPT-4o uses standard max_tokens parameter
+        temperature=0.3,  # Consistent, professional output
+    )
+
+    return response.choices[0].message.content

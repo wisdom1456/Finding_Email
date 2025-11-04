@@ -1,3 +1,3 @@
-"""Legal Portal Package."""
+"""UI module for the Legal Document Analysis Portal."""
 
-__version__ = "1.0.0"
+from __future__ import annotations

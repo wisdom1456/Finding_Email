@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Dict, List, Optional
+from typing import TYPE_CHECKING, Dict, List
 
 import streamlit as st
-from legal_portal.utils.cost_estimator import CostEstimator
 
 if TYPE_CHECKING:
-    from legal_portal.core.data_models import CostEstimate
+    pass
 
 
 class ProgressTracker:
@@ -198,115 +197,6 @@ def calculate_document_sizes(files: List) -> Dict[str, int]:
             # Default size if calculation fails
             sizes[file.name] = 1024  # 1KB default
     return sizes
-
-
-def display_cost_estimation(cost_estimate: CostEstimate) -> None:
-    """Display cost estimation before processing begins."""
-    st.subheader("📊 Estimated Processing Costs")
-
-    col1, col2 = st.columns(2)
-
-    with col1:
-        st.metric(
-            label="Total Estimated Cost",
-            value=f"${float(cost_estimate.estimated_cost):.4f}",
-            help=f"Confidence: {cost_estimate.breakdown.get('confidence', 0.8):.0%}",
-        )
-
-    with col2:
-        st.metric(
-            label="Confidence Level",
-            value=f"{cost_estimate.breakdown.get('confidence', 0.8):.0%}",
-            help="Based on file size analysis and processing patterns",
-        )
-
-    # Detailed breakdown in expander
-    if st.expander("View Cost Breakdown"):
-        st.write("**Cost Breakdown:**")
-        breakdown_data = []
-        for category, cost in cost_estimate.breakdown.items():
-            if category != "confidence":  # Skip confidence, it's not a cost
-                breakdown_data.append(
-                    {
-                        "Category": category.replace("_", " ").title(),
-                        "Estimated Cost": f"${float(cost):.4f}",
-                    }
-                )
-
-        if breakdown_data:
-            st.dataframe(breakdown_data, use_container_width=True)
-        else:
-            st.info("No detailed breakdown available")
-
-
-def display_processing_cost_update(current_cost: float) -> None:
-    """Display real-time cost updates during processing."""
-    if current_cost > 0:
-        st.sidebar.metric(
-            label="Processing Cost",
-            value=f"${current_cost:.4f}",
-            help="Real-time cost accumulation",
-        )
-
-
-def generate_cost_estimate_for_files(files: List) -> Optional[CostEstimate]:
-    """Generate cost estimate for uploaded files."""
-    try:
-        cost_estimator = CostEstimator()
-
-        # Process files to get structured data for estimation
-        processed_docs = []
-        audio_files = []
-        video_files = []
-
-        for file in files:
-            file_type = file.type.lower() if hasattr(file, "type") else ""
-            file_name = file.name
-            file_size = getattr(file, "size", 0)
-
-            # Categorize files
-            if "audio" in file_type:
-                audio_files.append({"filename": file_name, "size": file_size})
-            elif "video" in file_type:
-                video_files.append({"filename": file_name, "size": file_size})
-            else:
-                # For documents, create minimal ProcessedDocument for estimation
-                content = ""
-                try:
-                    if hasattr(file, "getvalue"):
-                        content_bytes = file.getvalue()
-                        if isinstance(content_bytes, bytes):
-                            content = content_bytes.decode("utf-8", errors="ignore")
-                        else:
-                            content = str(content_bytes)
-                except (UnicodeDecodeError, AttributeError):
-                    # Use file size as proxy for content length
-                    content = "x" * file_size  # Rough content estimation
-
-                from legal_portal.core.data_models import (
-                    DocumentType,
-                    FileMetadata,
-                    FileType,
-                    ProcessedDocument,
-                )
-
-                processed_doc = ProcessedDocument(
-                    file_name=file_name,
-                    content=content,
-                    file_type=FileType.PDF if file_name.lower().endswith(".pdf") else FileType.TXT,
-                    document_type=DocumentType.CASE_DOCUMENT,
-                    metadata=FileMetadata(filename=file_name, size=file_size),
-                )
-                processed_docs.append(processed_doc)
-
-        # Generate cost estimate
-        return cost_estimator.generate_cost_estimate(
-            documents=processed_docs, audio_files=audio_files, video_files=video_files
-        )
-
-    except (ValueError, TypeError, AttributeError) as e:
-        st.warning(f"Could not generate cost estimate: {e!s}")
-        return None
 
 
 def generate_case_analysis_html(analysis_result):
@@ -556,7 +446,6 @@ def generate_case_analysis_html(analysis_result):
 
 def handle_file_uploads():
     """Identifies intake documents from uploaded files and prompts for clarification.
-    Shows cost estimation after file upload but before processing.
     Returns True if analysis can proceed, False otherwise.
 
     SECURITY: This function now includes comprehensive security validations:
@@ -736,19 +625,7 @@ def handle_file_uploads():
             st.session_state.case_documents = [f for f in uploaded_files if f != st.session_state.intake_form]
             intake_selected = True
 
-    # Show cost estimation after intake form is selected
     if intake_selected and st.session_state.intake_form:
-        # Generate and display cost estimate
-        if st.session_state.cost_estimate is None:
-            with st.spinner("Generating cost estimate..."):
-                cost_estimate = generate_cost_estimate_for_files(uploaded_files)
-                if cost_estimate:
-                    st.session_state.cost_estimate = cost_estimate
-
-        # Display cost estimation if available
-        if st.session_state.cost_estimate:
-            display_cost_estimation(st.session_state.cost_estimate)
-
         return True
 
     return False

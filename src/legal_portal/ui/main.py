@@ -9,7 +9,6 @@ import threading
 import time
 
 import streamlit as st
-
 from legal_portal.services.main_processor import process_case_documents
 from legal_portal.ui.components.ui_components import (
     case_information_form,
@@ -22,6 +21,9 @@ from legal_portal.utils.logging_config import get_module_logger, setup_logging
 # Initialize logging
 setup_logging(app_name="legal-portal", level=os.getenv("LOG_LEVEL", "INFO"))
 logger = get_module_logger(__name__)
+
+# PIN Authentication
+APP_PIN = os.getenv("APP_ACCESS_PIN", "0101")
 
 
 # --- Session State Initialization ---
@@ -129,6 +131,33 @@ def run_processing_in_background(
         loop.close()
 
 
+# --- PIN Authentication Check ---
+def check_authentication():
+    """Check if user is authenticated with PIN."""
+    if "authenticated" not in st.session_state:
+        st.session_state.authenticated = False
+
+    if not st.session_state.authenticated:
+        st.title("🔒 Legal Portal Access")
+        st.markdown("### Enter PIN to Continue")
+
+        pin_input = st.text_input(
+            "Access PIN", type="password", max_chars=4, help="Enter the 4-digit PIN to access the portal"
+        )
+
+        col1, col2, col3 = st.columns([1, 1, 2])
+        with col1:
+            if st.button("🔓 Unlock", use_container_width=True):
+                if pin_input == APP_PIN:
+                    st.session_state.authenticated = True
+                    st.success("✅ Access granted!")
+                    st.rerun()
+                else:
+                    st.error("❌ Incorrect PIN. Please try again.")
+
+        st.stop()
+
+
 # --- Main Application ---
 def main():
     """Main function to run the Streamlit application."""
@@ -139,6 +168,9 @@ def main():
         layout="wide",
         initial_sidebar_state="expanded",
     )
+
+    # --- Check Authentication First ---
+    check_authentication()
 
     # --- Initialize Session & Logging ---
     initialize_session_state()

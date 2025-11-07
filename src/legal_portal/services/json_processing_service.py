@@ -200,6 +200,7 @@ class JsonProcessingService:
             document_summaries=document_summaries_json,  # Pass JSON directly
             quality_context=quality_context,
             attorney_name=attorney_name,
+            attorney_title="Senior Partner",  # Default title
             firm_name=firm_name,
             contact_phone=contact_phone_value,
             contact_email=contact_email_value,

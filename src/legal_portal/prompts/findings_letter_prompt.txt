@@ -317,7 +317,7 @@ Thank you, and I remain committed to protecting your interests throughout this p
 Sincerely,
 
 {attorney_name}
-{attorney_title or "Senior Partner"}
+{attorney_title}
 {firm_name}
 
 ---

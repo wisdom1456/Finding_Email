@@ -11,7 +11,6 @@ import magic
 import vertexai
 from google.api_core.exceptions import GoogleAPICallError, RetryError
 from google.cloud import speech, storage
-from legal_portal.utils.logging_config import get_module_logger
 from tenacity import (
     retry,
     retry_if_exception_type,
@@ -19,7 +18,11 @@ from tenacity import (
     wait_exponential,
 )
 
+from legal_portal.utils.logging_config import get_module_logger
+
 logger = get_module_logger(__name__)
+from vertexai.generative_models import GenerativeModel, Part
+
 from legal_portal.core.data_models import (
     CriminalEvidenceCategory,
     CriminalEvidenceItem,
@@ -30,7 +33,6 @@ from legal_portal.core.data_models import (
     TimeRange,
     VideoInsight,
 )
-from vertexai.generative_models import GenerativeModel, Part
 
 
 class VideoProcessingError(Exception):

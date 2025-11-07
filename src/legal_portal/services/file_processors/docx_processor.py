@@ -5,6 +5,7 @@ import mimetypes
 import os
 
 import docx
+
 from legal_portal.core.data_models import (
     DocumentType,
     FileMetadata,

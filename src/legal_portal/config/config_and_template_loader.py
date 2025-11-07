@@ -5,6 +5,7 @@ from typing import Any, Dict, Optional
 
 import yaml
 from jinja2 import Environment, FileSystemLoader, select_autoescape
+
 from legal_portal.utils.logging_config import get_module_logger
 
 logger = get_module_logger(__name__)

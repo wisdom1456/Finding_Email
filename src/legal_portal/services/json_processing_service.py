@@ -1,36 +1,85 @@
 from __future__ import annotations
 
+import asyncio
 import os
 import re
-from typing import Any, Dict, Optional
+from typing import List, Optional, Tuple
 
 import markdown2
-from legal_portal.config.default import get_openai_config
-from legal_portal.utils.logging_config import get_module_logger
 from openai import (
     APIConnectionError,
     APIError,
-    APIStatusError,
     APITimeoutError,
-    AuthenticationError,
-    BadRequestError,
     InternalServerError,
-    OpenAI,
-    PermissionDeniedError,
     RateLimitError,
-    UnprocessableEntityError,
 )
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_fixed
+
+from legal_portal.core.data_models import ProcessingError
+from legal_portal.utils.logging_config import get_module_logger
+from legal_portal.utils.openai_client import OpenAIClient
 
 logger = get_module_logger(__name__)
 
 
 class JsonProcessingService:
-    """Simplified service for generating HTML content using a single master prompt."""
+    """Handles interaction with OpenAI for processing structured data."""
 
-    def __init__(self, client: OpenAI, config: Dict[str, Any]):
+    def __init__(self, client: OpenAIClient, config: dict):
+        """Initialize the service.
+
+        Args:
+        ----
+            client: An instance of the custom OpenAIClient wrapper.
+            config: Configuration dictionary.
+
+        """
         self.client = client
         self.config = config
+
+    async def process_documents_to_json(self, prompt: str) -> Tuple[Optional[str], List[ProcessingError]]:
+        """Processes a prompt to get a JSON response from OpenAI asynchronously.
+
+        Args:
+        ----
+            prompt: The prompt to send to the OpenAI API.
+
+        Returns:
+        -------
+            A tuple containing the JSON response string and a list of any processing errors.
+
+        """
+        try:
+            loop = asyncio.get_running_loop()
+            # Run the synchronous _make_openai_request in a separate thread
+            response_content = await loop.run_in_executor(
+                None,  # Use the default thread pool executor
+                self._make_openai_request,
+                prompt,
+            )
+
+            if response_content:
+                # Successfully received content, return it with no errors
+                return response_content, []
+            else:
+                # OpenAI returned an empty response
+                error_message = "OpenAI returned an empty or null response."
+                logger.error(error_message)
+                error = ProcessingError(
+                    source="JsonProcessingService",
+                    error_type="APIError",
+                    error_message=error_message,
+                )
+                return None, [error]
+
+        except Exception as e:
+            logger.exception(f"An unexpected error occurred in process_documents_to_json: {e}")
+            error = ProcessingError(
+                source="JsonProcessingService",
+                error_type=type(e).__name__,
+                error_message=str(e),
+            )
+            return None, [error]
 
     def _load_prompt_template(self) -> str:
         """Loads the prompt template from a file."""
@@ -72,6 +121,112 @@ class JsonProcessingService:
         except Exception as e:
             logger.exception("Unexpected error in HTML letter generation")
             raise e
+
+    async def generate_findings_letter_from_json(
+        self,
+        intake_content: str,
+        document_summaries_json: str,
+        quality_context: str = "",
+        attorney_name: str = None,
+        firm_name: str = None,
+        confirmed_qa_pairs: list = None,
+        contact_phone: str = None,
+        contact_email: str = None,
+    ) -> str:
+        """Generate findings letter from structured JSON summaries.
+
+        Args:
+        ----
+            intake_content: Extracted text from intake form
+            document_summaries_json: JSON string of structured DocumentSummaryStructured objects
+            quality_context: Formatted quality assessment results
+            attorney_name: Attorney name for signature (optional, will extract from intake if not provided)
+            firm_name: Firm name for signature (optional, will extract from intake if not provided)
+            confirmed_qa_pairs: User-confirmed question-answer pairs from intake form review
+            contact_phone: Contact phone for letter footer (optional, uses placeholder if not provided)
+            contact_email: Contact email for letter footer (optional, uses placeholder if not provided)
+
+        Returns:
+        -------
+            HTML letter content
+
+        """
+        logger.info("Generating letter from structured JSON input")
+
+        # Format Q&A pairs for prompt context
+        qa_context = ""
+        if confirmed_qa_pairs:
+            qa_context = "USER-CONFIRMED INTAKE QUESTIONS & ANSWERS:\n\n"
+            for i, qa in enumerate(confirmed_qa_pairs, 1):
+                question = qa.get("question", "N/A")
+                answer = qa.get("answer", "N/A")
+                qa_context += f"{i}. Q: {question}\n   A: {answer}\n\n"
+            logger.info(f"Including {len(confirmed_qa_pairs)} user-confirmed Q&A pairs in letter generation")
+        else:
+            qa_context = "No user-confirmed Q&A pairs available."
+            logger.info("No confirmed Q&A pairs provided for letter generation")
+
+        # Load enhanced prompt template
+        template_content = self._load_prompt_template()
+
+        # Extract attorney name from intake if not provided
+        if not attorney_name:
+            import re
+
+            attorney_match = re.search(r'"attorney_name":\s*"([^"]+)"', intake_content, re.IGNORECASE)
+            if not attorney_match:
+                attorney_match = re.search(r'"attorneyName":\s*"([^"]+)"', intake_content)
+            attorney_name = attorney_match.group(1) if attorney_match else "Senior Partner"
+
+        if not firm_name:
+            import re
+
+            firm_match = re.search(r'"firm_name":\s*"([^"]+)"', intake_content, re.IGNORECASE)
+            firm_name = firm_match.group(1) if firm_match else ""
+
+        # Use provided contact info or fallback to defaults/placeholders
+        contact_phone_value = contact_phone if contact_phone else "(727) 275-9575"
+        contact_email_value = contact_email if contact_email else "[EMAIL PLACEHOLDER]"
+
+        logger.info(
+            f"Contact info for letter: phone={'provided' if contact_phone else 'default'}, "
+            f"email={'provided' if contact_email else 'placeholder'}"
+        )
+
+        # Format prompt with JSON input and signature variables
+        prompt = template_content.format(
+            qa_context=qa_context,  # NEW: User-confirmed Q&A pairs
+            intake_data=intake_content[:5000],
+            document_summaries=document_summaries_json,  # Pass JSON directly
+            quality_context=quality_context,
+            attorney_name=attorney_name,
+            firm_name=firm_name,
+            contact_phone=contact_phone_value,
+            contact_email=contact_email_value,
+        )
+
+        logger.info("Making OpenAI request for letter generation from JSON")
+
+        loop = asyncio.get_running_loop()
+        markdown_response = await loop.run_in_executor(
+            None,  # Use the default thread pool executor
+            self._make_openai_request,
+            prompt,
+            "gpt-4o",  # model
+            0.3,  # temperature
+            12000,  # max_tokens
+            "You are a senior legal writing assistant helping to draft professional client findings letters. Follow the template structure exactly and provide comprehensive, well-reasoned legal analysis.",  # system_message
+        )
+
+        if not markdown_response or not markdown_response.strip():
+            raise ValueError("OpenAI returned empty response for letter generation")
+
+        # Convert to HTML
+        html_content = self._convert_markdown_to_html(markdown_response)
+
+        logger.info("Successfully generated letter from JSON", extra={"html_length": len(html_content)})
+
+        return html_content
 
     def _convert_markdown_to_html(self, markdown_content: str) -> str:
         """Convert Markdown content to clean HTML.
@@ -162,248 +317,6 @@ class JsonProcessingService:
 
         return cleaned
 
-    def _prepare_request_config(self, model: Optional[str] = None) -> Dict[str, Any]:
-        """Prepare OpenAI request configuration.
-
-        Args:
-        ----
-            model: Optional model override
-
-        Returns:
-        -------
-            Configuration dictionary for OpenAI request
-
-        """
-        logger.debug(
-            "Preparing OpenAI request configuration",
-            extra={
-                "method": "_prepare_request_config",
-                "hypothesis_id": "configuration_setup",
-                "stage": "entry",
-                "model_provided": model is not None,
-            },
-        )
-
-        config = get_openai_config()
-        final_model = model or config["model"]
-
-        request_config = {
-            "model": final_model,
-            "timeout": config["timeout"],
-            "max_retries": config["max_retries"],
-            "temperature": config["temperature"],
-            "max_tokens": config["max_tokens"],
-        }
-
-        logger.debug(
-            "Request configuration prepared",
-            extra={
-                "method": "_prepare_request_config",
-                "hypothesis_id": "configuration_setup",
-                "stage": "exit",
-                "model": final_model,
-                "temperature": request_config["temperature"],
-                "max_tokens": request_config["max_tokens"],
-            },
-        )
-
-        return request_config
-
-    def _execute_openai_request(self, config: Dict[str, Any], prompt: str) -> Any:
-        """Execute the core OpenAI API request.
-
-        Args:
-        ----
-            config: Request configuration
-            prompt: Prompt to send
-
-        Returns:
-        -------
-            OpenAI response object
-
-        """
-        logger.debug(
-            "Executing OpenAI API request",
-            extra={
-                "method": "_execute_openai_request",
-                "hypothesis_id": "api_execution",
-                "stage": "entry",
-                "prompt_length": len(prompt),
-                "model": config["model"],
-            },
-        )
-
-        # GPT-5 models use different parameter names
-        is_gpt5 = config["model"].startswith("gpt-5")
-
-        request_params = {
-            "model": config["model"],
-            "messages": [{"role": "user", "content": prompt}],
-        }
-
-        # GPT-5 models use max_completion_tokens and don't support custom temperature
-        if is_gpt5:
-            request_params["max_completion_tokens"] = config["max_tokens"]
-            # GPT-5 only supports temperature=1 (default), so don't set it
-        else:
-            request_params["temperature"] = config["temperature"]
-            request_params["max_tokens"] = config["max_tokens"]
-
-        response = self.client.with_options(
-            timeout=config["timeout"], max_retries=config["max_retries"]
-        ).chat.completions.create(**request_params)
-
-        logger.debug(
-            "OpenAI API request executed successfully",
-            extra={
-                "method": "_execute_openai_request",
-                "hypothesis_id": "api_execution",
-                "stage": "exit",
-                "model": config["model"],
-                "response_received": response is not None,
-            },
-        )
-
-        return response
-
-    def _handle_retryable_errors(self, error: Exception, context: Dict[str, Any]) -> None:
-        """Handle retryable OpenAI errors that should trigger retry logic."""
-        error_type = type(error).__name__
-
-        logger.warning(
-            f"Retryable OpenAI error encountered: {error_type}",
-            extra={
-                "method": "_handle_retryable_errors",
-                "hypothesis_id": "retryable_error_handling",
-                "error_type": error_type,
-                "error_details": str(error),
-                "model": context.get("model"),
-                "will_retry": True,
-            },
-        )
-
-        # Re-raise to trigger tenacity retry logic
-        raise error
-
-    def _handle_authentication_errors(self, error: Exception, context: Dict[str, Any]) -> None:
-        """Handle authentication-related OpenAI errors."""
-        error_type = type(error).__name__
-
-        logger.error(
-            f"Authentication error: {error_type}",
-            extra={
-                "method": "_handle_authentication_errors",
-                "hypothesis_id": "authentication_error_handling",
-                "error_type": error_type,
-                "error_details": str(error),
-                "model": context.get("model"),
-                "requires_api_key_check": True,
-            },
-        )
-
-    def _handle_client_errors(self, error: Exception, context: Dict[str, Any]) -> None:
-        """Handle client-side OpenAI errors."""
-        error_type = type(error).__name__
-
-        logger.error(
-            f"Client error: {error_type}",
-            extra={
-                "method": "_handle_client_errors",
-                "hypothesis_id": "client_error_handling",
-                "error_type": error_type,
-                "error_details": str(error),
-                "model": context.get("model"),
-                "prompt_start": context.get("prompt", "")[:200],
-            },
-        )
-
-    def _handle_server_errors(self, error: Exception, context: Dict[str, Any]) -> None:
-        """Handle server-side OpenAI errors."""
-        error_type = type(error).__name__
-        request_id = getattr(error, "request_id", "unknown")
-        status_code = getattr(error, "status_code", "unknown")
-
-        logger.error(
-            f"Server error: {error_type}",
-            extra={
-                "method": "_handle_server_errors",
-                "hypothesis_id": "server_error_handling",
-                "error_type": error_type,
-                "status_code": status_code,
-                "request_id": request_id,
-                "model": context.get("model"),
-            },
-        )
-
-    def _handle_unexpected_errors(self, error: Exception, context: Dict[str, Any]) -> None:
-        """Handle unexpected errors during OpenAI requests."""
-        error_type = type(error).__name__
-
-        logger.error(
-            f"Unexpected error: {error_type}",
-            extra={
-                "method": "_handle_unexpected_errors",
-                "hypothesis_id": "unexpected_error_handling",
-                "error_type": error_type,
-                "error_details": str(error),
-                "model": context.get("model"),
-                "prompt_start": context.get("prompt", "")[:200],
-            },
-        )
-
-    def _validate_openai_response(self, response: Any, context: Dict[str, Any]) -> Optional[str]:
-        """Validate OpenAI response and extract content.
-
-        Args:
-        ----
-            response: OpenAI response object
-            context: Request context for logging
-
-        Returns:
-        -------
-            Response content or None if invalid
-
-        """
-        logger.debug(
-            "Validating OpenAI response",
-            extra={
-                "method": "_validate_openai_response",
-                "hypothesis_id": "response_validation",
-                "stage": "entry",
-                "model": context.get("model"),
-            },
-        )
-
-        request_id = getattr(response, "_request_id", "unknown")
-        content = response.choices[0].message.content
-
-        if not content or not content.strip():
-            logger.error(
-                "OpenAI returned empty content",
-                extra={
-                    "method": "_validate_openai_response",
-                    "hypothesis_id": "response_validation",
-                    "request_id": request_id,
-                    "model": context.get("model"),
-                    "content_empty": True,
-                },
-            )
-            return None
-
-        logger.info(
-            "OpenAI response validated successfully",
-            extra={
-                "method": "_validate_openai_response",
-                "hypothesis_id": "response_validation",
-                "stage": "exit",
-                "request_id": request_id,
-                "response_length": len(content),
-                "model": context.get("model"),
-            },
-        )
-
-        return content
-
     @retry(
         stop=stop_after_attempt(3),
         wait=wait_fixed(2),
@@ -417,60 +330,43 @@ class JsonProcessingService:
             )
         ),
     )
-    def _make_openai_request(self, prompt: str, model: Optional[str] = None) -> Optional[str]:
+    def _make_openai_request(
+        self,
+        prompt: str,
+        model: Optional[str] = "gpt-4o",
+        temperature: float = 0.3,
+        max_tokens: int = 12000,
+        system_message: str = None,
+    ) -> Optional[str]:
         """Make OpenAI API request with comprehensive error handling following OpenAI best practices."""
-        logger.debug(
-            "OpenAI API request initiated",
-            extra={
-                "method": "_make_openai_request",
-                "hypothesis_id": "openai_api_failure",
-                "stage": "entry",
-                "prompt_length": len(prompt),
-                "model_provided": model is not None,
-                "config_available": self.config is not None,
-            },
-        )
-
-        # Prepare request configuration
-        config = self._prepare_request_config(model)
-        context = {"model": config["model"], "prompt": prompt}
+        # Default system message for JSON output (document analysis)
+        if system_message is None:
+            system_message = "You are a helpful assistant designed to output JSON."
 
         logger.info(
             "Making OpenAI request",
             extra={
                 "method": "_make_openai_request",
                 "hypothesis_id": "openai_api_failure",
-                "model": config["model"],
+                "model": model,
                 "prompt_length": len(prompt),
-                "temperature": config["temperature"],
-                "max_tokens": config["max_tokens"],
+                "temperature": temperature,
+                "max_tokens": max_tokens,
             },
         )
 
         try:
-            # Execute the API request
-            response = self._execute_openai_request(config, prompt)
-
-            # Validate and return response content
-            return self._validate_openai_response(response, context)
-
-        except (
-            APIConnectionError,
-            RateLimitError,
-            APITimeoutError,
-            APIError,
-            InternalServerError,
-        ) as e:
-            self._handle_retryable_errors(e, context)
-        except (AuthenticationError, PermissionDeniedError) as e:
-            self._handle_authentication_errors(e, context)
-            return None
-        except (BadRequestError, UnprocessableEntityError) as e:
-            self._handle_client_errors(e, context)
-            return None
-        except APIStatusError as e:
-            self._handle_server_errors(e, context)
-            return None
-        except (ValueError, TypeError, AttributeError, KeyError, OSError) as e:
-            self._handle_unexpected_errors(e, context)
+            response_dict = self.client.create_chat_completion(
+                model=model,
+                messages=[
+                    {"role": "system", "content": system_message},
+                    {"role": "user", "content": prompt},
+                ],
+                temperature=temperature,
+                max_tokens=max_tokens,
+            )
+            return response_dict["content"]
+        except Exception as e:
+            logger.exception(f"An error occurred during the OpenAI request: {e}")
+            # Depending on desired behavior, you might want to return None or re-raise
             return None

@@ -137,6 +137,8 @@ class CitationTrackingService:
         """
         source_docs = []
 
+        logger.info("Extracting source documents from case analysis")
+
         # Add intake analysis as a source
         if case_analysis.intake_analysis:
             source_docs.append(
@@ -147,13 +149,21 @@ class CitationTrackingService:
                     "relevance_to_case": "Primary case information and client details",
                 }
             )
+            logger.debug("Added intake analysis as source document")
 
         # Add document analyses
         if case_analysis.analyzed_documents:
-            for doc_analysis in case_analysis.analyzed_documents:
+            logger.info(f"Processing {len(case_analysis.analyzed_documents)} analyzed documents")
+            for idx, doc_analysis in enumerate(case_analysis.analyzed_documents):
+                # FIX: Use file_name (with underscore) instead of filename
+                filename = getattr(
+                    doc_analysis, "file_name", getattr(doc_analysis, "filename", f"Document_{idx}")
+                )
+                logger.debug(f"Extracting source document {idx+1}: {filename}")
+
                 source_docs.append(
                     {
-                        "filename": doc_analysis.filename,
+                        "filename": filename,
                         "document_type": getattr(doc_analysis, "document_type", "document"),
                         "summary": getattr(doc_analysis, "summary", ""),
                         "key_information": getattr(doc_analysis, "key_information", ""),
@@ -176,7 +186,9 @@ class CitationTrackingService:
                     "relevance_to_case": "Chronological overview of case events",
                 }
             )
+            logger.debug("Added case timeline as source document")
 
+        logger.info(f"Extracted {len(source_docs)} total source documents")
         return source_docs
 
     def _extract_citations_from_content(
@@ -194,16 +206,23 @@ class CitationTrackingService:
             List of Citation objects mapping statements to sources
 
         """
+        logger.info(f"Extracting citations from letter content (length: {len(letter_content)} chars)")
+        logger.info(f"Available source documents: {len(source_documents)}")
+
         citations = []
 
         # Remove HTML tags for analysis
         text_content = re.sub(r"<[^>]+>", "", letter_content)
+        logger.debug(f"Text content length after HTML removal: {len(text_content)} chars")
 
         # Split into sentences for analysis
         sentences = self._split_into_sentences(text_content)
+        logger.info(f"Split letter into {len(sentences)} sentences for analysis")
 
-        for sentence in sentences:
+        factual_count = 0
+        for idx, sentence in enumerate(sentences):
             if self._is_factual_statement(sentence):
+                factual_count += 1
                 # Find best matching source document
                 source_match = self._find_best_source_match(sentence, source_documents)
 
@@ -218,7 +237,11 @@ class CitationTrackingService:
                         document_section=source_match.get("document_section"),
                     )
                     citations.append(citation)
+                    logger.debug(
+                        f"Created citation {len(citations)}: {source_match['filename']} (confidence: {source_match.get('confidence', 'medium')})"
+                    )
 
+        logger.info(f"Identified {factual_count} factual statements, created {len(citations)} citations")
         return citations
 
     def _split_into_sentences(self, text: str) -> List[str]:
@@ -611,8 +634,9 @@ This is essential for legal accuracy and attorney review. Every factual claim in
         """Remove citation references from letter content to create a clean version.
 
         This method strips out citation references in formats like:
-        - [Source: filename.pdf]
-        - [Source: filename.pdf; another_file.docx]
+        - (Source: filename.pdf)
+        - (Source: filename.pdf; another_file.docx)
+        - [Source: filename.pdf] (legacy format)
 
         Args:
         ----
@@ -625,9 +649,9 @@ This is essential for legal accuracy and attorney review. Every factual claim in
         """
         import re
 
-        # Pattern to match citation references in square brackets
-        # Matches: [Source: filename.ext], [Source: file1.ext; file2.ext], etc.
-        citation_pattern = r"\[Source:[^\]]+\]"
+        # Pattern to match citation references in parentheses or square brackets
+        # Matches: (Source: filename.ext), [Source: filename.ext], etc.
+        citation_pattern = r"[\(\[]Source:[^\)\]]+[\)\]]"
 
         # Remove citations and clean up any extra spaces
         clean_content = re.sub(citation_pattern, "", letter_content)
@@ -642,3 +666,37 @@ This is essential for legal accuracy and attorney review. Every factual claim in
         clean_content = re.sub(r"\s+([,.;!?])", r"\1", clean_content)
 
         return clean_content.strip()
+
+    def clean_filename_hashes(self, letter_content: str) -> str:
+        """Remove hash suffixes from filenames in citations.
+
+        This method cleans up filenames by removing the 8-character hash suffix
+        that was added for security/uniqueness (e.g., _fb5b8b11).
+
+        Examples:
+        --------
+        - (Source: Contract_fb5b8b11.pdf) → (Source: Contract.pdf)
+        - (Source: Emails_f1823cf4.pdf) → (Source: Emails.pdf)
+        - (Source: Document_abc12345.docx) → (Source: Document.docx)
+
+        Args:
+        ----
+            letter_content: Letter content with citations containing hash suffixes
+
+        Returns:
+        -------
+            Letter content with clean filenames in citations
+
+        """
+        import re
+
+        # Pattern to match hash suffix before file extension
+        # Matches: _[8 hex chars].[extension]
+        # Example: _fb5b8b11.pdf → .pdf
+        hash_pattern = r"_[a-f0-9]{8}(\.[a-zA-Z]{2,5})"
+
+        # Replace hash + extension with just extension
+        # This transforms: filename_hash.ext → filename.ext
+        clean_content = re.sub(hash_pattern, r"\1", letter_content)
+
+        return clean_content

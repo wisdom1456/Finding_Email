@@ -6,8 +6,9 @@ import json
 import re
 from typing import Any, Callable, TypeVar
 
-from legal_portal.utils.logging_config import get_module_logger
 from pydantic import BaseModel, ValidationError
+
+from legal_portal.utils.logging_config import get_module_logger
 
 logger = get_module_logger(__name__)
 

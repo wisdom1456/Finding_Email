@@ -5,6 +5,8 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING
 
+from openai import OpenAI
+
 from legal_portal.core.data_models import (
     AIAnalysisError,
     AnalysisError,
@@ -16,7 +18,6 @@ from legal_portal.core.data_models import (
     ProcessedDocument,
 )
 from legal_portal.utils.logging_config import get_module_logger
-from openai import OpenAI
 
 logger = get_module_logger(__name__)
 from legal_portal.utils.validators import (

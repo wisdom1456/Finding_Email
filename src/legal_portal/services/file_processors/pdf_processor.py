@@ -4,6 +4,7 @@ import mimetypes
 import os
 
 import fitz  # PyMuPDF
+
 from legal_portal.core.data_models import (
     DocumentType,
     FileMetadata,

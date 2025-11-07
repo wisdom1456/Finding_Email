@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import Enum
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
@@ -95,9 +95,11 @@ class ProcessedDocument(BaseModel):
     file_name: str
     content: str
     document_type: DocumentType
+    file_type: FileType
     metadata: FileMetadata
     page_count: Optional[int] = None
     extraction_method: Optional[str] = None
+    extraction_quality: Optional[str] = None  # "high", "medium", "low"
     extracted_at: datetime = Field(default_factory=datetime.now)
 
 
@@ -110,6 +112,87 @@ class ProcessingError(BaseModel):
     timestamp: datetime = Field(default_factory=datetime.now)
 
 
+# ============================================================================
+# Structured Summary Models (for enhanced AI output)
+# ============================================================================
+
+
+class KeyDate(BaseModel):
+    """Represents a significant date in the case."""
+
+    date: str = Field(description="Date in YYYY-MM-DD format or 'Month DD, YYYY'")
+    event: str = Field(description="What happened on this date")
+    source_document: Optional[str] = None
+
+
+class KeyAmount(BaseModel):
+    """Represents a monetary amount in the case."""
+
+    amount: str = Field(description="Formatted as $XXX,XXX.XX")
+    description: str = Field(description="What this amount represents")
+    source_document: Optional[str] = None
+
+
+class DocumentSummaryStructured(BaseModel):
+    """Structured summary of a document for AI analysis.
+
+    This model ensures consistent, complete extraction of legal facts.
+    """
+
+    document_name: str
+    document_type: str = Field(description="E.g., contract, disclosure, correspondence, evidence")
+    parties: List[str] = Field(
+        default_factory=list, description="All parties mentioned (people, companies, entities)"
+    )
+    key_dates: List[KeyDate] = Field(
+        default_factory=list, description="Important dates (purchase, breach, notice, deadline)"
+    )
+    key_amounts: List[KeyAmount] = Field(
+        default_factory=list, description="Monetary amounts (purchase price, damages, fees)"
+    )
+    issues_identified: List[str] = Field(
+        default_factory=list, description="Legal problems, violations, or concerns found"
+    )
+    relevance_to_case: str = Field(description="How this document relates to the client's claims")
+    extraction_quality: str = Field(
+        default="high", description="Quality of source text: 'high', 'medium', or 'low'"
+    )
+    extraction_notes: Optional[str] = Field(
+        default=None, description="Any issues with source text (e.g., 'Extracted via OCR, may have errors')"
+    )
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "document_name": "Property_Disclosure_Form.pdf",
+                "document_type": "Seller Disclosure",
+                "parties": ["Miguel Velasco", "Rachael Taft", "William Lichtenstein"],
+                "key_dates": [{"date": "2024-02-29", "event": "Property purchase"}],
+                "key_amounts": [{"amount": "$590,000.00", "description": "Purchase price"}],
+                "issues_identified": [
+                    "Seller answered 'I don't know' to flood history questions",
+                    "Property located in special flood hazard area",
+                ],
+                "relevance_to_case": "Shows seller failed to disclose known flood risks",
+                "extraction_quality": "high",
+            }
+        }
+
+
+class QualityScore(BaseModel):
+    """Quality assessment for extracted content."""
+
+    document: str = Field(description="The name of the document being assessed")
+    score: float = Field(ge=0.0, le=10.0, description="Quality score from 0-10")
+    has_meaningful_content: bool = Field(description="Text contains actual information vs. noise")
+    is_complete: bool = Field(description="Document appears complete (not truncated)")
+    confidence_level: str = Field(description="'high', 'medium', or 'low'")
+    issues: List[str] = Field(default_factory=list, description="Any quality concerns")
+    recommendations: List[str] = Field(
+        default_factory=list, description="Suggested improvements or follow-ups"
+    )
+
+
 class ProcessingResult(BaseModel):
     """Result of the complete document processing workflow.
 
@@ -118,8 +201,12 @@ class ProcessingResult(BaseModel):
 
     # Core outputs
     main_letter: str = Field(description="HTML content of the generated findings letter")
+    main_letter_with_citations: Optional[str] = Field(
+        default=None, description="HTML content of the findings letter with citations"
+    )
     document_summaries: str = Field(description="Text summaries of all analyzed documents")
     case_analysis: str = Field(description="Detailed case analysis content")
+    quality_report: Optional[List[Dict[str, Any]]] = None  # NEW: For quality report
 
     # Metadata
     status: str = Field(description="Processing status: 'completed', 'partial', or 'failed'")

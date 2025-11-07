@@ -4,7 +4,7 @@ import asyncio
 import mimetypes
 import os
 import re
-from typing import List
+from typing import Callable, List, Optional
 
 # Import from the backend utils (to be moved to root utils later)
 from legal_portal.core.data_models import DocumentType, ProcessedDocument
@@ -185,141 +185,291 @@ class DocumentProcessor:
         return result
 
     async def process_documents_from_streamlit(
-        self, uploaded_files, intake_filenames: List[str]
+        self,
+        streamlit_files: List[Any],
+        intake_filenames: Optional[List[str]] = None,
+        progress_callback: Optional[Callable] = None,  # Add progress_callback
     ) -> List[ProcessedDocument]:
-        """Process documents directly from Streamlit file uploads with enhanced security.
+        """Process a list of Streamlit UploadedFile objects with optimized batch processing for images."""
+        total_docs = len(streamlit_files)
 
-        Security features:
-        - Secure filename sanitization to prevent path traversal
-        - File size validation and enforcement
-        - Content type validation with magic number detection
-        - Secure temporary file creation with restricted permissions
+        # Separate images from other files for batch processing
+        image_files = []
+        non_image_files = []
+
+        for file in streamlit_files:
+            filename = file.name.lower() if hasattr(file, "name") else str(file).lower()
+            if filename.endswith((".jpg", ".jpeg", ".png")):
+                image_files.append(file)
+            else:
+                non_image_files.append(file)
+
+        logger.info(
+            f"Processing {total_docs} documents: {len(image_files)} images, {len(non_image_files)} non-images"
+        )
+
+        # Group images intelligently for batch processing
+        from legal_portal.utils.helpers import group_images_intelligently
+
+        image_groups = group_images_intelligently(image_files, max_per_group=3)
+
+        logger.info(f"Grouped {len(image_files)} images into {len(image_groups)} batches")
+
+        # Process all documents (batched images + individual non-images) in parallel
+        all_tasks = []
+        processed_docs_count = [0]  # Use list for mutable counter in nested function
+
+        # Create tasks for image batches
+        for batch_idx, image_group in enumerate(image_groups, 1):
+            task = self._process_image_batch_wrapper(
+                image_group,
+                intake_filenames,
+                batch_idx,
+                len(image_groups),
+                progress_callback,
+                processed_docs_count,
+                total_docs,
+            )
+            all_tasks.append(task)
+
+        # Create tasks for non-image files
+        for file in non_image_files:
+            task = self._process_single_file_wrapper(
+                file, intake_filenames, progress_callback, processed_docs_count, total_docs
+            )
+            all_tasks.append(task)
+
+        # Execute all tasks in parallel
+        results = await asyncio.gather(*all_tasks, return_exceptions=True)
+
+        # Flatten results and filter out errors
+        processed_docs = []
+        for result in results:
+            if isinstance(result, Exception):
+                logger.error(f"Document processing error: {result}")
+            elif isinstance(result, list):
+                # Batch result
+                processed_docs.extend(result)
+            elif result:
+                # Single document result
+                processed_docs.append(result)
+
+        logger.info(f"Successfully processed {len(processed_docs)} out of {total_docs} documents")
+        return processed_docs
+
+    async def _process_single_file_wrapper(
+        self, file, intake_filenames, progress_callback, processed_docs_count, total_docs
+    ):
+        """Wrapper for single file processing with progress tracking."""
+        try:
+            doc = await self._process_single_file(file, intake_filenames)
+            if doc:
+                processed_docs_count[0] += 1
+                if progress_callback:
+                    progress_callback(
+                        message=f"Extracting content from document {processed_docs_count[0]} of {total_docs}...",
+                        docs_processed=[doc.file_name],
+                        phase="document_extraction",
+                        percent=int((processed_docs_count[0] / total_docs) * 15),
+                    )
+                return doc
+        except Exception as e:
+            logger.error(f"Error processing file {file.name if hasattr(file, 'name') else 'unknown'}: {e}")
+            return None
+
+    async def _process_image_batch_wrapper(
+        self,
+        image_group,
+        intake_filenames,
+        batch_idx,
+        total_batches,
+        progress_callback,
+        processed_docs_count,
+        total_docs,
+    ):
+        """Wrapper for batch image processing with progress tracking."""
+        try:
+            # Prepare image files for batch processing
+            from legal_portal.services.file_processors.batch_vision_processor import process_images_batch
+
+            image_info_list = []
+            temp_files = []
+
+            for img_file in image_group:
+                try:
+                    # Security validation and temp file creation
+                    from legal_portal.utils.security import (
+                        MAX_FILE_SIZE,
+                        create_secure_temp_file,
+                        secure_filename,
+                        validate_file_content,
+                        validate_file_size,
+                    )
+
+                    file_data = img_file.getvalue()
+                    validate_file_size(file_data, MAX_FILE_SIZE)
+
+                    original_name = img_file.name
+                    sanitized_name = secure_filename(original_name)
+
+                    mime_type, _ = validate_file_content(file_data, sanitized_name)
+                    temp_path = create_secure_temp_file(file_data, sanitized_name)
+                    temp_files.append(temp_path)
+
+                    doc_type = self._get_document_type(sanitized_name, intake_filenames, original_name)
+                    image_info_list.append((temp_path, doc_type, original_name))
+
+                except Exception as e:
+                    logger.error(
+                        f"Error preparing image {img_file.name if hasattr(img_file, 'name') else 'unknown'}: {e}"
+                    )
+
+            if not image_info_list:
+                return []
+
+            # Process batch
+            logger.info(f"Processing image batch {batch_idx}/{total_batches} ({len(image_info_list)} images)")
+            batch_results = await process_images_batch(image_info_list)
+
+            # Update progress
+            processed_docs_count[0] += len(batch_results)
+            if progress_callback:
+                progress_callback(
+                    message=f"Processed image batch {batch_idx}/{total_batches} ({len(batch_results)} images)...",
+                    docs_processed=[doc.file_name for doc in batch_results],
+                    phase="document_extraction",
+                    percent=int((processed_docs_count[0] / total_docs) * 15),
+                )
+
+            # Cleanup temp files
+            for temp_file in temp_files:
+                try:
+                    if os.path.exists(temp_file):
+                        os.remove(temp_file)
+                except Exception as e:
+                    logger.warning(f"Failed to cleanup temp file {temp_file}: {e}")
+
+            return batch_results
+
+        except Exception as e:
+            logger.error(f"Error processing image batch {batch_idx}: {e}", exc_info=True)
+            return []
+
+    async def _process_single_file(
+        self,
+        uploaded_file,
+        intake_filenames: List[str],
+    ) -> Optional[ProcessedDocument]:
+        """Process a single uploaded file.
 
         Args:
         ----
-            uploaded_files: List of Streamlit UploadedFile objects
+            uploaded_file: Streamlit UploadedFile object
             intake_filenames: List of filenames that should be treated as intake forms
 
         Returns:
         -------
-            List of ProcessedDocument objects
+            ProcessedDocument object if successful, None otherwise.
 
         """
-        processing_tasks = []
         temp_files = []  # Track temp files for cleanup
+        try:
+            # Read file data
+            file_data = uploaded_file.getvalue()
 
-        for uploaded_file in uploaded_files:
+            # Apply security validations
             try:
-                # Read file data
-                file_data = uploaded_file.getvalue()
+                # Validate file size
+                validate_file_size(file_data, MAX_FILE_SIZE)
 
-                # Apply security validations
-                try:
-                    # Validate file size
-                    validate_file_size(file_data, MAX_FILE_SIZE)
+                # Sanitize filename
+                original_name = uploaded_file.name
+                sanitized_name = secure_filename(original_name)
 
-                    # Sanitize filename
-                    original_name = uploaded_file.name
-                    sanitized_name = secure_filename(original_name)
+                # DEBUG LOG: Track filename sanitization for intake form detection
+                logger.info(
+                    "Filename sanitization debug",
+                    extra={
+                        "module": "document_processor",
+                        "hypothesis_id": "filename_sanitization_mismatch",
+                        "original_filename": original_name,
+                        "sanitized_filename": sanitized_name,
+                        "action": "filename_sanitization",
+                        "filename_changed": original_name != sanitized_name,
+                    },
+                )
 
-                    # DEBUG LOG: Track filename sanitization for intake form detection
-                    logger.info(
-                        "Filename sanitization debug",
-                        extra={
-                            "module": "document_processor",
-                            "hypothesis_id": "filename_sanitization_mismatch",
-                            "original_filename": original_name,
-                            "sanitized_filename": sanitized_name,
-                            "action": "filename_sanitization",
-                            "filename_changed": original_name != sanitized_name,
-                        },
+                # Validate content type
+                mime_type, file_ext = validate_file_content(file_data, sanitized_name)
+
+                # Create secure temporary file
+                temp_path = create_secure_temp_file(file_data, sanitized_name)
+                temp_files.append(temp_path)
+
+                logger.info(
+                    "File passed security validation",
+                    extra={
+                        "original_name": original_name,
+                        "sanitized_name": sanitized_name,
+                        "mime_type": mime_type,
+                        "file_size": len(file_data),
+                    },
+                )
+
+            except ValueError as e:
+                logger.error(
+                    f"Security validation failed for file '{uploaded_file.name}'",
+                    extra={
+                        "error": str(e),
+                        "file_name": uploaded_file.name,
+                    },
+                )
+                raise DocumentProcessingError(f"Security validation failed for '{uploaded_file.name}': {e!s}")
+
+            # TODO: Add PDF compression support for large files
+            # if sanitized_name.lower().endswith('.pdf'):
+            #     file = await self.pdf_compressor.compress_pdf_if_needed(file)
+
+            # Pass original filename for proper intake form detection
+            doc_type = self._get_document_type(sanitized_name, intake_filenames, original_name)
+            content_type, _ = mimetypes.guess_type(sanitized_name)
+
+            processor = PROCESSOR_MAP.get(content_type)
+            if not processor:
+                # Fallback for incorrect mimetypes using sanitized name
+                if sanitized_name.endswith(".pdf"):
+                    processor = PROCESSOR_MAP.get("application/pdf")
+                elif sanitized_name.endswith(".docx"):
+                    processor = PROCESSOR_MAP.get(
+                        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                     )
+                elif sanitized_name.endswith(".doc"):
+                    processor = PROCESSOR_MAP.get("application/msword")
+                elif sanitized_name.endswith(".txt"):
+                    processor = PROCESSOR_MAP.get("text/plain")
+                elif sanitized_name.endswith(".eml"):
+                    processor = PROCESSOR_MAP.get("message/rfc822")
 
-                    # Validate content type
-                    mime_type, file_ext = validate_file_content(file_data, sanitized_name)
-
-                    # Create secure temporary file
-                    temp_path = create_secure_temp_file(file_data, sanitized_name)
-                    temp_files.append(temp_path)
-
-                    logger.info(
-                        "File passed security validation",
-                        extra={
-                            "original_name": original_name,
-                            "sanitized_name": sanitized_name,
-                            "mime_type": mime_type,
-                            "file_size": len(file_data),
-                        },
-                    )
-
-                except ValueError as e:
-                    logger.error(
-                        f"Security validation failed for file '{uploaded_file.name}'",
-                        extra={
-                            "error": str(e),
-                            "file_name": uploaded_file.name,
-                        },
-                    )
-                    raise DocumentProcessingError(
-                        f"Security validation failed for '{uploaded_file.name}': {e!s}"
-                    )
-
-                # TODO: Add PDF compression support for large files
-                # if sanitized_name.lower().endswith('.pdf'):
-                #     file = await self.pdf_compressor.compress_pdf_if_needed(file)
-
-                # Pass original filename for proper intake form detection
-                doc_type = self._get_document_type(sanitized_name, intake_filenames, original_name)
-                content_type, _ = mimetypes.guess_type(sanitized_name)
-
-                processor = PROCESSOR_MAP.get(content_type)
-                if not processor:
-                    # Fallback for incorrect mimetypes using sanitized name
-                    if sanitized_name.endswith(".pdf"):
-                        processor = PROCESSOR_MAP.get("application/pdf")
-                    elif sanitized_name.endswith(".docx"):
-                        processor = PROCESSOR_MAP.get(
-                            "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                        )
-                    elif sanitized_name.endswith(".doc"):
-                        processor = PROCESSOR_MAP.get("application/msword")
-                    elif sanitized_name.endswith(".txt"):
-                        processor = PROCESSOR_MAP.get("text/plain")
-                    elif sanitized_name.endswith(".eml"):
-                        processor = PROCESSOR_MAP.get("message/rfc822")
-
-                if not processor:
-                    msg = f"No processor available for file '{sanitized_name}' with content type '{content_type}'"
-                    raise DocumentProcessingError(msg)
-
-                # Use sanitized name for processing
-                processing_tasks.append(processor(temp_path, doc_type, sanitized_name))
-
-            except Exception as e:
-                # Clean up temp files on error
-                for temp_file in temp_files:
-                    if os.path.exists(temp_file):
-                        try:
-                            os.remove(temp_file)
-                        except OSError:
-                            pass  # Best effort cleanup
-
-                msg = f"Error processing file '{uploaded_file.name}': {e!s}"
-                logger.error(msg, extra={"error": str(e), "file_name": uploaded_file.name})
+            if not processor:
+                msg = f"No processor available for file '{sanitized_name}' with content type '{content_type}'"
                 raise DocumentProcessingError(msg)
 
-        try:
-            return await asyncio.gather(*processing_tasks)
-        finally:
-            # Clean up all temporary files
+            # Use sanitized name for processing
+            processed_doc = await processor(temp_path, doc_type, sanitized_name)
+            return processed_doc
+
+        except Exception as e:
+            # Clean up temp files on error
             for temp_file in temp_files:
                 if os.path.exists(temp_file):
                     try:
                         os.remove(temp_file)
-                    except OSError as e:
-                        logger.warning(
-                            "Failed to remove temporary file", extra={"temp_file": temp_file, "error": str(e)}
-                        )
+                    except OSError:
+                        pass  # Best effort cleanup
+
+            msg = f"Error processing file '{uploaded_file.name}': {e!s}"
+            logger.error(msg, extra={"error": str(e), "file_name": uploaded_file.name})
+            raise DocumentProcessingError(msg)
 
     async def process_documents(self, files, intake_filenames: List[str]) -> List[ProcessedDocument]:
         """Legacy method for backward compatibility.

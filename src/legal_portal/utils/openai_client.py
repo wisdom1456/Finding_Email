@@ -249,6 +249,90 @@ class OpenAIClient:
             logger.error(f"OPENAI CLIENT: ❌ Failed to get available models: {e}")
             return [self.default_model, self.fallback_model]
 
+    def create_chat_completion(
+        self,
+        model: str,
+        messages: List[Dict[str, str]],
+        temperature: float = 0.3,
+        max_tokens: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        """Standard interface for chat completions across all services.
+
+        This is the single unified method for making OpenAI chat completion requests.
+        All services should use this method instead of calling the SDK directly.
+
+        Args:
+        ----
+            model: Model to use (e.g., "gpt-4o", "gpt-4o-mini")
+            messages: List of message dicts with 'role' and 'content'
+            temperature: Sampling temperature (0.0-2.0)
+            max_tokens: Maximum tokens to generate (None for model default)
+
+        Returns:
+        -------
+            Dictionary with:
+                - content: The text response from the model
+                - usage: Dict with prompt_tokens, completion_tokens, total_tokens
+                - model: The model used
+
+        Raises:
+        ------
+            Exception: On API errors (logged internally)
+
+        """
+        try:
+            logger.info(
+                f"Making chat completion request with {model}",
+                extra={
+                    "model": model,
+                    "temperature": temperature,
+                    "max_tokens": max_tokens,
+                    "message_count": len(messages),
+                },
+            )
+
+            # Make the API call
+            response = self.client.chat.completions.create(
+                model=model,
+                messages=messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
+            )
+
+            content = response.choices[0].message.content
+            usage = response.usage
+
+            logger.info(
+                "Chat completion successful",
+                extra={
+                    "model": model,
+                    "prompt_tokens": usage.prompt_tokens,
+                    "completion_tokens": usage.completion_tokens,
+                    "total_tokens": usage.total_tokens,
+                    "response_length": len(content) if content else 0,
+                },
+            )
+
+            return {
+                "content": content,
+                "usage": {
+                    "prompt_tokens": usage.prompt_tokens,
+                    "completion_tokens": usage.completion_tokens,
+                    "total_tokens": usage.total_tokens,
+                },
+                "model": model,
+            }
+
+        except openai.RateLimitError as e:
+            logger.error(f"Rate limit error: {e}")
+            raise
+        except openai.APIError as e:
+            logger.error(f"API error: {e}")
+            raise
+        except Exception as e:
+            logger.error(f"Unexpected error in chat completion: {e}")
+            raise
+
     def _create_error_response(self, error_type: str, exception: Optional[Exception]) -> Dict[str, Any]:
         """Create standardized error response."""
         return {

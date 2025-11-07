@@ -5,6 +5,8 @@ import os
 from io import BytesIO
 
 import pytesseract
+from PIL import Image
+
 from legal_portal.core.data_models import (
     DocumentType,
     FileMetadata,
@@ -12,7 +14,6 @@ from legal_portal.core.data_models import (
     ProcessedDocument,
 )
 from legal_portal.utils.logging_config import get_module_logger
-from PIL import Image
 
 logger = get_module_logger(__name__)
 

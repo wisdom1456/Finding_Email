@@ -1,10 +1,9 @@
 from __future__ import annotations
 
+import base64
 import mimetypes
 import os
-from io import BytesIO
 
-import pytesseract
 from legal_portal.core.data_models import (
     DocumentType,
     FileMetadata,
@@ -12,8 +11,7 @@ from legal_portal.core.data_models import (
     ProcessedDocument,
 )
 from legal_portal.utils.logging_config import get_module_logger
-from PIL import Image
-from PIL.ExifTags import TAGS
+from legal_portal.utils.openai_client import OpenAIClient
 
 logger = get_module_logger(__name__)
 
@@ -21,88 +19,79 @@ logger = get_module_logger(__name__)
 async def process_jpg(
     file_path: str, document_type: DocumentType, original_filename: str
 ) -> ProcessedDocument:
-    """Processes a JPG file by extracting text using OCR with JPG-specific optimizations.
+    """Processes a JPG file by extracting text using GPT-4o Vision API.
 
-    JPG-specific features:
-    - EXIF metadata extraction for image quality assessment
-    - Compression artifact handling
-    - Quality-based preprocessing optimization
-    - Enhanced noise reduction for compressed images
+    NOTE: This is the single-image processing mode (legacy).
+    For batch processing of multiple images (more efficient), use:
+    batch_vision_processor.process_images_batch()
     """
-    logger.debug(f"Processing JPG: {original_filename}")
+    logger.debug(f"Processing JPG with GPT-4o Vision: {original_filename}")
 
     text_content = ""
-    metadata_info = ""
 
     try:
-        with open(file_path, "rb") as f:
-            image = Image.open(BytesIO(f.read()))
+        with open(file_path, "rb") as image_file:
+            base64_image = base64.b64encode(image_file.read()).decode("utf-8")
 
-            # Extract EXIF metadata for JPG quality assessment
-            try:
-                exifdata = image.getexif()
-                if exifdata:
-                    metadata_entries = []
-                    for tag_id in exifdata:
-                        tag = TAGS.get(tag_id, tag_id)
-                        data = exifdata.get(tag_id)
-                        if tag in ["Make", "Model", "DateTime", "Software"]:
-                            metadata_entries.append(f"{tag}: {data}")
-                    if metadata_entries:
-                        metadata_info = " [EXIF: " + ", ".join(metadata_entries) + "]"
-                        logger.debug(f"Extracted EXIF metadata for {original_filename}")
-            except Exception as e:
-                logger.debug(f"No EXIF data available for {original_filename}: {e}")
+        openai_client = OpenAIClient()
+        client = openai_client.client
 
-            # JPG-specific preprocessing
-            # Convert to RGB if needed (JPG doesn't support transparency)
-            if image.mode != "RGB":
-                image = image.convert("RGB")
+        logger.info(f"Sending {original_filename} to GPT-4o Vision API for analysis...")
+        logger.debug(
+            f"GPT-4o Vision request structure: model=gpt-4o, image_url=data:image/jpeg;base64,[{len(base64_image)} chars]"
+        )
 
-            # Convert to grayscale for OCR
-            image = image.convert("L")
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": (
+                                "Describe what you see in this image in detail. If it shows property damage, maintenance issues, "
+                                "water intrusion, mold, structural problems, or other relevant visual information, describe the "
+                                "condition, severity, and any visible details. Also extract any visible text, labels, dates, or annotations."
+                            ),
+                        },
+                        {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}},
+                    ],
+                }
+            ],
+            max_tokens=1000,
+            temperature=0.1,
+        )
 
-            # JPG-specific enhancement: reduce compression artifacts
-            from PIL import ImageEnhance, ImageFilter
+        logger.debug(f"GPT-4o Vision response (JPG): {response.model_dump_json(indent=2)}")
 
-            # Apply slight blur to reduce JPEG artifacts
-            image = image.filter(ImageFilter.SMOOTH_MORE)
+        # Extract text from response
+        text_content = response.choices[0].message.content if response.choices else ""
+        text_content = text_content.strip()
 
-            # Enhance contrast to compensate for potential quality loss
-            contrast_enhancer = ImageEnhance.Contrast(image)
-            image = contrast_enhancer.enhance(1.3)
+        if text_content:
+            logger.info(f"Successfully extracted {len(text_content)} characters from JPG {original_filename}")
+        else:
+            logger.warning(f"GPT-4o did not return any text for JPG {original_filename}")
+            text_content = "[GPT-4o Vision returned no text for this image.]"
 
-            # Sharpen slightly to improve text clarity
-            sharpness_enhancer = ImageEnhance.Sharpness(image)
-            image = sharpness_enhancer.enhance(1.1)
-
-            # OCR configuration optimized for JPG images with potential compression
-            # Create character whitelist with properly escaped characters for security
-            char_whitelist = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789.,!?@#$%^&*()_+-=[]{}|;:\\"<>/`~'
-
-            # Properly format the config string for tesseract command line
-            # The -c flag requires the parameter to be properly quoted to handle special characters
-            custom_config = f"--oem 3 --psm 6 -c tessedit_char_whitelist={char_whitelist}"
-
-            logger.debug(f"OCR config for {original_filename}: {custom_config}")
-            text_content = pytesseract.image_to_string(image, config=custom_config)
-
-            # Append metadata info to content if available
-            if metadata_info:
-                text_content += metadata_info
-
-        logger.info(f"Successfully extracted text from JPG {original_filename}")
     except Exception as e:
-        logger.error(f"Error processing JPG {original_filename}: {e}")
-        text_content = f"Error extracting text from JPG {original_filename}."
+        logger.error(f"Error processing JPG {original_filename} with GPT-4o: {e}", exc_info=True)
+        text_content = f"[Text extraction failed for {original_filename}. Error: {str(e)}]"
 
     content_type, _ = mimetypes.guess_type(file_path)
     file_size = os.path.getsize(file_path) if os.path.exists(file_path) else 0
 
-    # Create proper FileMetadata object with required fields
     file_metadata = FileMetadata(filename=original_filename, size=file_size)
 
     logger.info(f"✅ Created FileMetadata for JPG {original_filename}, size: {file_size}")
+
+    # Assess extraction quality
+    extraction_quality = "high"  # Default for successful extraction
+    if "[Text extraction failed" in text_content or "[GPT-4o Vision returned no text" in text_content:
+        extraction_quality = "low"
+    elif len(text_content) < 100:
+        extraction_quality = "medium"
 
     return ProcessedDocument(
         file_name=original_filename,
@@ -110,4 +99,6 @@ async def process_jpg(
         document_type=document_type,
         file_type=FileType.JPG,
         metadata=file_metadata,
+        extraction_method="GPT-4o Vision API",
+        extraction_quality=extraction_quality,
     )

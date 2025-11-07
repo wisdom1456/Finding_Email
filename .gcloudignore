@@ -1,3 +1,110 @@
-# This file is used by gcloud to ignore files when deploying.
-# We need to explicitly include the pins.json file.
-!src/legal_portal/config/pins.json
+# This file specifies files that are intentionally untracked by gcloud
+# and should be excluded from deployment
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+*.egg-info/
+dist/
+build/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+tests/
+test_*/
+
+# Documentation
+docs/
+*.md
+!README.md
+
+# Logs and temp files
+logs/
+*.log
+temp/
+*.tmp
+
+# Environment files (secrets should be in Cloud Secret Manager)
+.env
+.env.*
+
+# Development files
+node_modules/
+.DS_Store
+Thumbs.db
+
+# Output directories
+output/
+validation_output/
+debug_output/
+cost_sessions/
+
+# Session files
+session_audit.log
+streamlit_live.log
+
+# Test data (comment out if needed in production)
+test_data/
+
+# Build artifacts
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg
+*.egg-info/
+dist/
+build/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.manifest
+*.spec
+
+# Reports
+reports/
+ruff_*.txt
+*.log
+build.log
+
+# Scripts (keep only deployment scripts)
+cleanup.sh
+consolidate.sh
+force_cleanup.sh
+post_consolidation_fix.sh
+start_*.sh
+run_app.sh
+
+# Memory bank (development only)
+memory-bank/
+
+# Large archives
+*.zip
+*.tar
+*.tar.gz
+*.rar

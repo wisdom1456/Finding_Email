@@ -4,7 +4,6 @@ import os
 import tempfile
 
 import magic
-from legal_portal.utils.logging_config import get_module_logger
 from openai import APIError, APITimeoutError, OpenAI, RateLimitError
 from tenacity import (
     retry,
@@ -12,6 +11,8 @@ from tenacity import (
     stop_after_attempt,
     wait_exponential,
 )
+
+from legal_portal.utils.logging_config import get_module_logger
 
 logger = get_module_logger(__name__)
 

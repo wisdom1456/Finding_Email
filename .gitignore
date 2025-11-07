@@ -182,6 +182,11 @@ test_data/**/*.AVI
 test_data/**/Pictures of Flooding.pdf
 test_data/**/Notice to Owner.pdf
 test_data/**/Devlin - LLW Text Thread.pdf
+test_data/**/SubFloorBeforeInstallersArrived.pdf
+
+# Exclude all large files (>100MB) to prevent GitHub push issues
+test_data/**/*.pdf
+# But allow smaller PDFs by using git add -f if needed
 
 # Refactor Script Outputs
 .test_results/
@@ -312,3 +317,13 @@ dmypy.json
 *_old*
 consolidation.log
 pre-consolidation-backup-*.tar.gz
+
+# Additional build and debug outputs
+streamlit_live.log
+session_audit.log
+debug_output/
+validation_output/
+
+# Generated outputs
+output/letters/
+output/summaries/

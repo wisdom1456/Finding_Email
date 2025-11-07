@@ -2,11 +2,226 @@
 
 from __future__ import annotations
 
-import json
-from pathlib import Path
-
 import streamlit as st
 import streamlit.components.v1 as components
+
+from legal_portal.services.document_formatter import DocumentFormatterService
+from legal_portal.utils.logging_config import get_module_logger
+
+logger = get_module_logger(__name__)
+
+
+def review_and_confirm_section():
+    """Displays the interactive review and confirmation screen with editable Q&A pairs."""
+    st.header("Step 2: Review & Confirm Intake Information")
+
+    review_data = st.session_state.review_data
+
+    # ===== SECTION 1: Editable Q&A Pairs (Main Focus) =====
+    st.subheader("📋 Intake Form Questions & Answers")
+    st.info(
+        "💡 Review the information below. You can edit answers, add new questions (click ➕), or remove incorrect entries (click 🗑️)."
+    )
+
+    # Initialize editable Q&A in session state if not present OR if review_data has new intake_qa_pairs
+    qa_pairs_from_extraction = review_data.get("intake_qa_pairs", [])
+
+    # Check if we need to initialize or refresh the editable Q&A pairs
+    should_initialize = False
+
+    if "editable_qa_pairs" not in st.session_state:
+        # First time - initialize
+        should_initialize = True
+    elif qa_pairs_from_extraction and len(qa_pairs_from_extraction) > len(st.session_state.editable_qa_pairs):
+        # New extraction has more pairs than current state - refresh with new data
+        should_initialize = True
+        logger.info(
+            f"Refreshing Q&A pairs: {len(qa_pairs_from_extraction)} extracted vs {len(st.session_state.editable_qa_pairs)} in state"
+        )
+
+    if should_initialize:
+        if qa_pairs_from_extraction:
+            st.session_state.editable_qa_pairs = qa_pairs_from_extraction.copy()
+            logger.info(f"Initialized editable_qa_pairs with {len(qa_pairs_from_extraction)} extracted pairs")
+        else:
+            # No extraction data - provide starter questions
+            st.session_state.editable_qa_pairs = [
+                {"question": "What is the primary legal issue?", "answer": ""},
+                {"question": "What is the desired outcome?", "answer": ""},
+                {"question": "Are there any deadlines or urgency?", "answer": ""},
+            ]
+            logger.info("No Q&A pairs extracted - initialized with starter questions")
+
+    # Show warning if extraction failed or returned few results
+    if qa_pairs_from_extraction and len(qa_pairs_from_extraction) < 3:
+        st.warning(
+            "⚠️ Very few questions were detected from the intake form. Please add any missing information using the form below, or refer to the full intake text at the bottom."
+        )
+
+    # Show count and stats
+    total_pairs = len(st.session_state.editable_qa_pairs)
+    answered_pairs = sum(1 for qa in st.session_state.editable_qa_pairs if qa.get("answer", "").strip())
+    st.caption(f"📊 {total_pairs} questions extracted • {answered_pairs} answered")
+
+    # Handle large forms
+    if total_pairs > 25:
+        st.info(
+            f"ℹ️ Large form detected ({total_pairs} questions). Consider removing non-essential questions for clarity."
+        )
+
+    # Display editable data table
+    edited_qa = st.data_editor(
+        st.session_state.editable_qa_pairs,
+        column_config={
+            "question": st.column_config.TextColumn("Question", width="medium", required=True),
+            "answer": st.column_config.TextColumn("Answer", width="large", required=False),
+        },
+        num_rows="dynamic",  # Allow adding/removing rows
+        width="stretch",
+        hide_index=False,
+        height=400,  # Limit height for long forms
+        key="qa_editor",
+    )
+
+    # Update session state with edits (persist across reruns)
+    st.session_state.editable_qa_pairs = edited_qa
+
+    st.divider()
+
+    # ===== SECTION 2: Structured Data Summary (Reference) =====
+    with st.expander("📊 Structured Data Summary (Auto-extracted for reference)", expanded=False):
+        parsed_intake = review_data.get("parsed_intake_data", {})
+
+        if parsed_intake:
+            col1, col2 = st.columns(2)
+            with col1:
+                st.markdown("**Case Summary:**")
+                st.write(parsed_intake.get("case_summary", "Not provided"))
+
+                st.markdown("**Desired Outcome:**")
+                st.write(parsed_intake.get("desired_outcome", "Not provided"))
+
+            with col2:
+                st.markdown("**Urgency Level:**")
+                st.write(parsed_intake.get("urgency_level", "Not specified"))
+
+                st.markdown("**Parties Involved:**")
+                parties = parsed_intake.get("parties", [])
+                if parties:
+                    for party in parties:
+                        st.write(
+                            f"• {party.get('name', 'Unknown')} ({party.get('relationship', 'Unknown relationship')})"
+                        )
+                else:
+                    st.write("No parties listed")
+
+            # Display additional fields if present
+            additional_fields = parsed_intake.get("additional_fields", {})
+            if additional_fields:
+                st.divider()
+                st.markdown("**Additional Information Extracted:**")
+                cols = st.columns(2)
+                items = list(additional_fields.items())
+                for idx, (field_name, field_value) in enumerate(items):
+                    if field_value:  # Only show fields with values
+                        with cols[idx % 2]:
+                            # Format field name nicely (e.g., "attorney_name" -> "Attorney Name")
+                            display_name = field_name.replace("_", " ").title()
+                            st.markdown(f"**{display_name}:**")
+                            st.write(field_value)
+        else:
+            st.info("No structured data extracted")
+
+    st.divider()
+
+    # ===== SECTION 3: Confirm Client Name =====
+    st.subheader("Confirm Client Name")
+    st.info(
+        "The client name has been automatically extracted from the intake form. Please confirm or correct it below."
+    )
+    confirmed_client_name = st.text_input(
+        "Client Name", value=review_data.get("client_name", ""), key="confirmed_client_name_input"
+    )
+
+    # ===== SECTION 4: Prioritize Key Documents =====
+    st.subheader("Prioritize Key Documents")
+    st.info(
+        "You can select up to 3 documents to be given extra weight during the AI analysis. This is optional but recommended for focusing the results."
+    )
+    all_docs = review_data.get("uploaded_files", [])
+    key_documents = st.multiselect(
+        "Select Key Documents", options=all_docs, max_selections=3, key="key_documents_multiselect"
+    )
+
+    # ===== SECTION 5: Define Legal Issue =====
+    st.subheader("Define Primary Legal Issue")
+    st.info(
+        "The AI has analyzed your intake form and identified the most relevant practice areas below. Select the primary legal issue to focus the analysis."
+    )
+
+    # Get AI-suggested practice areas from review_data
+    suggested_areas = review_data.get("suggested_practice_areas", ["Other"])
+    legal_issues = ["Select an issue..."] + suggested_areas
+
+    selected_issue = st.selectbox(
+        "Primary Legal Issue (AI-suggested options)",
+        options=legal_issues,
+        key="legal_issue_selectbox",
+        help="These options were intelligently selected based on your intake form content",
+    )
+
+    custom_issue = ""
+    if selected_issue == "Other":
+        custom_issue = st.text_input("Please specify the legal issue:", key="custom_legal_issue_input")
+
+    # ===== SECTION 6: Full Intake Form Text (Reference) =====
+    with st.expander("Show Full Intake Form Text for Reference"):
+        st.text_area(
+            "Intake Form Content",
+            value=review_data.get("intake_content", ""),
+            height=300,
+            key="intake_text_area",
+            label_visibility="hidden",
+        )
+
+    st.divider()
+
+    # ===== CONFIRMATION BUTTON WITH ENHANCED VALIDATION =====
+    if st.button("Confirm & Start Full Analysis", type="primary"):
+        # Validation: Client Name
+        if not confirmed_client_name:
+            st.warning("⚠️ Client Name cannot be empty.")
+            return
+
+        # Validation: Legal Issue
+        if selected_issue == "Select an issue...":
+            st.warning("⚠️ Please select a primary legal issue.")
+            return
+
+        # Validation: Q&A has sufficient content
+        valid_qa_count = sum(
+            1 for qa in edited_qa if qa.get("question", "").strip() and qa.get("answer", "").strip()
+        )
+        if valid_qa_count < 2:
+            st.warning(
+                "⚠️ Please provide at least 2 complete question-answer pairs with both question and answer filled."
+            )
+            return
+
+        # Save the confirmed and selected data back to session state to be used by the main processor
+        st.session_state.case_info["clientName"] = confirmed_client_name
+        st.session_state.review_data["key_documents"] = key_documents
+        st.session_state.review_data["legal_issue"] = (
+            custom_issue if selected_issue == "Other" else selected_issue
+        )
+        st.session_state.review_data["confirmed_qa_pairs"] = edited_qa  # NEW: Save confirmed Q&A
+
+        # Log confirmation for debugging
+        logger.info(f"User confirmed {len(edited_qa)} Q&A pairs for analysis")
+
+        # Set flag to start the analysis
+        st.session_state.start_full_analysis = True
+        st.rerun()
 
 
 def case_information_form():
@@ -14,14 +229,6 @@ def case_information_form():
     st.sidebar.header("Case Information")
 
     # Test Data Button
-    st.sidebar.subheader("🧪 Quick Test")
-    if st.sidebar.button(
-        "🚀 Load Devlin Test Case",
-        help="Loads test case data and files - manual analysis start required",
-    ):
-        load_devlin_test_case()
-        return
-
     st.sidebar.text("---")
 
     st.session_state.case_info["clientName"] = st.sidebar.text_input(
@@ -34,106 +241,21 @@ def case_information_form():
         "Case Reference", value=st.session_state.case_info["caseReference"]
     )
 
-
-def load_devlin_test_case():
-    """Load the Devlin test case data and files (manual analysis start required)."""
-    try:
-        # Set default case information
-        st.session_state.case_info = {
-            "clientName": "Erik Devlin",
-            "attorneyName": "Bernhardt Riley",
-            "caseReference": "Devlin v. LLW Construction - Contractor Dispute",
-        }
-
-        # Define test data path
-        test_folder = Path(
-            "test_data/Devlin, Erik [MetLife]/Shared Folder with Client/Shared with Bernhardt Riley"
-        )
-
-        if not test_folder.exists():
-            st.sidebar.error(f"Test folder not found: {test_folder}")
-            return
-
-        # Load files from test directory
-        uploaded_files = []
-        supported_extensions = {
-            ".pdf",
-            ".docx",
-            ".eml",
-            ".txt",
-            ".jpg",
-            ".jpeg",
-            ".png",
-            ".mp3",
-            ".m4a",
-            ".wav",
-            ".mp4",
-            ".mov",
-            ".avi",
-        }
-
-        for file_path in test_folder.rglob("*"):
-            if file_path.is_file() and file_path.suffix.lower() in supported_extensions:
-                # Create a mock uploaded file object
-                try:
-                    with open(file_path, "rb") as f:
-                        file_content = f.read()
-
-                    # Determine MIME type based on file extension
-                    extension = file_path.suffix.lower()
-                    mime_type_map = {
-                        ".pdf": "application/pdf",
-                        ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                        ".eml": "message/rfc822",
-                        ".txt": "text/plain",
-                        ".jpg": "image/jpeg",
-                        ".jpeg": "image/jpeg",
-                        ".png": "image/png",
-                        ".mp3": "audio/mpeg",
-                        ".m4a": "audio/mp4",
-                        ".wav": "audio/wav",
-                        ".mp4": "video/mp4",
-                        ".mov": "video/quicktime",
-                        ".avi": "video/x-msvideo",
-                    }
-
-                    # Create a proper mock file object that simulates Streamlit UploadedFile
-                    class MockFile:
-                        def __init__(self, name, content, mime_type):
-                            self.name = name
-                            self._content = content
-                            self.type = mime_type
-                            self.size = len(content)
-
-                        def read(self, size=-1):
-                            return self._content if size == -1 else self._content[:size]
-
-                        def getvalue(self):
-                            return self._content
-
-                        def seek(self, offset, whence=0):
-                            # Mock seek method - not actually used but may be expected
-                            pass
-
-                    mock_file = MockFile(
-                        file_path.name,
-                        file_content,
-                        mime_type_map.get(extension, "application/octet-stream"),
-                    )
-
-                    uploaded_files.append(mock_file)
-                except Exception as e:
-                    st.sidebar.warning(f"Could not load {file_path.name}: {e}")
-
-        if uploaded_files:
-            st.session_state.uploaded_files = uploaded_files
-            st.sidebar.success(f"✅ Loaded {len(uploaded_files)} test files and case information")
-            st.sidebar.info("📋 Ready for analysis - click 'Start Analysis' when ready")
-        else:
-            st.sidebar.error("No supported files found in test directory")
-
-    except Exception as e:
-        st.sidebar.error(f"Error loading test case: {e}")
+    # Optional contact information for letter footer
+    st.sidebar.text("---")
+    st.sidebar.caption("Optional Contact Information (for letter)")
+    st.session_state.case_info["contactPhone"] = st.sidebar.text_input(
+        "Contact Phone",
+        value=st.session_state.case_info.get("contactPhone", "(727) 275-9575"),
+        placeholder="e.g., (555) 123-4567",
+        help="Phone number for letter footer",
+    )
+    st.session_state.case_info["contactEmail"] = st.sidebar.text_input(
+        "Contact Email",
+        value=st.session_state.case_info.get("contactEmail", ""),
+        placeholder="e.g., contact@lawfirm.com",
+        help="Optional: If provided, replaces [EMAIL PLACEHOLDER] in letter",
+    )
 
 
 def file_upload_section():
@@ -163,19 +285,182 @@ def results_display_section():
     if st.session_state.get("final_results"):
         st.header("Results")
 
-        # Display the main findings letter
-        if st.session_state.get("main_letter"):
-            st.subheader("Findings Letter")
+        # Get client name for formatting
+        client_name = "Client"
+        if st.session_state.get("case_info"):
+            client_name = st.session_state.case_info.get("clientName", "Client") or "Client"
 
-            # Display the letter directly without cleaning citations
-            components.html(st.session_state.main_letter, height=800, scrolling=True, width=None)
+        # DEBUG: Log what we're passing to formatter
+        logger.info(f"Formatting reports with client_name: '{client_name}'")
 
-            # Provide download buttons
-            st.subheader("Download Options")
-            col1, col2, col3 = st.columns(3)
-            _display_download_buttons(col1, col2, col3)
-        else:
-            st.info("The findings letter is being generated.")
+        # Create tabs for organized display
+        tab_titles = ["📧 Findings Letter", "📚 Cited Letter", "📄 Document Review", "⚖️ Case Analysis"]
+        if st.session_state.get("quality_report"):
+            tab_titles.append("📊 Quality Report")
+
+        tabs = st.tabs(tab_titles)
+
+        # Findings Letter Tab
+        with tabs[0]:
+            # Display the main findings letter
+            if st.session_state.get("main_letter"):
+                # Wrap the letter content with explicit styling to force white background and black text
+                # This ensures the content is readable in both light and dark modes
+                wrapped_html = f"""
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <meta charset="UTF-8">
+                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                    <style>
+                        html, body {{
+                            background-color: #ffffff !important;
+                            color: #000000 !important;
+                            margin: 0;
+                            padding: 0;
+                        }}
+                        * {{
+                            color: inherit;
+                        }}
+                    </style>
+                </head>
+                <body>
+                    {st.session_state.main_letter}
+                </body>
+                </html>
+                """
+
+                # Display the letter directly without cleaning citations
+                components.html(wrapped_html, height=800, scrolling=True, width=None)
+            else:
+                st.info("The findings letter is being generated.")
+
+        # Cited Letter Tab (NEW)
+        with tabs[1]:
+            # Display the findings letter with citations
+            if st.session_state.get("main_letter_with_citations"):
+                # Wrap the cited letter content with explicit styling
+                wrapped_cited_html = f"""
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <meta charset="UTF-8">
+                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                    <style>
+                        html, body {{
+                            background-color: #ffffff !important;
+                            color: #000000 !important;
+                            margin: 0;
+                            padding: 0;
+                        }}
+                        * {{
+                            color: inherit;
+                        }}
+                        /* Style for citation links */
+                        sup a {{
+                            color: #0066cc !important;
+                            text-decoration: none;
+                        }}
+                        sup a:hover {{
+                            text-decoration: underline;
+                        }}
+                    </style>
+                </head>
+                <body>
+                    {st.session_state.main_letter_with_citations}
+                </body>
+                </html>
+                """
+
+                # Display the cited letter
+                components.html(wrapped_cited_html, height=800, scrolling=True, width=None)
+            else:
+                st.info("The cited letter is being generated or citations are unavailable.")
+
+        # Document Review Tab
+        with tabs[2]:
+            # Display the formatted document review
+            if st.session_state.get("document_review"):
+                formatter = DocumentFormatterService()
+                formatted_review = formatter.format_document_review(
+                    st.session_state.document_review, client_name
+                )
+
+                # Wrap with white background styling
+                wrapped_review = f"""
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <meta charset="UTF-8">
+                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                    <style>
+                        html, body {{
+                            background-color: #ffffff !important;
+                            margin: 0;
+                            padding: 0;
+                        }}
+                    </style>
+                </head>
+                <body>
+                    {formatted_review}
+                </body>
+                </html>
+                """
+
+                components.html(wrapped_review, height=800, scrolling=True, width=None)
+            else:
+                st.info("Document review is not available.")
+
+        # Case Analysis Tab
+        with tabs[3]:
+            # Display the formatted case analysis
+            if st.session_state.get("case_analysis"):
+                formatter = DocumentFormatterService()
+                formatted_analysis = formatter.format_case_analysis(
+                    st.session_state.case_analysis, client_name
+                )
+
+                # Wrap with white background styling
+                wrapped_analysis = f"""
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <meta charset="UTF-8">
+                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                    <style>
+                        html, body {{
+                            background-color: #ffffff !important;
+                            margin: 0;
+                            padding: 0;
+                        }}
+                    </style>
+                </head>
+                <body>
+                    {formatted_analysis}
+                </body>
+                </html>
+                """
+
+                components.html(wrapped_analysis, height=800, scrolling=True, width=None)
+            else:
+                st.info("Case analysis is not available.")
+
+        # Quality Report Tab (conditionally displayed)
+        if len(tabs) > 4:
+            with tabs[4]:
+                st.subheader("Document Quality & Integrity Report")
+                quality_report_data = st.session_state.quality_report
+                if quality_report_data:
+                    formatter = DocumentFormatterService()
+                    report_html = formatter.format_quality_report(quality_report_data)
+                    components.html(report_html, height=800, scrolling=True)
+                else:
+                    st.info("No quality report data is available.")
+
+        # Provide download buttons below tabs
+        st.subheader("Download Options")
+        col1, col2, col3, col4 = st.columns(4)
+        _display_download_buttons(col1, col2, col3, col4)
 
         # Display any errors that occurred
         if st.session_state.get("errors"):
@@ -184,8 +469,8 @@ def results_display_section():
                 st.warning(f"**{error.source}**: {error.error_message}")
 
 
-def _display_download_buttons(col1, col2, col3):
-    """Display download buttons for the findings letter, document review, and case analysis."""
+def _display_download_buttons(col1, col2, col3, col4):
+    """Display download buttons for the findings letters (clean and cited), document review, and case analysis."""
     # Get client name for filename
     client_name = "Client"
     if st.session_state.get("case_info"):
@@ -195,55 +480,75 @@ def _display_download_buttons(col1, col2, col3):
     if not client_name:
         client_name = "Client"
 
-    with col1:
-        # Download button for main findings letter as HTML
-        try:
-            main_letter_bytes = st.session_state.main_letter.encode("utf-8")
-            st.download_button(
-                label="📧 Findings Letter",
-                data=main_letter_bytes,
-                file_name=f"Findings_Letter_{client_name}.html",
-                mime="text/html",
-                help="Download the findings letter in HTML format.",
-            )
-        except Exception as e:
-            st.error(f"Error creating findings letter download: {e}")
+    formatter = DocumentFormatterService()
 
-    with col2:
-        # Download button for document review
+    with col1:
+        # Download button for clean findings letter (no citations)
         try:
-            # Assuming document review is stored in session state
-            if st.session_state.get("document_review"):
-                doc_review_bytes = st.session_state.document_review.encode("utf-8")
+            if st.session_state.get("main_letter"):
+                main_letter_bytes = st.session_state.main_letter.encode("utf-8")
                 st.download_button(
-                    label="📄 Document Review",
-                    data=doc_review_bytes,
-                    file_name=f"Document_Review_{client_name}.txt",
-                    mime="text/plain",
-                    help="Download the document review.",
+                    label="📧 Findings Letter",
+                    data=main_letter_bytes,
+                    file_name=f"Findings_Letter_{client_name}.html",
+                    mime="text/html",
+                    help="Download findings letter (clean version)",
                 )
         except Exception as e:
-            st.error(f"Error creating document review download: {e}")
+            st.error(f"Error: {e}")
+
+    with col2:
+        # Download button for cited findings letter (NEW)
+        try:
+            if st.session_state.get("main_letter_with_citations"):
+                cited_letter_bytes = st.session_state.main_letter_with_citations.encode("utf-8")
+                st.download_button(
+                    label="📚 Letter (Cited)",
+                    data=cited_letter_bytes,
+                    file_name=f"Findings_Letter_Cited_{client_name}.html",
+                    mime="text/html",
+                    help="With citations and source references",
+                )
+            else:
+                st.info("Citations unavailable", icon="ℹ️")
+        except Exception as e:
+            st.error(f"Error: {e}")
 
     with col3:
-        # Download button for case analysis
+        # Download button for document review (formatted HTML) - MOVED from col2
         try:
-            # Assuming case analysis is stored in session state
+            if st.session_state.get("document_review"):
+                # Format the document review as HTML
+                formatted_review = formatter.format_document_review(
+                    st.session_state.document_review, client_name
+                )
+                doc_review_bytes = formatted_review.encode("utf-8")
+                st.download_button(
+                    label="📄 Doc Review",
+                    data=doc_review_bytes,
+                    file_name=f"Document_Review_{client_name}.html",
+                    mime="text/html",
+                    help="Download the formatted document review.",
+                )
+        except Exception as e:
+            st.error(f"Error: {e}")
+
+    with col4:
+        # Download button for case analysis (formatted HTML) - MOVED from col3
+        try:
             if st.session_state.get("case_analysis"):
-                # Check if it's already a string or needs to be JSON-serialized
-                case_analysis = st.session_state.case_analysis
-                if isinstance(case_analysis, str):
-                    case_analysis_bytes = case_analysis.encode("utf-8")
-                else:
-                    case_analysis_str = json.dumps(case_analysis, indent=2)
-                    case_analysis_bytes = case_analysis_str.encode("utf-8")
+                # Format the case analysis as HTML
+                formatted_analysis = formatter.format_case_analysis(
+                    st.session_state.case_analysis, client_name
+                )
+                case_analysis_bytes = formatted_analysis.encode("utf-8")
 
                 st.download_button(
                     label="⚖️ Case Analysis",
                     data=case_analysis_bytes,
-                    file_name=f"Case_Analysis_{client_name}.txt",
-                    mime="text/plain",
-                    help="Download the case analysis.",
+                    file_name=f"Case_Analysis_{client_name}.html",
+                    mime="text/html",
+                    help="Download the formatted case analysis.",
                 )
         except Exception as e:
-            st.error(f"Error creating case analysis download: {e}")
+            st.error(f"Error: {e}")

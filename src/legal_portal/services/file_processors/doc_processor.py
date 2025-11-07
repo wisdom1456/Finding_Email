@@ -81,7 +81,6 @@ async def process_doc(
                     # Method 4: Try oletools for OLE compound document parsing
                     try:
                         from oletools import olefile
-                        from oletools.olevba import VBA_Parser
 
                         if olefile.isOleFile(file_path):
                             # This is a basic OLE file reader - more sophisticated parsing would be needed

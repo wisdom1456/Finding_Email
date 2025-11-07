@@ -1,10 +1,9 @@
 from __future__ import annotations
 
+import base64
 import mimetypes
 import os
-from io import BytesIO
 
-import pytesseract
 from legal_portal.core.data_models import (
     DocumentType,
     FileMetadata,
@@ -12,7 +11,7 @@ from legal_portal.core.data_models import (
     ProcessedDocument,
 )
 from legal_portal.utils.logging_config import get_module_logger
-from PIL import Image
+from legal_portal.utils.openai_client import OpenAIClient
 
 logger = get_module_logger(__name__)
 
@@ -20,57 +19,79 @@ logger = get_module_logger(__name__)
 async def process_png(
     file_path: str, document_type: DocumentType, original_filename: str
 ) -> ProcessedDocument:
-    """Processes a PNG file by extracting text using OCR with PNG-specific optimizations.
+    """Processes a PNG file by extracting text using GPT-4o Vision API.
 
-    PNG-specific features:
-    - Handles transparency channels properly
-    - Optimized for lossless compression artifacts
-    - Enhanced preprocessing for crisp text
+    NOTE: This is the single-image processing mode (legacy).
+    For batch processing of multiple images (more efficient), use:
+    batch_vision_processor.process_images_batch()
     """
-    logger.debug(f"Processing PNG: {original_filename}")
+    logger.debug(f"Processing PNG with GPT-4o Vision: {original_filename}")
 
     text_content = ""
 
     try:
-        with open(file_path, "rb") as f:
-            image = Image.open(BytesIO(f.read()))
+        with open(file_path, "rb") as image_file:
+            base64_image = base64.b64encode(image_file.read()).decode("utf-8")
 
-            # PNG-specific preprocessing
-            # Handle transparency by converting RGBA to RGB with white background
-            if image.mode in ("RGBA", "LA"):
-                # Create a white background image
-                background = Image.new("RGB", image.size, (255, 255, 255))
-                if image.mode == "RGBA":
-                    background.paste(image, mask=image.split()[-1])  # Use alpha channel as mask
-                else:  # LA mode
-                    background.paste(image.convert("RGB"))
-                image = background
+        openai_client = OpenAIClient()
+        client = openai_client.client
 
-            # Convert to grayscale for better OCR results on PNG
-            image = image.convert("L")
+        logger.info(f"Sending {original_filename} to GPT-4o Vision API for analysis...")
+        logger.debug(
+            f"GPT-4o Vision request structure: model=gpt-4o, image_url=data:image/png;base64,[{len(base64_image)} chars]"
+        )
 
-            # PNG-specific enhancement: sharpen for crisp text
-            from PIL import ImageEnhance
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": (
+                                "Describe what you see in this image in detail. If it shows property damage, maintenance issues, "
+                                "water intrusion, mold, structural problems, or other relevant visual information, describe the "
+                                "condition, severity, and any visible details. Also extract any visible text, labels, dates, or annotations."
+                            ),
+                        },
+                        {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{base64_image}"}},
+                    ],
+                }
+            ],
+            max_tokens=1000,
+            temperature=0.1,
+        )
 
-            enhancer = ImageEnhance.Sharpness(image)
-            image = enhancer.enhance(1.2)  # Slight sharpening
+        logger.debug(f"GPT-4o Vision response (PNG): {response.model_dump_json(indent=2)}")
 
-            # OCR configuration optimized for PNG images
-            custom_config = r'--oem 3 --psm 6 -c tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789.,!?@#$%^&*()_+-=[]{}|;:"\<>/`~'
-            text_content = pytesseract.image_to_string(image, config=custom_config)
+        # Extract text from response
+        text_content = response.choices[0].message.content if response.choices else ""
+        text_content = text_content.strip()
 
-        logger.info(f"Successfully extracted text from PNG {original_filename}")
+        if text_content:
+            logger.info(f"Successfully extracted {len(text_content)} characters from PNG {original_filename}")
+        else:
+            logger.warning(f"GPT-4o did not return any text for PNG {original_filename}")
+            text_content = "[GPT-4o Vision returned no text for this image.]"
+
     except Exception as e:
-        logger.error(f"Error processing PNG {original_filename}: {e}")
-        text_content = f"Error extracting text from PNG {original_filename}."
+        logger.error(f"Error processing PNG {original_filename} with GPT-4o: {e}", exc_info=True)
+        text_content = f"[Text extraction failed for {original_filename}. Error: {str(e)}]"
 
     content_type, _ = mimetypes.guess_type(file_path)
     file_size = os.path.getsize(file_path) if os.path.exists(file_path) else 0
 
-    # Create proper FileMetadata object with required fields
     file_metadata = FileMetadata(filename=original_filename, size=file_size)
 
     logger.info(f"✅ Created FileMetadata for PNG {original_filename}, size: {file_size}")
+
+    # Assess extraction quality
+    extraction_quality = "high"  # Default for successful extraction
+    if "[Text extraction failed" in text_content or "[GPT-4o Vision returned no text" in text_content:
+        extraction_quality = "low"
+    elif len(text_content) < 100:
+        extraction_quality = "medium"
 
     return ProcessedDocument(
         file_name=original_filename,
@@ -78,4 +99,6 @@ async def process_png(
         document_type=document_type,
         file_type=FileType.PNG,
         metadata=file_metadata,
+        extraction_method="GPT-4o Vision API",
+        extraction_quality=extraction_quality,
     )

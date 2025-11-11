@@ -44,7 +44,7 @@ class LetterReviewService:
         quality_context: Optional[str] = None,
         client_name: Optional[str] = None,
     ) -> str:
-        """Performs a comprehensive review of the draft letter for quality, accuracy, and tone."""
+        """Perform a comprehensive review of the draft letter for quality, accuracy, and tone."""
         logger.info("Performing comprehensive letter review...")
 
         # 1. Normalize encoding artifacts before AI review
@@ -65,7 +65,11 @@ class LetterReviewService:
                 messages=[
                     {
                         "role": "system",
-                        "content": "You are a senior law firm partner reviewing a junior associate's draft letter. Your task is to refine it to meet the highest professional standards.",
+                        "content": (
+                            "You are a senior law firm partner reviewing a junior associate's "
+                            "draft letter. Your task is to refine it to meet the highest "
+                            "professional standards."
+                        ),
                     },
                     {"role": "user", "content": prompt},
                 ],
@@ -172,6 +176,7 @@ class LetterReviewService:
             case_type: Optional case type (e.g., "real estate", "contract dispute")
             document_summaries_json: JSON summaries for source verification
             quality_context: Quality assessment results for completeness checks
+            client_name: Optional client name for personalized greeting
 
         Returns:
         -------
@@ -223,11 +228,18 @@ Check that the letter addresses any quality issues or missing data warnings.
             },
         )
 
-        review_prompt = f"""You are a senior legal editor performing a comprehensive final review before sending this letter to a client{' named ' + client_name if client_name else ''}.
+        client_intro = f" named {client_name}" if client_name else ""
+        review_prompt = f"""You are a senior legal editor performing a comprehensive final review
+before sending this letter to a client{client_intro}.
 
-**Your task:** Review and REFINE the provided draft letter. The draft contains detailed analysis based on case documents - your role is to improve clarity, verify citations, and fix errors WITHOUT removing factual content. Do NOT regenerate the letter from scratch.
+**Your task:** Review and REFINE the provided draft letter. The draft contains
+detailed analysis based on case documents - your role is to improve clarity, verify
+citations, and fix errors WITHOUT removing factual content. Do NOT regenerate the
+letter from scratch.
 
-**CRITICAL:** Preserve all specific facts, dates, amounts, party names, and document references from the draft. Only modify for grammar, clarity, citation format, and completeness checks.
+**CRITICAL:** Preserve all specific facts, dates, amounts, party names, and document
+references from the draft. Only modify for grammar, clarity, citation format, and
+completeness checks.
 
 **COMPREHENSIVE REVIEW CHECKLIST:**
 
@@ -238,19 +250,26 @@ Check that the letter addresses any quality issues or missing data warnings.
    - Use the structured JSON data below to verify sources
 
 2. **Completeness Check** (CRITICAL)
-   - Verify all required sections are present: Background, Key Provisions, Analysis, Next Steps
-   - Check that Analysis includes: Favorable Facts, Challenges, Outcome, Financial Impact
-   - Ensure Next Steps include: timeframes, consequences of delay, legal reasons
-   - Flag missing elements: "[Missing: Financial Impact analysis]"
+   - Verify all required sections are present: Factual Summary, Key Legal Points, Recommended Action
+   - Optional fourth section: Strengths Overview (only if case has strong evidence)
+   - Check that Key Legal Points uses substantive bullet paragraphs (not just headings)
+   - Ensure Recommended Action includes: specific actions, protective framing, call to action
+   - Flag missing elements: "[Missing: Recommended Action section]"
 
 2a. **Release/Waiver Analysis Verification** (CRITICAL for client protection)
-   - Search document summaries for any mention of "release", "waiver", "concession", or "settlement agreement"
+   - Search document summaries for any mention of "release", "waiver", "concession",
+     or "settlement agreement"
    - IF found, verify the Analysis section includes:
      * Clear warning about signing the release
      * Specific explanation of what rights would be waived
      * Strong recommendation to decline or modify release
-   - IF release mentioned in documents but NOT analyzed in letter, ADD dedicated paragraph to Challenges section:
-     "IMPORTANT: You have been offered [amount] in exchange for signing a release. We strongly advise against signing this release without legal review, as it would waive your right to pursue claims for [specific issues]. The small payment does not adequately compensate you for waiving these valuable legal remedies."
+   - IF release mentioned in documents but NOT analyzed in letter, ADD dedicated
+     paragraph to Challenges section:
+     "IMPORTANT: You have been offered [amount] in exchange for signing a release.
+     We strongly advise against signing this release without legal review, as it
+     would waive your right to pursue claims for [specific issues]. The small
+     payment does not adequately compensate you for waiving these valuable legal
+     remedies."
 
 3. **Tone & Language**
    - Maintain measured, cautious language ("may", "could", "appears", "based on")
@@ -281,14 +300,16 @@ Check that the letter addresses any quality issues or missing data warnings.
    **MANDATORY FIXES - DO NOT SKIP:**
 
    a) **Signature Placeholders:**
-      - If you see "[Your Name]": Replace with the attorney name from context, or use "Senior Partner" if not available
+      - If you see "[Your Name]": Replace with the attorney name from context, or use
+        "Senior Partner" if not available
       - Use the client_name context if attorney not specified
 
    b) **Financial Analysis Placeholders:**
       - If you see "[Note: Financial analysis required]" or similar:
         * Look at document_summaries_json for "key_amounts"
         * If amounts exist: Write actual analysis with those amounts
-        * If no amounts: Write "Financial assessment pending receipt of [specific documents needed]"
+        * If no amounts: Write "Financial assessment pending receipt of [specific
+          documents needed]"
 
    c) **Missing Information Placeholders:**
       - Replace with specific statement: "This information requires [specific document type]"
@@ -299,12 +320,14 @@ Check that the letter addresses any quality issues or missing data warnings.
    - Any text within square brackets [...]
    - The strings "XXX", "TBD", "PLACEHOLDER"
 
-   If ANY are found, you FAILED this review. Fix them or output: "REVIEW FAILED: Unable to resolve placeholder: [quote the placeholder]"
+   If ANY are found, you FAILED this review. Fix them or output:
+   "REVIEW FAILED: Unable to resolve placeholder: [quote the placeholder]"
 
 7. **Structure & Flow**
-   - Ensure logical progression from Background → Provisions → Analysis → Next Steps
+   - Ensure logical progression from Factual Summary → Key Legal Points → Recommended Action
    - Check that each section builds on previous content
    - Verify action items are specific and actionable
+   - Confirm letter stays within 800-1,200 word target (1,500 max)
 
 8. **CLIENT-FRIENDLINESS & VOICE CHECK** (CRITICAL)
 
@@ -384,10 +407,10 @@ Check that the letter addresses any quality issues or missing data warnings.
 - Action item structure to use "Why this protects you" subheadings
 
 **WHAT NOT TO CHANGE:**
-- Number and sequence of main sections (Sections 1-8)
+- Number and sequence of main sections (Sections 1-3, optional 4)
 - Level of caution/conservatism
 - Facts not in the original (don't invent new information)
-- Main section headings (1. Factual Summary, 2. Legal Analysis, etc.)
+- Main section headings (1. Factual Summary, 2. Key Legal Points, 3. Recommended Action)
 
 **Case Context:**
 {context_str}
@@ -397,7 +420,10 @@ Check that the letter addresses any quality issues or missing data warnings.
 **Draft Letter to Review:**
 {draft_letter}
 
-**Instructions:** Return the improved letter in the EXACT SAME FORMAT as the input (HTML if HTML, Markdown if Markdown). Perform a comprehensive rewrite focusing on completeness, accuracy, and professional quality. If the letter is already excellent, minimal changes are fine.
+**Instructions:** Return the improved letter in the EXACT SAME FORMAT as the input
+(HTML if HTML, Markdown if Markdown). Perform a comprehensive rewrite focusing on
+completeness, accuracy, and professional quality. If the letter is already excellent,
+minimal changes are fine.
 """
 
         try:
@@ -406,7 +432,11 @@ Check that the letter addresses any quality issues or missing data warnings.
                 messages=[
                     {
                         "role": "system",
-                        "content": "You are a meticulous senior legal editor with 20+ years experience. You ensure every client letter is complete, accurate, and professionally formatted.",
+                        "content": (
+                            "You are a meticulous senior legal editor with 20+ years "
+                            "experience. You ensure every client letter is complete, "
+                            "accurate, and professionally formatted."
+                        ),
                     },
                     {"role": "user", "content": review_prompt},
                 ],
@@ -463,7 +493,7 @@ Check that the letter addresses any quality issues or missing data warnings.
             issues.append("Letter is too short (< 500 characters)")
 
         # Check for required sections (basic check)
-        required_sections = ["Background", "Key Provisions", "Analysis", "Recommended Next Steps"]
+        required_sections = ["Factual Summary", "Key Legal Points", "Recommended Action"]
         for section in required_sections:
             if section not in letter:
                 warnings.append(f"Missing or misnamed section: {section}")

@@ -1,5 +1,4 @@
-"""This module provides lightweight quality assurance checks for generated findings letters.
-"""
+"""This module provides lightweight quality assurance checks for generated findings letters."""
 from typing import Any, Dict, List
 
 

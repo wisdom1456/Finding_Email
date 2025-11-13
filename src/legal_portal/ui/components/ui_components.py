@@ -279,6 +279,19 @@ def file_upload_section():
     if uploaded_files:
         st.session_state.uploaded_files = uploaded_files
 
+        # Check for large files and display compression option
+        large_files = [f for f in uploaded_files if f.size > 10 * 1024 * 1024]  # 10MB threshold
+        if large_files:
+            st.warning(
+                f"{len(large_files)} large file(s) detected. Compressing them is recommended to reduce cost and processing time."
+            )
+            # Default to True for a better user experience
+            compress_choice = st.checkbox("✅ Compress large files before analysis", value=True)
+            st.session_state.compress_files = compress_choice
+        else:
+            # Ensure the state is clean if no large files are present
+            st.session_state.compress_files = False
+
 
 def results_display_section():
     """Display the final results and download links."""

@@ -139,11 +139,11 @@ class AuthManager:
             token = self._generate_jwt_token(username)
             st.session_state["auth_token"] = token
 
-        elif authentication_status == False:
+        elif authentication_status is False:
             st.error("Username/password is incorrect")
             logger.warning(f"Failed login attempt for username: {username}")
 
-        elif authentication_status == None:
+        elif authentication_status is None:
             st.warning("Please enter your username and password")
 
         return name, authentication_status, username

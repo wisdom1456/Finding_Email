@@ -449,7 +449,8 @@ def generate_case_analysis_html(analysis_result):
 
 
 def identify_relevant_practice_areas_from_qa(qa_pairs: list[dict]) -> list[str]:
-    """Uses AI to analyze Q&A pairs and identify the 5 most relevant practice areas.
+    """Use AI to analyze Q&A pairs and identify the 5 most relevant practice areas.
+
     Returns a list of practice area strings.
     """
     # Convert Q&A pairs to text for analysis
@@ -459,7 +460,8 @@ def identify_relevant_practice_areas_from_qa(qa_pairs: list[dict]) -> list[str]:
 
 
 def identify_relevant_practice_areas(intake_content: str) -> list[str]:
-    """Uses AI to analyze the intake form and identify the 5 most relevant practice areas.
+    """Use AI to analyze the intake form and identify the 5 most relevant practice areas.
+
     Returns a list of practice area strings.
     """
     import json
@@ -509,7 +511,8 @@ def identify_relevant_practice_areas(intake_content: str) -> list[str]:
         "Product Liability",
     ]
 
-    prompt = f"""Analyze the following intake form and identify the 5 most relevant practice areas from the list provided.
+    prompt = f"""Analyze the following intake form and identify the 5 most relevant practice areas \
+from the list provided.
 
 INTAKE FORM:
 {intake_content}
@@ -522,7 +525,8 @@ Return ONLY a JSON object with this structure:
     "practice_areas": ["area1", "area2", "area3", "area4", "area5"]
 }}
 
-Select exactly 5 practice areas that are most relevant to the client's legal issue. Order them from most relevant to least relevant.
+Select exactly 5 practice areas that are most relevant to the client's legal issue. \
+Order them from most relevant to least relevant.
 """
 
     try:
@@ -532,7 +536,10 @@ Select exactly 5 practice areas that are most relevant to the client's legal iss
             messages=[
                 {
                     "role": "system",
-                    "content": "You are a legal intake specialist. Analyze intake forms and identify relevant practice areas.",
+                    "content": (
+                        "You are a legal intake specialist. Analyze intake forms and "
+                        "identify relevant practice areas."
+                    ),
                 },
                 {"role": "user", "content": prompt},
             ],
@@ -570,7 +577,8 @@ Select exactly 5 practice areas that are most relevant to the client's legal iss
 
 
 def parse_intake_form_with_ai(intake_content: str) -> dict:
-    """Uses AI to extract structured data from the intake form.
+    """Use AI to extract structured data from the intake form.
+
     Returns a dict with client names, case summary, parties, and other key info.
     This is much more robust than regex and adapts to form changes automatically.
     """
@@ -606,8 +614,10 @@ Return ONLY a JSON object with this exact structure:
 IMPORTANT:
 - Extract actual names filled in the form, not placeholder text like "(First Name, Last Name)"
 - If a field is blank or not found, use empty string or empty array
-- For additional_fields: capture any other important information from the form that doesn't fit the standard fields above
-- Use descriptive field names (e.g., "attorney_name", "case_number", "referral_source", "budget", "deadline_date")
+- For additional_fields: capture any other important information from the form that doesn't fit \
+the standard fields above
+- Use descriptive field names (e.g., "attorney_name", "case_number", "referral_source", "budget", \
+"deadline_date")
 - Only populate additional_fields with actual data present in the form
 - If no additional fields exist, return an empty object for additional_fields
 """
@@ -619,7 +629,10 @@ IMPORTANT:
             messages=[
                 {
                     "role": "system",
-                    "content": "You are a legal intake specialist. Extract structured data from intake forms with high accuracy.",
+                    "content": (
+                        "You are a legal intake specialist. Extract structured data from "
+                        "intake forms with high accuracy."
+                    ),
                 },
                 {"role": "user", "content": prompt},
             ],
@@ -653,7 +666,8 @@ IMPORTANT:
 
 
 def extract_client_name_from_qa(qa_pairs: list[dict]) -> str:
-    """Extracts client name(s) from Q&A pairs.
+    """Extract client name(s) from Q&A pairs.
+
     Looks for questions like "Client Name 1", "Client Name 2", etc.
     If multiple names are found, they are joined with ' and '.
     """
@@ -680,7 +694,8 @@ def extract_client_name_from_qa(qa_pairs: list[dict]) -> str:
 
 
 def build_structured_display_from_qa(qa_pairs: list[dict]) -> dict:
-    """Builds a structured display data from Q&A pairs for the summary expander.
+    """Build structured display data from Q&A pairs for the summary expander.
+
     Maps common questions to structured fields.
     """
     structured = {
@@ -692,8 +707,6 @@ def build_structured_display_from_qa(qa_pairs: list[dict]) -> dict:
         "urgency_level": "",
         "additional_fields": {},
     }
-
-    party_data = {}  # Temporary storage for party relationships
 
     for qa in qa_pairs:
         question = qa.get("question", "").lower()
@@ -736,9 +749,9 @@ def build_structured_display_from_qa(qa_pairs: list[dict]) -> dict:
 
 
 def parse_client_name_from_intake(intake_content: str) -> str:
-    """DEPRECATED: Use extract_client_name_from_qa() instead.
+    """Extract client name(s) from the intake form using AI.
 
-    Extracts client name(s) from the intake form using AI.
+    DEPRECATED: Use extract_client_name_from_qa() instead.
     If two client names are found, they are joined with ' and '.
     """
     intake_data = parse_intake_form_with_ai(intake_content)
@@ -759,8 +772,9 @@ def parse_client_name_from_intake(intake_content: str) -> str:
 
 
 def parse_intake_form_qa_pairs(intake_content: str) -> list[dict]:
-    """Uses AI to extract question-answer pairs from the intake form.
-    Returns a list of Q&A objects: [{"question": "...", "answer": "..."}]
+    """Use AI to extract question-answer pairs from the intake form.
+
+    Returns a list of Q&A objects: [{"question": "...", "answer": "..."}].
 
     This function:
     - Extracts both explicit questions and labeled fields as Q&A
@@ -827,7 +841,8 @@ EXTRACTION RULES:
 5. For checkbox responses, convert to text (e.g., "Critical - Deadline of March 15, 2024")
 6. Keep questions concise but answers complete and contextual
 7. Remove duplicate questions - if same question appears twice, keep only the first occurrence
-8. When you find a Party/Relationship pair, combine them: "Party 1: John Smith (Relationship: Contractor)"
+8. When you find a Party/Relationship pair, combine them: \
+"Party 1: John Smith (Relationship: Contractor)"
 
 EXAMPLES:
 
@@ -842,13 +857,15 @@ EXAMPLES:
 
 - Input Top: "Please provide a brief summary of the legal issue..."
 - Input Bottom: "We own the investment property at 811 Gate Run Rd..."
-- Output: {{"question": "Please provide a brief summary of the legal issue", "answer": "We own the investment property at 811 Gate Run Rd..."}}
+- Output: {{"question": "Please provide a brief summary of the legal issue", \
+"answer": "We own the investment property at 811 Gate Run Rd..."}}
 
 **Skip These:**
 - "Client Name 1: (First Name, Last Name):" with NO corresponding value in bottom section
 - Empty fields with only placeholders or blank lines
 
-Return 10-30 Q&A pairs typically, depending on form completeness. If the form follows Pattern B, carefully match each labeled field to its corresponding value from the data section."""
+Return 10-30 Q&A pairs typically, depending on form completeness. If the form follows Pattern B, \
+carefully match each labeled field to its corresponding value from the data section."""
 
     try:
         client = OpenAIClient()
@@ -857,7 +874,12 @@ Return 10-30 Q&A pairs typically, depending on form completeness. If the form fo
             messages=[
                 {
                     "role": "system",
-                    "content": "You are a legal intake specialist. Extract question-answer pairs from intake forms with high accuracy. You excel at matching form field labels (at the top) with their corresponding filled values (which may appear at the bottom). Always return valid JSON arrays only.",
+                    "content": (
+                        "You are a legal intake specialist. Extract question-answer pairs from "
+                        "intake forms with high accuracy. You excel at matching form field labels "
+                        "(at the top) with their corresponding filled values (which may appear at the "
+                        "bottom). Always return valid JSON arrays only."
+                    ),
                 },
                 {"role": "user", "content": prompt},
             ],
@@ -930,7 +952,7 @@ Return 10-30 Q&A pairs typically, depending on form completeness. If the form fo
 
 
 def group_images_intelligently(images: list, max_per_group: int = 3) -> list:
-    """Groups images intelligently based on filename similarity and upload patterns.
+    """Group images intelligently based on filename similarity and upload patterns.
 
     This grouping strategy enables batch Vision API processing while maintaining
     context awareness between related images.
@@ -1030,7 +1052,8 @@ def group_images_intelligently(images: list, max_per_group: int = 3) -> list:
 
 
 def handle_file_uploads():
-    """Identifies intake documents from uploaded files and prompts for clarification.
+    """Identify intake documents from uploaded files and prompt for clarification.
+
     Returns True if analysis can proceed, False otherwise.
 
     SECURITY: This function now includes comprehensive security validations:

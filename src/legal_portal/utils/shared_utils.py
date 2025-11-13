@@ -36,13 +36,13 @@ class SharedUtilityService:
     """
 
     def __init__(self):
-        """Initialize the shared utility service"""
+        """Initialize the shared utility service."""
         self.service_name = "SharedUtilityService"
 
     def log_service_activity(
         self, method: str, stage: str, hypothesis_id: str, level: str = "info", **kwargs
     ) -> None:
-        """Standardized logging for service activities with consistent structure
+        """Standardized logging for service activities with consistent structure.
 
         Args:
         ----
@@ -81,7 +81,7 @@ class SharedUtilityService:
         method: str = "unknown_method",
         re_raise: bool = False,
     ) -> Optional[str]:
-        """Centralized OpenAI error handling with consistent logging and classification
+        """Centralized OpenAI error handling with consistent logging and classification.
 
         Args:
         ----
@@ -95,8 +95,6 @@ class SharedUtilityService:
             Error classification string or None
 
         """
-        error_type = type(error).__name__
-
         # Retryable errors - typically temporary issues
         if isinstance(
             error,
@@ -133,7 +131,7 @@ class SharedUtilityService:
         return "unexpected"
 
     def _handle_retryable_errors(self, error: Exception, context: Dict[str, Any], method: str) -> None:
-        """Handle retryable OpenAI errors that should trigger retry logic"""
+        """Handle retryable OpenAI errors that should trigger retry logic."""
         error_type = type(error).__name__
 
         logger.warning(
@@ -150,7 +148,7 @@ class SharedUtilityService:
         )
 
     def _handle_authentication_errors(self, error: Exception, context: Dict[str, Any], method: str) -> None:
-        """Handle authentication-related OpenAI errors"""
+        """Handle authentication-related OpenAI errors."""
         error_type = type(error).__name__
 
         logger.error(
@@ -167,7 +165,7 @@ class SharedUtilityService:
         )
 
     def _handle_client_errors(self, error: Exception, context: Dict[str, Any], method: str) -> None:
-        """Handle client-side OpenAI errors"""
+        """Handle client-side OpenAI errors."""
         error_type = type(error).__name__
 
         logger.error(
@@ -184,7 +182,7 @@ class SharedUtilityService:
         )
 
     def _handle_server_errors(self, error: Exception, context: Dict[str, Any], method: str) -> None:
-        """Handle server-side OpenAI errors"""
+        """Handle server-side OpenAI errors."""
         error_type = type(error).__name__
         request_id = getattr(error, "request_id", "unknown")
         status_code = getattr(error, "status_code", "unknown")
@@ -203,7 +201,7 @@ class SharedUtilityService:
         )
 
     def _handle_unexpected_errors(self, error: Exception, context: Dict[str, Any], method: str) -> None:
-        """Handle unexpected errors during OpenAI requests"""
+        """Handle unexpected errors during OpenAI requests."""
         error_type = type(error).__name__
 
         logger.error(
@@ -222,7 +220,7 @@ class SharedUtilityService:
     def validate_required_keys(
         self, data: Dict[str, Any], required_keys: List[str], context_name: str = "data"
     ) -> bool:
-        """Validate that all required keys are present in a dictionary
+        """Validate that all required keys are present in a dictionary.
 
         Args:
         ----
@@ -268,7 +266,7 @@ class SharedUtilityService:
         return True
 
     def validate_non_empty_string(self, value: Any, field_name: str) -> bool:
-        """Validate that a value is a non-empty string
+        """Validate that a value is a non-empty string.
 
         Args:
         ----
@@ -296,7 +294,7 @@ class SharedUtilityService:
         return True
 
     def validate_positive_number(self, value: Any, field_name: str, allow_zero: bool = False) -> bool:
-        """Validate that a value is a positive number
+        """Validate that a value is a positive number.
 
         Args:
         ----
@@ -349,7 +347,7 @@ class SharedUtilityService:
             return False
 
     def sanitize_prompt(self, prompt: str, max_length: Optional[int] = None) -> str:
-        """Sanitize and optionally truncate a prompt for safe processing
+        """Sanitize and optionally truncate a prompt for safe processing.
 
         Args:
         ----
@@ -401,7 +399,7 @@ class SharedUtilityService:
         prompt: Optional[str] = None,
         **kwargs,
     ) -> Dict[str, Any]:
-        """Create a standardized context dictionary for request operations
+        """Create a standardized context dictionary for request operations.
 
         Args:
         ----

@@ -4,7 +4,7 @@ import asyncio
 import mimetypes
 import os
 import re
-from typing import Callable, List, Optional
+from typing import Any, Callable, List, Optional
 
 # Import from the backend utils (to be moved to root utils later)
 from legal_portal.core.data_models import DocumentType, ProcessedDocument
@@ -31,8 +31,8 @@ class DocumentProcessingError(Exception):
 
 class DocumentProcessor:
     """A service class for processing uploaded documents.
-    It identifies file types, categorizes them, and extracts content.
 
+    It identifies file types, categorizes them, and extracts content.
     Refactored to work as a standalone Python module without FastAPI dependencies.
     """
 
@@ -42,7 +42,8 @@ class DocumentProcessor:
     def _get_document_type(
         self, filename: str, intake_filenames: List[str], original_filename: str = None
     ) -> DocumentType:
-        """Determines if a file is an intake form or a general case document.
+        """Determine if a file is an intake form or a general case document.
+
         Enhanced with case-insensitive matching and keyword detection.
 
         Args:
@@ -101,7 +102,7 @@ class DocumentProcessor:
         match = re.match(r"^(.+?)_[a-f0-9]{8}(\.[^.]+)?$", filename)
         if match:
             base_part = match.group(1).lower()
-            extension = match.group(2) if match.group(2) else ""
+            # extension is available in match.group(2) if needed for future enhancements
 
             # Check each intake filename to see if it could have produced this sanitized name
             for intake_name in intake_filenames:
@@ -260,14 +261,17 @@ class DocumentProcessor:
     async def _process_single_file_wrapper(
         self, file, intake_filenames, progress_callback, processed_docs_count, total_docs
     ):
-        """Wrapper for single file processing with progress tracking."""
+        """Wrap single file processing with progress tracking."""
         try:
             doc = await self._process_single_file(file, intake_filenames)
             if doc:
                 processed_docs_count[0] += 1
                 if progress_callback:
                     progress_callback(
-                        message=f"Extracting content from document {processed_docs_count[0]} of {total_docs}...",
+                        message=(
+                            f"Extracting content from document {processed_docs_count[0]} "
+                            f"of {total_docs}..."
+                        ),
                         docs_processed=[doc.file_name],
                         phase="document_extraction",
                         percent=int((processed_docs_count[0] / total_docs) * 15),
@@ -287,7 +291,7 @@ class DocumentProcessor:
         processed_docs_count,
         total_docs,
     ):
-        """Wrapper for batch image processing with progress tracking."""
+        """Wrap batch image processing with progress tracking."""
         try:
             # Prepare image files for batch processing
             from legal_portal.services.file_processors.batch_vision_processor import process_images_batch
@@ -320,9 +324,8 @@ class DocumentProcessor:
                     image_info_list.append((temp_path, doc_type, original_name))
 
                 except Exception as e:
-                    logger.error(
-                        f"Error preparing image {img_file.name if hasattr(img_file, 'name') else 'unknown'}: {e}"
-                    )
+                    img_name = img_file.name if hasattr(img_file, "name") else "unknown"
+                    logger.error(f"Error preparing image {img_name}: {e}")
 
             if not image_info_list:
                 return []
@@ -335,7 +338,10 @@ class DocumentProcessor:
             processed_docs_count[0] += len(batch_results)
             if progress_callback:
                 progress_callback(
-                    message=f"Processed image batch {batch_idx}/{total_batches} ({len(batch_results)} images)...",
+                    message=(
+                        f"Processed image batch {batch_idx}/{total_batches} "
+                        f"({len(batch_results)} images)..."
+                    ),
                     docs_processed=[doc.file_name for doc in batch_results],
                     phase="document_extraction",
                     percent=int((processed_docs_count[0] / total_docs) * 15),
@@ -424,7 +430,9 @@ class DocumentProcessor:
                         "file_name": uploaded_file.name,
                     },
                 )
-                raise DocumentProcessingError(f"Security validation failed for '{uploaded_file.name}': {e!s}")
+                raise DocumentProcessingError(
+                    f"Security validation failed for '{uploaded_file.name}': {e!s}"
+                ) from e
 
             # TODO: Add PDF compression support for large files
             # if sanitized_name.lower().endswith('.pdf'):
@@ -469,10 +477,11 @@ class DocumentProcessor:
 
             msg = f"Error processing file '{uploaded_file.name}': {e!s}"
             logger.error(msg, extra={"error": str(e), "file_name": uploaded_file.name})
-            raise DocumentProcessingError(msg)
+            raise DocumentProcessingError(msg) from e
 
     async def process_documents(self, files, intake_filenames: List[str]) -> List[ProcessedDocument]:
         """Legacy method for backward compatibility.
+
         This can be used with SavedDocument objects or adapted for other file sources.
         """
         processing_tasks = []
@@ -520,7 +529,10 @@ class DocumentProcessor:
         return await asyncio.gather(*processing_tasks)
 
     async def process_documents_from_paths(
-        self, file_paths: List[str], intake_filenames: List[str]
+        self,
+        file_paths: List[str],
+        intake_filenames: List[str],
+        progress_callback: Optional[Callable] = None,
     ) -> List[ProcessedDocument]:
         """Process documents from file paths.
 
@@ -528,6 +540,7 @@ class DocumentProcessor:
         ----
             file_paths: List of file paths to process
             intake_filenames: List of filenames that should be treated as intake forms
+            progress_callback: Optional callback for progress updates
 
         Returns:
         -------
@@ -535,6 +548,8 @@ class DocumentProcessor:
 
         """
         processing_tasks = []
+        total_docs = len(file_paths)
+        processed_docs_count = [0]
 
         for file_path in file_paths:
             if not os.path.exists(file_path):
@@ -573,4 +588,26 @@ class DocumentProcessor:
 
             processing_tasks.append(processor(file_path, doc_type, filename))
 
-        return await asyncio.gather(*processing_tasks)
+        # Execute all tasks and collect results
+        results = await asyncio.gather(*processing_tasks, return_exceptions=True)
+
+        # Filter out errors and update progress
+        processed_docs = []
+        for result in results:
+            if isinstance(result, Exception):
+                logger.error(f"Document processing error: {result}")
+            elif result:
+                processed_docs.append(result)
+                processed_docs_count[0] += 1
+                if progress_callback:
+                    progress_callback(
+                        message=(
+                            f"Extracted content from {processed_docs_count[0]} of "
+                            f"{total_docs} documents..."
+                        ),
+                        docs_processed=[result.file_name],
+                        phase="document_extraction",
+                        percent=int((processed_docs_count[0] / total_docs) * 15),
+                    )
+
+        return processed_docs

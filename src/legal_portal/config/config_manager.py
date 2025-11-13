@@ -1,5 +1,4 @@
-"""Configuration management for AI analysis components.
-"""
+"""Configuration management for AI analysis components."""
 
 from __future__ import annotations
 

@@ -5,17 +5,21 @@ from __future__ import annotations
 import asyncio
 import os
 import queue
+import shutil
+import tempfile
 import threading
 import time
+from pathlib import Path
 
 import streamlit as st
+
+from legal_portal.services.file_compression_service import FileCompressionService
 from legal_portal.services.main_processor import process_case_documents
 from legal_portal.ui.components.ui_components import (
     case_information_form,
     file_upload_section,
     results_display_section,
 )
-from legal_portal.utils.helpers import handle_file_uploads
 from legal_portal.utils.logging_config import get_module_logger, setup_logging
 
 # Initialize logging
@@ -49,6 +53,7 @@ def initialize_session_state():
         "processing_progress": "",  # Current processing step
         "processing_start_time": None,
         "result_queue": None,  # Thread-safe queue for results
+        "session_temp_dir": None,  # For temporary file processing
         "ui_step": "upload",  # 'upload', 'review', 'processing', 'results'
         "review_data": {},  # Holds data for the review screen
         "start_full_analysis": False,  # Flag to start background thread
@@ -63,10 +68,19 @@ def initialize_session_state():
 
 
 def run_processing_in_background(
-    intake_form, case_documents, case_info, review_data, result_queue: queue.Queue
+    intake_form_path, case_document_paths, case_info, review_data, result_queue: queue.Queue
 ):
     """Run the document processing in a background thread using asyncio.
     Uses a thread-safe queue to communicate the final result back to the UI.
+
+    Args:
+    ----
+        intake_form_path: File path to the intake form
+        case_document_paths: List of file paths to case documents
+        case_info: Case metadata dictionary
+        review_data: Review data dictionary
+        result_queue: Thread-safe queue for results
+
     """
     try:
         # Create a new event loop for this thread
@@ -89,8 +103,8 @@ def run_processing_in_background(
         # Run the async processing function to get the final result
         result = loop.run_until_complete(
             process_case_documents(
-                intake_form=intake_form,
-                case_documents=case_documents,
+                intake_form_path=intake_form_path,
+                case_document_paths=case_document_paths,
                 case_info=case_info,  # Use parameter, not session_state
                 review_data=review_data,
                 progress_callback=send_progress,  # Pass the callback
@@ -129,6 +143,72 @@ def run_processing_in_background(
     finally:
         # Clean up the event loop
         loop.close()
+
+        # Clean up the temporary directory
+        if st.session_state.get("session_temp_dir"):
+            try:
+                shutil.rmtree(st.session_state.session_temp_dir)
+                logger.info(f"Successfully cleaned up temp directory: {st.session_state.session_temp_dir}")
+                st.session_state.session_temp_dir = None
+            except Exception as e:
+                logger.error(f"Failed to clean up temp directory. Error: {e}")
+
+
+def prepare_files_for_analysis(uploaded_files, compress_flag):
+    """Saves uploaded files to a temporary directory, compresses them if needed,
+    and returns a list of final file paths for intake and case documents.
+
+    Args:
+    ----
+        uploaded_files: List of Streamlit UploadedFile objects
+        compress_flag: Boolean indicating whether to compress large files
+
+    Returns:
+    -------
+        Tuple of (intake_path, case_document_paths)
+
+    """
+    if "session_temp_dir" not in st.session_state or not st.session_state.session_temp_dir:
+        # Create a unique, secure temporary directory for this session
+        st.session_state.session_temp_dir = tempfile.mkdtemp(prefix="legal_portal_")
+        logger.info(f"Created temporary directory: {st.session_state.session_temp_dir}")
+
+    temp_dir = st.session_state.session_temp_dir
+    final_file_paths = []
+    compressor = FileCompressionService() if compress_flag else None
+
+    with st.spinner("Preparing and compressing files..."):
+        for uploaded_file in uploaded_files:
+            try:
+                # Save the file to the temporary directory
+                temp_file_path = os.path.join(temp_dir, uploaded_file.name)
+                with open(temp_file_path, "wb") as f:
+                    f.write(uploaded_file.getbuffer())
+
+                # If compression is enabled, process the file
+                if compressor:
+                    # The process_file method handles the size check and compression in-place
+                    final_path = compressor.process_file(temp_file_path)
+                else:
+                    final_path = temp_file_path
+
+                final_file_paths.append(final_path)
+
+            except Exception as e:
+                logger.error(f"Failed to prepare file {uploaded_file.name}. Error: {e}")
+                # Optionally, alert the user
+                st.warning(f"Could not process file: {uploaded_file.name}. It will be skipped.")
+
+    # Separate intake form from other documents based on the final file paths
+    intake_path = None
+    case_document_paths = []
+    for path in final_file_paths:
+        if "intake" in Path(path).name.lower():
+            intake_path = path
+        else:
+            case_document_paths.append(path)
+
+    return intake_path, case_document_paths
 
 
 # --- PIN Authentication Check ---
@@ -312,26 +392,40 @@ def handle_analysis_start():
     st.session_state.ui_step = "processing"
     st.session_state.final_results = None  # Clear previous results
 
-    # Validate and prepare uploaded files for processing
-    # handle_file_uploads() accesses st.session_state.uploaded_files directly
-    # and sets intake_form and case_documents in session_state
-    files_ready = handle_file_uploads()
-
-    if not files_ready or not st.session_state.get("intake_form"):
-        st.error("Could not find the intake form. Processing stopped.")
+    # --- New File Preparation Workflow ---
+    if not st.session_state.get("uploaded_files"):
+        st.error("No files were uploaded. Processing stopped.")
         st.session_state.processing_status = "failed"
         return
+
+    # Prepare files, compressing if the user opted in
+    intake_form_path, case_document_paths = prepare_files_for_analysis(
+        st.session_state.uploaded_files, st.session_state.get("compress_files", False)
+    )
+
+    if not intake_form_path:
+        st.error("Could not find or process the intake form. Processing stopped.")
+        st.session_state.processing_status = "failed"
+        # Clean up the directory if processing fails early
+        if st.session_state.get("session_temp_dir"):
+            shutil.rmtree(st.session_state.session_temp_dir)
+        return
+
+    # Store the paths in session_state for the background thread
+    st.session_state.intake_form_path = intake_form_path
+    st.session_state.case_document_paths = case_document_paths
+    # --- End of New Workflow ---
 
     # Create a queue for the thread to send results back
     result_queue = queue.Queue()
     st.session_state.result_queue = result_queue
 
-    # Start the background thread
+    # Start the background thread with file paths
     thread = threading.Thread(
         target=run_processing_in_background,
         args=(
-            st.session_state.intake_form,
-            st.session_state.case_documents,
+            st.session_state.intake_form_path,
+            st.session_state.case_document_paths,
             st.session_state.case_info,  # Pass case_info
             st.session_state.review_data,  # Pass review_data
             result_queue,

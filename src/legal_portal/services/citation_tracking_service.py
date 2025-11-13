@@ -220,7 +220,7 @@ class CitationTrackingService:
         logger.info(f"Split letter into {len(sentences)} sentences for analysis")
 
         factual_count = 0
-        for idx, sentence in enumerate(sentences):
+        for _idx, sentence in enumerate(sentences):
             if self._is_factual_statement(sentence):
                 factual_count += 1
                 # Find best matching source document

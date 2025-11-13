@@ -206,10 +206,7 @@ class AIAnalyzer:
         self, doc: ProcessedDocument, ctx: EnhancedIntakeAnalysis, prompt_config: str = None
     ) -> str:
         """Builds a context-aware prompt for a case document using configuration-driven prompts."""
-        client_priorities_str = (
-            ", ".join(ctx.client_priorities) if ctx.client_priorities else "None specified"
-        )
-        desired_outcomes_str = ", ".join(ctx.desired_outcomes) if ctx.desired_outcomes else "None specified"
+        # Note: client_priorities and desired_outcomes are available in ctx if needed for future enhancements
 
         if prompt_config:
             # Use configuration-provided prompt
@@ -657,7 +654,7 @@ class AIAnalyzer:
 
         # Use configuration-provided prompt or fallback
         if prompt_config:
-            base_prompt = prompt_config
+            final_assessment_prompt = prompt_config
         else:
             # New analytical prompt approach with compatible JSON output structure
             final_assessment_prompt = """

@@ -100,8 +100,8 @@ def _convert_to_case_analysis_result(
 
 
 async def process_case_documents(
-    intake_form: Any,
-    case_documents: List[Any],
+    intake_form_path: str,
+    case_document_paths: List[str],
     case_info: dict,
     review_data: dict,  # NEW: For key docs and legal issue
     progress_callback: Optional[Callable] = None,
@@ -114,8 +114,8 @@ async def process_case_documents(
 
     Args:
     ----
-        intake_form: File-like object containing the intake form
-        case_documents: List of file-like objects containing case documents
+        intake_form_path: File path to the intake form
+        case_document_paths: List of file paths to case documents
         case_info: Optional dictionary with case metadata (client name, attorney, etc.)
 
     Returns:
@@ -139,21 +139,19 @@ async def process_case_documents(
         json_processing_service = JsonProcessingService(client=openai_client_wrapper, config={})
 
         # 2. Validate inputs
-        if not intake_form:
+        if not intake_form_path:
             raise ValueError("An intake form is required for the analysis.")
 
-        # Case documents are optional - intake form alone is sufficient for preliminary analysis
-        if not case_documents or len(case_documents) == 0:
-            logger.info(
-                "No case documents provided - will process intake form only for preliminary analysis."
-            )
+        # Case documents are optional
+        if not case_document_paths:
+            logger.warning("No case documents provided. Analysis will be based on the intake form only.")
 
-        # 3. Process intake form to extract data
-        logger.info("Processing intake form...")
-        intake_files = [intake_form]
-        processed_intake = await doc_processor.process_documents_from_streamlit(
-            intake_files,
-            intake_filenames=[intake_form.name if hasattr(intake_form, "name") else "intake.pdf"],
+        # 3. Process intake form from its path
+        logger.info(f"Processing intake form from path: {intake_form_path}")
+        intake_filename = os.path.basename(intake_form_path)
+        processed_intake = await doc_processor.process_documents_from_paths(
+            [intake_form_path],
+            intake_filenames=[intake_filename],
         )
 
         if not processed_intake:
@@ -168,16 +166,14 @@ async def process_case_documents(
 
         # 4. Process case documents (if any)
         processed_case_docs = []
-        if case_documents:
-            # First, pass the progress callback to the document processor
-            processor = DocumentProcessor()
+        if case_document_paths:
             if progress_callback:
                 progress_callback("Extracting content from documents...", [], "document_extraction", 5)
 
-            processed_docs = await processor.process_documents_from_streamlit(
-                case_documents,
-                intake_filenames=[intake_form.name],
-                progress_callback=progress_callback,  # Pass it here
+            processed_docs = await doc_processor.process_documents_from_paths(
+                case_document_paths,
+                intake_filenames=[os.path.basename(intake_form_path)],
+                progress_callback=progress_callback,
             )
             processed_case_docs.extend(processed_docs)
 
@@ -499,7 +495,7 @@ def _detect_near_duplicates(documents: List[Any]) -> None:
     """Log warnings about potentially duplicate files based on filename similarity."""
     filenames = [doc.file_name for doc in documents]
     for i, name1 in enumerate(filenames):
-        for j, name2 in enumerate(filenames[i + 1 :], start=i + 1):
+        for _j, name2 in enumerate(filenames[i + 1 :], start=i + 1):
             # Check filename similarity (ignoring extension)
             base1 = os.path.splitext(name1)[0].lower()
             base2 = os.path.splitext(name2)[0].lower()

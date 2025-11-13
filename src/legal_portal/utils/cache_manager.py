@@ -29,10 +29,10 @@ except ImportError:
 
 
 class CacheManager:
-    """Manage caching for expensive operations"""
+    """Manage caching for expensive operations."""
 
     def __init__(self, cache_dir: str = ".cache", use_redis: bool = False):
-        """Initialize cache manager
+        """Initialize cache manager.
 
         Args:
         ----
@@ -64,13 +64,13 @@ class CacheManager:
             logger.warning("Redis requested but not installed. Using file cache only.")
 
     def cache_key(self, *args, **kwargs) -> str:
-        """Generate cache key from arguments"""
+        """Generate cache key from arguments."""
         key_data = {"args": args, "kwargs": kwargs}
         key_str = json.dumps(key_data, sort_keys=True, default=str)
         return hashlib.md5(key_str.encode()).hexdigest()
 
     def get(self, key: str) -> Optional[Any]:
-        """Get value from cache"""
+        """Get value from cache."""
         # Try Redis first
         if self.redis_client:
             try:
@@ -106,7 +106,7 @@ class CacheManager:
         return None
 
     def set(self, key: str, value: Any, ttl: int = 86400):
-        """Set value in cache with TTL
+        """Set value in cache with TTL.
 
         Args:
         ----
@@ -135,7 +135,7 @@ class CacheManager:
             logger.error(f"File cache write failed: {e}")
 
     def delete(self, key: str):
-        """Delete a specific cache entry"""
+        """Delete a specific cache entry."""
         # Delete from Redis
         if self.redis_client:
             try:
@@ -154,7 +154,7 @@ class CacheManager:
         logger.debug(f"Cache deleted: {key[:8]}...")
 
     def clear(self):
-        """Clear all cache entries"""
+        """Clear all cache entries."""
         # Clear Redis cache
         if self.redis_client:
             try:
@@ -172,7 +172,7 @@ class CacheManager:
         logger.info("File cache cleared")
 
     def cached(self, ttl: int = 86400, key_prefix: str = ""):
-        """Decorator for caching function results
+        """Decorator for caching function results.
 
         Args:
         ----
@@ -217,7 +217,7 @@ class CacheManager:
         return decorator
 
     def get_stats(self) -> Dict[str, Any]:
-        """Get cache statistics"""
+        """Get cache statistics."""
         stats = {
             "cache_dir": str(self.cache_dir),
             "file_cache_count": len(list(self.cache_dir.glob("*.pkl"))),
@@ -236,7 +236,7 @@ class CacheManager:
         return stats
 
     def cleanup_expired(self, max_age_hours: int = 24):
-        """Remove expired cache files
+        """Remove expired cache files.
 
         Args:
         ----
@@ -267,7 +267,7 @@ _global_cache = None
 
 
 def get_cache_manager(cache_dir: str = ".cache", use_redis: bool = False) -> CacheManager:
-    """Get or create global cache manager instance
+    """Get or create global cache manager instance.
 
     Args:
     ----
@@ -287,7 +287,7 @@ def get_cache_manager(cache_dir: str = ".cache", use_redis: bool = False) -> Cac
 
 # Convenience decorators using global cache
 def cached(ttl: int = 86400, key_prefix: str = ""):
-    """Convenience decorator using global cache manager
+    """Convenience decorator using global cache manager.
 
     Args:
     ----
@@ -305,44 +305,44 @@ def cached(ttl: int = 86400, key_prefix: str = ""):
 
 # Example usage for document processing cache
 class DocumentCache:
-    """Specialized cache for document processing operations"""
+    """Specialized cache for document processing operations."""
 
     def __init__(self, cache_manager: Optional[CacheManager] = None):
-        """Initialize with optional custom cache manager"""
+        """Initialize with optional custom cache manager."""
         self.cache = cache_manager or get_cache_manager()
 
     def cache_document_analysis(self, document_id: str, analysis_result: Dict[str, Any]):
-        """Cache document analysis results"""
+        """Cache document analysis results."""
         key = f"doc_analysis:{document_id}"
         self.cache.set(key, analysis_result, ttl=86400 * 7)  # Cache for 7 days
 
     def get_document_analysis(self, document_id: str) -> Optional[Dict[str, Any]]:
-        """Retrieve cached document analysis"""
+        """Retrieve cached document analysis."""
         key = f"doc_analysis:{document_id}"
         return self.cache.get(key)
 
     def cache_embeddings(self, text_hash: str, embeddings: Any):
-        """Cache text embeddings"""
+        """Cache text embeddings."""
         key = f"embeddings:{text_hash}"
         self.cache.set(key, embeddings, ttl=86400 * 30)  # Cache for 30 days
 
     def get_embeddings(self, text_hash: str) -> Optional[Any]:
-        """Retrieve cached embeddings"""
+        """Retrieve cached embeddings."""
         key = f"embeddings:{text_hash}"
         return self.cache.get(key)
 
     def cache_api_response(self, prompt_hash: str, response: str, model: str = "gpt-4"):
-        """Cache API responses"""
+        """Cache API responses."""
         key = f"api_response:{model}:{prompt_hash}"
         self.cache.set(key, response, ttl=86400 * 3)  # Cache for 3 days
 
     def get_api_response(self, prompt_hash: str, model: str = "gpt-4") -> Optional[str]:
-        """Retrieve cached API response"""
+        """Retrieve cached API response."""
         key = f"api_response:{model}:{prompt_hash}"
         return self.cache.get(key)
 
     def cache_generated_document(self, case_id: str, doc_type: str, content: str):
-        """Cache generated documents with 24-hour TTL
+        """Cache generated documents with 24-hour TTL.
 
         Args:
         ----
@@ -356,7 +356,7 @@ class DocumentCache:
         logger.info(f"Cached generated document: {case_id}:{doc_type}")
 
     def get_generated_document(self, case_id: str, doc_type: str) -> Optional[str]:
-        """Retrieve cached generated document
+        """Retrieve cached generated document.
 
         Args:
         ----
@@ -373,7 +373,7 @@ class DocumentCache:
 
 
 def cleanup_validation_output(validation_dir: str = "validation_output", max_age_hours: int = 24) -> int:
-    """Remove old files from validation_output directory
+    """Remove old files from validation_output directory.
 
     Args:
     ----

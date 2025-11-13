@@ -691,10 +691,6 @@ class DocumentFormatterService:
         """
         logger.info(f"Formatting findings letter for client: '{client_name}'")
         try:
-            from datetime import datetime
-
-            current_date = datetime.now().strftime("%B %d, %Y")
-
             # Clean the input HTML - remove any existing html/body tags
             cleaned_content = letter_html
             cleaned_content = re.sub(r"<!DOCTYPE[^>]*>", "", cleaned_content, flags=re.IGNORECASE)

@@ -1,4 +1,4 @@
-"""Async Streamlit Helper Module
+"""Async Streamlit Helper Module.
 
 Enables async operations and parallel processing in Streamlit applications
 to keep the UI responsive during long-running operations.
@@ -20,11 +20,11 @@ logger = logging.getLogger(__name__)
 
 
 class AsyncStreamlit:
-    """Enable async operations in Streamlit"""
+    """Enable async operations in Streamlit."""
 
     @staticmethod
     def run_async(func: Callable, *args, **kwargs) -> Any:
-        """Run async function in Streamlit
+        """Run async function in Streamlit.
 
         Args:
         ----
@@ -68,7 +68,7 @@ class AsyncStreamlit:
         status_text=None,
         max_workers: int = 5,
     ) -> Generator[Any, None, None]:
-        """Execute tasks in parallel with progress updates
+        """Execute tasks in parallel with progress updates.
 
         Args:
         ----
@@ -133,7 +133,7 @@ class AsyncStreamlit:
         max_workers: int = 5,
         progress_callback: Optional[Callable] = None,
     ) -> List[Any]:
-        """Process items in batches with parallel execution
+        """Process items in batches with parallel execution.
 
         Args:
         ----
@@ -182,7 +182,7 @@ class AsyncStreamlit:
     @staticmethod
     @contextmanager
     def spinner(text: str = "Processing..."):
-        """Context manager for showing a spinner during async operations
+        """Context manager for showing a spinner during async operations.
 
         Args:
         ----
@@ -198,7 +198,7 @@ class AsyncStreamlit:
 
     @staticmethod
     def async_cache(ttl: int = 3600):
-        """Decorator for caching async function results in Streamlit
+        """Decorator for caching async function results in Streamlit.
 
         Args:
         ----
@@ -228,10 +228,10 @@ class AsyncStreamlit:
 
 
 class ParallelDocumentProcessor:
-    """Specialized parallel processor for document operations"""
+    """Specialized parallel processor for document operations."""
 
     def __init__(self, max_workers: int = 10):
-        """Initialize parallel document processor
+        """Initialize parallel document processor.
 
         Args:
         ----
@@ -249,7 +249,7 @@ class ParallelDocumentProcessor:
         status_text=None,
         chunk_size: int = 5,
     ) -> List[Any]:
-        """Process multiple documents in parallel with progress updates
+        """Process multiple documents in parallel with progress updates.
 
         Args:
         ----
@@ -310,7 +310,7 @@ class ParallelDocumentProcessor:
         rate_limit_delay: float = 0.1,
         progress_callback: Optional[Callable] = None,
     ) -> List[Any]:
-        """Execute API calls in parallel with rate limiting
+        """Execute API calls in parallel with rate limiting.
 
         Args:
         ----
@@ -357,7 +357,7 @@ class ParallelDocumentProcessor:
 
 # Convenience functions for common async patterns
 def run_parallel_tasks(tasks: List[Callable], max_workers: int = 5) -> List[Any]:
-    """Run multiple tasks in parallel and return results
+    """Run multiple tasks in parallel and return results.
 
     Args:
     ----
@@ -382,7 +382,7 @@ def run_parallel_tasks(tasks: List[Callable], max_workers: int = 5) -> List[Any]
 
 
 def async_map(func: Callable, items: List[Any], max_workers: int = 5) -> List[Any]:
-    """Apply function to items in parallel
+    """Apply function to items in parallel.
 
     Args:
     ----
@@ -409,7 +409,7 @@ def async_map(func: Callable, items: List[Any], max_workers: int = 5) -> List[An
 
 # Example usage in Streamlit app
 def example_streamlit_usage():
-    """Example of using AsyncStreamlit in a Streamlit app"""
+    """Example of using AsyncStreamlit in a Streamlit app."""
     st.title("Async Processing Example")
 
     # Create progress indicators
@@ -425,7 +425,7 @@ def example_streamlit_usage():
     tasks = [lambda i=i: slow_task(i) for i in range(10)]
 
     results = []
-    for task_idx, result in AsyncStreamlit.parallel_progress(
+    for _task_idx, result in AsyncStreamlit.parallel_progress(
         tasks, progress_bar=progress_bar, status_text=status_text, max_workers=5
     ):
         results.append(result)

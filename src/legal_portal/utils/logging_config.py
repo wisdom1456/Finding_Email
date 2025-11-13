@@ -11,7 +11,7 @@ from legal_portal.utils.structured_logger import StructuredLogger
 
 
 def setup_logging(app_name: str = "legal-portal", level: str = None):
-    """Setup application-wide logging with observability features.
+    """Set up application-wide logging with observability features.
 
     Args:
     ----
@@ -36,8 +36,8 @@ def setup_logging(app_name: str = "legal-portal", level: str = None):
     logging.getLogger("openai").setLevel(logging.WARNING)
     logging.getLogger("streamlit").setLevel(logging.WARNING)
 
-    # Initialize metrics collector
-    metrics = MetricsCollector()
+    # Initialize metrics collector (available for future use)
+    _ = MetricsCollector()
 
     # Create loggers for different components
     loggers = {

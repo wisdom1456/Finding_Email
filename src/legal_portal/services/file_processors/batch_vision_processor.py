@@ -92,7 +92,7 @@ IMPORTANT: You must analyze ALL {len(image_files)} images and provide a separate
         # Build content array with prompt + all images
         content = [{"type": "text", "text": prompt_text}]
 
-        for idx, (base64_image, image_format) in enumerate(encoded_images, 1):
+        for _idx, (base64_image, image_format) in enumerate(encoded_images, 1):
             content.append(
                 {
                     "type": "image_url",

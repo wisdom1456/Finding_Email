@@ -3,14 +3,6 @@
 from __future__ import annotations
 
 import json
-
-from legal_portal.utils.logging_config import get_module_logger
-
-logger = get_module_logger(__name__)
-
-
-# Add logging for debugging
-import logging
 import os
 import re
 import time
@@ -20,7 +12,9 @@ import httpx
 import openai
 from openai import OpenAI
 
-logger = logging.getLogger(__name__)
+from legal_portal.utils.logging_config import get_module_logger
+
+logger = get_module_logger(__name__)
 
 
 class OpenAIClient:
@@ -46,7 +40,8 @@ class OpenAIClient:
         self.retry_delay = 2
 
     def _extract_json_content(self, content: str) -> str:
-        """Intelligently extracts a JSON string from the API response.
+        """Intelligently extract a JSON string from the API response.
+
         Handles both plain JSON and JSON wrapped in Markdown code blocks.
         """
         # Check for plain JSON
@@ -86,7 +81,10 @@ class OpenAIClient:
                     messages=[
                         {
                             "role": "system",
-                            "content": "You are a legal analysis expert. Provide thorough, accurate, and professional analysis based on the provided information.",
+                            "content": (
+                                "You are a legal analysis expert. Provide thorough, accurate, and "
+                                "professional analysis based on the provided information."
+                            ),
                         },
                         {"role": "user", "content": prompt},
                     ],
@@ -179,8 +177,9 @@ class OpenAIClient:
         return self._create_error_response("Both models failed", None)
 
     def parse_json_response(self, content: str) -> Dict[str, Any]:
-        """Parses a JSON response from a string, intelligently handling
-        plain JSON or JSON embedded in a Markdown code block.
+        """Parse a JSON response from a string.
+
+        Intelligently handles plain JSON or JSON embedded in a Markdown code block.
         Returns a standardized response format like other OpenAI client methods.
         """
         if not content:
@@ -227,7 +226,7 @@ class OpenAIClient:
         """Validate that OpenAI API key is properly configured."""
         try:
             # Make a minimal API call to test the key
-            response = self.client.chat.completions.create(
+            self.client.chat.completions.create(
                 model="gpt-4o-mini",
                 messages=[{"role": "user", "content": "Test"}],
                 max_tokens=1,
@@ -256,7 +255,7 @@ class OpenAIClient:
         temperature: float = 0.3,
         max_tokens: Optional[int] = None,
     ) -> Dict[str, Any]:
-        """Standard interface for chat completions across all services.
+        """Provide standard interface for chat completions across all services.
 
         This is the single unified method for making OpenAI chat completion requests.
         All services should use this method instead of calling the SDK directly.

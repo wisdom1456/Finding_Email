@@ -32,7 +32,7 @@ except ImportError:
 
 
 class ValidationResult(NamedTuple):
-    """Result of file validation"""
+    """Result of file validation."""
 
     is_valid: bool
     detected_type: str | None
@@ -42,7 +42,7 @@ class ValidationResult(NamedTuple):
 
 
 class ValidationError(Exception):
-    """Raised when file validation encounters an error"""
+    """Raised when file validation encounters an error."""
 
 
 class EnhancedFileValidator:
@@ -82,7 +82,7 @@ class EnhancedFileValidator:
     }
 
     def __init__(self):
-        """Initialize the enhanced file validator"""
+        """Initialize the enhanced file validator."""
         self.magic_mime = None
         self.magic_available = MAGIC_AVAILABLE
 
@@ -200,7 +200,7 @@ class EnhancedFileValidator:
         issues: list[str],
         warnings: list[str],
     ) -> str | None:
-        """Validate file using magic numbers"""
+        """Validate file using magic numbers."""
         try:
             # Use first 2048 bytes for accurate detection (as recommended by python-magic docs)
             detection_bytes = file_data[:2048] if len(file_data) > 2048 else file_data
@@ -244,7 +244,7 @@ class EnhancedFileValidator:
             return self._validate_extension_only(file_extension, issues)
 
     def _validate_extension_only(self, file_extension: str, issues: list[str]) -> str | None:
-        """Fallback validation using file extension only"""
+        """Fallback validation using file extension only."""
         # Map extensions to MIME types
         extension_map = {
             ".pdf": "application/pdf",
@@ -271,7 +271,7 @@ class EnhancedFileValidator:
         return detected_type
 
     def _validate_minimum_size(self, file_data: bytes, detected_type: str, issues: list[str]) -> None:
-        """Validate file meets minimum size requirements"""
+        """Validate file meets minimum size requirements."""
         file_size = len(file_data)
         min_size = self.MIN_FILE_SIZES.get(detected_type, 1)
 
@@ -297,7 +297,7 @@ class EnhancedFileValidator:
         issues: list[str],
         warnings: list[str],
     ) -> None:
-        """Validate file content for corruption and emptiness"""
+        """Validate file content for corruption and emptiness."""
         if detected_type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
             self._validate_docx_content(file_data, filename, issues, warnings)
         elif detected_type == "application/pdf":
@@ -316,7 +316,7 @@ class EnhancedFileValidator:
     def _validate_docx_content(
         self, file_data: bytes, filename: str, issues: list[str], warnings: list[str]
     ) -> None:
-        """Validate DOCX file content and structure"""
+        """Validate DOCX file content and structure."""
         try:
             # Create temporary file for python-docx to read
             with tempfile.NamedTemporaryFile(delete=False, suffix=".docx") as temp_file:
@@ -381,7 +381,7 @@ class EnhancedFileValidator:
     def _validate_pdf_content(
         self, file_data: bytes, filename: str, issues: list[str], warnings: list[str]
     ) -> None:
-        """Validate PDF file content and structure"""
+        """Validate PDF file content and structure."""
         try:
             # Use PyMuPDF to validate PDF structure
             with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as temp_file:
@@ -447,7 +447,7 @@ class EnhancedFileValidator:
     def _validate_text_content(
         self, file_data: bytes, filename: str, issues: list[str], warnings: list[str]
     ) -> None:
-        """Validate text file content"""
+        """Validate text file content."""
         try:
             # Try to decode as UTF-8
             try:
@@ -499,7 +499,7 @@ class EnhancedFileValidator:
     def _validate_png_content(
         self, file_data: bytes, filename: str, issues: list[str], warnings: list[str]
     ) -> None:
-        """Validate PNG file content and structure with magic number check"""
+        """Validate PNG file content and structure with magic number check."""
         try:
             # Check PNG magic number: 89 50 4E 47 0D 0A 1A 0A
             png_signature = b"\x89\x50\x4E\x47\x0D\x0A\x1A\x0A"
@@ -556,7 +556,7 @@ class EnhancedFileValidator:
     def _validate_jpg_content(
         self, file_data: bytes, filename: str, issues: list[str], warnings: list[str]
     ) -> None:
-        """Validate JPG file content and structure with magic number check"""
+        """Validate JPG file content and structure with magic number check."""
         try:
             # Check JPG magic number: FF D8 FF
             if not file_data.startswith(b"\xFF\xD8\xFF"):
@@ -612,7 +612,7 @@ class EnhancedFileValidator:
     def _validate_csv_content(
         self, file_data: bytes, filename: str, issues: list[str], warnings: list[str]
     ) -> None:
-        """Validate CSV file content and structure"""
+        """Validate CSV file content and structure."""
         try:
             import csv
             from io import StringIO
@@ -694,7 +694,7 @@ class EnhancedFileValidator:
     def _validate_doc_content(
         self, file_data: bytes, filename: str, issues: list[str], warnings: list[str]
     ) -> None:
-        """Validate legacy DOC file content and structure with magic number check"""
+        """Validate legacy DOC file content and structure with magic number check."""
         try:
             # Check DOC magic number: D0 CF 11 E0 A1 B1 1A E1 (OLE compound document)
             ole_signature = b"\xD0\xCF\x11\xE0\xA1\xB1\x1A\xE1"

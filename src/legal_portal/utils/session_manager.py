@@ -170,7 +170,7 @@ class SessionManager:
     def _get_user_sessions(self, username: str) -> List[Dict]:
         """Get all sessions for a user."""
         sessions = []
-        for session_id, session_info in st.session_state.get("global_sessions", {}).items():
+        for _session_id, session_info in st.session_state.get("global_sessions", {}).items():
             if session_info.get("username") == username:
                 sessions.append(session_info)
         return sessions

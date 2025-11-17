@@ -13,6 +13,7 @@ from pathlib import Path
 
 import streamlit as st
 
+# NOTE: analysis.engine is old/experimental code - using main_processor instead
 from legal_portal.services.file_compression_service import FileCompressionService
 from legal_portal.services.main_processor import process_case_documents
 from legal_portal.ui.components.ui_components import (
@@ -44,6 +45,7 @@ def initialize_session_state():
         "case_documents": [],
         "final_results": None,
         "main_letter": None,
+        "main_letter_with_citations": None,
         "document_review": None,
         "case_analysis": None,
         "quality_report": None,  # For the new quality report tab
@@ -70,7 +72,8 @@ def initialize_session_state():
 def run_processing_in_background(
     intake_form_path, case_document_paths, case_info, review_data, result_queue: queue.Queue
 ):
-    """Run the document processing in a background thread using asyncio.
+    """Run document processing in a background thread using asyncio.
+
     Uses a thread-safe queue to communicate the final result back to the UI.
 
     Args:
@@ -100,32 +103,20 @@ def run_processing_in_background(
                 }
             )
 
-        # Run the async processing function to get the final result
-        result = loop.run_until_complete(
+        # Process documents using the main processor
+        final_report = loop.run_until_complete(
             process_case_documents(
                 intake_form_path=intake_form_path,
                 case_document_paths=case_document_paths,
-                case_info=case_info,  # Use parameter, not session_state
+                case_info=case_info,
                 review_data=review_data,
-                progress_callback=send_progress,  # Pass the callback
+                progress_callback=send_progress,
             )
         )
 
         # Send ONE final message to the queue
-        if result.status == "completed":
-            result_queue.put({"type": "completed", "result": result})
-            print(
-                f"DEBUG [Background Thread]: Sent completion to queue (main_letter length={len(result.main_letter)})"
-            )
-        else:
-            result_queue.put(
-                {
-                    "type": "failed",
-                    "error": f"Processing failed with status: {result.status}",
-                    "result": result,
-                }
-            )
-            print(f"DEBUG [Background Thread]: Sent failure to queue (status={result.status})")
+        result_queue.put({"type": "completed", "result": final_report})
+        print("DEBUG [Background Thread]: Sent completion to queue")
 
     except Exception as e:
         # Send error through queue
@@ -133,9 +124,16 @@ def run_processing_in_background(
 
         # Provide more helpful error messages for common issues
         if "APITimeoutError" in error_msg or "Request timed out" in error_msg:
-            error_msg = "OpenAI API timeout - The AI service took too long to respond. This usually means the model is overloaded. Please try again in a few minutes."
+            error_msg = (
+                "OpenAI API timeout - The AI service took too long to respond. "
+                "This usually means the model is overloaded. "
+                "Please try again in a few minutes."
+            )
         elif "RetryError" in error_msg:
-            error_msg = "Multiple API failures - The AI service failed after several retry attempts. Please check your internet connection and try again."
+            error_msg = (
+                "Multiple API failures - The AI service failed after several "
+                "retry attempts. Please check your internet connection and try again."
+            )
 
         result_queue.put({"type": "failed", "error": error_msg})
         print(f"DEBUG [Background Thread]: Sent exception to queue: {error_msg}")
@@ -155,7 +153,9 @@ def run_processing_in_background(
 
 
 def prepare_files_for_analysis(uploaded_files, compress_flag):
-    """Saves uploaded files to a temporary directory, compresses them if needed,
+    """Save uploaded files and compress them if needed.
+
+    Saves uploaded files to a temporary directory, compresses them if needed,
     and returns a list of final file paths for intake and case documents.
 
     Args:
@@ -240,7 +240,7 @@ def check_authentication():
 
 # --- Main Application ---
 def main():
-    """Main function to run the Streamlit application."""
+    """Run the Streamlit application."""
     # --- Page Configuration ---
     st.set_page_config(
         page_title="Bernhardt Riley | Document Analysis Portal",
@@ -345,7 +345,8 @@ def handle_review_transition():
 
                 if not qa_pairs:
                     st.warning(
-                        "⚠️ Failed to extract information from intake form. You can manually enter the details in the review screen."
+                        "⚠️ Failed to extract information from intake form. "
+                        "You can manually enter the details in the review screen."
                     )
                     qa_pairs = []
 
@@ -356,7 +357,8 @@ def handle_review_transition():
                 practice_areas = identify_relevant_practice_areas_from_qa(qa_pairs)
 
                 logger.info(
-                    f"Successfully processed intake: {len(qa_pairs)} Q&A pairs, client: '{client_name}', {len(practice_areas)} practice areas"
+                    f"Successfully processed intake: {len(qa_pairs)} Q&A pairs, "
+                    f"client: '{client_name}', {len(practice_areas)} practice areas"
                 )
 
             except Exception as e:
@@ -485,14 +487,13 @@ def check_processing_status():
                 result = result_data["result"]
                 st.session_state.processing_status = "completed"
                 st.session_state.ui_step = "results"
-                st.session_state.main_letter = result.main_letter
-                st.session_state.main_letter_with_citations = (
-                    result.main_letter_with_citations
-                )  # NEW: Cited version
+                st.session_state.final_results = result
                 st.session_state.document_review = result.document_summaries
                 st.session_state.case_analysis = result.case_analysis
-                st.session_state.quality_report = result.quality_report
-                st.session_state.final_results = {"status": "completed"}
+                st.session_state.main_letter = result.main_letter  # Store findings letter
+                st.session_state.main_letter_with_citations = (
+                    result.main_letter_with_citations
+                )  # Store cited letter
 
                 # Cleanup
                 if "current_progress" in st.session_state:

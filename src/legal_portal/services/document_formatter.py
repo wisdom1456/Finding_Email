@@ -31,8 +31,12 @@ class DocumentFormatterService:
         """
         logger.info(f"Formatting document review for client: '{client_name}'")
         try:
-            # Parse JSON
-            summaries = json.loads(document_summaries_json)
+            # Parse JSON if it's a string
+            if isinstance(document_summaries_json, str):
+                summaries = json.loads(document_summaries_json)
+            else:
+                summaries = document_summaries_json
+
             if not isinstance(summaries, list):
                 summaries = [summaries]
 
@@ -84,8 +88,12 @@ class DocumentFormatterService:
         """
         logger.info(f"Formatting case analysis for client: '{client_name}'")
         try:
-            # Parse JSON
-            analysis = json.loads(case_analysis_json)
+            # Parse JSON if it's a string
+            if isinstance(case_analysis_json, str):
+                analysis = json.loads(case_analysis_json)
+            else:
+                analysis = case_analysis_json
+
             if not isinstance(analysis, list):
                 analysis = [analysis]
 
@@ -231,7 +239,7 @@ class DocumentFormatterService:
 
     @staticmethod
     def format_quality_report(quality_results: List[Dict[str, Any]]) -> str:
-        """Formats the document quality validation results into an HTML report."""
+        """Format the document quality validation results into an HTML report."""
         if not quality_results:
             return "<h2>No quality report generated.</h2>"
 
@@ -297,7 +305,10 @@ class DocumentFormatterService:
 
         # --- Table Section ---
         html += "<table class='quality-report-table'>"
-        html += "<thead><tr><th>Filename</th><th>Confidence</th><th>Score</th><th>Issues</th><th>Recommendations</th></tr></thead>"
+        html += (
+            "<thead><tr><th>Filename</th><th>Confidence</th><th>Score</th>"
+            "<th>Issues</th><th>Recommendations</th></tr></thead>"
+        )
         html += "<tbody>"
 
         for result in quality_results:

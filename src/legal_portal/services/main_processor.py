@@ -743,8 +743,8 @@ async def _generate_document_summaries(
 
     # Handle case with no documents - analyze intake form only
     if not case_documents:
-    if not case_documents:  # noqa: E501
-        prompt = f"""You are a legal document analyst. Given the client intake information below, provide a structured JSON analysis.
+        prompt = f"""You are a legal document analyst. \
+Given the client intake information below, provide a structured JSON analysis.
 
 INTAKE INFORMATION:
 {intake_content}
@@ -848,8 +848,8 @@ Return ONLY valid JSON, no markdown code blocks.
         logger.info(f"Processing {len(case_documents)} documents in single call...")
 
         # Build the structured JSON prompt for documents
-        # Build the structured JSON prompt for documents  # noqa: E501
-        prompt = f"""You are a legal document analyst. Analyze each document and return structured JSON with complete facts.
+        prompt = f"""You are a legal document analyst. \
+Analyze each document and return structured JSON with complete facts.
 
 INTAKE INFORMATION:
 {intake_content}
@@ -886,9 +886,10 @@ OUTPUT FORMAT (STRICT JSON):
         }}  # noqa: E501
       ],
       "issues_identified": [
-        "Specific legal problem or violation found",  # noqa: E501
-        # noqa: E501
-        "IMPORTANT: Flag any dual roles or conflicts of interest (e.g., 'Client serves as HOA board member while also filing claim against HOA')",
+        "Specific legal problem or violation found",
+        "IMPORTANT: Flag any dual roles or conflicts of interest "
+        "(e.g., 'Client serves as HOA board member while also "
+        "filing claim against HOA')",
         "Note any ethical considerations or recusal requirements"
       ],
       "risk_items": [
@@ -920,9 +921,12 @@ CRITICAL RULES:
 - Format amounts as $XXX,XXX.XX
 - Include ALL parties mentioned (people, companies, entities)
 - List specific issues, not generic statements
-        # noqa: E501
-- **DUAL ROLES & CONFLICTS**: If the client holds multiple roles (board member + property owner, employer + employee, etc.), EXPLICITLY flag this in "issues_identified" with format: "CONFLICT: Client holds dual role as [Role 1] and [Role 2]"
-- Flag any potential conflicts of interest, ethical concerns, or situations requiring recusal
+- **DUAL ROLES & CONFLICTS**: If the client holds multiple roles (board member +
+  property owner, employer + employee, etc.), EXPLICITLY flag this in
+  "issues_identified" with format: "CONFLICT: Client holds dual role as
+  [Role 1] and [Role 2]"
+- Flag any potential conflicts of interest, ethical concerns, or situations
+  requiring recusal
 - If a field has no data, use empty array [] or note "Not found in document"
 - Return ONLY valid JSON, no markdown code blocks
 """
@@ -1126,9 +1130,10 @@ OUTPUT FORMAT (STRICT JSON):
         }}  # noqa: E501
       ],
       "issues_identified": [
-        "Specific legal problem or violation found",  # noqa: E501
-        # noqa: E501
-        "IMPORTANT: Flag any dual roles or conflicts of interest (e.g., 'Client serves as HOA board member while also filing claim against HOA')",
+        "Specific legal problem or violation found",
+        "IMPORTANT: Flag any dual roles or conflicts of interest "
+        "(e.g., 'Client serves as HOA board member while also "
+        "filing claim against HOA')",
         "Note any ethical considerations or recusal requirements"
       ],
       "risk_items": [
@@ -1160,9 +1165,12 @@ CRITICAL RULES:
 - Format amounts as $XXX,XXX.XX
 - Include ALL parties mentioned (people, companies, entities)
 - List specific issues, not generic statements
-        # noqa: E501
-- **DUAL ROLES & CONFLICTS**: If the client holds multiple roles (board member + property owner, employer + employee, etc.), EXPLICITLY flag this in "issues_identified" with format: "CONFLICT: Client holds dual role as [Role 1] and [Role 2]"
-- Flag any potential conflicts of interest, ethical concerns, or situations requiring recusal
+- **DUAL ROLES & CONFLICTS**: If the client holds multiple roles (board member +
+  property owner, employer + employee, etc.), EXPLICITLY flag this in
+  "issues_identified" with format: "CONFLICT: Client holds dual role as
+  [Role 1] and [Role 2]"
+- Flag any potential conflicts of interest, ethical concerns, or situations
+  requiring recusal
 - If a field has no data, use empty array [] or note "Not found in document"
 - Return ONLY valid JSON, no markdown code blocks
 """

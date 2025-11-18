@@ -99,7 +99,7 @@ class CacheManager:
                 logger.info(f"⏰ Cache expired (file): {key[:8]}...")
                 try:
                     cache_file.unlink()  # Remove expired cache file
-                except:
+                except Exception:
                     pass
 
         logger.info(f"❌ Cache miss: {key[:8]}...")
@@ -140,7 +140,7 @@ class CacheManager:
         if self.redis_client:
             try:
                 self.redis_client.delete(key)
-            except:
+            except Exception:
                 pass
 
         # Delete from file cache
@@ -148,7 +148,7 @@ class CacheManager:
         if cache_file.exists():
             try:
                 cache_file.unlink()
-            except:
+            except Exception:
                 pass
 
         logger.debug(f"Cache deleted: {key[:8]}...")
@@ -167,7 +167,7 @@ class CacheManager:
         for cache_file in self.cache_dir.glob("*.pkl"):
             try:
                 cache_file.unlink()
-            except:
+            except Exception:
                 pass
         logger.info("File cache cleared")
 
@@ -230,7 +230,7 @@ class CacheManager:
                 info = self.redis_client.info()
                 stats["redis_keys"] = self.redis_client.dbsize()
                 stats["redis_memory_mb"] = info.get("used_memory", 0) / (1024 * 1024)
-            except:
+            except Exception:
                 stats["redis_status"] = "error"
 
         return stats

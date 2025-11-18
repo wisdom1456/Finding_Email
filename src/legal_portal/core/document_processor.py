@@ -434,10 +434,6 @@ class DocumentProcessor:
                     f"Security validation failed for '{uploaded_file.name}': {e!s}"
                 ) from e
 
-            # TODO: Add PDF compression support for large files
-            # if sanitized_name.lower().endswith('.pdf'):
-            #     file = await self.pdf_compressor.compress_pdf_if_needed(file)
-
             # Pass original filename for proper intake form detection
             doc_type = self._get_document_type(sanitized_name, intake_filenames, original_name)
             content_type, _ = mimetypes.guess_type(sanitized_name)

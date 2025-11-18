@@ -87,9 +87,9 @@ class JsonProcessingService:
         try:
             with open(prompt_path, "r", encoding="utf-8") as f:
                 return f.read()
-        except FileNotFoundError:
+        except FileNotFoundError as e:
             logger.error(f"Prompt template file not found at: {prompt_path}")
-            raise ValueError(f"Findings letter prompt template not found at {prompt_path}")
+            raise ValueError(f"Findings letter prompt template not found at {prompt_path}") from e
 
     def generate_html_letter(self, intake_data: str, document_summaries: str) -> str:
         """Generate HTML letter content using the single master prompt."""

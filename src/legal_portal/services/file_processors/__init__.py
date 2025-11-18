@@ -13,9 +13,7 @@ from .doc_processor import process_doc
 from .docx_processor import process_docx
 from .eml_processor import process_eml
 from .image_processor import process_image
-from .jpg_processor import process_jpg
 from .pdf_processor import process_pdf
-from .png_processor import process_png
 from .txt_processor import process_txt
 
 # Type alias for processor functions
@@ -25,14 +23,14 @@ Processor = Callable[[str, DocumentType, str], Awaitable[ProcessedDocument]]
 PROCESSOR_MAP: dict[str, Processor] = {
     "application/pdf": process_pdf,
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document": process_docx,
-    "application/msword": process_doc,  # Updated to use dedicated legacy DOC processor
+    "application/msword": process_doc,
     "message/rfc822": process_eml,
     "text/plain": process_txt,
     "text/csv": process_csv,
     "application/csv": process_csv,
-    "image/jpeg": process_jpg,  # Updated to use dedicated JPG processor
-    "image/png": process_png,  # Updated to use dedicated PNG processor
-    "image/gif": process_image,  # Keep generic processor for other image types
+    "image/jpeg": process_image,  # Use generic image processor (batch processor handles JPG)
+    "image/png": process_image,  # Use generic image processor (batch processor handles PNG)
+    "image/gif": process_image,
     "image/bmp": process_image,
     "image/tiff": process_image,
 }

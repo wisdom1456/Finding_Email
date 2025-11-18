@@ -182,7 +182,7 @@ class JSONFormatter(logging.Formatter):
             if hasattr(record, "msg") and isinstance(record.msg, str):
                 if record.msg.startswith("{"):
                     return record.msg
-        except:
+        except Exception:
             pass
 
         # Otherwise create JSON structure

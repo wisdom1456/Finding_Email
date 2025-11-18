@@ -32,10 +32,6 @@ ALLOWED_EXTENSIONS = {
     ".jpg",
     ".jpeg",
     ".png",
-    ".mp3",
-    ".wav",
-    ".mp4",
-    ".mov",
     ".csv",
 }
 
@@ -55,15 +51,6 @@ ALLOWED_MIME_TYPES = {
     # Images
     "image/jpeg",
     "image/png",
-    # Audio
-    "audio/mpeg",
-    "audio/wav",
-    "audio/x-wav",
-    "audio/wave",
-    # Video
-    "video/mp4",
-    "video/quicktime",
-    "video/x-msvideo",
 }
 
 # MIME type to extension mapping for validation
@@ -79,13 +66,6 @@ MIME_EXTENSION_MAP = {
     "message/rfc822": [".eml"],  # Standard MIME type for .eml files
     "image/jpeg": [".jpg", ".jpeg"],
     "image/png": [".png"],
-    "audio/mpeg": [".mp3"],
-    "audio/wav": [".wav"],
-    "audio/x-wav": [".wav"],
-    "audio/wave": [".wav"],
-    "video/mp4": [".mp4"],
-    "video/quicktime": [".mov"],
-    "video/x-msvideo": [".avi"],
 }
 
 

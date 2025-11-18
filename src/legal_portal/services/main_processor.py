@@ -876,7 +876,7 @@ CRITICAL RULES:
         logger.error(f"❌ Failed to parse JSON response: {e}")
         logger.error(f"Raw response: {raw_response[:500]}...")
         # Return empty result - let calling code handle fallback
-        raise ValueError(f"JSON parsing failed: {e}")
+        raise ValueError(f"JSON parsing failed: {e}") from e
 
 
 async def _process_document_batch(

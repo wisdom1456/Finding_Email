@@ -1214,7 +1214,7 @@ BEGIN.
                 else:
                     logger.info("AI ANALYZER: ❌ No video insights to preserve for BadRequestError recovery")
                     msg = f"BadRequestError in final assessment without video data: {error_details}"
-                    raise AIAnalysisError(msg)
+                    raise AIAnalysisError(msg) from bad_request_error
 
             except (APIError, APITimeoutError, RateLimitError) as api_error:
                 # Handle specific OpenAI API errors

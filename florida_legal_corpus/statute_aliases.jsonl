@@ -1,9 +1,51 @@
-{"statute_id":"statute:fl:83.51","alias_text":"§ 83.51","normalized":"Fla. Stat. § 83.51","patterns":["F.S. 83.51","Florida Statutes 83.51","Section 83.51","s. 83.51"]}
-{"statute_id":"statute:fl:83.56","alias_text":"§ 83.56","normalized":"Fla. Stat. § 83.56","patterns":["F.S. 83.56","Florida Statutes 83.56","Section 83.56","s. 83.56"]}
-{"statute_id":"statute:fl:558.001","alias_text":"§ 558.001","normalized":"Fla. Stat. § 558.001","patterns":["F.S. 558.001","Florida Statutes 558.001","Section 558.001","s. 558.001","Ch. 558, § 001"]}
-{"statute_id":"statute:fl:558.002","alias_text":"§ 558.002","normalized":"Fla. Stat. § 558.002","patterns":["F.S. 558.002","Florida Statutes 558.002","Section 558.002","s. 558.002"]}
-{"statute_id":"statute:fl:713.01","alias_text":"§ 713.01","normalized":"Fla. Stat. § 713.01","patterns":["F.S. 713.01","Florida Statutes 713.01","s. 713.01","§713.01"]}
-{"statute_id":"statute:fl:713.06","alias_text":"§ 713.06","normalized":"Fla. Stat. § 713.06","patterns":["F.S. 713.06","Section 713.06","s. 713.06","§713.06"]}
-{"statute_id":"statute:fl:713.13","alias_text":"§ 713.13","normalized":"Fla. Stat. § 713.13","patterns":["F.S. 713.13","Section 713.13","s. 713.13"]}
-{"statute_id":"statute:fl:95.11","alias_text":"§ 95.11","normalized":"Fla. Stat. § 95.11","patterns":["F.S. 95.11","Florida Statutes 95.11","s. 95.11","95.11, Fla. Stat."]}
-{"statute_id":"statute:fl:57.105","alias_text":"§ 57.105","normalized":"Fla. Stat. § 57.105","patterns":["F.S. 57.105","Section 57.105","s. 57.105","§57.105"]}
+{"statute_id":"statute:fl:83.51","alias_text":"§ 83.51","normalized":"Fla. Stat. § 83.51","patterns":["F.S. 83.51","Florida Statutes 83.51","Section 83.51","s. 83.51","Fla.Stat. 83.51","Fla. Stat. 83.51"]}
+{"statute_id":"statute:fl:83.56","alias_text":"§ 83.56","normalized":"Fla. Stat. § 83.56","patterns":["F.S. 83.56","Florida Statutes 83.56","Section 83.56","s. 83.56","Fla.Stat. 83.56","Fla. Stat. 83.56"]}
+{"statute_id":"statute:fl:558.001","alias_text":"§ 558.001","normalized":"Fla. Stat. § 558.001","patterns":["F.S. 558.001","Florida Statutes 558.001","Section 558.001","s. 558.001","Ch. 558, § 001","Fla.Stat. 558.001","Fla. Stat. 558.001"]}
+{"statute_id":"statute:fl:558.002","alias_text":"§ 558.002","normalized":"Fla. Stat. § 558.002","patterns":["F.S. 558.002","Florida Statutes 558.002","Section 558.002","s. 558.002","Fla.Stat. 558.002","Fla. Stat. 558.002"]}
+{"statute_id":"statute:fl:713.01","alias_text":"§ 713.01","normalized":"Fla. Stat. § 713.01","patterns":["F.S. 713.01","Florida Statutes 713.01","s. 713.01","§713.01","Fla.Stat. 713.01","Fla. Stat. 713.01","Section 713.01"]}
+{"statute_id":"statute:fl:713.06","alias_text":"§ 713.06","normalized":"Fla. Stat. § 713.06","patterns":["F.S. 713.06","Section 713.06","s. 713.06","§713.06","Fla.Stat. 713.06","Fla. Stat. 713.06","Florida Statutes 713.06"]}
+{"statute_id":"statute:fl:713.13","alias_text":"§ 713.13","normalized":"Fla. Stat. § 713.13","patterns":["F.S. 713.13","Section 713.13","s. 713.13","Fla.Stat. 713.13","Fla. Stat. 713.13","Florida Statutes 713.13"]}
+{"statute_id":"statute:fl:95.11","alias_text":"§ 95.11","normalized":"Fla. Stat. § 95.11","patterns":["F.S. 95.11","Florida Statutes 95.11","s. 95.11","95.11, Fla. Stat.","Fla.Stat. 95.11","Fla. Stat. 95.11","Section 95.11"]}
+{"statute_id":"statute:fl:57.105","alias_text":"§ 57.105","normalized":"Fla. Stat. § 57.105","patterns":["F.S. 57.105","Section 57.105","s. 57.105","§57.105","Fla.Stat. 57.105","Fla. Stat. 57.105","Florida Statutes 57.105"]}
+{"statute_id":"statute:fl:501.204","alias_text":"§ 501.204","normalized":"Fla. Stat. § 501.204","patterns":["F.S. 501.204","Section 501.204","s. 501.204","FDUTPA 501.204","Fla.Stat. 501.204","Fla. Stat. 501.204","Florida Statutes 501.204"]}
+{"statute_id":"statute:fl:501.211","alias_text":"§ 501.211","normalized":"Fla. Stat. § 501.211","patterns":["F.S. 501.211","Section 501.211","s. 501.211","FDUTPA 501.211","Fla.Stat. 501.211","Fla. Stat. 501.211","Florida Statutes 501.211"]}
+{"statute_id":"statute:fl:83.43","alias_text":"§ 83.43","normalized":"Fla. Stat. § 83.43","patterns":["F.S. 83.43","Florida Statutes 83.43","Section 83.43","s. 83.43","Fla.Stat. 83.43","Fla. Stat. 83.43"]}
+{"statute_id":"statute:fl:83.49","alias_text":"§ 83.49","normalized":"Fla. Stat. § 83.49","patterns":["F.S. 83.49","Florida Statutes 83.49","Section 83.49","s. 83.49","Fla.Stat. 83.49","Fla. Stat. 83.49"]}
+{"statute_id":"statute:fl:558.004","alias_text":"§ 558.004","normalized":"Fla. Stat. § 558.004","patterns":["F.S. 558.004","Florida Statutes 558.004","Section 558.004","s. 558.004","Fla.Stat. 558.004","Fla. Stat. 558.004"]}
+{"statute_id":"statute:fl:558.003","alias_text":"§ 558.003","normalized":"Fla. Stat. § 558.003","patterns":["F.S. 558.003","Florida Statutes 558.003","s. 558.003","§558.003","558.003"]}
+{"statute_id":"statute:fl:558.005","alias_text":"§ 558.005","normalized":"Fla. Stat. § 558.005","patterns":["F.S. 558.005","Florida Statutes 558.005","s. 558.005","§558.005","558.005"]}
+{"statute_id":"statute:fl:83.57","alias_text":"§ 83.57","normalized":"Fla. Stat. § 83.57","patterns":["F.S. 83.57","Florida Statutes 83.57","s. 83.57","§83.57","83.57"]}
+{"statute_id":"statute:fl:83.59","alias_text":"§ 83.59","normalized":"Fla. Stat. § 83.59","patterns":["F.S. 83.59","Florida Statutes 83.59","s. 83.59","§83.59","83.59"]}
+{"statute_id":"statute:fl:83.60","alias_text":"§ 83.60","normalized":"Fla. Stat. § 83.60","patterns":["F.S. 83.60","Florida Statutes 83.60","s. 83.60","§83.60","83.60"]}
+{"statute_id":"statute:fl:83.63","alias_text":"§ 83.63","normalized":"Fla. Stat. § 83.63","patterns":["F.S. 83.63","Florida Statutes 83.63","s. 83.63","§83.63","83.63"]}
+{"statute_id":"statute:fl:83.67","alias_text":"§ 83.67","normalized":"Fla. Stat. § 83.67","patterns":["F.S. 83.67","Florida Statutes 83.67","s. 83.67","§83.67","83.67"]}
+{"statute_id":"statute:fl:702.01","alias_text":"§ 702.01","normalized":"Fla. Stat. § 702.01","patterns":["F.S. 702.01","Florida Statutes 702.01","s. 702.01","§702.01","702.01"]}
+{"statute_id":"statute:fl:702.10","alias_text":"§ 702.10","normalized":"Fla. Stat. § 702.10","patterns":["F.S. 702.10","Florida Statutes 702.10","s. 702.10","§702.10","702.10"]}
+{"statute_id":"statute:fl:702.11","alias_text":"§ 702.11","normalized":"Fla. Stat. § 702.11","patterns":["F.S. 702.11","Florida Statutes 702.11","s. 702.11","§702.11","702.11"]}
+{"statute_id":"statute:fl:702.015","alias_text":"§ 702.015","normalized":"Fla. Stat. § 702.015","patterns":["F.S. 702.015","Florida Statutes 702.015","s. 702.015","§702.015","702.015"]}
+{"statute_id":"statute:fl:95.011","alias_text":"§ 95.011","normalized":"Fla. Stat. § 95.011","patterns":["F.S. 95.011","Florida Statutes 95.011","s. 95.011","§95.011","95.011"]}
+{"statute_id":"statute:fl:95.031","alias_text":"§ 95.031","normalized":"Fla. Stat. § 95.031","patterns":["F.S. 95.031","Florida Statutes 95.031","s. 95.031","§95.031","95.031"]}
+{"statute_id":"statute:fl:501.201","alias_text":"§ 501.201","normalized":"Fla. Stat. § 501.201","patterns":["F.S. 501.201","Florida Statutes 501.201","s. 501.201","§501.201","501.201"]}
+{"statute_id":"statute:fl:501.202","alias_text":"§ 501.202","normalized":"Fla. Stat. § 501.202","patterns":["F.S. 501.202","Florida Statutes 501.202","s. 501.202","§501.202","501.202"]}
+{"statute_id":"statute:fl:501.203","alias_text":"§ 501.203","normalized":"Fla. Stat. § 501.203","patterns":["F.S. 501.203","Florida Statutes 501.203","s. 501.203","§501.203","501.203"]}
+{"statute_id":"statute:fl:713.08","alias_text":"§ 713.08","normalized":"Fla. Stat. § 713.08","patterns":["F.S. 713.08","Florida Statutes 713.08","s. 713.08","§713.08","713.08"]}
+{"statute_id":"statute:fl:713.16","alias_text":"§ 713.16","normalized":"Fla. Stat. § 713.16","patterns":["F.S. 713.16","Florida Statutes 713.16","s. 713.16","§713.16","713.16"]}
+{"statute_id":"statute:fl:713.18","alias_text":"§ 713.18","normalized":"Fla. Stat. § 713.18","patterns":["F.S. 713.18","Florida Statutes 713.18","s. 713.18","§713.18","713.18"]}
+{"statute_id":"statute:fl:627.7011","alias_text":"§ 627.7011","normalized":"Fla. Stat. § 627.7011","patterns":["F.S. 627.7011","Florida Statutes 627.7011","s. 627.7011","§627.7011","627.7011"]}
+{"statute_id":"statute:fl:57.041","alias_text":"§ 57.041","normalized":"Fla. Stat. § 57.041","patterns":["F.S. 57.041","Florida Statutes 57.041","s. 57.041","§57.041","57.041"]}
+{"statute_id":"statute:fl:627.701","alias_text":"§ 627.701","normalized":"Fla. Stat. § 627.701","patterns":["F.S. 627.701","Florida Statutes 627.701","s. 627.701","§627.701","627.701"]}
+{"statute_id":"statute:fl:627.7014","alias_text":"§ 627.7014","normalized":"Fla. Stat. § 627.7014","patterns":["F.S. 627.7014","Florida Statutes 627.7014","s. 627.7014","§627.7014","627.7014"]}
+{"statute_id":"statute:fl:627.70131","alias_text":"§ 627.70131","normalized":"Fla. Stat. § 627.70131","patterns":["F.S. 627.70131","Florida Statutes 627.70131","s. 627.70131","§627.70131","627.70131"]}
+{"statute_id":"statute:fl:95.051","alias_text":"§ 95.051","normalized":"Fla. Stat. § 95.051","patterns":["F.S. 95.051","Florida Statutes 95.051","s. 95.051","§95.051","95.051"]}
+{"statute_id":"statute:fl:672.316","alias_text":"§ 672.316","normalized":"Fla. Stat. § 672.316","patterns":["F.S. 672.316","Florida Statutes 672.316","s. 672.316","§672.316","672.316"]}
+{"statute_id":"statute:fl:83.53","alias_text":"§ 83.53","normalized":"Fla. Stat. § 83.53","patterns":["F.S. 83.53","Florida Statutes 83.53","s. 83.53","§83.53","83.53"]}
+{"statute_id":"statute:fl:83.64","alias_text":"§ 83.64","normalized":"Fla. Stat. § 83.64","patterns":["F.S. 83.64","Florida Statutes 83.64","s. 83.64","§83.64","83.64"]}
+{"statute_id":"statute:fl:768.81","alias_text":"§ 768.81","normalized":"Fla. Stat. § 768.81","patterns":["F.S. 768.81","Florida Statutes 768.81","s. 768.81","§768.81","768.81"]}
+{"statute_id":"statute:fl:768.73","alias_text":"§ 768.73","normalized":"Fla. Stat. § 768.73","patterns":["F.S. 768.73","Florida Statutes 768.73","s. 768.73","§768.73","768.73"]}
+{"statute_id":"statute:fl:768.76","alias_text":"§ 768.76","normalized":"Fla. Stat. § 768.76","patterns":["F.S. 768.76","Florida Statutes 768.76","s. 768.76","§768.76","768.76"]}
+{"statute_id":"statute:fl:627.702","alias_text":"§ 627.702","normalized":"Fla. Stat. § 627.702","patterns":["F.S. 627.702","Florida Statutes 627.702","s. 627.702","§627.702","627.702"]}
+{"statute_id":"statute:fl:627.428","alias_text":"§ 627.428","normalized":"Fla. Stat. § 627.428","patterns":["F.S. 627.428","Florida Statutes 627.428","s. 627.428","§627.428","627.428"]}
+{"statute_id":"statute:fl:83.62","alias_text":"§ 83.62","normalized":"Fla. Stat. § 83.62","patterns":["F.S. 83.62","Florida Statutes 83.62","s. 83.62","§83.62","83.62"]}
+{"statute_id":"statute:fl:713.20","alias_text":"§ 713.20","normalized":"Fla. Stat. § 713.20","patterns":["F.S. 713.20","Florida Statutes 713.20","s. 713.20","§713.20","713.20"]}
+{"statute_id":"statute:fl:501.2105","alias_text":"§ 501.2105","normalized":"Fla. Stat. § 501.2105","patterns":["F.S. 501.2105","Florida Statutes 501.2105","s. 501.2105","§501.2105","501.2105"]}
+{"statute_id":"statute:fl:558.006","alias_text":"§ 558.006","normalized":"Fla. Stat. § 558.006","patterns":["F.S. 558.006","Florida Statutes 558.006","s. 558.006","§558.006","558.006"]}

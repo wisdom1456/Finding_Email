@@ -6,6 +6,9 @@ import re
 from typing import List, Optional, Tuple
 
 import markdown2
+from legal_portal.core.data_models import ProcessingError
+from legal_portal.utils.logging_config import get_module_logger
+from legal_portal.utils.openai_client import OpenAIClient
 from openai import (
     APIConnectionError,
     APIError,
@@ -14,10 +17,6 @@ from openai import (
     RateLimitError,
 )
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_fixed
-
-from legal_portal.core.data_models import ProcessingError
-from legal_portal.utils.logging_config import get_module_logger
-from legal_portal.utils.openai_client import OpenAIClient
 
 logger = get_module_logger(__name__)
 
@@ -38,7 +37,7 @@ class JsonProcessingService:
         self.config = config
 
     async def process_documents_to_json(self, prompt: str) -> Tuple[Optional[str], List[ProcessingError]]:
-        """Processes a prompt to get a JSON response from OpenAI asynchronously.
+        """Process a prompt to get a JSON response from OpenAI asynchronously.
 
         Args:
         ----
@@ -82,7 +81,7 @@ class JsonProcessingService:
             return None, [error]
 
     def _load_prompt_template(self) -> str:
-        """Loads the prompt template from a file."""
+        """Load the prompt template from a file."""
         prompt_path = os.path.join(os.path.dirname(__file__), "..", "prompts", "findings_letter_prompt.txt")
         try:
             with open(prompt_path, "r", encoding="utf-8") as f:
@@ -132,6 +131,7 @@ class JsonProcessingService:
         confirmed_qa_pairs: list = None,
         contact_phone: str = None,
         contact_email: str = None,
+        statute_context: str = "",
     ) -> str:
         """Generate findings letter from structured JSON summaries.
 
@@ -145,6 +145,7 @@ class JsonProcessingService:
             confirmed_qa_pairs: User-confirmed question-answer pairs from intake form review
             contact_phone: Contact phone for letter footer (optional, uses placeholder if not provided)
             contact_email: Contact email for letter footer (optional, uses placeholder if not provided)
+            statute_context: Context about relevant Florida statutes for the case
 
         Returns:
         -------
@@ -193,12 +194,18 @@ class JsonProcessingService:
             f"email={'provided' if contact_email else 'placeholder'}"
         )
 
+        # Add statute context to the prompt if provided
+        full_quality_context = quality_context
+        if statute_context:
+            full_quality_context = f"{quality_context}\n\n{statute_context}"
+            logger.info("Added statute recommendations to letter generation prompt")
+
         # Format prompt with JSON input and signature variables
         prompt = template_content.format(
             qa_context=qa_context,  # NEW: User-confirmed Q&A pairs
             intake_data=intake_content[:5000],
             document_summaries=document_summaries_json,  # Pass JSON directly
-            quality_context=quality_context,
+            quality_context=full_quality_context,
             attorney_name=attorney_name,
             attorney_title="Senior Partner",  # Default title
             firm_name=firm_name,
@@ -216,7 +223,11 @@ class JsonProcessingService:
             "gpt-4o",  # model
             0.3,  # temperature
             12000,  # max_tokens
-            "You are a senior legal writing assistant helping to draft professional client findings letters. Follow the template structure exactly and provide comprehensive, well-reasoned legal analysis.",  # system_message
+            (  # system_message
+                "You are a senior legal writing assistant helping to draft professional "
+                "client findings letters. Follow the template structure exactly and "
+                "provide comprehensive, well-reasoned legal analysis."
+            ),
         )
 
         if not markdown_response or not markdown_response.strip():
@@ -307,14 +318,24 @@ class JsonProcessingService:
         if not response_text:
             return ""
 
-        # Remove any code fences that might wrap the content
-        cleaned = re.sub(r"^```markdown\\s*", "", response_text.strip(), flags=re.MULTILINE)
-        cleaned = re.sub(r"^```\\s*", "", cleaned, flags=re.MULTILINE)
-        cleaned = re.sub(r"\\s*```$", "", cleaned, flags=re.MULTILINE)
+        cleaned = response_text.strip()
+
+        # Remove code fences with language specifiers (```html, ```markdown, etc.)
+        # Match opening fence with optional language specifier at start
+        cleaned = re.sub(r"^\s*```(?:html|markdown|md)?\s*\n?", "", cleaned, flags=re.MULTILINE)
+
+        # Remove closing code fences
+        cleaned = re.sub(r"\n?\s*```\s*$", "", cleaned, flags=re.MULTILINE)
+
+        # Clean up any remaining stray code fences (in case of multiple wrappings)
+        cleaned = re.sub(r"```(?:html|markdown|md)?\s*\n?", "", cleaned)
+        cleaned = re.sub(r"\n?\s*```", "", cleaned)
+
         cleaned = cleaned.strip()
 
-        # Remove any HTML tags that might have been included accidentally
-        cleaned = re.sub(r"<[^>]+>", "", cleaned)
+        # DO NOT remove HTML tags - the AI should be generating markdown, not HTML
+        # The markdown will be converted to HTML later
+        # If the AI accidentally includes some HTML, markdown2 will handle it gracefully
 
         return cleaned
 

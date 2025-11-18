@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import streamlit as st
 import streamlit.components.v1 as components
-
 from legal_portal.services.document_formatter import DocumentFormatterService
 from legal_portal.utils.logging_config import get_module_logger
 
@@ -12,7 +11,7 @@ logger = get_module_logger(__name__)
 
 
 def review_and_confirm_section():
-    """Displays the interactive review and confirmation screen with editable Q&A pairs."""
+    """Display the interactive review and confirmation screen with editable Q&A pairs."""
     st.header("Step 2: Review & Confirm Intake Information")
 
     review_data = st.session_state.review_data
@@ -20,7 +19,7 @@ def review_and_confirm_section():
     # ===== SECTION 1: Editable Q&A Pairs (Main Focus) =====
     st.subheader("📋 Intake Form Questions & Answers")
     st.info(
-        "💡 Review the information below. You can edit answers, add new questions (click ➕), or remove incorrect entries (click 🗑️)."
+        "💡 Review the information below. You can edit answers, add new questions (click ➕), or remove incorrect entries (click 🗑️)."  # noqa: E501
     )
 
     # Initialize editable Q&A in session state if not present OR if review_data has new intake_qa_pairs
@@ -36,7 +35,7 @@ def review_and_confirm_section():
         # New extraction has more pairs than current state - refresh with new data
         should_initialize = True
         logger.info(
-            f"Refreshing Q&A pairs: {len(qa_pairs_from_extraction)} extracted vs {len(st.session_state.editable_qa_pairs)} in state"
+            f"Refreshing Q&A pairs: {len(qa_pairs_from_extraction)} extracted vs {len(st.session_state.editable_qa_pairs)} in state"  # noqa: E501
         )
 
     if should_initialize:
@@ -55,8 +54,40 @@ def review_and_confirm_section():
     # Show warning if extraction failed or returned few results
     if qa_pairs_from_extraction and len(qa_pairs_from_extraction) < 3:
         st.warning(
-            "⚠️ Very few questions were detected from the intake form. Please add any missing information using the form below, or refer to the full intake text at the bottom."
+            "⚠️ Very few questions were detected from the intake form. Please add any missing information using the form below, or refer to the full intake text at the bottom."  # noqa: E501
         )
+
+    # Defensive check: Ensure editable_qa_pairs is a list of dicts
+    if not isinstance(st.session_state.editable_qa_pairs, list):
+        logger.error(f"editable_qa_pairs is not a list! Type: {type(st.session_state.editable_qa_pairs)}")
+        st.error(
+            f"⚠️ Data format error. Resetting Q&A pairs. Type was: {type(st.session_state.editable_qa_pairs)}"
+        )
+        st.session_state.editable_qa_pairs = [
+            {"question": "What is the primary legal issue?", "answer": ""},
+            {"question": "What is the desired outcome?", "answer": ""},
+            {"question": "Are there any deadlines or urgency?", "answer": ""},
+        ]
+
+    # Validate each item in the list
+    valid_qa_pairs = []
+    for item in st.session_state.editable_qa_pairs:
+        if isinstance(item, dict):
+            # Ensure question and answer keys exist
+            valid_qa_pairs.append(
+                {"question": str(item.get("question", "")), "answer": str(item.get("answer", ""))}
+            )
+        else:
+            logger.warning(f"Skipping invalid Q&A item: {item} (type: {type(item)})")
+
+    # Update with validated data
+    st.session_state.editable_qa_pairs = (
+        valid_qa_pairs
+        if valid_qa_pairs
+        else [
+            {"question": "What is the primary legal issue?", "answer": ""},
+        ]
+    )
 
     # Show count and stats
     total_pairs = len(st.session_state.editable_qa_pairs)
@@ -66,22 +97,29 @@ def review_and_confirm_section():
     # Handle large forms
     if total_pairs > 25:
         st.info(
-            f"ℹ️ Large form detected ({total_pairs} questions). Consider removing non-essential questions for clarity."
+            f"ℹ️ Large form detected ({total_pairs} questions). Consider removing non-essential questions for clarity."  # noqa: E501
         )
 
     # Display editable data table
-    edited_qa = st.data_editor(
-        st.session_state.editable_qa_pairs,
-        column_config={
-            "question": st.column_config.TextColumn("Question", width="medium", required=True),
-            "answer": st.column_config.TextColumn("Answer", width="large", required=False),
-        },
-        num_rows="dynamic",  # Allow adding/removing rows
-        width="stretch",
-        hide_index=False,
-        height=400,  # Limit height for long forms
-        key="qa_editor",
-    )
+    try:
+        edited_qa = st.data_editor(
+            st.session_state.editable_qa_pairs,
+            column_config={
+                "question": st.column_config.TextColumn("Question", required=True),
+                "answer": st.column_config.TextColumn("Answer", required=False),
+            },
+            num_rows="dynamic",  # Allow adding/removing rows
+            use_container_width=True,
+            hide_index=True,
+            height=400,  # Limit height for long forms
+            key="qa_editor",
+        )
+    except Exception as e:
+        logger.error(f"Error in st.data_editor: {e}", exc_info=True)
+        st.error(f"⚠️ Error displaying Q&A editor: {e}")
+        # Fallback to simple text areas
+        st.warning("Using fallback editor due to error.")
+        edited_qa = st.session_state.editable_qa_pairs
 
     # Update session state with edits (persist across reruns)
     st.session_state.editable_qa_pairs = edited_qa
@@ -110,7 +148,7 @@ def review_and_confirm_section():
                 if parties:
                     for party in parties:
                         st.write(
-                            f"• {party.get('name', 'Unknown')} ({party.get('relationship', 'Unknown relationship')})"
+                            f"• {party.get('name', 'Unknown')} ({party.get('relationship', 'Unknown relationship')})"  # noqa: E501
                         )
                 else:
                     st.write("No parties listed")
@@ -137,7 +175,7 @@ def review_and_confirm_section():
     # ===== SECTION 3: Confirm Client Name =====
     st.subheader("Confirm Client Name")
     st.info(
-        "The client name has been automatically extracted from the intake form. Please confirm or correct it below."
+        "The client name has been automatically extracted from the intake form. Please confirm or correct it below."  # noqa: E501
     )
     confirmed_client_name = st.text_input(
         "Client Name", value=review_data.get("client_name", ""), key="confirmed_client_name_input"
@@ -146,7 +184,7 @@ def review_and_confirm_section():
     # ===== SECTION 4: Prioritize Key Documents =====
     st.subheader("Prioritize Key Documents")
     st.info(
-        "You can select up to 3 documents to be given extra weight during the AI analysis. This is optional but recommended for focusing the results."
+        "You can select up to 3 documents to be given extra weight during the AI analysis. This is optional but recommended for focusing the results."  # noqa: E501
     )
     all_docs = review_data.get("uploaded_files", [])
     key_documents = st.multiselect(
@@ -156,18 +194,21 @@ def review_and_confirm_section():
     # ===== SECTION 5: Define Legal Issue =====
     st.subheader("Define Primary Legal Issue")
     st.info(
-        "The AI has analyzed your intake form and identified the most relevant practice areas below. Select the primary legal issue to focus the analysis."
+        "✨ The AI has analyzed your intake form and auto-selected the most likely legal issue. "
+        "Please verify and change if needed."
     )
 
     # Get AI-suggested practice areas from review_data
     suggested_areas = review_data.get("suggested_practice_areas", ["Other"])
-    legal_issues = ["Select an issue..."] + suggested_areas
 
+    # Auto-select the first (most relevant) suggestion, but allow user to change
+    # Index 0 is the AI's top recommendation
     selected_issue = st.selectbox(
-        "Primary Legal Issue (AI-suggested options)",
-        options=legal_issues,
+        "Primary Legal Issue (AI-selected, verify or change)",
+        options=suggested_areas,
+        index=0,  # Auto-select the first (most relevant) option
         key="legal_issue_selectbox",
-        help="These options were intelligently selected based on your intake form content",
+        help="The AI selected the top match based on your intake form. You can change this if needed.",
     )
 
     custom_issue = ""
@@ -193,9 +234,9 @@ def review_and_confirm_section():
             st.warning("⚠️ Client Name cannot be empty.")
             return
 
-        # Validation: Legal Issue
-        if selected_issue == "Select an issue...":
-            st.warning("⚠️ Please select a primary legal issue.")
+        # Validation: Legal Issue (now just check for "Other" with no custom text)
+        if selected_issue == "Other" and not custom_issue:
+            st.warning("⚠️ Please specify the legal issue when 'Other' is selected.")
             return
 
         # Validation: Q&A has sufficient content
@@ -204,7 +245,7 @@ def review_and_confirm_section():
         )
         if valid_qa_count < 2:
             st.warning(
-                "⚠️ Please provide at least 2 complete question-answer pairs with both question and answer filled."
+                "⚠️ Please provide at least 2 complete question-answer pairs with both question and answer filled."  # noqa: E501
             )
             return
 
@@ -218,6 +259,7 @@ def review_and_confirm_section():
 
         # Log confirmation for debugging
         logger.info(f"User confirmed {len(edited_qa)} Q&A pairs for analysis")
+        logger.info(f"Selected legal issue: {st.session_state.review_data['legal_issue']}")
 
         # Set flag to start the analysis
         st.session_state.start_full_analysis = True
@@ -283,7 +325,7 @@ def file_upload_section():
         large_files = [f for f in uploaded_files if f.size > 10 * 1024 * 1024]  # 10MB threshold
         if large_files:
             st.warning(
-                f"{len(large_files)} large file(s) detected. Compressing them is recommended to reduce cost and processing time."
+                f"{len(large_files)} large file(s) detected. Compressing them is recommended to reduce cost and processing time."  # noqa: E501
             )
             # Default to True for a better user experience
             compress_choice = st.checkbox("✅ Compress large files before analysis", value=True)
@@ -483,7 +525,7 @@ def results_display_section():
 
 
 def _display_download_buttons(col1, col2, col3, col4):
-    """Display download buttons for the findings letters (clean and cited), document review, and case analysis."""
+    """Display download buttons for the findings letters (clean and cited), document review, and case analysis."""  # noqa: E501
     # Get client name for filename
     client_name = "Client"
     if st.session_state.get("case_info"):

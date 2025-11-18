@@ -162,6 +162,8 @@ class DocumentSummaryStructured(BaseModel):
     )
 
     class Config:
+        """Pydantic configuration for DocumentSummaryStructured."""
+
         json_schema_extra = {
             "example": {
                 "document_name": "Property_Disclosure_Form.pdf",
@@ -217,8 +219,11 @@ class ProcessingResult(BaseModel):
     intake_content: Optional[str] = None
     document_count: int = 0
     errors: List[ProcessingError] = Field(default_factory=list)
+    warnings: List[str] = Field(default_factory=list, description="Non-critical warnings for user awareness")
 
     class Config:
+        """Pydantic configuration for ProcessingResult."""
+
         json_schema_extra = {
             "example": {
                 "main_letter": "<html>...</html>",

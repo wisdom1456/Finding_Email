@@ -269,6 +269,51 @@ def main():
     # --- Main Content ---
     if st.session_state.ui_step == "upload":
         st.header("Step 1: Upload Documents")
+
+        # Display practice area guidance
+        with st.expander("ℹ️ Supported Practice Areas (Florida law only)", expanded=False):
+            st.markdown(
+                """
+            **This application is optimized for Florida civil litigation matters only.**
+            Federal claims and non-Florida jurisdictions are not currently supported.
+
+            ### ✅ Covered Practice Areas:
+
+            **1. Consumer Protection & Business Misconduct**
+            - Contract disputes and breach claims (UCC Ch. 671-672)
+            - Consumer protection violations (FDUTPA - Ch. 501 Part II)
+            - Business organization disputes (Ch. 605 LLC, Ch. 607 Corp)
+            - Timeshare disputes and related matters
+
+            **2. Real Estate & Property Disputes**
+            - Landlord-tenant disputes (Ch. 83)
+            - Foreclosure defense and procedures (Ch. 702)
+            - Property damage and insurance claims (Ch. 627)
+            - Construction defects (Ch. 558)
+            - Mechanic's liens (Ch. 713)
+
+            **3. Civil Litigation & Administrative Law**
+            - Statutes of limitation (Ch. 95)
+            - Administrative procedure matters (Ch. 120)
+            - Copyright matters (only insofar as Florida law intersects)
+            - Attorney fees and sanctions (Ch. 57)
+
+            **4. Selective Personal Injury**
+            - Motorcycle accidents (Ch. 316 traffic law)
+            - Limited medical malpractice matters (Ch. 766)
+
+            ### ⚠️ Not Supported:
+            - Federal claims or federal court matters
+            - Criminal law
+            - Immigration law
+            - Bankruptcy (federal jurisdiction)
+            - Patent/trademark law (federal jurisdiction)
+            - Out-of-state matters
+            # noqa: E501
+            **If your case involves federal law or multi-jurisdiction issues, please consult with the attorney before proceeding.**
+            """
+            )
+
         file_upload_section()
 
         if st.button("Review Documents"):

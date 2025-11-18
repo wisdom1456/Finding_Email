@@ -49,6 +49,19 @@
      *   **Clean Git History**: Established proper `.gitignore` configuration excluding sensitive files and build artifacts
      *   **Production Ready**: Application is now version-controlled and ready for collaborative development or deployment
 
+### AI Auto-Fill Legal Issue Enhancement (November 2025)
+
+*   **Objective**: Improve UX by automatically pre-selecting the most likely legal issue based on AI analysis
+*   **Status**: **Completed**
+*   **Key Outcomes**:
+     *   **Auto-Selection**: Dropdown now defaults to the AI's top recommendation (index 0) instead of "Select an issue..."
+     *   **User Control Retained**: Users can verify and change the selection as needed
+     *   **Updated Validation**: Removed check for "Select an issue..." and only validates "Other" selections
+     *   **Better UX**: Eliminates unnecessary manual selection step while maintaining full user control
+     *   **No Extra API Calls**: Leverages existing AI analysis from intake processing
+     *   **Consistent Pattern**: Follows same pattern as auto-filled client name field
+     *   **Documentation**: Created comprehensive enhancement guide in `AI_AUTO_FILL_LEGAL_ISSUE_ENHANCEMENT.md`
+
 ## 2. Next Steps & Future Work
 
 ### Foundational Improvements

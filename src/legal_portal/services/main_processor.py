@@ -8,6 +8,7 @@ import time
 from difflib import SequenceMatcher
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
+from legal_portal.config.default import get_settings
 from legal_portal.core.data_models import (
     AnalyzedDocument,
     CaseAnalysisResult,
@@ -18,6 +19,7 @@ from legal_portal.core.data_models import (
     QualityScore,
 )
 from legal_portal.core.document_processor import DocumentProcessor
+from legal_portal.services.corpus_coverage_service import CorpusCoverageService
 from legal_portal.services.document_quality_validator import DocumentQualityValidator
 from legal_portal.services.json_processing_service import JsonProcessingService
 from legal_portal.services.letter_review_service import LetterReviewService
@@ -33,7 +35,8 @@ IMAGE_HANDLING_INSTRUCTIONS = """
 **CRITICAL INSTRUCTIONS FOR IMAGE DOCUMENTS:**
 Documents marked with [📷 IMAGE FILE] are images. For these:
 - Base analysis ONLY on the visual description provided in the content
-- DO NOT infer `parties`, `key_dates`, or `key_amounts` unless explicitly visible/readable in the image description
+- DO NOT infer `parties`, `key_dates`, or `key_amounts` unless explicitly visible/readable
+  in the image description
 - Set `document_type` to "Evidence"
 - For `issues_identified`: describe what is visually shown (e.g., "Visible water damage on flooring")
 - For `relevance_to_case`: explain what the image depicts and why it matters to the case
@@ -117,6 +120,8 @@ async def process_case_documents(
         intake_form_path: File path to the intake form
         case_document_paths: List of file paths to case documents
         case_info: Optional dictionary with case metadata (client name, attorney, etc.)
+        review_data: Dictionary containing key documents and legal issue from review step
+        progress_callback: Optional callback function for progress updates
 
     Returns:
     -------
@@ -235,7 +240,7 @@ async def process_case_documents(
         logger.info("AI Call #2: Generating findings letter from structured data...")
         if os.getenv("LOG_LEVEL") == "DEBUG":
             logger.info(
-                f"CONTEXT CHECK - Passing {len(intake_content)} chars intake + JSON summaries to letter generation"
+                f"CONTEXT CHECK - Passing {len(intake_content)} chars intake + JSON summaries to letter generation"  # noqa: E501
             )
 
         document_summaries_json_str = json.dumps([s.model_dump() for s in structured_summaries], indent=2)
@@ -251,6 +256,76 @@ async def process_case_documents(
         # Extract confirmed Q&A pairs from review_data
         confirmed_qa_pairs = review_data.get("confirmed_qa_pairs", []) if review_data else []
 
+        # Get settings for feature flags
+        settings = get_settings()
+
+        # Check corpus coverage for this case
+        coverage_warnings = []
+        if settings.corpus_coverage_warnings:
+            try:
+                coverage_service = CorpusCoverageService()
+                legal_issues = []
+                if review_data and "legal_issues" in review_data:
+                    legal_issues = review_data.get("legal_issues", [])
+
+                case_type = case_info.get("caseType") if case_info else None
+
+                coverage_result = coverage_service.analyze_coverage(
+                    case_type=case_type, case_facts=intake_content[:2000], legal_issues=legal_issues
+                )
+
+                if coverage_result["warnings"]:
+                    coverage_warnings = coverage_result["warnings"]
+                    for warning in coverage_warnings:
+                        logger.warning(f"Corpus coverage: {warning}")
+
+                if not coverage_result["is_covered"]:
+                    logger.warning(
+                        f"Case type may be outside Florida Legal Corpus coverage. "
+                        f"Detected areas: {coverage_result.get('unsupported_areas', [])}"
+                    )
+            except Exception as e:
+                logger.warning(f"Failed to analyze corpus coverage: {e}", exc_info=True)
+
+        # Get statute recommendations based on case facts (if feature enabled)
+        statute_context = ""
+        if settings.suggest_statutes:
+            try:
+                from legal_portal.services.statute_recommendation_service import StatuteRecommendationService
+
+                recommendation_service = StatuteRecommendationService()
+
+                # Extract legal issues from review_data if available
+                legal_issues = []
+                if review_data and "legal_issues" in review_data:
+                    legal_issues = review_data.get("legal_issues", [])
+
+                # Get case type from case_info if available
+                case_type = case_info.get("caseType") if case_info else None
+
+                # Generate recommendations
+                recommendations = recommendation_service.recommend_statutes(
+                    case_facts=intake_content[:2000],  # Use first 2000 chars of intake
+                    legal_issues=legal_issues,
+                    case_type=case_type,
+                    limit=5,
+                )
+
+                if recommendations:
+                    statute_context = recommendation_service.get_statute_context_for_prompt(
+                        recommendations, max_statutes=5
+                    )
+                    logger.info(
+                        f"Generated {len(recommendations)} statute recommendations for letter",
+                        extra={"recommendation_count": len(recommendations)},
+                    )
+                else:
+                    logger.info("No statute recommendations generated for this case")
+            except Exception as e:
+                logger.warning(f"Failed to generate statute recommendations: {e}", exc_info=True)
+        else:
+            logger.info("Statute recommendations disabled via SUGGEST_STATUTES flag")
+
         # Pass new context to letter generation
         draft_letter = await json_processing_service.generate_findings_letter_from_json(
             intake_content=intake_content,
@@ -261,6 +336,7 @@ async def process_case_documents(
             confirmed_qa_pairs=confirmed_qa_pairs,  # NEW: Pass user-confirmed Q&A
             contact_phone=contact_phone,  # NEW: Pass contact phone
             contact_email=contact_email,  # NEW: Pass contact email
+            statute_context=statute_context,  # NEW: Pass statute recommendations
         )
 
         if os.getenv("LOG_LEVEL") == "DEBUG":
@@ -279,7 +355,7 @@ async def process_case_documents(
             client_name = case_info.get("clientName", None)
 
         # Perform comprehensive review (now includes source verification and completeness checks)
-        improved_letter = letter_review_service.review_and_improve_letter(
+        improved_letter, statute_validation = letter_review_service.review_and_improve_letter(
             draft_letter=draft_letter,
             intake_summary=intake_summary,
             case_type=None,
@@ -297,6 +373,22 @@ async def process_case_documents(
                 "improved_length": len(improved_letter),
             },
         )
+
+        # Log statute validation results
+        if statute_validation:
+            logger.info(
+                "Statute validation results",
+                extra={
+                    "total_citations": statute_validation.total_citations,
+                    "verified_citations": statute_validation.verified_citations,
+                    "unverified_citations": statute_validation.unverified_citations,
+                    "suspicious_citations": statute_validation.suspicious_citations,
+                    "validation_warnings": len(statute_validation.warnings),
+                },
+            )
+            # Log individual warnings if any
+            for warning in statute_validation.warnings:
+                logger.warning(f"Statute validation: {warning}")
 
         # 8. Run lightweight QA checks
         logger.info("Running lightweight QA heuristics...")
@@ -394,6 +486,7 @@ async def process_case_documents(
             intake_content=intake_content,
             document_count=len(processed_case_docs),
             errors=errors,
+            warnings=coverage_warnings,  # NEW: Add corpus coverage warnings
         )
         logger.info("✅ Full document processing workflow completed successfully.")
         return result
@@ -485,7 +578,7 @@ def _deduplicate_documents(documents: List[Any]) -> List[Any]:
             unique_docs.append(doc)
         else:
             logger.warning(
-                f"Duplicate detected: '{doc.file_name}' is identical to '{seen_hashes[content_hash]}'. Skipping."
+                f"Duplicate detected: '{doc.file_name}' is identical to '{seen_hashes[content_hash]}'. Skipping."  # noqa: E501
             )
 
     return unique_docs
@@ -599,7 +692,7 @@ def _create_smart_batches(documents: list, max_tokens_per_batch: int = 50000) ->
     batches = []
     current_batch = []
     current_tokens = 0
-    MAX_DOCS_PER_BATCH = 10  # Hard limit to prevent API timeouts
+    max_docs_per_batch = 10  # Hard limit to prevent API timeouts
 
     for doc in documents:
         doc_tokens = _estimate_tokens(doc.content)
@@ -607,7 +700,7 @@ def _create_smart_batches(documents: list, max_tokens_per_batch: int = 50000) ->
         # Start new batch if: would exceed token limit OR already have 10 docs
         if (current_tokens + doc_tokens > max_tokens_per_batch and current_batch) or len(
             current_batch
-        ) >= MAX_DOCS_PER_BATCH:
+        ) >= max_docs_per_batch:
             batches.append(current_batch)
             current_batch = [doc]
             current_tokens = doc_tokens
@@ -634,9 +727,12 @@ async def _generate_document_summaries(
 
     Args:
     ----
-        openai_client_wrapper: An instance of the custom OpenAIClient wrapper.
         intake_content: Extracted text from intake form
         case_documents: List of ProcessedDocument objects (can be empty)
+        openai_client_wrapper: An instance of the custom OpenAIClient wrapper.
+        json_processing_service: Service for processing JSON responses from AI
+        review_data: Dictionary containing key documents and legal issue from review step
+        progress_callback: Optional callback function for progress updates
 
     Returns:
     -------
@@ -647,6 +743,7 @@ async def _generate_document_summaries(
 
     # Handle case with no documents - analyze intake form only
     if not case_documents:
+    if not case_documents:  # noqa: E501
         prompt = f"""You are a legal document analyst. Given the client intake information below, provide a structured JSON analysis.
 
 INTAKE INFORMATION:
@@ -676,7 +773,7 @@ Return ONLY valid JSON, no markdown code blocks.
 
         if needs_batching:
             logger.info(
-                f"📊 Large document set detected: {len(case_documents)} docs, ~{total_estimated_tokens:,} tokens"
+                f"📊 Large document set detected: {len(case_documents)} docs, ~{total_estimated_tokens:,} tokens"  # noqa: E501
             )
             logger.info("Using intelligent batching to process all documents...")
 
@@ -704,7 +801,7 @@ Return ONLY valid JSON, no markdown code blocks.
                         progress_pct = (batch_num - 1) / len(batches)
                         st.session_state.progress_callback(
                             progress_pct,
-                            f"Analyzing batch {batch_num} of {len(batches)} ({len(all_summaries)}/{len(case_documents)} documents complete)",
+                            f"Analyzing batch {batch_num} of {len(batches)} ({len(all_summaries)}/{len(case_documents)} documents complete)",  # noqa: E501
                         )
                 except (ImportError, AttributeError):
                     pass  # Streamlit not available or progress callback not set
@@ -732,14 +829,14 @@ Return ONLY valid JSON, no markdown code blocks.
                     # Calculate percentage within the 15-75% range
                     progress_pct = 15 + int((docs_processed_count / total_docs_in_all_batches) * 60)
                     progress_callback(
-                        message=f"Analyzed {docs_processed_count} of {total_docs_in_all_batches} documents...",
+                        message=f"Analyzed {docs_processed_count} of {total_docs_in_all_batches} documents...",  # noqa: E501
                         docs_processed=[s.document_name for s in all_summaries],
                         phase="document_analysis",
                         percent=progress_pct,
                     )
 
             logger.info(
-                f"✅ Batch processing complete: {len(all_summaries)} total summaries from {len(batches)} batches"
+                f"✅ Batch processing complete: {len(all_summaries)} total summaries from {len(batches)} batches"  # noqa: E501
             )
 
             return (
@@ -751,6 +848,7 @@ Return ONLY valid JSON, no markdown code blocks.
         logger.info(f"Processing {len(case_documents)} documents in single call...")
 
         # Build the structured JSON prompt for documents
+        # Build the structured JSON prompt for documents  # noqa: E501
         prompt = f"""You are a legal document analyst. Analyze each document and return structured JSON with complete facts.
 
 INTAKE INFORMATION:
@@ -785,10 +883,11 @@ OUTPUT FORMAT (STRICT JSON):
           "amount": "$XXX,XXX.XX format",
           "description": "What this represents",
           "source_document": "Document name, Section/Page"
-        }}
+        }}  # noqa: E501
       ],
       "issues_identified": [
-        "Specific legal problem or violation found",
+        "Specific legal problem or violation found",  # noqa: E501
+        # noqa: E501
         "IMPORTANT: Flag any dual roles or conflicts of interest (e.g., 'Client serves as HOA board member while also filing claim against HOA')",
         "Note any ethical considerations or recusal requirements"
       ],
@@ -817,10 +916,11 @@ OUTPUT FORMAT (STRICT JSON):
 
 CRITICAL RULES:
 - Always populate source_document fields with specific references
-- Use exact dates in consistent format (Month DD, YYYY preferred)
+- Use exact dates in consistent format (Month DD, YYYY preferred)  # noqa: E501
 - Format amounts as $XXX,XXX.XX
 - Include ALL parties mentioned (people, companies, entities)
 - List specific issues, not generic statements
+        # noqa: E501
 - **DUAL ROLES & CONFLICTS**: If the client holds multiple roles (board member + property owner, employer + employee, etc.), EXPLICITLY flag this in "issues_identified" with format: "CONFLICT: Client holds dual role as [Role 1] and [Role 2]"
 - Flag any potential conflicts of interest, ethical concerns, or situations requiring recusal
 - If a field has no data, use empty array [] or note "Not found in document"
@@ -930,7 +1030,7 @@ async def _process_document_batch(
 
 
 def _clean_and_parse_json(json_string: str, batch_num: int = None) -> Optional[Dict[str, Any]]:
-    """Cleans a JSON string by removing markdown code blocks and then parses it.
+    """Clean a JSON string by removing markdown code blocks and then parse it.
 
     Args:
     ----
@@ -965,7 +1065,7 @@ def _build_summary_prompt(
     is_batch: bool = False,
     batch_info: tuple = (),
 ) -> str:
-    """Builds the prompt for the document summarization AI call."""
+    """Build the prompt for the document summarization AI call."""
     # Prepare context from review step
     legal_issue = review_data.get("legal_issue", "Not specified")
     key_documents_list = review_data.get("key_documents", [])
@@ -984,10 +1084,10 @@ USER-DEFINED CONTEXT:
     if is_batch:
         batch_num, total_batches = batch_info
         batch_header = f"BATCH {batch_num} of {total_batches} - "
-        main_header = "You are a legal document analyst. Analyze each document in this batch and return structured JSON with complete facts."
+        main_header = "You are a legal document analyst. Analyze each document in this batch and return structured JSON with complete facts."  # noqa: E501
     else:
         batch_header = ""
-        main_header = "You are a legal document analyst. Analyze each document and return structured JSON with complete facts."
+        main_header = "You are a legal document analyst. Analyze each document and return structured JSON with complete facts."  # noqa: E501
 
     return f"""{main_header}
 
@@ -1023,10 +1123,11 @@ OUTPUT FORMAT (STRICT JSON):
           "amount": "$XXX,XXX.XX format",
           "description": "What this represents",
           "source_document": "Document name, Section/Page"
-        }}
+        }}  # noqa: E501
       ],
       "issues_identified": [
-        "Specific legal problem or violation found",
+        "Specific legal problem or violation found",  # noqa: E501
+        # noqa: E501
         "IMPORTANT: Flag any dual roles or conflicts of interest (e.g., 'Client serves as HOA board member while also filing claim against HOA')",
         "Note any ethical considerations or recusal requirements"
       ],
@@ -1055,10 +1156,11 @@ OUTPUT FORMAT (STRICT JSON):
 
 CRITICAL RULES:
 - Always populate source_document fields with specific references
-- Use exact dates in consistent format (Month DD, YYYY preferred)
+- Use exact dates in consistent format (Month DD, YYYY preferred)  # noqa: E501
 - Format amounts as $XXX,XXX.XX
 - Include ALL parties mentioned (people, companies, entities)
 - List specific issues, not generic statements
+        # noqa: E501
 - **DUAL ROLES & CONFLICTS**: If the client holds multiple roles (board member + property owner, employer + employee, etc.), EXPLICITLY flag this in "issues_identified" with format: "CONFLICT: Client holds dual role as [Role 1] and [Role 2]"
 - Flag any potential conflicts of interest, ethical concerns, or situations requiring recusal
 - If a field has no data, use empty array [] or note "Not found in document"

@@ -118,6 +118,28 @@ class Settings(BaseSettings):
     )
 
     # ==================================================
+    # FLORIDA LEGAL CORPUS FEATURE FLAGS
+    # ==================================================
+
+    validate_citations: bool = Field(
+        True,
+        alias="VALIDATE_CITATIONS",
+        description="Enable statute citation validation against Florida Legal Corpus",
+    )
+
+    suggest_statutes: bool = Field(
+        True,
+        alias="SUGGEST_STATUTES",
+        description="Enable AI-powered Florida statute recommendations based on case facts",
+    )
+
+    corpus_coverage_warnings: bool = Field(
+        True,
+        alias="CORPUS_COVERAGE_WARNINGS",
+        description="Show warnings when case type is outside corpus coverage areas",
+    )
+
+    # ==================================================
     # OPTIONAL CONFIGURATION
     # ==================================================
 
@@ -164,6 +186,7 @@ class Settings(BaseSettings):
     @classmethod
     def validate_credentials_file(cls, v, values):
         """Validate that the Google credentials file exists only when absolutely necessary.
+
         This validator is now very lenient to allow application startup without credentials.
         """
         # Skip validation if no value provided

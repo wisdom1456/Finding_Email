@@ -7,8 +7,12 @@ to ensure quality, consistency, and professional tone.
 from __future__ import annotations
 
 import re
-from typing import Optional
+from typing import Optional, Tuple
 
+from legal_portal.services.statute_validation_service import (
+    StatuteValidationService,
+    ValidationResult,
+)
 from legal_portal.utils.logging_config import get_module_logger
 from legal_portal.utils.openai_client import OpenAIClient
 
@@ -25,15 +29,17 @@ ENCODING_ARTIFACTS = {
 class LetterReviewService:
     """Provides AI-powered final review and cleanup of findings letters."""
 
-    def __init__(self, client: OpenAIClient):
+    def __init__(self, client: OpenAIClient, statute_validator: Optional[StatuteValidationService] = None):
         """Initialize with OpenAI client.
 
         Args:
         ----
             client: An instance of the custom OpenAIClient wrapper.
+            statute_validator: Optional StatuteValidationService for citation validation.
 
         """
         self.client = client
+        self.statute_validator = statute_validator or StatuteValidationService()
 
     def review_and_improve_letter(
         self,
@@ -43,8 +49,13 @@ class LetterReviewService:
         document_summaries_json: Optional[str] = None,
         quality_context: Optional[str] = None,
         client_name: Optional[str] = None,
-    ) -> str:
-        """Perform a comprehensive review of the draft letter for quality, accuracy, and tone."""
+    ) -> Tuple[str, Optional[ValidationResult]]:
+        """Perform a comprehensive review of the draft letter for quality, accuracy, and tone.
+
+        Returns
+        -------
+            Tuple of (improved_letter, validation_result)
+        """
         logger.info("Performing comprehensive letter review...")
 
         # 1. Normalize encoding artifacts before AI review
@@ -83,26 +94,86 @@ class LetterReviewService:
                 logger.warning("Letter review returned no content; returning original letter.")
                 return normalized_letter
 
-            # 2. Final normalization pass on the AI-reviewed content
-            final_letter = self._normalize_encoding(reviewed_content)
+            # 2. Clean any code fences from AI response
+            cleaned_content = self._clean_code_fences(reviewed_content)
 
-            # 3. Remove any editorial notes that the AI may have included
+            # 3. Final normalization pass on the AI-reviewed content
+            final_letter = self._normalize_encoding(cleaned_content)
+
+            # 4. Remove any editorial notes that the AI may have included
             final_letter = self._remove_editorial_notes(final_letter)
 
+            # 5. Validate statute citations
+            validation_result = None
+            try:
+                validation_result = self.statute_validator.validate_letter(final_letter)
+                logger.info(
+                    f"Statute validation complete: {validation_result.verified_citations} verified, "
+                    f"{validation_result.unverified_citations} unverified, "
+                    f"{validation_result.suspicious_citations} suspicious"
+                )
+            except Exception as val_error:
+                logger.error(f"Error during statute validation: {val_error}", exc_info=True)
+
             logger.info("Comprehensive letter review completed.")
-            return final_letter
+            return final_letter, validation_result
 
         except Exception as e:
             logger.error(f"Error during letter review: {e}", exc_info=True)
             # On error, return original letter rather than failing
             logger.warning("Returning original letter due to review error")
-            return draft_letter
+            return draft_letter, None
 
     def _normalize_encoding(self, text: str) -> str:
         """Corrects common encoding artifacts in text."""
         for pattern, replacement in ENCODING_ARTIFACTS.items():
             text = pattern.sub(replacement, text)
         return text
+
+    def _clean_code_fences(self, text: str) -> str:
+        """Remove markdown code fences from AI response.
+
+        The AI sometimes wraps HTML content in code fences like:
+        ```html
+        <div>...</div>
+        ```
+
+        This method removes those fences so the HTML can be properly formatted.
+
+        Args:
+        ----
+            text: AI response content potentially wrapped in code fences
+
+        Returns:
+        -------
+            Cleaned content with code fences removed
+        """
+        if not text:
+            return ""
+
+        cleaned = text.strip()
+
+        # Remove code fences with language specifiers (```html, ```markdown, etc.)
+        # Match opening fence with optional language specifier at start
+        cleaned = re.sub(r"^\s*```(?:html|markdown|md)?\s*\n?", "", cleaned, flags=re.MULTILINE)
+
+        # Remove closing code fences
+        cleaned = re.sub(r"\n?\s*```\s*$", "", cleaned, flags=re.MULTILINE)
+
+        # Clean up any remaining stray code fences (in case of multiple wrappings)
+        cleaned = re.sub(r"```(?:html|markdown|md)?\s*\n?", "", cleaned)
+        cleaned = re.sub(r"\n?\s*```", "", cleaned)
+
+        cleaned = cleaned.strip()
+
+        # Log if we removed code fences
+        if cleaned != text.strip():
+            logger.info(
+                "Removed code fences from AI response",
+                extra={"original_length": len(text), "cleaned_length": len(cleaned)},
+            )
+
+        return cleaned
 
     def _remove_editorial_notes(self, text: str) -> str:
         """Remove editorial notes and internal comments from the letter.
@@ -476,7 +547,7 @@ minimal changes are fine.
 
         Returns:
         -------
-            Dictionary with validation results
+            Dictionary with validation results including statute validation
 
         """
         issues = []
@@ -508,12 +579,29 @@ minimal changes are fine.
         if len(source_refs) < 2:
             warnings.append("Few or no source document references found")
 
+        # Validate statute citations with corpus
+        statute_validation = None
+        try:
+            statute_validation = self.statute_validator.validate_letter(letter)
+            # Add warnings for unverified citations
+            if statute_validation.unverified_citations > 0:
+                warnings.append(
+                    f"{statute_validation.unverified_citations} statute citation(s) could not be verified"
+                )
+            if statute_validation.suspicious_citations > 0:
+                issues.append(
+                    f"{statute_validation.suspicious_citations} suspicious statute citation(s) detected"
+                )
+        except Exception as e:
+            logger.error(f"Error during statute validation: {e}", exc_info=True)
+            warnings.append("Statute validation failed")
+
         quality_score = 10.0
         quality_score -= len(issues) * 2.0  # -2 points per issue
         quality_score -= len(warnings) * 0.5  # -0.5 points per warning
         quality_score = max(0.0, quality_score)
 
-        return {
+        result = {
             "quality_score": round(quality_score, 1),
             "issues": issues,
             "warnings": warnings,
@@ -522,3 +610,9 @@ minimal changes are fine.
             "source_reference_count": len(source_refs),
             "word_count": len(letter.split()),
         }
+
+        # Add statute validation details if available
+        if statute_validation:
+            result["statute_validation"] = statute_validation.to_dict()
+
+        return result

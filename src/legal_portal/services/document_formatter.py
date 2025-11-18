@@ -778,8 +778,12 @@ class DocumentFormatterService:
         /* Paragraphs and text */
         p {{
             margin: 18px 0;
-            text-align: left;
+            text-align: justify;
+            text-justify: inter-word;
             max-width: 85ch;
+            hyphens: auto;
+            -webkit-hyphens: auto;
+            -ms-hyphens: auto;
         }}
 
         /* Lists - Enhanced for readability */

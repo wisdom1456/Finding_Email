@@ -156,7 +156,20 @@ class DocumentFormatterService:
                 )
                 # Sort dates if possible
                 sorted_dates = sorted(all_dates, key=lambda x: x.get("date", ""))
+
+                # Deduplicate dates based on date + event combination
+                seen = set()
+                unique_dates = []
                 for date_info in sorted_dates:
+                    date = date_info.get("date", "Unknown date")
+                    event = date_info.get("event", "")
+                    # Create a unique key from date and event
+                    date_event_key = f"{date}|{event}"
+                    if date_event_key not in seen:
+                        seen.add(date_event_key)
+                        unique_dates.append(date_info)
+
+                for date_info in unique_dates:
                     date = date_info.get("date", "Unknown date")
                     event = date_info.get("event", "")
                     source = date_info.get("source_document", "")

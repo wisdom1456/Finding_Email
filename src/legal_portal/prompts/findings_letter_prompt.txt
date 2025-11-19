@@ -365,6 +365,35 @@ NOTE: The information above has been reviewed and verified by the user. Use this
 
 ---
 
+**CLIO MATTER CONTEXT (If Available):**
+
+{clio_matter_context}
+
+**Instructions for using CLIO context:**
+
+When CLIO matter context is provided, leverage it to strengthen your letter with specific, date-referenced communications and patterns:
+
+1. **Reference Specific Communications**: Instead of generic statements like "based on communications," write "Following your demand letter sent on January 18, 2024..."
+
+2. **Cite Communication Gaps as Evidence**: Use gaps to demonstrate bad faith or avoidance: "Jones Construction failed to respond for 45 days despite follow-up requests on February 2nd and March 4th"
+
+3. **Use Party Roles for Clarity**: Reference party relationships: "Mike Jones, representing Jones Construction as project manager..."
+
+4. **Build Chronological Narrative**: Use the communication timeline to show progression: "You first notified them on [date], followed up on [date], and escalated on [date]"
+
+5. **Leverage Response Patterns**: Use communication statistics as evidence: "Despite your five attempts to resolve this amicably, opposing counsel has responded only once—a pattern suggesting avoidance rather than good-faith negotiation."
+
+**Example Enhancement:**
+- Generic: "The opposing party has been unresponsive"
+- Enhanced: "Following your demand letter on January 18, 2024, Jones Construction failed to respond for 45 days. Despite follow-up emails on February 2nd and March 4th, they only replied on March 6th—a pattern suggesting avoidance rather than good-faith negotiation."
+
+**When to Use:**
+- Factual Summary: Ground the timeline in specific communication dates
+- Key Legal Points: Reference specific correspondence to demonstrate notice, good faith, or opposing party's breach
+- Strengths Section: Cite communication patterns as evidence of client's diligence or opposing party's bad faith
+
+---
+
 ## VOICE EXAMPLES (CRITICAL)
 
 **CORRECT - Second Person (Direct Address):**

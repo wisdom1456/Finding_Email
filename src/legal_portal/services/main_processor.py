@@ -326,6 +326,15 @@ async def process_case_documents(
         else:
             logger.info("Statute recommendations disabled via SUGGEST_STATUTES flag")
 
+        # Check if CLIO context is available in review_data
+        clio_context_str = ""
+        if review_data.get("clio_matter_context"):
+            from legal_portal.services.clio_context_builder import ClioContextBuilder
+
+            builder = ClioContextBuilder()
+            clio_context_str = builder.format_clio_context_for_prompt(review_data["clio_matter_context"])
+            logger.info("Using CLIO matter context for enhanced letter generation")
+
         # Pass new context to letter generation
         draft_letter = await json_processing_service.generate_findings_letter_from_json(
             intake_content=intake_content,
@@ -337,6 +346,7 @@ async def process_case_documents(
             contact_phone=contact_phone,  # NEW: Pass contact phone
             contact_email=contact_email,  # NEW: Pass contact email
             statute_context=statute_context,  # NEW: Pass statute recommendations
+            clio_matter_context=clio_context_str,  # NEW: Pass CLIO context
         )
 
         if os.getenv("LOG_LEVEL") == "DEBUG":

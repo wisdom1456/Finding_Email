@@ -301,38 +301,111 @@ def case_information_form():
 
 
 def file_upload_section():
-    """Handle the file upload section, allowing folder uploads."""
-    st.header("Upload Case Folder")
+    """Gated two-step upload: CLIO selection first, then documents."""
+    import os
+
+    # Check if CLIO is configured
+    clio_enabled = bool(os.getenv("CLIO_CLIENT_ID") and os.getenv("CLIO_CLIENT_SECRET"))
+
+    if not clio_enabled:
+        # No CLIO - go straight to manual upload
+        _show_manual_upload_section()
+        return
+
+    # === Step 1: Matter Selection (Gated) ===
+    st.subheader("Step 1: Select CLIO Matter (Optional)")
+
+    matter_selected = st.session_state.get("clio_selected_matter") is not None
+    matter_skipped = st.session_state.get("clio_matter_skipped", False)
+    step1_complete = matter_selected or matter_skipped
+
+    if not step1_complete:
+        # Show CLIO connection/search
+        from legal_portal.ui.components.clio_integration_ui import (
+            clio_connection_section,
+            matter_search_section,
+        )
+
+        if not st.session_state.get("clio_authenticated"):
+            clio_connection_section()
+        else:
+            matter_search_section()
+
+            st.divider()
+            col1, col2, col3 = st.columns([1, 2, 1])
+            with col2:
+                if st.button(
+                    "📝 No CLIO matter available - Skip to document upload", use_container_width=True
+                ):
+                    st.session_state.clio_matter_skipped = True
+                    st.rerun()
+    else:
+        # Show selection summary
+        if matter_selected:
+            matter = st.session_state.clio_selected_matter
+            st.success(f"✅ Matter selected: **{matter.display_number}** - {matter.client_name}")
+            col1, col2 = st.columns([3, 1])
+            with col1:
+                if matter.description:
+                    st.caption(
+                        matter.description[:100] + "..."
+                        if len(matter.description) > 100
+                        else matter.description
+                    )
+            with col2:
+                if st.button("Change matter"):
+                    st.session_state.clio_selected_matter = None
+                    st.session_state.clio_imported_data = None
+                    st.session_state.clio_processed_docs = []
+                    st.rerun()
+        else:
+            st.info("ℹ️ Proceeding without CLIO matter")
+            if st.button("Select a matter instead"):
+                st.session_state.clio_matter_skipped = False
+                st.rerun()
+
+    st.divider()
+
+    # === Step 2: Document Upload (Only shown after Step 1) ===
+    if step1_complete:
+        st.subheader("Step 2: Upload Case Documents")
+        _show_manual_upload_section()
+    else:
+        st.info("👆 Please select a CLIO matter or click 'No CLIO matter available' to continue")
+
+
+def _show_manual_upload_section():
+    """Show manual file upload interface."""
     uploaded_files = st.file_uploader(
-        "Select a folder or multiple files (TXT, PDF, DOCX, DOC, PNG, JPG, EML, CSV files)",
-        type=[
-            "txt",
-            "pdf",
-            "docx",
-            "doc",
-            "png",
-            "jpg",
-            "jpeg",
-            "eml",
-            "csv",
-        ],
+        "Select intake form and case documents (TXT, PDF, DOCX, DOC, PNG, JPG, EML, CSV)",
+        type=["txt", "pdf", "docx", "doc", "png", "jpg", "jpeg", "eml", "csv"],
         accept_multiple_files=True,
+        key="manual_file_uploader",
     )
+
     if uploaded_files:
         st.session_state.uploaded_files = uploaded_files
+        # Don't set data_source here - will be determined during preparation
 
-        # Check for large files and display compression option
-        large_files = [f for f in uploaded_files if f.size > 10 * 1024 * 1024]  # 10MB threshold
+        # Check for large files
+        large_files = [f for f in uploaded_files if f.size > 10 * 1024 * 1024]
         if large_files:
-            st.warning(
-                f"{len(large_files)} large file(s) detected. Compressing them is recommended to reduce cost and processing time."  # noqa: E501
-            )
-            # Default to True for a better user experience
+            st.warning(f"{len(large_files)} large file(s) detected. Compressing is recommended.")
             compress_choice = st.checkbox("✅ Compress large files before analysis", value=True)
             st.session_state.compress_files = compress_choice
         else:
-            # Ensure the state is clean if no large files are present
             st.session_state.compress_files = False
+
+        # Show file count
+        st.success(f"✅ {len(uploaded_files)} file(s) ready for upload")
+
+    # Show any currently uploaded files
+    elif st.session_state.get("uploaded_files"):
+        current_files = st.session_state.uploaded_files
+        st.info(f"📁 {len(current_files)} file(s) currently uploaded")
+        if st.button("Clear uploaded files"):
+            st.session_state.uploaded_files = []
+            st.rerun()
 
 
 def results_display_section():

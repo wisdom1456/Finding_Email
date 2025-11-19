@@ -56,11 +56,27 @@ def initialize_session_state():
         "processing_start_time": None,
         "result_queue": None,  # Thread-safe queue for results
         "session_temp_dir": None,  # For temporary file processing
-        "ui_step": "upload",  # 'upload', 'review', 'processing', 'results'
+        "ui_step": "upload",  # 'upload', 'preparing_review', 'review', 'processing', 'results'
         "review_data": {},  # Holds data for the review screen
         "start_full_analysis": False,  # Flag to start background thread
         "editable_qa_pairs": [],  # For the Q&A editor in review screen
         "confirmed_qa_pairs": [],  # Final confirmed Q&A after user review
+        # CLIO Integration state
+        "clio_authenticated": False,
+        "clio_access_token": None,
+        "clio_refresh_token": None,
+        "clio_token_expires_at": None,
+        "clio_selected_matter": None,
+        "clio_matter_skipped": False,  # User explicitly skipped CLIO
+        "clio_imported_data": None,
+        "clio_processed_docs": [],
+        "clio_matter_context": None,
+        "data_source": "manual",  # 'manual', 'clio', or 'hybrid'
+        # Preparation stage
+        "preparation_thread": None,
+        "preparation_status": "idle",  # idle, active, completed, failed
+        "preparation_queue": None,  # Queue for preparation progress updates
+        "preparation_error": None,  # Error message if preparation fails
     }
 
     # Initialize any missing session state variables
@@ -152,15 +168,349 @@ def run_processing_in_background(
                 logger.error(f"Failed to clean up temp directory. Error: {e}")
 
 
-def prepare_files_for_analysis(uploaded_files, compress_flag):
-    """Save uploaded files and compress them if needed.
-
-    Saves uploaded files to a temporary directory, compresses them if needed,
-    and returns a list of final file paths for intake and case documents.
+def run_preparation_in_background(
+    uploaded_files, clio_matter, clio_access_token, preparation_queue: queue.Queue
+):
+    """Prepare review data in background: import CLIO + process intake.
 
     Args:
     ----
-        uploaded_files: List of Streamlit UploadedFile objects
+        uploaded_files: List of uploaded Streamlit file objects
+        clio_matter: Selected CLIO matter (or None)
+        clio_access_token: CLIO OAuth token (or None)
+        preparation_queue: Queue for progress updates
+
+    """
+    try:
+        # Create event loop
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+
+        def send_progress(message, status="in_progress"):
+            """Send progress update."""
+            preparation_queue.put({"type": "progress", "message": message, "status": status})
+
+        # Step 1: Import CLIO data if matter selected
+        clio_imported_data = None
+        clio_processed_docs = []
+        clio_matter_context = None
+
+        if clio_matter:
+            send_progress("Importing communications from CLIO...")
+
+            try:
+                from legal_portal.services.clio_client import ClioClient
+                from legal_portal.services.clio_data_transformer import ClioDataTransformer
+
+                client = ClioClient(clio_access_token)
+
+                # Fetch communications
+                communications = client.get_communications(clio_matter.id)
+                send_progress(f"✓ Imported {len(communications)} communications", "done")
+
+                # Fetch notes
+                send_progress("Importing notes from CLIO...")
+                notes = client.get_notes(clio_matter.id)
+                send_progress(f"✓ Imported {len(notes)} notes", "done")
+
+                # Fetch documents (metadata only)
+                send_progress("Fetching document list from CLIO...")
+                documents = client.get_documents(clio_matter.id)
+                send_progress(f"✓ Found {len(documents)} documents", "done")
+
+                # Fetch contacts
+                send_progress("Fetching contact information...")
+                contact_ids = set()
+                for comm in communications:
+                    contact_ids.add(comm.sender.id)
+                    contact_ids.update([r.id for r in comm.recipients])
+                contacts = client.get_contacts(list(contact_ids)) if contact_ids else []
+                send_progress(f"✓ Retrieved {len(contacts)} contacts", "done")
+
+                # Transform data
+                send_progress("Processing CLIO data...")
+                transformer = ClioDataTransformer()
+                clio_processed_docs, clio_imported_data = transformer.transform_clio_import(
+                    clio_matter, communications, notes, documents, contacts
+                )
+                clio_matter_context = clio_imported_data.matter_context
+                send_progress(f"✓ Processed {len(clio_processed_docs)} items from CLIO", "done")
+
+                logger.info(f"CLIO import successful: {len(clio_processed_docs)} items")
+
+            except Exception as e:
+                error_msg = f"CLIO import failed: {str(e)}"
+                logger.error(error_msg, exc_info=True)
+                preparation_queue.put({"type": "clio_error", "error": error_msg})
+                return  # Stop here - let user decide to retry or continue
+
+        # Step 2: Process intake form
+        send_progress("Analyzing intake form...")
+
+        intake_files = [f for f in uploaded_files if "intake" in f.name.lower()]
+        if not intake_files:
+            preparation_queue.put(
+                {
+                    "type": "failed",
+                    "error": "No intake form found. Please upload a file with 'intake' in the name.",
+                }
+            )
+            return
+
+        intake_file = intake_files[0]
+
+        # Process intake with DocumentProcessor
+        from legal_portal.core.document_processor import DocumentProcessor
+
+        processor = DocumentProcessor()
+        processed_intake = loop.run_until_complete(
+            processor.process_documents_from_streamlit([intake_file], intake_filenames=["intake"])
+        )
+
+        if not processed_intake:
+            preparation_queue.put({"type": "failed", "error": "Failed to extract content from intake form."})
+            return
+
+        intake_content = processed_intake[0].content
+        send_progress("✓ Intake form processed", "done")
+
+        # Step 3: Parse intake with AI
+        send_progress("Extracting information from intake...")
+
+        from legal_portal.utils.helpers import (
+            build_structured_display_from_qa,
+            extract_client_name_from_qa,
+            identify_relevant_practice_areas_from_qa,
+            parse_intake_form_qa_pairs,
+        )
+
+        qa_pairs = parse_intake_form_qa_pairs(intake_content)
+
+        if not qa_pairs:
+            logger.warning("Failed to extract Q&A from intake")
+            qa_pairs = []
+
+        send_progress(f"✓ Extracted {len(qa_pairs)} Q&A pairs", "done")
+
+        # Step 4: Merge CLIO Q&A if available
+        if clio_imported_data:
+            send_progress("Merging CLIO data with intake...")
+            clio_qa = clio_imported_data.auto_populated_qa
+            existing_questions = {qa["question"].lower() for qa in qa_pairs}
+
+            added_count = 0
+            for clio_qa_item in clio_qa:
+                if clio_qa_item["question"].lower() not in existing_questions:
+                    qa_pairs.append(clio_qa_item)
+                    added_count += 1
+
+            send_progress(f"✓ Added {added_count} Q&A pairs from CLIO", "done")
+            logger.info(f"Merged {added_count} CLIO Q&A pairs")
+
+        # Step 5: Derive final data
+        send_progress("Finalizing preparation...")
+
+        client_name = extract_client_name_from_qa(qa_pairs)
+        intake_data = build_structured_display_from_qa(qa_pairs)
+        practice_areas = identify_relevant_practice_areas_from_qa(qa_pairs)
+
+        # Use CLIO client name if not found in intake
+        if not client_name and clio_imported_data:
+            client_name = clio_imported_data.matter.client_name
+
+        # Determine data source
+        if clio_imported_data:
+            data_source = "hybrid"
+            all_files = list(uploaded_files) + clio_processed_docs
+        else:
+            data_source = "manual"
+            all_files = uploaded_files
+
+        file_names = [f.name if hasattr(f, "name") else f.file_name for f in all_files]
+
+        # Build review data
+        review_data = {
+            "client_name": client_name,
+            "intake_content": intake_content,
+            "uploaded_files": file_names,
+            "suggested_practice_areas": practice_areas,
+            "parsed_intake_data": intake_data,
+            "intake_qa_pairs": qa_pairs,
+        }
+
+        # Send completion
+        preparation_queue.put(
+            {
+                "type": "completed",
+                "review_data": review_data,
+                "data_source": data_source,
+                "clio_imported_data": clio_imported_data,
+                "clio_processed_docs": clio_processed_docs,
+                "clio_matter_context": clio_matter_context,
+                "all_files": all_files,
+            }
+        )
+
+        logger.info("Preparation completed successfully")
+
+    except Exception as e:
+        error_msg = f"Preparation failed: {str(e)}"
+        logger.error(error_msg, exc_info=True)
+        preparation_queue.put({"type": "failed", "error": error_msg})
+    finally:
+        loop.close()
+
+
+def show_preparation_screen():
+    """Display preparation progress with granular feedback."""
+    st.header("⚙️ Preparing Your Case...")
+
+    # Check if thread is running
+    if not st.session_state.preparation_thread or not st.session_state.preparation_thread.is_alive():
+        # Thread finished or crashed
+        st.session_state.preparation_status = "completed"
+
+    # Create progress container
+    progress_container = st.container()
+
+    with progress_container:
+        # Check queue for messages
+        messages = []
+        clio_error = None
+        completion_data = None
+
+        while st.session_state.preparation_queue and not st.session_state.preparation_queue.empty():
+            try:
+                msg = st.session_state.preparation_queue.get_nowait()
+
+                if msg["type"] == "progress":
+                    messages.append(msg)
+                elif msg["type"] == "clio_error":
+                    clio_error = msg["error"]
+                    st.session_state.preparation_status = "clio_failed"
+                elif msg["type"] == "completed":
+                    completion_data = msg
+                    st.session_state.preparation_status = "completed"
+                elif msg["type"] == "failed":
+                    st.session_state.preparation_error = msg["error"]
+                    st.session_state.preparation_status = "failed"
+
+            except queue.Empty:
+                break
+
+        # Display progress messages
+        if messages:
+            for msg in messages:
+                status_icon = "✓" if msg.get("status") == "done" else "⏳"
+                st.text(f"{status_icon} {msg['message']}")
+
+        # Handle CLIO error with retry/skip options
+        if st.session_state.preparation_status == "clio_failed":
+            st.error(f"**CLIO Import Error:**\n\n{clio_error}")
+            st.warning("You can retry the CLIO import or continue with manual files only.")
+
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("🔄 Retry CLIO Import", use_container_width=True):
+                    # Reset and restart preparation
+                    st.session_state.preparation_status = "idle"
+                    st.session_state.preparation_error = None
+                    st.rerun()
+
+            with col2:
+                if st.button("Continue with Manual Files Only", use_container_width=True):
+                    # Clear CLIO matter and restart preparation
+                    st.session_state.clio_selected_matter = None
+                    st.session_state.clio_matter_skipped = True
+                    st.session_state.preparation_status = "idle"
+                    st.session_state.preparation_error = None
+                    st.rerun()
+
+        # Handle general failure
+        elif st.session_state.preparation_status == "failed":
+            st.error(f"**Preparation Failed:**\n\n{st.session_state.preparation_error}")
+
+            if st.button("← Back to Upload"):
+                st.session_state.ui_step = "upload"
+                st.session_state.preparation_status = "idle"
+                st.session_state.preparation_error = None
+                st.rerun()
+
+        # Handle completion
+        elif st.session_state.preparation_status == "completed" and completion_data:
+            st.success("✅ Preparation complete! Transitioning to review...")
+
+            # Store results in session state
+            review_data = completion_data["review_data"]
+
+            # Add CLIO context to review_data so it's available in background thread
+            if completion_data.get("clio_matter_context"):
+                review_data["clio_matter_context"] = completion_data["clio_matter_context"]
+
+            st.session_state.review_data = review_data
+            st.session_state.data_source = completion_data["data_source"]
+            st.session_state.clio_imported_data = completion_data.get("clio_imported_data")
+            st.session_state.clio_processed_docs = completion_data.get("clio_processed_docs", [])
+            st.session_state.clio_matter_context = completion_data.get("clio_matter_context")
+            st.session_state.uploaded_files = completion_data["all_files"]
+
+            # Transition to review
+            st.session_state.ui_step = "review"
+            st.rerun()
+
+        # Still processing
+        else:
+            with st.spinner("Processing..."):
+                time.sleep(0.5)
+                st.rerun()
+
+
+def handle_preparation_start():
+    """Validate inputs and start the preparation background thread."""
+    # Validate uploaded files
+    if not st.session_state.get("uploaded_files"):
+        st.error("Please upload files before proceeding.")
+        return
+
+    # Check for intake form
+    uploaded_files = st.session_state.uploaded_files
+    intake_files = [f for f in uploaded_files if "intake" in f.name.lower()]
+
+    if not intake_files:
+        st.error("Please upload an intake form (filename must contain 'intake').")
+        return
+
+    # Prepare for background processing
+    clio_matter = st.session_state.get("clio_selected_matter")
+    clio_token = st.session_state.get("clio_access_token")
+
+    # Create queue for progress updates
+    st.session_state.preparation_queue = queue.Queue()
+    st.session_state.preparation_status = "active"
+    st.session_state.preparation_error = None
+
+    # Start background thread
+    preparation_thread = threading.Thread(
+        target=run_preparation_in_background,
+        args=(uploaded_files, clio_matter, clio_token, st.session_state.preparation_queue),
+        daemon=True,
+    )
+    preparation_thread.start()
+    st.session_state.preparation_thread = preparation_thread
+
+    # Transition to preparation screen
+    st.session_state.ui_step = "preparing_review"
+    st.rerun()
+
+
+def prepare_files_for_analysis(uploaded_files, compress_flag):
+    """Save uploaded files and compress them if needed.
+
+    Handles both Streamlit UploadedFile objects and ProcessedDocument objects (from CLIO).
+
+    Args:
+    ----
+        uploaded_files: List of UploadedFile or ProcessedDocument objects
         compress_flag: Boolean indicating whether to compress large files
 
     Returns:
@@ -168,6 +518,8 @@ def prepare_files_for_analysis(uploaded_files, compress_flag):
         Tuple of (intake_path, case_document_paths)
 
     """
+    from legal_portal.core.data_models import ProcessedDocument
+
     if "session_temp_dir" not in st.session_state or not st.session_state.session_temp_dir:
         # Create a unique, secure temporary directory for this session
         st.session_state.session_temp_dir = tempfile.mkdtemp(prefix="legal_portal_")
@@ -180,24 +532,41 @@ def prepare_files_for_analysis(uploaded_files, compress_flag):
     with st.spinner("Preparing and compressing files..."):
         for uploaded_file in uploaded_files:
             try:
-                # Save the file to the temporary directory
-                temp_file_path = os.path.join(temp_dir, uploaded_file.name)
-                with open(temp_file_path, "wb") as f:
-                    f.write(uploaded_file.getbuffer())
+                # Check if this is a ProcessedDocument (from CLIO) or UploadedFile
+                if isinstance(uploaded_file, ProcessedDocument):
+                    # This is already processed from CLIO - save its content to a temp file
+                    file_name = uploaded_file.file_name
+                    temp_file_path = os.path.join(temp_dir, file_name)
 
-                # If compression is enabled, process the file
-                if compressor:
-                    # The process_file method handles the size check and compression in-place
-                    final_path = compressor.process_file(temp_file_path)
+                    # Save the already-extracted content as text
+                    with open(temp_file_path, "w", encoding="utf-8") as f:
+                        f.write(uploaded_file.content)
+
+                    # CLIO documents are already processed, no need to compress
+                    final_file_paths.append(temp_file_path)
+                    logger.info(f"Saved CLIO document: {file_name}")
+
                 else:
-                    final_path = temp_file_path
+                    # This is an UploadedFile - save and optionally compress
+                    temp_file_path = os.path.join(temp_dir, uploaded_file.name)
+                    with open(temp_file_path, "wb") as f:
+                        f.write(uploaded_file.getbuffer())
 
-                final_file_paths.append(final_path)
+                    # If compression is enabled, process the file
+                    if compressor:
+                        final_path = compressor.process_file(temp_file_path)
+                    else:
+                        final_path = temp_file_path
+
+                    final_file_paths.append(final_path)
 
             except Exception as e:
-                logger.error(f"Failed to prepare file {uploaded_file.name}. Error: {e}")
-                # Optionally, alert the user
-                st.warning(f"Could not process file: {uploaded_file.name}. It will be skipped.")
+                # Handle both types of file names
+                file_name = getattr(uploaded_file, "name", None) or getattr(
+                    uploaded_file, "file_name", "unknown"
+                )
+                logger.error(f"Failed to prepare file {file_name}. Error: {e}")
+                st.warning(f"Could not process file: {file_name}. It will be skipped.")
 
     # Separate intake form from other documents based on the final file paths
     intake_path = None
@@ -217,6 +586,16 @@ def check_authentication():
     if "authenticated" not in st.session_state:
         st.session_state.authenticated = False
 
+    # Check for authentication token in query params (from OAuth redirect)
+    query_params = st.query_params
+    if "auth_token" in query_params and not st.session_state.authenticated:
+        auth_token = query_params["auth_token"]
+        # Validate token format (simple check)
+        if auth_token and len(auth_token) == 32:
+            st.session_state.authenticated = True
+            st.session_state.auth_token = auth_token
+            logger.info("Restored authentication from OAuth redirect")
+
     if not st.session_state.authenticated:
         st.title("🔒 Legal Portal Access")
         st.markdown("### Enter PIN to Continue")
@@ -229,13 +608,24 @@ def check_authentication():
         with col1:
             if st.button("🔓 Unlock", use_container_width=True):
                 if pin_input == APP_PIN:
+                    # Generate authentication token
+                    import secrets
+
+                    auth_token = secrets.token_hex(16)
                     st.session_state.authenticated = True
+                    st.session_state.auth_token = auth_token
                     st.success("✅ Access granted!")
                     st.rerun()
                 else:
                     st.error("❌ Incorrect PIN. Please try again.")
 
         st.stop()
+
+    # Generate auth token if not present (for existing sessions)
+    if "auth_token" not in st.session_state:
+        import secrets
+
+        st.session_state.auth_token = secrets.token_hex(16)
 
 
 # --- Main Application ---
@@ -309,17 +699,25 @@ def main():
             - Bankruptcy (federal jurisdiction)
             - Patent/trademark law (federal jurisdiction)
             - Out-of-state matters
-            # noqa: E501
-            **If your case involves federal law or multi-jurisdiction issues, please consult with the attorney before proceeding.**
+
+            **If your case involves federal law or multi-jurisdiction issues,
+            please consult with the attorney before proceeding.**
             """
             )
 
         file_upload_section()
 
-        if st.button("Review Documents"):
-            # This button now transitions to the review step
-            # The actual processing happens after the review
-            handle_review_transition()
+        # Show "Prepare for Review" button only if files are uploaded
+        if st.session_state.get("uploaded_files") and len(st.session_state.uploaded_files) > 0:
+            st.divider()
+            col1, col2, col3 = st.columns([1, 2, 1])
+            with col2:
+                if st.button("📋 Prepare for Review", use_container_width=True, type="primary"):
+                    handle_preparation_start()
+
+    elif st.session_state.ui_step == "preparing_review":
+        # New preparation screen with granular progress
+        show_preparation_screen()
 
     elif st.session_state.ui_step == "review":
         # This is the new review step

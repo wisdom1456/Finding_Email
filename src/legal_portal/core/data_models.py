@@ -300,3 +300,72 @@ class CostEstimate(BaseModel):
     model_used: str = "gpt-4"
 
     model_config = {"protected_namespaces": ()}  # Allow 'model_' prefix
+
+
+# ============================================================================
+# CLIO Integration Models
+# ============================================================================
+
+
+class ClioContact(BaseModel):
+    """Person or organization in CLIO."""
+
+    id: int
+    name: str
+    type: str  # "Person", "Company"
+    email: Optional[str] = None
+    phone: Optional[str] = None
+
+
+class ClioMatter(BaseModel):
+    """CLIO matter with rich metadata."""
+
+    id: int
+    display_number: str
+    description: str
+    client_name: str
+    practice_area: Optional[str] = None
+    status: str
+    open_date: datetime
+    close_date: Optional[datetime] = None
+    custom_fields: Dict[str, Any] = Field(default_factory=dict)
+
+
+class ClioCommunication(BaseModel):
+    """Email or communication with metadata."""
+
+    id: int
+    subject: str
+    date: datetime
+    sender: ClioContact
+    recipients: List[ClioContact]
+    body: str
+    communication_type: str  # "Email", "PhoneCall", "Letter"
+    matter_id: int
+
+
+class ClioMatterContext(BaseModel):
+    """Rich context for letter generation."""
+
+    matter_summary: str
+    timeline: List[Dict[str, Any]]  # Chronological events
+    party_relationships: Dict[str, str]  # name -> role
+    communication_statistics: Dict[str, Any]
+    key_dates: List[Dict[str, Any]]
+    communication_gaps: List[str]  # Notable silences
+
+
+class ClioImportResult(BaseModel):
+    """Complete import result with metadata."""
+
+    matter: ClioMatter
+    communications_imported: int
+    documents_imported: int
+    notes_imported: int
+    contacts: List[ClioContact]
+    matter_context: ClioMatterContext
+    auto_populated_qa: List[Dict[str, str]]
+    errors: List[str]
+    date_range: Optional[tuple[datetime, datetime]] = None
+    total_file_size_bytes: int = 0
+    import_duration_seconds: float = 0

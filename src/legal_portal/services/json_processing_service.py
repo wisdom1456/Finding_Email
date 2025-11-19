@@ -132,6 +132,7 @@ class JsonProcessingService:
         contact_phone: str = None,
         contact_email: str = None,
         statute_context: str = "",
+        clio_matter_context: str = "",
     ) -> str:
         """Generate findings letter from structured JSON summaries.
 
@@ -144,8 +145,11 @@ class JsonProcessingService:
             firm_name: Firm name for signature (optional, will extract from intake if not provided)
             confirmed_qa_pairs: User-confirmed question-answer pairs from intake form review
             contact_phone: Contact phone for letter footer (optional, uses placeholder if not provided)
-            contact_email: Contact email for letter footer (optional, uses placeholder if not provided)
+            contact_email: Contact email for letter footer
+                (optional, uses placeholder if not provided)
             statute_context: Context about relevant Florida statutes for the case
+            clio_matter_context: Rich context from CLIO matter including timeline,
+                party relationships, communication patterns
 
         Returns:
         -------
@@ -194,11 +198,14 @@ class JsonProcessingService:
             f"email={'provided' if contact_email else 'placeholder'}"
         )
 
-        # Add statute context to the prompt if provided
+        # Add statute context and CLIO context to the prompt if provided
         full_quality_context = quality_context
         if statute_context:
             full_quality_context = f"{quality_context}\n\n{statute_context}"
             logger.info("Added statute recommendations to letter generation prompt")
+        if clio_matter_context:
+            full_quality_context = f"{full_quality_context}\n\n{clio_matter_context}"
+            logger.info("Added CLIO matter context to letter generation prompt")
 
         # Format prompt with JSON input and signature variables
         prompt = template_content.format(
@@ -211,6 +218,7 @@ class JsonProcessingService:
             firm_name=firm_name,
             contact_phone=contact_phone_value,
             contact_email=contact_email_value,
+            clio_matter_context=clio_matter_context,  # CLIO context for enhanced letter generation
         )
 
         logger.info("Making OpenAI request for letter generation from JSON")

@@ -101,6 +101,7 @@ class StatuteRecommendationService:
         Args:
         ----
             validator: Optional StatuteValidationService for accessing corpus
+
         """
         self.validator = validator or StatuteValidationService()
         logger.info("StatuteRecommendationService initialized")
@@ -124,6 +125,7 @@ class StatuteRecommendationService:
         Returns:
         -------
             List of recommended statutes, sorted by relevance
+
         """
         logger.info(f"Generating statute recommendations (limit: {limit})")
 
@@ -190,6 +192,7 @@ class StatuteRecommendationService:
         Returns:
         -------
             Set of relevant keywords
+
         """
         keywords = set()
 
@@ -244,6 +247,7 @@ class StatuteRecommendationService:
         Returns:
         -------
             Set of relevant chapter numbers
+
         """
         chapters = set()
 
@@ -272,6 +276,7 @@ class StatuteRecommendationService:
         Returns:
         -------
             Tuple of (score, reason) where score is 0-1
+
         """
         score = 0.0
         reasons = []
@@ -336,6 +341,7 @@ class StatuteRecommendationService:
         Returns:
         -------
             Formatted string for prompt context
+
         """
         if not recommendations:
             return ""

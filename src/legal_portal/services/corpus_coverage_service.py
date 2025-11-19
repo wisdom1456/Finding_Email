@@ -193,6 +193,7 @@ class CorpusCoverageService:
             - unsupported_areas: List of detected unsupported areas
             - confidence: float (0.0-1.0)
             - warnings: List of warning messages
+
         """
         text_to_analyze = f"{case_type or ''} {case_facts} {' '.join(legal_issues or [])}".lower()
 

@@ -19,19 +19,21 @@ from legal_portal.core.data_models import (
     ProcessedDocument,
     ServiceCost,
 )
-from legal_portal.utils.logging_config import get_module_logger
-
-logger = get_module_logger(__name__)
 from legal_portal.utils.cost_calculator import CostCalculator
 from legal_portal.utils.cost_estimator import CostEstimator
 from legal_portal.utils.cost_exporter import CostExporter
+from legal_portal.utils.logging_config import get_module_logger
+
+logger = get_module_logger(__name__)
 
 
 class CostSessionManager:
-    # Manages cost tracking sessions for legal case processing.
-    # Provides session-based cost tracking that persists cost estimates,
-    # accumulates actual costs during processing, and generates comprehensive
-    # cost summaries with variance analysis for operational insights.
+    """Manage cost tracking sessions for legal case processing.
+
+    Provides session-based cost tracking that persists cost estimates,
+    accumulates actual costs during processing, and generates comprehensive
+    cost summaries with variance analysis for operational insights.
+    """
 
     def __init__(self, session_storage_dir: str = "cost_sessions") -> None:
         # Initialize cost session manager.
@@ -53,14 +55,20 @@ class CostSessionManager:
         audio_files: list[dict[str, Any]] | None = None,
         video_files: list[dict[str, Any]] | None = None,
     ) -> str:
-        # Initialize a new cost tracking session for a case.
-        # Args:
-        #     case_id: Optional case identifier (generates UUID if not provided)
-        #     documents: List of documents to process
-        #     audio_files: List of audio file metadata
-        #     video_files: List of video file metadata
-        # Returns:
-        #     Case ID for the cost tracking session
+        """Initialize a new cost tracking session for a case.
+
+        Args:
+        ----
+            case_id: Optional case identifier (generates UUID if not provided)
+            documents: List of documents to process
+            audio_files: List of audio file metadata dictionaries
+            video_files: List of video file metadata dictionaries
+
+        Returns:
+        -------
+            Case ID for the cost tracking session
+
+        """
         if not case_id:
             case_id = str(uuid.uuid4())
 
@@ -92,12 +100,19 @@ class CostSessionManager:
         case_analysis_result: CaseAnalysisResult,
         processing_logs: dict[str, Any] | None = None,
     ) -> CostSummary:
-        # Update session with actual costs incurred during processing.
-        # Args:
-        #     case_id: Case identifier
-        #     case_analysis_result: Complete analysis results
-        #     processing_logs: Optional detailed processing logs
-        # Returns:
+        """Update session with actual costs incurred during processing.
+
+        Args:
+        ----
+            case_id: Case identifier
+            case_analysis_result: Complete analysis results from processing
+            processing_logs: Optional detailed processing logs for cost calculation
+
+        Returns:
+        -------
+            Updated CostSummary with actual costs and variance analysis
+
+        """
         #     Updated CostSummary with actual costs and variance
         # Load session if not in active sessions
         if case_id not in self.active_sessions:
@@ -157,11 +172,17 @@ class CostSessionManager:
         return cost_summary
 
     def get_cost_summary(self, case_id: str) -> CostSummary | None:
-        # Retrieve cost summary for a case.
-        # Args:
-        #     case_id: Case identifier
-        # Returns:
-        #     CostSummary if found, None otherwise
+        """Retrieve cost summary for a case.
+
+        Args:
+        ----
+            case_id: Case identifier
+
+        Returns:
+        -------
+            CostSummary if found, None otherwise
+
+        """
         # Check active sessions first
         if case_id in self.active_sessions:
             return self.active_sessions[case_id]
@@ -170,11 +191,21 @@ class CostSessionManager:
         return self._load_session(case_id)
 
     def finalize_cost_session(self, case_id: str) -> CostSummary:
-        # Finalize cost tracking session and generate final summary.
-        # Args:
-        #     case_id: Case identifier
-        # Returns:
-        #     Final CostSummary with complete analysis
+        """Finalize cost tracking session and generate final summary.
+
+        Args:
+        ----
+            case_id: Case identifier
+
+        Returns:
+        -------
+            Final CostSummary with complete analysis
+
+        Raises:
+        ------
+            ValueError: If cost session not found for the given case_id
+
+        """
         cost_summary = self.get_cost_summary(case_id)
         if not cost_summary:
             msg = f"Cost session not found for case_id: {case_id}"
@@ -190,11 +221,27 @@ class CostSessionManager:
         return cost_summary
 
     def generate_cost_report(self, case_id: str) -> dict[str, Any]:
-        # Generate detailed cost report for a case.
-        # Args:
-        #     case_id: Case identifier
-        # Returns:
-        #     Detailed cost analysis report
+        """Generate detailed cost report for a case.
+
+        Args:
+        ----
+            case_id: Case identifier
+
+        Returns:
+        -------
+            Detailed cost analysis report dictionary containing:
+            - case_id: Case identifier
+            - report_generated: ISO timestamp of report generation
+            - cost_estimate: Estimated costs breakdown
+            - actual_costs: Actual costs breakdown
+            - variance_analysis: Cost variance analysis
+            - service_breakdown: Per-service cost breakdown
+
+        Raises:
+        ------
+            ValueError: If cost session not found for the given case_id
+
+        """
         cost_summary = self.get_cost_summary(case_id)
         if not cost_summary:
             msg = f"Cost session not found for case_id: {case_id}"
@@ -284,11 +331,22 @@ class CostSessionManager:
         return report
 
     def export_cost_data_for_budget_analysis(self, case_ids: list[str] | None = None) -> dict[str, Any]:
-        # Export cost data in format suitable for budget analysis.
-        # Args:
-        #     case_ids: Optional list of specific case IDs to export
-        # Returns:
-        #     Budget analysis data export
+        """Export cost data in format suitable for budget analysis.
+
+        Args:
+        ----
+            case_ids: Optional list of specific case IDs to export.
+                If None, exports all available sessions.
+
+        Returns:
+        -------
+            Budget analysis data export dictionary containing:
+            - export_timestamp: ISO timestamp of export
+            - total_cases: Number of cases exported
+            - cases: List of case cost data
+            - summary_statistics: Aggregate statistics across all cases
+
+        """
         if case_ids is None:
             # Get all available sessions
             case_ids = self._get_all_session_ids()
@@ -431,9 +489,15 @@ class CostSessionManager:
         variance_amount = float(cost_summary.cost_variance) if cost_summary.cost_variance else 0.0
 
         if abs(variance_pct) <= 5:
-            return f"Costs were within expected range (±5%). Variance: {variance_pct:.1f}% (${variance_amount:.2f})"
+            return (
+                f"Costs were within expected range (±5%). "
+                f"Variance: {variance_pct:.1f}% (${variance_amount:.2f})"
+            )
         if variance_pct > 0:
-            return f"Costs exceeded estimate by {variance_pct:.1f}% (${variance_amount:.2f}). Consider reviewing estimation models."
+            return (
+                f"Costs exceeded estimate by {variance_pct:.1f}% (${variance_amount:.2f}). "
+                f"Consider reviewing estimation models."
+            )
         return f"Costs came in {abs(variance_pct):.1f}% under estimate (${abs(variance_amount):.2f} savings)."
 
     def _generate_service_breakdown(self, actual_costs: ActualCosts) -> dict[str, Any]:
@@ -542,14 +606,22 @@ class CostSessionManager:
         return False
 
     def export_session_budget(self, session_id: str, format: str = "csv") -> str:
-        # Export complete session budget in specified format.
-        # Args:
-        #     session_id: Case identifier for the session
-        #     format: Export format ('csv', 'json', 'html', 'text')
-        # Returns:
-        #     Exported budget data as string
-        # Raises:
-        #     ValueError: If session not found or invalid format
+        """Export complete session budget in specified format.
+
+        Args:
+        ----
+            session_id: Case identifier for the session
+            format: Export format ('csv', 'json', 'html', 'text')
+
+        Returns:
+        -------
+            Exported budget data as string in the requested format
+
+        Raises:
+        ------
+            ValueError: If session not found or invalid format specified
+
+        """
         cost_summary = self.get_cost_summary(session_id)
         if not cost_summary:
             msg = f"Cost session not found for session_id: {session_id}"

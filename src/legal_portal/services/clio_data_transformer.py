@@ -52,6 +52,7 @@ class ClioDataTransformer:
         Returns
         -------
             Tuple of (processed_docs, import_result)
+
         """
         logger.info(f"Transforming CLIO data for matter {matter.display_number}")
         start_time = time.time()
@@ -126,6 +127,7 @@ class ClioDataTransformer:
         Returns
         -------
             ProcessedDocument with formatted email content
+
         """
         # Format content with headers
         recipient_names = ", ".join([r.name for r in comm.recipients])
@@ -165,6 +167,7 @@ Subject: {comm.subject}
         Returns
         -------
             ProcessedDocument with formatted note content
+
         """
         subject = note.get("subject", "No subject")
         detail = note.get("detail", "")

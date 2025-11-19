@@ -329,9 +329,17 @@ class CostEstimator:
         return max(1.0, estimated_minutes * 1.15)
 
     def update_confidence_level(self, new_confidence: float) -> None:
-        # Update estimation confidence level.
-        # Args:
-        #     new_confidence: New confidence level (0.0-1.0)
+        """Update estimation confidence level.
+
+        Args:
+        ----
+            new_confidence: New confidence level between 0.0 and 1.0
+
+        Raises:
+        ------
+            ValueError: If confidence level is outside the valid range
+
+        """
         if 0.0 <= new_confidence <= 1.0:
             self.confidence_level = new_confidence
         else:

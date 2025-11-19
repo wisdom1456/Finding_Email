@@ -53,6 +53,7 @@ class ClioAuthService:
         Returns
         -------
             str: Base URL for CLIO API v4
+
         """
         return f"{self.base_url}/api/v4"
 
@@ -66,6 +67,7 @@ class ClioAuthService:
         Returns
         -------
             str: Authorization URL to redirect user to
+
         """
         if not self.client_id:
             raise ValueError("CLIO_CLIENT_ID not configured")
@@ -105,6 +107,7 @@ class ClioAuthService:
         Raises
         ------
             ValueError: If exchange fails or invalid code
+
         """
         if not self.client_id or not self.client_secret:
             raise ValueError("CLIO credentials not configured")
@@ -156,6 +159,7 @@ class ClioAuthService:
         Raises
         ------
             ValueError: If refresh fails
+
         """
         if not self.client_id or not self.client_secret:
             raise ValueError("CLIO credentials not configured")
@@ -202,6 +206,7 @@ class ClioAuthService:
         Returns
         -------
             bool: True if token is expired or expires in < 5 minutes
+
         """
         # Consider token expired if it expires in less than 5 minutes
         buffer = timedelta(minutes=5)

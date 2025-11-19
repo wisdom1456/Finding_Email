@@ -39,6 +39,7 @@ def load_and_index_corpus() -> Corpus:
     Returns
     -------
         A dictionary containing the indexed statutes and rules.
+
     """
     statutes_data = _load_jsonl(STATUTES_FILE)
     rules_data = _load_jsonl(RULES_FILE)
@@ -63,6 +64,7 @@ def find_statute_by_keyword(corpus: Corpus, keyword: str) -> List[Statute]:
     Returns:
     -------
         A list of matching statutes.
+
     """
     keyword = keyword.lower()
     results = []
@@ -88,6 +90,7 @@ def get_statute_by_citation(corpus: Corpus, citation: str) -> Statute | None:
     Returns:
     -------
         The statute dictionary or None if not found.
+
     """
     return corpus.get("statutes", {}).get(citation)
 

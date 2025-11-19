@@ -109,6 +109,7 @@ class StatuteValidationService:
         Args:
         ----
             corpus_dir: Path to Florida Legal Corpus directory
+
         """
         if corpus_dir is None:
             # Default to project corpus directory
@@ -182,6 +183,7 @@ class StatuteValidationService:
         Returns:
         -------
             ValidationResult with detailed validation information
+
         """
         logger.info("Starting statute citation validation")
         result = ValidationResult()
@@ -231,6 +233,7 @@ class StatuteValidationService:
         Returns:
         -------
             Set of unique citation strings found
+
         """
         citations = set()
 
@@ -261,6 +264,7 @@ class StatuteValidationService:
         Returns:
         -------
             StatuteReference with validation results
+
         """
         ref = StatuteReference(original_text=citation_text)
 
@@ -304,6 +308,7 @@ class StatuteValidationService:
         Returns:
         -------
             Normalized citation or None if format is invalid
+
         """
         # Check aliases first
         citation_lower = citation_text.lower().strip()
@@ -338,6 +343,7 @@ class StatuteValidationService:
         Returns:
         -------
             Statute dictionary or None if not found
+
         """
         # Normalize first
         normalized = self._normalize_citation(citation)
@@ -361,6 +367,7 @@ class StatuteValidationService:
         Returns:
         -------
             List of matching statute dictionaries
+
         """
         keyword_lower = keyword.lower()
         matches = []
@@ -391,5 +398,6 @@ def get_statute_validation_service() -> StatuteValidationService:
     Returns
     -------
         Cached StatuteValidationService instance
+
     """
     return StatuteValidationService()

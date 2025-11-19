@@ -18,9 +18,11 @@ from legal_portal.core.data_models import (
 
 
 class CostCalculator:
-    # Calculates actual processing costs from API usage and processing logs.
-    # Tracks real costs incurred during document analysis, audio transcription,
-    # and video processing to provide accurate cost summaries and variance analysis.
+    """Calculate actual processing costs from API usage and processing logs.
+
+    Tracks real costs incurred during document analysis, audio transcription,
+    and video processing to provide accurate cost summaries and variance analysis.
+    """
 
     # Current API Pricing Rates (USD) - matches CostEstimator
     PRICING_RATES = {
@@ -397,11 +399,20 @@ class CostCalculator:
         return token_usage
 
     def parse_vertex_ai_response_for_tokens(self, response_data: dict[str, Any]) -> dict[str, int]:
-        # Parse Vertex AI response to extract token usage.
-        # Args:
-        #     response_data: Raw response from Vertex AI
-        # Returns:
-        #     Dictionary with token usage information
+        """Parse Vertex AI response to extract token usage.
+
+        Args:
+        ----
+            response_data: Raw response from Vertex AI API
+
+        Returns:
+        -------
+            Dictionary with token usage information containing:
+            - prompt_tokens: Number of input tokens
+            - completion_tokens: Number of output tokens
+            - total_tokens: Total tokens used
+
+        """
         token_usage = {}
 
         # Vertex AI token usage is typically in metadata

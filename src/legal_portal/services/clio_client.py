@@ -43,6 +43,7 @@ class ClioClient:
         Parameters
         ----------
             access_token: OAuth access token
+
         """
         self.access_token = access_token
         self.base_url = "https://app.clio.com/api/v4"
@@ -87,6 +88,7 @@ class ClioClient:
             ClioAuthError: Authentication/authorization error
             ClioRateLimitError: Rate limit exceeded
             ClioAPIError: Other API errors
+
         """
         self._wait_for_rate_limit()
 
@@ -142,6 +144,7 @@ class ClioClient:
         Returns
         -------
             List of ClioMatter objects
+
         """
         logger.info(f"Searching CLIO matters: query='{query}', limit={limit}")
 
@@ -191,6 +194,7 @@ class ClioClient:
         Returns
         -------
             ClioMatter object with full details
+
         """
         logger.info(f"Fetching matter details: id={matter_id}")
 
@@ -251,6 +255,7 @@ class ClioClient:
         Returns
         -------
             List of ClioCommunication objects
+
         """
         logger.info(f"Fetching communications: matter_id={matter_id}, limit={limit}")
 
@@ -357,6 +362,7 @@ class ClioClient:
         Returns
         -------
             List of ClioContact objects
+
         """
         if not contact_ids:
             return []
@@ -413,6 +419,7 @@ class ClioClient:
         Returns
         -------
             List of note dictionaries
+
         """
         logger.info(f"Fetching notes: matter_id={matter_id}")
 
@@ -455,6 +462,7 @@ class ClioClient:
         Returns
         -------
             List of document metadata dictionaries
+
         """
         logger.info(f"Fetching documents: matter_id={matter_id}")
 
@@ -497,6 +505,7 @@ class ClioClient:
         Returns
         -------
             bytes: Document content
+
         """
         logger.info(f"Downloading document: id={document_id}")
 
@@ -529,6 +538,7 @@ class ClioClient:
         Returns
         -------
             datetime object or None
+
         """
         if not date_str:
             return None

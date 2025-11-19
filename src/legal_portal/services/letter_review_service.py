@@ -55,6 +55,7 @@ class LetterReviewService:
         Returns
         -------
             Tuple of (improved_letter, validation_result)
+
         """
         logger.info("Performing comprehensive letter review...")
 
@@ -147,6 +148,7 @@ class LetterReviewService:
         Returns:
         -------
             Cleaned content with code fences removed
+
         """
         if not text:
             return ""

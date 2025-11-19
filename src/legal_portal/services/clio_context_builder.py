@@ -36,6 +36,7 @@ class ClioContextBuilder:
         Returns
         -------
             ClioMatterContext with enriched data
+
         """
         logger.info(f"Building context for matter {matter.display_number}")
 
@@ -74,6 +75,7 @@ class ClioContextBuilder:
         Returns
         -------
             List of {question, answer} dictionaries
+
         """
         qa_pairs = []
 
@@ -115,6 +117,7 @@ class ClioContextBuilder:
         Returns
         -------
             List of timeline events sorted chronologically
+
         """
         # Sort by date
         sorted_comms = sorted(communications, key=lambda c: c.date)
@@ -152,6 +155,7 @@ class ClioContextBuilder:
         Returns
         -------
             Dict mapping contact name to inferred role
+
         """
         roles = {}
 
@@ -206,6 +210,7 @@ class ClioContextBuilder:
         Returns
         -------
             Dict with statistics and insights
+
         """
         attorney_initiated = 0
         client_initiated = 0
@@ -257,6 +262,7 @@ class ClioContextBuilder:
         Returns
         -------
             List of gap descriptions
+
         """
         gaps = []
 
@@ -287,6 +293,7 @@ class ClioContextBuilder:
         Returns
         -------
             List of key date dictionaries
+
         """
         key_dates = []
 
@@ -330,6 +337,7 @@ class ClioContextBuilder:
         Returns
         -------
             Formatted string for inclusion in prompt
+
         """
         sections = []
 

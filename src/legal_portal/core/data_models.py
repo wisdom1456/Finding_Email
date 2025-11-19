@@ -289,6 +289,44 @@ class ServiceCost(BaseModel):
     cost: float
     operation_type: str
     details: Optional[dict] = None
+    units_consumed: Optional[int] = None
+    unit_type: Optional[str] = None
+    rate_per_unit: Optional[float] = None
+    total_cost: Optional[float] = None
+    file_name: Optional[str] = None
+
+
+class ActualCosts(BaseModel):
+    """Total actual costs for all processing operations."""
+
+    total_actual_cost: float
+    service_costs: List[ServiceCost] = Field(default_factory=list)
+
+
+class TranscriptedMedia(BaseModel):
+    """Transcribed audio/media file."""
+
+    file_name: str
+    transcript: str
+    duration: Optional[float] = None  # Duration in seconds
+
+
+class VideoInsight(BaseModel):
+    """Video analysis insights."""
+
+    file_name: str
+    duration: Optional[float] = None
+    insights: Optional[str] = None
+    labels: Optional[List[str]] = None
+    objects: Optional[List[str]] = None
+    metadata: Optional[FileMetadata] = None
+
+
+class EnhancedVideoInsight(VideoInsight):
+    """Enhanced video insight with criminal analysis."""
+
+    is_criminal_case: bool = False
+    criminal_analysis: Optional[str] = None
 
 
 class CostEstimate(BaseModel):

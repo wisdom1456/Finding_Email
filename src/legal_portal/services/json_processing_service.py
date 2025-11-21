@@ -198,14 +198,17 @@ class JsonProcessingService:
             f"email={'provided' if contact_email else 'placeholder'}"
         )
 
-        # Add statute context and CLIO context to the prompt if provided
+        # Keep statute context separate for prominence in prompt
+        statute_context_formatted = statute_context if statute_context else ""
+
+        # Only append CLIO context to quality_context
         full_quality_context = quality_context
-        if statute_context:
-            full_quality_context = f"{quality_context}\n\n{statute_context}"
-            logger.info("Added statute recommendations to letter generation prompt")
         if clio_matter_context:
             full_quality_context = f"{full_quality_context}\n\n{clio_matter_context}"
             logger.info("Added CLIO matter context to letter generation prompt")
+
+        if statute_context_formatted:
+            logger.info("Statute context will be prominently placed in prompt")
 
         # Format prompt with JSON input and signature variables
         prompt = template_content.format(
@@ -213,6 +216,7 @@ class JsonProcessingService:
             intake_data=intake_content[:5000],
             document_summaries=document_summaries_json,  # Pass JSON directly
             quality_context=full_quality_context,
+            statute_context=statute_context_formatted,  # Prominent statute context
             attorney_name=attorney_name,
             attorney_title="Senior Partner",  # Default title
             firm_name=firm_name,

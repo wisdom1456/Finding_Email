@@ -48,7 +48,12 @@ markdown2>=2.4.10
 # Optional: Redis for advanced caching and session management
 # redis>=5.0.1  # Uncomment if using Redis for session storage
 
+# FastAPI Backend (Phase 5 - SvelteKit Migration)
+fastapi>=0.100.0
+uvicorn>=0.20.0
+python-multipart>=0.0.6
+supabase>=2.0.0
+
 # Removed unnecessary dependencies:
 # - pyth (not used in current implementation)
 # - sseclient-py (async/SSE not needed)
-# - fastapi, uvicorn, python-multipart (FastAPI removed)

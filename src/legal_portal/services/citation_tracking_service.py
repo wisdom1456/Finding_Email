@@ -154,30 +154,31 @@ class CitationTrackingService:
         # Add document analyses
         if case_analysis.analyzed_documents:
             logger.info(f"Processing {len(case_analysis.analyzed_documents)} analyzed documents")
-            for idx, doc_analysis in enumerate(case_analysis.analyzed_documents):
-                # FIX: Use file_name (with underscore) instead of filename
-                filename = getattr(
-                    doc_analysis, "file_name", getattr(doc_analysis, "filename", f"Document_{idx}")
-                )
-                logger.debug(f"Extracting source document {idx+1}: {filename}")
+        for idx, doc_analysis in enumerate(case_analysis.analyzed_documents):
+            # Prefer explicit string attributes for filenames
+            filename = getattr(doc_analysis, "file_name", None)
+            if not isinstance(filename, str) or not filename:
+                filename = getattr(doc_analysis, "filename", None)
+            if not isinstance(filename, str) or not filename:
+                filename = f"Document_{idx}"
+            logger.debug(f"Extracting source document {idx+1}: {filename}")
 
-                source_docs.append(
-                    {
-                        "filename": filename,
-                        "document_type": getattr(doc_analysis, "document_type", "document"),
-                        "summary": getattr(doc_analysis, "summary", ""),
-                        "key_information": getattr(doc_analysis, "key_information", ""),
-                        "relevance_to_case": getattr(doc_analysis, "relevance_to_case", ""),
-                        "legal_significance": getattr(doc_analysis, "legal_significance", ""),
-                        "citations": getattr(doc_analysis, "citations", []),
-                    }
-                )
-
-        # Add case timeline as a source
-        if case_analysis.case_timeline:
-            timeline_summary = "; ".join(
-                f"{event['date']}: {event['event']}" for event in case_analysis.case_timeline
+            source_docs.append(
+                {
+                    "filename": filename,
+                    "document_type": getattr(doc_analysis, "document_type", "document"),
+                    "summary": getattr(doc_analysis, "summary", ""),
+                    "key_information": getattr(doc_analysis, "key_information", ""),
+                    "relevance_to_case": getattr(doc_analysis, "relevance_to_case", ""),
+                    "legal_significance": getattr(doc_analysis, "legal_significance", ""),
+                    "citations": getattr(doc_analysis, "citations", []),
+                }
             )
+
+        # Add case timeline as a source (if it exists)
+        case_timeline = getattr(case_analysis, "case_timeline", None)
+        if case_timeline:
+            timeline_summary = "; ".join(f"{event['date']}: {event['event']}" for event in case_timeline)
             source_docs.append(
                 {
                     "filename": "Case Timeline",
@@ -630,6 +631,22 @@ This is essential for legal accuracy and attorney review. Every factual claim in
 
         return appendix_html
 
+    def embed_citations(self, letter_content: str, citation_map: Optional[CitationMap] = None) -> str:
+        """Embed citation references into the given letter content."""
+        target_map = citation_map or self.current_citation_map
+        if not target_map:
+            logger.debug("No citation map available for embedding citations")
+            return letter_content
+        return self._embed_citations_in_letter(letter_content, target_map)
+
+    def generate_citation_appendix_html(self, citation_map: Optional[CitationMap] = None) -> str:
+        """Generate citation appendix HTML for the provided map or current context."""
+        target_map = citation_map or self.current_citation_map
+        if not target_map:
+            logger.debug("No citation map available for appendix generation")
+            return ""
+        return self._generate_citation_appendix(target_map)
+
     def remove_citations_from_letter(self, letter_content: str) -> str:
         """Remove citation references from letter content to create a clean version.
 
@@ -650,8 +667,9 @@ This is essential for legal accuracy and attorney review. Every factual claim in
         import re
 
         # Pattern to match citation references in parentheses or square brackets
-        # Matches: (Source: filename.ext), [Source: filename.ext], etc.
-        citation_pattern = r"[\(\[]Source:[^\)\]]+[\)\]]"
+        # Matches: (Source: filename.ext), [Source: filename.ext], [Source verification needed], etc.
+        # Updated to handle both "Source:" and "Source " (with/without colon)
+        citation_pattern = r"[\(\[]\s*Source:?[^\)\]]+[\)\]]"
 
         # Remove citations and clean up any extra spaces
         clean_content = re.sub(citation_pattern, "", letter_content)

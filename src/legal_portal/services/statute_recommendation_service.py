@@ -356,3 +356,97 @@ class StatuteRecommendationService:
             context += f"   - Tags: {', '.join(rec.tags[:5])}\n\n"
 
         return context
+
+    def get_deadline_relevant_statutes(
+        self, case_type: str, keywords: List[str]
+    ) -> List[StatuteRecommendation]:
+        """Get statutes specifically relevant for deadline calculation.
+
+        Args:
+        ----
+            case_type: Type of case
+            keywords: Keywords from case facts
+
+        Returns:
+        -------
+            List of statutes with deadline language
+        """
+        deadline_relevant_chapters = []
+
+        # Map case types to deadline-critical chapters
+        if "construction" in case_type.lower():
+            deadline_relevant_chapters = ["558", "713", "95"]
+        elif "landlord" in case_type.lower() or "tenant" in case_type.lower():
+            deadline_relevant_chapters = ["83", "95"]
+        elif "foreclosure" in case_type.lower():
+            deadline_relevant_chapters = ["702", "95"]
+        else:
+            deadline_relevant_chapters = ["95"]  # Always include statute of limitations
+
+        # Get statutes from these chapters
+        recommendations = []
+        for citation, statute in self.validator.statutes.items():
+            if not citation.startswith("statute:"):
+                continue
+
+            if statute["chapter"] in deadline_relevant_chapters:
+                # Check if statute text contains deadline language
+                statute_text = statute.get("text", "").lower()
+                has_deadline = any(
+                    phrase in statute_text
+                    for phrase in [
+                        "within",
+                        "days",
+                        "months",
+                        "years",
+                        "deadline",
+                        "not later than",
+                        "prior to",
+                        "before",
+                        "after",
+                    ]
+                )
+
+                if has_deadline:
+                    recommendations.append(
+                        StatuteRecommendation(
+                            citation=f"Fla. Stat. § {statute['chapter']}.{statute['section']}",
+                            title=statute["title"],
+                            summary=statute["summary"],
+                            relevance_score=1.0,
+                            relevance_reason="Contains deadline language",
+                            tags=statute.get("tags", []),
+                            chapter=statute["chapter"],
+                            section=statute["section"],
+                        )
+                    )
+
+        return recommendations
+
+    def get_deadline_context_for_prompt(
+        self, deadline_statutes: List[StatuteRecommendation], max_statutes: int = 3
+    ) -> str:
+        """Format deadline-relevant statutes for prompt.
+
+        Args:
+        ----
+            deadline_statutes: Statutes containing deadline language
+            max_statutes: Maximum to include
+
+        Returns:
+        -------
+            Formatted context for prompt
+        """
+        if not deadline_statutes:
+            return ""
+
+        context = "**Deadline-Relevant Florida Statutes:**\n\n"
+        context += "The following statutes contain specific deadline requirements:\n\n"
+
+        for i, statute in enumerate(deadline_statutes[:max_statutes], 1):
+            context += f"{i}. **{statute.citation}** - {statute.title}\n"
+            context += f"   - {statute.summary}\n\n"
+
+        context += "IMPORTANT: Extract specific deadlines from these statutes and calculate dates based on case facts.\n\n"
+
+        return context

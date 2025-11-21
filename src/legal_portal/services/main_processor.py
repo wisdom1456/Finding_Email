@@ -102,6 +102,93 @@ def _convert_to_case_analysis_result(
     )
 
 
+async def _generate_case_analysis_summary(
+    intake_content: str,
+    structured_summaries: List[DocumentSummaryStructured],
+    openai_client_wrapper: OpenAIClient,
+    review_data: dict,
+) -> dict:
+    """Generate high-level case analysis from structured summaries.
+
+    AI Call #2.5: Synthesize all document summaries into case-level insights.
+
+    Args:
+    ----
+        intake_content: Raw intake form content
+        structured_summaries: List of DocumentSummaryStructured objects
+        openai_client_wrapper: OpenAI client for API calls
+        review_data: Dictionary containing legal issue and key documents
+
+    Returns:
+    -------
+        Dictionary with case_summary, practice_area, key_issues, relevant_statutes, additional_details
+
+    """
+    # Build prompt with all document summaries
+    summaries_json = json.dumps([s.model_dump() for s in structured_summaries], indent=2)
+    legal_issue = review_data.get("legal_issue", "") if review_data else ""
+
+    prompt = f"""You are a senior legal analyst. Based on the intake form and document summaries below, create a high-level case analysis.
+
+INTAKE INFORMATION:
+{intake_content}
+
+{f"IDENTIFIED LEGAL ISSUE: {legal_issue}" if legal_issue else ""}
+
+DOCUMENT SUMMARIES:
+{summaries_json}
+
+Generate a structured case analysis with:
+1. **case_summary**: 120-200 word executive summary of the case, covering who, what, when, where, why
+2. **practice_area**: Primary legal practice area (e.g., "Construction Law", "Consumer Protection", "Landlord-Tenant")
+3. **key_issues**: List 3-7 specific legal issues or problems identified
+4. **relevant_statutes**: Identify 2-5 potentially relevant Florida statutes with brief relevance notes
+5. **additional_details**: Any other important context not captured above
+
+OUTPUT AS STRICT JSON:
+{{
+  "case_summary": "...",
+  "practice_area": "...",
+  "key_issues": ["issue 1", "issue 2", ...],
+  "relevant_statutes": [
+    {{"statute": "Fla. Stat. § 718.116", "relevance": "HOA lien priority"}},
+    ...
+  ],
+  "additional_details": "..."
+}}
+"""
+
+    try:
+        response = openai_client_wrapper.create_chat_completion(
+            model="gpt-4o",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.3,
+            response_format={"type": "json_object"},
+        )
+
+        analysis_json = json.loads(response["content"])
+        logger.info(f"Generated case analysis for practice area: {analysis_json.get('practice_area')}")
+
+        # Ensure all required fields are present with defaults
+        return {
+            "case_summary": analysis_json.get("case_summary", "No summary available"),
+            "practice_area": analysis_json.get("practice_area", "General Legal Matter"),
+            "key_issues": analysis_json.get("key_issues", []),
+            "relevant_statutes": analysis_json.get("relevant_statutes", []),
+            "additional_details": analysis_json.get("additional_details", None),
+        }
+    except Exception as e:
+        logger.error(f"Failed to generate case analysis summary: {e}", exc_info=True)
+        # Return minimal fallback structure
+        return {
+            "case_summary": "Unable to generate case summary due to processing error.",
+            "practice_area": "General Legal Matter",
+            "key_issues": ["Analysis error - manual review required"],
+            "relevant_statutes": [],
+            "additional_details": f"Error: {str(e)}",
+        }
+
+
 async def process_case_documents(
     intake_form_path: str,
     case_document_paths: List[str],
@@ -236,8 +323,20 @@ async def process_case_documents(
             progress_callback,
         )
 
-        # 6. AI Call #2: Generate findings letter from JSON
-        logger.info("AI Call #2: Generating findings letter from structured data...")
+        # 5.5. AI Call #2.5: Generate case-level analysis summary
+        logger.info("AI Call #2.5: Generating case-level analysis summary...")
+        case_analysis_dict = await _generate_case_analysis_summary(
+            intake_content, structured_summaries, openai_client_wrapper, review_data
+        )
+        client_name_for_case = (
+            (case_info or {}).get("client_name") or (case_info or {}).get("clientName") or "Client"
+        )
+        case_analysis_result = _convert_to_case_analysis_result(
+            structured_summaries, client_name_for_case, intake_content
+        )
+
+        # 6. AI Call #3: Generate findings letter from JSON
+        logger.info("AI Call #3: Generating findings letter from structured data...")
         if os.getenv("LOG_LEVEL") == "DEBUG":
             logger.info(
                 f"CONTEXT CHECK - Passing {len(intake_content)} chars intake + JSON summaries to letter generation"  # noqa: E501
@@ -326,6 +425,34 @@ async def process_case_documents(
         else:
             logger.info("Statute recommendations disabled via SUGGEST_STATUTES flag")
 
+        # NEW: Extract deadlines using corpus and documents
+        deadline_context = ""
+        try:
+            from legal_portal.services.deadline_extraction_service import DeadlineExtractionService
+
+            deadline_service = DeadlineExtractionService()
+            deadlines = deadline_service.extract_deadlines(
+                structured_summaries=structured_summaries,
+                case_type=case_analysis_dict.get("practice_area", "General"),
+                case_facts=intake_content[:2000],
+            )
+
+            if deadlines:
+                deadline_context = deadline_service.format_deadlines_for_prompt(deadlines)
+                logger.info(
+                    f"Extracted {len(deadlines)} deadlines: "
+                    f"{sum(1 for d in deadlines if d.urgency == 'critical')} critical, "
+                    f"{sum(1 for d in deadlines if d.urgency == 'important')} important"
+                )
+        except Exception as e:
+            logger.warning(f"Failed to extract deadlines: {e}", exc_info=True)
+
+        # Append deadline context to statute context for prompt
+        if deadline_context:
+            statute_context = (
+                f"{statute_context}\n\n{deadline_context}" if statute_context else deadline_context
+            )
+
         # Check if CLIO context is available in review_data
         clio_context_str = ""
         if review_data.get("clio_matter_context"):
@@ -411,8 +538,11 @@ async def process_case_documents(
             # Optionally, you could add these warnings to the ProcessingResult errors
             # For now, we just log them.
 
-        # 8b. Create clean and cited versions
+        # 8b. Create clean and cited versions plus citation appendix
         logger.info("Creating clean and cited versions of findings letter...")
+        citation_summary = None
+        citation_appendix_html = None
+        citation_map_dict = None
         try:
             from legal_portal.services.citation_tracking_service import CitationTrackingService
 
@@ -423,15 +553,28 @@ async def process_case_documents(
             # Transform: (Source: Contract_fb5b8b11.pdf) → (Source: Contract.pdf)
             letter_with_clean_filenames = citation_service.clean_filename_hashes(improved_letter)
 
+            citation_map = citation_service.create_citation_map(
+                case_analysis_result, letter_with_clean_filenames
+            )
+            citation_summary = citation_service.get_citation_summary()
+            citation_appendix_html = citation_service.generate_citation_appendix_html(citation_map)
+            citation_map_dict = citation_service.export_citation_map("dict")
+
             # Keep the version with citations (but clean filenames) for cited letter
-            letter_with_citations = letter_with_clean_filenames
+            letter_with_citations = citation_service.embed_citations(
+                letter_with_clean_filenames, citation_map
+            )
 
             # Strip citations to create clean version
             clean_letter = citation_service.remove_citations_from_letter(letter_with_clean_filenames)
 
+            # DEBUG: Check if citations were actually removed
+            has_citations_clean = "[Source:" in clean_letter or "(Source:" in clean_letter
+            has_citations_cited = "[Source:" in letter_with_citations or "(Source:" in letter_with_citations
             logger.info(
                 f"Successfully created both versions: "
-                f"clean ({len(clean_letter)} chars) and cited ({len(letter_with_citations)} chars)"
+                f"clean ({len(clean_letter)} chars, has_citations={has_citations_clean}) "
+                f"and cited ({len(letter_with_citations)} chars, has_citations={has_citations_cited})"
             )
 
             # 8c. Apply professional formatting to both versions
@@ -458,7 +601,10 @@ async def process_case_documents(
             improved_letter = clean_letter
 
         except Exception as e:
-            logger.warning(f"Failed to strip citations: {e}", exc_info=True)
+            logger.error(f"CITATION PROCESSING FAILED: {e}", exc_info=True)
+            logger.error(f"Exception type: {type(e).__name__}")
+            logger.error(f"Exception details: {str(e)}")
+
             # Fallback: apply formatting to the improved letter
             try:
                 from legal_portal.services.document_formatter import DocumentFormatterService
@@ -466,13 +612,16 @@ async def process_case_documents(
                 formatter = DocumentFormatterService()
                 client_name_for_format = case_info.get("clientName", "Client") if case_info else "Client"
                 improved_letter = formatter.format_findings_letter(improved_letter, client_name_for_format)
-                logger.info("Applied formatting to fallback letter")
+                logger.warning("Applied formatting to fallback letter - BOTH VERSIONS WILL HAVE CITATIONS")
             except Exception as format_error:
-                logger.warning(f"Failed to format fallback letter: {format_error}")
+                logger.error(f"Failed to format fallback letter: {format_error}")
 
-            # Use the same formatted letter for both versions
+            # Use the same formatted letter for both versions (THIS IS THE PROBLEM)
             letter_with_citations = improved_letter
-            logger.info("Using formatted letter for both versions due to citation stripping error")
+            clean_letter = improved_letter
+            logger.error(
+                "⚠️  FALLBACK MODE: Using same letter for both versions due to citation error - both will contain citations"
+            )
 
         # 9. Calculate processing time
         processing_time = time.time() - start_time
@@ -485,9 +634,7 @@ async def process_case_documents(
             main_letter=improved_letter,
             main_letter_with_citations=letter_with_citations,  # NEW: Cited version
             document_summaries=json.dumps([s.model_dump() for s in structured_summaries], indent=2),
-            case_analysis=json.dumps(
-                [s.model_dump() for s in structured_summaries], indent=2
-            ),  # For backward compatibility
+            case_analysis=json.dumps(case_analysis_dict, indent=2),  # NEW: Proper case analysis structure
             quality_report=[q.model_dump() for q in quality_results]
             if quality_results
             else None,  # NEW: Add quality results
@@ -497,6 +644,11 @@ async def process_case_documents(
             document_count=len(processed_case_docs),
             errors=errors,
             warnings=coverage_warnings,  # NEW: Add corpus coverage warnings
+            citation_summary=citation_summary,
+            citation_appendix=citation_appendix_html,
+            citation_map=citation_map_dict,
+            statute_validation=statute_validation.to_dict() if statute_validation else None,
+            qa_warnings=qa_warnings if qa_warnings else None,
         )
         logger.info("✅ Full document processing workflow completed successfully.")
         return result
@@ -516,7 +668,15 @@ async def process_case_documents(
         return ProcessingResult(
             main_letter="<html><body><p>Processing failed due to validation error.</p></body></html>",
             document_summaries="",
-            case_analysis="",
+            case_analysis=json.dumps(
+                {
+                    "case_summary": "Processing failed - validation error",
+                    "practice_area": "Unknown",
+                    "key_issues": ["Processing error"],
+                    "relevant_statutes": [],
+                    "additional_details": str(e),
+                }
+            ),
             status="failed",
             processing_time_seconds=processing_time,
             document_count=0,
@@ -538,7 +698,15 @@ async def process_case_documents(
         return ProcessingResult(
             main_letter="<html><body><p>Processing failed due to an unexpected error.</p></body></html>",
             document_summaries="",
-            case_analysis="",
+            case_analysis=json.dumps(
+                {
+                    "case_summary": "Processing failed - unexpected error",
+                    "practice_area": "Unknown",
+                    "key_issues": ["Processing error"],
+                    "relevant_statutes": [],
+                    "additional_details": str(e),
+                }
+            ),
             status="failed",
             processing_time_seconds=processing_time,
             document_count=0,
@@ -857,9 +1025,9 @@ Return ONLY valid JSON, no markdown code blocks.
         # Original single-call path for smaller document sets
         logger.info(f"Processing {len(case_documents)} documents in single call...")
 
-        # Build the structured JSON prompt for documents
+        # Build the flexible JSON prompt for documents
         prompt = f"""You are a legal document analyst. \
-Analyze each document and return structured JSON with complete facts.
+Your goal is to extract ALL relevant information from each document, not just fit data into predefined boxes.
 
 INTAKE INFORMATION:
 {intake_content}
@@ -878,66 +1046,49 @@ OUTPUT FORMAT (STRICT JSON):
   "documents": [
     {{
       "document_name": "exact_filename.pdf",
-      "document_type": "Contract" | "Disclosure" | "Evidence" | "Correspondence",
-      "parties": ["Full Name 1", "Full Name 2"],
-      "jurisdiction_inferred": "State or Court inferred from document",
-      "key_dates": [
-        {{
-          "date": "YYYY-MM-DD or Month DD, YYYY",
-          "event": "What happened",
-          "source_document": "Document name, Section/Page"
-        }}
+      "document_type": "Contract" | "Disclosure" | "Evidence" | "Correspondence" | "Estimate" | "Notice" | "Other",
+
+      "executive_summary": "2-3 sentence overview: What this document is, what it contains, and why it matters",
+
+      "key_content": "Comprehensive narrative of all important information. Include specific facts, obligations, evidence, statements. Capture everything relevant even if it doesn't fit structured categories.",
+
+      "structured_data": {{
+        "parties": ["Only if clearly named"],
+        "dates": [
+          {{"date": "YYYY-MM-DD", "event": "description", "source": "page ref"}}
+        ],
+        "amounts": [
+          {{"amount": "$XXX", "description": "what it represents", "source": "page ref"}}
+        ],
+        "contract_clauses": [
+          {{"clause_id": "section", "description": "content", "snippet": "quote"}}
+        ]
+      }},
+
+      "important_details": [
+        "Any critical info not captured above",
+        "Conflicts of interest: 'CONFLICT: Client is both X and Y'",
+        "Procedural requirements or deadlines",
+        "Risks, limitations, problems identified",
+        "Strong evidence or admissions"
       ],
-      "key_amounts": [
-        {{
-          "amount": "$XXX,XXX.XX format",
-          "description": "What this represents",
-          "source_document": "Document name, Section/Page"
-        }}  # noqa: E501
-      ],
-      "issues_identified": [
-        "Specific legal problem or violation found",
-        "IMPORTANT: Flag any dual roles or conflicts of interest "
-        "(e.g., 'Client serves as HOA board member while also "
-        "filing claim against HOA')",
-        "Note any ethical considerations or recusal requirements"
-      ],
-      "risk_items": [
-        "Lien risk present",
-        "Statute of limitations proximity",
-        "Insurance coverage limitations"
-      ],
-      "contract_clauses_referenced": [
-        {{
-          "clause_number": "e.g., 7.1",
-          "title": "e.g., 'Default and Cure'",
-          "snippet": "Brief quote from the clause"
-        }}
-      ],
-      "procedural_requirements": [
-        "e.g., 'Chapter 558 pre-suit notice required'",
-        "e.g., 'Contract requires mediation before litigation'"
-      ],
-      "relevance_to_case": "How this document supports or weakens the claim",
+
+      "legal_significance": "Why this matters legally",
+      "relevance_to_case": "How this supports/weakens the claim",
       "extraction_quality": "high" | "medium" | "low",
-      "extraction_notes": "Any issues with source text"
+      "extraction_notes": "Only if extraction issues occurred"
     }}
   ]
 }}
 
 CRITICAL RULES:
-- Always populate source_document fields with specific references
-- Use exact dates in consistent format (Month DD, YYYY preferred)  # noqa: E501
-- Format amounts as $XXX,XXX.XX
-- Include ALL parties mentioned (people, companies, entities)
-- List specific issues, not generic statements
-- **DUAL ROLES & CONFLICTS**: If the client holds multiple roles (board member +
-  property owner, employer + employee, etc.), EXPLICITLY flag this in
-  "issues_identified" with format: "CONFLICT: Client holds dual role as
-  [Role 1] and [Role 2]"
-- Flag any potential conflicts of interest, ethical concerns, or situations
-  requiring recusal
-- If a field has no data, use empty array [] or note "Not found in document"
+- FOCUS on comprehensive capture in "key_content" and "important_details"
+- Structured fields are OPTIONAL - only populate if clearly present
+- NEVER say "not found" - just omit fields or use empty arrays
+- If document doesn't have something (e.g., no contract clauses in an estimate), that's fine
+- Capture EVERYTHING relevant, even if unconventional
+- Flag conflicts of interest prominently
+- Be specific with facts, quotes, and references
 - Return ONLY valid JSON, no markdown code blocks
 """
 
@@ -1115,72 +1266,72 @@ INTAKE INFORMATION (for context):
 {batch_header}DOCUMENTS TO ANALYZE:
 {_format_documents_with_metadata(documents)}
 
-Your task is to provide a detailed, structured summary for EACH document.
+Your task is to provide a comprehensive analysis of EACH document with FLEXIBILITY.
+Focus on capturing ALL relevant information, not just predefined fields.
 ---
 OUTPUT FORMAT (STRICT JSON):
 {{
   "documents": [
     {{
       "document_name": "exact_filename.pdf",
-      "document_type": "Contract" | "Disclosure" | "Evidence" | "Correspondence",
-      "parties": ["Full Name 1", "Full Name 2"],
-      "jurisdiction_inferred": "State or Court inferred from document",
-      "key_dates": [
-        {{
-          "date": "YYYY-MM-DD or Month DD, YYYY",
-          "event": "What happened",
-          "source_document": "Document name, Section/Page"
-        }}
+      "document_type": "Contract" | "Disclosure" | "Evidence" | "Correspondence" | "Estimate" | "Notice" | "Other",
+
+      "executive_summary": "2-3 sentence overview: What this document is, what it contains, and why it matters to the case",
+
+      "key_content": "Detailed narrative of the most important information in this document. Include specific facts, statements, admissions, obligations, or evidence. Be comprehensive - capture everything relevant even if it doesn't fit a category below.",
+
+      "structured_data": {{
+        "parties": ["Only include if clearly identifiable names/entities are present"],
+        "dates": [
+          {{
+            "date": "YYYY-MM-DD or Month DD, YYYY",
+            "event": "What happened",
+            "source": "Page or section reference"
+          }}
+        ],
+        "amounts": [
+          {{
+            "amount": "$XXX,XXX.XX",
+            "description": "What this represents",
+            "source": "Page or section reference"
+          }}
+        ],
+        "contract_clauses": [
+          {{
+            "clause_id": "Section number if applicable",
+            "description": "What the clause covers",
+            "snippet": "Brief relevant quote"
+          }}
+        ]
+      }},
+
+      "important_details": [
+        "Any other critical information that doesn't fit above",
+        "Flag dual roles/conflicts: 'CONFLICT: Client is both [Role 1] and [Role 2]'",
+        "Note procedural requirements, deadlines, notice requirements",
+        "Identify risks, limitations, or potential problems",
+        "Highlight admissions, contradictions, or smoking guns"
       ],
-      "key_amounts": [
-        {{
-          "amount": "$XXX,XXX.XX format",
-          "description": "What this represents",
-          "source_document": "Document name, Section/Page"
-        }}  # noqa: E501
-      ],
-      "issues_identified": [
-        "Specific legal problem or violation found",
-        "IMPORTANT: Flag any dual roles or conflicts of interest "
-        "(e.g., 'Client serves as HOA board member while also "
-        "filing claim against HOA')",
-        "Note any ethical considerations or recusal requirements"
-      ],
-      "risk_items": [
-        "Lien risk present",
-        "Statute of limitations proximity",
-        "Insurance coverage limitations"
-      ],
-      "contract_clauses_referenced": [
-        {{
-          "clause_number": "e.g., 7.1",
-          "title": "e.g., 'Default and Cure'",
-          "snippet": "Brief quote from the clause"
-        }}
-      ],
-      "procedural_requirements": [
-        "e.g., 'Chapter 558 pre-suit notice required'",
-        "e.g., 'Contract requires mediation before litigation'"
-      ],
+
+      "legal_significance": "Why this document matters legally - does it establish liability, show damages, prove notice, demonstrate violation, etc.",
+
       "relevance_to_case": "How this document supports or weakens the claim",
+
       "extraction_quality": "high" | "medium" | "low",
-      "extraction_notes": "Any issues with source text"
+      "extraction_notes": "Only note if there were text extraction issues or if document is incomplete"
     }}
   ]
 }}
 
 CRITICAL RULES:
-- Always populate source_document fields with specific references
-- Use exact dates in consistent format (Month DD, YYYY preferred)  # noqa: E501
-- Format amounts as $XXX,XXX.XX
-- Include ALL parties mentioned (people, companies, entities)
-- List specific issues, not generic statements
-- **DUAL ROLES & CONFLICTS**: If the client holds multiple roles (board member +
-  property owner, employer + employee, etc.), EXPLICITLY flag this in
-  "issues_identified" with format: "CONFLICT: Client holds dual role as
-  [Role 1] and [Role 2]"
-- Flag any potential conflicts of interest, ethical concerns, or situations
-  requiring recusal
-- If a field has no data, use empty array [] or note "Not found in document"
+- PRIORITIZE COMPREHENSIVE CAPTURE over fitting into boxes
+- The "key_content" and "important_details" fields should contain EVERYTHING relevant
+- Structured fields are OPTIONAL - only populate if data is clearly present
+- NEVER say "not found" - simply omit optional fields or leave arrays empty
+- If a document type doesn't have contracts clauses (like an estimate), that's fine - focus on what IS there
+- **CONFLICTS OF INTEREST**: If client has dual roles, ALWAYS flag in "important_details"
+- Include page numbers or section references when possible
+- Be specific with amounts, dates, and names when they appear
+- Capture admissions, contradictions, or particularly strong/weak points
 - Return ONLY valid JSON, no markdown code blocks
 """

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 from pydantic import BaseModel, Field
 
@@ -112,6 +112,24 @@ class ProcessingError(BaseModel):
     timestamp: datetime = Field(default_factory=datetime.now)
 
 
+class AnalysisError(BaseModel):
+    """Lightweight error object returned to the UI when a step fails."""
+
+    source: str
+    error_message: str
+    error_type: Optional[str] = None
+    details: Optional[Any] = None
+    timestamp: datetime = Field(default_factory=datetime.now)
+
+
+class AIAnalysisError(Exception):
+    """Custom exception for AI analysis failures."""
+
+    def __init__(self, message: str, *, details: Any | None = None) -> None:
+        super().__init__(message)
+        self.details = details
+
+
 # ============================================================================
 # Structured Summary Models (for enhanced AI output)
 # ============================================================================
@@ -181,6 +199,49 @@ class DocumentSummaryStructured(BaseModel):
         }
 
 
+class PartyInvolved(BaseModel):
+    """Represents an individual or organization involved in the matter."""
+
+    name: str
+    role: str
+    relationship: Optional[str] = None
+    contact_information: Optional[str] = None
+
+
+class EnhancedIntakeAnalysis(BaseModel):
+    """Rich intake analysis used by the new AI pipeline."""
+
+    client_name: Optional[str] = None
+    attorney_name: Optional[str] = None
+    case_summary: Optional[str] = None
+    case_type: Optional[str] = None
+    urgency_level: Optional[str] = None
+    client_priorities: List[str] = Field(default_factory=list)
+    desired_outcomes: List[str] = Field(default_factory=list)
+    key_facts: List[str] = Field(default_factory=list)
+    parties_involved: List[PartyInvolved] = Field(default_factory=list)
+    financial_impact: Optional[str] = None
+    legal_claims: List[str] = Field(default_factory=list)
+    timeline_events: List[Dict[str, Any]] = Field(default_factory=list)
+
+
+class DemandLetterEvaluation(BaseModel):
+    """Determines whether a demand letter is an appropriate next step."""
+
+    is_appropriate: bool = True
+    reasoning: str = ""
+    potential_outcomes: List[str] = Field(default_factory=list)
+    relevant_statutes: List[str] = Field(default_factory=list)
+
+
+class FinalAnalysis(BaseModel):
+    """Captures final recommendations and next steps for the client."""
+
+    case_summary: Optional[str] = None
+    recommendations: Optional[str] = None
+    next_steps: List[str] = Field(default_factory=list)
+
+
 class QualityScore(BaseModel):
     """Quality assessment for extracted content."""
 
@@ -193,6 +254,24 @@ class QualityScore(BaseModel):
     recommendations: List[str] = Field(
         default_factory=list, description="Suggested improvements or follow-ups"
     )
+
+
+class CaseAnalysisSummary(BaseModel):
+    """High-level case analysis for display on results page.
+
+    This represents the synthesized case-level insights that are shown
+    in the Case Analysis section of the UI.
+    """
+
+    case_summary: str = Field(description="120-200 word executive summary of the case")
+    practice_area: str = Field(
+        description="Primary practice area (e.g., 'Construction Law', 'Consumer Protection')"
+    )
+    key_issues: List[str] = Field(description="List of 3-7 key legal issues identified")
+    relevant_statutes: List[Dict[str, str]] = Field(
+        description="List of {statute: 'Fla. Stat. § XXX', relevance: 'Why it applies'}"
+    )
+    additional_details: Optional[str] = Field(default=None, description="Any additional important details")
 
 
 class ProcessingResult(BaseModel):
@@ -220,6 +299,25 @@ class ProcessingResult(BaseModel):
     document_count: int = 0
     errors: List[ProcessingError] = Field(default_factory=list)
     warnings: List[str] = Field(default_factory=list, description="Non-critical warnings for user awareness")
+    citation_summary: Optional[Dict[str, Any]] = Field(
+        default=None, description="Summary stats for citation tracking"
+    )
+    citation_appendix: Optional[str] = Field(
+        default=None, description="HTML appendix listing citations and source documents"
+    )
+    citation_map: Optional[Dict[str, Any]] = Field(
+        default=None, description="Full citation map structure for diagnostics"
+    )
+    statute_validation: Optional[Dict[str, Any]] = Field(
+        default=None, description="Results from statute validation service"
+    )
+    qa_warnings: Optional[List[str]] = Field(
+        default=None, description="Lightweight QA heuristics output for reviewer awareness"
+    )
+    artifacts: Optional[Dict[str, Dict[str, Any]]] = Field(
+        default=None,
+        description="Stored artifact metadata (paths, content types, signed URLs)",
+    )
 
     class Config:
         """Pydantic configuration for ProcessingResult."""
@@ -269,16 +367,20 @@ class LegalAssessment(BaseModel):
 
     claim_viability: Optional[str] = None
     overall_evidence_strength: Optional[str] = None
-    potential_challenges: List[str] = Field(default_factory=list)
+    potential_challenges: Union[str, List[str], None] = None
     recommended_actions: List[str] = Field(default_factory=list)
+    demand_letter_appropriate: Optional[bool] = None
+    urgency_assessment: Optional[str] = None
 
 
 class CaseAnalysisResult(BaseModel):
     """Complete case analysis result (legacy format)."""
 
-    intake_analysis: Optional[IntakeAnalysis] = None
+    intake_analysis: Optional[Union[EnhancedIntakeAnalysis, IntakeAnalysis]] = None
     analyzed_documents: List[AnalyzedDocument] = Field(default_factory=list)
     legal_assessment: Optional[LegalAssessment] = None
+    demand_letter_evaluation: Optional[DemandLetterEvaluation] = None
+    final_analysis: Optional[FinalAnalysis] = None
     errors: List[ProcessingError] = Field(default_factory=list)
 
 

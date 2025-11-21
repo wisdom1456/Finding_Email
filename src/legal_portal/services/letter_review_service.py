@@ -317,10 +317,32 @@ completeness checks.
 **COMPREHENSIVE REVIEW CHECKLIST:**
 
 1.  **Source Verification** (CRITICAL)
-   - Every major fact (date, amount, party name) MUST cite a source document
-   - Format: "per the Property Disclosure Form, Question 3(a)" or "(Source: Contract, page 2)"
-   - If a fact has no source, flag it: "[Source verification needed]"
+   - Every major fact (date, amount, party name) should reference its source document
+   - Format: "per the Property Disclosure Form" or "as documented in the contract"
+   - NEVER add placeholder text like "[Source verification needed]" - if you cannot verify a source, state the fact using cautious language ("based on available information") or omit it
    - Use the structured JSON data below to verify sources
+
+1a. **CORPUS STATUTE VERIFICATION** (CRITICAL)
+
+Check every Florida statute citation against the verified statutes provided above:
+
+✅ VERIFIED STATUTE (from corpus): Can cite confidently without caveats
+   - Use format: "Florida Statute § XXX.XX" or "Fla. Stat. § XXX.XX"
+   - Reference the statute's relevance context provided above
+   - No need for cautious language like "may apply" or "appears to"
+
+❌ UNVERIFIED STATUTE (not in corpus): Use cautious language
+   - Format: "Under Florida law" instead of citing specific section
+   - OR: Add caveat: "Florida Statute § XXX.XX may apply (verification recommended)"
+   - OR: Remove citation if not confident
+
+**Action Required:**
+1. List all Florida statute citations in the draft
+2. Check each against "VERIFIED FLORIDA STATUTES" section above
+3. For unverified statutes: Either remove, generalize, or add caveat
+4. For verified statutes: Ensure they're cited confidently with proper format
+
+This prevents hallucinated statute citations while allowing legitimate references.
 
 2. **Completeness Check** (CRITICAL)
    - Verify all required sections are present: Factual Summary, Key Legal Points, Recommended Action

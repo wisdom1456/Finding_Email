@@ -10,9 +10,8 @@ from typing import Any, Dict, List, Optional
 
 import httpx
 import openai
-from openai import OpenAI
-
 from legal_portal.utils.logging_config import get_module_logger
+from openai import OpenAI
 
 logger = get_module_logger(__name__)
 
@@ -254,6 +253,7 @@ class OpenAIClient:
         messages: List[Dict[str, str]],
         temperature: float = 0.3,
         max_tokens: Optional[int] = None,
+        response_format: Optional[Dict[str, str]] = None,
     ) -> Dict[str, Any]:
         """Provide standard interface for chat completions across all services.
 
@@ -266,6 +266,7 @@ class OpenAIClient:
             messages: List of message dicts with 'role' and 'content'
             temperature: Sampling temperature (0.0-2.0)
             max_tokens: Maximum tokens to generate (None for model default)
+            response_format: Optional dict to specify response format (e.g., {"type": "json_object"})
 
         Returns:
         -------
@@ -290,13 +291,21 @@ class OpenAIClient:
                 },
             )
 
+            # Build request parameters
+            request_params = {
+                "model": model,
+                "messages": messages,
+                "temperature": temperature,
+            }
+
+            if max_tokens is not None:
+                request_params["max_tokens"] = max_tokens
+
+            if response_format is not None:
+                request_params["response_format"] = response_format
+
             # Make the API call
-            response = self.client.chat.completions.create(
-                model=model,
-                messages=messages,
-                temperature=temperature,
-                max_tokens=max_tokens,
-            )
+            response = self.client.chat.completions.create(**request_params)
 
             content = response.choices[0].message.content
             usage = response.usage

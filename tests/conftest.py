@@ -3,10 +3,14 @@
 from __future__ import annotations
 
 import json
-from typing import Any, Dict, List
+from datetime import datetime
+from typing import Any, AsyncGenerator, Dict, List
 from unittest.mock import MagicMock, patch
 
 import pytest
+import pytest_asyncio
+from fastapi import FastAPI
+from httpx import ASGITransport, AsyncClient
 
 # Import data models
 from legal_portal.core.data_models import (
@@ -386,3 +390,174 @@ def sample_review_data():
         "key_documents": ["Contract.pdf", "Email_Correspondence.pdf"],
         "confirmed_qa_pairs": [{"question": "What is the purchase price?", "answer": "$50,000.00"}],
     }
+
+
+# ============================================================================
+# FastAPI Testing Fixtures
+# ============================================================================
+
+
+@pytest.fixture
+def test_user_id():
+    """Return a deterministic test user UUID."""
+    return "00000000-0000-0000-0000-000000000001"
+
+
+@pytest.fixture
+def test_user_token(test_user_id):
+    """Return a mock JWT token for authenticated endpoints."""
+    # In real tests, this would be a properly signed JWT
+    # For now, return a simple mock token
+    return f"Bearer mock_jwt_token_for_{test_user_id}"
+
+
+@pytest.fixture
+def mock_supabase_client():
+    """Mock Supabase client for service-role operations."""
+    mock_client = MagicMock()
+
+    # Mock table operations
+    mock_table = MagicMock()
+    mock_table.select.return_value = mock_table
+    mock_table.insert.return_value = mock_table
+    mock_table.update.return_value = mock_table
+    mock_table.delete.return_value = mock_table
+    mock_table.eq.return_value = mock_table
+    mock_table.neq.return_value = mock_table
+    mock_table.limit.return_value = mock_table
+    mock_table.order.return_value = mock_table
+    mock_table.single.return_value = mock_table
+    mock_table.execute.return_value = MagicMock(data=[], error=None)
+
+    mock_client.table.return_value = mock_table
+
+    # Mock auth operations
+    mock_auth = MagicMock()
+    mock_auth.get_user.return_value = MagicMock(
+        user=MagicMock(id="00000000-0000-0000-0000-000000000001", email="test@example.com"), error=None
+    )
+    mock_client.auth = mock_auth
+
+    # Mock storage operations
+    mock_storage = MagicMock()
+    mock_bucket = MagicMock()
+    mock_bucket.upload.return_value = MagicMock(data={"path": "test/path"}, error=None)
+    mock_bucket.download.return_value = MagicMock(data=b"fake file content", error=None)
+    mock_bucket.remove.return_value = MagicMock(data=None, error=None)
+    mock_bucket.get_public_url.return_value = "https://example.com/fake-url"
+    mock_storage.from_.return_value = mock_bucket
+    mock_client.storage = mock_storage
+
+    return mock_client
+
+
+@pytest.fixture
+def mock_supabase_user_client(test_user_id):
+    """Mock Supabase client with RLS context (user-scoped)."""
+    mock_client = MagicMock()
+
+    # Mock table operations with RLS filtering
+    mock_table = MagicMock()
+    mock_table.select.return_value = mock_table
+    mock_table.insert.return_value = mock_table
+    mock_table.update.return_value = mock_table
+    mock_table.delete.return_value = mock_table
+    mock_table.eq.return_value = mock_table
+    mock_table.limit.return_value = mock_table
+    mock_table.order.return_value = mock_table
+    mock_table.single.return_value = mock_table
+
+    # Default to returning user's own cases
+    mock_table.execute.return_value = MagicMock(
+        data=[
+            {
+                "id": "case-001",
+                "user_id": test_user_id,
+                "case_name": "Test Case",
+                "created_at": datetime.utcnow().isoformat(),
+            }
+        ],
+        error=None,
+    )
+
+    mock_client.table.return_value = mock_table
+
+    return mock_client
+
+
+@pytest_asyncio.fixture
+async def app_client(mock_supabase_client, mock_openai_client) -> AsyncGenerator[AsyncClient, None]:
+    """FastAPI test client with mocked dependencies."""
+    # Import the FastAPI app
+    try:
+        from legal_portal.api.main import app
+    except ImportError:
+        # If main.py doesn't exist yet, create a minimal app
+        app = FastAPI(title="Test App")
+
+        @app.get("/health")
+        async def health():
+            return {"status": "healthy"}
+
+    # Override dependencies
+    from legal_portal.api.dependencies import get_supabase_client, get_user_supabase_client
+
+    async def override_get_supabase():
+        return mock_supabase_client
+
+    async def override_get_user_supabase():
+        return mock_supabase_client
+
+    app.dependency_overrides[get_supabase_client] = override_get_supabase
+    app.dependency_overrides[get_user_supabase_client] = override_get_user_supabase
+
+    # Create async client
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        yield client
+
+    # Clear overrides
+    app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def case_factory(test_user_id):
+    """Factory for creating test case data."""
+
+    def _create_case(**overrides):
+        defaults = {
+            "id": f"case-{datetime.utcnow().timestamp()}",
+            "user_id": test_user_id,
+            "case_name": "Test Case",
+            "client_name": "John Doe",
+            "attorney_name": "Jane Smith",
+            "case_type": "Consumer Protection",
+            "status": "active",
+            "created_at": datetime.utcnow().isoformat(),
+            "updated_at": datetime.utcnow().isoformat(),
+        }
+        defaults.update(overrides)
+        return defaults
+
+    return _create_case
+
+
+@pytest.fixture
+def document_factory(test_user_id):
+    """Factory for creating test document data."""
+
+    def _create_document(**overrides):
+        defaults = {
+            "id": f"doc-{datetime.utcnow().timestamp()}",
+            "user_id": test_user_id,
+            "case_id": "case-001",
+            "file_name": "test_document.pdf",
+            "file_type": "pdf",
+            "file_size": 1024,
+            "storage_path": f"documents/{test_user_id}/test_document.pdf",
+            "uploaded_at": datetime.utcnow().isoformat(),
+        }
+        defaults.update(overrides)
+        return defaults
+
+    return _create_document

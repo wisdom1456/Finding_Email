@@ -3,6 +3,7 @@
 	import { onMount } from 'svelte';
 	import ClioMatterSearch from '$lib/components/ClioMatterSearch.svelte';
 	import ProgressIndicator from '$lib/components/ProgressIndicator.svelte';
+	import PageHeader from '$lib/components/ui/PageHeader.svelte';
 	import { clioStore } from '$lib/stores/clioStore';
 
 	interface ProgressStep {
@@ -113,19 +114,19 @@
 	<title>Create New Case | Legal Portal</title>
 </svelte:head>
 
-<div class="min-h-screen bg-gray-50 py-8">
-	<div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-		<!-- Header -->
-		<div class="mb-8">
-			<h1 class="text-3xl font-bold text-gray-900">Create New Case</h1>
-			<p class="mt-2 text-sm text-gray-600">
-				{#if $clioStore.connected && !showManualForm}
-					Search for a Clio matter to automatically populate case details and documents
-				{:else}
-					Enter case details manually
-				{/if}
-			</p>
-		</div>
+<div class="space-y-6">
+	<!-- Header -->
+	<PageHeader
+		title="Create New Case"
+		subtitle="{$clioStore.connected && !showManualForm
+			? 'Search for a Clio matter to automatically populate case details and documents'
+			: 'Enter case details manually'}"
+		breadcrumbs={[
+			{ label: 'Dashboard', href: '/app' },
+			{ label: 'Cases', href: '/app/cases' },
+			{ label: 'New Case' }
+		]}
+	/>
 
 		{#if error && !partialCaseId}
 			<div class="mb-6 bg-red-50 border border-red-200 rounded-md p-4">
@@ -300,34 +301,33 @@
 			</div>
 		{/if}
 
-		{#if !$clioStore.connected && !showManualForm}
-			<!-- Not Connected to Clio -->
-			<div class="bg-blue-50 border border-blue-200 rounded-lg p-6">
-				<div class="flex">
-					<svg class="h-5 w-5 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-						<path
-							stroke-linecap="round"
-							stroke-linejoin="round"
-							stroke-width="2"
-							d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-						/>
-					</svg>
-					<div class="ml-3 flex-1">
-						<h3 class="text-sm font-medium text-blue-800">Clio Not Connected</h3>
-						<p class="mt-1 text-sm text-blue-700">
-							Connect to Clio to search for matters and automatically import case details. You can still create cases manually.
-						</p>
-						<div class="mt-4">
-							<button
-								onclick={() => (showManualForm = true)}
-								class="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700"
-							>
-								Create Manual Case
-							</button>
-						</div>
+	{#if !$clioStore.connected && !showManualForm}
+		<!-- Not Connected to Clio -->
+		<div class="bg-blue-50 border border-blue-200 rounded-lg p-6">
+			<div class="flex">
+				<svg class="h-5 w-5 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+					<path
+						stroke-linecap="round"
+						stroke-linejoin="round"
+						stroke-width="2"
+						d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+					/>
+				</svg>
+				<div class="ml-3 flex-1">
+					<h3 class="text-sm font-medium text-blue-800">Clio Not Connected</h3>
+					<p class="mt-1 text-sm text-blue-700">
+						Connect to Clio to search for matters and automatically import case details. You can still create cases manually.
+					</p>
+					<div class="mt-4">
+						<button
+							onclick={() => (showManualForm = true)}
+							class="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700"
+						>
+							Create Manual Case
+						</button>
 					</div>
 				</div>
 			</div>
-		{/if}
-	</div>
+		</div>
+	{/if}
 </div>

@@ -10,7 +10,8 @@ lsof -ti:5173,5174,8000 | xargs kill -9 2>/dev/null || true
 echo ""
 echo "🚀 Starting Backend (FastAPI) on 127.0.0.1:8000..."
 cd /Users/BRFlorida/Projects/Work/Finding_Emails
-python3 -m uvicorn src.legal_portal.api.main:app --reload --host 127.0.0.1 --port 8000 > backend_live.log 2>&1 &
+export PYTHONPATH="/Users/BRFlorida/Projects/Work/Finding_Emails/src:$PYTHONPATH"
+python3 -m uvicorn legal_portal.api.main:app --reload --host 127.0.0.1 --port 8000 > backend_live.log 2>&1 &
 BACKEND_PID=$!
 
 echo "⏳ Waiting for backend to start..."

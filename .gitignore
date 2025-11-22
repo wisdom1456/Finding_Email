@@ -74,7 +74,12 @@ Thumbs.db
 
 # Logs
 *.log
+*.log.*
 logs/
+backend*.log
+frontend*.log
+**/backend*.log
+**/frontend*.log
 
 # Database
 *.db

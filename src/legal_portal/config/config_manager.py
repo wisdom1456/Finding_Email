@@ -84,9 +84,9 @@ class ConfigManager:
                     "Unexpected config structure in %s; falling back to empty dict", self.config_path
                 )
         except FileNotFoundError:
-            logger.warning("Configuration file not found at %s; using defaults", self.config_path)
+            logger.warning(f"Configuration file not found at {self.config_path}; using defaults")
         except json.JSONDecodeError as exc:
-            logger.error("Failed to parse configuration file %s: %s", self.config_path, exc)
+            logger.error(f"Failed to parse configuration file {self.config_path}: {exc}")
 
         # Fallback minimal structure so tests can still run.
         return {"prompts": {}, "metadata": {}}

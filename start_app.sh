@@ -246,6 +246,11 @@ check_dependencies() {
                 "pydantic-settings") import_name="pydantic_settings" ;;
                 "Pillow") import_name="PIL" ;;
                 "sseclient-py") import_name="sseclient" ;;
+                "streamlit-authenticator") import_name="streamlit_authenticator" ;;
+                "PyJWT") import_name="jwt" ;;
+                "pyyaml"|"PyYAML") import_name="yaml" ;;
+                "requests-oauthlib") import_name="requests_oauthlib" ;;
+                "beautifulsoup4") import_name="bs4" ;;
             esac
 
             log_verbose "Testing import for package: $pkg_name (import as: $import_name)"

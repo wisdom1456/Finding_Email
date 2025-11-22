@@ -6,7 +6,11 @@
 	import { PUBLIC_API_URL } from '$env/static/public';
 	import ClioMatterSearch from '$lib/components/ClioMatterSearch.svelte';
 	import ClioLinkedMatter from '$lib/components/ClioLinkedMatter.svelte';
+	import UploadFailureSummary from '$lib/components/UploadFailureSummary.svelte';
+	import PageHeader from '$lib/components/ui/PageHeader.svelte';
+	import Tabs from '$lib/components/ui/Tabs.svelte';
 	import { clioStore } from '$lib/stores/clioStore';
+	import { Trash2, Edit, ArrowLeft } from 'lucide-svelte';
 	import type { CaseData } from '$lib/types';
 
 	let caseData = $state<CaseData | null>(null);
@@ -67,6 +71,18 @@
 	let dragActive = $state(false);
 	let duplicateFiles = $state<Set<number>>(new Set());
 
+	// Upload failure tracking
+	interface UploadFailure {
+		fileName: string;
+		reason: string;
+		fileSizeMB?: number;
+		errorCode: string;
+		file?: File; // Keep file for retry
+	}
+	let uploadFailures = $state<UploadFailure[]>([]);
+	let showFailureSummary = $state(false);
+	let maxFileSizeMB = $state(100); // Default, will be fetched from settings
+
 	// Delete confirmation state
 	let deleteConfirmDoc = $state<string | null>(null);
 	let deleteConfirmCase = $state(false);
@@ -80,12 +96,82 @@
 	let savingCase = $state(false);
 
 	const caseId = $derived($page.params.id);
+	
+	// Tab state
+	let activeTab = $state('overview');
 
 	onMount(async () => {
 		await loadCase();
 		await loadDocuments();
 		await loadAnalysisStatus();
+		await loadSettings();
 	});
+
+	async function loadSettings() {
+		try {
+			const response = await fetch(`${PUBLIC_API_URL}/api/settings/limits`);
+			if (response.ok) {
+				const data = await response.json();
+				maxFileSizeMB = data.max_file_size_mb;
+			}
+		} catch (error) {
+			console.error('Failed to load settings:', error);
+			// Keep default value
+		}
+	}
+
+	function categorizeError(errorMessage: string, errorCode?: string): string {
+		if (errorCode) return errorCode;
+		
+		// Fallback categorization based on message
+		if (errorMessage.includes('MB') || errorMessage.toLowerCase().includes('size')) 
+			return 'FILE_TOO_LARGE';
+		if (errorMessage.toLowerCase().includes('extension') || errorMessage.toLowerCase().includes('type')) 
+			return 'INVALID_TYPE';
+		if (errorMessage.toLowerCase().includes('content') || errorMessage.toLowerCase().includes('magic')) 
+			return 'CONTENT_VALIDATION';
+		if (errorMessage.toLowerCase().includes('empty')) 
+			return 'CORRUPTED';
+		if (errorMessage.toLowerCase().includes('security'))
+			return 'SECURITY_VIOLATION';
+		return 'UNKNOWN';
+	}
+
+	function validateFileBeforeUpload(file: File): { valid: boolean; error?: string; errorCode?: string } {
+		// Check file size
+		const fileSizeMB = file.size / (1024 * 1024);
+		if (fileSizeMB > maxFileSizeMB) {
+			return {
+				valid: false,
+				error: `File size (${fileSizeMB.toFixed(2)}MB) exceeds maximum allowed size (${maxFileSizeMB}MB)`,
+				errorCode: 'FILE_TOO_LARGE'
+			};
+		}
+
+		// Check file type
+		const allowedExtensions = ['.pdf', '.doc', '.docx', '.txt', '.rtf', '.eml', '.jpg', '.jpeg', '.png', '.csv'];
+		const fileName = file.name.toLowerCase();
+		const hasValidExtension = allowedExtensions.some(ext => fileName.endsWith(ext));
+		
+		if (!hasValidExtension) {
+			return {
+				valid: false,
+				error: `File type not allowed. Allowed types: ${allowedExtensions.join(', ')}`,
+				errorCode: 'INVALID_TYPE'
+			};
+		}
+
+		// Check if empty
+		if (file.size === 0) {
+			return {
+				valid: false,
+				error: 'Empty files are not allowed',
+				errorCode: 'CORRUPTED'
+			};
+		}
+
+		return { valid: true };
+	}
 
 	async function loadCase() {
 		try {
@@ -395,7 +481,9 @@
 
 		uploading = true;
 		errorMessage = '';
+		uploadFailures = [];
 		let skippedCount = duplicateFiles.size;
+		let successCount = 0;
 
 		try {
 			const {
@@ -408,37 +496,81 @@
 			for (let i = 0; i < filesToUpload.length; i++) {
 				const file = filesToUpload[i];
 				const originalIndex = selectedFiles.indexOf(file);
-				const formData = new FormData();
-				formData.append('file', file);
-				formData.append('case_id', caseId);
-				formData.append('is_intake_form', (originalIndex === intakeFormIndex).toString());
 
-				const response = await fetch(`${PUBLIC_API_URL}/api/documents/upload`, {
-					method: 'POST',
-					headers: {
-						Authorization: `Bearer ${session.access_token}`
-					},
-					body: formData
-				});
+				try {
+					// Pre-upload validation
+					const validation = validateFileBeforeUpload(file);
+					if (!validation.valid) {
+						uploadFailures.push({
+							fileName: file.name,
+							reason: validation.error!,
+							errorCode: validation.errorCode || 'UNKNOWN',
+							fileSizeMB: file.size / (1024 * 1024),
+							file: file
+						});
+						continue; // Skip this file, continue with others
+					}
 
-				if (!response.ok) {
-					const errorData = await response.json();
-					throw new Error(errorData.detail || `Failed to upload ${file.name}`);
+					// Upload file
+					const formData = new FormData();
+					formData.append('file', file);
+					formData.append('case_id', caseId);
+					formData.append('is_intake_form', (originalIndex === intakeFormIndex).toString());
+
+					const response = await fetch(`${PUBLIC_API_URL}/api/documents/upload`, {
+						method: 'POST',
+						headers: {
+							Authorization: `Bearer ${session.access_token}`
+						},
+						body: formData
+					});
+
+					if (!response.ok) {
+						const errorData = await response.json().catch(() => ({ detail: 'Upload failed' }));
+						uploadFailures.push({
+							fileName: file.name,
+							reason: errorData.detail || `Failed to upload ${file.name}`,
+							errorCode: categorizeError(errorData.detail, errorData.code),
+							fileSizeMB: file.size / (1024 * 1024),
+							file: file
+						});
+					} else {
+						successCount++;
+					}
+				} catch (error: any) {
+					uploadFailures.push({
+						fileName: file.name,
+						reason: error.message || 'Unknown error',
+						errorCode: 'UNKNOWN',
+						fileSizeMB: file.size / (1024 * 1024),
+						file: file
+					});
 				}
 
 				uploadProgress = ((i + 1) / filesToUpload.length) * 100;
 			}
 
-			// Reload documents and reset
+			// Reload documents
 			await loadDocuments();
-			selectedFiles = [];
-			intakeFormIndex = null;
-			showIntakeSelector = false;
-			duplicateFiles = new Set();
-			
-			// Show success message with skipped count
-			if (skippedCount > 0) {
-				errorMessage = `✅ Uploaded ${filesToUpload.length} file(s). Skipped ${skippedCount} duplicate(s).`;
+
+			// Show summary
+			if (uploadFailures.length > 0) {
+				showFailureSummary = true;
+				if (successCount > 0) {
+					errorMessage = `⚠️ Uploaded ${successCount} file(s), ${uploadFailures.length} failed. Click to see details.`;
+				}
+			} else {
+				// All successful
+				selectedFiles = [];
+				intakeFormIndex = null;
+				showIntakeSelector = false;
+				duplicateFiles = new Set();
+				
+				let message = `✅ Successfully uploaded ${successCount} file(s)`;
+				if (skippedCount > 0) {
+					message += `. Skipped ${skippedCount} duplicate(s)`;
+				}
+				errorMessage = message;
 				setTimeout(() => { errorMessage = ''; }, 5000);
 			}
 		} catch (error: any) {
@@ -447,6 +579,24 @@
 			uploading = false;
 			uploadProgress = 0;
 		}
+	}
+
+	async function retryFailedUploads() {
+		if (uploadFailures.length === 0) return;
+
+		// Retry only the failed files
+		const filesToRetry = uploadFailures
+			.filter(f => f.file)
+			.map(f => f.file!);
+
+		if (filesToRetry.length === 0) return;
+
+		// Reset the selected files to only failed ones
+		selectedFiles = filesToRetry;
+		
+		// Close the summary modal and retry
+		showFailureSummary = false;
+		await uploadSelectedFiles();
 	}
 
 	async function promoteToIntakeForm(docId: string) {
@@ -724,31 +874,49 @@
 			<p class="text-sm text-red-600">Case not found</p>
 		</div>
 	{:else}
-		<!-- Header with Delete Button -->
-		<div class="md:flex md:items-center md:justify-between">
-			<div class="flex-1 min-w-0">
-				<h2 class="text-2xl font-bold leading-7 text-gray-900 sm:text-3xl sm:truncate">
-					{caseData.client_name}
-				</h2>
-				{#if caseData.reference_number}
-					<p class="mt-1 text-sm text-gray-500">{caseData.reference_number}</p>
-				{/if}
-			</div>
-			<div class="mt-4 flex md:mt-0 md:ml-4 space-x-3">
-				<span class="px-3 py-1 inline-flex text-sm leading-5 font-semibold rounded-full {getStatusColor(caseData.status)}">
-					{caseData.status}
-				</span>
-				<button
-					onclick={() => (deleteConfirmCase = true)}
-					class="inline-flex items-center px-3 py-2 border border-red-300 shadow-sm text-sm leading-4 font-medium rounded-md text-red-700 bg-white hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
-				>
-					<svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-					</svg>
-					Delete Case
-				</button>
-			</div>
-		</div>
+		<!-- Back Button -->
+		<a
+			href="/app/cases"
+			class="inline-flex items-center text-sm font-medium text-gray-500 hover:text-gray-700 transition-colors"
+		>
+			<ArrowLeft class="h-4 w-4 mr-2" />
+			Back to Cases
+		</a>
+
+		<!-- Header with Actions -->
+		<PageHeader
+			title={caseData.client_name}
+			subtitle={caseData.reference_number}
+			breadcrumbs={[
+				{ label: 'Dashboard', href: '/app' },
+				{ label: 'Cases', href: '/app/cases' },
+				{ label: caseData.client_name }
+			]}
+		>
+			{#snippet children()}
+				<div class="flex items-center space-x-3">
+					<span class="px-3 py-1 inline-flex text-sm leading-5 font-semibold rounded-full {getStatusColor(caseData.status)}">
+						{caseData.status}
+					</span>
+					{#if !editingCase}
+						<button
+							onclick={startEditCase}
+							class="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+						>
+							<Edit class="h-4 w-4 mr-1.5" />
+							Edit
+						</button>
+					{/if}
+					<button
+						onclick={() => (deleteConfirmCase = true)}
+						class="inline-flex items-center px-3 py-2 border border-red-300 shadow-sm text-sm leading-4 font-medium rounded-md text-red-700 bg-white hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors"
+					>
+						<Trash2 class="h-4 w-4 mr-1" />
+						Delete
+					</button>
+				</div>
+			{/snippet}
+		</PageHeader>
 
 		{#if errorMessage}
 			<div class="rounded-md bg-red-50 p-4">
@@ -756,22 +924,24 @@
 			</div>
 		{/if}
 
-		<!-- Case Info -->
-		<div class="bg-white shadow rounded-lg p-6">
-			<div class="flex justify-between items-center mb-4">
-				<h3 class="text-lg font-medium text-gray-900">Case Details</h3>
-				{#if !editingCase}
-					<button
-						onclick={startEditCase}
-						class="inline-flex items-center px-3 py-1.5 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-					>
-						<svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-						</svg>
-						Edit
-					</button>
-				{/if}
-			</div>
+		<!-- Tabs -->
+		<Tabs
+			tabs={[
+				{ id: 'overview', label: 'Overview' },
+				{ id: 'documents', label: 'Documents' },
+				{ id: 'analysis', label: 'Analysis' }
+			]}
+			bind:activeTab
+		>
+			{#snippet children()}
+				<!-- Overview Tab -->
+				{#if activeTab === 'overview'}
+					<div class="space-y-6">
+						<!-- Case Info -->
+						<div class="bg-white shadow rounded-lg p-6">
+							<div class="flex justify-between items-center mb-4">
+								<h3 class="text-lg font-medium text-gray-900">Case Details</h3>
+							</div>
 
 			{#if editingCase}
 				<!-- Edit Form -->
@@ -859,11 +1029,11 @@
 						</div>
 					{/if}
 				</dl>
-			{/if}
-		</div>
+					{/if}
+				</div>
 
-		<!-- Practice Area Guidance -->
-		<details class="bg-blue-50 border border-blue-200 rounded-lg">
+				<!-- Practice Area Guidance -->
+				<details class="bg-blue-50 border border-blue-200 rounded-lg">
 			<summary class="px-4 py-3 cursor-pointer text-sm font-medium text-blue-900 hover:bg-blue-100">
 				ℹ️ Supported Practice Areas (Florida law only)
 			</summary>
@@ -922,13 +1092,13 @@
 
 				<p class="text-xs italic text-gray-600 mt-3">
 					If your case involves federal law or multi-jurisdiction issues, please consult with the attorney before proceeding.
-				</p>
-			</div>
-	</details>
+					</p>
+				</div>
+			</details>
 
-	<!-- Clio Matter Import (only show if connected) - Shown FIRST so user imports before uploading -->
-	{#if $clioStore.connected}
-		<div class="bg-white shadow rounded-lg p-6">
+					<!-- Clio Matter Import (only show if connected) -->
+					{#if $clioStore.connected}
+						<div class="bg-white shadow rounded-lg p-6">
 			<h3 class="text-lg font-medium text-gray-900 mb-4">
 				{caseData?.clio_matter_id ? 'Clio Matter' : 'Import from Clio'}
 			</h3>
@@ -956,12 +1126,17 @@
 						await loadCase();
 						await loadDocuments();
 					}}
-				/>
-			{/if}
-		</div>
-	{/if}
+					/>
+				{/if}
+			</div>
+		{/if}
+					</div>
+				{/if}
 
-		<!-- Enhanced Documents Section -->
+				<!-- Documents Tab -->
+				{#if activeTab === 'documents'}
+					<div class="space-y-6">
+						<!-- Enhanced Documents Section -->
 		<div class="bg-white shadow rounded-lg">
 			<div class="px-4 py-5 sm:px-6 border-b border-gray-200">
 				<h3 class="text-lg leading-6 font-medium text-gray-900">Documents</h3>
@@ -1192,15 +1367,20 @@
 									</button>
 								</div>
 							</li>
-						{/each}
+								{/each}
 					</ul>
 				</div>
 			{/if}
 		</div>
+					</div>
+				{/if}
 
-		<!-- Analysis Section -->
-		<div class="bg-white shadow rounded-lg p-6">
-			<h3 class="text-lg font-medium text-gray-900 mb-4">Analysis</h3>
+				<!-- Analysis Tab -->
+				{#if activeTab === 'analysis'}
+					<div class="space-y-6">
+						<!-- Analysis Section -->
+						<div class="bg-white shadow rounded-lg p-6">
+							<h3 class="text-lg font-medium text-gray-900 mb-4">Analysis</h3>
 
 			{#if !analysisStatus && documents.length > 0}
 				<button
@@ -1234,6 +1414,7 @@
 						<div class="flex items-center space-x-3">
 							<a
 								href="/app/cases/{caseId}/results"
+								data-sveltekit-preload-data="off"
 								class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
 							>
 								View Results
@@ -1267,14 +1448,18 @@
 						</div>
 					{/if}
 
-					{#if analysisStatus.error}
-						<div class="rounded-md bg-red-50 p-4">
-							<p class="text-sm text-red-800">{analysisStatus.error}</p>
+							{#if analysisStatus.error}
+								<div class="rounded-md bg-red-50 p-4">
+									<p class="text-sm text-red-800">{analysisStatus.error}</p>
+								</div>
+							{/if}
 						</div>
 					{/if}
 				</div>
-			{/if}
-		</div>
+					</div>
+				{/if}
+			{/snippet}
+		</Tabs>
 	{/if}
 </div>
 
@@ -1578,4 +1763,21 @@
 			</div>
 		</div>
 	</div>
+{/if}
+
+<!-- Upload Failure Summary Modal -->
+{#if showFailureSummary && uploadFailures.length > 0}
+	<UploadFailureSummary 
+		failures={uploadFailures}
+		totalAttempted={selectedFiles.length}
+		onClose={() => {
+			showFailureSummary = false;
+			selectedFiles = [];
+			intakeFormIndex = null;
+			showIntakeSelector = false;
+			duplicateFiles = new Set();
+			uploadFailures = [];
+		}}
+		onRetry={retryFailedUploads}
+	/>
 {/if}

@@ -156,6 +156,8 @@ class MultiStageAnalyzer:
         total_time = time.time() - start_time
         logger.info(f"Multi-stage analysis complete in {total_time:.2f} seconds")
 
+        opposing_parties = self._identify_opposing_parties(fact_matrix)
+
         return MultiStageAnalysisResult(
             fact_matrix=fact_matrix,
             issue_map=issue_map,
@@ -164,6 +166,7 @@ class MultiStageAnalyzer:
             verified_statutes=verified_statutes,
             processing_time_seconds=total_time,
             stage_timings=self.stage_timings,
+            opposing_parties=opposing_parties,
         )
 
     async def _extract_fact_matrix(
@@ -203,12 +206,15 @@ Extract and structure the following facts:
    - Name (exact spelling)
    - Role (Client, Opposing Party, Contractor, Landlord, Tenant, Subcontractor, etc.)
    - First mentioned in which document
+   - Is this an opposing party? (true/false)
+   - Entity type (individual, LLC, corporation, partnership, government, or unknown)
 
 2. **TIMELINE**: Chronological events with dates
    - Date (be as specific as possible)
    - Description of event
    - Source document
    - Significance (why this event matters)
+   - Supporting evidence (list of document names that prove the event)
 
 3. **FINANCIAL DATA**: All monetary amounts
    - Amount (exact number)
@@ -216,6 +222,7 @@ Extract and structure the following facts:
    - Date if applicable
    - Source document
    - Type (paid, owed, claimed, estimated)
+   - Category (contract_price, payment_made, damages_claimed, fees_owed, refund_owed, other)
 
 4. **KEY DOCUMENTS**: Important documents referenced
    - Document name
@@ -236,7 +243,9 @@ Return a JSON object with this EXACT structure:
       "name": "string",
       "role": "string",
       "contact_info": "string or null",
-      "first_mentioned_in": "string or null"
+      "first_mentioned_in": "string or null",
+      "is_opposing_party": true,
+      "entity_type": "individual | LLC | corporation | partnership | government | unknown"
     }}
   ],
   "timeline": [
@@ -244,7 +253,8 @@ Return a JSON object with this EXACT structure:
       "date": "YYYY-MM-DD or Month YYYY",
       "description": "string",
       "source_document": "string",
-      "significance": "string or null"
+      "significance": "string or null",
+      "supporting_evidence": ["DocumentA.pdf"]
     }}
   ],
   "financial_data": [
@@ -253,7 +263,8 @@ Return a JSON object with this EXACT structure:
       "description": "string",
       "date": "string or null",
       "source_document": "string",
-      "payment_type": "paid | owed | claimed | estimated"
+      "payment_type": "paid | owed | claimed | estimated",
+      "category": "contract_price | payment_made | damages_claimed | fees_owed | refund_owed | other"
     }}
   ],
   "key_documents": [
@@ -281,8 +292,9 @@ RULES:
 - Return ONLY valid JSON, no markdown formatting
 """
 
+        model = self.client.get_preferred_model("multi_stage_analysis", "gpt-4o")
         response_dict = self.client.create_chat_completion(
-            model="gpt-4o",
+            model=model,
             messages=[
                 {
                     "role": "system",
@@ -377,8 +389,9 @@ COMPLEXITY CRITERIA:
 Return ONLY valid JSON.
 """
 
+        model = self.client.get_preferred_model("multi_stage_analysis", "gpt-4o")
         response_dict = self.client.create_chat_completion(
-            model="gpt-4o",
+            model=model,
             messages=[
                 {
                     "role": "system",
@@ -491,8 +504,9 @@ CRITICAL INSTRUCTIONS:
 Return ONLY valid JSON.
 """
 
+        model = self.client.get_preferred_model("multi_stage_analysis", "gpt-4o")
         response_dict = self.client.create_chat_completion(
-            model="gpt-4o",
+            model=model,
             messages=[
                 {
                     "role": "system",
@@ -569,3 +583,20 @@ Return ONLY valid JSON.
                 issue_format="bullets_with_subheadings",
                 reasoning=f"Moderate complexity with {num_primary_issues} issues",
             )
+
+    def _identify_opposing_parties(self, fact_matrix: FactMatrix) -> List[Party]:
+        """Identify opposing parties based on flags or roles."""
+        opposing = [
+            party
+            for party in fact_matrix.parties
+            if party.is_opposing_party or (party.role and "oppos" in party.role.lower())
+        ]
+
+        if not opposing:
+            opposing = [
+                party
+                for party in fact_matrix.parties
+                if party.role and party.role.lower() not in {"client", "law firm", "attorney", "counsel"}
+            ]
+
+        return opposing

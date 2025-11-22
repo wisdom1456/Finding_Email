@@ -14,6 +14,7 @@ from legal_portal.core.data_models import (
     CaseAnalysisResult,
     DocumentSummaryStructured,
     IntakeAnalysis,
+    Party,
     ProcessingError,
     ProcessingResult,
     QualityScore,
@@ -22,10 +23,8 @@ from legal_portal.core.document_processor import DocumentProcessor
 from legal_portal.services.corpus_coverage_service import CorpusCoverageService
 from legal_portal.services.document_quality_validator import DocumentQualityValidator
 from legal_portal.services.json_processing_service import JsonProcessingService
-from legal_portal.services.letter_review_service import LetterReviewService
 from legal_portal.services.multi_stage_analyzer import MultiStageAnalyzer
-from legal_portal.services.qa_service import run_qa_heuristics  # Import the new QA function
-from legal_portal.services.statute_validation_service import StatuteValidationService
+from legal_portal.services.statute_recommendation_service import StatuteRecommendationService
 from legal_portal.utils.logging_config import get_module_logger
 from legal_portal.utils.openai_client import OpenAIClient
 
@@ -161,8 +160,9 @@ OUTPUT AS STRICT JSON:
 """
 
     try:
+        model = openai_client_wrapper.get_preferred_model("document_analysis", "gpt-4o")
         response = openai_client_wrapper.create_chat_completion(
-            model="gpt-4o",
+            model=model,
             messages=[{"role": "user", "content": prompt}],
             temperature=0.3,
             response_format={"type": "json_object"},
@@ -308,7 +308,36 @@ async def process_case_documents(
         aggregated_quality_report = _aggregate_quality_results(quality_results)
         quality_context = _format_quality_context(aggregated_quality_report)
 
+        # Load settings early so we can use it for statute recommendations
+        settings = get_settings()
+
         # Pass new context to summary generation
+        # Get statute recommendations early so we can use them in document summarization
+        statute_context = ""
+        if settings.suggest_statutes:
+            try:
+                recommendation_service = StatuteRecommendationService()
+                legal_issues = []
+                if review_data and "legal_issues" in review_data:
+                    legal_issues = review_data.get("legal_issues", [])
+                case_type = case_info.get("caseType") if case_info else None
+                recommendations = recommendation_service.recommend_statutes(
+                    case_facts=intake_content[:2000],
+                    legal_issues=legal_issues,
+                    case_type=case_type,
+                    limit=5,
+                )
+                if recommendations:
+                    statute_context = recommendation_service.get_statute_context_for_prompt(
+                        recommendations, max_statutes=5
+                    )
+                    logger.info(
+                        f"Generated {len(recommendations)} statute recommendations for document analysis",
+                        extra={"recommendation_count": len(recommendations)},
+                    )
+            except Exception as e:
+                logger.warning(f"Failed to generate statute recommendations: {e}", exc_info=True)
+
         if progress_callback:
             progress_callback(
                 "Analyzing extracted content...",
@@ -323,6 +352,7 @@ async def process_case_documents(
             json_processing_service,  # Pass the instance here
             review_data,  # Pass through
             progress_callback,
+            statute_context,  # NEW: Pass statute context
         )
 
         # 5.5. AI Call #2.5: Generate case-level analysis summary
@@ -337,28 +367,14 @@ async def process_case_documents(
             structured_summaries, client_name_for_case, intake_content
         )
 
-        # 6. AI Call #3: Generate findings letter from JSON
-        logger.info("AI Call #3: Generating findings letter from structured data...")
-        if os.getenv("LOG_LEVEL") == "DEBUG":
-            logger.info(
-                f"CONTEXT CHECK - Passing {len(intake_content)} chars intake + JSON summaries to letter generation"  # noqa: E501
-            )
-
         document_summaries_json_str = json.dumps([s.model_dump() for s in structured_summaries], indent=2)
 
-        # Extract attorney information from case_info
+        # Extract information for downstream letter/chat generation
         attorney_name = case_info.get("attorneyName") if case_info else None
         firm_name = case_info.get("firmName") if case_info else None
-
-        # Extract contact information from case_info
         contact_phone = case_info.get("contactPhone") if case_info else None
         contact_email = case_info.get("contactEmail") if case_info else None
-
-        # Extract confirmed Q&A pairs from review_data
         confirmed_qa_pairs = review_data.get("confirmed_qa_pairs", []) if review_data else []
-
-        # Get settings for feature flags
-        settings = get_settings()
 
         # Check corpus coverage for this case
         coverage_warnings = []
@@ -387,45 +403,6 @@ async def process_case_documents(
                     )
             except Exception as e:
                 logger.warning(f"Failed to analyze corpus coverage: {e}", exc_info=True)
-
-        # Get statute recommendations based on case facts (if feature enabled)
-        statute_context = ""
-        if settings.suggest_statutes:
-            try:
-                from legal_portal.services.statute_recommendation_service import StatuteRecommendationService
-
-                recommendation_service = StatuteRecommendationService()
-
-                # Extract legal issues from review_data if available
-                legal_issues = []
-                if review_data and "legal_issues" in review_data:
-                    legal_issues = review_data.get("legal_issues", [])
-
-                # Get case type from case_info if available
-                case_type = case_info.get("caseType") if case_info else None
-
-                # Generate recommendations
-                recommendations = recommendation_service.recommend_statutes(
-                    case_facts=intake_content[:2000],  # Use first 2000 chars of intake
-                    legal_issues=legal_issues,
-                    case_type=case_type,
-                    limit=5,
-                )
-
-                if recommendations:
-                    statute_context = recommendation_service.get_statute_context_for_prompt(
-                        recommendations, max_statutes=5
-                    )
-                    logger.info(
-                        f"Generated {len(recommendations)} statute recommendations for letter",
-                        extra={"recommendation_count": len(recommendations)},
-                    )
-                else:
-                    logger.info("No statute recommendations generated for this case")
-            except Exception as e:
-                logger.warning(f"Failed to generate statute recommendations: {e}", exc_info=True)
-        else:
-            logger.info("Statute recommendations disabled via SUGGEST_STATUTES flag")
 
         # NEW: Extract deadlines using corpus and documents
         deadline_context = ""
@@ -467,23 +444,25 @@ async def process_case_documents(
         # ==================================================
         # MULTI-STAGE ANALYSIS PIPELINE (FEATURE FLAG)
         # ==================================================
-        draft_letter = None
+        multi_stage_result = None
+        fact_matrix = None
+        legal_issue_map = None
+        deep_analysis = None
+        letter_structure = None
+        verified_statutes = []
 
         if settings.use_multi_stage_analysis:
             logger.info("🔬 Multi-stage analysis enabled - using enhanced 4-stage pipeline")
 
             try:
-                # Initialize multi-stage analyzer
                 statute_service = StatuteRecommendationService()
                 multi_stage_analyzer = MultiStageAnalyzer(
                     openai_client=openai_client_wrapper, statute_service=statute_service
                 )
 
-                # Execute multi-stage analysis
                 if progress_callback:
                     progress_callback("Running multi-stage legal analysis...", phase="fact_extraction")
 
-                # Get multi-stage analysis result (returns MultiStageAnalysisResult object, not tuple)
                 multi_stage_result = await multi_stage_analyzer.analyze_case(
                     intake_content=intake_content,
                     document_summaries=structured_summaries,
@@ -491,7 +470,6 @@ async def process_case_documents(
                     case_type=case_analysis_dict.get("practice_area"),
                 )
 
-                # Extract components from result
                 fact_matrix = multi_stage_result.fact_matrix
                 legal_issue_map = multi_stage_result.issue_map
                 deep_analysis = multi_stage_result.deep_analysis
@@ -503,268 +481,81 @@ async def process_case_documents(
                     f"letter structure: {letter_structure.style}"
                 )
 
-                # Get verified statutes from issue map
-                verified_statutes = [
-                    {
-                        "citation": s["citation"],
-                        "title": s.get("title", ""),
-                        "summary": s.get("description", ""),
-                    }
-                    for s in legal_issue_map.relevant_statutes
-                ]
-
-                # VERSION 1: Generate letter WITH citations
-                if progress_callback:
-                    progress_callback(
-                        "Generating findings letter with citations...", phase="email_generation"
-                    )
-
-                draft_letter = await json_processing_service.generate_findings_letter_adaptive(
-                    intake_content=intake_content,
-                    fact_matrix=fact_matrix,
-                    legal_analysis=deep_analysis,
-                    structure_guidance=letter_structure,
-                    verified_statutes=verified_statutes,
-                    attorney_name=attorney_name,
-                    firm_name=firm_name,
-                    confirmed_qa_pairs=confirmed_qa_pairs,
-                    contact_phone=contact_phone,
-                    contact_email=contact_email,
-                    quality_context=quality_context,
-                    clio_matter_context=clio_context_str,
-                )
-
-                logger.info(f"Multi-stage adaptive letter generated: {len(draft_letter)} chars")
+                verified_statutes = multi_stage_result.verified_statutes
 
             except Exception as e:
                 logger.error(f"Multi-stage analysis failed: {e}", exc_info=True)
-                logger.info("Falling back to standard letter generation workflow")
-                settings.use_multi_stage_analysis = False  # Temporary fallback for this run
+                multi_stage_result = None
 
-        # ==================================================
-        # STANDARD WORKFLOW (FALLBACK OR DEFAULT)
-        # ==================================================
-        if not settings.use_multi_stage_analysis or draft_letter is None:
-            logger.info("Using standard letter generation workflow")
+        # Derive opposing parties from fact matrix
+        opposing_parties: List[Party] = []
+        if fact_matrix:
+            for party in fact_matrix.parties:
+                role_label = (party.role or "").lower()
+                if party.is_opposing_party or "opposing" in role_label:
+                    opposing_parties.append(party)
+            if not opposing_parties:
+                for party in fact_matrix.parties:
+                    role_label = (party.role or "").lower()
+                    if "client" not in role_label and "attorney" not in role_label:
+                        opposing_parties.append(party)
 
-            # Pass new context to letter generation
-            draft_letter = await json_processing_service.generate_findings_letter_from_json(
-                intake_content=intake_content,
-                document_summaries_json=document_summaries_json_str,
-                quality_context=quality_context,
-                attorney_name=attorney_name,
-                firm_name=firm_name,
-                confirmed_qa_pairs=confirmed_qa_pairs,  # NEW: Pass user-confirmed Q&A
-                contact_phone=contact_phone,  # NEW: Pass contact phone
-                contact_email=contact_email,  # NEW: Pass contact email
-                statute_context=statute_context,  # NEW: Pass statute recommendations
-                clio_matter_context=clio_context_str,  # NEW: Pass CLIO context
-            )
-
-        if os.getenv("LOG_LEVEL") == "DEBUG":
-            logger.info(f"CONTEXT CHECK - Generated draft letter: {len(draft_letter)} chars")
-
-        # 7. AI Call #3: Comprehensive quality review and rewrite
-        logger.info("AI Call #3: Comprehensive letter review and formatting...")
-        letter_review_service = LetterReviewService(client=openai_client_wrapper)
-
-        # Extract full intake for review context (don't truncate)
-        intake_summary = intake_content
-
-        # Also pass client name from case_info for better personalization
-        client_name = None
-        if case_info:
-            client_name = case_info.get("clientName", None)
-
-        # Perform comprehensive review (now includes source verification and completeness checks)
-        improved_letter, statute_validation = letter_review_service.review_and_improve_letter(
-            draft_letter=draft_letter,
-            intake_summary=intake_summary,
-            case_type=None,
-            document_summaries_json=json.dumps(
-                [s.model_dump() for s in structured_summaries], indent=2
-            ),  # NEW - pass for source verification
-            quality_context=quality_context,  # NEW - pass for completeness checks
-            client_name=client_name,
-        )
-
-        logger.info(
-            f"Letter review complete: {len(draft_letter)} -> {len(improved_letter)} chars",
-            extra={
-                "original_length": len(draft_letter),
-                "improved_length": len(improved_letter),
-            },
-        )
-
-        # Log statute validation results
-        if statute_validation:
-            logger.info(
-                "Statute validation results",
-                extra={
-                    "total_citations": statute_validation.total_citations,
-                    "verified_citations": statute_validation.verified_citations,
-                    "unverified_citations": statute_validation.unverified_citations,
-                    "suspicious_citations": statute_validation.suspicious_citations,
-                    "validation_warnings": len(statute_validation.warnings),
-                },
-            )
-            # Log individual warnings if any
-            for warning in statute_validation.warnings:
-                logger.warning(f"Statute validation: {warning}")
-
-        # 8. Run lightweight QA checks
-        logger.info("Running lightweight QA heuristics...")
-        qa_warnings = run_qa_heuristics(
-            improved_letter, json.loads(json.dumps([s.model_dump() for s in structured_summaries], indent=2))
-        )
-        if qa_warnings:
-            for warning in qa_warnings:
-                logger.warning(warning)  # Log QA warnings
-            # Optionally, you could add these warnings to the ProcessingResult errors
-            # For now, we just log them.
-
-        # 8b. Create clean and cited versions plus citation appendix
-        logger.info("Creating clean and cited versions of findings letter...")
-        citation_summary = None
-        citation_appendix_html = None
-        citation_map_dict = None
-        try:
-            from uuid import uuid4
-
-            from legal_portal.services.citation_tracking_service import CitationTrackingService
-
-            # Initialize corpus services for enhanced citation tracking
-            corpus_validation_service = StatuteValidationService()
-            corpus_coverage_service = CorpusCoverageService()
-
-            # Determine corpus coverage
-            practice_area = case_analysis_dict.get("practice_area", "")
-            coverage_result = corpus_coverage_service.analyze_coverage(
-                case_type=practice_area, case_facts=intake_content[:500]
-            )
-            is_corpus_covered = coverage_result.get("is_covered", False)
-
-            # Calculate average document quality
-            avg_quality = (
-                sum(q.score for q in quality_results) / len(quality_results) if quality_results else 7.0
-            )
-
-            # The AI generates letter WITH citations (per prompt instructions)
-            citation_service = CitationTrackingService(corpus_service=corpus_validation_service)
-
-            # Get client name for citation map
-            client_name_for_citation = case_info.get("clientName", "Client") if case_info else "Client"
-
-            # Clean hash suffixes from filenames in citations
-            # Transform: (Source: Contract_fb5b8b11.pdf) → (Source: Contract.pdf)
-            letter_with_clean_filenames = citation_service.clean_filename_hashes(improved_letter)
-
-            # Create citation map with adaptive threshold and corpus validation
-            citation_map = citation_service.create_citation_map(
-                letter_id=str(uuid4()),
-                client_name=client_name_for_citation,
-                letter_content=letter_with_clean_filenames,
-                case_analysis=case_analysis_result,
-                case_type=practice_area,
-                is_corpus_covered=is_corpus_covered,
-                average_doc_quality=avg_quality,
-            )
-            citation_summary = citation_service.get_citation_summary()
-            citation_appendix_html = citation_service.generate_citation_appendix_html(citation_map)
-            citation_map_dict = citation_service.export_citation_map("dict")
-
-            # Keep the version with citations (but clean filenames) for cited letter
-            letter_with_citations = citation_service.embed_citations(
-                letter_with_clean_filenames, citation_map
-            )
-
-            # Strip citations to create clean version
-            clean_letter = citation_service.remove_citations_from_letter(letter_with_clean_filenames)
-
-            # Check if citations were properly embedded (look for superscript citation links)
-            has_citations_clean = '<sup><a href="#citation-' in clean_letter
-            has_citations_cited = '<sup><a href="#citation-' in letter_with_citations
-
-            logger.info(
-                f"Successfully created both versions: "
-                f"clean ({len(clean_letter)} chars, has_citations={has_citations_clean}) "
-                f"and cited ({len(letter_with_citations)} chars, has_citations={has_citations_cited})"
-            )
-
-            # 8c. Apply professional formatting to both versions
-            logger.info("Applying professional legal document formatting...")
-            from legal_portal.services.document_formatter import DocumentFormatterService
-
-            formatter = DocumentFormatterService()
-
-            # Get client name for formatted header
-            client_name_for_format = case_info.get("clientName", "Client") if case_info else "Client"
-
-            # Apply formatting to both versions
-            clean_letter = formatter.format_findings_letter(clean_letter, client_name_for_format)
-            letter_with_citations = formatter.format_findings_letter(
-                letter_with_citations, client_name_for_format
-            )
-
-            logger.info(
-                f"Applied professional formatting: "
-                f"clean ({len(clean_letter)} chars) and cited ({len(letter_with_citations)} chars)"
-            )
-
-            # Use clean version as main letter
-            improved_letter = clean_letter
-
-        except Exception as e:
-            logger.error(f"CITATION PROCESSING FAILED: {e}", exc_info=True)
-            logger.error(f"Exception type: {type(e).__name__}")
-            logger.error(f"Exception details: {str(e)}")
-
-            # Fallback: apply formatting to the improved letter
-            try:
-                from legal_portal.services.document_formatter import DocumentFormatterService
-
-                formatter = DocumentFormatterService()
-                client_name_for_format = case_info.get("clientName", "Client") if case_info else "Client"
-                improved_letter = formatter.format_findings_letter(improved_letter, client_name_for_format)
-                logger.warning("Applied formatting to fallback letter - BOTH VERSIONS WILL HAVE CITATIONS")
-            except Exception as format_error:
-                logger.error(f"Failed to format fallback letter: {format_error}")
-
-            # Use the same formatted letter for both versions (THIS IS THE PROBLEM)
-            letter_with_citations = improved_letter
-            clean_letter = improved_letter
-            logger.error(
-                "⚠️  FALLBACK MODE: Using same letter for both versions due to citation error - both will contain citations"
-            )
+        multi_stage_result_dict = multi_stage_result.model_dump(mode="json") if multi_stage_result else None
 
         # 9. Calculate processing time
         processing_time = time.time() - start_time
 
-        # 10. Create and return the result object
-        logger.info(f"Successfully completed document processing in {processing_time:.2f}s")
+        logger.info(
+            f"Successfully completed document processing in {processing_time:.2f}s (letters deferred)"
+        )
 
-        # Final result construction
+        # Track which models were used for each operation
+        models_used = {
+            "document_analysis": openai_client_wrapper.get_preferred_model("document_analysis", "gpt-4o"),
+            "letter_generation": openai_client_wrapper.get_preferred_model("letter_generation", "gpt-4o"),
+            "case_chat": openai_client_wrapper.get_preferred_model("case_chat", "gpt-4o"),
+            "multi_stage_analysis": openai_client_wrapper.get_preferred_model(
+                "multi_stage_analysis", "gpt-4o"
+            ),
+        }
+
+        artifacts_payload = {
+            "statute_context": statute_context,
+            "deadline_context": deadline_context,
+            "clio_matter_context": clio_context_str,
+            "quality_context": quality_context,
+            "attorney_name": attorney_name,
+            "firm_name": firm_name,
+            "contact_phone": contact_phone,
+            "contact_email": contact_email,
+            "confirmed_qa_pairs": confirmed_qa_pairs,
+            "document_summaries_json": document_summaries_json_str,
+            "models_used": models_used,
+        }
+
         result = ProcessingResult(
-            main_letter=improved_letter,
-            main_letter_with_citations=letter_with_citations,  # NEW: Cited version
+            main_letter="",
+            main_letter_with_citations="",
             document_summaries=json.dumps([s.model_dump() for s in structured_summaries], indent=2),
-            case_analysis=json.dumps(case_analysis_dict, indent=2),  # NEW: Proper case analysis structure
-            quality_report=[q.model_dump() for q in quality_results]
-            if quality_results
-            else None,  # NEW: Add quality results
+            case_analysis=json.dumps(case_analysis_dict, indent=2),
+            quality_report=[q.model_dump() for q in quality_results] if quality_results else None,
             status="completed",
             processing_time_seconds=processing_time,
             intake_content=intake_content,
             document_count=len(processed_case_docs),
             errors=errors,
-            warnings=coverage_warnings,  # NEW: Add corpus coverage warnings
-            citation_summary=citation_summary,
-            citation_appendix=citation_appendix_html,
-            citation_map=citation_map_dict,
-            statute_validation=statute_validation.to_dict() if statute_validation else None,
-            qa_warnings=qa_warnings if qa_warnings else None,
+            warnings=coverage_warnings,
+            citation_summary=None,
+            citation_appendix=None,
+            citation_map=None,
+            statute_validation=None,
+            qa_warnings=None,
+            artifacts=artifacts_payload,
+            opposing_parties=opposing_parties,
+            multi_stage_result=multi_stage_result_dict,
+            generated_letters={},
         )
-        logger.info("✅ Full document processing workflow completed successfully.")
+        logger.info("✅ Document processing completed (letters deferred to on-demand endpoints).")
         return result
 
     except ValueError as e:
@@ -1014,6 +805,7 @@ async def _generate_document_summaries(
     json_processing_service: JsonProcessingService,  # Add this parameter
     review_data: dict,  # NEW
     progress_callback: Optional[Callable] = None,
+    statute_context: str = "",  # NEW: Pass statute recommendations
 ) -> Tuple[List[Dict[str, Any]], List[ProcessingError]]:
     """AI Call #1: Generate structured JSON summaries of case documents.
 
@@ -1107,6 +899,7 @@ Return ONLY valid JSON, no markdown code blocks.
                     json_processing_service,  # Pass json_processing_service
                     review_data,  # Pass review_data
                     errors,
+                    statute_context,  # NEW: Pass statute context
                 )
 
                 if batch_result:
@@ -1207,8 +1000,9 @@ CRITICAL RULES:
 """
 
     # Make the API call
+    model = openai_client_wrapper.get_preferred_model("document_analysis", "gpt-4o")
     response_dict = openai_client_wrapper.create_chat_completion(
-        model="gpt-4o",
+        model=model,
         messages=[
             {
                 "role": "system",
@@ -1267,13 +1061,19 @@ async def _process_document_batch(
     json_processing_service: JsonProcessingService,
     review_data: dict,  # NEW
     errors: List[ProcessingError],
+    statute_context: str = "",  # NEW: Pass statute context
 ) -> Tuple[List[Dict[str, Any]], List[ProcessingError]]:
     """Process a single batch of documents."""
     logger.info(f"📦 Processing batch {batch_num}/{total_batches} with {len(batch_documents)} documents")
 
     # Build the prompt with the new context
     prompt = _build_summary_prompt(
-        intake_content, batch_documents, review_data, is_batch=True, batch_info=(batch_num, total_batches)
+        intake_content,
+        batch_documents,
+        review_data,
+        is_batch=True,
+        batch_info=(batch_num, total_batches),
+        statute_context=statute_context,
     )
 
     response_json, batch_errors = await json_processing_service.process_documents_to_json(prompt)
@@ -1343,6 +1143,7 @@ def _build_summary_prompt(
     review_data: dict,
     is_batch: bool = False,
     batch_info: tuple = (),
+    statute_context: str = "",
 ) -> str:
     """Build the prompt for the document summarization AI call."""
     # Prepare context from review step
@@ -1360,6 +1161,18 @@ USER-DEFINED CONTEXT:
 {key_docs_str}
 """
 
+    # Add statute context if available
+    statute_section = ""
+    if statute_context:
+        statute_section = f"""
+
+RELEVANT FLORIDA STATUTES (for cross-reference):
+{statute_context}
+
+When analyzing documents, identify which statutes (if any) are relevant to the document's content.
+List them in the "statute_citations" field using the format: "Fla. Stat. § XXX.XX"
+"""
+
     if is_batch:
         batch_num, total_batches = batch_info
         batch_header = f"BATCH {batch_num} of {total_batches} - "
@@ -1371,6 +1184,8 @@ USER-DEFINED CONTEXT:
     return f"""{main_header}
 
 {user_context_section}
+
+{statute_section}
 
 INTAKE INFORMATION (for context):
 {intake_content}
@@ -1393,6 +1208,16 @@ OUTPUT FORMAT (STRICT JSON):
       "executive_summary": "2-3 sentence overview: What this document is, what it contains, and why it matters to the case",
 
       "key_content": "Detailed narrative of the most important information in this document. Include specific facts, statements, admissions, obligations, or evidence. Be comprehensive - capture everything relevant even if it doesn't fit a category below.",
+
+      "key_quotes": [
+        "Direct verbatim excerpt from document that serves as evidence",
+        "Another important quote showing facts or admissions"
+      ],
+
+      "statute_citations": [
+        "Fla. Stat. § XXX.XX (if this document relates to a provided statute)",
+        "Only include statutes that are clearly relevant to this specific document"
+      ],
 
       "structured_data": {{
         "parties": ["Only include if clearly identifiable names/entities are present"],
@@ -1440,6 +1265,8 @@ OUTPUT FORMAT (STRICT JSON):
 CRITICAL RULES:
 - PRIORITIZE COMPREHENSIVE CAPTURE over fitting into boxes
 - The "key_content" and "important_details" fields should contain EVERYTHING relevant
+- **KEY_QUOTES**: Extract 2-5 direct verbatim quotes that serve as evidence (if document has readable text)
+- **STATUTE_CITATIONS**: Only include statutes if the document content clearly relates to them
 - Structured fields are OPTIONAL - only populate if data is clearly present
 - NEVER say "not found" - simply omit optional fields or leave arrays empty
 - If a document type doesn't have contracts clauses (like an estimate), that's fine - focus on what IS there

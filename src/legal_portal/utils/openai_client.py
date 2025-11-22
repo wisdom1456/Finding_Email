@@ -19,8 +19,14 @@ logger = get_module_logger(__name__)
 class OpenAIClient:
     """Handles all OpenAI API interactions and response processing."""
 
-    def __init__(self):
-        """Initialize OpenAI client with proper timeout and connection settings."""
+    def __init__(self, user_preferences: Optional[Dict[str, str]] = None):
+        """Initialize OpenAI client with proper timeout and connection settings.
+
+        Args:
+        ----
+            user_preferences: Optional dict of user AI model preferences by operation type
+                             e.g., {"document_analysis": "gpt-4o", "letter_generation": "gpt-4o"}
+        """
         # Configure HTTP client with appropriate timeouts for cloud environments
         http_client = httpx.Client(
             timeout=httpx.Timeout(
@@ -37,6 +43,23 @@ class OpenAIClient:
         self.fallback_model = "gpt-4o-mini"
         self.max_retries = 3
         self.retry_delay = 2
+
+        # Store user preferences for model selection
+        self.user_preferences = user_preferences or {}
+
+    def get_preferred_model(self, operation_type: str, fallback: str = "gpt-4o") -> str:
+        """Get the user's preferred model for a specific operation type.
+
+        Args:
+        ----
+            operation_type: Type of operation (e.g., "document_analysis", "letter_generation")
+            fallback: Fallback model if no preference is set
+
+        Returns:
+        -------
+            Model name to use
+        """
+        return self.user_preferences.get(operation_type, fallback)
 
     def _extract_json_content(self, content: str) -> str:
         """Intelligently extract a JSON string from the API response.

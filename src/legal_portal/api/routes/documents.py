@@ -1,8 +1,6 @@
 """Document management endpoints.
 """
 
-import mimetypes
-import uuid
 from datetime import datetime
 from typing import List
 
@@ -36,22 +34,30 @@ async def upload_document(
     user_supabase=Depends(get_user_supabase_client),
     service_supabase=Depends(get_supabase_client),
 ):
-    """Upload a document for a case.
+    """Upload a document for a case with unified validation and compression.
 
     Args:
     ----
         case_id: ID of the case this document belongs to
         file: File to upload
+        is_intake_form: Whether this is an intake form
         user: Current authenticated user
-        supabase: Supabase client
+        user_supabase: User-scoped Supabase client (for RLS)
+        service_supabase: Service-scoped Supabase client (bypasses RLS)
 
     Returns:
     -------
         Created document metadata
+
+    Raises:
+    ------
+        400: Validation error (size, type, content, security)
+        404: Case not found
+        500: Server error
     """
     try:
         print("\n🔍 DEBUG upload_document:")
-        print(f"  - User ID: {user["id"]}")
+        print(f"  - User ID: {user['id']}")
         print(f"  - Case ID: {case_id}")
         print(f"  - Filename: {file.filename}")
         print(f"  - Content type: {file.content_type}")
@@ -68,49 +74,35 @@ async def upload_document(
 
         # Read file content
         file_content = await file.read()
-        file_size = len(file_content)
-        print(f"  - File size: {file_size} bytes")
+        print(f"  - File size: {len(file_content)} bytes")
 
-        # Generate unique storage path
-        file_extension = file.filename.split(".")[-1] if "." in file.filename else ""
-        unique_filename = f"{uuid.uuid4()}.{file_extension}" if file_extension else str(uuid.uuid4())
-        storage_path = f"{user["id"]}/{case_id}/{unique_filename}"
-        print(f"  - Storage path: {storage_path}")
+        # Use unified processor for validation, compression, and upload
+        processor = DocumentProcessor()
 
-        # Upload to Supabase Storage (use service client to bypass storage RLS)
-        print("  - Uploading to Supabase Storage with service client...")
-        storage_response = service_supabase.storage.from_("documents").upload(
-            storage_path,
-            file_content,
-            {
-                "content-type": file.content_type
-                or mimetypes.guess_type(file.filename)[0]
-                or "application/octet-stream"
-            },
-        )
-        print("  - Storage upload complete")
-
-        # Prepare metadata
-        metadata = {"is_intake_form": is_intake_form}
+        try:
+            doc_record = await processor.process_and_upload(
+                file_content=file_content,
+                filename=file.filename,
+                user_id=user["id"],
+                case_id=case_id,
+                supabase_client=service_supabase,
+                is_intake_form=is_intake_form,
+                content_type=file.content_type,
+            )
+        except ValidationError as e:
+            # Return structured validation error
+            error_response = {
+                "code": e.error_code,
+                "detail": str(e),
+                "file_name": file.filename,
+                "file_size_mb": e.file_size_mb,
+            }
+            print(f"\n❌ Validation error: {e.error_code} - {str(e)}")
+            return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content=error_response)
 
         # Create document record in database (use user client for RLS)
         print("  - Creating document record in database...")
-        print(f"  - Is intake form: {is_intake_form}")
-        doc_response = (
-            user_supabase.table("documents")
-            .insert(
-                {
-                    "case_id": case_id,
-                    "file_name": file.filename,
-                    "file_type": file.content_type or "unknown",
-                    "file_size": file_size,
-                    "storage_path": storage_path,
-                    "status": "uploaded",
-                    "metadata": metadata,
-                }
-            )
-            .execute()
-        )
+        doc_response = user_supabase.table("documents").insert(doc_record).execute()
 
         if not doc_response.data:
             raise HTTPException(
@@ -119,8 +111,18 @@ async def upload_document(
 
         print(f"  - ✅ Document uploaded successfully: {doc_response.data[0]['id']}")
         return doc_response.data[0]
+
     except HTTPException:
         raise
+    except ValidationError as e:
+        # Catch any validation errors that slipped through
+        error_response = {
+            "code": e.error_code,
+            "detail": str(e),
+            "file_name": file.filename,
+            "file_size_mb": e.file_size_mb,
+        }
+        return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content=error_response)
     except Exception as e:
         print("\n❌ ERROR in upload_document:")
         print(f"  - Exception type: {type(e).__name__}")

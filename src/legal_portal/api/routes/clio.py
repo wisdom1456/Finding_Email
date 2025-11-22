@@ -3,7 +3,6 @@
 Handles OAuth flow, matter search, and data import from Clio.
 """
 
-import uuid
 from datetime import datetime, timezone
 from typing import List, Optional
 
@@ -16,7 +15,8 @@ from legal_portal.api.services.clio_client import (
     ClioAuthError,
     ClioClient,
 )
-from legal_portal.api.utils.document_processor import DocumentProcessor
+from legal_portal.api.utils.document_processor import DocumentProcessor as DocProc
+from legal_portal.core.document_processor import DocumentProcessor, ValidationError
 from pydantic import BaseModel
 
 from supabase import Client
@@ -466,71 +466,59 @@ async def import_clio_data(
 
                 access_token = integration.data[0]["access_token"]
 
-                # Download and extract text from document (with automatic compression)
+                # Download file from Clio (just download, no processing yet)
                 print("  - Downloading from Clio...")
-                (
-                    file_content,
-                    content_type,
-                    extracted_text,
-                    compression_meta,
-                ) = DocumentProcessor.download_and_extract(doc_url, access_token, doc_name, compress=True)
-
-                file_size = len(file_content)
-                original_size = compression_meta.get("original_size", file_size)
-                was_compressed = compression_meta.get("compressed", False)
-
-                # Track compression statistics
-                if was_compressed:
-                    files_compressed += 1
-                    total_original_size += original_size
-                    total_compressed_size += file_size
-
-                print(f"  - Downloaded: {original_size} bytes")
-                if was_compressed:
-                    compression_ratio = compression_meta.get("compression_ratio", 1.0)
-                    reduction_pct = (1 - compression_ratio) * 100
-                    print(
-                        f"  - Compressed: {file_size} bytes ({reduction_pct:.1f}% reduction, "
-                        f"method: {compression_meta.get('method', 'unknown')})"
-                    )
-                print(f"  - Content type: {content_type}")
-                print(f"  - Text extracted: {bool(extracted_text)}")
-
-                # Generate unique storage path
-                file_extension = doc_name.split(".")[-1] if "." in doc_name else ""
-                unique_filename = f"{uuid.uuid4()}.{file_extension}" if file_extension else str(uuid.uuid4())
-                storage_path = f"{user['id']}/{case_id}/clio_{unique_filename}"
-
-                # Upload to Supabase Storage
-                print(f"  - Uploading to Supabase Storage: {storage_path}")
-                supabase.storage.from_("documents").upload(
-                    storage_path, file_content, {"content-type": content_type}
-                )
+                file_content, content_type = DocProc.download_file(doc_url, access_token)
+                original_size = len(file_content)
+                print(f"  - Downloaded: {original_size / (1024 * 1024):.2f}MB")
 
                 # Check if this is an intake form
                 is_intake = "intake" in doc_name.lower()
 
-                # Save document record with extracted text and compression metadata
-                doc_data = {
-                    "case_id": case_id,
-                    "file_name": doc_name,
-                    "file_type": content_type,
-                    "file_size": file_size,
-                    "storage_path": storage_path,
-                    "status": "processed" if extracted_text else "uploaded",
-                    "extracted_text": extracted_text,
-                    "metadata": {
-                        "clio_source": True,
-                        "clio_type": "document",
-                        "clio_id": doc_id,
-                        "clio_url": doc_url,
-                        "clio_filename": doc_name,
-                        "is_intake_form": is_intake,
-                        "compression": compression_meta,
-                    },
-                }
-                supabase.table("documents").insert(doc_data).execute()
-                print(f"  - ✅ Document saved successfully{' (INTAKE FORM)' if is_intake else ''}")
+                # Use unified processor for validation, compression, and upload
+                print("  - Processing with unified validator...")
+                processor = DocumentProcessor()
+
+                try:
+                    doc_record = await processor.process_and_upload(
+                        file_content=file_content,
+                        filename=doc_name,
+                        user_id=user["id"],
+                        case_id=case_id,
+                        supabase_client=supabase,
+                        is_intake_form=is_intake,
+                        content_type=content_type,
+                    )
+
+                    # Track compression statistics if compressed
+                    if doc_record.get("metadata", {}).get("compression", {}).get("compressed"):
+                        files_compressed += 1
+                        comp_meta = doc_record["metadata"]["compression"]
+                        total_original_size += comp_meta["original_size"]
+                        total_compressed_size += comp_meta["compressed_size"]
+                        print(
+                            f"  - Compressed: {comp_meta['original_size'] / (1024 * 1024):.2f}MB → "
+                            f"{comp_meta['compressed_size'] / (1024 * 1024):.2f}MB"
+                        )
+
+                    # Add Clio-specific metadata
+                    doc_record["metadata"].update(
+                        {
+                            "clio_source": True,
+                            "clio_type": "document",
+                            "clio_id": doc_id,
+                            "clio_url": doc_url,
+                            "clio_filename": doc_name,
+                        }
+                    )
+
+                    # Insert document record
+                    supabase.table("documents").insert(doc_record).execute()
+                    print(f"  - ✅ Document saved successfully{' (INTAKE FORM)' if is_intake else ''}")
+
+                except ValidationError as e:
+                    print(f"  - ❌ Validation failed: {e.error_code} - {str(e)}")
+                    raise Exception(f"Validation failed: {str(e)}")
 
             except Exception as e:
                 print(f"Warning: Failed to download/process document {doc.get('id', 'unknown')}: {e}")

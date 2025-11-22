@@ -16,7 +16,7 @@ from fastapi.responses import JSONResponse
 # Load environment variables from .env file
 load_dotenv()
 
-from legal_portal.api.routes import analysis, cases, clio, documents, health, intake
+from legal_portal.api.routes import analysis, cases, clio, documents, health, intake, profile, settings
 
 
 @asynccontextmanager
@@ -78,6 +78,8 @@ app.include_router(documents.router, prefix="/api/documents", tags=["documents"]
 app.include_router(analysis.router, prefix="/api/analysis", tags=["analysis"])
 app.include_router(clio.router, prefix="/api", tags=["clio"])
 app.include_router(intake.router, prefix="/api", tags=["intake"])
+app.include_router(profile.router, prefix="/api", tags=["profile"])
+app.include_router(settings.router, prefix="/api/settings", tags=["settings"])
 
 
 @app.get("/")

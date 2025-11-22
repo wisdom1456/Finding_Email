@@ -9,17 +9,38 @@ import traceback
 from datetime import datetime
 from email.message import EmailMessage
 from email.utils import formatdate, make_msgid
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 import html2text
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from legal_portal.api.dependencies import get_current_user, get_supabase_client, get_user_supabase_client
-from legal_portal.core.data_models import ProcessingResult
+from legal_portal.core.data_models import (
+    ChatMessageRequest,
+    ChatMessageResponse,
+    LetterType,
+    ProcessingResult,
+)
+from legal_portal.services.case_chat_service import CaseChatService
+from legal_portal.services.demand_letter_service import DemandLetterService
+from legal_portal.services.json_processing_service import JsonProcessingService
 from legal_portal.services.main_processor import process_case_documents
+from legal_portal.utils.openai_client import OpenAIClient
 from pydantic import BaseModel, Field
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+
+async def _get_user_ai_preferences(user_id: str, supabase) -> Optional[Dict[str, str]]:
+    """Fetch user's AI model preferences from profile."""
+    try:
+        response = supabase.table("profiles").select("ai_preferences").eq("id", user_id).single().execute()
+        if response.data and response.data.get("ai_preferences"):
+            return response.data["ai_preferences"]
+    except Exception as e:
+        logger.warning(f"Could not fetch user AI preferences: {e}")
+    return None
+
 
 # Optional WeasyPrint import for PDF generation
 try:
@@ -50,7 +71,7 @@ def _html_to_pdf_bytes(html: Optional[str]) -> Optional[bytes]:
     try:
         return HTML(string=html, base_url=os.getcwd()).write_pdf()
     except Exception as exc:
-        logger.warning("Failed to render PDF artifact: %s", exc)
+        logger.warning(f"Failed to render PDF artifact: {exc}")
         return None
 
 
@@ -61,7 +82,7 @@ def _html_to_plain_text(html: Optional[str]) -> str:
     try:
         return _HTML2TEXT_CONVERTER.handle(html)
     except Exception as exc:
-        logger.warning("Failed to convert HTML to plain text: %s", exc)
+        logger.warning(f"Failed to convert HTML to plain text: {exc}")
         return ""
 
 
@@ -81,7 +102,7 @@ def _generate_eml_bytes(html: Optional[str], subject: str) -> Optional[bytes]:
         msg.add_alternative(html, subtype="html")
         return msg.as_bytes()
     except Exception as exc:
-        logger.warning("Failed to generate EML artifact: %s", exc)
+        logger.warning(f"Failed to generate EML artifact: {exc}")
         return None
 
 
@@ -103,7 +124,7 @@ def _store_artifact(storage, path: str, data: bytes, content_type: str) -> Optio
             "filename": os.path.basename(path),
         }
     except Exception as exc:
-        logger.warning("Failed to upload artifact %s: %s", path, exc)
+        logger.warning(f"Failed to upload artifact {path}: {exc}")
         return None
 
 
@@ -156,22 +177,26 @@ def _generate_and_store_artifacts(
     return {key: value for key, value in artifacts.items() if value}
 
 
-def _attach_signed_artifact_urls(
-    service_supabase, artifacts: Dict[str, Dict[str, Any]]
-) -> Dict[str, Dict[str, Any]]:
+def _attach_signed_artifact_urls(service_supabase, artifacts: Dict[str, Any]) -> Dict[str, Any]:
     """Attach signed URLs to stored artifact metadata."""
-    enriched: Dict[str, Dict[str, Any]] = {}
+    enriched: Dict[str, Any] = {}
     for key, info in artifacts.items():
+        # Skip if info is not a dictionary (e.g. it's a context string)
+        if not isinstance(info, dict):
+            enriched[key] = info
+            continue
+
         path = info.get("path")
         bucket = info.get("bucket", ARTIFACT_BUCKET)
         if not path:
+            enriched[key] = info
             continue
         try:
             signed = service_supabase.storage.from_(bucket).create_signed_url(path, SIGNED_URL_TTL)
             signed_url = signed.get("signedURL")
             enriched[key] = {**info, "signed_url": signed_url}
         except Exception as exc:
-            logger.warning("Failed to create signed URL for %s: %s", path, exc)
+            logger.warning(f"Failed to create signed URL for {path}: {exc}")
             enriched[key] = info
     return enriched or artifacts
 
@@ -193,6 +218,29 @@ class AnalysisResponse(BaseModel):
     updated_at: datetime
     result: Optional[Dict[str, Any]] = None
     error: Optional[str] = None
+
+
+class LetterGenerationRequest(BaseModel):
+    """Request payload for on-demand letter generation."""
+
+    case_id: str
+    letter_type: LetterType = LetterType.FINDINGS
+    target_party_name: Optional[str] = None
+    demand_amount: Optional[float] = None
+    demand_deadline: str = "10 business days"
+    specific_demands: List[str] = Field(default_factory=list)
+    attorney_name: Optional[str] = None
+    firm_name: Optional[str] = None
+    contact_phone: Optional[str] = None
+    contact_email: Optional[str] = None
+
+
+class LetterGenerationResponse(BaseModel):
+    """Response payload for generated letters."""
+
+    letter_html: str
+    letter_type: LetterType
+    target_party_name: Optional[str] = None
 
 
 async def process_case_background(case_id: str, analysis_id: str, supabase, provider: str = "openai"):
@@ -663,3 +711,214 @@ async def get_analysis_results(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error fetching analysis results: {str(e)}",
         ) from e
+
+
+@router.post("/generate-letter", response_model=LetterGenerationResponse)
+async def generate_letter(
+    request: LetterGenerationRequest,
+    user=Depends(get_current_user),  # noqa: B008
+    supabase=Depends(get_user_supabase_client),  # noqa: B008
+):
+    """Generate findings or demand letters on-demand."""
+    _ensure_case_access(supabase, request.case_id, user["id"])
+    analysis_record = _fetch_latest_analysis_result(supabase, request.case_id)
+
+    result_payload = analysis_record["result"]
+    processing_result = ProcessingResult(**result_payload)
+
+    if not processing_result.multi_stage_result:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            detail="On-demand letters require the latest analysis. Please re-run the case analysis.",
+        )
+
+    # Fetch user's AI preferences
+    ai_preferences = await _get_user_ai_preferences(user["id"], supabase)
+    openai_client = OpenAIClient(user_preferences=ai_preferences)
+    artifacts = processing_result.artifacts or {}
+    attorney_info = {
+        "name": request.attorney_name or artifacts.get("attorney_name"),
+        "firm": request.firm_name or artifacts.get("firm_name"),
+        "phone": request.contact_phone or artifacts.get("contact_phone"),
+        "email": request.contact_email or artifacts.get("contact_email"),
+    }
+
+    msr = processing_result.multi_stage_result
+    letter_html: str
+    target_party_name: Optional[str] = None
+
+    if request.letter_type == LetterType.FINDINGS:
+        from legal_portal.core.data_models import DeepAnalysis, FactMatrix, LetterStructure
+
+        fact_matrix = FactMatrix(**msr["fact_matrix"])
+        deep_analysis = DeepAnalysis(**msr["deep_analysis"])
+        letter_structure = LetterStructure(**msr["letter_structure"])
+        verified_statutes = msr.get("verified_statutes", [])
+
+        json_service = JsonProcessingService(client=openai_client, config={})
+        letter_html = await json_service.generate_findings_letter_adaptive(
+            intake_content=processing_result.intake_content or "",
+            fact_matrix=fact_matrix,
+            legal_analysis=deep_analysis,
+            structure_guidance=letter_structure,
+            verified_statutes=verified_statutes,
+            attorney_name=attorney_info["name"],
+            firm_name=attorney_info["firm"],
+            confirmed_qa_pairs=artifacts.get("confirmed_qa_pairs", []),
+            contact_phone=attorney_info["phone"],
+            contact_email=attorney_info["email"],
+            quality_context=artifacts.get("quality_context", ""),
+            clio_matter_context=artifacts.get("clio_matter_context", ""),
+        )
+        letter_key = "findings"
+    else:
+        if not request.target_party_name:
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="target_party_name is required for demand letters",
+            )
+
+        # Extract client_name from request, fact_matrix, or artifacts
+        client_name = request.client_name
+        if not client_name:
+            # Try to get from fact_matrix parties (find client role)
+            fact_matrix_data = msr.get("fact_matrix", {})
+            parties = fact_matrix_data.get("parties", [])
+            for party in parties:
+                if party.get("role", "").lower() in ["client", "plaintiff", "claimant"]:
+                    client_name = party.get("name")
+                    break
+
+        # Fall back to artifacts or "Client"
+        if not client_name:
+            client_name = artifacts.get("client_name") or "Client"
+
+        # Parse document_summaries from JSON string
+        document_summaries = []
+        if processing_result.document_summaries:
+            try:
+                import json
+
+                document_summaries = json.loads(processing_result.document_summaries)
+            except Exception as e:
+                logger.warning(f"Failed to parse document_summaries: {e}")
+
+        demand_service = DemandLetterService(openai_client)
+        letter_html = await demand_service.generate_demand_letter(
+            fact_matrix_dict=msr["fact_matrix"],
+            deep_analysis_dict=msr["deep_analysis"],
+            target_party_name=request.target_party_name,
+            demand_amount=request.demand_amount,
+            demand_deadline=request.demand_deadline,
+            specific_demands=request.specific_demands,
+            attorney_info=attorney_info,
+            client_name=client_name,
+            document_summaries=document_summaries,
+        )
+        target_party_name = request.target_party_name
+        letter_key = f"demand_{request.target_party_name.replace(' ', '_')}".lower()
+
+    result_payload.setdefault("generated_letters", {})[letter_key] = letter_html
+    supabase.table("analysis_results").update({"result": result_payload}).eq(
+        "id", analysis_record["id"]
+    ).execute()
+
+    return LetterGenerationResponse(
+        letter_html=letter_html,
+        letter_type=request.letter_type,
+        target_party_name=target_party_name,
+    )
+
+
+@router.post("/chat", response_model=ChatMessageResponse)
+async def case_chat(
+    request: ChatMessageRequest,
+    user=Depends(get_current_user),  # noqa: B008
+    supabase=Depends(get_user_supabase_client),  # noqa: B008
+):
+    """Chat about a case with the AI assistant."""
+    _ensure_case_access(supabase, request.case_id, user["id"])
+    analysis_record = _fetch_latest_analysis_result(supabase, request.case_id)
+
+    result_payload = analysis_record["result"]
+    processing_result = ProcessingResult(**result_payload)
+
+    if not processing_result.multi_stage_result:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            detail="Case chat requires the latest analysis. Please re-run the case analysis.",
+        )
+
+    history_response = (
+        supabase.table("case_chat_messages")
+        .select("user_message, ai_response")
+        .eq("case_id", request.case_id)
+        .order("created_at", desc=False)
+        .limit(10)
+        .execute()
+    )
+
+    conversation_history: List[Dict[str, str]] = []
+    if history_response.data:
+        for row in history_response.data:
+            conversation_history.append({"role": "user", "content": row["user_message"]})
+            conversation_history.append({"role": "assistant", "content": row["ai_response"]})
+
+    # Fetch user's AI preferences
+    ai_preferences = await _get_user_ai_preferences(user["id"], supabase)
+    openai_client = OpenAIClient(user_preferences=ai_preferences)
+    chat_service = CaseChatService(openai_client)
+    ai_response = await chat_service.send_message(
+        user_message=request.message,
+        analysis_result=processing_result,
+        conversation_history=conversation_history,
+    )
+
+    supabase.table("case_chat_messages").insert(
+        {
+            "case_id": request.case_id,
+            "user_message": request.message,
+            "ai_response": ai_response,
+            "context_used": processing_result.multi_stage_result or {},
+        }
+    ).execute()
+
+    return ChatMessageResponse(response=ai_response, context_used={})
+
+
+def _ensure_case_access(supabase_client, case_id: str, user_id: str) -> None:
+    """Ensure the authenticated user owns the requested case."""
+    case_response = (
+        supabase_client.table("cases").select("id").eq("id", case_id).eq("user_id", user_id).execute()
+    )
+
+    if not case_response.data:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Case not found")
+
+
+def _fetch_latest_analysis_result(supabase_client, case_id: str) -> Dict[str, Any]:
+    """Fetch the latest completed analysis result for a case."""
+    response = (
+        supabase_client.table("analysis_results")
+        .select("id, result")
+        .eq("case_id", case_id)
+        .eq("status", "completed")
+        .order("created_at", desc=True)
+        .limit(1)
+        .execute()
+    )
+
+    if not response.data:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            detail="No completed analysis found for this case",
+        )
+
+    record = response.data[0]
+    if not record.get("result"):
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            detail="Analysis result payload is missing",
+        )
+
+    return record

@@ -23,7 +23,9 @@ from legal_portal.services.corpus_coverage_service import CorpusCoverageService
 from legal_portal.services.document_quality_validator import DocumentQualityValidator
 from legal_portal.services.json_processing_service import JsonProcessingService
 from legal_portal.services.letter_review_service import LetterReviewService
+from legal_portal.services.multi_stage_analyzer import MultiStageAnalyzer
 from legal_portal.services.qa_service import run_qa_heuristics  # Import the new QA function
+from legal_portal.services.statute_validation_service import StatuteValidationService
 from legal_portal.utils.logging_config import get_module_logger
 from legal_portal.utils.openai_client import OpenAIClient
 
@@ -102,7 +104,7 @@ def _convert_to_case_analysis_result(
     )
 
 
-async def _generate_case_analysis_summary(
+def _generate_case_analysis_summary(
     intake_content: str,
     structured_summaries: List[DocumentSummaryStructured],
     openai_client_wrapper: OpenAIClient,
@@ -325,7 +327,7 @@ async def process_case_documents(
 
         # 5.5. AI Call #2.5: Generate case-level analysis summary
         logger.info("AI Call #2.5: Generating case-level analysis summary...")
-        case_analysis_dict = await _generate_case_analysis_summary(
+        case_analysis_dict = _generate_case_analysis_summary(
             intake_content, structured_summaries, openai_client_wrapper, review_data
         )
         client_name_for_case = (
@@ -462,19 +464,102 @@ async def process_case_documents(
             clio_context_str = builder.format_clio_context_for_prompt(review_data["clio_matter_context"])
             logger.info("Using CLIO matter context for enhanced letter generation")
 
-        # Pass new context to letter generation
-        draft_letter = await json_processing_service.generate_findings_letter_from_json(
-            intake_content=intake_content,
-            document_summaries_json=document_summaries_json_str,
-            quality_context=quality_context,
-            attorney_name=attorney_name,
-            firm_name=firm_name,
-            confirmed_qa_pairs=confirmed_qa_pairs,  # NEW: Pass user-confirmed Q&A
-            contact_phone=contact_phone,  # NEW: Pass contact phone
-            contact_email=contact_email,  # NEW: Pass contact email
-            statute_context=statute_context,  # NEW: Pass statute recommendations
-            clio_matter_context=clio_context_str,  # NEW: Pass CLIO context
-        )
+        # ==================================================
+        # MULTI-STAGE ANALYSIS PIPELINE (FEATURE FLAG)
+        # ==================================================
+        draft_letter = None
+
+        if settings.use_multi_stage_analysis:
+            logger.info("🔬 Multi-stage analysis enabled - using enhanced 4-stage pipeline")
+
+            try:
+                # Initialize multi-stage analyzer
+                statute_service = StatuteRecommendationService()
+                multi_stage_analyzer = MultiStageAnalyzer(
+                    openai_client=openai_client_wrapper, statute_service=statute_service
+                )
+
+                # Execute multi-stage analysis
+                if progress_callback:
+                    progress_callback("Running multi-stage legal analysis...", phase="fact_extraction")
+
+                # Get multi-stage analysis result (returns MultiStageAnalysisResult object, not tuple)
+                multi_stage_result = await multi_stage_analyzer.analyze_case(
+                    intake_content=intake_content,
+                    document_summaries=structured_summaries,
+                    progress_callback=progress_callback,
+                    case_type=case_analysis_dict.get("practice_area"),
+                )
+
+                # Extract components from result
+                fact_matrix = multi_stage_result.fact_matrix
+                legal_issue_map = multi_stage_result.issue_map
+                deep_analysis = multi_stage_result.deep_analysis
+                letter_structure = multi_stage_result.letter_structure
+
+                logger.info(
+                    f"Multi-stage analysis complete: {len(fact_matrix.timeline)} timeline events, "
+                    f"{len(legal_issue_map.primary_issues)} legal issues identified, "
+                    f"letter structure: {letter_structure.style}"
+                )
+
+                # Get verified statutes from issue map
+                verified_statutes = [
+                    {
+                        "citation": s["citation"],
+                        "title": s.get("title", ""),
+                        "summary": s.get("description", ""),
+                    }
+                    for s in legal_issue_map.relevant_statutes
+                ]
+
+                # VERSION 1: Generate letter WITH citations
+                if progress_callback:
+                    progress_callback(
+                        "Generating findings letter with citations...", phase="email_generation"
+                    )
+
+                draft_letter = await json_processing_service.generate_findings_letter_adaptive(
+                    intake_content=intake_content,
+                    fact_matrix=fact_matrix,
+                    legal_analysis=deep_analysis,
+                    structure_guidance=letter_structure,
+                    verified_statutes=verified_statutes,
+                    attorney_name=attorney_name,
+                    firm_name=firm_name,
+                    confirmed_qa_pairs=confirmed_qa_pairs,
+                    contact_phone=contact_phone,
+                    contact_email=contact_email,
+                    quality_context=quality_context,
+                    clio_matter_context=clio_context_str,
+                )
+
+                logger.info(f"Multi-stage adaptive letter generated: {len(draft_letter)} chars")
+
+            except Exception as e:
+                logger.error(f"Multi-stage analysis failed: {e}", exc_info=True)
+                logger.info("Falling back to standard letter generation workflow")
+                settings.use_multi_stage_analysis = False  # Temporary fallback for this run
+
+        # ==================================================
+        # STANDARD WORKFLOW (FALLBACK OR DEFAULT)
+        # ==================================================
+        if not settings.use_multi_stage_analysis or draft_letter is None:
+            logger.info("Using standard letter generation workflow")
+
+            # Pass new context to letter generation
+            draft_letter = await json_processing_service.generate_findings_letter_from_json(
+                intake_content=intake_content,
+                document_summaries_json=document_summaries_json_str,
+                quality_context=quality_context,
+                attorney_name=attorney_name,
+                firm_name=firm_name,
+                confirmed_qa_pairs=confirmed_qa_pairs,  # NEW: Pass user-confirmed Q&A
+                contact_phone=contact_phone,  # NEW: Pass contact phone
+                contact_email=contact_email,  # NEW: Pass contact email
+                statute_context=statute_context,  # NEW: Pass statute recommendations
+                clio_matter_context=clio_context_str,  # NEW: Pass CLIO context
+            )
 
         if os.getenv("LOG_LEVEL") == "DEBUG":
             logger.info(f"CONTEXT CHECK - Generated draft letter: {len(draft_letter)} chars")
@@ -544,17 +629,45 @@ async def process_case_documents(
         citation_appendix_html = None
         citation_map_dict = None
         try:
+            from uuid import uuid4
+
             from legal_portal.services.citation_tracking_service import CitationTrackingService
 
+            # Initialize corpus services for enhanced citation tracking
+            corpus_validation_service = StatuteValidationService()
+            corpus_coverage_service = CorpusCoverageService()
+
+            # Determine corpus coverage
+            practice_area = case_analysis_dict.get("practice_area", "")
+            coverage_result = corpus_coverage_service.analyze_coverage(
+                case_type=practice_area, case_facts=intake_content[:500]
+            )
+            is_corpus_covered = coverage_result.get("is_covered", False)
+
+            # Calculate average document quality
+            avg_quality = (
+                sum(q.score for q in quality_results) / len(quality_results) if quality_results else 7.0
+            )
+
             # The AI generates letter WITH citations (per prompt instructions)
-            citation_service = CitationTrackingService()
+            citation_service = CitationTrackingService(corpus_service=corpus_validation_service)
+
+            # Get client name for citation map
+            client_name_for_citation = case_info.get("clientName", "Client") if case_info else "Client"
 
             # Clean hash suffixes from filenames in citations
             # Transform: (Source: Contract_fb5b8b11.pdf) → (Source: Contract.pdf)
             letter_with_clean_filenames = citation_service.clean_filename_hashes(improved_letter)
 
+            # Create citation map with adaptive threshold and corpus validation
             citation_map = citation_service.create_citation_map(
-                case_analysis_result, letter_with_clean_filenames
+                letter_id=str(uuid4()),
+                client_name=client_name_for_citation,
+                letter_content=letter_with_clean_filenames,
+                case_analysis=case_analysis_result,
+                case_type=practice_area,
+                is_corpus_covered=is_corpus_covered,
+                average_doc_quality=avg_quality,
             )
             citation_summary = citation_service.get_citation_summary()
             citation_appendix_html = citation_service.generate_citation_appendix_html(citation_map)
@@ -568,9 +681,10 @@ async def process_case_documents(
             # Strip citations to create clean version
             clean_letter = citation_service.remove_citations_from_letter(letter_with_clean_filenames)
 
-            # DEBUG: Check if citations were actually removed
-            has_citations_clean = "[Source:" in clean_letter or "(Source:" in clean_letter
-            has_citations_cited = "[Source:" in letter_with_citations or "(Source:" in letter_with_citations
+            # Check if citations were properly embedded (look for superscript citation links)
+            has_citations_clean = '<sup><a href="#citation-' in clean_letter
+            has_citations_cited = '<sup><a href="#citation-' in letter_with_citations
+
             logger.info(
                 f"Successfully created both versions: "
                 f"clean ({len(clean_letter)} chars, has_citations={has_citations_clean}) "

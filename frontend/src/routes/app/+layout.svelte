@@ -22,6 +22,10 @@
 			const { data: { session } } = await supabase.auth.getSession();
 			if (!session) return;
 
+			// Validate the session by getting the user
+			const { data: { user }, error } = await supabase.auth.getUser();
+			if (error || !user) return;
+
 			const response = await fetch(`${PUBLIC_API_URL}/api/clio/status`, {
 				headers: { Authorization: `Bearer ${session.access_token}` }
 			});
@@ -106,8 +110,21 @@
 
 <!-- Clio Integration Modal -->
 {#if showClioModal}
-	<div class="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4 z-50" onclick={() => showClioModal = false}>
-		<div class="bg-white rounded-lg shadow-xl max-w-md w-full p-6" onclick={(e) => e.stopPropagation()}>
+	<div 
+		class="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4 z-50" 
+		role="button"
+		tabindex="0"
+		onclick={() => showClioModal = false}
+		onkeydown={(e) => { if (e.key === 'Escape') showClioModal = false; }}
+		aria-label="Close modal"
+	>
+		<div 
+			class="bg-white rounded-lg shadow-xl max-w-md w-full p-6" 
+			role="dialog"
+			aria-modal="true"
+			onclick={(e) => e.stopPropagation()}
+			onkeydown={(e) => e.stopPropagation()}
+		>
 			<div class="flex justify-between items-center mb-4">
 				<h3 class="text-lg font-medium text-gray-900">Clio Integration</h3>
 				<button

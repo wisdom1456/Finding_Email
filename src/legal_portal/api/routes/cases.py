@@ -1,5 +1,4 @@
-"""Case management endpoints.
-"""
+"""Case management endpoints."""
 
 import uuid
 from datetime import datetime, timezone
@@ -68,7 +67,9 @@ class CreateFromClioResponse(BaseModel):
 
 @router.post("", response_model=CaseResponse, status_code=status.HTTP_201_CREATED)
 async def create_case(
-    case_data: CaseCreate, user=Depends(get_current_user), supabase=Depends(get_user_supabase_client)
+    case_data: CaseCreate,
+    user=Depends(get_current_user),  # noqa: B008
+    supabase=Depends(get_user_supabase_client),  # noqa: B008
 ):
     """Create a new case for the authenticated user.
 
@@ -148,8 +149,8 @@ async def create_case(
 
 @router.get("", response_model=List[CaseResponse])
 async def list_cases(
-    user=Depends(get_current_user),
-    supabase=Depends(get_user_supabase_client),
+    user=Depends(get_current_user),  # noqa: B008
+    supabase=Depends(get_user_supabase_client),  # noqa: B008
     limit: int = 50,
     offset: int = 0,
 ):
@@ -180,11 +181,15 @@ async def list_cases(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error fetching cases: {str(e)}"
-        )
+        ) from e
 
 
 @router.get("/{case_id}", response_model=CaseResponse)
-async def get_case(case_id: str, user=Depends(get_current_user), supabase=Depends(get_user_supabase_client)):
+async def get_case(
+    case_id: str,
+    user=Depends(get_current_user),  # noqa: B008
+    supabase=Depends(get_user_supabase_client),  # noqa: B008
+):
     """Get a specific case by ID.
 
     Args:
@@ -209,15 +214,15 @@ async def get_case(case_id: str, user=Depends(get_current_user), supabase=Depend
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error fetching case: {str(e)}"
-        )
+        ) from e
 
 
 @router.patch("/{case_id}", response_model=CaseResponse)
 async def update_case(
     case_id: str,
     case_data: CaseUpdate,
-    user=Depends(get_current_user),
-    supabase=Depends(get_user_supabase_client),
+    user=Depends(get_current_user),  # noqa: B008
+    supabase=Depends(get_user_supabase_client),  # noqa: B008
 ):
     """Update a case.
 
@@ -252,15 +257,15 @@ async def update_case(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error updating case: {str(e)}"
-        )
+        ) from e
 
 
 @router.delete("/{case_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_case(
     case_id: str,
-    user=Depends(get_current_user),
-    user_supabase=Depends(get_user_supabase_client),
-    service_supabase=Depends(get_supabase_client),
+    user=Depends(get_current_user),  # noqa: B008
+    user_supabase=Depends(get_user_supabase_client),  # noqa: B008
+    service_supabase=Depends(get_supabase_client),  # noqa: B008
 ):
     """Delete a case and all associated documents from storage and database.
 
@@ -313,15 +318,15 @@ async def delete_case(
         print(f"  - Exception: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error deleting case: {str(e)}"
-        )
+        ) from e
 
 
 # ===== Clio Integration Endpoints =====
 
 
 async def get_clio_client_for_user(
-    user=Depends(get_current_user),
-    supabase=Depends(get_supabase_client),
+    user=Depends(get_current_user),  # noqa: B008
+    supabase=Depends(get_supabase_client),  # noqa: B008
 ) -> ClioClient:
     """Get authenticated Clio client for user."""
     try:
@@ -373,7 +378,7 @@ async def get_clio_client_for_user(
     except ClioAuthError as e:
         raise HTTPException(status_code=401, detail=f"Clio authentication failed: {str(e)}")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to initialize Clio client: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to initialize Clio client: {str(e)}") from e
 
 
 async def import_clio_documents_helper(
@@ -384,7 +389,8 @@ async def import_clio_documents_helper(
     supabase,
     progress_callback=None,
 ) -> Dict[str, Any]:
-    """Helper function to import documents from Clio matter.
+    """Import documents from Clio matter.
+
     Returns import status with counts and any errors.
 
     Args:
@@ -418,6 +424,11 @@ async def import_clio_documents_helper(
         note_success = 0
         doc_success = 0
         errors = []
+
+        # Track compression statistics
+        files_compressed = 0
+        total_original_size = 0
+        total_compressed_size = 0
 
         # Save communications as document entries
         total_comms = len(communications)
@@ -526,18 +537,36 @@ async def import_clio_documents_helper(
 
                 access_token = integration.data[0]["access_token"]
 
-                # Download and extract text from document
-                file_content, content_type, extracted_text = DocumentProcessor.download_and_extract(
-                    doc_url, access_token, doc_name
-                )
+                # Download and extract text from document (with automatic compression)
+                (
+                    file_content,
+                    content_type,
+                    extracted_text,
+                    compression_meta,
+                ) = DocumentProcessor.download_and_extract(doc_url, access_token, doc_name, compress=True)
 
                 file_size = len(file_content)
+                original_size = compression_meta.get("original_size", file_size)
+                was_compressed = compression_meta.get("compressed", False)
 
-                # Check file size limit (Supabase free tier: 50MB, but we'll be conservative)
-                max_size = 45 * 1024 * 1024  # 45MB
-                if file_size > max_size:
+                # Check file size limit - now supports up to 100MB with compression
+                max_size = 100 * 1024 * 1024  # 100MB
+                if original_size > max_size:
                     raise Exception(
-                        f"File too large ({file_size / 1024 / 1024:.1f}MB). Maximum size: {max_size / 1024 / 1024:.0f}MB"
+                        f"File too large ({original_size / 1024 / 1024:.1f}MB). Maximum size: {max_size / 1024 / 1024:.0f}MB"
+                    )
+
+                # Track compression statistics
+                if was_compressed:
+                    files_compressed += 1
+                    total_original_size += original_size
+                    total_compressed_size += file_size
+
+                    compression_ratio = compression_meta.get("compression_ratio", 1.0)
+                    reduction_pct = (1 - compression_ratio) * 100
+                    print(
+                        f"  - Compressed: {original_size / 1024 / 1024:.1f}MB → {file_size / 1024 / 1024:.1f}MB "
+                        f"({reduction_pct:.1f}% reduction)"
                     )
 
                 # Clean extracted text to remove null bytes (PostgreSQL doesn't support them)
@@ -558,7 +587,7 @@ async def import_clio_documents_helper(
                 # Check if this is an intake form candidate
                 is_intake_candidate = "intake" in doc_name.lower()
 
-                # Save document record with extracted text
+                # Save document record with extracted text and compression metadata
                 doc_data = {
                     "case_id": case_id,
                     "file_name": doc_name,
@@ -574,6 +603,7 @@ async def import_clio_documents_helper(
                         "clio_url": doc_url,
                         "clio_filename": doc_name,
                         "is_intake_candidate": is_intake_candidate,  # Mark as candidate, will prioritize later
+                        "compression": compression_meta,  # Store compression metadata
                     },
                 }
                 supabase.table("documents").insert(doc_data).execute()
@@ -603,6 +633,19 @@ async def import_clio_documents_helper(
             print(f"  - Errors: {len(errors)}")
             for error in errors[:5]:  # Show first 5 errors
                 print(f"    • {error}")
+
+        # Show compression statistics if any files were compressed
+        if files_compressed > 0:
+            total_saved = total_original_size - total_compressed_size
+            avg_reduction = (total_saved / total_original_size) * 100 if total_original_size > 0 else 0
+            print("\n💾 Compression Summary:")
+            print(f"  - Files compressed: {files_compressed}")
+            print(
+                f"  - Size reduction: {total_original_size / 1024 / 1024:.1f}MB → "
+                f"{total_compressed_size / 1024 / 1024:.1f}MB"
+            )
+            print(f"  - Space saved: {total_saved / 1024 / 1024:.1f}MB ({avg_reduction:.1f}% reduction)")
+        print("")  # Add blank line for readability
 
         # Post-processing: Prioritize intake forms
         print("\n🎯 Prioritizing intake forms...")
@@ -731,6 +774,7 @@ def analyze_intake_priority(doc: Dict[str, Any]) -> int:
 
 def analyze_intake_documents(case_id: str, supabase) -> Dict[str, Any]:
     """Analyze documents for intake form candidates.
+
     Returns analysis with intake document info.
     """
     try:
@@ -799,8 +843,8 @@ def analyze_intake_documents(case_id: str, supabase) -> Dict[str, Any]:
 @router.post("/create-from-clio", response_model=CreateFromClioResponse)
 async def create_case_from_clio(
     request: CreateFromClioRequest,
-    user=Depends(get_current_user),
-    supabase=Depends(get_supabase_client),
+    user=Depends(get_current_user),  # noqa: B008
+    supabase=Depends(get_supabase_client),  # noqa: B008
     clio_client: ClioClient = Depends(get_clio_client_for_user),
 ):
     """Create a new case from Clio matter with optional auto-import.
@@ -935,7 +979,10 @@ async def create_case_from_clio(
 
 @router.post("/{case_id}/set-intake-form")
 async def set_intake_form(
-    case_id: str, request: dict, user=Depends(get_current_user), supabase=Depends(get_supabase_client)
+    case_id: str,
+    request: dict,
+    user=Depends(get_current_user),  # noqa: B008
+    supabase=Depends(get_supabase_client),  # noqa: B008
 ):
     """Set a specific document as the primary intake form for a case.
 
@@ -1021,15 +1068,15 @@ async def set_intake_form(
         print(f"  - ❌ Exception: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error updating intake form: {str(e)}"
-        )
+        ) from e
 
 
 @router.post("/{case_id}/change-matter")
 async def change_clio_matter(
     case_id: str,
     request: CreateFromClioRequest,
-    user=Depends(get_current_user),
-    supabase=Depends(get_supabase_client),
+    user=Depends(get_current_user),  # noqa: B008
+    supabase=Depends(get_supabase_client),  # noqa: B008
     clio_client: ClioClient = Depends(get_clio_client_for_user),
 ):
     """Change the linked Clio matter for a case.
@@ -1173,4 +1220,4 @@ async def change_clio_matter(
         print(f"  - ❌ Exception: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error changing matter: {str(e)}"
-        )
+        ) from e

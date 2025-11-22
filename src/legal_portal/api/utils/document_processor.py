@@ -1,5 +1,4 @@
-"""Document processing utilities for downloading and extracting text from files.
-"""
+"""Document processing utilities for downloading and extracting text from files."""
 
 import io
 from typing import Optional, Tuple
@@ -7,6 +6,11 @@ from typing import Optional, Tuple
 import fitz  # PyMuPDF
 import requests
 from docx import Document
+from legal_portal.services.file_compression_service import get_compression_service
+from legal_portal.utils.compression_utils import format_file_size
+from legal_portal.utils.logging_config import get_module_logger
+
+logger = get_module_logger(__name__)
 
 
 class DocumentProcessor:
@@ -63,7 +67,7 @@ class DocumentProcessor:
             pdf_document.close()
             return "\n\n".join(text_parts)
         except Exception as e:
-            raise Exception(f"Failed to extract text from PDF: {str(e)}")
+            raise Exception(f"Failed to extract text from PDF: {str(e)}") from e
 
     @staticmethod
     def extract_text_from_docx(file_content: bytes) -> str:
@@ -82,7 +86,7 @@ class DocumentProcessor:
             text_parts = [paragraph.text for paragraph in doc.paragraphs]
             return "\n".join(text_parts)
         except Exception as e:
-            raise Exception(f"Failed to extract text from DOCX: {str(e)}")
+            raise Exception(f"Failed to extract text from DOCX: {str(e)}") from e
 
     @staticmethod
     def extract_text_from_txt(file_content: bytes) -> str:
@@ -103,7 +107,7 @@ class DocumentProcessor:
             except UnicodeDecodeError:
                 return file_content.decode("latin-1", errors="replace")
         except Exception as e:
-            raise Exception(f"Failed to extract text from TXT: {str(e)}")
+            raise Exception(f"Failed to extract text from TXT: {str(e)}") from e
 
     @classmethod
     def extract_text(cls, file_content: bytes, content_type: str, filename: str = "") -> Optional[str]:
@@ -148,19 +152,27 @@ class DocumentProcessor:
 
     @classmethod
     def download_and_extract(
-        cls, url: str, access_token: str, filename: str = ""
-    ) -> Tuple[bytes, str, Optional[str]]:
-        """Download file and extract text in one operation.
+        cls, url: str, access_token: str, filename: str = "", compress: bool = True
+    ) -> Tuple[bytes, str, Optional[str], Optional[dict]]:
+        """Download file, optionally compress it, and extract text in one operation.
 
         Args:
         ----
             url: URL to download from
             access_token: OAuth access token
             filename: Original filename for type detection
+            compress: Whether to attempt compression for large files (default: True)
 
         Returns:
         -------
-            Tuple of (file_content, content_type, extracted_text)
+            Tuple of (file_content, content_type, extracted_text, compression_metadata)
+            compression_metadata includes: {
+                "compressed": bool,
+                "original_size": int,
+                "compressed_size": int,
+                "compression_ratio": float,
+                "method": str
+            }
 
         Raises:
         ------
@@ -168,12 +180,54 @@ class DocumentProcessor:
         """
         # Download file
         file_content, content_type = cls.download_file(url, access_token)
+        original_size = len(file_content)
+
+        # Log download
+        logger.info(f"Downloaded file: {filename} ({format_file_size(original_size)})")
+
+        # Initialize compression metadata
+        compression_metadata = {
+            "compressed": False,
+            "original_size": original_size,
+            "compressed_size": original_size,
+            "compression_ratio": 1.0,
+            "method": "none",
+        }
+
+        # Attempt compression if enabled and file is large enough
+        if compress:
+            try:
+                compression_service = get_compression_service()
+                compression_result = compression_service.compress_file(file_content, filename, content_type)
+
+                # Update file content if compressed
+                if compression_result.was_compressed:
+                    file_content = compression_result.compressed_data
+                    logger.info(
+                        f"Compression applied: {format_file_size(original_size)} → "
+                        f"{format_file_size(compression_result.compressed_size)} "
+                        f"({compression_result.method_used})"
+                    )
+
+                # Update compression metadata
+                compression_metadata = {
+                    "compressed": compression_result.was_compressed,
+                    "original_size": compression_result.original_size,
+                    "compressed_size": compression_result.compressed_size,
+                    "compression_ratio": compression_result.compression_ratio,
+                    "method": compression_result.method_used,
+                }
+
+            except Exception as e:
+                logger.warning(f"Compression attempt failed for {filename}: {e}")
+                # Continue with uncompressed file
 
         # Extract text (may return None for unsupported types)
+        # Note: Extract from the potentially compressed file
         try:
             extracted_text = cls.extract_text(file_content, content_type, filename)
         except Exception as e:
-            print(f"Warning: Text extraction failed: {e}")
+            logger.warning(f"Text extraction failed for {filename}: {e}")
             extracted_text = None
 
-        return file_content, content_type, extracted_text
+        return file_content, content_type, extracted_text, compression_metadata

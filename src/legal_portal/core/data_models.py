@@ -32,6 +32,7 @@ class FileType(str, Enum):
     TXT = "text/plain"
     CSV = "text/csv"
     EML = "message/rfc822"
+    IMAGE = "image/generic"  # Generic image type
     JPG = "image/jpeg"
     PNG = "image/png"
     GIF = "image/gif"
@@ -171,7 +172,9 @@ class DocumentSummaryStructured(BaseModel):
     issues_identified: List[str] = Field(
         default_factory=list, description="Legal problems, violations, or concerns found"
     )
-    relevance_to_case: str = Field(description="How this document relates to the client's claims")
+    relevance_to_case: str = Field(
+        default="Relevance to be determined", description="How this document relates to the client's claims"
+    )
     extraction_quality: str = Field(
         default="high", description="Quality of source text: 'high', 'medium', or 'low'"
     )
@@ -509,3 +512,183 @@ class ClioImportResult(BaseModel):
     date_range: Optional[tuple[datetime, datetime]] = None
     total_file_size_bytes: int = 0
     import_duration_seconds: float = 0
+
+
+# ============================================================================
+# Multi-Stage Analysis Models (NEW - 2025-11-21)
+# ============================================================================
+
+
+class Party(BaseModel):
+    """Party involved in the case."""
+
+    name: str
+    role: str  # "Client", "Opposing Party", "Contractor", "Landlord", "Tenant", etc.
+    contact_info: Optional[str] = None
+    first_mentioned_in: Optional[str] = None  # Source document
+
+
+class Event(BaseModel):
+    """Chronological event in the case timeline."""
+
+    date: Union[datetime, str]  # Allow string for partial dates like "March 2025"
+    description: str
+    source_document: str
+    significance: Optional[str] = None  # Why this event matters legally
+
+
+class FinancialItem(BaseModel):
+    """Financial transaction or amount in the case."""
+
+    amount: float
+    description: str  # "Contract price", "Payment made", "Damages claimed"
+    date: Optional[Union[datetime, str]] = None
+    source_document: str
+    payment_type: Optional[str] = None  # "paid", "owed", "claimed", "estimated"
+
+
+class KeyDocument(BaseModel):
+    """Important document in the case."""
+
+    document_name: str
+    document_type: str  # "Contract", "Notice", "Correspondence", "Evidence"
+    date: Optional[Union[datetime, str]] = None
+    significance: str  # Why this document matters
+
+
+class PropertyInfo(BaseModel):
+    """Property details for real estate cases."""
+
+    address: str
+    property_type: Optional[str] = None  # "Residential", "Commercial"
+    additional_details: Dict[str, Any] = Field(default_factory=dict)
+
+
+class FactMatrix(BaseModel):
+    """Structured facts extracted from case documents."""
+
+    parties: List[Party]
+    timeline: List[Event]
+    financial_data: List[FinancialItem]
+    key_documents: List[KeyDocument]
+    preliminary_issues: List[str]  # Initial legal issues identified
+    property_details: Optional[PropertyInfo] = None
+    extraction_notes: Optional[str] = None  # Any caveats or quality issues
+
+
+class LegalIssue(BaseModel):
+    """A potential legal issue or cause of action."""
+
+    issue_name: str  # e.g., "Implied Warranty Breach"
+    category: str  # "contract", "tort", "statutory", "procedural"
+    elements: List[str]  # Legal elements that must be proven
+    potential_remedies: List[str]
+    florida_statute_references: List[str] = Field(default_factory=list)  # e.g., ["§83.51", "Chapter 558"]
+    confidence: str = "moderate"  # "strong", "moderate", "weak"
+
+
+class ProceduralStep(BaseModel):
+    """A procedural requirement that must be met."""
+
+    requirement: str  # Description of what must be done
+    deadline: Optional[str] = None  # When it must be done
+    statute_basis: Optional[str] = None  # Legal basis for requirement
+    consequences_if_missed: Optional[str] = None  # What happens if not done
+
+
+class LegalIssueMap(BaseModel):
+    """Map of all legal issues identified in the case."""
+
+    primary_issues: List[LegalIssue]
+    secondary_issues: List[LegalIssue] = Field(default_factory=list)
+    relevant_statutes: List[str] = Field(default_factory=list)  # Statute numbers to query corpus
+    procedural_requirements: List[ProceduralStep] = Field(default_factory=list)
+    case_complexity: str  # "simple" | "moderate" | "complex"
+    complexity_reasoning: Optional[str] = None  # Why this complexity level
+
+
+class IssueAnalysis(BaseModel):
+    """Detailed analysis of a single legal issue."""
+
+    issue_name: str
+    legal_standard: str  # Plain English explanation of the law
+    fact_application: str  # How facts meet/don't meet the standard
+    statute_analysis: Optional[str] = None  # Analysis with verified statute citations
+    case_law_support: Optional[str] = None  # If applicable
+    remedies_available: List[str]
+    procedural_requirements: Optional[str] = None  # Integrated into analysis
+    confidence_level: str  # "strong" | "moderate" | "weak"
+    supporting_evidence: List[str] = Field(default_factory=list)  # Key evidence supporting this claim
+
+
+class RiskAssessment(BaseModel):
+    """Assessment of risks and challenges."""
+
+    major_risks: List[str]
+    risk_mitigation_steps: List[str]
+    statute_of_limitations_concerns: Optional[str] = None
+    evidence_gaps: List[str] = Field(default_factory=list)
+
+
+class CriticalDeadline(BaseModel):
+    """A critical deadline that must be met."""
+
+    deadline_date: Optional[Union[datetime, str]] = None
+    description: str
+    consequence_if_missed: str
+    urgency: str  # "critical", "important", "normal"
+    statute_basis: Optional[str] = None
+
+
+class EvidenceAssessment(BaseModel):
+    """Assessment of evidence strength."""
+
+    strong_evidence: List[str]
+    weak_evidence: List[str]
+    missing_evidence: List[str]
+    overall_strength: str  # "strong", "moderate", "weak"
+
+
+class DeepAnalysis(BaseModel):
+    """Comprehensive legal analysis of all identified issues."""
+
+    issue_analyses: List[IssueAnalysis]
+    risk_assessment: RiskAssessment
+    deadline_tracking: List[CriticalDeadline]
+    evidence_strength: EvidenceAssessment
+    overall_case_strength: str  # "strong", "moderate", "weak"
+    key_strengths: List[str] = Field(default_factory=list)
+    key_challenges: List[str] = Field(default_factory=list)
+
+
+class LetterStructure(BaseModel):
+    """Guidance for how to structure the findings letter."""
+
+    style: str  # "simple_bullets" | "numbered_findings" | "hybrid"
+    intro: str  # "Here are the key points of our analysis:" OR "Key Findings"
+    issue_format: str  # "bullet_paragraphs" | "numbered_sections_with_headers" | "bullets_with_subheadings"
+    reasoning: Optional[str] = None  # Why this structure was chosen
+
+
+class MultiStageAnalysisResult(BaseModel):
+    """Complete result from multi-stage analysis pipeline."""
+
+    fact_matrix: FactMatrix
+    issue_map: LegalIssueMap
+    deep_analysis: DeepAnalysis
+    letter_structure: LetterStructure
+    verified_statutes: List[Dict[str, Any]] = Field(default_factory=list)  # From statute service
+    processing_time_seconds: float
+    stage_timings: Dict[str, float] = Field(default_factory=dict)  # Time per stage
+
+
+class CompletenessReport(BaseModel):
+    """Report on letter completeness."""
+
+    issues_addressed: List[str]
+    issues_missing: List[str]
+    statutes_cited: List[str]
+    statutes_missing: List[str]
+    completeness_score: float  # 0-1
+    recommendation: str  # "complete" | "needs_revision"
+    warnings: List[str] = Field(default_factory=list)

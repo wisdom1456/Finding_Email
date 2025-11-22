@@ -15,13 +15,68 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import asdict, dataclass
-from typing import Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 from uuid import uuid4
 
+if TYPE_CHECKING:
+    from legal_portal.services.statute_validation_service import StatuteValidationService
+
+import numpy as np
 from legal_portal.core.data_models import CaseAnalysisResult
 from legal_portal.utils.logging_config import get_module_logger
+from openai import OpenAI
 
 logger = get_module_logger(__name__)
+
+
+@dataclass
+class CitationThreshold:
+    """Adaptive threshold based on case context."""
+
+    base_threshold: float = 0.15  # Default 15%
+    quality_adjustment: float = 0.0
+    coverage_adjustment: float = 0.0
+
+    @property
+    def effective_threshold(self) -> float:
+        """Calculate final threshold with adjustments."""
+        return max(0.1, min(0.3, self.base_threshold + self.quality_adjustment + self.coverage_adjustment))
+
+    @classmethod
+    def from_case_context(
+        cls, case_type: Optional[str], is_corpus_covered: bool, document_quality: float
+    ) -> "CitationThreshold":
+        """Create threshold based on case context.
+
+        Args:
+        ----
+            case_type: Type of legal case
+            is_corpus_covered: Whether case falls within Florida Legal Corpus coverage
+            document_quality: Average document quality score (0-10 scale)
+
+        Returns:
+        -------
+            CitationThreshold configured for case context
+        """
+        threshold = cls()
+
+        # Adjust based on corpus coverage
+        if is_corpus_covered:
+            # Corpus-covered cases: can be stricter (expect better matches)
+            threshold.coverage_adjustment = +0.05
+        else:
+            # Non-covered cases: be more lenient
+            threshold.coverage_adjustment = -0.05
+
+        # Adjust based on document quality (0-10 scale)
+        if document_quality < 5.0:
+            # Low quality docs: be more lenient (OCR errors, etc)
+            threshold.quality_adjustment = -0.03
+        elif document_quality > 8.0:
+            # High quality docs: can be stricter
+            threshold.quality_adjustment = +0.02
+
+        return threshold
 
 
 @dataclass
@@ -58,12 +113,199 @@ class CitationTrackingService:
     all factual statements are properly attributed to their source documents.
     """
 
-    def __init__(self):
-        """Initialize the citation tracking service."""
+    def __init__(self, corpus_service: Optional["StatuteValidationService"] = None):
+        """Initialize the citation tracking service.
+
+        Args:
+        ----
+            corpus_service: Optional statute validation service for corpus-based validation
+        """
         self.current_citation_map: Optional[CitationMap] = None
+        self._openai_client = None
+        self._embedding_cache: Dict[str, List[float]] = {}
+        self.corpus_service = corpus_service
         logger.info("CitationTrackingService initialized")
 
-    def create_citation_map(self, case_analysis: CaseAnalysisResult, letter_content: str) -> CitationMap:
+    @property
+    def openai_client(self):
+        """Lazy load OpenAI client."""
+        if self._openai_client is None:
+            self._openai_client = OpenAI()
+        return self._openai_client
+
+    def _get_embedding(self, text: str) -> List[float]:
+        """Get text embedding with caching.
+
+        Args:
+        ----
+            text: Text to embed
+
+        Returns:
+        -------
+            List of floats representing the embedding
+        """
+        # Use first 500 chars to avoid token limits
+        text_key = text[:500]
+
+        if text_key not in self._embedding_cache:
+            try:
+                response = self.openai_client.embeddings.create(
+                    model="text-embedding-3-small", input=text_key
+                )
+                self._embedding_cache[text_key] = response.data[0].embedding
+                logger.debug(f"Generated embedding for text (length: {len(text_key)})")
+            except Exception as e:
+                logger.warning(f"Failed to generate embedding: {e}")
+                return []
+
+        return self._embedding_cache[text_key]
+
+    def _calculate_semantic_similarity(self, text1: str, text2: str) -> float:
+        """Calculate cosine similarity between text embeddings.
+
+        Args:
+        ----
+            text1: First text to compare
+            text2: Second text to compare
+
+        Returns:
+        -------
+            Similarity score between 0 and 1
+        """
+        emb1 = self._get_embedding(text1)
+        emb2 = self._get_embedding(text2)
+
+        if not emb1 or not emb2:
+            return 0.0
+
+        # Cosine similarity
+        dot_product = np.dot(emb1, emb2)
+        norm_product = np.linalg.norm(emb1) * np.linalg.norm(emb2)
+
+        if norm_product == 0:
+            return 0.0
+
+        return float(dot_product / norm_product)
+
+    def _normalize_text(self, text: str) -> str:
+        """Normalize text for better matching.
+
+        Args:
+        ----
+            text: Text to normalize
+
+        Returns:
+        -------
+            Normalized text
+        """
+        # Normalize dates
+        text = re.sub(r"\b\d{1,2}/\d{1,2}/\d{4}\b", "[DATE]", text)
+        text = re.sub(
+            r"\b(January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},?\s+\d{4}\b",
+            "[DATE]",
+            text,
+            flags=re.IGNORECASE,
+        )
+
+        # Normalize monetary amounts
+        text = re.sub(r"\$[\d,]+(\.\d{2})?", "[AMOUNT]", text)
+
+        # Normalize party names (Mr./Mrs./Ms. + Name)
+        text = re.sub(r"\b(Mr\.|Mrs\.|Ms\.)\s+[A-Z][a-z]+(\s+[A-Z][a-z]+)?", "[PARTY]", text)
+
+        # Normalize common legal terms
+        term_map = {
+            r"\b(contractor|contract)\b": "contract_party",
+            r"\b(abandoned|ceased|terminated|stopped)\b": "work_ceased",
+            r"\b(project|work|job)\b": "work",
+            r"\b(notice|notification|letter)\b": "notice",
+        }
+
+        for pattern, replacement in term_map.items():
+            text = re.sub(pattern, replacement, text, flags=re.IGNORECASE)
+
+        return text.lower()
+
+    def create_citation_map(
+        self,
+        letter_id: str,
+        client_name: str,
+        letter_content: str,
+        case_analysis: CaseAnalysisResult,
+        case_type: Optional[str] = None,
+        is_corpus_covered: bool = True,
+        average_doc_quality: float = 7.0,
+    ) -> CitationMap:
+        """Create a comprehensive citation map for a findings letter.
+
+        Args:
+        ----
+            letter_id: Unique identifier for the letter
+            client_name: Name of the client
+            letter_content: Generated findings letter content
+            case_analysis: Complete case analysis with source documents
+            case_type: Type of legal case
+            is_corpus_covered: Whether case falls within corpus coverage
+            average_doc_quality: Average document quality score (0-10 scale)
+
+        Returns:
+        -------
+            CitationMap with all detected citations and mappings
+        """
+        import datetime
+
+        logger.info("Creating citation map for findings letter")
+
+        # Extract basic case information
+        case_type_str = case_type or (
+            case_analysis.intake_analysis.case_type if case_analysis.intake_analysis else "Legal Matter"
+        )
+
+        # Extract source documents information
+        source_documents = self._extract_source_documents(case_analysis)
+
+        # Create adaptive threshold
+        adaptive_threshold = CitationThreshold.from_case_context(
+            case_type=case_type_str, is_corpus_covered=is_corpus_covered, document_quality=average_doc_quality
+        )
+
+        # Analyze letter content for factual statements
+        citations = self._extract_citations(letter_content, source_documents, adaptive_threshold)
+
+        # Create citation map
+        citation_map = CitationMap(
+            letter_id=letter_id,
+            client_name=client_name,
+            case_type=case_type_str,
+            generation_timestamp=datetime.datetime.now().isoformat(),
+            citations=citations,
+            source_documents=source_documents,
+            letter_content=letter_content,
+            metadata={
+                "total_citations": len(citations),
+                "source_document_count": len(source_documents),
+                "high_confidence_citations": len([c for c in citations if c.confidence == "high"]),
+                "letter_length": len(letter_content),
+                "citation_coverage": self._calculate_citation_coverage(letter_content, citations),
+                "adaptive_threshold": adaptive_threshold.effective_threshold,
+                "is_corpus_covered": is_corpus_covered,
+                "average_doc_quality": average_doc_quality,
+            },
+        )
+
+        self.current_citation_map = citation_map
+        logger.info(
+            f"Citation map created with {len(citations)} citations from {len(source_documents)} documents "
+            f"(threshold: {adaptive_threshold.effective_threshold:.2f})",
+            extra={"letter_id": letter_id, "client_name": client_name, "citation_count": len(citations)},
+        )
+
+        return citation_map
+
+    # Legacy method for backwards compatibility
+    def create_citation_map_legacy(
+        self, case_analysis: CaseAnalysisResult, letter_content: str
+    ) -> CitationMap:
         """Create a comprehensive citation map for a findings letter.
 
         Args:
@@ -76,9 +318,7 @@ class CitationTrackingService:
             CitationMap with all detected citations and mappings
 
         """
-        import datetime
-
-        logger.info("Creating citation map for findings letter")
+        logger.info("Creating legacy citation map for findings letter")
 
         # Generate unique ID for this letter
         letter_id = str(uuid4())
@@ -87,41 +327,20 @@ class CitationTrackingService:
         client_name = (
             case_analysis.intake_analysis.client_name if case_analysis.intake_analysis else "Unknown Client"
         )
-        case_type = (
+        case_type_str = (
             case_analysis.intake_analysis.case_type if case_analysis.intake_analysis else "Legal Matter"
         )
 
-        # Extract source documents information
-        source_documents = self._extract_source_documents(case_analysis)
-
-        # Analyze letter content for factual statements
-        citations = self._extract_citations_from_content(letter_content, source_documents)
-
-        # Create citation map
-        citation_map = CitationMap(
+        # Use the new method with default parameters
+        return self.create_citation_map(
             letter_id=letter_id,
             client_name=client_name,
-            case_type=case_type,
-            generation_timestamp=datetime.datetime.now().isoformat(),
-            citations=citations,
-            source_documents=source_documents,
             letter_content=letter_content,
-            metadata={
-                "total_citations": len(citations),
-                "source_document_count": len(source_documents),
-                "high_confidence_citations": len([c for c in citations if c.confidence == "high"]),
-                "letter_length": len(letter_content),
-                "citation_coverage": self._calculate_citation_coverage(letter_content, citations),
-            },
+            case_analysis=case_analysis,
+            case_type=case_type_str,
+            is_corpus_covered=True,
+            average_doc_quality=7.0,
         )
-
-        self.current_citation_map = citation_map
-        logger.info(
-            f"Citation map created with {len(citations)} citations from {len(source_documents)} documents",
-            extra={"letter_id": letter_id, "client_name": client_name, "citation_count": len(citations)},
-        )
-
-        return citation_map
 
     def _extract_source_documents(self, case_analysis: CaseAnalysisResult) -> List[Dict[str, Any]]:
         """Extract source document information from case analysis.
@@ -192,40 +411,44 @@ class CitationTrackingService:
         logger.info(f"Extracted {len(source_docs)} total source documents")
         return source_docs
 
-    def _extract_citations_from_content(
-        self, letter_content: str, source_documents: List[Dict[str, Any]]
+    def _extract_citations(
+        self,
+        letter_content: str,
+        source_documents: List[Dict[str, Any]],
+        adaptive_threshold: CitationThreshold,
     ) -> List[Citation]:
-        """Extract citations by analyzing letter content for factual statements.
+        """Extract citations with adaptive threshold.
 
         Args:
         ----
             letter_content: The generated findings letter content
             source_documents: Available source documents
+            adaptive_threshold: Adaptive threshold configuration
 
         Returns:
         -------
             List of Citation objects mapping statements to sources
-
         """
-        logger.info(f"Extracting citations from letter content (length: {len(letter_content)} chars)")
-        logger.info(f"Available source documents: {len(source_documents)}")
+        logger.info(
+            f"Using adaptive threshold: {adaptive_threshold.effective_threshold:.2f} "
+            f"(base={adaptive_threshold.base_threshold}, "
+            f"quality_adj={adaptive_threshold.quality_adjustment:+.2f}, "
+            f"coverage_adj={adaptive_threshold.coverage_adjustment:+.2f})"
+        )
 
         citations = []
-
-        # Remove HTML tags for analysis
         text_content = re.sub(r"<[^>]+>", "", letter_content)
-        logger.debug(f"Text content length after HTML removal: {len(text_content)} chars")
-
-        # Split into sentences for analysis
         sentences = self._split_into_sentences(text_content)
+
         logger.info(f"Split letter into {len(sentences)} sentences for analysis")
 
         factual_count = 0
-        for _idx, sentence in enumerate(sentences):
+        for sentence in sentences:
             if self._is_factual_statement(sentence):
                 factual_count += 1
-                # Find best matching source document
-                source_match = self._find_best_source_match(sentence, source_documents)
+                source_match = self._find_best_source_match(
+                    sentence, source_documents, threshold=adaptive_threshold.effective_threshold
+                )
 
                 if source_match:
                     citation = Citation(
@@ -238,11 +461,15 @@ class CitationTrackingService:
                         document_section=source_match.get("document_section"),
                     )
                     citations.append(citation)
-                    logger.debug(
-                        f"Created citation {len(citations)}: {source_match['filename']} (confidence: {source_match.get('confidence', 'medium')})"
-                    )
 
-        logger.info(f"Identified {factual_count} factual statements, created {len(citations)} citations")
+        logger.info(
+            f"Identified {factual_count} factual statements, "
+            f"created {len(citations)} citations "
+            f"(coverage: {len(citations)/factual_count*100:.1f}%)"
+            if factual_count > 0
+            else "No factual statements found"
+        )
+
         return citations
 
     def _split_into_sentences(self, text: str) -> List[str]:
@@ -292,7 +519,7 @@ class CitationTrackingService:
         return has_factual_content and not has_opinion_content
 
     def _find_best_source_match(
-        self, statement: str, source_documents: List[Dict[str, Any]]
+        self, statement: str, source_documents: List[Dict[str, Any]], threshold: float = 0.15
     ) -> Optional[Dict[str, Any]]:
         """Find the best matching source document for a factual statement.
 
@@ -300,6 +527,7 @@ class CitationTrackingService:
         ----
             statement: Factual statement to match
             source_documents: Available source documents
+            threshold: Minimum score threshold for matches
 
         Returns:
         -------
@@ -310,8 +538,8 @@ class CitationTrackingService:
         best_score = 0
 
         for doc in source_documents:
-            score = self._calculate_match_score(statement, doc)
-            if score > best_score and score > 0.3:  # Minimum confidence threshold
+            score = self._calculate_match_score(statement, doc, use_semantic=True)
+            if score > best_score and score > threshold:
                 best_score = score
                 best_match = {
                     "filename": doc["filename"],
@@ -323,47 +551,77 @@ class CitationTrackingService:
 
         return best_match
 
-    def _calculate_match_score(self, statement: str, document: Dict[str, Any]) -> float:
-        """Calculate how well a statement matches a source document.
+    def _calculate_match_score(
+        self, statement: str, document: Dict[str, Any], use_semantic: bool = True
+    ) -> float:
+        """Enhanced scoring: word overlap + semantic similarity + corpus validation.
 
         Args:
         ----
             statement: Statement to match
             document: Source document to match against
+            use_semantic: Whether to use semantic similarity
 
         Returns:
         -------
             Match score between 0 and 1
 
         """
-        statement_lower = statement.lower()
-        score = 0.0
+        # 1. Normalize texts
+        norm_statement = self._normalize_text(statement)
 
-        # Check for keyword matches in different document fields
-        fields_to_check = ["summary", "key_information", "relevance_to_case", "legal_significance"]
+        # 2. Word-based score (30% weight)
+        word_score = 0.0
+        fields_to_check = ["summary", "key_information", "relevance_to_case"]
 
         for field in fields_to_check:
             if document.get(field):
-                field_content = document[field].lower()
+                norm_doc_text = self._normalize_text(document[field])
 
-                # Simple keyword matching - could be enhanced with semantic similarity
-                statement_words = set(re.findall(r"\b\w+\b", statement_lower))
-                field_words = set(re.findall(r"\b\w+\b", field_content))
+                statement_words = set(re.findall(r"\b\w+\b", norm_statement))
+                field_words = set(re.findall(r"\b\w+\b", norm_doc_text))
 
                 if statement_words and field_words:
                     overlap = len(statement_words.intersection(field_words))
                     field_score = overlap / len(statement_words)
-                    score = max(score, field_score)
+                    word_score = max(word_score, field_score)
 
-        # Boost score for specific document types
+        # 3. Semantic similarity score (60% weight)
+        semantic_score = 0.0
+        if use_semantic:
+            for field in fields_to_check:
+                if document.get(field):
+                    similarity = self._calculate_semantic_similarity(statement, document[field])
+                    semantic_score = max(semantic_score, similarity)
+
+        # 4. Document type bonus (10% weight)
+        type_bonus = 0.0
         if (
-            ("contract" in statement_lower and document.get("document_type") == "contract")
-            or ("timeline" in statement_lower and document.get("document_type") == "timeline")
-            or ("intake" in statement_lower and document.get("document_type") == "intake")
+            ("contract" in statement.lower() and document.get("document_type") == "contract")
+            or ("timeline" in statement.lower() and document.get("document_type") == "timeline")
+            or ("intake" in statement.lower() and document.get("document_type") == "intake")
         ):
-            score += 0.2
+            type_bonus = 0.1
 
-        return min(score, 1.0)  # Cap at 1.0
+        # 5. Corpus validation bonus (if statute mentioned)
+        corpus_bonus = 0.0
+        if self.corpus_service:
+            statute_mentions = re.findall(r"Fla\.\s*Stat\.\s*§\s*(\d+)\.(\d+)", statement, re.IGNORECASE)
+            if statute_mentions:
+                # Check if statute in corpus
+                for chapter, section in statute_mentions:
+                    statute_id = f"statute:fl:{chapter}.{section}"
+                    if statute_id in self.corpus_service.statutes:
+                        corpus_bonus = 0.05  # Boost score if valid statute
+                        break
+
+        # Combined score
+        if use_semantic:
+            final_score = (0.3 * word_score) + (0.6 * semantic_score) + type_bonus + corpus_bonus
+        else:
+            final_score = word_score + type_bonus + corpus_bonus
+
+        return min(final_score, 1.0)
 
     def _calculate_citation_coverage(self, letter_content: str, citations: List[Citation]) -> float:
         """Calculate what percentage of factual statements have citations.

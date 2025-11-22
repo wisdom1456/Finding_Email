@@ -610,13 +610,17 @@ def prepare_files_for_analysis(uploaded_files, compress_flag):
                             with zipfile.ZipFile(temp_file_path, "r") as zip_ref:
                                 zip_ref.extractall(zip_extract_dir)
 
+                            # Force filesystem sync to prevent race conditions
+                            # Increased delay to 500ms for more reliable extraction
+                            await asyncio.sleep(0.5)
+
                             # Add extracted files to processing list (filtering out video/audio)
                             extracted_count = 0
                             skipped_count = 0
                             extracted_files_list = []
                             skipped_files_list = []
 
-                            for root, dirs, files in os.walk(zip_extract_dir):
+                            for root, _dirs, files in os.walk(zip_extract_dir):
                                 for extracted_file in files:
                                     # Skip hidden files and system files
                                     if extracted_file.startswith(".") or extracted_file.startswith(
@@ -634,6 +638,13 @@ def prepare_files_for_analysis(uploaded_files, compress_flag):
                                         continue
 
                                     extracted_path = os.path.join(root, extracted_file)
+
+                                    # Verify file exists before processing (filesystem sync check)
+                                    if not os.path.isfile(extracted_path):
+                                        logger.warning(
+                                            f"Extracted file not found (filesystem sync issue?): {extracted_path}"
+                                        )
+                                        continue
 
                                     # Optionally compress extracted file
                                     if compressor:
@@ -1130,17 +1141,81 @@ def check_processing_status():
     # Display current progress
     progress_data = st.session_state.current_progress
 
-    col1, col2 = st.columns([3, 1])
-    with col1:
-        st.write(f"**Status:** {progress_data.get('message', 'Processing...')}")
-    with col2:
-        st.write(f"🔄 Next refresh: **{seconds_until_refresh}s**")
+    # Check if this is multi-stage analysis (new system)
+    current_phase = progress_data.get("current_phase", "starting")
+    is_multi_stage = current_phase in [
+        "fact_extraction",
+        "issue_mapping",
+        "deep_analysis",
+        "letter_generation",
+        "final_review",
+    ]
 
-    # Show progress bar
-    if progress_data.get("progress_percent", 0) > 0:
-        st.progress(progress_data["progress_percent"] / 100)
+    if is_multi_stage:
+        # Enhanced display for multi-stage analysis
+        st.subheader("📊 Multi-Stage Analysis Progress")
+
+        # Metrics row
+        col1, col2, col3 = st.columns([2, 1, 1])
+        with col1:
+            st.metric("Current Stage", progress_data.get("message", "Processing..."))
+        with col2:
+            st.metric("Overall Progress", f"{progress_data.get('progress_percent', 0):.0f}%")
+        with col3:
+            if st.session_state.get("processing_start_time"):
+                elapsed = time.time() - st.session_state.processing_start_time
+                minutes = int(elapsed // 60)
+                seconds = int(elapsed % 60)
+                time_str = f"{minutes}m {seconds}s" if minutes > 0 else f"{seconds}s"
+                st.metric("Time Elapsed", time_str)
+
+        # Stage breakdown visual
+        st.write("**Analysis Stages:**")
+
+        # Define stages with their status
+        stages_config = [
+            ("Fact Extraction", "fact_extraction", "🔍"),
+            ("Issue Mapping", "issue_mapping", "⚖️"),
+            ("Legal Analysis", "deep_analysis", "📊"),
+            ("Letter Generation", "letter_generation", "✍️"),
+            ("Final Review", "final_review", "✅"),
+        ]
+
+        # Determine status for each stage
+        stage_progress = progress_data.get("stages", {})
+
+        for stage_name, stage_key, icon in stages_config:
+            status = stage_progress.get(stage_name, "pending")
+
+            if stage_key == current_phase:
+                st.info(f"⏳ {icon} **{stage_name}** - In Progress")
+            elif status == "completed" or (
+                stages_config.index((stage_name, stage_key, icon))
+                < [s[1] for s in stages_config].index(current_phase)
+            ):
+                st.success(f"✓ {icon} {stage_name}")
+            else:
+                st.text(f"○ {icon} {stage_name}")
+
+        # Overall progress bar
+        st.progress(progress_data.get("progress_percent", 0) / 100)
+
+        # Refresh countdown
+        st.caption(f"🔄 Next refresh: {seconds_until_refresh}s")
+
     else:
-        st.progress(0, text="Starting...")
+        # Legacy display for backwards compatibility
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            st.write(f"**Status:** {progress_data.get('message', 'Processing...')}")
+        with col2:
+            st.write(f"🔄 Next refresh: **{seconds_until_refresh}s**")
+
+        # Show progress bar
+        if progress_data.get("progress_percent", 0) > 0:
+            st.progress(progress_data["progress_percent"] / 100)
+        else:
+            st.progress(0, text="Starting...")
 
     # Show processed documents list
     docs_processed = progress_data.get("documents_processed", [])
@@ -1149,8 +1224,8 @@ def check_processing_status():
             for doc in docs_processed:
                 st.write(f"✓ {doc}")
 
-    # Show elapsed time
-    if st.session_state.get("processing_start_time"):
+    # Show elapsed time (only for legacy mode, multi-stage already shows it in metrics)
+    if not is_multi_stage and st.session_state.get("processing_start_time"):
         elapsed = time.time() - st.session_state.processing_start_time
         minutes = int(elapsed // 60)
         seconds = int(elapsed % 60)

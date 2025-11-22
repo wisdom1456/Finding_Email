@@ -22,14 +22,28 @@ The subject line should:
 
 ## Template (Simplified Client Letter Structure)
 
-**Salutation & Opening:**
+**Salutation & Opening (MATCH ATTORNEY PATTERN):**
 
-Good afternoon [Client Name(s)],
+Dear [Client Name(s)]: OR Good afternoon [Client Name(s)],
 
-I hope this message finds you well. I wanted to follow up with a summary of our findings after reviewing [describe documents briefly]. Following our review of your documents and our recent discussion, I am providing a summary of the situation, along with legal considerations and my recommendations for moving forward.
+I hope you are doing well. I wanted to follow up with a summary of our findings after reviewing [specific documents] regarding [specific property/issue].
+
+As discussed, the primary concern is [state the main issue clearly].
 
 **OPTIONAL - Attorney Introduction (use when appropriate):**
 My name is [Attorney Name], and I am the attorney who will be assisting with your matter.
+
+**TONE REQUIREMENTS (CRITICAL - ENFORCE STRICTLY):**
+- ✅ REQUIRED: "I hope you are doing well" (warm, personal)
+- ❌ FORBIDDEN: "I trust this letter finds you well" OR "I hope this letter finds you well" (too formal/stiff)
+- ✅ REQUIRED: "I wanted to follow up" (conversational-professional)
+- ❌ FORBIDDEN: "I am writing to inform" OR "I am writing to provide" (bureaucratic)
+- This creates warmth while remaining professional
+
+**EXAMPLE OPENING (COPY THIS PATTERN):**
+"Dear Mr. Devlin,
+
+I hope you are doing well. I wanted to follow up with a summary of our findings after reviewing the documents you submitted regarding your property at [address]."
 
 **CRITICAL VOICE REQUIREMENTS:**
 - **Second person throughout:** Address the client directly using "you/your" in all sections. Never refer to the client in third person.
@@ -67,7 +81,43 @@ Target: 200-300 words]
 
 ---
 
-## 2. KEY LEGAL POINTS
+## 2. KEY LEGAL POINTS - ADAPTIVE STRUCTURE
+
+**CRITICAL: Structure adapts to case complexity. Do NOT force a rigid template.**
+
+### STEP 1: Determine Structure Based on Case Complexity
+
+**Count the major legal issues identified in the case analysis:**
+
+**IF 1-4 LEGAL ISSUES (Simple/Moderate Cases):**
+- Use: "Here are the key points of our analysis:"
+- Format: Bullet list with substantive paragraph bullets
+- Each bullet = One complete paragraph explaining the issue
+- Example style: Miguel Velasco, Erik Devlin, Balaji Badam, Clifton Price letters
+- **DEFAULT TO THIS FORMAT** - Most cases fall into this category
+
+**IF 5+ LEGAL ISSUES OR HIGHLY COMPLEX PROCEDURAL REQUIREMENTS:**
+- Use: "Key Findings" as intro (no "Here are...")
+- Format: Numbered sections (2., 3., 4., etc.) with headers for each issue
+- Each issue gets its own numbered section
+- Example style: Christopher Eastman letter
+- **USE SPARINGLY** - Only for truly complex cases with many distinct claims
+
+### STEP 2: Apply Chosen Structure
+
+**FOR SIMPLE/MODERATE CASES (1-2 issues):**
+
+Here are the key points of our analysis:
+
+• **[First Legal Issue]**: [Plain English standard]. [Application to facts with citations]. [Remedies available]. [Procedural requirements if any].
+
+• **[Second Legal Issue]**: [Plain English standard]. [Application to facts]. [Remedies]. [Requirements].
+
+• **[Additional points as bullets]**: Continue with substantive paragraph bullets
+
+---
+
+**FOR COMPLEX CASES (5+ issues):**
 
 **SECTION HEADER FORMAT:**
 
@@ -117,118 +167,127 @@ This pre-suit requirement protects both parties but means immediate litigation i
 
 For risks that could escalate (liens, foreclosure, eviction, statute of limitations), use this pattern to show progression:
 
-**Structure:** [Triggering Event] → [Intermediate Step] → [Legal Action] → [Ultimate Consequence]
+**Structure:** [Triggering Event] → [Intermediate Step] → [Legal Action] → [Ultimate Consequence in PLAIN ENGLISH]
 
-**Example:**
-"You have received a Notice to Owner from a subcontractor [Source: Notice.pdf]. This notice is the FIRST STEP toward filing a construction lien against your property. In Florida, once a lien is recorded, the subcontractor may initiate a foreclosure action to enforce the lien and recover the amount owed. While this is not always immediate, the risk should not be taken lightly—foreclosure of a construction lien can ultimately lead to the FORCED SALE OF YOUR HOME if not resolved."
+**CRITICAL - HIGH STAKES LANGUAGE (USE ALL CAPS FOR ULTIMATE CONSEQUENCES):**
+For the ultimate consequence, use concrete, client-understandable language in ALL CAPS:
+- ✅ "FORCED SALE OF YOUR HOME" (not "forced sale of your home" or "potential foreclosure proceedings")
+- ✅ "PERMANENT LOSS OF YOUR LEGAL RIGHTS" (not "permanent loss of your legal rights" or "statute of limitations expiration")
+- ✅ "PHYSICAL REMOVAL FROM THE PROPERTY" (not "physical removal from the property" or "eviction action")
+- ✅ "LICENSE REVOCATION AND INABILITY TO WORK" (not "license revocation" or "professional sanctions")
+
+**The ALL CAPS format signals maximum urgency to the client while remaining professional.**
+
+**Example (COPY THIS PATTERN):**
+"You received a Notice to Owner from a subcontractor on October 15, 2024. This notice is the FIRST STEP toward filing a construction lien against your property. In Florida, the subcontractor has 90 days from their last work date to file a lien—meaning a lien could be recorded as early as January 2025. Once a lien is recorded, the subcontractor may initiate a foreclosure action to enforce the lien and recover the amount owed. While this is not always immediate, the risk should not be taken lightly—foreclosure of a construction lien can ultimately lead to the FORCED SALE OF YOUR HOME if not resolved."
 
 **Why This Works:**
 - Names the specific document received
 - Shows step-by-step progression with "first step" language
 - Uses cautious qualifiers ("not always immediate")
-- States ultimate consequence in plain English (FORCED SALE)
+- States ultimate consequence in plain English using high-stakes language
 - Creates urgency without panic
 
 **When to Use Consequence Chains:**
-- Mechanic's liens (Notice to Owner → Lien → Foreclosure → Sale)
-- Eviction notices (3-Day Notice → 7-Day Notice → Court Filing → Eviction)
-- Statute of limitations (Claim accrued → Time passing → Deadline → Loss of rights forever)
-- License suspension (Citation → Hearing → Finding → Suspension)
+- Mechanic's liens (Notice to Owner → Lien → Foreclosure → FORCED SALE OF YOUR HOME)
+- Eviction notices (3-Day Notice → 7-Day Notice → Court Filing → PHYSICAL REMOVAL FROM PROPERTY)
+- Statute of limitations (Claim accrued → Time passing → Deadline → PERMANENT LOSS OF LEGAL RIGHTS)
+- License suspension (Citation → Hearing → Finding → LICENSE REVOCATION AND INABILITY TO WORK)
 
 Target for entire section: 400-600 words across all numbered subsections]
 
 ---
 
-## 3. RECOMMENDED ACTION
+## 3. RECOMMENDED ACTION & NEXT STEPS
 
-[Brief, directive recommendation. Use transitional phrase like "We recommend the following course of action:" or "Based on the above, the most appropriate course of action is to..."]
+**THIS IS THE FINAL SUBSTANTIVE SECTION - Combine recommendations with timeline/urgency**
 
-**Use A/B/C format for multiple actions:**
+**ATTORNEY OPENING PATTERNS (Choose based on case):**
 
-"We recommend the following course of action:
+**Pattern 1 (Most Common - Paragraph Format - USE THIS AS DEFAULT):**
+"Based on the above, a negotiated resolution would likely be your most efficient and cost-effective path forward. One option would be to [primary action]. This may lead to a joint resolution that includes mutual waivers and a clear release of future liability."
 
-A. [Action Title]:
+**This is the DEFAULT pattern used in most real attorney letters (Miguel Velasco, Erik Devlin, Balaji Badam, Clifton Price style).**
 
-Our firm can [describe what the firm will do]. This [action] will:
-• [Benefit 1]
-• [Benefit 2]
-• [Benefit 3]
+**THEN INTEGRATE TIMELINE/URGENCY INTO THE NARRATIVE:**
+- Weave urgency naturally: "We recommend sending this demand within the next 7 days to preserve your rights under the statute"
+- Mention firm actions: "Our firm will draft and send the necessary notices within 30 days"
+- Note ongoing needs: "You should continue to document any further communications or issues"
 
-B. [Action Title] (and [Risk Being Mitigated]):
+**Example (Paragraph Style from Real Letters):**
+"Based on the above, a negotiated resolution would likely be your most efficient and cost-effective path forward. One option would be to issue a demand letter to the contractor demanding completion of the project in accordance with the contract terms or reimbursement for amounts you may need to pay to hire another contractor. We recommend sending this demand promptly to preserve your legal position. This may lead to a joint resolution that includes mutual waivers and a clear release of future liability. Furthermore, you should reach out to the subcontractor and pay the amount owed under the Notice to Owner to avoid a lien being placed on your home. You can seek reimbursement of this amount from the contractor as a result of his failure to pay subcontractors."
 
-[First, explain the risk if applicable - use consequence chain if serious]
-
-[Then, provide specific recommendation]
+**Pattern 2 (For Cases Requiring Protective Client Action):**
+Use the paragraph format above AND add:
 
 **PROTECTIVE ACTION CHECKLIST (when recommending client take direct action):**
 
 When you recommend a client take protective action (pay subcontractor, document damage, send notice, gather evidence), provide a CHECKLIST of what to obtain/retain:
 
-**Format:**
 "If you proceed with [action], we strongly advise:
 • [Document to obtain]: [Brief explanation of protection]
 • [Document to retain]: [Brief explanation of importance]
 • [Strategic point]: [How this strengthens your position]"
 
 **Example:**
-"If you proceed with payment, we strongly advise:
+"If you proceed with payment to the subcontractor, we strongly advise:
 • Obtaining a written release of lien or lien waiver from the subcontractor
 • Retaining proof of payment (cancelled check, receipt, signed acknowledgment)
-• Using this payment as part of your damages claim in pursuing reimbursement from [Opposing Party], who failed in their contractual obligation to pay their vendors"
+• Using this payment as part of your damages claim in pursuing reimbursement from the contractor"
 
-This proactive step helps mitigate your risk and strengthens your position in any forthcoming legal action.
+**Pattern 3 (For Complex Multi-Step Recommendations - USE SPARINGLY):**
+Only when absolutely necessary, use numbered recommendations (like Christopher Eastman letter):
 
-C. [Optional third action - often "Schedule a Call"]:
+"We recommend the following:
 
-Please let us know if you would like us to proceed with [specific actions from A and B], or schedule a call to discuss these recommendations."
+1. [Action Title]: [Specific action with brief rationale]
 
-**CRITICAL:** Keep this section BRIEF. Do NOT use extensive subsections like "What you need to do" and "Why this protects you" and "Timeline". Integrate those elements naturally into the paragraph or bullet points.
+2. [Action Title]: [Specific action with brief rationale]
+
+3. [Action Title]: [Specific action with brief rationale]"
+
+Then conclude with a paragraph synthesizing the strategy.
 
 **SCOPE LIMITATION (when applicable):**
 "Please note that our representation in this matter is limited to [describe scope]. Should you wish to pursue [extended action], we would be happy to discuss continued representation under a private retainer agreement."
 
-Target: 200-300 words]
+**CRITICAL INSTRUCTIONS:**
+- ❌ DO NOT create a separate bulleted timeline section with "Immediate/Short-term/Ongoing"
+- ✅ DO integrate timeline and urgency into the narrative recommendation paragraph
+- ❌ DO NOT use extensive subsections labeled "What you need to do" and "Why this protects you"
+- ✅ DO weave those elements naturally into the text
+- Keep this section BRIEF and action-oriented (200-350 words including closing)
+
+Target: 200-350 words total]
 
 ---
 
-## 4. Next Steps
+## CLOSING - Call to Action (ATTORNEY PATTERN)
 
-[Brief, actionable timeline section. Format:]
+**Standard Closing:**
+"Please let us know if you would like us to proceed with [specific action], or whether you would prefer that we first set a phone call to discuss our review and recommendations for next steps."
 
-**Next Steps:**
-
-Provide a clear timeline of actions for both client and firm:
-
-• **Immediate (Within 7 days):** [Specific action client should take]
-• **Short-term (Within 30 days):** [What firm will do, deadlines to meet]
-• **Ongoing:** [Documentation, preservation, monitoring needs]
-
-**Call to Action:**
-"Please let us know if you would like us to proceed with [specific action], or schedule a call to discuss these recommendations."
-
-Target: 100-150 words]
-
----
-
-## Call to Action
-
-Please let us know if you would like us to proceed with [specific action, e.g., "drafting the demand letter"], or whether you would prefer to schedule a phone call to discuss our review and recommendations in more detail.
+**Alternative (More Formal):**
+"Please let us know if you would like us to proceed with drafting and sending the above-referenced [document], or schedule a call to discuss these recommendations."
 
 [If applicable: "For your consideration, I have attached [additional document]."]
 
 ---
 
-**Closing:**
+**Closing Signature:**
 
-Thank you, and I remain committed to protecting your interests throughout this process.
-
-[Alternative closing: "We remain committed to protecting your interests throughout this process."]
-
-Sincerely,
-
+Thank you,
 {attorney_name}
 {attorney_title}
+
+**OR (More Formal):**
+
+Sincerely,
+{attorney_name}, Esq.
+{attorney_title}
 {firm_name}
+
+**Note:** Match formality level to opening (if "Dear" → "Sincerely"; if "Good afternoon" → "Thank you")
 
 ---
 
@@ -247,11 +306,12 @@ By section:
 - Opening: 50-75 words
 - Section 1 (Factual Summary): 200-300 words
 - Section 2 (Key Legal Points): 300-500 words
-- Section 3 (Recommended Action): 200-300 words
-- Section 4 (Strengths - optional): 100-150 words if included
+- Section 3 (Recommended Action & Next Steps): 200-350 words
 - Closing: 50-75 words
 
 **CRITICAL:** If you exceed 1,500 words, you have failed. Client letters must be concise and scannable.
+
+**NOTE:** There is NO separate "Section 4: Next Steps" - timeline and urgency are integrated into Section 3.
 
 ---
 
@@ -268,6 +328,13 @@ By section:
 * Plain English first, then technical details
 * When referring to client: "you filed a notice" NOT "Mr. Smith filed a notice"
 * Be specific: Use exact dates (Month DD, YYYY), currency ($128,355.77), and timeframes
+* **CRITICAL - DATE MATH (MANDATORY):** Do not just list dates. You MUST CALCULATE time differences and state them explicitly:
+  - ✅ GOOD: "You vacated on April 15, 2025, but the landlord's notice was sent on May 30, 2025—45 days later, which is 15 days beyond the 30-day statutory deadline"
+  - ✅ GOOD: "Since March 2025—over 8 months ago—the contractor's communications have been sporadic"
+  - ❌ BAD: "You vacated on April 15, 2025. The notice was sent on May 30, 2025. The deadline is 30 days."
+  - ❌ BAD: "Since March 2025, the contractor's communications have been sporadic"
+  - **EVERY date reference must include calculated time duration (X days later, Y months ago, Z days beyond deadline)**
+  - Calculate days/months between events, compare to statutory deadlines, and state the gap
 * Avoid overconfidence: Use "likely," "probable," "may" rather than "will," "certainly," "definitely"
 * Jurisdiction awareness: Only cite statutes/cases that clearly apply to this matter
 
@@ -289,28 +356,33 @@ Each bullet in Section 2 (Key Legal Points) must be SUBSTANTIVE - a complete par
 
 ---
 
-## MANDATORY: INLINE SOURCE CITATIONS
+## CRITICAL: NO INLINE [Source: ...] CITATIONS IN CLIENT LETTERS
 
-CRITICAL: Every major fact MUST include an inline citation immediately after the fact.
+**IMPORTANT CHANGE:** Attorney-written letters do NOT include inline [Source: ...] citations. These are for internal review only.
 
-**Required Format:** [Source: document_name.pdf]
+**INSTEAD, USE PROPER LEGAL CITATIONS:**
+- Florida Statute §83.49(3)(a)
+- Fla. Stat. Chapter 558
+- Document references: "per the contract", "as documented in your lease agreement", "according to the purchase agreement"
 
-**What Requires Citations:**
-- All dates: "on September 3, 2025 [Source: Demand Letter.pdf]"
-- All dollar amounts: "$128,000 [Source: Contract.pdf]"
-- All party names (first mention): "LLW Construction, Inc. [Source: Contract.pdf]"
-- All key events: "contractor ceased work [Source: Client Notes.txt]"
-- All contractual terms: "per the agreement [Source: Construction Agreement.pdf]"
+**GOOD (Attorney Style):**
+"You entered into a contract with LLW Construction, Inc. in November 2024 for $128,000. You have paid $100,000 to date, but the contractor ceased work in March 2025."
 
-**Citation Placement:**
-- Immediately after the fact, before punctuation
-- Within the same sentence: "paid $100,000 [Source: Receipt.pdf]."
-- Not on a new line or in a separate paragraph
+**BAD (Internal Review Style):**
+"You entered into a contract with LLW Construction, Inc. [Source: Contract.pdf] in November 2024 [Source: Contract.pdf] for $128,000 [Source: Contract.pdf]."
 
-**Example with Multiple Citations:**
-"You entered into a contract with LLW Construction, Inc. [Source: Contract.pdf] in November 2024 [Source: Contract.pdf] for $128,000 [Source: Contract.pdf]. You have paid $100,000 to date [Source: Payment Records.pdf], but the contractor ceased work in March 2025 [Source: Client Notes.txt]."
+**For Document References:**
+- "per the contract dated November 15, 2024"
+- "as outlined in your lease agreement"
+- "according to the Notice to Owner received on May 30, 2025"
+- "based on the property disclosure form"
 
-**Verification:** Before finalizing, scan the letter and ensure every date, amount, and party name has a [Source: ...] citation.
+**For Statute References:**
+- "Florida Statute §83.49(3)(a) requires..."
+- "Under Fla. Stat. Chapter 558..."
+- "Pursuant to Florida Statutes § 713.02 and § 713.06..."
+
+**NOTE:** The system will generate a separate version WITH [Source: ...] citations for attorney review. The client letter should be clean and professional.
 
 ---
 
@@ -567,31 +639,41 @@ If NO verified statutes are provided above, you may still cite other Florida sta
 Before finalizing the letter, verify:
 
 ✅ **Subject line generated** in format: "Legal Review and Recommended Next Steps – [Opposing Party] [Dispute Type]"
-✅ Opens with "Good afternoon [Client Name(s)]" and context about documents reviewed
-✅ Uses "I" voice for attorney actions ("I am providing", "I recommend")
-✅ **Numbered section headers throughout** (1. FACTUAL SUMMARY, 2. [LEGAL ISSUE], 3. [LEGAL ISSUE], etc.)
+✅ Opens with "Good afternoon [Client Name(s)]" OR "Dear [Client Name(s)]:" and context about documents reviewed
+✅ **CRITICAL**: Opening uses warm tone: "I hope you are doing well" (NOT "I hope this letter finds you well" OR "I trust this letter finds you well")
+✅ Uses "I wanted to follow up" (NOT "I am writing to inform" OR "I am writing to provide")
+✅ Uses "I" voice for attorney actions ("I recommend", "I wanted to follow up")
+✅ **Numbered section headers** (1. FACTUAL SUMMARY, 2. KEY LEGAL POINTS OR [SPECIFIC ISSUE])
 ✅ **Statute citations in headers when applicable** (e.g., "2. IMPLIED WARRANTY & CONSTRUCTION DEFECTS (Fla. Stat. Chapter 558)")
 ✅ Section 1: Factual Summary (200-300 words)
-  - Opens with "Based on our review, we understand that..."
+  - Opens with "Based on our review, we understand that..." or similar
   - Uses bullet points for compound problems
   - Includes current status with any notices received
-✅ Sections 2+: Each major legal issue gets its OWN numbered section (not subsections A/B/C)
-  - Plain English legal standard
-  - Application to facts with citations
+✅ Section 2: Key Legal Points - Structure based on complexity:
+  - **1-4 issues**: Use "Here are the key points of our analysis:" with substantive paragraph bullets (DEFAULT)
+  - **5+ issues**: Use numbered subsections (2., 3., 4.) with headers for each issue (RARE)
+  - Plain English legal standard first
+  - Application to facts with specific details
   - Procedural requirements integrated naturally (not standalone)
-  - **Consequence chains for escalating risks** (Notice → Lien → Foreclosure → Sale)
-✅ Recommended Action section with A/B/C structure (200-300 words)
-  - **Protective action checklists** when client needs to take action
+  - **DATE MATH (MANDATORY)**: Every date reference MUST include calculated duration (e.g., "Since March 2025—over 8 months ago" NOT just "Since March 2025")
+  - **DATE MATH FOR DEADLINES (MANDATORY)**: Calculate gaps from statutory deadlines (e.g., "45 days later—15 days beyond the 30-day deadline")
+  - **Consequence chains with ALL CAPS for ultimate consequences** (Notice → Lien → Foreclosure → FORCED SALE OF YOUR HOME)
+✅ Section 3: Recommended Action & Next Steps (200-350 words)
+  - Opens with "Based on the above, a negotiated resolution..." OR "At this juncture, the most appropriate course of action..."
+  - **Timeline/urgency integrated into paragraph** (NOT separate bullets with Immediate/Short-term/Ongoing)
+  - **Protective action checklists** when client needs to take direct action
   - "If you proceed with [action], we strongly advise: • [checklist items]"
-✅ Next Steps with timeline (100-150 words)
-✅ Call to action: "Please let us know if you would like us to proceed..."
-✅ Closes with "I remain committed to protecting your interests" or "We remain committed..."
+  - Scope limitation paragraph if applicable
+✅ Call to action: "Please let us know if you would like us to proceed..." or "...whether you would prefer that we first set a phone call..."
+✅ Closing signature matches formality (Dear → Sincerely; Good afternoon → Thank you)
+✅ Disclaimer included: "This analysis is based on the documents provided..."
 ✅ Total word count: 800-1,200 words (max 1,500)
-✅ Every date, amount, and party name has [Source: ...] citation
+✅ Every date, amount, and party name properly cited (clean format without [Source: ...] for client version)
 ✅ Verified corpus statutes cited preferentially
 ✅ NO "Legal Claims Analysis" section
 ✅ NO standalone "Procedural Requirements" section
 ✅ NO "Case Assessment" section with STRENGTHS/CHALLENGES
+✅ NO separate "Next Steps" section with bullet timeline
 ✅ NO editorial notes or placeholders
 
 **If any of these are missing or incorrect, revise before submission.**

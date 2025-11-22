@@ -640,3 +640,119 @@ minimal changes are fine.
             result["statute_validation"] = statute_validation.to_dict()
 
         return result
+
+    def validate_legal_completeness(
+        self,
+        letter: str,
+        issue_map,  # LegalIssueMap
+        analysis,  # DeepAnalysis
+    ):
+        """Verify all identified legal issues are addressed in letter.
+
+        Args:
+        ----
+            letter: The generated findings letter
+            issue_map: LegalIssueMap with identified issues
+            analysis: DeepAnalysis with comprehensive analysis
+
+        Returns:
+        -------
+            CompletenessReport with:
+            - issues_addressed: List[str]
+            - issues_missing: List[str]
+            - statutes_cited: List[str]
+            - statutes_missing: List[str]
+            - completeness_score: float (0-1)
+            - recommendation: str ("complete" | "needs_revision")
+            - warnings: List[str]
+        """
+        from legal_portal.core.data_models import CompletenessReport
+
+        issues_addressed = []
+        issues_missing = []
+        warnings = []
+
+        # Check each primary issue from analysis appears in letter
+        logger.info(f"Checking completeness for {len(issue_map.primary_issues)} primary issues")
+
+        for issue in issue_map.primary_issues:
+            issue_name_lower = issue.issue_name.lower()
+            letter_lower = letter.lower()
+
+            # Check if issue name or key terms appear in letter
+            found = False
+
+            # Check for issue name
+            if issue_name_lower in letter_lower:
+                found = True
+
+            # Check for category-specific terms
+            if not found and issue.category:
+                category_terms = {
+                    "contract": ["contract", "breach", "agreement"],
+                    "tort": ["negligence", "duty", "breach of duty"],
+                    "statutory": [ref.lower() for ref in issue.florida_statute_references if ref],
+                }
+                if issue.category in category_terms:
+                    for term in category_terms[issue.category]:
+                        if term in letter_lower:
+                            found = True
+                            break
+
+            if found:
+                issues_addressed.append(issue.issue_name)
+                logger.debug(f"Issue addressed: {issue.issue_name}")
+            else:
+                issues_missing.append(issue.issue_name)
+                logger.warning(f"Issue may be missing from letter: {issue.issue_name}")
+                warnings.append(f"Issue '{issue.issue_name}' may not be adequately addressed")
+
+        # Check statute citations
+        statutes_cited = []
+        statutes_missing = []
+
+        for statute_ref in issue_map.relevant_statutes:
+            # Clean up statute reference for matching
+            statute_clean = statute_ref.replace("§", "").replace("Fla. Stat.", "").strip()
+
+            if statute_ref in letter or statute_clean in letter:
+                statutes_cited.append(statute_ref)
+            else:
+                statutes_missing.append(statute_ref)
+                warnings.append(f"Statute {statute_ref} may not be cited")
+
+        # Calculate completeness score
+        total_issues = len(issue_map.primary_issues)
+        if total_issues > 0:
+            completeness_score = len(issues_addressed) / total_issues
+        else:
+            completeness_score = 1.0  # No issues to address
+
+        # Determine recommendation
+        if completeness_score >= 0.9:
+            recommendation = "complete"
+        elif completeness_score >= 0.7:
+            recommendation = "mostly_complete"
+            warnings.append(
+                f"Letter addresses {completeness_score:.0%} of identified issues. Consider reviewing missing issues."
+            )
+        else:
+            recommendation = "needs_revision"
+            warnings.append(
+                f"Letter only addresses {completeness_score:.0%} of identified issues. Revision recommended."
+            )
+
+        logger.info(
+            f"Completeness check complete: {len(issues_addressed)}/{total_issues} issues addressed, "
+            f"score={completeness_score:.2f}, recommendation={recommendation}"
+        )
+
+        return CompletenessReport(
+            issues_addressed=issues_addressed,
+            issues_missing=issues_missing,
+            statutes_cited=statutes_cited,
+            statutes_missing=statutes_missing,
+            completeness_score=completeness_score,
+            recommendation=recommendation,
+            warnings=warnings,
+        )

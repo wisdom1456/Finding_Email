@@ -28,13 +28,17 @@ python-docx>=1.1.0
 PyMuPDF>=1.23.0
 python-magic>=0.4.27
 
-# Image Processing (for OCR support)
+# Image Processing (for OCR support and compression)
 Pillow>=10.0.0
 pytesseract>=0.3.10
+
+# PDF Processing and Compression
+PyPDF2>=3.0.0
 
 # Utility Libraries
 tenacity>=8.2.3
 textstat>=0.7.8
+numpy>=1.24.0
 
 # Data Visualization for Cost Tracking
 plotly>=5.17.0

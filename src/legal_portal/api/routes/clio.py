@@ -115,7 +115,7 @@ async def authorize_clio(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to initiate OAuth: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to initiate OAuth: {str(e)}") from e
 
 
 @router.get("/callback")
@@ -176,8 +176,8 @@ async def clio_callback(
 
 @router.get("/status", response_model=ClioConnectionStatus)
 async def get_clio_status(
-    user=Depends(get_current_user),
-    supabase: Client = Depends(get_supabase_client),
+    user=Depends(get_current_user),  # noqa: B008
+    supabase: Client = Depends(get_supabase_client),  # noqa: B008
 ):
     """Get Clio connection status for current user."""
     try:
@@ -213,27 +213,27 @@ async def get_clio_status(
         )
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to get status: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to get status: {str(e)}") from e
 
 
 @router.delete("/disconnect")
 async def disconnect_clio(
-    user=Depends(get_current_user),
+    user=Depends(get_current_user),  # noqa: B008
     supabase: Client = Depends(get_supabase_client),
 ):
     """Disconnect Clio integration for current user."""
     try:
-        result = supabase.table("integrations_clio").delete().eq("user_id", user["id"]).execute()
+        supabase.table("integrations_clio").delete().eq("user_id", user["id"]).execute()
 
         return {"success": True, "message": "Clio integration disconnected"}
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to disconnect: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to disconnect: {str(e)}") from e
 
 
 # ===== Matter Search =====
 async def get_clio_client(
-    user=Depends(get_current_user),
+    user=Depends(get_current_user),  # noqa: B008
     supabase: Client = Depends(get_supabase_client),
 ) -> ClioClient:
     """Dependency to get authenticated Clio client."""
@@ -286,7 +286,7 @@ async def get_clio_client(
     except ClioAuthError as e:
         raise HTTPException(status_code=401, detail=f"Clio authentication failed: {str(e)}")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to initialize Clio client: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to initialize Clio client: {str(e)}") from e
 
 
 @router.get("/search-matters", response_model=List[ClioMatterResponse])
@@ -317,16 +317,16 @@ async def search_clio_matters(
     except ClioAPIError as e:
         raise HTTPException(status_code=500, detail=f"Clio API error: {str(e)}")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Search failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Search failed: {str(e)}") from e
 
 
 # ===== Data Import =====
 @router.post("/import", response_model=ClioImportResponse)
 async def import_clio_data(
     import_request: ClioImportRequest,
-    user=Depends(get_current_user),
-    clio_client: ClioClient = Depends(get_clio_client),
-    supabase: Client = Depends(get_supabase_client),
+    user=Depends(get_current_user),  # noqa: B008
+    clio_client: ClioClient = Depends(get_clio_client),  # noqa: B008
+    supabase: Client = Depends(get_supabase_client),  # noqa: B008
 ):
     """Import communications, notes, and documents from a Clio matter."""
     try:
@@ -352,6 +352,11 @@ async def import_clio_data(
 
         # Import documents (metadata only)
         documents = clio_client.get_documents(matter_id)
+
+        # Track compression statistics
+        files_compressed = 0
+        total_original_size = 0
+        total_compressed_size = 0
 
         # Save communications as document entries
         for comm in communications:
@@ -461,14 +466,33 @@ async def import_clio_data(
 
                 access_token = integration.data[0]["access_token"]
 
-                # Download and extract text from document
+                # Download and extract text from document (with automatic compression)
                 print("  - Downloading from Clio...")
-                file_content, content_type, extracted_text = DocumentProcessor.download_and_extract(
-                    doc_url, access_token, doc_name
-                )
+                (
+                    file_content,
+                    content_type,
+                    extracted_text,
+                    compression_meta,
+                ) = DocumentProcessor.download_and_extract(doc_url, access_token, doc_name, compress=True)
 
                 file_size = len(file_content)
-                print(f"  - Downloaded: {file_size} bytes")
+                original_size = compression_meta.get("original_size", file_size)
+                was_compressed = compression_meta.get("compressed", False)
+
+                # Track compression statistics
+                if was_compressed:
+                    files_compressed += 1
+                    total_original_size += original_size
+                    total_compressed_size += file_size
+
+                print(f"  - Downloaded: {original_size} bytes")
+                if was_compressed:
+                    compression_ratio = compression_meta.get("compression_ratio", 1.0)
+                    reduction_pct = (1 - compression_ratio) * 100
+                    print(
+                        f"  - Compressed: {file_size} bytes ({reduction_pct:.1f}% reduction, "
+                        f"method: {compression_meta.get('method', 'unknown')})"
+                    )
                 print(f"  - Content type: {content_type}")
                 print(f"  - Text extracted: {bool(extracted_text)}")
 
@@ -486,7 +510,7 @@ async def import_clio_data(
                 # Check if this is an intake form
                 is_intake = "intake" in doc_name.lower()
 
-                # Save document record with extracted text
+                # Save document record with extracted text and compression metadata
                 doc_data = {
                     "case_id": case_id,
                     "file_name": doc_name,
@@ -502,6 +526,7 @@ async def import_clio_data(
                         "clio_url": doc_url,
                         "clio_filename": doc_name,
                         "is_intake_form": is_intake,
+                        "compression": compression_meta,
                     },
                 }
                 supabase.table("documents").insert(doc_data).execute()
@@ -529,7 +554,7 @@ async def import_clio_data(
                         },
                     }
                     supabase.table("documents").insert(doc_data).execute()
-                except:
+                except Exception:
                     pass  # Silently fail if we can't even save metadata
 
         # Prepare complete matter data for storage
@@ -559,6 +584,18 @@ async def import_clio_data(
             "user_id", user["id"]
         ).execute()
 
+        # Log compression summary if any files were compressed
+        if files_compressed > 0:
+            total_saved = total_original_size - total_compressed_size
+            avg_reduction = (total_saved / total_original_size) * 100 if total_original_size > 0 else 0
+            print("\n💾 Compression Summary:")
+            print(f"  - Files compressed: {files_compressed}")
+            print(
+                f"  - Size reduction: {total_original_size / 1024 / 1024:.1f}MB → "
+                f"{total_compressed_size / 1024 / 1024:.1f}MB"
+            )
+            print(f"  - Space saved: {total_saved / 1024 / 1024:.1f}MB ({avg_reduction:.1f}% reduction)")
+
         return ClioImportResponse(
             success=True,
             message="Clio data imported successfully",
@@ -572,13 +609,13 @@ async def import_clio_data(
     except ClioAPIError as e:
         raise HTTPException(status_code=500, detail=f"Clio API error: {str(e)}")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Import failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Import failed: {str(e)}") from e
 
 
 @router.delete("/unlink/{case_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def unlink_clio_matter(
     case_id: str,
-    user=Depends(get_current_user),
+    user=Depends(get_current_user),  # noqa: B008
     supabase: Client = Depends(get_supabase_client),
 ):
     """Unlink Clio matter from case and delete all imported Clio documents.
@@ -637,4 +674,4 @@ async def unlink_clio_matter(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to unlink Clio matter: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to unlink Clio matter: {str(e)}") from e

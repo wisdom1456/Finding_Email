@@ -1,170 +1,378 @@
-"""File compression service for handling large PDF and image files."""
+"""File compression service for handling large PDFs and images.
 
+This service provides automatic compression for files that exceed a
+configurable threshold, enabling import of larger files while optimizing storage.
+"""
+
+from __future__ import annotations
+
+import io
 import os
-import shutil
 import subprocess
-from pathlib import Path
+import tempfile
+from dataclasses import dataclass
+from typing import Optional, Tuple
 
-from PIL import Image
-
+from legal_portal.config.default import settings
 from legal_portal.utils.logging_config import get_module_logger
+from PIL import Image
 
 logger = get_module_logger(__name__)
 
-# Define a constant for the large file threshold (10 MB)
-LARGE_FILE_THRESHOLD_BYTES = 10 * 1024 * 1024
+
+@dataclass
+class CompressionResult:
+    """Result of a file compression operation."""
+
+    compressed_data: bytes
+    original_size: int
+    compressed_size: int
+    compression_ratio: float
+    method_used: str
+    was_compressed: bool
 
 
 class FileCompressionService:
-    """A service to compress large PDF and image files before analysis."""
+    """Service for compressing PDFs and images."""
 
-    def is_ghostscript_installed(self) -> bool:
-        """Check if Ghostscript is available in the system's PATH."""
-        return shutil.which("gs") is not None
-
-    def compress_pdf(self, input_path: str, output_path: str, quality: str = "ebook") -> bool:
-        """Compresses a PDF using Ghostscript.
-
-        Args:
-        ----
-            input_path: The full path to the source PDF file.
-            output_path: The full path where the compressed PDF will be saved.
-            quality: The Ghostscript preset to use for compression.
-                     Options: 'screen', 'ebook', 'printer', 'prepress', 'default'.
-
-        Returns:
-        -------
-            True if compression was successful, False otherwise.
-
-        """
-        if not self.is_ghostscript_installed():
-            logger.warning("Ghostscript is not installed. PDF compression will be skipped.")
-            return False
-
-        command = [
-            "gs",
-            "-sDEVICE=pdfwrite",
-            "-dCompatibilityLevel=1.4",
-            f"-dPDFSETTINGS=/{quality}",
-            "-dNOPAUSE",
-            "-dQUIET",
-            "-dBATCH",
-            f"-sOutputFile={output_path}",
-            input_path,
-        ]
-
-        try:
-            logger.info(f"Compressing PDF: {Path(input_path).name}")
-            subprocess.run(command, check=True, capture_output=True, text=True)
-            logger.info(f"Successfully compressed PDF to {Path(output_path).name}")
-            return True
-        except subprocess.CalledProcessError as e:
-            logger.error(f"Ghostscript failed to compress PDF '{Path(input_path).name}'. Error: {e.stderr}")
-            return False
-        except FileNotFoundError:
-            logger.error(
-                "Ghostscript command 'gs' not found. Please ensure it is installed and in your system's PATH."
-            )
-            return False
-
-    def compress_image(
+    def __init__(
         self,
-        input_path: str,
-        output_path: str,
-        max_dimensions: tuple = (2048, 2048),
-        quality: int = 85,
-    ) -> bool:
-        """Resizes and compresses an image using Pillow, converting to JPEG.
+        compression_threshold_mb: float = 10.0,
+        pdf_quality: str = "ebook",
+        image_quality: int = 85,
+    ):
+        """Initialize compression service.
 
         Args:
         ----
-            input_path: Full path to the source image.
-            output_path: Full path to save the compressed image.
-            max_dimensions: A tuple (width, height) for the maximum size.
-            quality: The JPEG quality setting (1-95).
+            compression_threshold_mb: Size threshold in MB to trigger compression
+            pdf_quality: Ghostscript quality preset (screen, ebook, printer, prepress)
+            image_quality: JPEG quality (0-100)
+
+        """
+        self.compression_threshold_bytes = int(compression_threshold_mb * 1024 * 1024)
+        self.pdf_quality = pdf_quality
+        self.image_quality = image_quality
+        self.has_ghostscript = self._check_ghostscript()
+
+        if self.has_ghostscript:
+            logger.info(f"Ghostscript detected - using for PDF compression (quality: {pdf_quality})")
+        else:
+            logger.warning("Ghostscript not available - PDF compression will be limited")
+
+    def _check_ghostscript(self) -> bool:
+        """Check if Ghostscript is available."""
+        try:
+            result = subprocess.run(
+                ["gs", "--version"],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+            return result.returncode == 0
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            return False
+
+    def should_compress(self, file_size: int) -> bool:
+        """Determine if a file should be compressed based on size.
+
+        Args:
+        ----
+            file_size: File size in bytes
 
         Returns:
         -------
-            True if successful, False otherwise.
+            True if file should be compressed
+
+        """
+        return file_size > self.compression_threshold_bytes
+
+    def compress_file(
+        self,
+        file_data: bytes,
+        filename: str,
+        content_type: str,
+    ) -> CompressionResult:
+        """Compress a file if applicable.
+
+        Args:
+        ----
+            file_data: Original file bytes
+            filename: Original filename
+            content_type: MIME type of the file
+
+        Returns:
+        -------
+            CompressionResult with compression details
+
+        """
+        original_size = len(file_data)
+        file_size_mb = original_size / (1024 * 1024)
+
+        # Check if compression is needed
+        if not self.should_compress(original_size):
+            logger.debug(f"File '{filename}' ({file_size_mb:.2f}MB) below compression threshold, skipping")
+            return CompressionResult(
+                compressed_data=file_data,
+                original_size=original_size,
+                compressed_size=original_size,
+                compression_ratio=1.0,
+                method_used="none",
+                was_compressed=False,
+            )
+
+        logger.info(f"Compressing file '{filename}' ({file_size_mb:.2f}MB)")
+
+        # Determine compression method based on content type
+        content_type_lower = content_type.lower()
+
+        try:
+            if "pdf" in content_type_lower or filename.lower().endswith(".pdf"):
+                compressed_data, method = self._compress_pdf(file_data)
+            elif any(img_type in content_type_lower for img_type in ["image", "jpeg", "jpg", "png"]):
+                compressed_data, method = self._compress_image(file_data, content_type_lower)
+            else:
+                # Unsupported type for compression
+                logger.warning(f"Compression not supported for content type: {content_type}")
+                return CompressionResult(
+                    compressed_data=file_data,
+                    original_size=original_size,
+                    compressed_size=original_size,
+                    compression_ratio=1.0,
+                    method_used="unsupported",
+                    was_compressed=False,
+                )
+
+            compressed_size = len(compressed_data)
+            compression_ratio = compressed_size / original_size
+            size_reduction_pct = (1 - compression_ratio) * 100
+
+            logger.info(
+                f"Compression complete: {original_size / (1024 * 1024):.2f}MB → "
+                f"{compressed_size / (1024 * 1024):.2f}MB "
+                f"({size_reduction_pct:.1f}% reduction, method: {method})"
+            )
+
+            return CompressionResult(
+                compressed_data=compressed_data,
+                original_size=original_size,
+                compressed_size=compressed_size,
+                compression_ratio=compression_ratio,
+                method_used=method,
+                was_compressed=True,
+            )
+
+        except Exception as e:
+            logger.error(f"Compression failed for '{filename}': {e}", exc_info=True)
+            # Return original file if compression fails
+            return CompressionResult(
+                compressed_data=file_data,
+                original_size=original_size,
+                compressed_size=original_size,
+                compression_ratio=1.0,
+                method_used=f"failed: {str(e)}",
+                was_compressed=False,
+            )
+
+    def _compress_pdf(self, pdf_data: bytes) -> Tuple[bytes, str]:
+        """Compress a PDF using Ghostscript (preferred) or PyPDF2 (fallback).
+
+        Args:
+        ----
+            pdf_data: Original PDF bytes
+
+        Returns:
+        -------
+            Tuple of (compressed_data, method_name)
+
+        """
+        if self.has_ghostscript:
+            return self._compress_pdf_ghostscript(pdf_data)
+        else:
+            return self._compress_pdf_pypdf2(pdf_data)
+
+    def _compress_pdf_ghostscript(self, pdf_data: bytes) -> Tuple[bytes, str]:
+        """Compress PDF using Ghostscript.
+
+        Args:
+        ----
+            pdf_data: Original PDF bytes
+
+        Returns:
+        -------
+            Tuple of (compressed_data, method_name)
+
+        """
+        # Create temporary files for input and output
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as input_file:
+            input_file.write(pdf_data)
+            input_path = input_file.name
+
+        output_path = input_path + ".compressed.pdf"
+
+        try:
+            # Ghostscript command for PDF compression
+            # Quality presets: screen (72dpi), ebook (150dpi), printer (300dpi), prepress (300dpi, color preserved)
+            gs_command = [
+                "gs",
+                "-sDEVICE=pdfwrite",
+                "-dCompatibilityLevel=1.4",
+                f"-dPDFSETTINGS=/{self.pdf_quality}",
+                "-dNOPAUSE",
+                "-dQUIET",
+                "-dBATCH",
+                f"-sOutputFile={output_path}",
+                input_path,
+            ]
+
+            subprocess.run(
+                gs_command,
+                capture_output=True,
+                timeout=300,  # 5 minute timeout
+                check=True,
+            )
+
+            # Read compressed PDF
+            with open(output_path, "rb") as f:
+                compressed_data = f.read()
+
+            # Verify the compressed version is smaller, otherwise use original
+            if len(compressed_data) >= len(pdf_data):
+                logger.warning("Ghostscript compression resulted in larger file, using original")
+                compressed_data = pdf_data
+
+            return compressed_data, f"ghostscript-{self.pdf_quality}"
+
+        except subprocess.TimeoutExpired:
+            logger.error("Ghostscript compression timed out")
+            return pdf_data, "ghostscript-timeout"
+        except subprocess.CalledProcessError as e:
+            logger.error(f"Ghostscript compression failed: {e.stderr.decode()}")
+            return pdf_data, "ghostscript-failed"
+        finally:
+            # Clean up temporary files
+            if os.path.exists(input_path):
+                os.unlink(input_path)
+            if os.path.exists(output_path):
+                os.unlink(output_path)
+
+    def _compress_pdf_pypdf2(self, pdf_data: bytes) -> Tuple[bytes, str]:
+        """Compress PDF using PyPDF2 (basic compression fallback).
+
+        Args:
+        ----
+            pdf_data: Original PDF bytes
+
+        Returns:
+        -------
+            Tuple of (compressed_data, method_name)
 
         """
         try:
-            logger.info(f"Compressing image: {Path(input_path).name}")
-            with Image.open(input_path) as img:
-                # Resize the image if it's larger than the max dimensions
-                if img.width > max_dimensions[0] or img.height > max_dimensions[1]:
-                    img.thumbnail(max_dimensions, Image.Resampling.LANCZOS)
+            from PyPDF2 import PdfReader, PdfWriter
 
-                # Convert to RGB if it has an alpha channel (like PNGs) to save as JPEG
-                if img.mode in ("RGBA", "P"):
-                    img = img.convert("RGB")
+            # Read PDF
+            pdf_reader = PdfReader(io.BytesIO(pdf_data))
+            pdf_writer = PdfWriter()
 
-                img.save(
-                    output_path,
-                    "JPEG",
-                    quality=quality,
-                    optimize=True,
-                    progressive=True,
-                )
-            logger.info(f"Successfully compressed image to {Path(output_path).name}")
-            return True
+            # Copy pages and compress
+            for page in pdf_reader.pages:
+                page.compress_content_streams()
+                pdf_writer.add_page(page)
+
+            # Write to bytes
+            output_stream = io.BytesIO()
+            pdf_writer.write(output_stream)
+            compressed_data = output_stream.getvalue()
+
+            # Verify the compressed version is smaller
+            if len(compressed_data) >= len(pdf_data):
+                logger.warning("PyPDF2 compression resulted in larger file, using original")
+                return pdf_data, "pypdf2-skipped"
+
+            return compressed_data, "pypdf2"
+
         except Exception as e:
-            logger.error(f"Pillow failed to compress image '{Path(input_path).name}'. Error: {e}")
-            return False
+            logger.error(f"PyPDF2 compression failed: {e}")
+            return pdf_data, "pypdf2-failed"
 
-    def process_file(self, input_path: str) -> str:
-        """Process a file, compress it in-place if large enough, and return the final path.
-
-        If a file is compressed, the original is replaced by the compressed version.
-        If compression fails or is not needed, the original file path is returned.
+    def _compress_image(self, image_data: bytes, content_type: str) -> Tuple[bytes, str]:
+        """Compress an image using Pillow.
 
         Args:
         ----
-            input_path: The full path to the file to process.
+            image_data: Original image bytes
+            content_type: MIME type of the image
 
         Returns:
         -------
-            The path to the processed (potentially compressed) file.
+            Tuple of (compressed_data, method_name)
 
         """
-        file_path = Path(input_path)
-        if not file_path.exists():
-            logger.warning(f"File not found for processing: {input_path}")
-            return input_path
+        try:
+            # Open image
+            img = Image.open(io.BytesIO(image_data))
 
-        file_size = file_path.stat().st_size
-        if file_size < LARGE_FILE_THRESHOLD_BYTES:
-            return input_path  # No compression needed
+            # Determine output format
+            if "png" in content_type.lower():
+                output_format = "PNG"
+                optimize_params = {"optimize": True}
+            else:
+                # Convert to JPEG for maximum compression
+                output_format = "JPEG"
+                optimize_params = {
+                    "quality": self.image_quality,
+                    "optimize": True,
+                }
 
-        file_extension = file_path.suffix.lower()
-        temp_output_path = file_path.with_suffix(f".compressed{file_extension}")
+                # Convert RGBA to RGB for JPEG
+                if img.mode in ("RGBA", "LA", "P"):
+                    background = Image.new("RGB", img.size, (255, 255, 255))
+                    if img.mode == "P":
+                        img = img.convert("RGBA")
+                    background.paste(img, mask=img.split()[-1] if img.mode in ("RGBA", "LA") else None)
+                    img = background
 
-        success = False
-        if file_extension == ".pdf":
-            success = self.compress_pdf(str(file_path), str(temp_output_path))
-        elif file_extension in [".png", ".jpg", ".jpeg"]:
-            # All compressed images become JPEGs for consistency and size benefits
-            temp_output_path = file_path.with_suffix(".compressed.jpg")
-            success = self.compress_image(str(file_path), str(temp_output_path))
+            # Compress image
+            output_stream = io.BytesIO()
+            img.save(output_stream, format=output_format, **optimize_params)
+            compressed_data = output_stream.getvalue()
 
-        if success:
-            # On successful compression, replace the original with the compressed file
-            try:
-                original_size_mb = round(file_size / (1024 * 1024), 2)
-                compressed_size_mb = round(temp_output_path.stat().st_size / (1024 * 1024), 2)
-                logger.info(
-                    f"Compression successful for {file_path.name}. "
-                    f"Original: {original_size_mb} MB -> Compressed: {compressed_size_mb} MB"
-                )
-                os.remove(input_path)
-                os.rename(temp_output_path, input_path)
+            # Verify the compressed version is smaller
+            if len(compressed_data) >= len(image_data):
+                logger.warning("Image compression resulted in larger file, using original")
+                return image_data, f"pillow-{output_format.lower()}-skipped"
 
-            except OSError as e:
-                logger.error(f"Failed to replace original file with compressed version. Error: {e}")
-                # If replacement fails, cleanup the compressed file and use the original
-                if temp_output_path.exists():
-                    os.remove(temp_output_path)
-                return input_path
+            return compressed_data, f"pillow-{output_format.lower()}"
 
-        # If compression was not attempted or failed, return the original path
-        return input_path
+        except Exception as e:
+            logger.error(f"Image compression failed: {e}")
+            return image_data, "pillow-failed"
+
+
+# Global instance with default settings from config
+_compression_service: Optional[FileCompressionService] = None
+
+
+def get_compression_service() -> FileCompressionService:
+    """Get or create the global compression service instance.
+
+    Returns
+    -------
+        FileCompressionService instance configured from settings
+
+    """
+    global _compression_service
+    if _compression_service is None:
+        # Get settings from config (with fallback defaults)
+        threshold_mb = getattr(settings, "compression_threshold_mb", 10.0)
+        pdf_quality = getattr(settings, "pdf_compression_quality", "ebook")
+        image_quality = getattr(settings, "image_compression_quality", 85)
+
+        _compression_service = FileCompressionService(
+            compression_threshold_mb=threshold_mb,
+            pdf_quality=pdf_quality,
+            image_quality=image_quality,
+        )
+
+    return _compression_service

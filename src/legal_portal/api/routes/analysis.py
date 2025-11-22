@@ -1,6 +1,6 @@
-"""Document analysis endpoints.
-"""
+"""Document analysis endpoints."""
 
+import asyncio
 import json
 import logging
 import os
@@ -304,9 +304,14 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
                     with zipfile.ZipFile(temp_path, "r") as zip_ref:
                         zip_ref.extractall(zip_extract_dir)
 
+                    # Force filesystem sync to prevent race conditions
+                    # Increased delay to 500ms for more reliable extraction
+                    await asyncio.sleep(0.5)
+                    logger.debug(f"Filesystem sync delay (500ms) after extracting {doc['file_name']}")
+
                     # Add extracted files to processing list (filtering out video/audio)
                     extracted_count = 0
-                    for root, dirs, files in os.walk(zip_extract_dir):
+                    for root, _dirs, files in os.walk(zip_extract_dir):
                         for extracted_file in files:
                             # Skip hidden files and system files
                             if extracted_file.startswith(".") or extracted_file.startswith("__MACOSX"):
@@ -318,8 +323,15 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
                                 continue
 
                             extracted_path = os.path.join(root, extracted_file)
-                            file_paths.append(extracted_path)
-                            extracted_count += 1
+
+                            # Verify file exists before adding to processing list
+                            if os.path.isfile(extracted_path):
+                                file_paths.append(extracted_path)
+                                extracted_count += 1
+                            else:
+                                logger.warning(
+                                    f"Extracted file not found (filesystem sync issue?): {extracted_path}"
+                                )
 
                     print(f"  - ✅ Extracted {extracted_count} files from {doc['file_name']}")
 
@@ -472,9 +484,9 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
 async def start_analysis(
     request: AnalysisRequest,
     background_tasks: BackgroundTasks,
-    user=Depends(get_current_user),
-    user_supabase=Depends(get_user_supabase_client),
-    service_supabase=Depends(get_supabase_client),
+    user=Depends(get_current_user),  # noqa: B008
+    user_supabase=Depends(get_user_supabase_client),  # noqa: B008
+    service_supabase=Depends(get_supabase_client),  # noqa: B008
 ):
     """Start analysis for a case (async background task).
 
@@ -538,12 +550,14 @@ async def start_analysis(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error starting analysis: {str(e)}"
-        )
+        ) from e
 
 
 @router.get("/status/{case_id}", response_model=AnalysisResponse)
 async def get_analysis_status(
-    case_id: str, user=Depends(get_current_user), supabase=Depends(get_user_supabase_client)
+    case_id: str,
+    user=Depends(get_current_user),  # noqa: B008
+    supabase=Depends(get_user_supabase_client),  # noqa: B008
 ):
     """Get the latest analysis status for a case.
 
@@ -588,15 +602,15 @@ async def get_analysis_status(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error fetching analysis status: {str(e)}",
-        )
+        ) from e
 
 
 @router.get("/results/{case_id}")
 async def get_analysis_results(
     case_id: str,
-    user=Depends(get_current_user),
-    supabase=Depends(get_user_supabase_client),
-    service_supabase=Depends(get_supabase_client),
+    user=Depends(get_current_user),  # noqa: B008
+    supabase=Depends(get_user_supabase_client),  # noqa: B008
+    service_supabase=Depends(get_supabase_client),  # noqa: B008
 ):
     """Get the full analysis results for a completed case.
 
@@ -648,4 +662,4 @@ async def get_analysis_results(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error fetching analysis results: {str(e)}",
-        )
+        ) from e

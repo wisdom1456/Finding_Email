@@ -665,6 +665,7 @@ minimal changes are fine.
             - completeness_score: float (0-1)
             - recommendation: str ("complete" | "needs_revision")
             - warnings: List[str]
+
         """
         from legal_portal.core.data_models import CompletenessReport
 

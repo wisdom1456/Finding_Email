@@ -111,8 +111,7 @@ class ClioDataTransformer:
         )
 
         logger.info(
-            f"Transformation complete: {len(processed_docs)} documents, "
-            f"{len(errors)} errors, {duration:.2f}s"
+            f"Transformation complete: {len(processed_docs)} documents, {len(errors)} errors, {duration:.2f}s"
         )
 
         return processed_docs, result
@@ -134,7 +133,7 @@ class ClioDataTransformer:
 
         content = f"""From: {comm.sender.name}
 To: {recipient_names}
-Date: {comm.date.strftime('%B %d, %Y at %I:%M %p')}
+Date: {comm.date.strftime("%B %d, %Y at %I:%M %p")}
 Subject: {comm.subject}
 
 {comm.body}

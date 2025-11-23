@@ -370,6 +370,7 @@ class StatuteRecommendationService:
         Returns:
         -------
             List of statutes with deadline language
+
         """
         deadline_relevant_chapters = []
 
@@ -436,6 +437,7 @@ class StatuteRecommendationService:
         Returns:
         -------
             Formatted context for prompt
+
         """
         if not deadline_statutes:
             return ""

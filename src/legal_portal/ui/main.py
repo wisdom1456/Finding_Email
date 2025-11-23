@@ -685,8 +685,8 @@ def prepare_files_for_analysis(uploaded_files, compress_flag):
 
                             st.markdown(
                                 f'<div style="padding: 4px 12px 4px 32px; color: #28a745; font-size: 0.9em;">'
-                                f'  ℹ️ {", ".join(summary_parts)}'
-                                f'</div>',
+                                f"  ℹ️ {', '.join(summary_parts)}"
+                                f"</div>",
                                 unsafe_allow_html=True,
                             )
 

@@ -53,7 +53,7 @@ async def get_profile(
         logger.error(f"Error fetching profile: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error fetching profile: {str(e)}"
-        )
+        ) from e
 
 
 @router.put("", response_model=ProfileResponse)
@@ -107,4 +107,4 @@ async def update_profile(
         logger.error(f"Error updating profile: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error updating profile: {str(e)}"
-        )
+        ) from e

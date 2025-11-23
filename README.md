@@ -2,6 +2,10 @@
 
 A Streamlit-based application for analyzing legal documents and generating professional findings letters.
 
+## 📚 Documentation
+
+For comprehensive documentation, see the [Documentation Index](docs/README.md).
+
 ## 🚀 Quick Start
 
 ### Prerequisites

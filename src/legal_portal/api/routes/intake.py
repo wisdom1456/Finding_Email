@@ -134,7 +134,7 @@ async def process_intake_form(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to process intake form: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to process intake form: {str(e)}") from e
     finally:
         # Clean up temporary file
         if temp_file_path and os.path.exists(temp_file_path):
@@ -201,4 +201,4 @@ async def confirm_intake_data(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to save intake data: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to save intake data: {str(e)}") from e

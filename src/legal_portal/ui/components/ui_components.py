@@ -513,7 +513,7 @@ def _display_uploaded_files_list(uploaded_files):
                         skipped_count = 0
 
                         for extracted_file in visible_files:
-                            file_ext = Path(extracted_file).suffix.lower()
+                            Path(extracted_file).suffix.lower()
 
                             # Check if file will be skipped
                             if any(extracted_file.lower().endswith(ext) for ext in video_audio_extensions):
@@ -545,7 +545,7 @@ def _display_uploaded_files_list(uploaded_files):
                             st.markdown(
                                 f'<div class="extracted-file" style="color: #666; font-style: italic;">'
                                 f'<span class="file-icon">ℹ️</span>↳ {", ".join(summary_parts)}'
-                                f'</div>',
+                                f"</div>",
                                 unsafe_allow_html=True,
                             )
 

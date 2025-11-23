@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, onDestroy } from 'svelte';
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { supabase } from '$lib/supabase';
@@ -10,6 +10,7 @@
 	import PageHeader from '$lib/components/ui/PageHeader.svelte';
 	import Tabs from '$lib/components/ui/Tabs.svelte';
 	import { clioStore } from '$lib/stores/clioStore';
+	import { progressStore } from '$lib/stores/progressStore';
 	import { Trash2, Edit, ArrowLeft } from 'lucide-svelte';
 	import type { CaseData } from '$lib/types';
 
@@ -21,6 +22,9 @@
 	let analyzing = $state(false);
 	let errorMessage = $state('');
 	let uploadProgress = $state(0);
+	let currentUploadFile = $state<string>('');
+	let uploadedCount = $state(0);
+	let totalUploadCount = $state(0);
 
 	// Find all potential intake documents (any with "intake" in filename)
 	let intakeCandidates = $derived(
@@ -105,6 +109,11 @@
 		await loadDocuments();
 		await loadAnalysisStatus();
 		await loadSettings();
+	});
+
+	onDestroy(() => {
+		// Clean up SSE connection if active
+		progressStore.disconnect();
 	});
 
 	async function loadSettings() {
@@ -482,6 +491,8 @@
 		uploading = true;
 		errorMessage = '';
 		uploadFailures = [];
+		uploadedCount = 0;
+		totalUploadCount = filesToUpload.length;
 		let skippedCount = duplicateFiles.size;
 		let successCount = 0;
 
@@ -495,6 +506,8 @@
 			// Upload each non-duplicate file
 			for (let i = 0; i < filesToUpload.length; i++) {
 				const file = filesToUpload[i];
+				currentUploadFile = file.name;
+				uploadedCount = i;
 				const originalIndex = selectedFiles.indexOf(file);
 
 				try {
@@ -578,6 +591,9 @@
 		} finally {
 			uploading = false;
 			uploadProgress = 0;
+			currentUploadFile = '';
+			uploadedCount = 0;
+			totalUploadCount = 0;
 		}
 	}
 
@@ -807,10 +823,37 @@
 			// Reset selection
 			selectedIntakeDocId = null;
 
+			const analysisData = await response.json();
+			const analysisId = analysisData.id;
+
 			// Reload analysis status
 			await loadAnalysisStatus();
 
-			// Poll for updates
+			// Try SSE first, fall back to polling if not supported
+			const sseUrl = `${PUBLIC_API_URL}/api/progress/analysis/${analysisId}?token=${session.access_token}`;
+			const sseSupported = progressStore.isSuppported();
+
+			if (sseSupported) {
+				console.log('Using SSE for progress updates');
+				const connected = progressStore.connect(sseUrl, async () => {
+					// On completion, reload data
+					await loadAnalysisStatus();
+					await loadCase();
+					analyzing = false;
+				});
+
+				if (!connected) {
+					// SSE failed, fall back to polling
+					console.warn('SSE connection failed, falling back to polling');
+					startPolling();
+				}
+			} else {
+				// SSE not supported, use polling
+				console.log('SSE not supported, using polling');
+				startPolling();
+			}
+
+			function startPolling() {
 			const pollInterval = setInterval(async () => {
 				await loadAnalysisStatus();
 				await loadCase();
@@ -820,6 +863,7 @@
 					analyzing = false;
 				}
 			}, 5000);
+			}
 		} catch (error: any) {
 			errorMessage = error.message || 'Failed to start analysis';
 			analyzing = false;
@@ -1254,14 +1298,34 @@
 			{/if}
 
 			{#if uploading}
-				<div class="px-4 pb-4">
-					<div class="w-full bg-gray-200 rounded-full h-2">
+				<div class="px-4 pb-4 space-y-3">
+					<div class="flex items-center justify-between text-sm">
+						<span class="text-gray-700 font-medium">
+							Uploading file {uploadedCount + 1} of {totalUploadCount}
+						</span>
+						<span class="text-gray-500">{Math.round(uploadProgress)}%</span>
+					</div>
+					
+					{#if currentUploadFile}
+						<p class="text-xs text-gray-600 truncate">
+							📄 {currentUploadFile}
+						</p>
+					{/if}
+					
+					<div class="w-full bg-gray-200 rounded-full h-2.5">
 						<div
-							class="bg-blue-600 h-2 rounded-full transition-all duration-300"
+							class="bg-blue-600 h-2.5 rounded-full transition-all duration-300"
 							style="width: {uploadProgress}%"
 						></div>
 					</div>
-					<p class="mt-2 text-sm text-gray-600 text-center">Uploading... {Math.round(uploadProgress)}%</p>
+					
+					<div class="flex items-center justify-center space-x-2 text-xs text-gray-500">
+						<svg class="animate-spin h-4 w-4 text-blue-600" fill="none" viewBox="0 0 24 24">
+							<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+							<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+						</svg>
+						<span>Processing and uploading files...</span>
+					</div>
 				</div>
 			{/if}
 
@@ -1404,9 +1468,34 @@
 					</div>
 
 					{#if analysisStatus.status === 'processing'}
+						<div class="space-y-3">
 						<div class="flex items-center">
 							<div class="inline-block animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600 mr-2"></div>
-							<span class="text-sm text-gray-600">Processing documents...</span>
+								<span class="text-sm text-gray-600">
+									{$progressStore.message || 'Processing documents...'}
+								</span>
+							</div>
+							
+							{#if $progressStore.percent > 0}
+								<div class="w-full bg-gray-200 rounded-full h-2">
+									<div 
+										class="bg-blue-600 h-2 rounded-full transition-all duration-300"
+										style="width: {$progressStore.percent}%"
+									></div>
+								</div>
+								<p class="text-xs text-gray-500">{$progressStore.percent}% complete</p>
+							{/if}
+							
+							{#if $progressStore.sub_step}
+								<p class="text-xs text-gray-500 italic">{$progressStore.sub_step}</p>
+							{/if}
+							
+							{#if $progressStore.current_doc}
+								<p class="text-xs text-gray-500">
+									Processing document {$progressStore.current_doc.index}/{$progressStore.current_doc.total}: 
+									{$progressStore.current_doc.name}
+								</p>
+							{/if}
 						</div>
 					{/if}
 

@@ -1,5 +1,4 @@
-"""Tests for health check endpoints.
-"""
+"""Tests for health check endpoints."""
 
 from fastapi.testclient import TestClient
 from legal_portal.api.main import app

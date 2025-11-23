@@ -15,7 +15,6 @@ from typing import NamedTuple
 
 import docx
 import fitz  # PyMuPDF
-
 from legal_portal.utils.logging_config import get_module_logger
 
 logger = get_module_logger(__name__)
@@ -502,7 +501,7 @@ class EnhancedFileValidator:
         """Validate PNG file content and structure with magic number check."""
         try:
             # Check PNG magic number: 89 50 4E 47 0D 0A 1A 0A
-            png_signature = b"\x89\x50\x4E\x47\x0D\x0A\x1A\x0A"
+            png_signature = b"\x89\x50\x4e\x47\x0d\x0a\x1a\x0a"
             if not file_data.startswith(png_signature):
                 issues.append("Invalid PNG magic number signature")
                 logger.error(
@@ -559,7 +558,7 @@ class EnhancedFileValidator:
         """Validate JPG file content and structure with magic number check."""
         try:
             # Check JPG magic number: FF D8 FF
-            if not file_data.startswith(b"\xFF\xD8\xFF"):
+            if not file_data.startswith(b"\xff\xd8\xff"):
                 issues.append("Invalid JPEG magic number signature")
                 logger.error(
                     "JPEG magic number validation failed",
@@ -697,7 +696,7 @@ class EnhancedFileValidator:
         """Validate legacy DOC file content and structure with magic number check."""
         try:
             # Check DOC magic number: D0 CF 11 E0 A1 B1 1A E1 (OLE compound document)
-            ole_signature = b"\xD0\xCF\x11\xE0\xA1\xB1\x1A\xE1"
+            ole_signature = b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"
             if not file_data.startswith(ole_signature):
                 issues.append("Invalid DOC magic number signature (not an OLE compound document)")
                 logger.error(

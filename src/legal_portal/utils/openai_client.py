@@ -26,6 +26,7 @@ class OpenAIClient:
         ----
             user_preferences: Optional dict of user AI model preferences by operation type
                              e.g., {"document_analysis": "gpt-4o", "letter_generation": "gpt-4o"}
+
         """
         # Configure HTTP client with appropriate timeouts for cloud environments
         http_client = httpx.Client(
@@ -58,6 +59,7 @@ class OpenAIClient:
         Returns:
         -------
             Model name to use
+
         """
         return self.user_preferences.get(operation_type, fallback)
 

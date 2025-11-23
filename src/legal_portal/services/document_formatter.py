@@ -140,7 +140,7 @@ class DocumentFormatterService:
                     <div class="summary-section">
                         <h3>Parties Involved</h3>
                         <ul class="party-list">
-                            {''.join(f'<li>{party}</li>' for party in sorted(all_parties))}
+                            {"".join(f"<li>{party}</li>" for party in sorted(all_parties))}
                         </ul>
                     </div>
                 """
@@ -177,7 +177,7 @@ class DocumentFormatterService:
                         f"""
                         <li>
                             <strong>{date}:</strong> {event}
-                            {f'<span class="source">({source})</span>' if source else ''}
+                            {f'<span class="source">({source})</span>' if source else ""}
                         </li>
                     """
                     )
@@ -199,7 +199,7 @@ class DocumentFormatterService:
                         f"""
                         <li>
                             <strong>{amount}:</strong> {description}
-                            {f'<span class="source">({source})</span>' if source else ''}
+                            {f'<span class="source">({source})</span>' if source else ""}
                         </li>
                     """
                     )
@@ -340,9 +340,9 @@ class DocumentFormatterService:
 
             html += f"""
             <tr>
-                <td>{result.get('document', 'Unknown')}</td>
+                <td>{result.get("document", "Unknown")}</td>
                 <td class='{quality_class}'>{confidence_level.upper()}</td>
-                <td>{result.get('score', 0):.1f}/10</td>
+                <td>{result.get("score", 0):.1f}/10</td>
                 <td>{issues_html}</td>
                 <td>{recommendations_html}</td>
             </tr>
@@ -698,6 +698,303 @@ class DocumentFormatterService:
 </body>
 </html>
 """
+
+    @staticmethod
+    def format_demand_letter(letter_html: str, recipient_name: str = "Recipient") -> str:
+        """Format demand letter HTML with professional legal document styling.
+
+        Args:
+        ----
+            letter_html: AI-generated letter HTML content
+            recipient_name: Recipient name for the document title
+
+        Returns:
+        -------
+            Fully-formatted HTML with professional demand letter styling
+
+        """
+        logger.info(f"Formatting demand letter for recipient: '{recipient_name}'")
+        try:
+            # Clean the input HTML - remove any existing html/body tags
+            cleaned_content = letter_html
+            cleaned_content = re.sub(r"<!DOCTYPE[^>]*>", "", cleaned_content, flags=re.IGNORECASE)
+            cleaned_content = re.sub(r"<html[^>]*>|</html>", "", cleaned_content, flags=re.IGNORECASE)
+            cleaned_content = re.sub(
+                r"<head>.*?</head>", "", cleaned_content, flags=re.IGNORECASE | re.DOTALL
+            )
+            cleaned_content = re.sub(r"<body[^>]*>|</body>", "", cleaned_content, flags=re.IGNORECASE)
+            cleaned_content = cleaned_content.strip()
+
+            # Build the professionally formatted demand letter
+            formatted_html = f"""
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Demand Letter - {recipient_name}</title>
+    <style>
+        html, body {{
+            background-color: #ffffff !important;
+            color: #000000 !important;
+            margin: 0;
+            padding: 0;
+        }}
+
+        body {{
+            font-family: 'Times New Roman', Times, serif;
+            font-size: 12pt;
+            line-height: 2.0;
+            color: #000000;
+            background-color: #ffffff;
+            padding: 1in 1.25in;
+            max-width: 8.5in;
+            margin: 0 auto;
+        }}
+
+        /* Page breaks for printing */
+        @media print {{
+            body {{
+                padding: 0.5in 1in;
+            }}
+
+            h1, h2, h3 {{
+                page-break-after: avoid;
+            }}
+
+            p, ul, ol {{
+                page-break-inside: avoid;
+            }}
+        }}
+
+        /* Header section (Date, Certified Mail, RE: line) */
+        .letter-header {{
+            margin-bottom: 24pt;
+            line-height: 1.5;
+        }}
+
+        .letter-header p {{
+            margin: 6pt 0;
+        }}
+
+        /* Headings - Subtle styling for formal letters */
+        h1 {{
+            color: #000000;
+            font-size: 14pt;
+            margin-top: 24pt;
+            margin-bottom: 12pt;
+            font-weight: bold;
+            text-transform: none;
+        }}
+
+        h2 {{
+            color: #000000;
+            font-size: 13pt;
+            margin-top: 20pt;
+            margin-bottom: 12pt;
+            font-weight: bold;
+            text-transform: none;
+        }}
+
+        h3 {{
+            color: #000000;
+            font-size: 12pt;
+            margin-top: 16pt;
+            margin-bottom: 10pt;
+            font-weight: bold;
+        }}
+
+        h4 {{
+            color: #000000;
+            font-size: 12pt;
+            margin-top: 14pt;
+            margin-bottom: 8pt;
+            font-weight: bold;
+            font-style: italic;
+        }}
+
+        /* Paragraphs - Double-spaced for professional legal documents */
+        p {{
+            margin: 0 0 12pt 0;
+            text-align: left;
+            text-indent: 0;
+            line-height: 2.0;
+        }}
+
+        /* First paragraph after heading - no top margin */
+        h1 + p, h2 + p, h3 + p, h4 + p {{
+            margin-top: 0;
+        }}
+
+        /* Lists - Formatted for demands and numbered items */
+        ul, ol {{
+            margin: 12pt 0;
+            padding-left: 0.5in;
+            line-height: 2.0;
+        }}
+
+        li {{
+            margin: 6pt 0;
+            padding-left: 0;
+        }}
+
+        /* Nested lists */
+        ul ul, ol ul, ul ol, ol ol {{
+            margin-top: 6pt;
+            margin-bottom: 6pt;
+            padding-left: 0.4in;
+        }}
+
+        /* Numbered demands - prominent formatting */
+        ol.demands {{
+            counter-reset: demand-counter;
+            list-style: none;
+            padding-left: 0;
+        }}
+
+        ol.demands > li {{
+            counter-increment: demand-counter;
+            margin: 12pt 0 12pt 0.3in;
+            text-indent: -0.3in;
+        }}
+
+        ol.demands > li:before {{
+            content: counter(demand-counter) ". ";
+            font-weight: bold;
+        }}
+
+        /* Strong and emphasis */
+        strong, b {{
+            font-weight: bold;
+            color: #000000;
+        }}
+
+        em, i {{
+            font-style: italic;
+        }}
+
+        /* Signature block */
+        .signature-block {{
+            margin-top: 36pt;
+            margin-bottom: 0;
+            line-height: 1.5;
+        }}
+
+        .signature-block p {{
+            margin: 4pt 0;
+            line-height: 1.5;
+        }}
+
+        /* RE: line styling */
+        .re-line {{
+            font-weight: bold;
+            margin: 12pt 0;
+        }}
+
+        /* Salutation */
+        .salutation {{
+            margin: 18pt 0 12pt 0;
+        }}
+
+        /* Closing */
+        .closing {{
+            margin-top: 24pt;
+            margin-bottom: 6pt;
+        }}
+
+        /* Block quotes for contract language */
+        blockquote {{
+            margin: 12pt 0 12pt 0.5in;
+            padding: 12pt;
+            border-left: 3px solid #cccccc;
+            background-color: #f9f9f9;
+            font-style: italic;
+            line-height: 1.8;
+        }}
+
+        /* Horizontal rules - minimal for letterhead separation */
+        hr {{
+            border: 0;
+            border-top: 1px solid #cccccc;
+            margin: 24pt 0;
+        }}
+
+        /* Special formatting for legal citations */
+        .citation {{
+            font-style: italic;
+        }}
+
+        /* Address blocks */
+        .address-block {{
+            margin: 12pt 0;
+            line-height: 1.5;
+        }}
+
+        .address-block p {{
+            margin: 3pt 0;
+            line-height: 1.3;
+        }}
+
+        /* Table styling for any financial breakdowns */
+        table {{
+            border-collapse: collapse;
+            width: 100%;
+            margin: 12pt 0;
+            font-size: 11pt;
+        }}
+
+        th, td {{
+            border: 1px solid #cccccc;
+            padding: 8pt 12pt;
+            text-align: left;
+        }}
+
+        th {{
+            background-color: #f5f5f5;
+            font-weight: bold;
+        }}
+
+        /* Responsive adjustments */
+        @media screen and (max-width: 768px) {{
+            body {{
+                padding: 20px;
+                font-size: 11pt;
+            }}
+
+            ul, ol {{
+                padding-left: 30px;
+            }}
+        }}
+
+        /* Print optimizations */
+        @media print {{
+            body {{
+                line-height: 1.8;
+            }}
+
+            p {{
+                line-height: 1.8;
+            }}
+
+            ul, ol {{
+                line-height: 1.8;
+            }}
+        }}
+    </style>
+</head>
+<body>
+    {cleaned_content}
+</body>
+</html>
+"""
+
+            logger.info("Successfully formatted demand letter HTML")
+            return formatted_html
+
+        except Exception as e:
+            logger.error(f"Error formatting demand letter HTML: {e}", exc_info=True)
+            # Return basic HTML if formatting fails
+            return f"<html><head><title>Demand Letter</title></head><body>{letter_html}</body></html>"
 
     @staticmethod
     def format_findings_letter(letter_html: str, client_name: str = "Client") -> str:

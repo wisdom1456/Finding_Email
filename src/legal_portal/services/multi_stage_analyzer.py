@@ -11,6 +11,7 @@ Created: 2025-11-21
 
 from __future__ import annotations
 
+import asyncio
 import json
 import time
 from typing import Callable, List, Optional
@@ -55,6 +56,7 @@ class MultiStageAnalyzer:
         ----
             openai_client: OpenAI client for AI calls
             statute_service: Service for querying Florida statute corpus
+
         """
         self.client = openai_client
         self.statute_service = statute_service or StatuteRecommendationService()
@@ -81,13 +83,14 @@ class MultiStageAnalyzer:
         Returns:
         -------
             MultiStageAnalysisResult with comprehensive analysis
+
         """
         start_time = time.time()
         logger.info("Starting multi-stage analysis pipeline")
 
         # Stage 1: Extract Fact Matrix
         if progress_callback:
-            progress_callback("Extracting key facts and timeline...", [], "fact_extraction", 20)
+            await progress_callback("Extracting key facts and timeline...", [], "fact_extraction", 20)
 
         stage_start = time.time()
         fact_matrix = await self._extract_fact_matrix(intake_content, document_summaries)
@@ -100,7 +103,7 @@ class MultiStageAnalyzer:
 
         # Stage 2: Map Legal Issues
         if progress_callback:
-            progress_callback("Mapping legal issues and statutes...", [], "issue_mapping", 35)
+            await progress_callback("Mapping legal issues and statutes...", [], "issue_mapping", 35)
 
         stage_start = time.time()
         issue_map = await self._map_legal_issues(fact_matrix, intake_content, case_type, legal_issues)
@@ -114,7 +117,8 @@ class MultiStageAnalyzer:
         verified_statutes = []
         if issue_map.relevant_statutes:
             try:
-                recommendations = self.statute_service.recommend_statutes(
+                recommendations = await asyncio.to_thread(
+                    self.statute_service.recommend_statutes,
                     case_facts=intake_content[:2000],
                     legal_issues=legal_issues or [],
                     case_type=case_type,
@@ -135,7 +139,7 @@ class MultiStageAnalyzer:
 
         # Stage 3: Deep Legal Analysis
         if progress_callback:
-            progress_callback("Performing comprehensive legal analysis...", [], "deep_analysis", 60)
+            await progress_callback("Performing comprehensive legal analysis...", [], "deep_analysis", 60)
 
         stage_start = time.time()
         deep_analysis = await self._perform_deep_analysis(
@@ -341,7 +345,7 @@ RULES:
         prompt = f"""You are a Florida legal issue analyst. Based on the facts extracted, identify ALL applicable legal issues and statutes.
 
 CASE TYPE: {case_type or "Unknown"}
-PRELIMINARY ISSUES: {', '.join(legal_issues_hint or fact_matrix.preliminary_issues)}
+PRELIMINARY ISSUES: {", ".join(legal_issues_hint or fact_matrix.preliminary_issues)}
 
 FACTS:
 - Parties: {len(fact_matrix.parties)} identified

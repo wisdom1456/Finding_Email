@@ -1,4 +1,5 @@
 """Metrics collection for observability."""
+
 from __future__ import annotations
 
 import json

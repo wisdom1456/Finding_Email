@@ -100,7 +100,6 @@ async def test_intake_analysis_structured_output(app_client: AsyncClient, sample
     if response.status_code == 200:
         data = response.json()
         # Verify expected fields in structured output
-        expected_fields = ["client_name", "legal_issue", "parties", "key_dates"]
         # At least some structured data should be present
         assert isinstance(data, dict)
 

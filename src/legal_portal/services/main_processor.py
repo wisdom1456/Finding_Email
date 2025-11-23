@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import os
@@ -262,7 +263,7 @@ async def process_case_documents(
         processed_case_docs = []
         if case_document_paths:
             if progress_callback:
-                progress_callback("Extracting content from documents...", [], "document_extraction", 5)
+                await progress_callback("Extracting content from documents...", [], "document_extraction", 5)
 
             processed_docs = await doc_processor.process_documents_from_paths(
                 case_document_paths,
@@ -275,7 +276,7 @@ async def process_case_documents(
                 logger.warning("No case documents were successfully processed.")
 
             if progress_callback:
-                progress_callback(
+                await progress_callback(
                     f"Extracted content from {len(processed_case_docs)} documents",
                     [d.file_name for d in processed_case_docs],
                     "extraction_complete",
@@ -286,12 +287,12 @@ async def process_case_documents(
         if processed_case_docs:
             logger.info(f"Checking {len(processed_case_docs)} documents for duplicates...")
             if progress_callback:
-                progress_callback("Deduplicating documents...")
+                await progress_callback("Deduplicating documents...")
 
-            processed_case_docs = _deduplicate_documents(processed_case_docs)
+            processed_case_docs = await asyncio.to_thread(_deduplicate_documents, processed_case_docs)
             logger.info(f"After deduplication: {len(processed_case_docs)} unique documents")
 
-            _detect_near_duplicates(processed_case_docs)
+            await asyncio.to_thread(_detect_near_duplicates, processed_case_docs)
 
         # 4.5. Quality validation on processed documents
         quality_validator = DocumentQualityValidator()
@@ -299,10 +300,11 @@ async def process_case_documents(
         if processed_case_docs:
             logger.info("Running document quality validation...")
             if progress_callback:
-                progress_callback("Validating document quality...")
+                await progress_callback("Validating document quality...")
 
             for doc in processed_case_docs:
-                quality_results.append(quality_validator.validate_document(doc))
+                res = await asyncio.to_thread(quality_validator.validate_document, doc)
+                quality_results.append(res)
 
         # Aggregate quality results and create context string
         aggregated_quality_report = _aggregate_quality_results(quality_results)
@@ -321,7 +323,8 @@ async def process_case_documents(
                 if review_data and "legal_issues" in review_data:
                     legal_issues = review_data.get("legal_issues", [])
                 case_type = case_info.get("caseType") if case_info else None
-                recommendations = recommendation_service.recommend_statutes(
+                recommendations = await asyncio.to_thread(
+                    recommendation_service.recommend_statutes,
                     case_facts=intake_content[:2000],
                     legal_issues=legal_issues,
                     case_type=case_type,
@@ -339,7 +342,7 @@ async def process_case_documents(
                 logger.warning(f"Failed to generate statute recommendations: {e}", exc_info=True)
 
         if progress_callback:
-            progress_callback(
+            await progress_callback(
                 "Analyzing extracted content...",
                 [d.file_name for d in processed_case_docs],
                 "document_analysis",
@@ -357,15 +360,17 @@ async def process_case_documents(
 
         # 5.5. AI Call #2.5: Generate case-level analysis summary
         logger.info("AI Call #2.5: Generating case-level analysis summary...")
-        case_analysis_dict = _generate_case_analysis_summary(
-            intake_content, structured_summaries, openai_client_wrapper, review_data
+        case_analysis_dict = await asyncio.to_thread(
+            _generate_case_analysis_summary,
+            intake_content,
+            structured_summaries,
+            openai_client_wrapper,
+            review_data,
         )
         client_name_for_case = (
             (case_info or {}).get("client_name") or (case_info or {}).get("clientName") or "Client"
         )
-        case_analysis_result = _convert_to_case_analysis_result(
-            structured_summaries, client_name_for_case, intake_content
-        )
+        _convert_to_case_analysis_result(structured_summaries, client_name_for_case, intake_content)
 
         document_summaries_json_str = json.dumps([s.model_dump() for s in structured_summaries], indent=2)
 
@@ -387,8 +392,11 @@ async def process_case_documents(
 
                 case_type = case_info.get("caseType") if case_info else None
 
-                coverage_result = coverage_service.analyze_coverage(
-                    case_type=case_type, case_facts=intake_content[:2000], legal_issues=legal_issues
+                coverage_result = await asyncio.to_thread(
+                    coverage_service.analyze_coverage,
+                    case_type=case_type,
+                    case_facts=intake_content[:2000],
+                    legal_issues=legal_issues,
                 )
 
                 if coverage_result["warnings"]:
@@ -447,9 +455,7 @@ async def process_case_documents(
         multi_stage_result = None
         fact_matrix = None
         legal_issue_map = None
-        deep_analysis = None
         letter_structure = None
-        verified_statutes = []
 
         if settings.use_multi_stage_analysis:
             logger.info("🔬 Multi-stage analysis enabled - using enhanced 4-stage pipeline")
@@ -461,7 +467,7 @@ async def process_case_documents(
                 )
 
                 if progress_callback:
-                    progress_callback("Running multi-stage legal analysis...", phase="fact_extraction")
+                    await progress_callback("Running multi-stage legal analysis...", phase="fact_extraction")
 
                 multi_stage_result = await multi_stage_analyzer.analyze_case(
                     intake_content=intake_content,
@@ -472,7 +478,6 @@ async def process_case_documents(
 
                 fact_matrix = multi_stage_result.fact_matrix
                 legal_issue_map = multi_stage_result.issue_map
-                deep_analysis = multi_stage_result.deep_analysis
                 letter_structure = multi_stage_result.letter_structure
 
                 logger.info(
@@ -480,8 +485,6 @@ async def process_case_documents(
                     f"{len(legal_issue_map.primary_issues)} legal issues identified, "
                     f"letter structure: {letter_structure.style}"
                 )
-
-                verified_statutes = multi_stage_result.verified_statutes
 
             except Exception as e:
                 logger.error(f"Multi-stage analysis failed: {e}", exc_info=True)
@@ -913,7 +916,7 @@ Return ONLY valid JSON, no markdown code blocks.
                 if progress_callback:
                     # Calculate percentage within the 15-75% range
                     progress_pct = 15 + int((docs_processed_count / total_docs_in_all_batches) * 60)
-                    progress_callback(
+                    await progress_callback(
                         message=f"Analyzed {docs_processed_count} of {total_docs_in_all_batches} documents...",  # noqa: E501
                         docs_processed=[s.document_name for s in all_summaries],
                         phase="document_analysis",
@@ -1001,7 +1004,8 @@ CRITICAL RULES:
 
     # Make the API call
     model = openai_client_wrapper.get_preferred_model("document_analysis", "gpt-4o")
-    response_dict = openai_client_wrapper.create_chat_completion(
+    response_dict = await asyncio.to_thread(
+        openai_client_wrapper.create_chat_completion,
         model=model,
         messages=[
             {

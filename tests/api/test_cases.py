@@ -1,6 +1,5 @@
 """Test cases API endpoints."""
 
-
 import pytest
 from httpx import AsyncClient
 
@@ -17,7 +16,7 @@ async def test_create_case(app_client: AsyncClient, case_factory, test_user_id):
     }
 
     # Mock Supabase response
-    created_case = case_factory(**case_data)
+    case_factory(**case_data)
     app_client._transport.app.dependency_overrides
 
     # Act

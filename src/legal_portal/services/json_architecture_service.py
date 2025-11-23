@@ -30,8 +30,7 @@ class JSONArchitectureService:
     def __init__(self):
         """Initialize the deprecated JSON architecture service."""
         logger.warning(
-            "JSONArchitectureService is deprecated. "
-            "Use JsonProcessingService.generate_html_letter() instead."
+            "JSONArchitectureService is deprecated. Use JsonProcessingService.generate_html_letter() instead."
         )
         self.required_sections = [
             "factual_summary",
@@ -57,7 +56,7 @@ class JSONArchitectureService:
         This method is no longer supported in the new architecture.
         """
         logger.error(
-            "validate_json_response() is deprecated. " "HTML validation is handled in JsonProcessingService."
+            "validate_json_response() is deprecated. HTML validation is handled in JsonProcessingService."
         )
         return json_data if isinstance(json_data, dict) else self._create_deprecation_fallback()
 

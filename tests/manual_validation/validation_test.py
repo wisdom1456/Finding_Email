@@ -2,7 +2,7 @@
 """Final validation test to ensure all components are working correctly.
 Tests the complete workflow including the fixes for:
 - TypeError in budget_sheet.py
-- jinja2.TemplateNotFound error in main_processor.py
+- jinja2.TemplateNotFound error in main_processor.py.
 """
 
 import sys
@@ -14,7 +14,7 @@ sys.path.insert(0, str(Path(__file__).parent / "src"))
 
 
 def test_complete_workflow():
-    """Test the complete document processing workflow"""
+    """Test the complete document processing workflow."""
     print("=== FINAL VALIDATION TEST ===")
     print("Testing complete workflow with all recent fixes...")
 
@@ -30,7 +30,7 @@ def test_complete_workflow():
 
         # Test 2: Initialize core services
         print("\n2. Initializing core services...")
-        config_manager = ConfigManager()
+        ConfigManager()
         formatting_service = ContentFormattingService(config={})
         template_service = TemplateRenderingService()
         print("✓ Core services initialized successfully")

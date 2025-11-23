@@ -290,6 +290,7 @@ class JsonProcessingService:
         Returns:
         -------
             HTML letter content
+
         """
         logger.info(
             f"Generating adaptive letter with {structure_guidance.style} structure",

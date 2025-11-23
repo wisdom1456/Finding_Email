@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Lightweight configuration manager used by compatibility tests and prompt helpers.
 
 Historically the project exposed a ``ConfigManager`` class that loaded YAML/JSON
@@ -23,6 +21,8 @@ The implementation intentionally keeps the surface area small but flexible:
 This is sufficient for the remaining legacy callers and keeps the door open to
 swap in a richer unified manager later without breaking imports.
 """
+
+from __future__ import annotations
 
 import json
 import logging

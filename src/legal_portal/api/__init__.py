@@ -1,2 +1,1 @@
-"""FastAPI application package for the Legal Document Analysis Portal.
-"""
+"""FastAPI application package for the Legal Document Analysis Portal."""

@@ -398,42 +398,6 @@ class ProcessingResult(BaseModel):
     multi_stage_result: Optional[Dict[str, Any]] = None
     generated_letters: Dict[str, str] = Field(default_factory=dict)
 
-
-class LetterType(str, Enum):
-    """Types of letters the system can generate."""
-
-    FINDINGS = "findings"
-    DEMAND = "demand"
-
-
-class DemandLetterRequest(BaseModel):
-    """API request payload for generating demand letters."""
-
-    case_id: str
-    target_party_name: str
-    demand_amount: Optional[float] = None
-    demand_deadline: str = "10 business days"
-    specific_demands: List[str] = Field(default_factory=list)
-    attorney_name: Optional[str] = None
-    firm_name: Optional[str] = None
-    contact_phone: Optional[str] = None
-    contact_email: Optional[str] = None
-    client_name: Optional[str] = None
-
-
-class ChatMessageRequest(BaseModel):
-    """API request payload for case chat."""
-
-    case_id: str
-    message: str
-
-
-class ChatMessageResponse(BaseModel):
-    """API response payload for case chat replies."""
-
-    response: str
-    context_used: Dict[str, Any] = Field(default_factory=dict)
-
     class Config:
         """Pydantic configuration for ProcessingResult."""
 

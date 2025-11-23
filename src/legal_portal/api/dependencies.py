@@ -26,6 +26,7 @@ def get_supabase_client():
     Returns
     -------
         Supabase client
+
     """
     supabase_url = os.getenv("SUPABASE_URL")
     supabase_key = os.getenv("SUPABASE_SERVICE_KEY")
@@ -47,6 +48,7 @@ def get_user_supabase_client(credentials: HTTPAuthorizationCredentials = Depends
     Returns:
     -------
         Supabase client authenticated as user
+
     """
     supabase_url = os.getenv("SUPABASE_URL")
     supabase_key = os.getenv("SUPABASE_ANON_KEY")
@@ -100,6 +102,7 @@ async def get_current_user(
     Raises:
     ------
         HTTPException: If token is invalid or user not found
+
     """
     try:
         # Verify the JWT token with Supabase
@@ -128,7 +131,7 @@ async def get_current_user(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=f"Authentication failed: {str(e)}",
             headers={"WWW-Authenticate": "Bearer"},
-        )
+        ) from e
 
 
 async def get_optional_user(
@@ -145,6 +148,7 @@ async def get_optional_user(
     Returns:
     -------
         User object or None
+
     """
     if not credentials:
         return None

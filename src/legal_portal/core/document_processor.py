@@ -39,6 +39,7 @@ class DocumentProcessingError(Exception):
         ----
             message: Human-readable error message
             error_code: Machine-readable error code for categorization
+
         """
         super().__init__(message)
         self.error_code = error_code
@@ -55,6 +56,7 @@ class ValidationError(DocumentProcessingError):
             message: Human-readable error message
             error_code: One of FILE_TOO_LARGE, INVALID_TYPE, CONTENT_VALIDATION, SECURITY_VIOLATION, CORRUPTED
             file_size_mb: File size in MB if relevant
+
         """
         super().__init__(message, error_code)
         self.file_size_mb = file_size_mb
@@ -104,6 +106,7 @@ class DocumentProcessor:
         ------
             ValidationError: If validation fails with categorized error code
             DocumentProcessingError: If processing fails
+
         """
         temp_files = []
 
@@ -126,11 +129,11 @@ class DocumentProcessor:
             except ValueError as e:
                 error_msg = str(e)
                 if "extension" in error_msg or "not allowed" in error_msg:
-                    raise ValidationError(error_msg, error_code="INVALID_TYPE")
+                    raise ValidationError(error_msg, error_code="INVALID_TYPE") from e
                 elif "content type" in error_msg or "magic" in error_msg.lower():
-                    raise ValidationError(error_msg, error_code="CONTENT_VALIDATION")
+                    raise ValidationError(error_msg, error_code="CONTENT_VALIDATION") from e
                 else:
-                    raise ValidationError(error_msg, error_code="SECURITY_VIOLATION")
+                    raise ValidationError(error_msg, error_code="SECURITY_VIOLATION") from e
 
             # Use provided content_type or detected mime_type
             final_content_type = content_type or mime_type
@@ -481,10 +484,9 @@ class DocumentProcessor:
             if doc:
                 processed_docs_count[0] += 1
                 if progress_callback:
-                    progress_callback(
+                    await progress_callback(
                         message=(
-                            f"Extracting content from document {processed_docs_count[0]} "
-                            f"of {total_docs}..."
+                            f"Extracting content from document {processed_docs_count[0]} of {total_docs}..."
                         ),
                         docs_processed=[doc.file_name],
                         phase="document_extraction",
@@ -551,10 +553,9 @@ class DocumentProcessor:
             # Update progress
             processed_docs_count[0] += len(batch_results)
             if progress_callback:
-                progress_callback(
+                await progress_callback(
                     message=(
-                        f"Processed image batch {batch_idx}/{total_batches} "
-                        f"({len(batch_results)} images)..."
+                        f"Processed image batch {batch_idx}/{total_batches} ({len(batch_results)} images)..."
                     ),
                     docs_processed=[doc.file_name for doc in batch_results],
                     phase="document_extraction",
@@ -810,10 +811,9 @@ class DocumentProcessor:
                 processed_docs.append(result)
                 processed_docs_count[0] += 1
                 if progress_callback:
-                    progress_callback(
+                    await progress_callback(
                         message=(
-                            f"Extracted content from {processed_docs_count[0]} of "
-                            f"{total_docs} documents..."
+                            f"Extracted content from {processed_docs_count[0]} of {total_docs} documents..."
                         ),
                         docs_processed=[result.file_name],
                         phase="document_extraction",

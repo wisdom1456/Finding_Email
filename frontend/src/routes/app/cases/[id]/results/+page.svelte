@@ -44,6 +44,11 @@
 	// Collapsible document analysis state - all start collapsed
 	let collapsedDocs = $state<Set<string>>(new Set());
 
+	// Demand calculation state
+	let calculatingAmount = $state(false);
+	let calculationReasoning = $state('');
+	let calculationBreakdown = $state<Array<{ description: string; amount: number }>>([]);
+
 	function toggleDoc(docName: string) {
 		const newSet = new Set(collapsedDocs);
 		if (newSet.has(docName)) {
@@ -181,32 +186,113 @@
 			selectedParty = data.opposing_parties[0].name;
 		}
 
-		// Try to prefill demand letter fields from multi_stage_result
-		if (data.multi_stage_result) {
-			// Financial data for demand amount (nested in fact_matrix)
-			const factMatrix = data.multi_stage_result.fact_matrix || {};
-			const financialData = factMatrix.financial_data || [];
-			const claimedAmount = financialData.find((item: any) => 
-				item.payment_type === 'claimed' || 
-				item.category === 'damages_claimed' ||
-				item.description?.toLowerCase().includes('damage') || 
-				item.description?.toLowerCase().includes('owed')
+	// Try to prefill demand letter fields from multiple sources
+	let foundAmount = false;
+	
+	// 1. Try multi_stage_result first (most structured)
+	if (data.multi_stage_result && !foundAmount) {
+		const factMatrix = data.multi_stage_result.fact_matrix || {};
+		const financialData = factMatrix.financial_data || [];
+		
+		// Look for claimed/owed amounts first
+		const claimedAmount = financialData.find((item: any) => 
+			item.payment_type === 'claimed' || 
+			item.category === 'damages_claimed'
+		);
+		
+		if (claimedAmount && claimedAmount.amount) {
+			demandAmount = claimedAmount.amount;
+			foundAmount = true;
+			console.log('Found demand amount in fact_matrix:', demandAmount);
+		} else {
+			// Try any "owed" amount
+			const owedAmount = financialData.find((item: any) => 
+				item.payment_type === 'owed' ||
+				item.description?.toLowerCase().includes('owed') ||
+				item.description?.toLowerCase().includes('damage')
 			);
-			if (claimedAmount && claimedAmount.amount) {
-				demandAmount = claimedAmount.amount;
-			}
-
-			// Primary issues for specific demands
-			const issueMap = data.multi_stage_result.issue_map || {};
-			const primaryIssues = issueMap.primary_issues || [];
-			if (primaryIssues.length > 0) {
-				specificDemands = primaryIssues.map((issue: any) => 
-					`Resolve the issue of ${issue.issue_name} by providing appropriate remedies.`
-				).join('\n');
-			} else {
-				specificDemands = "Provide full and timely compliance with all outstanding obligations.";
+			if (owedAmount && owedAmount.amount) {
+				demandAmount = owedAmount.amount;
+				foundAmount = true;
+				console.log('Found owed amount in fact_matrix:', demandAmount);
+			} else if (financialData.length > 0) {
+				// Fallback: use the largest amount found
+				const maxAmountItem = financialData.reduce((prev: any, current: any) => 
+					(prev.amount > current.amount) ? prev : current
+				);
+				if (maxAmountItem && maxAmountItem.amount) {
+					demandAmount = maxAmountItem.amount;
+					foundAmount = true;
+					console.log('Using largest amount in fact_matrix as fallback:', demandAmount);
+				}
 			}
 		}
+
+		// Primary issues for specific demands
+		const issueMap = data.multi_stage_result.issue_map || {};
+		const primaryIssues = issueMap.primary_issues || [];
+		if (primaryIssues.length > 0) {
+			specificDemands = primaryIssues.map((issue: any) => 
+				`Resolve the issue of ${issue.issue_name} by providing appropriate remedies.`
+			).join('\n');
+		} else {
+			specificDemands = "Provide full and timely compliance with all outstanding obligations.";
+		}
+	}
+	
+	// 2. Fall back to case_analysis financial_impact
+	if (!foundAmount && data.case_analysis?.intake_analysis?.financial_impact) {
+		const financialText = data.case_analysis.intake_analysis.financial_impact;
+		// Extract dollar amounts from text
+		const amountMatch = financialText.match(/\$[\d,]+(?:\.\d{2})?/);
+		if (amountMatch) {
+			const amountStr = amountMatch[0].replace(/[$,]/g, '');
+			demandAmount = parseFloat(amountStr);
+			foundAmount = true;
+			console.log('Found demand amount in intake financial_impact:', demandAmount);
+		}
+	}
+	
+	// 3. Fall back to document summaries key_amounts
+	if (!foundAmount && data.document_summaries && Array.isArray(data.document_summaries)) {
+		for (const doc of data.document_summaries) {
+			if (doc.key_amounts && Array.isArray(doc.key_amounts)) {
+				for (const amount of doc.key_amounts) {
+					if (amount.description?.toLowerCase().includes('damage') || 
+					    amount.description?.toLowerCase().includes('owed') ||
+					    amount.description?.toLowerCase().includes('claim')) {
+						// Extract numeric value from formatted string
+						const amountStr = amount.amount?.replace(/[$,]/g, '');
+						if (amountStr) {
+							demandAmount = parseFloat(amountStr);
+							foundAmount = true;
+							console.log('Found demand amount in document key_amounts:', demandAmount);
+							break;
+						}
+					}
+				}
+				if (foundAmount) break;
+			}
+		}
+	}
+	
+	// 4. Last resort: use any financial amount from documents
+	if (!foundAmount && data.document_summaries && Array.isArray(data.document_summaries)) {
+		for (const doc of data.document_summaries) {
+			if (doc.key_amounts && Array.isArray(doc.key_amounts) && doc.key_amounts.length > 0) {
+				const firstAmount = doc.key_amounts[0];
+				const amountStr = firstAmount.amount?.replace(/[$,]/g, '');
+				if (amountStr) {
+					demandAmount = parseFloat(amountStr);
+					foundAmount = true;
+					console.log('Using first available amount from documents:', demandAmount);
+					break;
+				}
+			}
+		}
+	}
+	
+	console.log('Final demand amount:', demandAmount || 'not found');
 
 		// Initialize all documents as collapsed
 		if (data.document_summaries && data.document_summaries.length > 0) {
@@ -231,6 +317,52 @@
 			contact_email: contactEmail || undefined
 		});
 		generatingFindings = false;
+	}
+
+	async function calculateDemandAmount() {
+		if (!selectedParty) {
+			alert('Please select an opposing party first');
+			return;
+		}
+
+		calculatingAmount = true;
+		calculationReasoning = '';
+		calculationBreakdown = [];
+
+		try {
+			const {
+				data: { session }
+			} = await supabase.auth.getSession();
+
+			if (!session) throw new Error('Not authenticated');
+
+			const response = await fetch(`${API_URL}/api/analysis/calculate-demand-amount`, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					Authorization: `Bearer ${session.access_token}`
+				},
+				body: JSON.stringify({
+					case_id: caseId,
+					target_party_name: selectedParty
+				})
+			});
+
+			if (!response.ok) {
+				const detail = await response.json().catch(() => ({}));
+				throw new Error(detail?.detail || 'Failed to calculate demand amount');
+			}
+
+			const data = await response.json();
+			demandAmount = data.amount;
+			calculationReasoning = data.reasoning;
+			calculationBreakdown = data.breakdown || [];
+		} catch (err: any) {
+			alert(err.message || 'Failed to calculate demand amount');
+			console.error('Demand calculation error:', err);
+		} finally {
+			calculatingAmount = false;
+		}
 	}
 
 	async function generateDemandLetter() {
@@ -778,8 +910,9 @@
 									{/each}
 								</select>
 							</div>
-							<div>
-								<label class="block text-sm font-medium text-gray-700 mb-1">Demand Amount ($)</label>
+						<div>
+							<label class="block text-sm font-medium text-gray-700 mb-1">Demand Amount ($)</label>
+							<div class="flex gap-2">
 								<input
 									type="number"
 									class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm"
@@ -787,7 +920,36 @@
 									step="100"
 									bind:value={demandAmount}
 								/>
+								<button
+									type="button"
+									onclick={calculateDemandAmount}
+									disabled={!selectedParty || calculatingAmount}
+									class="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap text-sm font-medium"
+									title={!selectedParty ? "Please select an opposing party first" : "Calculate suggested demand amount based on case analysis"}
+								>
+									{calculatingAmount ? 'Calculating...' : 'Calculate'}
+								</button>
 							</div>
+							{#if calculationReasoning}
+								<div class="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-md">
+									<p class="text-sm text-blue-900 font-medium">AI Calculation:</p>
+									<p class="text-sm text-blue-800 mt-1">{calculationReasoning}</p>
+									{#if calculationBreakdown && calculationBreakdown.length > 0}
+										<details class="mt-2">
+											<summary class="text-xs text-blue-700 cursor-pointer hover:text-blue-900">View breakdown</summary>
+											<ul class="mt-2 space-y-1">
+												{#each calculationBreakdown as item}
+													<li class="text-xs text-blue-800 flex justify-between">
+														<span>{item.description}</span>
+														<span class="font-mono">${item.amount.toLocaleString()}</span>
+													</li>
+												{/each}
+											</ul>
+										</details>
+									{/if}
+								</div>
+							{/if}
+						</div>
 							<div>
 								<label class="block text-sm font-medium text-gray-700 mb-1">Response Deadline</label>
 								<select

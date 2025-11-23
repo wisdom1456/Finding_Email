@@ -314,9 +314,7 @@ def is_production() -> bool:
 def get_openai_api_key() -> str:
     """Get the OpenAI API key with validation."""
     if not settings.openai_api_key:
-        msg = (
-            "OPENAI_API_KEY is required but not set. " "Please check your .env file or environment variables."
-        )
+        msg = "OPENAI_API_KEY is required but not set. Please check your .env file or environment variables."
         raise ValueError(msg)
     return settings.openai_api_key
 

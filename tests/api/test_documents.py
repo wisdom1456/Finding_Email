@@ -140,7 +140,7 @@ async def test_duplicate_document_detection(app_client: AsyncClient):
     files = {"file": ("duplicate.pdf", BytesIO(file_content), "application/pdf")}
 
     # Upload first time
-    response1 = await app_client.post(
+    await app_client.post(
         f"/api/cases/{case_id}/documents", files=files, headers={"Authorization": "Bearer mock_token"}
     )
 

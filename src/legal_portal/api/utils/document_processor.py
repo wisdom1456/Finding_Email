@@ -32,6 +32,7 @@ class DocumentProcessor:
         Raises:
         ------
             Exception: If download fails
+
         """
         headers = {
             "Authorization": f"Bearer {access_token}",
@@ -54,6 +55,7 @@ class DocumentProcessor:
         Returns:
         -------
             Extracted text
+
         """
         try:
             # Open PDF from bytes
@@ -80,6 +82,7 @@ class DocumentProcessor:
         Returns:
         -------
             Extracted text
+
         """
         try:
             doc = Document(io.BytesIO(file_content))
@@ -99,6 +102,7 @@ class DocumentProcessor:
         Returns:
         -------
             Extracted text
+
         """
         try:
             # Try UTF-8 first, fall back to latin-1
@@ -122,6 +126,7 @@ class DocumentProcessor:
         Returns:
         -------
             Extracted text or None if extraction not supported
+
         """
         # Normalize content type
         content_type = content_type.lower().split(";")[0].strip()
@@ -177,6 +182,7 @@ class DocumentProcessor:
         Raises:
         ------
             Exception: If download fails
+
         """
         # Download file
         file_content, content_type = cls.download_file(url, access_token)

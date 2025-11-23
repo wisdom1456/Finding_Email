@@ -1,4 +1,5 @@
 """Audit logging for compliance and security."""
+
 from __future__ import annotations
 
 import hashlib

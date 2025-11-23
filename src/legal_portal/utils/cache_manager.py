@@ -3,6 +3,7 @@
 Provides caching functionality for expensive operations with file-based
 and optional Redis support.
 """
+
 from __future__ import annotations
 
 import hashlib

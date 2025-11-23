@@ -13,7 +13,7 @@ sys.path.insert(0, str(Path(__file__).parent / "src"))
 
 
 def test_preamble_removal():
-    """Test that generated letters start correctly without preamble"""
+    """Test that generated letters start correctly without preamble."""
     print("=== TESTING PREAMBLE REMOVAL ===")
     print("Testing that letters start directly with title and salutation...")
 

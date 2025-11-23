@@ -1,4 +1,5 @@
 """Centralized logging configuration with enhanced observability."""
+
 from __future__ import annotations
 
 import logging
@@ -213,7 +214,7 @@ def log_ai_processing(operation: str, model: str, tokens: int = None, **kwargs):
 def log_performance_metric(operation: str, duration: float, **kwargs):
     """Log performance metrics."""
     performance_logger.info(
-        f"Performance: {operation} took {duration*1000:.2f}ms",
+        f"Performance: {operation} took {duration * 1000:.2f}ms",
         operation=operation,
         duration_ms=duration * 1000,
         **kwargs,

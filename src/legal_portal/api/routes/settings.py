@@ -27,6 +27,7 @@ async def get_upload_limits():
     Returns
     -------
         Current max file size and compression threshold in MB
+
     """
     return UploadLimitsResponse(
         max_file_size_mb=settings.max_file_size_mb, compression_threshold_mb=settings.compression_threshold_mb
@@ -40,6 +41,7 @@ async def get_settings():
     Returns
     -------
         System settings including upload limits
+
     """
     return SettingsResponse(
         upload_limits=UploadLimitsResponse(

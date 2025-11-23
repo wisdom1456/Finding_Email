@@ -57,6 +57,7 @@ class CitationThreshold:
         Returns:
         -------
             CitationThreshold configured for case context
+
         """
         threshold = cls()
 
@@ -119,6 +120,7 @@ class CitationTrackingService:
         Args:
         ----
             corpus_service: Optional statute validation service for corpus-based validation
+
         """
         self.current_citation_map: Optional[CitationMap] = None
         self._openai_client = None
@@ -143,6 +145,7 @@ class CitationTrackingService:
         Returns:
         -------
             List of floats representing the embedding
+
         """
         # Use first 500 chars to avoid token limits
         text_key = text[:500]
@@ -171,6 +174,7 @@ class CitationTrackingService:
         Returns:
         -------
             Similarity score between 0 and 1
+
         """
         emb1 = self._get_embedding(text1)
         emb2 = self._get_embedding(text2)
@@ -197,6 +201,7 @@ class CitationTrackingService:
         Returns:
         -------
             Normalized text
+
         """
         # Normalize dates
         text = re.sub(r"\b\d{1,2}/\d{1,2}/\d{4}\b", "[DATE]", text)
@@ -251,6 +256,7 @@ class CitationTrackingService:
         Returns:
         -------
             CitationMap with all detected citations and mappings
+
         """
         import datetime
 
@@ -380,7 +386,7 @@ class CitationTrackingService:
                 filename = getattr(doc_analysis, "filename", None)
             if not isinstance(filename, str) or not filename:
                 filename = f"Document_{idx}"
-            logger.debug(f"Extracting source document {idx+1}: {filename}")
+            logger.debug(f"Extracting source document {idx + 1}: {filename}")
 
             source_docs.append(
                 {
@@ -428,6 +434,7 @@ class CitationTrackingService:
         Returns:
         -------
             List of Citation objects mapping statements to sources
+
         """
         logger.info(
             f"Using adaptive threshold: {adaptive_threshold.effective_threshold:.2f} "
@@ -465,7 +472,7 @@ class CitationTrackingService:
         logger.info(
             f"Identified {factual_count} factual statements, "
             f"created {len(citations)} citations "
-            f"(coverage: {len(citations)/factual_count*100:.1f}%)"
+            f"(coverage: {len(citations) / factual_count * 100:.1f}%)"
             if factual_count > 0
             else "No factual statements found"
         )
@@ -835,10 +842,10 @@ This is essential for legal accuracy and attorney review. Every factual claim in
                 <li id="citation-{i}" style="margin-bottom: 10px;">
                     <strong>Statement:</strong> "{citation.statement}"<br>
                     <strong>Source:</strong> {citation.source_document}
-                    {f'<br><strong>Page:</strong> {citation.page_number}' if citation.page_number else ''}
+                    {f"<br><strong>Page:</strong> {citation.page_number}" if citation.page_number else ""}
                     <br><strong>Confidence:</strong>
                     <span style="color: {confidence_color}; font-weight: bold;">{citation.confidence.title()}</span>
-                    {f'<br><strong>Context:</strong> {citation.context}' if citation.context else ''}
+                    {f"<br><strong>Context:</strong> {citation.context}" if citation.context else ""}
                 </li>
                 """
 
@@ -854,9 +861,9 @@ This is essential for legal accuracy and attorney review. Every factual claim in
         for doc in citation_map.source_documents:
             appendix_html += f"""
             <li style="margin-bottom: 8px;">
-                <strong>{doc['filename']}</strong>
-                <span style="color: #6c757d;">({doc.get('document_type', 'document')})</span>
-                {f'<br><em>{doc.get("relevance_to_case", "")}</em>' if doc.get("relevance_to_case") else ''}
+                <strong>{doc["filename"]}</strong>
+                <span style="color: #6c757d;">({doc.get("document_type", "document")})</span>
+                {f"<br><em>{doc.get('relevance_to_case', '')}</em>" if doc.get("relevance_to_case") else ""}
             </li>
             """
 
@@ -877,10 +884,10 @@ This is essential for legal accuracy and attorney review. Every factual claim in
                     <strong>Source Documents:</strong> {len(citation_map.source_documents)}
                 </div>
                 <div>
-                    <strong>Coverage:</strong> {citation_map.metadata.get('citation_coverage', 0):.1%}
+                    <strong>Coverage:</strong> {citation_map.metadata.get("citation_coverage", 0):.1%}
                 </div>
                 <div>
-                    <strong>Generated:</strong> {citation_map.generation_timestamp.split('T')[0]}
+                    <strong>Generated:</strong> {citation_map.generation_timestamp.split("T")[0]}
                 </div>
             </div>
         </div>

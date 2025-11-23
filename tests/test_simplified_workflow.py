@@ -13,13 +13,13 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-# Add project root to path
-sys.path.insert(0, str(Path(__file__).parent / "src"))
-
 from dotenv import load_dotenv
 from legal_portal.core.document_processor import DocumentProcessor
 from legal_portal.services.json_processing_service import JsonProcessingService
 from legal_portal.utils.openai_client import OpenAIClient
+
+# Add project root to path
+sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 
 class MockFile:

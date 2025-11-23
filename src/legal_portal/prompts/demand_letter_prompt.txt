@@ -27,65 +27,77 @@ REQUIRED LETTER STRUCTURE:
 
 1. **Header Section** (if property address or certified mail info available in party context):
    - Date: [Current date in format: Month DD, YYYY]
+   - Blank line
    - "Sent via certified mail:" [if tracking info available]
    - Recipient name and address (from party context)
    - Tracking number [if available]
    - Blank line
-   - "RE: Demand Letter Regarding [Brief Description]"
-   - "Property Address: [address]" [if property address available in context]
+   - "**RE: Demand Letter Regarding [Brief Description]**"
+   - "**Property Address:** [address]" [if property address available in context]
+   - Blank line
 
 2. **Salutation**: 
    - `Dear Sir or Madam:` or `Dear {target_party_name}:`
+   - Blank line
 
 3. **Introduction Paragraph**:
    - State representation: "Our law firm has been retained by {client_name} (hereinafter "Client" or appropriate term)"
    - Use "hereinafter" to define key parties, contracts, and terms (e.g., "the Contract", "the Property", "Contractor")
    - State purpose and direct future communications to attorney
 
-4. **Background** (not "FACTUAL BACKGROUND"):
-   - Write 3-5 narrative paragraphs with specific dates using "on or about [date]" format
+4. **Background**:
+   - Use heading: "## Background" or no heading (flow naturally from introduction)
+   - Write 3-5 well-structured narrative paragraphs
+   - Use specific dates in "on or about [date]" format
    - Use formal language: "pursuant to", "it is undisputed", "as you are aware"
    - Format monetary amounts as: Written form first, then numeric in parentheses
      Example: "One Hundred Thousand U.S. Dollars and Zero Cents ($100,000.00)"
    - Include timeline of events affecting this party
    - Cite specific documents conversationally (no `[Source]` tags)
    - Detail the facts chronologically with concrete details
+   - Each paragraph should be substantive (4-6 sentences minimum)
 
-5. **Legal Analysis** (not "BASIS FOR DEMAND"):
+5. **Legal Analysis**:
+   - Use heading: "## Legal Analysis" or no heading (flow naturally)
+   - Write 3-5 well-structured paragraphs analyzing the legal issues
    - Start with contract interpretation if applicable: "It is undisputed that the parties entered into the Contract on or about [date]"
    - **REQUIRED: Include case citations** when available in analysis context
      Format: "Murry v. Zynyx Mktg. Communs., Inc., 774 So. 2d 714, 715 (Fla. 3d DCA 2000)"
    - **REQUIRED: Quote contract provisions verbatim** when available in analysis context
-     Example: "Article 5 titled 'Agreement to Build,' provides Contractor's responsibilities as follows:\n\n[Verbatim quote]"
-   - Include Florida Statute citations in proper format: "Florida Statute § 713.02 (4)"
+     Example: "Article 5 titled 'Agreement to Build,' provides Contractor's responsibilities as follows:\n\n> [Verbatim quote]"
+     Use blockquote (>) for contract quotes
+   - Include Florida Statute citations in proper format: "Florida Statute § 713.02(4)"
    - Explain legal elements (e.g., breach of contract: valid contract, material breach, damages)
    - Apply facts to legal standards
    - Use formal legal language: "axiomatic", "undisputed", "pursuant to"
+   - Each paragraph should be substantive (4-6 sentences minimum)
 
-6. **Demand** (not "SPECIFIC DEMANDS"):
-   - Start with: "As such, let this correspondence serve as a formal demand that"
+6. **Demand**:
+   - Use heading: "## Demand" or no heading (start with formal demand language)
+   - Opening: "As such, let this correspondence serve as a formal demand that:"
+   - Blank line
    - Numbered list with detailed, specific demands:
-     1. [First demand with specifics]
-     2. [Second demand with specifics]
-     3. [Additional demands]
-   - Include monetary demand in written and numeric form
-   - Include consequences: "Should we fail to receive any response within {demand_deadline} from receipt of this letter, we will assume you intend to reject this demand and will proceed to take any necessary legal action afforded to our Client."
-   - Mention specific remedies: filing lawsuit, liens, attorney's fees, specific performance
+     1. [First demand with complete specifics]
+     2. [Second demand with complete specifics]  
+     3. [Additional demands as needed]
+   - Blank line after list
+   - Include monetary paragraph: "We demand the payment of [Written Amount] U.S. Dollars and [Cents] Cents ($X,XXX.XX) as compensation for [reason], to be received within {demand_deadline} from receipt of this letter."
+   - Blank line
+   - Consequences paragraph: "Should we fail to receive any response within this timeframe, we will assume you intend to reject this demand and will proceed to take any necessary legal action afforded to our Client, including [list specific remedies: filing a lawsuit for breach of contract, seeking specific performance, pursuing attorney's fees, etc.]."
 
 7. **Closing Paragraph**:
-   - "Thank you for your prompt attention to this matter and we look forward to your compliance with the above."
-   - Contact instructions: "Please do not hesitate to reach out to our office at {contact_phone} or via e-mail at {contact_email}"
+   - Blank line
+   - "Thank you for your prompt attention to this matter, and we look forward to your compliance with the above. Please do not hesitate to reach out to our office at {contact_phone} or via e-mail at {contact_email}."
+   - Blank line
 
 8. **Signature Block**:
-   ```
-   Sincerely,
-   
-   /s/ {attorney_name}
-   {attorney_name}, Esq.
-   Division Attorney
-   {firm_name}
-   Attorney for {client_name}
-   ```
+   - "Sincerely,"
+   - Blank line
+   - "/s/ {attorney_name}"
+   - "{attorney_name}, Esq."
+   - "Division Attorney"
+   - "{firm_name}"
+   - "Attorney for {client_name}"
 
 STYLE REQUIREMENTS:
 - Professional, measured tone with formal legal language
@@ -93,7 +105,19 @@ STYLE REQUIREMENTS:
 - Use phrases: "pursuant to", "on or about", "it is undisputed", "axiomatic", "as you are aware"
 - Format amounts: "One Hundred Thousand U.S. Dollars and Zero Cents ($100,000.00)"
 - No hedging in demands - be direct and specific
-- No Markdown code fences in output
+- **No Markdown code fences in output** (no ``` blocks)
 - No placeholders like "[insert]" - use actual data from context
+- Use proper paragraph spacing (blank lines between sections)
+- Use blockquotes (>) for contract provisions
+- Use ## for section headings if including them (optional)
 - **CRITICAL**: Include case citations and contract quotations when available in analysis context
-- Length: 800-1500 words (longer than before to accommodate legal analysis depth)
+- Length: 800-1500 words (comprehensive legal analysis)
+- Ensure proper letter format with clear separation between sections
+
+OUTPUT FORMAT:
+- Output should be clean markdown without code fences
+- Use blank lines for spacing between sections
+- Use > for blockquotes (contract language)
+- Use numbered lists (1., 2., 3.) for demands
+- Use ** for bold (RE: line, amounts, emphasis)
+- Ensure professional letter flow from header to signature

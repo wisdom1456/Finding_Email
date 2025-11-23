@@ -1,11 +1,12 @@
-"""Document management endpoints.
-"""
+"""Document management endpoints."""
 
 from datetime import datetime
 from typing import List
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi.responses import JSONResponse
 from legal_portal.api.dependencies import get_current_user, get_supabase_client, get_user_supabase_client
+from legal_portal.core.document_processor import DocumentProcessor, ValidationError
 from pydantic import BaseModel
 
 router = APIRouter()
@@ -54,6 +55,7 @@ async def upload_document(
         400: Validation error (size, type, content, security)
         404: Case not found
         500: Server error
+
     """
     try:
         print("\n🔍 DEBUG upload_document:")
@@ -129,7 +131,7 @@ async def upload_document(
         print(f"  - Exception message: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error uploading document: {str(e)}"
-        )
+        ) from e
 
 
 @router.get("/case/{case_id}", response_model=List[DocumentResponse])
@@ -147,6 +149,7 @@ async def list_documents_for_case(
     Returns:
     -------
         List of documents
+
     """
     try:
         # Verify case ownership
@@ -172,7 +175,7 @@ async def list_documents_for_case(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error fetching documents: {str(e)}"
-        )
+        ) from e
 
 
 @router.get("/{document_id}", response_model=DocumentResponse)
@@ -190,6 +193,7 @@ async def get_document(
     Returns:
     -------
         Document metadata
+
     """
     try:
         # Get document with case join to verify ownership
@@ -215,7 +219,7 @@ async def get_document(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error fetching document: {str(e)}"
-        )
+        ) from e
 
 
 @router.delete("/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -233,11 +237,12 @@ async def delete_document(
         user: Current authenticated user
         user_supabase: User-scoped Supabase client
         service_supabase: Service-role Supabase client
+
     """
     try:
         print("\n🔍 DEBUG delete_document:")
         print(f"  - Document ID: {document_id}")
-        print(f"  - User ID: {user["id"]}")
+        print(f"  - User ID: {user['id']}")
 
         # Get document with ownership verification
         response = (
@@ -274,4 +279,4 @@ async def delete_document(
         print(f"  - Exception: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error deleting document: {str(e)}"
-        )
+        ) from e

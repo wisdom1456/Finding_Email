@@ -79,6 +79,7 @@ class ClioClient:
         Args:
         ----
             access_token: OAuth access token
+
         """
         self.access_token = access_token
         self.base_url = "https://app.clio.com/api/v4"
@@ -123,6 +124,7 @@ class ClioClient:
             ClioAuthError: Authentication/authorization error
             ClioRateLimitError: Rate limit exceeded
             ClioAPIError: Other API errors
+
         """
         self._wait_for_rate_limit()
 
@@ -174,6 +176,7 @@ class ClioClient:
         Returns:
         -------
             ClioMatter object with full details
+
         """
         params = {
             "fields": "id,display_number,description,client,practice_area,status,open_date,close_date",
@@ -214,6 +217,7 @@ class ClioClient:
         Returns:
         -------
             List of ClioMatter objects
+
         """
         params = {
             "query": query,
@@ -263,6 +267,7 @@ class ClioClient:
         Returns:
         -------
             List of ClioCommunication objects
+
         """
         params = {
             "matter_id": matter_id,
@@ -364,6 +369,7 @@ class ClioClient:
         Returns:
         -------
             List of note dictionaries
+
         """
         params = {
             "matter_id": matter_id,
@@ -402,6 +408,7 @@ class ClioClient:
         Returns:
         -------
             List of document metadata dictionaries with latest_document_version
+
         """
         params = {
             "matter_id": matter_id,
@@ -441,6 +448,7 @@ class ClioClient:
         Returns:
         -------
             datetime object or None
+
         """
         if not date_str:
             return None

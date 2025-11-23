@@ -3,12 +3,14 @@
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from legal_portal.api.dependencies import get_current_user, get_supabase_client, get_user_supabase_client
 from legal_portal.api.services.clio_client import ClioAPIError, ClioAuthError, ClioClient
 from legal_portal.api.utils.document_processor import DocumentProcessor as DocProc
 from legal_portal.core.document_processor import DocumentProcessor, ValidationError
+from legal_portal.services.progress_manager import ProgressManager, get_progress_manager
 from pydantic import BaseModel, Field
+from starlette.concurrency import run_in_threadpool
 
 router = APIRouter()
 
@@ -63,6 +65,7 @@ class CreateFromClioResponse(BaseModel):
     error: Optional[str] = None
     case_created: bool = True
     import_failed: bool = False
+    import_id: Optional[str] = None  # ID for SSE progress tracking
 
 
 @router.post("", response_model=CaseResponse, status_code=status.HTTP_201_CREATED)
@@ -82,10 +85,11 @@ async def create_case(
     Returns:
     -------
         Created case
+
     """
     try:
         print("\n🔍 DEBUG create_case endpoint:")
-        print(f"  - User ID from token: {user["id"]}")
+        print(f"  - User ID from token: {user['id']}")
         print(f"  - User email: {user.get('email', 'N/A')}")
         print(f"  - Case data: client_name={case_data.client_name}")
 
@@ -98,7 +102,7 @@ async def create_case(
         )
 
         # Verify profile exists
-        print(f"  - Checking if profile exists for user {user["id"]}...")
+        print(f"  - Checking if profile exists for user {user['id']}...")
         try:
             profile_check = supabase.table("profiles").select("id").eq("id", user["id"]).execute()
             print(f"  - Profile check result: {profile_check.data}")
@@ -166,6 +170,7 @@ async def list_cases(
     Returns:
     -------
         List of cases
+
     """
     try:
         response = (
@@ -201,6 +206,7 @@ async def get_case(
     Returns:
     -------
         Case details
+
     """
     try:
         response = supabase.table("cases").select("*").eq("id", case_id).eq("user_id", user["id"]).execute()
@@ -236,6 +242,7 @@ async def update_case(
     Returns:
     -------
         Updated case
+
     """
     try:
         # Verify ownership
@@ -275,6 +282,7 @@ async def delete_case(
         user: Current authenticated user
         user_supabase: User-scoped Supabase client
         service_supabase: Service-role Supabase client
+
     """
     try:
         print("\n🔍 DEBUG delete_case:")
@@ -376,7 +384,7 @@ async def get_clio_client_for_user(
         return ClioClient(access_token)
 
     except ClioAuthError as e:
-        raise HTTPException(status_code=401, detail=f"Clio authentication failed: {str(e)}")
+        raise HTTPException(status_code=401, detail=f"Clio authentication failed: {str(e)}") from e
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to initialize Clio client: {str(e)}") from e
 
@@ -387,7 +395,8 @@ async def import_clio_documents_helper(
     user: dict,
     clio_client: ClioClient,
     supabase,
-    progress_callback=None,
+    progress_manager=None,
+    import_id: str = None,
 ) -> Dict[str, Any]:
     """Import documents from Clio matter.
 
@@ -395,29 +404,48 @@ async def import_clio_documents_helper(
 
     Args:
     ----
-        progress_callback: Optional async function to call with progress updates
-                          Should accept (step: str, current: int, total: int, item_name: str)
+        progress_manager: Optional ProgressManager instance for SSE updates
+        import_id: Unique ID for this import operation (for SSE tracking)
+
     """
     try:
         # Import communications
         print(f"\n🔍 Fetching communications for matter {matter_id}...")
-        if progress_callback:
-            await progress_callback("fetch", 0, 3, "Fetching communications from Clio...")
-        communications = clio_client.get_communications(matter_id, limit=100)
+        if progress_manager and import_id:
+            await progress_manager.publish_progress(
+                channel_id=import_id,
+                message="Fetching communications from Clio...",
+                phase="fetch_communications",
+                sub_step="fetch",
+                percent=5,
+            )
+        communications = await run_in_threadpool(clio_client.get_communications, matter_id, limit=100)
         print(f"  - Found {len(communications)} communications")
 
         # Import notes
         print(f"🔍 Fetching notes for matter {matter_id}...")
-        if progress_callback:
-            await progress_callback("fetch", 1, 3, "Fetching notes from Clio...")
-        notes = clio_client.get_notes(matter_id)
+        if progress_manager and import_id:
+            await progress_manager.publish_progress(
+                channel_id=import_id,
+                message="Fetching notes from Clio...",
+                phase="fetch_notes",
+                sub_step="fetch",
+                percent=10,
+            )
+        notes = await run_in_threadpool(clio_client.get_notes, matter_id)
         print(f"  - Found {len(notes)} notes")
 
         # Import documents (metadata only)
         print(f"🔍 Fetching documents for matter {matter_id}...")
-        if progress_callback:
-            await progress_callback("fetch", 2, 3, "Fetching documents from Clio...")
-        documents = clio_client.get_documents(matter_id)
+        if progress_manager and import_id:
+            await progress_manager.publish_progress(
+                channel_id=import_id,
+                message="Fetching documents from Clio...",
+                phase="fetch_documents",
+                sub_step="fetch",
+                percent=15,
+            )
+        documents = await run_in_threadpool(clio_client.get_documents, matter_id)
         print(f"  - Found {len(documents)} documents")
 
         comm_success = 0
@@ -434,9 +462,17 @@ async def import_clio_documents_helper(
         total_comms = len(communications)
         for idx, comm in enumerate(communications):
             try:
-                if progress_callback:
+                if progress_manager and import_id:
                     subject = comm.subject or "Untitled Communication"
-                    await progress_callback("communications", idx + 1, total_comms, subject)
+                    percent = 20 + int((idx / max(total_comms, 1)) * 5)
+                    await progress_manager.publish_progress(
+                        channel_id=import_id,
+                        message=f"Processing communication {idx + 1} of {total_comms}",
+                        phase="import_communications",
+                        percent=percent,
+                        sub_step=subject[:50],
+                        current_doc={"index": idx + 1, "total": total_comms, "name": subject},
+                    )
                 # Create a text document for each communication
                 content = f"Subject: {comm.subject}\n"
                 content += f"Date: {comm.date}\n"
@@ -473,9 +509,17 @@ async def import_clio_documents_helper(
         total_notes = len(notes)
         for idx, note in enumerate(notes):
             try:
-                if progress_callback:
+                if progress_manager and import_id:
                     note_subject = note.get("subject", "Untitled Note")
-                    await progress_callback("notes", idx + 1, total_notes, note_subject)
+                    percent = 25 + int((idx / max(total_notes, 1)) * 5)
+                    await progress_manager.publish_progress(
+                        channel_id=import_id,
+                        message=f"Processing note {idx + 1} of {total_notes}",
+                        phase="import_notes",
+                        percent=percent,
+                        sub_step=note_subject[:50],
+                        current_doc={"index": idx + 1, "total": total_notes, "name": note_subject},
+                    )
                 note_subject = note.get("subject", "No Subject")
                 note_detail = note.get("detail", "")
                 note_date = note.get("date", "")
@@ -510,9 +554,17 @@ async def import_clio_documents_helper(
         total_docs = len(documents)
         for idx, doc in enumerate(documents):
             try:
-                if progress_callback:
+                if progress_manager and import_id:
                     doc_name = doc.get("name", "Untitled Document")
-                    await progress_callback("documents", idx + 1, total_docs, doc_name)
+                    percent = 30 + int((idx / max(total_docs, 1)) * 60)
+                    await progress_manager.publish_progress(
+                        channel_id=import_id,
+                        message=f"Downloading and processing document {idx + 1} of {total_docs}",
+                        phase="import_documents",
+                        percent=percent,
+                        sub_step=doc_name[:50],
+                        current_doc={"index": idx + 1, "total": total_docs, "name": doc_name},
+                    )
                 doc_id = doc["id"]
                 doc_name = doc.get("name", "Untitled Document")
 
@@ -538,7 +590,10 @@ async def import_clio_documents_helper(
                 access_token = integration.data[0]["access_token"]
 
                 # Download file from Clio (just download, no processing yet)
-                file_content, content_type = DocProc.download_file(doc_url, access_token)
+                # Run blocking download in threadpool
+                file_content, content_type = await run_in_threadpool(
+                    DocProc.download_file, doc_url, access_token
+                )
                 original_size = len(file_content)
                 print(f"    Downloaded: {original_size / (1024 * 1024):.2f}MB")
 
@@ -589,7 +644,7 @@ async def import_clio_documents_helper(
 
                 except ValidationError as e:
                     print(f"    ❌ Validation failed: {e.error_code} - {str(e)}")
-                    raise Exception(f"Validation failed: {str(e)}")
+                    raise Exception(f"Validation failed: {str(e)}") from e
 
             except Exception as e:
                 error_msg = f"Document {doc.get('id', 'unknown')} ({doc.get('name', 'unknown')}): {str(e)}"
@@ -712,6 +767,7 @@ def analyze_intake_priority(doc: Dict[str, Any]) -> int:
     Returns:
     -------
         Priority score (higher = better)
+
     """
     filename = doc.get("file_name", "").lower()
     file_size = doc.get("file_size", 0)
@@ -821,12 +877,95 @@ def analyze_intake_documents(case_id: str, supabase) -> Dict[str, Any]:
         return {"error": str(e), "message": "Failed to analyze intake documents"}
 
 
+async def process_clio_import_background(
+    matter_id: int,
+    case_id: str,
+    user: dict,
+    clio_client: ClioClient,
+    supabase,
+    progress_manager: ProgressManager,
+    import_id: str,
+    case_clio_data: dict,
+):
+    """Background task to handle Clio import process."""
+    try:
+        # 3. Import documents
+        await progress_manager.publish_progress(
+            channel_id=import_id,
+            message="Starting document import from Clio...",
+            phase="import_start",
+            percent=30,
+            sub_step="initialization",
+        )
+
+        print("  - Starting document import (background)...")
+        import_result = await import_clio_documents_helper(
+            matter_id, case_id, user, clio_client, supabase, progress_manager, import_id
+        )
+        print(f"  - Import completed: {import_result.get('total_imported', 0)} items")
+
+        # Update case with import counts
+        # Use run_in_threadpool for supabase call just in case
+        await run_in_threadpool(
+            lambda: supabase.table("cases")
+            .update(
+                {
+                    "clio_matter_data": {
+                        **case_clio_data,
+                        "communications_count": import_result.get("communications_count", 0),
+                        "notes_count": import_result.get("notes_count", 0),
+                        "documents_count": import_result.get("documents_count", 0),
+                    }
+                }
+            )
+            .eq("id", case_id)
+            .execute()
+        )
+
+        # 4. Analyze intake candidates
+        await progress_manager.publish_progress(
+            channel_id=import_id,
+            message="Analyzing intake documents...",
+            phase="analyze_intake",
+            percent=90,
+            sub_step="identification",
+        )
+        print("  - Analyzing intake documents...")
+        # analyze_intake_documents likely sync? Let's wrap it
+        intake_analysis = await run_in_threadpool(analyze_intake_documents, case_id, supabase)
+        print(f"  - Intake analysis: {intake_analysis.get('message', 'N/A')}")
+
+        # 5. Publish completion
+        await progress_manager.publish_progress(
+            channel_id=import_id,
+            message="Case creation completed successfully!",
+            phase="complete",
+            percent=100,
+            sub_step="done",
+            status="completed",
+            data={"import_status": import_result, "intake_analysis": intake_analysis, "success": True},
+        )
+
+    except Exception as e:
+        print(f"❌ Error in background import: {e}")
+        await progress_manager.publish_progress(
+            channel_id=import_id,
+            message=f"Import failed: {str(e)}",
+            phase="error",
+            percent=0,
+            status="error",
+            error=str(e),
+        )
+
+
 @router.post("/create-from-clio", response_model=CreateFromClioResponse)
 async def create_case_from_clio(
     request: CreateFromClioRequest,
+    background_tasks: BackgroundTasks,
     user=Depends(get_current_user),  # noqa: B008
     supabase=Depends(get_supabase_client),  # noqa: B008
     clio_client: ClioClient = Depends(get_clio_client_for_user),
+    progress_manager: ProgressManager = Depends(get_progress_manager),
 ):
     """Create a new case from Clio matter with optional auto-import.
 
@@ -840,6 +979,7 @@ async def create_case_from_clio(
     Args:
     ----
         request: Matter ID and auto_import flag
+        background_tasks: FastAPI background tasks handler
         user: Current authenticated user
         supabase: Supabase client
         clio_client: Authenticated Clio client
@@ -847,22 +987,63 @@ async def create_case_from_clio(
     Returns:
     -------
         Case details with import status and intake analysis
+
     """
+    import uuid
+
     case_id = None
+    import_id = str(uuid.uuid4())  # Generate unique ID for progress tracking
 
     try:
+        # Initialize progress channel immediately
+        await progress_manager.publish_progress(
+            channel_id=import_id,
+            message="Starting case creation from Clio matter...",
+            phase="initialization",
+            percent=5,
+            sub_step="start",
+        )
+
         print("\n🔍 DEBUG create_case_from_clio:")
         print(f"  - User ID: {user['id']}")
         print(f"  - Matter ID: {request.matter_id}")
         print(f"  - Auto Import: {request.auto_import}")
+        print(f"  - Import ID: {import_id}")
 
         # 1. Fetch matter details
+        await progress_manager.publish_progress(
+            channel_id=import_id,
+            message="Fetching matter details from Clio...",
+            phase="fetch_matter",
+            percent=10,
+            sub_step="details",
+        )
         print("  - Fetching matter details from Clio...")
-        matter = clio_client.get_matter(request.matter_id)
+        # Run blocking call in threadpool
+        matter = await run_in_threadpool(clio_client.get_matter, request.matter_id)
         print(f"  - Matter fetched: {matter.display_number} - {matter.client_name}")
 
         # 2. Create case
+        await progress_manager.publish_progress(
+            channel_id=import_id,
+            message=f"Creating case for {matter.client_name}...",
+            phase="create_case",
+            percent=20,
+            sub_step="database",
+        )
         print("  - Creating case...")
+
+        clio_data = {
+            "matter_id": request.matter_id,
+            "display_number": matter.display_number,
+            "client_name": matter.client_name,
+            "description": matter.description,
+            "practice_area": matter.practice_area,
+            "status": matter.status,
+            "imported_at": datetime.now(timezone.utc).isoformat(),
+            "import_id": import_id,  # Store import_id for reference
+        }
+
         case_data = {
             "user_id": user["id"],
             "client_name": matter.client_name,
@@ -871,69 +1052,66 @@ async def create_case_from_clio(
             "clio_matter_id": str(request.matter_id),
             "created_via_clio": True,  # Mark as created via Clio
             "status": "pending",
-            "clio_matter_data": {
-                "matter_id": request.matter_id,
-                "display_number": matter.display_number,
-                "client_name": matter.client_name,
-                "description": matter.description,
-                "practice_area": matter.practice_area,
-                "status": matter.status,
-                "imported_at": datetime.now(timezone.utc).isoformat(),
-            },
+            "clio_matter_data": clio_data,
         }
 
-        case_result = supabase.table("cases").insert(case_data).execute()
+        # Run DB insert in threadpool
+        case_result = await run_in_threadpool(lambda: supabase.table("cases").insert(case_data).execute())
         case_id = case_result.data[0]["id"]
         print(f"  - ✅ Case created: {case_id}")
 
-        # 3. Import documents if auto_import
-        import_result = None
+        # 3. Trigger background import if auto_import
         if request.auto_import:
-            print("  - Starting document import...")
-            import_result = await import_clio_documents_helper(
-                request.matter_id, case_id, user, clio_client, supabase
+            print("  - Scheduling background import...")
+            background_tasks.add_task(
+                process_clio_import_background,
+                matter_id=request.matter_id,
+                case_id=case_id,
+                user=user,
+                clio_client=clio_client,
+                supabase=supabase,
+                progress_manager=progress_manager,
+                import_id=import_id,
+                case_clio_data=clio_data,
             )
-            print(f"  - Import completed: {import_result.get('total_imported', 0)} items")
+        else:
+            # If no auto import, verify intake manually or just finish
+            # For consistency, we should probably just mark as complete
+            await progress_manager.publish_progress(
+                channel_id=import_id,
+                message="Case created successfully (no import requested)!",
+                phase="complete",
+                percent=100,
+                sub_step="done",
+                status="completed",
+                data={"success": True},
+            )
 
-            # Update case with import counts
-            supabase.table("cases").update(
-                {
-                    "clio_matter_data": {
-                        **case_data["clio_matter_data"],
-                        "communications_count": import_result.get("communications_count", 0),
-                        "notes_count": import_result.get("notes_count", 0),
-                        "documents_count": import_result.get("documents_count", 0),
-                    }
-                }
-            ).eq("id", case_id).execute()
-
-        # 4. Analyze intake candidates
-        print("  - Analyzing intake documents...")
-        intake_analysis = analyze_intake_documents(case_id, supabase)
-        print(f"  - Intake analysis: {intake_analysis.get('message', 'N/A')}")
-
-        # 5. Return complete status
+        # 5. Return immediate response
+        # Note: import_status and intake_analysis will be None initially
+        # The frontend will receive them via SSE 'complete' event
         return CreateFromClioResponse(
             success=True,
             case_id=case_id,
             case=case_result.data[0],
-            import_status=import_result,
-            intake_analysis=intake_analysis,
+            import_status=None,
+            intake_analysis=None,
             case_created=True,
             import_failed=False,
+            import_id=import_id,  # Return import_id for SSE tracking
         )
 
     except ClioAuthError as e:
         # Case not created yet
         error_msg = f"Clio authentication error: {str(e)}"
         print(f"  - ❌ {error_msg}")
-        raise HTTPException(status_code=401, detail=error_msg)
+        raise HTTPException(status_code=401, detail=error_msg) from e
 
     except ClioAPIError as e:
         # Case not created yet
         error_msg = f"Clio API error: {str(e)}"
         print(f"  - ❌ {error_msg}")
-        raise HTTPException(status_code=500, detail=error_msg)
+        raise HTTPException(status_code=500, detail=error_msg) from e
 
     except Exception as e:
         error_msg = str(e)
@@ -983,6 +1161,7 @@ async def set_intake_form(
     Returns:
     -------
         Success message
+
     """
     try:
         document_id = request.get("document_id")
@@ -1080,6 +1259,7 @@ async def change_clio_matter(
     Returns:
     -------
         Updated case with new import status
+
     """
     try:
         print("\n🔍 DEBUG change_clio_matter:")
@@ -1194,9 +1374,9 @@ async def change_clio_matter(
     except HTTPException:
         raise
     except ClioAuthError as e:
-        raise HTTPException(status_code=401, detail=f"Clio authentication error: {str(e)}")
+        raise HTTPException(status_code=401, detail=f"Clio authentication error: {str(e)}") from e
     except ClioAPIError as e:
-        raise HTTPException(status_code=500, detail=f"Clio API error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Clio API error: {str(e)}") from e
     except Exception as e:
         print(f"  - ❌ Exception: {str(e)}")
         raise HTTPException(

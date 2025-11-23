@@ -3,6 +3,7 @@
 Handles OAuth flow, matter search, and data import from Clio.
 """
 
+import uuid
 from datetime import datetime, timezone
 from typing import List, Optional
 
@@ -17,6 +18,7 @@ from legal_portal.api.services.clio_client import (
 )
 from legal_portal.api.utils.document_processor import DocumentProcessor as DocProc
 from legal_portal.core.document_processor import DocumentProcessor, ValidationError
+from legal_portal.services.progress_manager import ProgressManager
 from pydantic import BaseModel
 
 from supabase import Client
@@ -68,6 +70,7 @@ class ClioImportResponse(BaseModel):
     communications_count: int
     notes_count: int
     documents_count: int
+    import_id: Optional[str] = None
 
 
 # ===== OAuth Flow =====
@@ -284,7 +287,7 @@ async def get_clio_client(
         return ClioClient(access_token)
 
     except ClioAuthError as e:
-        raise HTTPException(status_code=401, detail=f"Clio authentication failed: {str(e)}")
+        raise HTTPException(status_code=401, detail=f"Clio authentication failed: {str(e)}") from e
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to initialize Clio client: {str(e)}") from e
 
@@ -313,9 +316,9 @@ async def search_clio_matters(
         ]
 
     except ClioAuthError as e:
-        raise HTTPException(status_code=401, detail=f"Clio authentication error: {str(e)}")
+        raise HTTPException(status_code=401, detail=f"Clio authentication error: {str(e)}") from e
     except ClioAPIError as e:
-        raise HTTPException(status_code=500, detail=f"Clio API error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Clio API error: {str(e)}") from e
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Search failed: {str(e)}") from e
 
@@ -329,9 +332,18 @@ async def import_clio_data(
     supabase: Client = Depends(get_supabase_client),  # noqa: B008
 ):
     """Import communications, notes, and documents from a Clio matter."""
+    # Generate unique import ID for SSE streaming
+    import_id = f"clio_import_{str(uuid.uuid4())}"
+    progress_manager = ProgressManager.get_instance()
+    await progress_manager.create_channel(import_id)
+
     try:
         matter_id = import_request.matter_id
         case_id = import_request.case_id
+
+        await progress_manager.publish_progress(
+            channel_id=import_id, message="Starting Clio import...", phase="initialization", percent=0
+        )
 
         # Verify case belongs to user
         case_result = (
@@ -341,14 +353,36 @@ async def import_clio_data(
         if not case_result.data:
             raise HTTPException(status_code=404, detail="Case not found")
 
+        await progress_manager.publish_progress(
+            channel_id=import_id,
+            message="Fetching matter details from Clio...",
+            phase="fetch_matter",
+            percent=5,
+        )
+
         # Fetch full matter details first
         matter = clio_client.get_matter(matter_id)
+
+        await progress_manager.publish_progress(
+            channel_id=import_id,
+            message="Fetching communications...",
+            phase="fetch_communications",
+            percent=10,
+        )
 
         # Import communications
         communications = clio_client.get_communications(matter_id, limit=100)
 
+        await progress_manager.publish_progress(
+            channel_id=import_id, message="Fetching notes...", phase="fetch_notes", percent=15
+        )
+
         # Import notes
         notes = clio_client.get_notes(matter_id)
+
+        await progress_manager.publish_progress(
+            channel_id=import_id, message="Fetching document list...", phase="fetch_documents", percent=20
+        )
 
         # Import documents (metadata only)
         documents = clio_client.get_documents(matter_id)
@@ -358,8 +392,18 @@ async def import_clio_data(
         total_original_size = 0
         total_compressed_size = 0
 
+        total_items = len(communications) + len(notes) + len(documents)
+        items_processed = 0
+
+        await progress_manager.publish_progress(
+            channel_id=import_id,
+            message=f"Importing {len(communications)} communications...",
+            phase="import_communications",
+            percent=25,
+        )
+
         # Save communications as document entries
-        for comm in communications:
+        for idx, comm in enumerate(communications, 1):
             try:
                 # Create a text document for each communication
                 content = f"Subject: {comm.subject}\n"
@@ -389,11 +433,30 @@ async def import_clio_data(
                     },
                 }
                 supabase.table("documents").insert(doc_data).execute()
+                items_processed += 1
+
+                if idx % 5 == 0:  # Update every 5 items
+                    progress_pct = 25 + int((items_processed / total_items) * 25)
+                    await progress_manager.publish_progress(
+                        channel_id=import_id,
+                        message=f"Imported communication {idx}/{len(communications)}",
+                        phase="import_communications",
+                        percent=progress_pct,
+                        current_doc={
+                            "name": comm.subject[:50] if comm.subject else "Untitled",
+                            "index": idx,
+                            "total": len(communications),
+                        },
+                    )
             except Exception as e:
                 print(f"Warning: Failed to save communication {comm.id}: {e}")
 
+        await progress_manager.publish_progress(
+            channel_id=import_id, message=f"Importing {len(notes)} notes...", phase="import_notes", percent=30
+        )
+
         # Save notes as document entries
-        for note in notes:
+        for idx, note in enumerate(notes, 1):
             try:
                 note_subject = note.get("subject", "No Subject")
                 note_detail = note.get("detail", "")
@@ -420,17 +483,45 @@ async def import_clio_data(
                     },
                 }
                 supabase.table("documents").insert(doc_data).execute()
+                items_processed += 1
+
+                if idx % 5 == 0:  # Update every 5 items
+                    progress_pct = 30 + int((items_processed / total_items) * 20)
+                    await progress_manager.publish_progress(
+                        channel_id=import_id,
+                        message=f"Imported note {idx}/{len(notes)}",
+                        phase="import_notes",
+                        percent=progress_pct,
+                        current_doc={"name": note_subject[:50], "index": idx, "total": len(notes)},
+                    )
             except Exception as e:
                 print(f"Warning: Failed to save note {note.get('id', 'unknown')}: {e}")
 
+        await progress_manager.publish_progress(
+            channel_id=import_id,
+            message=f"Downloading and processing {len(documents)} documents...",
+            phase="import_documents",
+            percent=50,
+        )
+
         # Download and process document files (these will appear in the documents list)
-        for doc in documents:
+        for idx, doc in enumerate(documents, 1):
             try:
                 doc_id = doc["id"]
                 doc_name = doc.get("name", "Untitled Document")
                 doc_url = doc.get("latest_document_version", {}).get("url")
 
                 print(f"Processing Clio document: {doc_name} (ID: {doc_id})")
+
+                progress_pct = 50 + int((idx / len(documents)) * 40)
+                await progress_manager.publish_progress(
+                    channel_id=import_id,
+                    message=f"Processing document {idx}/{len(documents)}: {doc_name[:50]}",
+                    phase="import_documents",
+                    percent=progress_pct,
+                    current_doc={"name": doc_name[:50], "index": idx, "total": len(documents)},
+                    sub_step="Downloading from Clio...",
+                )
 
                 # Skip if no download URL
                 if not doc_url:
@@ -471,6 +562,15 @@ async def import_clio_data(
                 file_content, content_type = DocProc.download_file(doc_url, access_token)
                 original_size = len(file_content)
                 print(f"  - Downloaded: {original_size / (1024 * 1024):.2f}MB")
+
+                await progress_manager.publish_progress(
+                    channel_id=import_id,
+                    message=f"Processing document {idx}/{len(documents)}: {doc_name[:50]}",
+                    phase="import_documents",
+                    percent=progress_pct,
+                    current_doc={"name": doc_name[:50], "index": idx, "total": len(documents)},
+                    sub_step="Validating and compressing...",
+                )
 
                 # Check if this is an intake form
                 is_intake = "intake" in doc_name.lower()
@@ -516,9 +616,11 @@ async def import_clio_data(
                     supabase.table("documents").insert(doc_record).execute()
                     print(f"  - ✅ Document saved successfully{' (INTAKE FORM)' if is_intake else ''}")
 
+                    items_processed += 1
+
                 except ValidationError as e:
                     print(f"  - ❌ Validation failed: {e.error_code} - {str(e)}")
-                    raise Exception(f"Validation failed: {str(e)}")
+                    raise Exception(f"Validation failed: {str(e)}") from e
 
             except Exception as e:
                 print(f"Warning: Failed to download/process document {doc.get('id', 'unknown')}: {e}")
@@ -584,19 +686,52 @@ async def import_clio_data(
             )
             print(f"  - Space saved: {total_saved / 1024 / 1024:.1f}MB ({avg_reduction:.1f}% reduction)")
 
+        await progress_manager.publish_progress(
+            channel_id=import_id,
+            message="Import completed successfully!",
+            phase="completed",
+            percent=100,
+            status="completed",
+        )
+
         return ClioImportResponse(
             success=True,
             message="Clio data imported successfully",
             communications_count=len(communications),
             notes_count=len(notes),
             documents_count=len(documents),
+            import_id=import_id,
         )
 
     except ClioAuthError as e:
-        raise HTTPException(status_code=401, detail=f"Clio authentication error: {str(e)}")
+        await progress_manager.publish_progress(
+            channel_id=import_id,
+            message=f"Authentication error: {str(e)}",
+            phase="error",
+            percent=0,
+            status="error",
+            error=str(e),
+        )
+        raise HTTPException(status_code=401, detail=f"Clio authentication error: {str(e)}") from e
     except ClioAPIError as e:
-        raise HTTPException(status_code=500, detail=f"Clio API error: {str(e)}")
+        await progress_manager.publish_progress(
+            channel_id=import_id,
+            message=f"API error: {str(e)}",
+            phase="error",
+            percent=0,
+            status="error",
+            error=str(e),
+        )
+        raise HTTPException(status_code=500, detail=f"Clio API error: {str(e)}") from e
     except Exception as e:
+        await progress_manager.publish_progress(
+            channel_id=import_id,
+            message=f"Import failed: {str(e)}",
+            phase="error",
+            percent=0,
+            status="error",
+            error=str(e),
+        )
         raise HTTPException(status_code=500, detail=f"Import failed: {str(e)}") from e
 
 

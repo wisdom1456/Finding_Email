@@ -1,5 +1,4 @@
-"""Health check endpoints.
-"""
+"""Health check endpoints."""
 
 import os
 
@@ -16,6 +15,7 @@ async def health_check():
     Returns
     -------
         Health status
+
     """
     return {"status": "healthy", "service": "Legal Document Analysis API", "version": "1.0.0"}
 
@@ -27,6 +27,7 @@ async def detailed_health_check(supabase=Depends(get_supabase_client)):
     Returns
     -------
         Detailed health status including service dependencies
+
     """
     checks = {"api": "healthy", "supabase": "unknown", "openai": "unknown"}
 

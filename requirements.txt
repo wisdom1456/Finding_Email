@@ -61,3 +61,6 @@ supabase>=2.0.0
 # Removed unnecessary dependencies:
 # - pyth (not used in current implementation)
 # - sseclient-py (async/SSE not needed)
+
+# SSE (Server-Sent Events) support
+sse-starlette==2.1.3

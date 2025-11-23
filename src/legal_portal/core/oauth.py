@@ -1,4 +1,5 @@
 """OAuth 2.0/OIDC integration for enterprise SSO."""
+
 from __future__ import annotations
 
 import logging

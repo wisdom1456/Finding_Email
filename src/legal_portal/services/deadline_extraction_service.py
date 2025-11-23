@@ -48,6 +48,7 @@ class DeadlineExtractionService:
         Returns:
         -------
             List of deadlines sorted by date
+
         """
         logger.info("Extracting deadlines from documents and Florida statutes")
         deadlines = []
@@ -213,7 +214,7 @@ class DeadlineExtractionService:
                 desc_lower = key_date.description.lower()
 
                 # Check if this date matches trigger event
-                for trigger_type, keywords in trigger_keywords.items():
+                for _trigger_type, keywords in trigger_keywords.items():
                     if any(kw in desc_lower for kw in keywords):
                         try:
                             return datetime.strptime(key_date.date, "%Y-%m-%d")

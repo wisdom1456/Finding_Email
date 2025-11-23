@@ -28,6 +28,7 @@ def _wait_for_file_ready(file_path: str, max_wait_seconds: float = 2.0) -> bool:
     Returns:
     -------
         True if file is ready, False if timeout
+
     """
     start_time = time.time()
     last_size = -1
@@ -82,6 +83,7 @@ def detect_pdf_corruption(file_path: str) -> tuple[bool, str]:
     Returns:
     -------
         Tuple of (is_valid, reason_message)
+
     """
     if not os.path.exists(file_path):
         return False, "File not found"

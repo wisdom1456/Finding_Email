@@ -5,6 +5,7 @@ import json
 import logging
 import os
 import shutil
+import time
 import traceback
 from datetime import datetime
 from email.message import EmailMessage
@@ -24,8 +25,10 @@ from legal_portal.services.case_chat_service import CaseChatService
 from legal_portal.services.demand_letter_service import DemandLetterService
 from legal_portal.services.json_processing_service import JsonProcessingService
 from legal_portal.services.main_processor import process_case_documents
+from legal_portal.services.progress_manager import ProgressManager
 from legal_portal.utils.openai_client import OpenAIClient
 from pydantic import BaseModel, Field
+from starlette.concurrency import run_in_threadpool
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -233,6 +236,7 @@ class LetterGenerationRequest(BaseModel):
     firm_name: Optional[str] = None
     contact_phone: Optional[str] = None
     contact_email: Optional[str] = None
+    client_name: Optional[str] = None
 
 
 class LetterGenerationResponse(BaseModel):
@@ -241,6 +245,191 @@ class LetterGenerationResponse(BaseModel):
     letter_html: str
     letter_type: LetterType
     target_party_name: Optional[str] = None
+
+
+def _download_and_extract_documents(
+    case_id: str, documents: List[Dict[str, Any]], supabase, temp_dir: str
+) -> tuple[Optional[str], List[str]]:
+    """Synchronous helper to download and extract documents."""
+    file_paths = []
+    intake_form_path = None
+
+    for doc in documents:
+        storage_path = doc["storage_path"]
+        # Sanitize filename to avoid directory traversal and invalid characters
+        safe_filename = doc["file_name"].replace("/", "_").replace("\\", "_").replace(":", "_")
+        temp_path = os.path.join(temp_dir, safe_filename)
+
+        # Skip video and audio files
+        file_type = doc.get("file_type", "").lower()
+        file_name_lower = doc["file_name"].lower()
+
+        video_audio_types = [
+            "video/",
+            "audio/",  # Any video or audio MIME type
+            "application/x-mpegurl",
+            "application/vnd.apple.mpegurl",  # Streaming
+        ]
+        video_audio_extensions = [
+            ".mov",
+            ".mp4",
+            ".avi",
+            ".mkv",
+            ".wmv",
+            ".flv",
+            ".webm",
+            ".m4v",  # Video
+            ".mp3",
+            ".wav",
+            ".aac",
+            ".flac",
+            ".m4a",
+            ".ogg",
+            ".wma",
+            ".aiff",  # Audio
+        ]
+
+        is_video_audio = any(file_type.startswith(vtype) for vtype in video_audio_types) or any(
+            file_name_lower.endswith(ext) for ext in video_audio_extensions
+        )
+
+        if is_video_audio:
+            print(f"  - ⏭️  Skipping video/audio file: {doc['file_name']}")
+            continue
+
+        # Check if document has extracted_text (Clio comms/notes or already processed)
+        if doc.get("extracted_text"):
+            print(f"  - Using extracted text for: {doc['file_name']}")
+            # Save extracted text to temporary file
+            with open(temp_path, "w", encoding="utf-8") as f:
+                f.write(doc["extracted_text"])
+        else:
+            # Download file from Supabase Storage
+            try:
+                file_data = supabase.storage.from_("documents").download(storage_path)
+                with open(temp_path, "wb") as f:
+                    f.write(file_data)
+            except Exception as e:
+                print(f"  - Warning: Failed to download {doc['file_name']}: {e}")
+                continue  # Skip this document if download fails
+
+        # Check if this is a zip file - extract it
+        if doc["file_name"].lower().endswith(".zip"):
+            import zipfile
+
+            print(f"  - 📦 Extracting zip file: {doc['file_name']}")
+
+            try:
+                # Create subdirectory for this zip's contents
+                zip_extract_dir = os.path.join(temp_dir, f"{doc['id']}_extracted")
+                os.makedirs(zip_extract_dir, exist_ok=True)
+
+                # Extract zip file
+                with zipfile.ZipFile(temp_path, "r") as zip_ref:
+                    zip_ref.extractall(zip_extract_dir)
+
+                # Force filesystem sync to prevent race conditions
+                # Increased delay to 500ms for more reliable extraction
+                time.sleep(0.5)
+                logger.debug(f"Filesystem sync delay (500ms) after extracting {doc['file_name']}")
+
+                # Add extracted files to processing list (filtering out video/audio)
+                extracted_count = 0
+                for root, _dirs, files in os.walk(zip_extract_dir):
+                    for extracted_file in files:
+                        # Skip hidden files and system files
+                        if extracted_file.startswith(".") or extracted_file.startswith("__MACOSX"):
+                            continue
+
+                        # Skip video/audio files
+                        if any(extracted_file.lower().endswith(ext) for ext in video_audio_extensions):
+                            print(f"    ⏭️  Skipping video/audio: {extracted_file}")
+                            continue
+
+                        extracted_path = os.path.join(root, extracted_file)
+
+                        # Verify file exists before adding to processing list
+                        if os.path.isfile(extracted_path):
+                            file_paths.append(extracted_path)
+                            extracted_count += 1
+                        else:
+                            logger.warning(
+                                f"Extracted file not found (filesystem sync issue?): {extracted_path}"
+                            )
+
+                print(f"  - ✅ Extracted {extracted_count} files from {doc['file_name']}")
+
+                # Remove the original zip file
+                os.remove(temp_path)
+                continue  # Skip adding the zip file itself to file_paths
+
+            except zipfile.BadZipFile:
+                print(f"  - ⚠️  Invalid zip file: {doc['file_name']}")
+            except Exception as e:
+                print(f"  - ⚠️  Failed to extract zip file {doc['file_name']}: {e}")
+
+        # Check if this is an intake form
+        # Prioritize: 1) metadata flag, 2) PDF/DOCX files with "intake" in name, 3) other files with "intake"
+        is_intake = doc.get("metadata", {}).get("is_intake_form", False)
+        is_document_file = doc.get("file_type", "").lower() in [
+            "application/pdf",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        ]
+
+        if not is_intake and "intake" in doc["file_name"].lower():
+            # Prefer actual document files (PDF/DOCX) over communications/notes
+            if is_document_file:
+                is_intake = True
+
+        if is_intake:
+            # If we already have an intake form, only replace it with a better one (PDF/DOCX over communication)
+            if intake_form_path:
+                # Check if new candidate is a document file and current isn't, or if new is explicitly marked
+                current_is_doc = any(
+                    doc_check.get("id") == doc.get("id")
+                    and doc_check.get("file_type", "").lower()
+                    in [
+                        "application/pdf",
+                        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                    ]
+                    for doc_check in documents
+                )
+                if is_document_file or (doc.get("metadata", {}).get("is_intake_form") and not current_is_doc):
+                    # Add old intake to regular files
+                    file_paths.append(intake_form_path)
+                    intake_form_path = temp_path
+                    print(f"  - Replaced intake form with better match: {doc['file_name']}")
+                else:
+                    file_paths.append(temp_path)
+            else:
+                intake_form_path = temp_path
+                print(f"  - Identified intake form: {doc['file_name']}")
+        else:
+            file_paths.append(temp_path)
+
+    # If no intake form found, prefer first PDF/DOCX, then any document
+    if not intake_form_path and file_paths:
+        # Try to find a PDF or DOCX first
+        pdf_docx_files = [
+            f
+            for f in file_paths
+            if any(
+                doc.get("storage_path") in f
+                for doc in documents
+                if doc.get("file_type", "").lower()
+                in [
+                    "application/pdf",
+                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                ]
+            )
+        ]
+        if pdf_docx_files:
+            intake_form_path = pdf_docx_files[0]
+            file_paths.remove(intake_form_path)
+        else:
+            intake_form_path = file_paths.pop(0)
+
+    return intake_form_path, file_paths
 
 
 async def process_case_background(case_id: str, analysis_id: str, supabase, provider: str = "openai"):
@@ -252,10 +441,20 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
         analysis_id: Analysis record ID
         supabase: Supabase client
         provider: AI provider to use
+
     """
+    # Initialize progress manager
+    progress_manager = ProgressManager.get_instance()
+    await progress_manager.create_channel(analysis_id)
+
     try:
         # Update status to processing
         supabase.table("analysis_results").update({"status": "processing"}).eq("id", analysis_id).execute()
+
+        # Publish initial progress
+        await progress_manager.publish_progress(
+            channel_id=analysis_id, message="Starting document analysis...", phase="initialization", percent=0
+        )
 
         # Get case details
         case_response = supabase.table("cases").select("*").eq("id", case_id).execute()
@@ -275,185 +474,10 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
         temp_dir = f"/tmp/case_{case_id}"
         os.makedirs(temp_dir, exist_ok=True)
 
-        file_paths = []
-        intake_form_path = None
-
-        for doc in documents:
-            storage_path = doc["storage_path"]
-            # Sanitize filename to avoid directory traversal and invalid characters
-            safe_filename = doc["file_name"].replace("/", "_").replace("\\", "_").replace(":", "_")
-            temp_path = os.path.join(temp_dir, safe_filename)
-
-            # Skip video and audio files
-            file_type = doc.get("file_type", "").lower()
-            file_name_lower = doc["file_name"].lower()
-
-            video_audio_types = [
-                "video/",
-                "audio/",  # Any video or audio MIME type
-                "application/x-mpegurl",
-                "application/vnd.apple.mpegurl",  # Streaming
-            ]
-            video_audio_extensions = [
-                ".mov",
-                ".mp4",
-                ".avi",
-                ".mkv",
-                ".wmv",
-                ".flv",
-                ".webm",
-                ".m4v",  # Video
-                ".mp3",
-                ".wav",
-                ".aac",
-                ".flac",
-                ".m4a",
-                ".ogg",
-                ".wma",
-                ".aiff",  # Audio
-            ]
-
-            is_video_audio = any(file_type.startswith(vtype) for vtype in video_audio_types) or any(
-                file_name_lower.endswith(ext) for ext in video_audio_extensions
-            )
-
-            if is_video_audio:
-                print(f"  - ⏭️  Skipping video/audio file: {doc['file_name']}")
-                continue
-
-            # Check if document has extracted_text (Clio comms/notes or already processed)
-            if doc.get("extracted_text"):
-                print(f"  - Using extracted text for: {doc['file_name']}")
-                # Save extracted text to temporary file
-                with open(temp_path, "w", encoding="utf-8") as f:
-                    f.write(doc["extracted_text"])
-            else:
-                # Download file from Supabase Storage
-                try:
-                    file_data = supabase.storage.from_("documents").download(storage_path)
-                    with open(temp_path, "wb") as f:
-                        f.write(file_data)
-                except Exception as e:
-                    print(f"  - Warning: Failed to download {doc['file_name']}: {e}")
-                    continue  # Skip this document if download fails
-
-            # Check if this is a zip file - extract it
-            if doc["file_name"].lower().endswith(".zip"):
-                import zipfile
-
-                print(f"  - 📦 Extracting zip file: {doc['file_name']}")
-
-                try:
-                    # Create subdirectory for this zip's contents
-                    zip_extract_dir = os.path.join(temp_dir, f"{doc['id']}_extracted")
-                    os.makedirs(zip_extract_dir, exist_ok=True)
-
-                    # Extract zip file
-                    with zipfile.ZipFile(temp_path, "r") as zip_ref:
-                        zip_ref.extractall(zip_extract_dir)
-
-                    # Force filesystem sync to prevent race conditions
-                    # Increased delay to 500ms for more reliable extraction
-                    await asyncio.sleep(0.5)
-                    logger.debug(f"Filesystem sync delay (500ms) after extracting {doc['file_name']}")
-
-                    # Add extracted files to processing list (filtering out video/audio)
-                    extracted_count = 0
-                    for root, _dirs, files in os.walk(zip_extract_dir):
-                        for extracted_file in files:
-                            # Skip hidden files and system files
-                            if extracted_file.startswith(".") or extracted_file.startswith("__MACOSX"):
-                                continue
-
-                            # Skip video/audio files
-                            if any(extracted_file.lower().endswith(ext) for ext in video_audio_extensions):
-                                print(f"    ⏭️  Skipping video/audio: {extracted_file}")
-                                continue
-
-                            extracted_path = os.path.join(root, extracted_file)
-
-                            # Verify file exists before adding to processing list
-                            if os.path.isfile(extracted_path):
-                                file_paths.append(extracted_path)
-                                extracted_count += 1
-                            else:
-                                logger.warning(
-                                    f"Extracted file not found (filesystem sync issue?): {extracted_path}"
-                                )
-
-                    print(f"  - ✅ Extracted {extracted_count} files from {doc['file_name']}")
-
-                    # Remove the original zip file
-                    os.remove(temp_path)
-                    continue  # Skip adding the zip file itself to file_paths
-
-                except zipfile.BadZipFile:
-                    print(f"  - ⚠️  Invalid zip file: {doc['file_name']}")
-                except Exception as e:
-                    print(f"  - ⚠️  Failed to extract zip file {doc['file_name']}: {e}")
-
-            # Check if this is an intake form
-            # Prioritize: 1) metadata flag, 2) PDF/DOCX files with "intake" in name, 3) other files with "intake"
-            is_intake = doc.get("metadata", {}).get("is_intake_form", False)
-            is_document_file = doc.get("file_type", "").lower() in [
-                "application/pdf",
-                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-            ]
-
-            if not is_intake and "intake" in doc["file_name"].lower():
-                # Prefer actual document files (PDF/DOCX) over communications/notes
-                if is_document_file:
-                    is_intake = True
-
-            if is_intake:
-                # If we already have an intake form, only replace it with a better one (PDF/DOCX over communication)
-                if intake_form_path:
-                    # Check if new candidate is a document file and current isn't, or if new is explicitly marked
-                    current_is_doc = any(
-                        doc_check.get("id") == doc.get("id")
-                        and doc_check.get("file_type", "").lower()
-                        in [
-                            "application/pdf",
-                            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                        ]
-                        for doc_check in documents
-                    )
-                    if is_document_file or (
-                        doc.get("metadata", {}).get("is_intake_form") and not current_is_doc
-                    ):
-                        # Add old intake to regular files
-                        file_paths.append(intake_form_path)
-                        intake_form_path = temp_path
-                        print(f"  - Replaced intake form with better match: {doc['file_name']}")
-                    else:
-                        file_paths.append(temp_path)
-                else:
-                    intake_form_path = temp_path
-                    print(f"  - Identified intake form: {doc['file_name']}")
-            else:
-                file_paths.append(temp_path)
-
-        # If no intake form found, prefer first PDF/DOCX, then any document
-        if not intake_form_path and file_paths:
-            # Try to find a PDF or DOCX first
-            pdf_docx_files = [
-                f
-                for f in file_paths
-                if any(
-                    doc.get("storage_path") in f
-                    for doc in documents
-                    if doc.get("file_type", "").lower()
-                    in [
-                        "application/pdf",
-                        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                    ]
-                )
-            ]
-            if pdf_docx_files:
-                intake_form_path = pdf_docx_files[0]
-                file_paths.remove(intake_form_path)
-            else:
-                intake_form_path = file_paths.pop(0)
+        # Download and prepare files in threadpool to avoid blocking event loop
+        intake_form_path, file_paths = await run_in_threadpool(
+            _download_and_extract_documents, case_id, documents, supabase, temp_dir
+        )
 
         # If still no documents, we need at least one
         if not intake_form_path:
@@ -476,13 +500,25 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
         print(f"  - Processing with intake form: {os.path.basename(intake_form_path)}")
         print(f"  - Additional documents: {len(file_paths)}")
 
+        # Create progress callback that publishes to SSE
+        async def progress_callback(message: str, docs_processed=None, phase="", percent=0):
+            """Publish progress updates to SSE stream."""
+            await progress_manager.publish_progress(
+                channel_id=analysis_id,
+                message=message,
+                phase=phase,
+                percent=percent,
+                docs_processed=docs_processed or [],
+                sub_step=message,  # Use message as sub-step for granularity
+            )
+
         # Call the actual processor
         result: ProcessingResult = await process_case_documents(
             intake_form_path=intake_form_path,
             case_document_paths=file_paths,
             case_info=case_info,
             review_data=review_data,
-            progress_callback=None,
+            progress_callback=progress_callback,
         )
 
         print(f"  - Processing completed with status: {result.status}")
@@ -502,6 +538,15 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
         # Update case status
         supabase.table("cases").update({"status": "completed"}).eq("id", case_id).execute()
 
+        # Publish completion event
+        await progress_manager.publish_progress(
+            channel_id=analysis_id,
+            message="Analysis completed successfully!",
+            phase="completed",
+            percent=100,
+            status="completed",
+        )
+
     except Exception as e:
         # Log error and update status
         error_message = str(e)
@@ -516,6 +561,16 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
         ).eq("id", analysis_id).execute()
 
         supabase.table("cases").update({"status": "error"}).eq("id", case_id).execute()
+
+        # Publish error event
+        await progress_manager.publish_progress(
+            channel_id=analysis_id,
+            message=f"Analysis failed: {error_message}",
+            phase="error",
+            percent=0,
+            status="error",
+            error=error_message,
+        )
 
     finally:
         # Cleanup temporary files
@@ -548,6 +603,7 @@ async def start_analysis(
     Returns:
     -------
         Analysis record (status: pending)
+
     """
     try:
         # Verify case ownership using user client (respects RLS)
@@ -618,6 +674,7 @@ async def get_analysis_status(
     Returns:
     -------
         Latest analysis result
+
     """
     try:
         # Verify case ownership
@@ -671,6 +728,7 @@ async def get_analysis_results(
     Returns:
     -------
         Analysis results (ProcessingResult)
+
     """
     try:
         # Verify case ownership
@@ -828,6 +886,113 @@ async def generate_letter(
         letter_type=request.letter_type,
         target_party_name=target_party_name,
     )
+
+
+class CalculateDemandAmountRequest(BaseModel):
+    """Request to calculate demand amount."""
+
+    case_id: str
+    target_party_name: str
+
+
+class CalculateDemandAmountResponse(BaseModel):
+    """Response with calculated demand amount."""
+
+    amount: float
+    reasoning: str
+    breakdown: List[Dict[str, Any]]
+
+
+@router.post("/calculate-demand-amount", response_model=CalculateDemandAmountResponse)
+async def calculate_demand_amount(
+    request: CalculateDemandAmountRequest,
+    user=Depends(get_current_user),  # noqa: B008
+    supabase=Depends(get_user_supabase_client),  # noqa: B008
+):
+    """Calculate suggested demand amount based on case analysis and selected party."""
+    _ensure_case_access(supabase, request.case_id, user["id"])
+    analysis_record = _fetch_latest_analysis_result(supabase, request.case_id)
+
+    result_payload = analysis_record["result"]
+    processing_result = ProcessingResult(**result_payload)
+
+    if not processing_result.multi_stage_result:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            detail="Demand calculation requires the latest analysis. Please re-run the case analysis.",
+        )
+
+    # Fetch user's AI preferences
+    ai_preferences = await _get_user_ai_preferences(user["id"], supabase)
+    openai_client = OpenAIClient(user_preferences=ai_preferences)
+
+    msr = processing_result.multi_stage_result
+    fact_matrix = msr.get("fact_matrix", {})
+    deep_analysis = msr.get("deep_analysis", {})
+
+    # Build context for AI calculation
+    financial_data = fact_matrix.get("financial_data", [])
+    parties = fact_matrix.get("parties", [])
+    legal_issues = deep_analysis.get("issue_analyses", [])
+
+    # Filter financial items related to the target party
+    party_financial_items = []
+    general_financial_items = []
+
+    for item in financial_data:
+        description = item.get("description", "").lower()
+        if request.target_party_name.lower() in description:
+            party_financial_items.append(item)
+        else:
+            general_financial_items.append(item)
+
+    # Build AI prompt
+    prompt = f"""Analyze this case data and calculate a reasonable demand amount for the opposing party: {request.target_party_name}
+
+Financial Data:
+{json.dumps(financial_data, indent=2)}
+
+Parties Involved:
+{json.dumps(parties, indent=2)}
+
+Legal Issues:
+{json.dumps(legal_issues, indent=2)}
+
+Instructions:
+1. Identify all amounts owed, damages claimed, or contract breaches related to {request.target_party_name}
+2. Consider the strength of legal claims and potential recovery likelihood
+3. Include reasonable attorney fees and costs if applicable
+4. Provide a total demand amount that is justified by the evidence
+
+Return a JSON object with:
+- amount: float (total demand amount)
+- reasoning: string (2-3 sentence explanation)
+- breakdown: array of objects with {{description: string, amount: float}}
+
+Be realistic and evidence-based. Only include amounts supported by the case data."""
+
+    try:
+        response = await asyncio.to_thread(
+            openai_client.create_chat_completion,
+            messages=[{"role": "user", "content": prompt}],
+            response_format={"type": "json_object"},
+            temperature=0.2,
+            max_tokens=1000,
+        )
+
+        result = json.loads(response["choices"][0]["message"]["content"])
+
+        return CalculateDemandAmountResponse(
+            amount=result.get("amount", 0.0),
+            reasoning=result.get("reasoning", "Unable to calculate demand amount."),
+            breakdown=result.get("breakdown", []),
+        )
+    except Exception as e:
+        logger.error(f"Error calculating demand amount: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to calculate demand amount: {str(e)}",
+        ) from e
 
 
 @router.post("/chat", response_model=ChatMessageResponse)

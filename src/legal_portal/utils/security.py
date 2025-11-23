@@ -4,6 +4,7 @@ This module provides comprehensive security functions for handling file uploads,
 including path traversal prevention, file size enforcement, content type validation,
 and secure filename sanitization.
 """
+
 from __future__ import annotations
 
 import hashlib

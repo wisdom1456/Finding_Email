@@ -7,6 +7,7 @@ from typing import Dict, List, Optional
 
 import markdown2
 from legal_portal.core.data_models import DeepAnalysis, DocumentSummaryStructured, FactMatrix, Party
+from legal_portal.services.document_formatter import DocumentFormatterService
 from legal_portal.utils.logging_config import get_module_logger
 from legal_portal.utils.openai_client import OpenAIClient
 
@@ -70,7 +71,9 @@ class DemandLetterService:
                     "role": "system",
                     "content": (
                         "You are a senior Florida attorney drafting a formal demand letter. "
-                        "Be professional, assertive, and precise."
+                        "Be professional, assertive, and precise. "
+                        "Output clean content without markdown code fences or extra formatting. "
+                        "Use proper HTML-compatible line breaks and structure."
                     ),
                 },
                 {"role": "user", "content": prompt},
@@ -79,8 +82,18 @@ class DemandLetterService:
             max_tokens=8000,
         )
         markdown_content = response["content"].strip()
-        html = markdown2.markdown(markdown_content, extras=["tables", "smarty-pants"])
-        return f"<html><body>{html}</body></html>"
+
+        # Convert markdown to HTML
+        html = markdown2.markdown(
+            markdown_content, extras=["tables", "smarty-pants", "fenced-code-blocks", "cuddled-lists"]
+        )
+
+        # Apply professional formatting using DocumentFormatterService
+        formatted_html = DocumentFormatterService.format_demand_letter(
+            letter_html=html, recipient_name=target_party_name
+        )
+
+        return formatted_html
 
     def _build_party_context(self, fact_matrix: FactMatrix, party: Party) -> str:
         timeline = [
@@ -169,13 +182,13 @@ class DemandLetterService:
                     context_lines.append(f"Section/Article: {clause['clause_id']}")
                 context_lines.append(f"Description: {clause['description']}")
                 if clause["snippet"]:
-                    context_lines.append(f"Verbatim Text: \"{clause['snippet']}\"")
+                    context_lines.append(f'Verbatim Text: "{clause["snippet"]}"')
 
         # Display key quotes
         if key_quotes:
             context_lines.append("\n=== KEY QUOTES FROM DOCUMENTS ===")
             for item in key_quotes[:10]:  # Limit to first 10
-                context_lines.append(f"\nFrom {item['document']}: \"{item['quote']}\"")
+                context_lines.append(f'\nFrom {item["document"]}: "{item["quote"]}"')
 
         # Extract all case citations and statute citations across issues
         all_case_citations = []

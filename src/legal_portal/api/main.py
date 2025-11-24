@@ -13,34 +13,18 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-
-# Handle imports robustly
-try:
-    from src.legal_portal.api.routes import (
-        analysis,
-        cases,
-        clio,
-        documents,
-        health,
-        intake,
-        profile,
-        progress,
-        settings,
-    )
-    from src.legal_portal.utils.logging_config import setup_logging
-except ImportError:
-    from legal_portal.api.routes import (
-        analysis,
-        cases,
-        clio,
-        documents,
-        health,
-        intake,
-        profile,
-        progress,
-        settings,
-    )
-    from legal_portal.utils.logging_config import setup_logging
+from legal_portal.api.routes import (
+    analysis,
+    cases,
+    clio,
+    documents,
+    health,
+    intake,
+    profile,
+    progress,
+    settings,
+)
+from legal_portal.utils.logging_config import setup_logging
 
 # Load environment variables from .env file
 load_dotenv()

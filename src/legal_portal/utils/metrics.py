@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import threading
 import time
 from collections import defaultdict
@@ -131,9 +132,18 @@ class MetricsCollector:
                     "p99": self._percentile(values, 99) * 1000,
                 }
 
-        # Export to file (can be replaced with external service)
-        with open("logs/metrics.json", "a") as f:
-            f.write(json.dumps(stats) + "\n")
+        # Export to file only if not in serverless environment
+        # In serverless (Vercel/Lambda), we have read-only filesystem, so just log to stdout
+        if not os.getenv("VERCEL") and not os.getenv("AWS_LAMBDA_FUNCTION_NAME"):
+            try:
+                with open("logs/metrics.json", "a") as f:
+                    f.write(json.dumps(stats) + "\n")
+            except (OSError, PermissionError):
+                # If we can't write to file, just skip it (serverless environment)
+                pass
+        else:
+            # In serverless, log metrics to stdout for Vercel's logging system
+            print(f"METRICS: {json.dumps(stats)}", flush=True)
 
         # Clear old metrics (keep last hour)
         cutoff = datetime.utcnow() - timedelta(hours=1)

@@ -4,8 +4,17 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Dict, List
 
-import streamlit as st
 from legal_portal.utils.logging_config import get_module_logger
+
+# Try to import streamlit, but make it optional
+# Only needed for Streamlit UI components like ProgressTracker
+try:
+    import streamlit as st
+
+    HAS_STREAMLIT = True
+except ImportError:
+    HAS_STREAMLIT = False
+    st = None  # type: ignore
 
 if TYPE_CHECKING:
     pass

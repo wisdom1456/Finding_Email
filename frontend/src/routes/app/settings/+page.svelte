@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { supabase } from '$lib/supabase';
-	import { API_URL } from '$lib/config';
+	import { getApiUrl } from '$lib/config';
 
 	let loading = $state(true);
 	let saving = $state(false);
@@ -48,7 +48,8 @@ Palm Harbor, FL 34683`);
 			email = session.user.email || '';
 
 			// Fetch profile data
-			const response = await fetch(`${API_URL}/api/profile`, {
+			const apiUrl = getApiUrl();
+			const response = await fetch(`${apiUrl}/api/profile`, {
 				headers: {
 					'Authorization': `Bearer ${session.access_token}`,
 					'Content-Type': 'application/json'
@@ -103,7 +104,8 @@ Palm Harbor, FL 34683`);
 				}
 			};
 
-			const response = await fetch(`${API_URL}/api/profile`, {
+			const apiUrl = getApiUrl();
+			const response = await fetch(`${apiUrl}/api/profile`, {
 				method: 'PUT',
 				headers: {
 					'Authorization': `Bearer ${session.access_token}`,

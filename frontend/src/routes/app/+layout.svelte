@@ -3,7 +3,7 @@
 	import { supabase } from '$lib/supabase';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
-	import { API_URL } from '$lib/config';
+	import { getApiUrl } from '$lib/config';
 	import ClioConnect from '$lib/components/ClioConnect.svelte';
 	import { clioStore } from '$lib/stores/clioStore';
 	import { Menu, X, User, Settings, LogOut, Link2 } from 'lucide-svelte';
@@ -40,8 +40,10 @@
 			const { data: { user }, error } = await supabase.auth.getUser();
 			if (error || !user) return;
 
+			// Use getApiUrl() to ensure we get the correct runtime value (relative path in Vercel)
+			const apiUrl = getApiUrl();
 			console.log('Checking Clio status with token:', session.access_token?.substring(0, 20) + '...');
-			const endpoint = `${API_URL}/api/clio/status`;
+			const endpoint = `${apiUrl}/api/clio/status`;
 			console.log('Using status endpoint:', endpoint);
 
 			const response = await fetch(endpoint, {

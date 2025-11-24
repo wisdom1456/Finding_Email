@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onDestroy } from 'svelte';
-	import { API_URL } from '$lib/config';
+	import { getApiUrl } from '$lib/config';
 	import { supabase } from '$lib/supabase';
 	import { progressStore } from '$lib/stores/progressStore';
 	import ClioImportProgressModal from './ClioImportProgressModal.svelte';
@@ -58,8 +58,9 @@
 				throw new Error('Not authenticated');
 			}
 
+			const apiUrl = getApiUrl();
 			const response = await fetch(
-				`${API_URL}/api/clio/search-matters?query=${encodeURIComponent(searchQuery)}&limit=20`,
+				`${apiUrl}/api/clio/search-matters?query=${encodeURIComponent(searchQuery)}&limit=20`,
 				{
 					headers: {
 						Authorization: `Bearer ${session.access_token}`
@@ -118,7 +119,8 @@
 			}
 
 			// Use simple POST endpoint
-			const response = await fetch(`${API_URL}/api/cases/create-from-clio`, {
+			const apiUrl = getApiUrl();
+			const response = await fetch(`${apiUrl}/api/cases/create-from-clio`, {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json',
@@ -144,7 +146,7 @@
 			
 			// Start SSE for import progress if import_id is returned
 			if (result.import_id) {
-				const sseUrl = `${API_URL}/api/progress/clio-import/${result.import_id}?token=${session.access_token}`;
+				const sseUrl = `${apiUrl}/api/progress/clio-import/${result.import_id}?token=${session.access_token}`;
 				console.log('Connecting to SSE:', sseUrl);
 				
 				// Keep phase as 'creating' or 'importing' until SSE starts
@@ -233,7 +235,8 @@
 				throw new Error('Not authenticated');
 			}
 
-			const response = await fetch(`${API_URL}/api/clio/import`, {
+			const apiUrl = getApiUrl();
+			const response = await fetch(`${apiUrl}/api/clio/import`, {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json',
@@ -254,7 +257,7 @@
 			
 			// If import_id is returned, connect to SSE stream
 			if (result.import_id) {
-				const sseUrl = `${API_URL}/api/progress/clio-import/${result.import_id}`;
+				const sseUrl = `${apiUrl}/api/progress/clio-import/${result.import_id}`;
 				const sseSupported = progressStore.isSuppported();
 
 				if (sseSupported) {

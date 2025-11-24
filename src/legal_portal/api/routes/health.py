@@ -10,14 +10,43 @@ router = APIRouter()
 
 @router.get("/health")
 async def health_check():
-    """Basic health check endpoint.
+    """Check health and verify environment variables are set.
 
     Returns
     -------
-        Health status
+        Health status including environment variable check
 
     """
-    return {"status": "healthy", "service": "Legal Document Analysis API", "version": "1.0.0"}
+    # Check for required environment variables
+    required_vars = {
+        "SUPABASE_URL": bool(os.getenv("SUPABASE_URL")),
+        "SUPABASE_SERVICE_KEY": bool(os.getenv("SUPABASE_SERVICE_KEY")),
+        "SUPABASE_ANON_KEY": bool(os.getenv("SUPABASE_ANON_KEY")),
+    }
+
+    optional_vars = {
+        "OPENAI_API_KEY": bool(os.getenv("OPENAI_API_KEY")),
+        "CLIO_CLIENT_ID": bool(os.getenv("CLIO_CLIENT_ID")),
+        "CLIO_CLIENT_SECRET": bool(os.getenv("CLIO_CLIENT_SECRET")),
+    }
+
+    missing_required = [k for k, v in required_vars.items() if not v]
+    missing_optional = [k for k, v in optional_vars.items() if not v]
+
+    status = "healthy" if not missing_required else "unhealthy"
+
+    response = {
+        "status": status,
+        "service": "Legal Document Analysis API",
+        "version": "1.0.0",
+        "environment": {
+            "required_vars_set": all(required_vars.values()),
+            "missing_required": missing_required if missing_required else None,
+            "missing_optional": missing_optional if missing_optional else None,
+        },
+    }
+
+    return response
 
 
 @router.get("/health/detailed")

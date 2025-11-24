@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { API_URL } from '$lib/config';
+	import { getApiUrl } from '$lib/config';
 	import { supabase } from '$lib/supabase';
 	import { clioStore } from '$lib/stores/clioStore';
 
@@ -21,6 +21,7 @@
 		errorMessage = '';
 
 		try {
+			console.log('DEBUG_V3: ClioConnect checkConnection starting');
 			const {
 				data: { session }
 			} = await supabase.auth.getSession();
@@ -31,11 +32,18 @@
 				return;
 			}
 
+			const apiUrl = getApiUrl();
+			console.log('DEBUG_V3: getApiUrl returned:', JSON.stringify(apiUrl));
 			console.log('Checking Clio status with token:', session.access_token?.substring(0, 20) + '...');
 			
-			console.log('Using API URL prefix:', API_URL || '(relative)');
+			console.log('Using API URL prefix:', apiUrl || '(relative)');
 
-			const response = await fetch(`${API_URL}/api/clio/status`, {
+			// Ensure apiUrl does not end with a slash if it's not empty, to avoid double slashes
+			// But empty string + /api is fine
+			const endpoint = `${apiUrl}/api/clio/status`;
+			console.log('Using status endpoint:', endpoint);
+
+			const response = await fetch(endpoint, {
 				headers: {
 					Authorization: `Bearer ${session.access_token}`
 				}
@@ -71,11 +79,12 @@
 				return;
 			}
 
+			const apiUrl = getApiUrl();
 			console.log('Initiating Clio OAuth with token:', session.access_token?.substring(0, 20) + '...');
 
 			// Redirect to OAuth authorization with token as query param
 			// (Required because direct navigation can't set Authorization header)
-			window.location.href = `${API_URL}/api/clio/authorize?token=${session.access_token}`;
+			window.location.href = `${apiUrl}/api/clio/authorize?token=${session.access_token}`;
 		} catch (error: any) {
 			console.error('Failed to initiate Clio connection:', error);
 			errorMessage = error.message || 'Failed to initiate connection';
@@ -97,7 +106,8 @@
 				return;
 			}
 
-			const response = await fetch(`${API_URL}/api/clio/disconnect`, {
+			const apiUrl = getApiUrl();
+			const response = await fetch(`${apiUrl}/api/clio/disconnect`, {
 				method: 'DELETE',
 				headers: {
 					Authorization: `Bearer ${session.access_token}`

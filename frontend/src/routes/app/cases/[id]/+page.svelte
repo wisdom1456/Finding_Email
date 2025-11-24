@@ -3,7 +3,7 @@
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { supabase } from '$lib/supabase';
-	import { API_URL } from '$lib/config';
+	import { getApiUrl } from '$lib/config';
 	import ClioMatterSearch from '$lib/components/ClioMatterSearch.svelte';
 	import ClioLinkedMatter from '$lib/components/ClioLinkedMatter.svelte';
 	import UploadFailureSummary from '$lib/components/UploadFailureSummary.svelte';
@@ -625,10 +625,10 @@
 				throw new Error('Not authenticated');
 			}
 
-			const PUBLIC_API_URL = import.meta.env.PUBLIC_API_URL || 'http://127.0.0.1:8000';
+			const apiUrl = getApiUrl();
 			
 			// Call backend to update intake form designation
-			const response = await fetch(`${API_URL}/api/cases/${caseId}/set-intake-form`, {
+			const response = await fetch(`${apiUrl}/api/cases/${caseId}/set-intake-form`, {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json',
@@ -693,8 +693,9 @@
 				throw new Error('Not authenticated');
 			}
 
-			const apiUrl = PUBLIC_API_URL || import.meta.env.PUBLIC_API_URL || 'http://127.0.0.1:8000';
-			console.log('📡 API URL:', apiUrl);
+			// Use getApiUrl() from config which handles Vercel/local environments correctly
+			const apiUrl = getApiUrl();
+			console.log('📡 API URL:', apiUrl || '(relative)');
 			console.log('🔑 Token:', session.access_token?.substring(0, 20) + '...');
 
 			const response = await fetch(`${apiUrl}/api/cases/${caseId}`, {

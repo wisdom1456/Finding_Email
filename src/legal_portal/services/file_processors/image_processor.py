@@ -4,9 +4,6 @@ import mimetypes
 import os
 from io import BytesIO
 
-import pytesseract
-from PIL import Image
-
 from legal_portal.core.data_models import (
     DocumentType,
     FileMetadata,
@@ -14,25 +11,40 @@ from legal_portal.core.data_models import (
     ProcessedDocument,
 )
 from legal_portal.utils.logging_config import get_module_logger
+from PIL import Image
 
 logger = get_module_logger(__name__)
+
+# Try to import pytesseract, but make it optional
+# OCR won't work in serverless environments without the Tesseract binary
+try:
+    import pytesseract
+
+    HAS_OCR = True
+except ImportError:
+    HAS_OCR = False
+    logger.warning("pytesseract not available - OCR functionality disabled")
 
 
 async def process_image(
     file_path: str, document_type: DocumentType, original_filename: str
 ) -> ProcessedDocument:
-    """Processes an image file by extracting text using OCR from a given path."""
+    """Process an image file by extracting text using OCR from a given path."""
     logger.debug(f"Processing Image: {original_filename}")
 
     text_content = ""
 
     try:
-        with open(file_path, "rb") as f:
-            image = Image.open(BytesIO(f.read()))
-            # Convert image to grayscale for better OCR results
-            image = image.convert("L")
-            text_content = pytesseract.image_to_string(image)
-        logger.info(f"Successfully extracted text from {original_filename}")
+        if HAS_OCR:
+            with open(file_path, "rb") as f:
+                image = Image.open(BytesIO(f.read()))
+                # Convert image to grayscale for better OCR results
+                image = image.convert("L")
+                text_content = pytesseract.image_to_string(image)
+            logger.info(f"Successfully extracted text from {original_filename}")
+        else:
+            logger.warning(f"OCR not available - skipping text extraction for {original_filename}")
+            text_content = "[Image - OCR not available in this environment]"
     except Exception as e:
         logger.error(f"Error processing image {original_filename}: {e}")
         text_content = f"Error extracting text from {original_filename}."

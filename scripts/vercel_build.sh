@@ -28,4 +28,48 @@ else
   echo "⚠️ WARNING: api/requirements.txt not found"
 fi
 
+echo ">>> Verifying environment variables"
+echo "Checking required environment variables..."
+
+# Check Supabase variables (required)
+if [ -n "$SUPABASE_URL" ]; then
+    echo "✅ SUPABASE_URL is set"
+else
+    echo "❌ SUPABASE_URL is NOT set"
+fi
+
+if [ -n "$SUPABASE_SERVICE_KEY" ]; then
+    echo "✅ SUPABASE_SERVICE_KEY is set"
+else
+    echo "❌ SUPABASE_SERVICE_KEY is NOT set"
+fi
+
+if [ -n "$SUPABASE_ANON_KEY" ]; then
+    echo "✅ SUPABASE_ANON_KEY is set"
+else
+    echo "❌ SUPABASE_ANON_KEY is NOT set"
+fi
+
+# Check optional but important variables
+echo "Checking optional environment variables..."
+
+if [ -n "$OPENAI_API_KEY" ]; then
+    echo "✅ OPENAI_API_KEY is set"
+else
+    echo "⚠️ OPENAI_API_KEY is not set (optional but needed for analysis)"
+fi
+
+if [ -n "$CLIO_CLIENT_ID" ]; then
+    echo "✅ CLIO_CLIENT_ID is set"
+else
+    echo "⚠️ CLIO_CLIENT_ID is not set (optional but needed for Clio integration)"
+fi
+
+if [ -n "$CLIO_CLIENT_SECRET" ]; then
+    echo "✅ CLIO_CLIENT_SECRET is set"
+else
+    echo "⚠️ CLIO_CLIENT_SECRET is not set (optional but needed for Clio integration)"
+fi
+
+echo ">>> Environment variable check complete"
 echo ">>> Build complete"

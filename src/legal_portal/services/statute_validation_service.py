@@ -12,7 +12,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional, Set
 
-import streamlit as st
 from legal_portal.utils.logging_config import get_module_logger
 
 logger = get_module_logger(__name__)
@@ -391,13 +390,23 @@ class StatuteValidationService:
         return matches
 
 
-@st.cache_resource
+# Module-level singleton instance (replaces @st.cache_resource)
+_statute_validation_service_instance: Optional[StatuteValidationService] = None
+
+
 def get_statute_validation_service() -> StatuteValidationService:
     """Get cached instance of StatuteValidationService.
+
+    Uses a module-level singleton pattern to cache the instance.
+    This replaces the Streamlit @st.cache_resource decorator for
+    use in FastAPI without requiring Streamlit as a dependency.
 
     Returns
     -------
         Cached StatuteValidationService instance
 
     """
-    return StatuteValidationService()
+    global _statute_validation_service_instance
+    if _statute_validation_service_instance is None:
+        _statute_validation_service_instance = StatuteValidationService()
+    return _statute_validation_service_instance

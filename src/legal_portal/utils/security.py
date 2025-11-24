@@ -8,7 +8,6 @@ and secure filename sanitization.
 from __future__ import annotations
 
 import hashlib
-import json
 import mimetypes
 import os
 import re
@@ -437,52 +436,3 @@ __all__ = [
     "validate_file_size",
     "validate_total_upload_size",
 ]
-
-
-def check_pin():
-    """Check if the user has entered a valid PIN.
-
-    Note: This function requires Streamlit and is only used in Streamlit apps.
-    """
-    if not HAS_STREAMLIT:
-        raise RuntimeError("check_pin() requires Streamlit, which is not available in this environment")
-
-    pins_file = Path(__file__).parent.parent / "config" / "pins.json"
-    if not pins_file.exists():
-        st.error("PIN file not found. Please contact an administrator.")
-        return False
-
-    with open(pins_file, "r") as f:
-        pins_data = json.load(f)
-        allowed_pins = pins_data.get("pins", [])
-
-    if "pin_approved" not in st.session_state:
-        st.session_state["pin_approved"] = False
-
-    if st.session_state["pin_approved"]:
-        return True
-
-    if "pin_attempts" not in st.session_state:
-        st.session_state["pin_attempts"] = 0
-
-    if st.session_state["pin_attempts"] >= 3:
-        st.error("You have exceeded the maximum number of PIN attempts.")
-        return False
-
-    st.header("PIN Required")
-    user_pin = st.text_input("Please enter your PIN to continue:", type="password")
-
-    if user_pin:
-        if user_pin in allowed_pins:
-            st.session_state["pin_approved"] = True
-            st.rerun()
-        else:
-            st.session_state["pin_attempts"] += 1
-            remaining_attempts = 3 - st.session_state["pin_attempts"]
-            if remaining_attempts > 0:
-                st.warning(f"Invalid PIN. You have {remaining_attempts} attempts remaining.")
-            else:
-                st.error("You have exceeded the maximum number of PIN attempts.")
-            return False
-
-    return False

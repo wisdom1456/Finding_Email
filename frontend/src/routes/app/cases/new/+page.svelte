@@ -5,7 +5,7 @@
 	import ProgressIndicator from '$lib/components/ProgressIndicator.svelte';
 	import PageHeader from '$lib/components/ui/PageHeader.svelte';
 	import { clioStore } from '$lib/stores/clioStore';
-	import { API_URL } from '$lib/config';
+	import { getApiUrl } from '$lib/config';
 
 	interface ProgressStep {
 		label: string;
@@ -58,7 +58,8 @@
 				throw new Error('Not authenticated');
 			}
 
-			const response = await fetch(`${API_URL}/api/cases`, {
+			const apiUrl = getApiUrl();
+			const response = await fetch(`${apiUrl}/api/cases`, {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json',

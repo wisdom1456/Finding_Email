@@ -2,7 +2,7 @@
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
-	import { API_URL } from '$lib/config';
+	import { getApiUrl } from '$lib/config';
 	import { supabase } from '$lib/supabase';
 
 	const caseId = $derived($page.params.id);
@@ -109,7 +109,8 @@
 			const formData = new FormData();
 			formData.append('file', file);
 
-			const response = await fetch(`${API_URL}/api/intake/process`, {
+			const apiUrl = getApiUrl();
+			const response = await fetch(`${apiUrl}/api/intake/process`, {
 				method: 'POST',
 				headers: {
 					Authorization: `Bearer ${session.access_token}`
@@ -180,7 +181,8 @@
 			}
 
 			// Save confirmed data
-			const response = await fetch(`${API_URL}/api/intake/confirm`, {
+			const apiUrl = getApiUrl();
+			const response = await fetch(`${apiUrl}/api/intake/confirm`, {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json',

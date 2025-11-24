@@ -1,7 +1,7 @@
 <script lang="ts">
-	import { page } from '$app/stores';
+	import { page } from '$app/navigation';
 	import { goto } from '$app/navigation';
-	import { API_URL } from '$lib/config';
+	import { getApiUrl } from '$lib/config';
 	import { supabase } from '$lib/supabase';
 	import { slide } from 'svelte/transition';
 	import PageHeader from '$lib/components/ui/PageHeader.svelte';
@@ -12,7 +12,6 @@
 	let { data }: { data: PageData } = $props();
 
 	const caseId = $derived(data.caseId);
-	const api = API_URL;
 	
 	// Initialize state from SSR data
 	let results = $state<any>(data.results);
@@ -103,7 +102,8 @@
 
 			if (!session) throw new Error('Not authenticated');
 
-			const response = await fetch(`${API_URL}/api/analysis/calculate-demand-amount`, {
+			const apiUrl = getApiUrl();
+			const response = await fetch(`${apiUrl}/api/analysis/calculate-demand-amount`, {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json',
@@ -167,7 +167,8 @@
 
 			if (!session) throw new Error('Not authenticated');
 
-			const response = await fetch(`${API_URL}/api/analysis/generate-letter`, {
+			const apiUrl = getApiUrl();
+			const response = await fetch(`${apiUrl}/api/analysis/generate-letter`, {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json',
@@ -213,7 +214,8 @@
 			} = await supabase.auth.getSession();
 			if (!session) throw new Error('Not authenticated');
 
-			const response = await fetch(`${API_URL}/api/analysis/chat`, {
+			const apiUrl = getApiUrl();
+			const response = await fetch(`${apiUrl}/api/analysis/chat`, {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json',

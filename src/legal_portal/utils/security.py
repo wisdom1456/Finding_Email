@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import mimetypes
 import os
 import re
 import tempfile
@@ -16,8 +17,16 @@ import time
 from pathlib import Path
 from typing import Optional, Tuple
 
-import magic
 import streamlit as st
+
+# Try to import python-magic, but make it optional
+# python-magic requires libmagic which may not be available in serverless environments
+try:
+    import magic
+
+    HAS_MAGIC = True
+except ImportError:
+    HAS_MAGIC = False
 
 # Maximum file size: 100MB
 MAX_FILE_SIZE = 100 * 1024 * 1024  # 100MB
@@ -199,10 +208,31 @@ def validate_file_content(file_data: bytes, filename: str) -> Tuple[str, str]:
         )
 
     # Detect actual content type using magic numbers
-    try:
-        mime_type = magic.from_buffer(file_data, mime=True)
-    except Exception as e:
-        raise ValueError(f"Unable to determine file content type: {e!s}") from e
+    if HAS_MAGIC:
+        try:
+            mime_type = magic.from_buffer(file_data, mime=True)
+        except Exception as e:
+            raise ValueError(f"Unable to determine file content type: {e!s}") from e
+    else:
+        # Fallback to mimetypes.guess_type if python-magic is not available
+        # This is less secure but works in serverless environments
+        guessed_type, _ = mimetypes.guess_type(filename)
+        if guessed_type:
+            mime_type = guessed_type
+        else:
+            # Last resort: map extension to common MIME types
+            ext_to_mime = {
+                ".pdf": "application/pdf",
+                ".doc": "application/msword",
+                ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                ".txt": "text/plain",
+                ".csv": "text/csv",
+                ".eml": "message/rfc822",
+                ".jpg": "image/jpeg",
+                ".jpeg": "image/jpeg",
+                ".png": "image/png",
+            }
+            mime_type = ext_to_mime.get(ext, "application/octet-stream")
 
     # Check if detected MIME type is allowed
     if mime_type not in ALLOWED_MIME_TYPES:

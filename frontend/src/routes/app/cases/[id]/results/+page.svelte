@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
-	import { PUBLIC_API_URL } from '$env/static/public';
+	import { API_URL } from '$lib/config';
 	import { supabase } from '$lib/supabase';
 	import { slide } from 'svelte/transition';
 	import PageHeader from '$lib/components/ui/PageHeader.svelte';
@@ -12,7 +12,7 @@
 	let { data }: { data: PageData } = $props();
 
 	const caseId = $derived(data.caseId);
-	const API_URL = PUBLIC_API_URL || 'http://127.0.0.1:8000';
+	const api = API_URL;
 	
 	// Initialize state from SSR data
 	let results = $state<any>(data.results);

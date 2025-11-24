@@ -57,8 +57,8 @@
 				throw new Error('Not authenticated');
 			}
 
-			const PUBLIC_API_URL = import.meta.env.PUBLIC_API_URL || 'http://127.0.0.1:8000';
-			const response = await fetch(`${PUBLIC_API_URL}/api/cases`, {
+			import { API_URL } from '$lib/config';
+			const response = await fetch(`${API_URL}/api/cases`, {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json',

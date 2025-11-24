@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { PUBLIC_API_URL } from '$env/static/public';
+	import { API_URL } from '$lib/config';
 	import { supabase } from '$lib/supabase';
 	import type { ClioMatterData, CaseData } from '$lib/types';
 	import ClioMatterSearch from './ClioMatterSearch.svelte';
@@ -49,7 +49,7 @@
 				throw new Error('Not authenticated');
 			}
 
-			const response = await fetch(`${PUBLIC_API_URL}/api/clio/unlink/${caseId}`, {
+			const response = await fetch(`${API_URL}/api/clio/unlink/${caseId}`, {
 				method: 'DELETE',
 				headers: {
 					Authorization: `Bearer ${session.access_token}`
@@ -109,7 +109,7 @@
 				throw new Error('Not authenticated');
 			}
 
-			const response = await fetch(`${PUBLIC_API_URL}/api/cases/${caseId}/change-matter`, {
+			const response = await fetch(`${API_URL}/api/cases/${caseId}/change-matter`, {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json',

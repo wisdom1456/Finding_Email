@@ -3,7 +3,7 @@
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { supabase } from '$lib/supabase';
-	import { PUBLIC_API_URL } from '$env/static/public';
+	import { API_URL } from '$lib/config';
 	import ClioMatterSearch from '$lib/components/ClioMatterSearch.svelte';
 	import ClioLinkedMatter from '$lib/components/ClioLinkedMatter.svelte';
 	import UploadFailureSummary from '$lib/components/UploadFailureSummary.svelte';
@@ -118,7 +118,7 @@
 
 	async function loadSettings() {
 		try {
-			const response = await fetch(`${PUBLIC_API_URL}/api/settings/limits`);
+			const response = await fetch(`${API_URL}/api/settings/limits`);
 			if (response.ok) {
 				const data = await response.json();
 				maxFileSizeMB = data.max_file_size_mb;
@@ -530,7 +530,7 @@
 					formData.append('case_id', caseId);
 					formData.append('is_intake_form', (originalIndex === intakeFormIndex).toString());
 
-					const response = await fetch(`${PUBLIC_API_URL}/api/documents/upload`, {
+					const response = await fetch(`${API_URL}/api/documents/upload`, {
 						method: 'POST',
 						headers: {
 							Authorization: `Bearer ${session.access_token}`
@@ -628,7 +628,7 @@
 			const PUBLIC_API_URL = import.meta.env.PUBLIC_API_URL || 'http://127.0.0.1:8000';
 			
 			// Call backend to update intake form designation
-			const response = await fetch(`${PUBLIC_API_URL}/api/cases/${caseId}/set-intake-form`, {
+			const response = await fetch(`${API_URL}/api/cases/${caseId}/set-intake-form`, {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json',
@@ -659,7 +659,7 @@
 
 			if (!session) throw new Error('Not authenticated');
 
-			const response = await fetch(`${PUBLIC_API_URL}/api/documents/${docId}`, {
+			const response = await fetch(`${API_URL}/api/documents/${docId}`, {
 				method: 'DELETE',
 				headers: {
 					Authorization: `Bearer ${session.access_token}`
@@ -752,7 +752,7 @@
 
 			if (!session) throw new Error('Not authenticated');
 
-			const response = await fetch(`${PUBLIC_API_URL}/api/cases/${caseId}`, {
+			const response = await fetch(`${API_URL}/api/cases/${caseId}`, {
 				method: 'PATCH',
 				headers: {
 					'Content-Type': 'application/json',
@@ -803,7 +803,7 @@
 
 			if (!session) throw new Error('Not authenticated');
 
-			const response = await fetch(`${PUBLIC_API_URL}/api/analysis/start`, {
+			const response = await fetch(`${API_URL}/api/analysis/start`, {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json',
@@ -830,7 +830,7 @@
 			await loadAnalysisStatus();
 
 			// Try SSE first, fall back to polling if not supported
-			const sseUrl = `${PUBLIC_API_URL}/api/progress/analysis/${analysisId}?token=${session.access_token}`;
+			const sseUrl = `${API_URL}/api/progress/analysis/${analysisId}?token=${session.access_token}`;
 			const sseSupported = progressStore.isSuppported();
 
 			if (sseSupported) {

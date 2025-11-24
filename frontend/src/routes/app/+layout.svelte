@@ -3,7 +3,7 @@
 	import { supabase } from '$lib/supabase';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
-	import { PUBLIC_API_URL } from '$env/static/public';
+	import { API_URL } from '$lib/config';
 	import ClioConnect from '$lib/components/ClioConnect.svelte';
 	import { clioStore } from '$lib/stores/clioStore';
 	import { Menu, X, User, Settings, LogOut, Link2 } from 'lucide-svelte';
@@ -40,11 +40,9 @@
 			const { data: { user }, error } = await supabase.auth.getUser();
 			if (error || !user) return;
 
-			const apiUrl = PUBLIC_API_URL.includes('localhost') || PUBLIC_API_URL.includes('127.0.0.1') 
-				? PUBLIC_API_URL 
-				: '';
-			
-			const endpoint = apiUrl ? `${apiUrl}/api/clio/status` : '/api/clio/status';
+			console.log('Checking Clio status with token:', session.access_token?.substring(0, 20) + '...');
+			const endpoint = `${API_URL}/api/clio/status`;
+			console.log('Using status endpoint:', endpoint);
 
 			const response = await fetch(endpoint, {
 				headers: { Authorization: `Bearer ${session.access_token}` }

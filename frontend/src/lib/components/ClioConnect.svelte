@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { PUBLIC_API_URL } from '$env/static/public';
+	import { API_URL } from '$lib/config';
 	import { supabase } from '$lib/supabase';
 	import { clioStore } from '$lib/stores/clioStore';
 
@@ -32,19 +32,10 @@
 			}
 
 			console.log('Checking Clio status with token:', session.access_token?.substring(0, 20) + '...');
-			// Use relative URL to avoid CORS issues - let the proxy/browser handle it
-			// Explicitly use relative path for Vercel production
-			const apiUrl = PUBLIC_API_URL.includes('localhost') || PUBLIC_API_URL.includes('127.0.0.1') 
-				? PUBLIC_API_URL 
-				: ''; // Empty string means relative path for production (same domain)
 			
-			console.log('Using API URL prefix:', apiUrl || '(relative)');
+			console.log('Using API URL prefix:', API_URL || '(relative)');
 
-			// If apiUrl is empty (relative), ensure we don't start with //
-			const endpoint = apiUrl ? `${apiUrl}/api/clio/status` : '/api/clio/status';
-			console.log('Fetching endpoint:', endpoint);
-
-			const response = await fetch(endpoint, {
+			const response = await fetch(`${API_URL}/api/clio/status`, {
 				headers: {
 					Authorization: `Bearer ${session.access_token}`
 				}
@@ -82,16 +73,9 @@
 
 			console.log('Initiating Clio OAuth with token:', session.access_token?.substring(0, 20) + '...');
 
-			// Use relative URL to avoid CORS issues
-			const apiUrl = PUBLIC_API_URL.includes('localhost') || PUBLIC_API_URL.includes('127.0.0.1') 
-				? PUBLIC_API_URL 
-				: '';
-			
-			const endpoint = apiUrl ? `${apiUrl}/api/clio/authorize` : '/api/clio/authorize';
-
 			// Redirect to OAuth authorization with token as query param
 			// (Required because direct navigation can't set Authorization header)
-			window.location.href = `${endpoint}?token=${session.access_token}`;
+			window.location.href = `${API_URL}/api/clio/authorize?token=${session.access_token}`;
 		} catch (error: any) {
 			console.error('Failed to initiate Clio connection:', error);
 			errorMessage = error.message || 'Failed to initiate connection';
@@ -113,14 +97,7 @@
 				return;
 			}
 
-			// Use relative URL to avoid CORS issues
-			const apiUrl = PUBLIC_API_URL.includes('localhost') || PUBLIC_API_URL.includes('127.0.0.1') 
-				? PUBLIC_API_URL 
-				: '';
-			
-			const endpoint = apiUrl ? `${apiUrl}/api/clio/disconnect` : '/api/clio/disconnect';
-
-			const response = await fetch(endpoint, {
+			const response = await fetch(`${API_URL}/api/clio/disconnect`, {
 				method: 'DELETE',
 				headers: {
 					Authorization: `Bearer ${session.access_token}`

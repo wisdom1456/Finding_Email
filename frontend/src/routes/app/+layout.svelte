@@ -43,8 +43,10 @@
 			const apiUrl = PUBLIC_API_URL.includes('localhost') || PUBLIC_API_URL.includes('127.0.0.1') 
 				? PUBLIC_API_URL 
 				: '';
+			
+			const endpoint = apiUrl ? `${apiUrl}/api/clio/status` : '/api/clio/status';
 
-			const response = await fetch(`${apiUrl}/api/clio/status`, {
+			const response = await fetch(endpoint, {
 				headers: { Authorization: `Bearer ${session.access_token}` }
 			});
 

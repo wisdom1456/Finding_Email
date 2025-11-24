@@ -3,6 +3,8 @@ set -e
 
 echo ">>> VERCEL BUILD DEBUG START"
 echo "Current directory: $(pwd)"
+node -v
+npm -v
 ls -la
 
 if [ -d "frontend" ]; then
@@ -11,8 +13,13 @@ if [ -d "frontend" ]; then
   echo "Changed to frontend directory: $(pwd)"
   ls -la
   
-  echo ">>> Installing dependencies..."
-  npm install
+  echo ">>> Installing dependencies (npm ci)..."
+  # Use --ignore-scripts to prevent any recursive hooks from firing
+  npm ci --ignore-scripts --legacy-peer-deps
+  
+  # Run svelte-kit sync manually since we ignored scripts
+  echo ">>> Running svelte-kit sync..."
+  npx svelte-kit sync
   
   echo ">>> Building..."
   npm run build

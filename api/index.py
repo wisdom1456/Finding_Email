@@ -1,9 +1,28 @@
 import os
 import sys
 
-# Add the root directory to the Python path so 'src' can be imported
-# Vercel places the files in the task root
-sys.path.append(os.path.dirname(os.path.dirname(__file__)))
+# --- PATH CONFIGURATION ---
+# We need to add both the root directory (for src/) and the api directory (for installed deps)
+# to the Python path.
+
+current_dir = os.path.dirname(__file__)  # The api/ directory
+parent_dir = os.path.dirname(current_dir)  # The root directory
+packages_dir = os.path.join(current_dir, "packages")  # Bundled dependencies
+
+# 1. Add packages directory (HIGHEST PRIORITY for dependencies)
+if os.path.exists(packages_dir) and packages_dir not in sys.path:
+    sys.path.insert(0, packages_dir)
+
+# 2. Add api/ directory to path (for local modules)
+if current_dir not in sys.path:
+    sys.path.insert(0, current_dir)
+
+# 3. Add root directory to path (for src/ imports)
+if parent_dir not in sys.path:
+    sys.path.insert(0, parent_dir)
+
+print(f"PYTHONPATH modified. Added: {packages_dir}, {current_dir}, {parent_dir}", file=sys.stderr)
+# --------------------------
 
 # Check for required environment variables and provide helpful error messages
 REQUIRED_ENV_VARS = ["SUPABASE_URL", "SUPABASE_SERVICE_KEY", "SUPABASE_ANON_KEY"]

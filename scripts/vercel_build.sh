@@ -62,7 +62,25 @@ echo ">>> Installing Python dependencies for serverless functions..."
 if [ -f "api/requirements.txt" ]; then
   echo "Found api/requirements.txt"
   cd api
-  pip install -r requirements.txt --target .
+  
+  # Create packages directory
+  mkdir -p packages
+  
+  # Clean install to packages directory to avoid conflicts
+  echo "Installing dependencies to api/packages..."
+  # Use python3 -m pip to ensure we use the correct pip for the runtime
+  # Use --target to install into packages dir
+  # Use --upgrade to ensure we get fresh versions
+  python3 -m pip install -r requirements.txt --target packages --upgrade --no-user
+  
+  # Verify installation
+  if [ -d "packages/html2text" ]; then
+    echo "✅ html2text installed successfully in api/packages/"
+  else
+    echo "⚠️ WARNING: html2text folder not found in api/packages/ after install"
+    ls -la packages/
+  fi
+  
   cd ..
   echo "Python dependencies installed"
 else

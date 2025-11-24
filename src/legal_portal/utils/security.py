@@ -17,7 +17,15 @@ import time
 from pathlib import Path
 from typing import Optional, Tuple
 
-import streamlit as st
+# Try to import streamlit, but make it optional
+# Streamlit is only needed for Streamlit apps, not FastAPI backend
+try:
+    import streamlit as st
+
+    HAS_STREAMLIT = True
+except ImportError:
+    HAS_STREAMLIT = False
+    st = None  # type: ignore
 
 # Try to import python-magic, but make it optional
 # python-magic requires libmagic which may not be available in serverless environments
@@ -432,7 +440,13 @@ __all__ = [
 
 
 def check_pin():
-    """Check if the user has entered a valid PIN."""
+    """Check if the user has entered a valid PIN.
+
+    Note: This function requires Streamlit and is only used in Streamlit apps.
+    """
+    if not HAS_STREAMLIT:
+        raise RuntimeError("check_pin() requires Streamlit, which is not available in this environment")
+
     pins_file = Path(__file__).parent.parent / "config" / "pins.json"
     if not pins_file.exists():
         st.error("PIN file not found. Please contact an administrator.")

@@ -7,6 +7,19 @@ node -v
 npm -v
 ls -la
 
+echo ">>> Checking Environment Variables..."
+if [ -z "$PUBLIC_SUPABASE_URL" ]; then
+  echo "WARNING: PUBLIC_SUPABASE_URL is not set!"
+else
+  echo "PUBLIC_SUPABASE_URL is set."
+fi
+
+if [ -z "$PUBLIC_SUPABASE_ANON_KEY" ]; then
+  echo "WARNING: PUBLIC_SUPABASE_ANON_KEY is not set!"
+else
+  echo "PUBLIC_SUPABASE_ANON_KEY is set."
+fi
+
 if [ -d "frontend" ]; then
   echo "Found frontend directory"
   cd frontend

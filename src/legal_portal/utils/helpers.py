@@ -5,7 +5,6 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Dict, List
 
 import streamlit as st
-
 from legal_portal.utils.logging_config import get_module_logger
 
 if TYPE_CHECKING:
@@ -33,12 +32,19 @@ class ProgressTracker:
         self.phase_history = []
 
         # Progress allocation for different phases
+        # Legacy phases (kept for backwards compatibility)
         self.PHASE_ALLOCATIONS = {
             "document_processing": (0, 15),  # 15% - File processing
             "intake_analysis": (15, 25),  # 10% - Single intake analysis
             "case_analysis": (25, 75),  # 50% - Bulk of processing (size-based)
             "final_assessment": (75, 85),  # 10% - Final legal assessment
             "email_generation": (85, 100),  # 15% - Email generation
+            # NEW: Multi-stage analysis phases
+            "fact_extraction": (15, 30),  # 15% - Extract structured facts
+            "issue_mapping": (30, 42),  # 12% - Map legal issues
+            "deep_analysis": (42, 75),  # 33% - Deep legal analysis (most time)
+            "letter_generation": (75, 92),  # 17% - Generate letter
+            "final_review": (92, 100),  # 8% - Final quality review
         }
 
         # Enhanced phase descriptions
@@ -67,6 +73,37 @@ class ProgressTracker:
                 "title": "📧 Generating Findings Letter",
                 "description": "Creating professional findings letter",
                 "estimated_duration": 45,
+            },
+            # NEW: Multi-stage analysis phase descriptions
+            "fact_extraction": {
+                "title": "🔍 Stage 1/4: Fact Extraction",
+                "description": "Extracting key facts, timeline, and parties from documents",
+                "estimated_duration": 40,
+                "tips": "Building structured fact foundation for legal analysis",
+            },
+            "issue_mapping": {
+                "title": "⚖️ Stage 2/4: Legal Issue Mapping",
+                "description": "Identifying applicable legal issues and Florida statutes",
+                "estimated_duration": 35,
+                "tips": "Querying Florida legal corpus for verified statutes",
+            },
+            "deep_analysis": {
+                "title": "📊 Stage 3/4: Deep Legal Analysis",
+                "description": "Performing comprehensive analysis with statute verification",
+                "estimated_duration": 90,  # Most time-consuming stage
+                "tips": "This is the most detailed stage - analyzing each legal issue thoroughly",
+            },
+            "letter_generation": {
+                "title": "✍️ Stage 4/4: Letter Generation",
+                "description": "Generating attorney-quality findings letter",
+                "estimated_duration": 50,
+                "tips": "Adapting structure to case complexity",
+            },
+            "final_review": {
+                "title": "✅ Final Review",
+                "description": "Reviewing completeness and formatting",
+                "estimated_duration": 20,
+                "tips": "Quality checks and citation verification",
             },
         }
 
@@ -163,11 +200,17 @@ class ProgressTracker:
 
         # Enhanced detail text with helpful information
         if detail:
-            # Add processing tips for long phases
+            # Add processing tips for long phases (legacy)
             if self.current_phase == "case_analysis" and "Analyzing" in detail:
                 detail += "\n💡 Tip: Analysis time depends on document complexity and length"
             elif self.current_phase == "final_assessment":
                 detail += "\n💡 Generating comprehensive legal recommendations..."
+
+            # Add tips for multi-stage analysis phases
+            phase_info = self.PHASE_DESCRIPTIONS.get(self.current_phase, {})
+            tips = phase_info.get("tips")
+            if tips:
+                detail += f"\n💡 {tips}"
 
             self.detail_text.text(detail)
 

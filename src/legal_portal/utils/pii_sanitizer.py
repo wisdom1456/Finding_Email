@@ -6,6 +6,7 @@ as well as legal-specific information like case numbers, court names, and legal 
 
 CRITICAL: PII sanitization is ALWAYS enabled in production and cannot be disabled.
 """
+
 from __future__ import annotations
 
 import hashlib

@@ -377,8 +377,8 @@ def file_upload_section():
 def _show_manual_upload_section():
     """Show manual file upload interface."""
     uploaded_files = st.file_uploader(
-        "Select intake form and case documents (TXT, PDF, DOCX, DOC, PNG, JPG, EML, CSV)",
-        type=["txt", "pdf", "docx", "doc", "png", "jpg", "jpeg", "eml", "csv"],
+        "Select intake form and case documents (TXT, PDF, DOCX, DOC, PNG, JPG, EML, CSV, ZIP)",
+        type=["txt", "pdf", "docx", "doc", "png", "jpg", "jpeg", "eml", "csv", "zip"],
         accept_multiple_files=True,
         key="manual_file_uploader",
     )
@@ -399,13 +399,196 @@ def _show_manual_upload_section():
         # Show file count
         st.success(f"✅ {len(uploaded_files)} file(s) ready for upload")
 
+        # Show detailed file list with zip file hierarchy
+        _display_uploaded_files_list(uploaded_files)
+
     # Show any currently uploaded files
     elif st.session_state.get("uploaded_files"):
         current_files = st.session_state.uploaded_files
         st.info(f"📁 {len(current_files)} file(s) currently uploaded")
+        _display_uploaded_files_list(current_files)
         if st.button("Clear uploaded files"):
             st.session_state.uploaded_files = []
             st.rerun()
+
+
+def _display_uploaded_files_list(uploaded_files):
+    """Display uploaded files with special visualization for zip files."""
+    import os
+    import tempfile
+    import zipfile
+    from pathlib import Path
+
+    st.markdown("### 📋 Files to be processed:")
+
+    # Custom CSS for zip file highlighting
+    st.markdown(
+        """
+        <style>
+        .zip-file {
+            background-color: #fff3cd;
+            padding: 8px 12px;
+            border-radius: 4px;
+            margin: 4px 0;
+            border-left: 4px solid #ffc107;
+            font-weight: 600;
+        }
+        .extracted-file {
+            padding: 4px 12px 4px 32px;
+            margin: 2px 0;
+            color: #666;
+            font-size: 0.9em;
+        }
+        .regular-file {
+            padding: 4px 12px;
+            margin: 2px 0;
+        }
+        .file-icon {
+            margin-right: 8px;
+        }
+        </style>
+    """,
+        unsafe_allow_html=True,
+    )
+
+    # Define video and audio file extensions to skip
+    video_audio_extensions = [
+        ".mov",
+        ".mp4",
+        ".avi",
+        ".mkv",
+        ".wmv",
+        ".flv",
+        ".webm",
+        ".m4v",  # Video
+        ".mp3",
+        ".wav",
+        ".aac",
+        ".flac",
+        ".m4a",
+        ".ogg",
+        ".wma",
+        ".aiff",  # Audio
+    ]
+
+    for uploaded_file in uploaded_files:
+        file_name = uploaded_file.name
+        file_size_mb = uploaded_file.size / (1024 * 1024)
+
+        # Check if it's a zip file
+        if file_name.lower().endswith(".zip"):
+            # Display zip file with yellow highlight
+            st.markdown(
+                f'<div class="zip-file">'
+                f'<span class="file-icon">📦</span>{file_name} '
+                f'<span style="color: #666; font-weight: normal;">({file_size_mb:.2f} MB)</span>'
+                f"</div>",
+                unsafe_allow_html=True,
+            )
+
+            # Try to peek into the zip file to show its contents
+            try:
+                # Create a temporary file to read the zip
+                with tempfile.NamedTemporaryFile(delete=False, suffix=".zip") as tmp_file:
+                    tmp_file.write(uploaded_file.getvalue())
+                    tmp_path = tmp_file.name
+
+                # Read zip contents
+                try:
+                    with zipfile.ZipFile(tmp_path, "r") as zip_ref:
+                        zip_contents = zip_ref.namelist()
+
+                        # Filter out hidden files and system files
+                        visible_files = [
+                            f
+                            for f in zip_contents
+                            if not any(
+                                part.startswith(".") or part.startswith("__MACOSX") for part in Path(f).parts
+                            )
+                            and not f.endswith("/")  # Skip directories
+                        ]
+
+                        # Show extracted files indented
+                        included_count = 0
+                        skipped_count = 0
+
+                        for extracted_file in visible_files:
+                            Path(extracted_file).suffix.lower()
+
+                            # Check if file will be skipped
+                            if any(extracted_file.lower().endswith(ext) for ext in video_audio_extensions):
+                                st.markdown(
+                                    f'<div class="extracted-file" style="color: #999;">'
+                                    f'<span class="file-icon">⏭️</span>↳ {Path(extracted_file).name} '
+                                    f'<span style="font-style: italic;">(will be skipped - video/audio)</span>'
+                                    f"</div>",
+                                    unsafe_allow_html=True,
+                                )
+                                skipped_count += 1
+                            else:
+                                st.markdown(
+                                    f'<div class="extracted-file">'
+                                    f'<span class="file-icon">✓</span>↳ {Path(extracted_file).name}'
+                                    f"</div>",
+                                    unsafe_allow_html=True,
+                                )
+                                included_count += 1
+
+                        # Show summary
+                        if included_count > 0 or skipped_count > 0:
+                            summary_parts = []
+                            if included_count > 0:
+                                summary_parts.append(f"{included_count} file(s) will be processed")
+                            if skipped_count > 0:
+                                summary_parts.append(f"{skipped_count} file(s) will be skipped")
+
+                            st.markdown(
+                                f'<div class="extracted-file" style="color: #666; font-style: italic;">'
+                                f'<span class="file-icon">ℹ️</span>↳ {", ".join(summary_parts)}'
+                                f"</div>",
+                                unsafe_allow_html=True,
+                            )
+
+                except zipfile.BadZipFile:
+                    st.markdown(
+                        '<div class="extracted-file" style="color: #dc3545;">'
+                        '<span class="file-icon">⚠️</span>↳ Invalid zip file - cannot extract'
+                        "</div>",
+                        unsafe_allow_html=True,
+                    )
+                finally:
+                    # Clean up temporary file
+                    try:
+                        os.unlink(tmp_path)
+                    except:
+                        pass
+
+            except Exception:
+                st.markdown(
+                    '<div class="extracted-file" style="color: #dc3545;">'
+                    '<span class="file-icon">⚠️</span>↳ Error reading zip contents'
+                    "</div>",
+                    unsafe_allow_html=True,
+                )
+        else:
+            # Regular file - check if it will be skipped
+            if any(file_name.lower().endswith(ext) for ext in video_audio_extensions):
+                st.markdown(
+                    f'<div class="regular-file" style="color: #999;">'
+                    f'<span class="file-icon">⏭️</span>{file_name} '
+                    f'<span style="color: #999;">({file_size_mb:.2f} MB)</span> '
+                    f'<span style="font-style: italic;">(will be skipped - video/audio)</span>'
+                    f"</div>",
+                    unsafe_allow_html=True,
+                )
+            else:
+                st.markdown(
+                    f'<div class="regular-file">'
+                    f'<span class="file-icon">📄</span>{file_name} '
+                    f'<span style="color: #666;">({file_size_mb:.2f} MB)</span>'
+                    f"</div>",
+                    unsafe_allow_html=True,
+                )
 
 
 def results_display_section():
@@ -422,14 +605,43 @@ def results_display_section():
         logger.info(f"Formatting reports with client_name: '{client_name}'")
 
         # Create tabs for organized display
-        tab_titles = ["📧 Findings Letter", "📚 Cited Letter", "📄 Document Review", "⚖️ Case Analysis"]
+        tab_titles = [
+            "📧 Client Letter (Clean)",
+            "📚 Attorney Letter (With Citations)",
+            "📄 Document Review",
+            "⚖️ Case Analysis",
+        ]
         if st.session_state.get("quality_report"):
             tab_titles.append("📊 Quality Report")
 
         tabs = st.tabs(tab_titles)
 
-        # Findings Letter Tab
+        # Client Letter Tab (Clean - No Citations)
         with tabs[0]:
+            st.markdown(
+                """
+                <div style="background-color: #e8f4f8; padding: 12px; border-radius: 8px; border-left: 4px solid #0066cc; margin-bottom: 16px;">
+                    <strong>📧 Client-Ready Letter</strong><br/>
+                    <span style="color: #555; font-size: 14px;">
+                        Clean version without source citations - ready to send to the client.
+                    </span>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+            # DEBUG: Check for citations in clean letter
+            main_letter_content = st.session_state.get("main_letter", "")
+            has_source_citations = "[Source:" in main_letter_content or "(Source:" in main_letter_content
+            if has_source_citations:
+                citation_count = main_letter_content.count("[Source:") + main_letter_content.count("(Source:")
+                st.error(
+                    f"🐛 DEBUG: Clean letter contains {citation_count} citation(s) - this should not happen!"
+                )
+                st.warning(f"Letter length: {len(main_letter_content)} chars")
+            else:
+                st.success(f"✅ Clean letter has no citations (length: {len(main_letter_content)} chars)")
+
             # Display the main findings letter
             if st.session_state.get("main_letter"):
                 # Wrap the letter content with explicit styling to force white background and black text
@@ -463,8 +675,36 @@ def results_display_section():
             else:
                 st.info("The findings letter is being generated.")
 
-        # Cited Letter Tab (NEW)
+        # Attorney Review Letter Tab (With Citations)
         with tabs[1]:
+            st.markdown(
+                """
+                <div style="background-color: #fff8e8; padding: 12px; border-radius: 8px; border-left: 4px solid #ff9800; margin-bottom: 16px;">
+                    <strong>📚 Attorney Review Version</strong><br/>
+                    <span style="color: #555; font-size: 14px;">
+                        Contains inline source citations (Source: filename.pdf) for fact verification.
+                        Use this version to review the evidence supporting each statement.
+                    </span>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+            # DEBUG: Check for citations in cited letter
+            cited_letter_content = st.session_state.get("main_letter_with_citations", "")
+            has_source_citations_cited = (
+                "[Source:" in cited_letter_content or "(Source:" in cited_letter_content
+            )
+            if has_source_citations_cited:
+                citation_count_cited = cited_letter_content.count("[Source:") + cited_letter_content.count(
+                    "(Source:"
+                )
+                st.success(f"✅ Cited letter contains {citation_count_cited} citation(s) as expected")
+                st.info(f"Letter length: {len(cited_letter_content)} chars")
+            else:
+                st.error("🐛 DEBUG: Cited letter has NO citations - something went wrong!")
+                st.warning(f"Letter length: {len(cited_letter_content)} chars")
+
             # Display the findings letter with citations
             if st.session_state.get("main_letter_with_citations"):
                 # Wrap the cited letter content with explicit styling

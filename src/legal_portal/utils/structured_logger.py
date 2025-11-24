@@ -1,4 +1,5 @@
 """Structured logging with observability features."""
+
 from __future__ import annotations
 
 import json

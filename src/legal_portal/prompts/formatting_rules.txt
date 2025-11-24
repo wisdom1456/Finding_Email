@@ -1,0 +1,444 @@
+# STRICT FORMATTING RULES - VISUAL EXAMPLES
+
+## CRITICAL: COPY THIS EXACT STRUCTURE
+
+```
+Subject: Legal Review and Recommended Next Steps – [Case Name]
+
+Dear [Client Name],
+
+[Opening paragraph with specific documents]
+
+1. FACTUAL SUMMARY
+
+[Paragraph 1]
+
+[Paragraph 2 OR bullet list]
+
+Here are the key points of our analysis:
+
+• **[Issue 1 Title] ([Statute])**: [Explanation]
+
+• **[Issue 2 Title]**: [Explanation]
+
+• **[Issue 3 Title] ([Statute])**: [Explanation]
+
+2. RECOMMENDED ACTION & NEXT STEPS
+
+[Recommendation paragraph]
+
+[Closing sentence]
+
+Thank you,
+
+[Attorney Name]
+[Title]
+
+[Disclaimer]
+```
+
+---
+
+## SPACING RULES (COUNT THE BLANK LINES)
+
+### Between Major Sections
+```
+[Last line of greeting]
+<-- 1 BLANK LINE -->
+[First line of section 1]
+```
+
+### Between Paragraphs
+```
+[Last line of paragraph 1]
+<-- 1 BLANK LINE -->
+[First line of paragraph 2]
+```
+
+### Between Bullet Items
+```
+• **Issue 1**: [text]
+<-- NO BLANK LINE -->
+• **Issue 2**: [text]
+```
+
+### Before Section Headers
+```
+[Last line of previous section]
+<-- 1 BLANK LINE -->
+1. FACTUAL SUMMARY
+<-- 1 BLANK LINE -->
+[First paragraph]
+```
+
+---
+
+## VISUAL TEMPLATE WITH EXACT SPACING
+
+```
+Subject: Legal Review and Recommended Next Steps – LLW Construction Dispute
+⬇️ 1 blank line
+Dear Mr. Devlin,
+⬇️ 1 blank line
+I hope you are doing well. I wanted to follow up with a summary of our findings...
+⬇️ 1 blank line
+1. FACTUAL SUMMARY
+⬇️ 1 blank line
+Based on our review, we understand that the issues began after you engaged...
+⬇️ 1 blank line
+Key concerns include:
+• Defective construction
+• Work ceased March 2025—over 8 months ago
+• Notice to Owner received
+⬇️ 1 blank line
+Here are the key points of our analysis:
+⬇️ 1 blank line
+• **Implied Warranty & Construction Defects (Florida Statutes Chapter 558)**: An "implied warranty" is a legal concept...
+⬅️ NO blank line
+• **Breach of Contract**: The contractor's failure to complete...
+⬅️ NO blank line
+• **Mechanic's Liens (Fla. Stat. § 713.06)**: You received a Notice to Owner...
+⬇️ 1 blank line
+2. RECOMMENDED ACTION & NEXT STEPS
+⬇️ 1 blank line
+I recommend two immediate actions: (1) Pay Tibbetts Lumber...
+⬇️ 1 blank line
+If you proceed with payment:
+• Obtain a written release
+• Retain proof of payment
+• Use as part of damages claim
+⬇️ 1 blank line
+Please let me know if you'd like to schedule a call.
+⬇️ 1 blank line
+Thank you,
+⬇️ 1 blank line
+Franklin Riley
+Senior Partner
+⬇️ 1 blank line
+This analysis is based on...
+```
+
+---
+
+## BULLET FORMATTING RULES
+
+### Top-Level Legal Issues
+```
+• **[Issue Title] ([Statute if applicable])**: [Content starts immediately after colon]
+```
+
+**Examples:**
+```
+✅ CORRECT:
+• **Implied Warranty & Construction Defects (Florida Statutes Chapter 558)**: An "implied warranty" is...
+
+✅ CORRECT (no statute):
+• **Breach of Contract**: The contractor's failure...
+
+❌ WRONG - no bullet symbol:
+**Implied Warranty & Construction Defects**: An "implied warranty"...
+
+❌ WRONG - numbered instead of bullet:
+2. IMPLIED WARRANTY & CONSTRUCTION DEFECTS: An "implied warranty"...
+
+❌ WRONG - ALL CAPS header:
+• IMPLIED WARRANTY & CONSTRUCTION DEFECTS: An "implied warranty"...
+```
+
+### Sub-Items Within Issues
+```
+• **Main Issue**: [Explanation]
+
+  **Sub-Section Title:**
+  - Sub-item 1
+  - Sub-item 2
+  - Sub-item 3
+```
+
+**Example:**
+```
+• **Implied Warranty (Chapter 558)**: An "implied warranty" is a legal concept...
+
+  **Pre-Litigation Requirements:**
+  Before pursuing litigation, Florida Statutes Chapter 558 requires:
+  - You must provide 60 days' written notice
+  - The contractor has 45 days to respond
+  - You CANNOT file suit without completing this process
+```
+
+### Action Items / Recommendations
+```
+[Paragraph introducing action]
+
+• Action item 1
+• Action item 2
+• Action item 3
+```
+
+**Example:**
+```
+If you proceed with payment to the subcontractor:
+• Obtain a written release of lien
+• Retain proof of payment
+• Use as part of your damages claim
+```
+
+---
+
+## SECTION HEADER RULES
+
+### Main Sections (Use Numbers)
+```
+1. FACTUAL SUMMARY
+
+2. RECOMMENDED ACTION & NEXT STEPS
+```
+
+**Format:**
+- Number, period, space
+- ALL CAPS
+- Standalone line
+- 1 blank line before
+- 1 blank line after
+
+### Transition Line (Between Factual and Legal)
+```
+Here are the key points of our analysis:
+```
+
+**Rules:**
+- Sentence case (not ALL CAPS)
+- Standalone line
+- 1 blank line before
+- 1 blank line after
+- MUST be this exact phrase (NOT "Key Findings")
+
+### Legal Issue Headers (Use Bullets)
+```
+• **Implied Warranty & Construction Defects (Fla. Stat. Chapter 558)**: 
+```
+
+**Format:**
+- Bullet symbol •
+- Bold issue title
+- Statute in parentheses (if applicable)
+- Colon after title
+- Content starts on same line
+
+---
+
+## COMPLETE WORKING EXAMPLE
+
+```
+Subject: Legal Review and Recommended Next Steps – LLW Construction Dispute
+
+Dear Mr. Devlin,
+
+I hope you are doing well. I wanted to follow up with a summary of our findings after reviewing the construction contract with LLW Construction Inc., payment records, and photos of defective work regarding your property at 3414 South Belcher Drive, Tampa, Florida.
+
+1. FACTUAL SUMMARY
+
+Based on our review, we understand that the issues began after you engaged LLW Construction Inc. to rebuild your home at a total contract price of $128,000. To date, you have paid $100,000, but the contractor has only completed work valued at $70,000—a $30,000 shortfall.
+
+Key concerns include:
+• Defective construction requiring complete reconstruction
+• Work ceased in March 2025—over 8 months ago
+• No communication from contractor since cessation
+• Notice to Owner received from Tibbetts Lumber for $2,150.66
+
+Here are the key points of our analysis:
+
+• **Implied Warranty & Construction Defects (Florida Statutes Chapter 558)**: An "implied warranty" is a legal concept. It is a warranty that is not explicitly stated in your contract but is implied by the law. Essentially, this means that the contractor guaranteed to do the work in a proper and workmanlike way. In your situation, the defective construction and incomplete work despite substantial payments may give rise to claims under this implied warranty.
+
+  **Pre-Litigation Requirements:**
+  Before pursuing litigation, Florida Statutes Chapter 558 requires specific steps:
+  - You must provide 60 days' written notice to the contractor
+  - The contractor then has 45 days to respond with a proposed repair plan
+  - You CANNOT file suit without completing this statutory process
+
+• **Breach of Contract**: The contractor's failure to complete $58,000 worth of contracted work constitutes a material breach. You may seek remedies including the cost to complete the project with another contractor or reimbursement for the overpayment.
+
+• **Mechanic's Liens (Fla. Stat. § 713.06)**: You received a Notice to Owner from Tibbetts Lumber—this is the FIRST STEP toward filing a construction lien against your property. The subcontractor has 90 days from their last work date to file a lien. Once recorded, they may initiate foreclosure, which can ultimately lead to the FORCED SALE OF YOUR HOME if not resolved.
+
+2. RECOMMENDED ACTION & NEXT STEPS
+
+I recommend two immediate actions: (1) Pay Tibbetts Lumber the $2,150.66 and obtain a lien waiver, and (2) Send a Chapter 558 pre-suit notice to LLW Construction Inc. These steps will protect your property and preserve your legal options.
+
+If you proceed with payment to the subcontractor:
+• Obtain a written release of lien or lien waiver
+• Retain proof of payment (cancelled check, receipt)
+• Use this payment as part of your damages claim
+
+Please let me know if you'd like to schedule a call to discuss these next steps.
+
+Thank you,
+
+Franklin Riley
+Senior Partner
+
+This analysis is based on the documents provided and represents a preliminary assessment. Additional facts may emerge that will materially affect this analysis. This communication is confidential and subject to attorney-client privilege.
+```
+
+---
+
+## COMMON FORMATTING MISTAKES TO AVOID
+
+### ❌ MISTAKE 1: Numbered Legal Issues
+```
+WRONG:
+
+2. IMPLIED WARRANTY & CONSTRUCTION DEFECTS
+3. BREACH OF CONTRACT  
+4. MECHANIC'S LIENS
+```
+
+```
+CORRECT:
+
+Here are the key points of our analysis:
+
+• **Implied Warranty & Construction Defects**: [explanation]
+• **Breach of Contract**: [explanation]
+• **Mechanic's Liens**: [explanation]
+```
+
+### ❌ MISTAKE 2: Wrong Transition Line
+```
+WRONG:
+
+Key Findings
+
+2. IMPLIED WARRANTY...
+```
+
+```
+CORRECT:
+
+Here are the key points of our analysis:
+
+• **Implied Warranty...**
+```
+
+### ❌ MISTAKE 3: Too Much Spacing
+```
+WRONG:
+
+• **Issue 1**: [text]
+
+
+• **Issue 2**: [text]
+
+
+• **Issue 3**: [text]
+```
+
+```
+CORRECT:
+
+• **Issue 1**: [text]
+• **Issue 2**: [text]
+• **Issue 3**: [text]
+```
+
+### ❌ MISTAKE 4: Missing Section 1
+```
+WRONG:
+
+Dear Mr. Smith,
+
+[Opening paragraph]
+
+Key Findings
+
+2. IMPLIED WARRANTY...
+```
+
+```
+CORRECT:
+
+Dear Mr. Smith,
+
+[Opening paragraph]
+
+1. FACTUAL SUMMARY
+
+[Factual content]
+
+Here are the key points of our analysis:
+
+• **Implied Warranty...**
+```
+
+### ❌ MISTAKE 5: Wrong Bullet Symbol
+```
+WRONG:
+
+- Implied Warranty...
+* Breach of Contract...
+→ Mechanic's Liens...
+```
+
+```
+CORRECT:
+
+• Implied Warranty...
+• Breach of Contract...
+• Mechanic's Liens...
+```
+
+---
+
+## QUALITY CHECKLIST
+
+Before finalizing, verify:
+
+### Structure
+- [ ] Has "1. FACTUAL SUMMARY" section
+- [ ] Has "Here are the key points of our analysis:" transition
+- [ ] Legal issues use bullet symbols (•), not numbers
+- [ ] Has final numbered section for recommendations
+- [ ] No "Key Findings" header
+- [ ] No sections numbered 2., 3., 4. for legal issues
+
+### Spacing
+- [ ] 1 blank line after greeting
+- [ ] 1 blank line before/after section headers
+- [ ] 1 blank line between paragraphs
+- [ ] NO blank lines between consecutive bullet items
+- [ ] 1 blank line before closing
+
+### Bullets
+- [ ] All legal issues start with • symbol
+- [ ] Issue titles are bold
+- [ ] Statute references in parentheses
+- [ ] Content starts after colon on same line
+- [ ] Sub-items indented with dashes (-)
+
+### Professional Touches
+- [ ] Proper subject line
+- [ ] Warm greeting
+- [ ] Specific documents listed
+- [ ] Educational tone
+- [ ] Simple, clear closing
+- [ ] Signature block
+- [ ] Disclaimer paragraph
+
+---
+
+## ENFORCEMENT: AI MUST FOLLOW
+
+**INSTRUCTION FOR AI:**
+
+You MUST copy this exact structure. Do not deviate. Do not number legal issues as 2., 3., 4. Always use bullet symbols (•) for legal issues. Always include "1. FACTUAL SUMMARY" and the transition line "Here are the key points of our analysis:". 
+
+**If you find yourself writing:**
+- "Key Findings" → STOP, use "Here are the key points of our analysis:"
+- "2. IMPLIED WARRANTY" → STOP, use "• **Implied Warranty**:"
+- "3. BREACH OF CONTRACT" → STOP, use "• **Breach of Contract**:"
+
+**The ONLY numbers in the letter should be:**
+1. Section 1 (Factual Summary)
+2. Final section (Recommended Actions)
+
+Everything else uses bullets (•).
+

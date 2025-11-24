@@ -246,6 +246,11 @@ check_dependencies() {
                 "pydantic-settings") import_name="pydantic_settings" ;;
                 "Pillow") import_name="PIL" ;;
                 "sseclient-py") import_name="sseclient" ;;
+                "streamlit-authenticator") import_name="streamlit_authenticator" ;;
+                "PyJWT") import_name="jwt" ;;
+                "pyyaml"|"PyYAML") import_name="yaml" ;;
+                "requests-oauthlib") import_name="requests_oauthlib" ;;
+                "beautifulsoup4") import_name="bs4" ;;
             esac
 
             log_verbose "Testing import for package: $pkg_name (import as: $import_name)"
@@ -386,9 +391,9 @@ EOF
 start_frontend() {
     log_step "Starting Streamlit application..."
 
-    # Verify app.py exists
-    if [ ! -f "app.py" ]; then
-        log_error "Application app.py not found"
+    # Verify run_app.py exists
+    if [ ! -f "run_app.py" ]; then
+        log_error "Application run_app.py not found"
         return 1
     fi
 
@@ -422,7 +427,7 @@ echo "The browser should open automatically"
 echo "Press Ctrl+C to stop the application"
 echo ""
 
-python3 -m streamlit run app.py --server.port 8501 --server.headless false
+python3 -m streamlit run run_app.py --server.port 8501 --server.headless false
 EOF
     )
 

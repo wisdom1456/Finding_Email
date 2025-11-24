@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""Targeted validation tests for the three critical error fixes.
-"""
+"""Targeted validation tests for the three critical error fixes."""
+
 from __future__ import annotations
 
 import os
@@ -13,13 +13,12 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 
 def test_cost_session_id_fix():
-    """Test Priority 1: cost_session_id initialization fix in app.py"""
+    """Test Priority 1: cost_session_id initialization fix in app.py."""
     print("🧪 Testing Priority 1: cost_session_id initialization...")
 
     try:
         # Import the session state initialization function
         import streamlit as st
-
         from app import initialize_session_state
 
         # Mock streamlit session state
@@ -74,7 +73,7 @@ def test_cost_session_id_fix():
 
 
 def test_structured_logger_exception_method():
-    """Test Priority 2: StructuredLogger exception method fix"""
+    """Test Priority 2: StructuredLogger exception method fix."""
     print("\n🧪 Testing Priority 2: StructuredLogger exception method...")
 
     try:
@@ -107,7 +106,7 @@ def test_structured_logger_exception_method():
 
 
 def test_ai_analyzer_error_handling():
-    """Test Priority 3: AI analyzer error handling (verify it's already fixed)"""
+    """Test Priority 3: AI analyzer error handling (verify it's already fixed)."""
     print("\n🧪 Testing Priority 3: AI analyzer error handling...")
 
     try:
@@ -119,14 +118,14 @@ def test_ai_analyzer_error_handling():
 
         # Verify it handles the error gracefully
         assert isinstance(error_context, dict), "Should return dict even on error"
-        assert error_context.get("ai_analysis_failed") == True, "Should indicate AI analysis failed"
+        assert error_context.get("ai_analysis_failed") is True, "Should indicate AI analysis failed"
 
         print("   Testing analyze_document with empty input...")
         error_analysis = analyze_document("", {"case_type": "test"})
 
         # Verify it handles the error gracefully
         assert isinstance(error_analysis, dict), "Should return dict even on error"
-        assert error_analysis.get("ai_analysis_failed") == True, "Should indicate AI analysis failed"
+        assert error_analysis.get("ai_analysis_failed") is True, "Should indicate AI analysis failed"
 
         print("✅ CONFIRMED: AI analyzer error handling already fixed")
         print("   Uses dict key access instead of attribute access for error objects")
@@ -145,7 +144,7 @@ def test_ai_analyzer_error_handling():
 
 
 def main():
-    """Run all validation tests"""
+    """Run all validation tests."""
     print("🔧 CRITICAL ERROR FIXES VALIDATION")
     print("=" * 50)
 

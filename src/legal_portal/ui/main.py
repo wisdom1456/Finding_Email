@@ -507,6 +507,7 @@ def prepare_files_for_analysis(uploaded_files, compress_flag):
     """Save uploaded files and compress them if needed.
 
     Handles both Streamlit UploadedFile objects and ProcessedDocument objects (from CLIO).
+    Automatically extracts zip files and processes their contents.
 
     Args:
     ----
@@ -518,6 +519,8 @@ def prepare_files_for_analysis(uploaded_files, compress_flag):
         Tuple of (intake_path, case_document_paths)
 
     """
+    import zipfile
+
     from legal_portal.core.data_models import ProcessedDocument
 
     if "session_temp_dir" not in st.session_state or not st.session_state.session_temp_dir:
@@ -529,9 +532,40 @@ def prepare_files_for_analysis(uploaded_files, compress_flag):
     final_file_paths = []
     compressor = FileCompressionService() if compress_flag else None
 
+    # Define video and audio file extensions to skip
+    video_audio_extensions = [
+        ".mov",
+        ".mp4",
+        ".avi",
+        ".mkv",
+        ".wmv",
+        ".flv",
+        ".webm",
+        ".m4v",  # Video
+        ".mp3",
+        ".wav",
+        ".aac",
+        ".flac",
+        ".m4a",
+        ".ogg",
+        ".wma",
+        ".aiff",  # Audio
+    ]
+
     with st.spinner("Preparing and compressing files..."):
         for uploaded_file in uploaded_files:
             try:
+                # Get file name for both types of objects
+                file_name = getattr(uploaded_file, "name", None) or getattr(
+                    uploaded_file, "file_name", "unknown"
+                )
+
+                # Skip video and audio files
+                if any(file_name.lower().endswith(ext) for ext in video_audio_extensions):
+                    logger.info(f"⏭️  Skipping video/audio file: {file_name}")
+                    st.info(f"⏭️  Skipping video/audio file: {file_name}")
+                    continue
+
                 # Check if this is a ProcessedDocument (from CLIO) or UploadedFile
                 if isinstance(uploaded_file, ProcessedDocument):
                     # This is already processed from CLIO - save its content to a temp file
@@ -552,13 +586,129 @@ def prepare_files_for_analysis(uploaded_files, compress_flag):
                     with open(temp_file_path, "wb") as f:
                         f.write(uploaded_file.getbuffer())
 
-                    # If compression is enabled, process the file
-                    if compressor:
-                        final_path = compressor.process_file(temp_file_path)
-                    else:
-                        final_path = temp_file_path
+                    # Check if this is a zip file - extract it
+                    if uploaded_file.name.lower().endswith(".zip"):
+                        logger.info(f"📦 Extracting zip file: {uploaded_file.name}")
 
-                    final_file_paths.append(final_path)
+                        # Display zip file with yellow highlight
+                        st.markdown(
+                            f'<div style="background-color: #fff3cd; padding: 8px 12px; '
+                            f'border-radius: 4px; margin: 8px 0; border-left: 4px solid #ffc107;">'
+                            f'<span style="font-weight: 600;">📦 Extracting: {uploaded_file.name}</span>'
+                            f"</div>",
+                            unsafe_allow_html=True,
+                        )
+
+                        try:
+                            # Create subdirectory for this zip's contents
+                            zip_extract_dir = os.path.join(
+                                temp_dir, Path(uploaded_file.name).stem + "_extracted"
+                            )
+                            os.makedirs(zip_extract_dir, exist_ok=True)
+
+                            # Extract zip file
+                            with zipfile.ZipFile(temp_file_path, "r") as zip_ref:
+                                zip_ref.extractall(zip_extract_dir)
+
+                            # Force filesystem sync to prevent race conditions
+                            # Increased delay to 500ms for more reliable extraction
+                            await asyncio.sleep(0.5)
+
+                            # Add extracted files to processing list (filtering out video/audio)
+                            extracted_count = 0
+                            skipped_count = 0
+                            extracted_files_list = []
+                            skipped_files_list = []
+
+                            for root, _dirs, files in os.walk(zip_extract_dir):
+                                for extracted_file in files:
+                                    # Skip hidden files and system files
+                                    if extracted_file.startswith(".") or extracted_file.startswith(
+                                        "__MACOSX"
+                                    ):
+                                        continue
+
+                                    # Skip video/audio files
+                                    if any(
+                                        extracted_file.lower().endswith(ext) for ext in video_audio_extensions
+                                    ):
+                                        logger.info(f"  ⏭️  Skipping video/audio: {extracted_file}")
+                                        skipped_files_list.append(extracted_file)
+                                        skipped_count += 1
+                                        continue
+
+                                    extracted_path = os.path.join(root, extracted_file)
+
+                                    # Verify file exists before processing (filesystem sync check)
+                                    if not os.path.isfile(extracted_path):
+                                        logger.warning(
+                                            f"Extracted file not found (filesystem sync issue?): {extracted_path}"
+                                        )
+                                        continue
+
+                                    # Optionally compress extracted file
+                                    if compressor:
+                                        final_path = compressor.process_file(extracted_path)
+                                    else:
+                                        final_path = extracted_path
+
+                                    final_file_paths.append(final_path)
+                                    extracted_files_list.append(extracted_file)
+                                    extracted_count += 1
+
+                            # Display extracted files with indentation
+                            if extracted_files_list:
+                                for extracted_file in extracted_files_list[:5]:  # Show first 5
+                                    st.markdown(
+                                        f'<div style="padding: 2px 12px 2px 32px; color: #666; font-size: 0.9em;">'
+                                        f"  ✓ ↳ {extracted_file}"
+                                        f"</div>",
+                                        unsafe_allow_html=True,
+                                    )
+                                if len(extracted_files_list) > 5:
+                                    st.markdown(
+                                        f'<div style="padding: 2px 12px 2px 32px; color: #666; font-size: 0.9em; font-style: italic;">'
+                                        f"  ... and {len(extracted_files_list) - 5} more file(s)"
+                                        f"</div>",
+                                        unsafe_allow_html=True,
+                                    )
+
+                            # Show summary
+                            logger.info(f"✅ Extracted {extracted_count} files from {uploaded_file.name}")
+                            summary_parts = []
+                            if extracted_count > 0:
+                                summary_parts.append(
+                                    f"{extracted_count} file(s) extracted and will be processed"
+                                )
+                            if skipped_count > 0:
+                                summary_parts.append(f"{skipped_count} video/audio file(s) skipped")
+
+                            st.markdown(
+                                f'<div style="padding: 4px 12px 4px 32px; color: #28a745; font-size: 0.9em;">'
+                                f"  ℹ️ {', '.join(summary_parts)}"
+                                f"</div>",
+                                unsafe_allow_html=True,
+                            )
+
+                            # Remove the original zip file
+                            os.remove(temp_file_path)
+
+                        except zipfile.BadZipFile:
+                            logger.error(f"Invalid zip file: {uploaded_file.name}")
+                            st.warning(f"⚠️ Could not extract {uploaded_file.name} - invalid zip file")
+                        except Exception as e:
+                            logger.error(f"Failed to extract zip file {uploaded_file.name}: {e}")
+                            st.warning(f"⚠️ Could not extract {uploaded_file.name}: {str(e)}")
+
+                    else:
+                        # Regular file (not a zip) - process normally
+                        # If compression is enabled, process the file
+                        if compressor:
+                            final_path = compressor.process_file(temp_file_path)
+                        else:
+                            final_path = temp_file_path
+
+                        final_file_paths.append(final_path)
 
             except Exception as e:
                 # Handle both types of file names
@@ -928,15 +1078,39 @@ def check_processing_status():
             elif result_data["type"] == "completed":
                 # Processing complete
                 result = result_data["result"]
+
+                # DEBUG: Log what we received
+                logger.info(f"DEBUG: Received result type: {type(result)}")
+                logger.info(
+                    f"DEBUG: Has main_letter: {hasattr(result, 'main_letter') if not isinstance(result, dict) else 'main_letter' in result}"
+                )
+                logger.info(
+                    f"DEBUG: Has document_summaries: {hasattr(result, 'document_summaries') if not isinstance(result, dict) else 'document_summaries' in result}"
+                )
+
                 st.session_state.processing_status = "completed"
                 st.session_state.ui_step = "results"
                 st.session_state.final_results = result
-                st.session_state.document_review = result.document_summaries
-                st.session_state.case_analysis = result.case_analysis
-                st.session_state.main_letter = result.main_letter  # Store findings letter
-                st.session_state.main_letter_with_citations = (
-                    result.main_letter_with_citations
-                )  # Store cited letter
+
+                # Handle both dict and object formats
+                if isinstance(result, dict):
+                    st.session_state.document_review = result.get("document_summaries", "")
+                    st.session_state.case_analysis = result.get("case_analysis", "")
+                    st.session_state.main_letter = result.get("main_letter", "")
+                    st.session_state.main_letter_with_citations = result.get("main_letter_with_citations", "")
+                    logger.info(
+                        f"DEBUG: Stored dict results - main_letter length: {len(result.get('main_letter', ''))}, doc_summaries length: {len(result.get('document_summaries', ''))}"
+                    )
+                else:
+                    st.session_state.document_review = result.document_summaries
+                    st.session_state.case_analysis = result.case_analysis
+                    st.session_state.main_letter = result.main_letter  # Store findings letter
+                    st.session_state.main_letter_with_citations = (
+                        result.main_letter_with_citations
+                    )  # Store cited letter
+                    logger.info(
+                        f"DEBUG: Stored object results - main_letter length: {len(result.main_letter)}, doc_summaries length: {len(result.document_summaries)}"
+                    )
 
                 # Cleanup
                 if "current_progress" in st.session_state:
@@ -967,17 +1141,81 @@ def check_processing_status():
     # Display current progress
     progress_data = st.session_state.current_progress
 
-    col1, col2 = st.columns([3, 1])
-    with col1:
-        st.write(f"**Status:** {progress_data.get('message', 'Processing...')}")
-    with col2:
-        st.write(f"🔄 Next refresh: **{seconds_until_refresh}s**")
+    # Check if this is multi-stage analysis (new system)
+    current_phase = progress_data.get("current_phase", "starting")
+    is_multi_stage = current_phase in [
+        "fact_extraction",
+        "issue_mapping",
+        "deep_analysis",
+        "letter_generation",
+        "final_review",
+    ]
 
-    # Show progress bar
-    if progress_data.get("progress_percent", 0) > 0:
-        st.progress(progress_data["progress_percent"] / 100)
+    if is_multi_stage:
+        # Enhanced display for multi-stage analysis
+        st.subheader("📊 Multi-Stage Analysis Progress")
+
+        # Metrics row
+        col1, col2, col3 = st.columns([2, 1, 1])
+        with col1:
+            st.metric("Current Stage", progress_data.get("message", "Processing..."))
+        with col2:
+            st.metric("Overall Progress", f"{progress_data.get('progress_percent', 0):.0f}%")
+        with col3:
+            if st.session_state.get("processing_start_time"):
+                elapsed = time.time() - st.session_state.processing_start_time
+                minutes = int(elapsed // 60)
+                seconds = int(elapsed % 60)
+                time_str = f"{minutes}m {seconds}s" if minutes > 0 else f"{seconds}s"
+                st.metric("Time Elapsed", time_str)
+
+        # Stage breakdown visual
+        st.write("**Analysis Stages:**")
+
+        # Define stages with their status
+        stages_config = [
+            ("Fact Extraction", "fact_extraction", "🔍"),
+            ("Issue Mapping", "issue_mapping", "⚖️"),
+            ("Legal Analysis", "deep_analysis", "📊"),
+            ("Letter Generation", "letter_generation", "✍️"),
+            ("Final Review", "final_review", "✅"),
+        ]
+
+        # Determine status for each stage
+        stage_progress = progress_data.get("stages", {})
+
+        for stage_name, stage_key, icon in stages_config:
+            status = stage_progress.get(stage_name, "pending")
+
+            if stage_key == current_phase:
+                st.info(f"⏳ {icon} **{stage_name}** - In Progress")
+            elif status == "completed" or (
+                stages_config.index((stage_name, stage_key, icon))
+                < [s[1] for s in stages_config].index(current_phase)
+            ):
+                st.success(f"✓ {icon} {stage_name}")
+            else:
+                st.text(f"○ {icon} {stage_name}")
+
+        # Overall progress bar
+        st.progress(progress_data.get("progress_percent", 0) / 100)
+
+        # Refresh countdown
+        st.caption(f"🔄 Next refresh: {seconds_until_refresh}s")
+
     else:
-        st.progress(0, text="Starting...")
+        # Legacy display for backwards compatibility
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            st.write(f"**Status:** {progress_data.get('message', 'Processing...')}")
+        with col2:
+            st.write(f"🔄 Next refresh: **{seconds_until_refresh}s**")
+
+        # Show progress bar
+        if progress_data.get("progress_percent", 0) > 0:
+            st.progress(progress_data["progress_percent"] / 100)
+        else:
+            st.progress(0, text="Starting...")
 
     # Show processed documents list
     docs_processed = progress_data.get("documents_processed", [])
@@ -986,8 +1224,8 @@ def check_processing_status():
             for doc in docs_processed:
                 st.write(f"✓ {doc}")
 
-    # Show elapsed time
-    if st.session_state.get("processing_start_time"):
+    # Show elapsed time (only for legacy mode, multi-stage already shows it in metrics)
+    if not is_multi_stage and st.session_state.get("processing_start_time"):
         elapsed = time.time() - st.session_state.processing_start_time
         minutes = int(elapsed // 60)
         seconds = int(elapsed % 60)

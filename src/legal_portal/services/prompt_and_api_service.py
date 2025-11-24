@@ -30,7 +30,7 @@ class PromptAndApiService:
     def __init__(self, config: Dict[str, Any]):
         """Initialize the deprecated prompt and API service."""
         logger.warning(
-            "PromptAndApiService is deprecated. " "Use JsonProcessingService.generate_html_letter() instead."
+            "PromptAndApiService is deprecated. Use JsonProcessingService.generate_html_letter() instead."
         )
         self.config = config or {}
 
@@ -55,8 +55,7 @@ class PromptAndApiService:
         This method is no longer supported in the new architecture.
         """
         logger.error(
-            "make_openai_request() is deprecated. "
-            "Use JsonProcessingService._make_openai_request() instead."
+            "make_openai_request() is deprecated. Use JsonProcessingService._make_openai_request() instead."
         )
 
         return "[DEPRECATED: Use JsonProcessingService for OpenAI requests]"

@@ -1,0 +1,53 @@
+# Frontend Dockerfile optimized for SvelteKit with Node.js
+FROM node:20-slim as builder
+
+# Set working directory
+WORKDIR /app
+
+# Copy package files for dependency installation
+COPY frontend/package*.json ./
+
+# Install dependencies with clean install for reproducible builds
+RUN npm ci --prefer-offline --no-audit
+
+# Copy frontend source code
+COPY frontend/ ./
+
+# Build the SvelteKit application
+RUN npm run build
+
+# Prune dev dependencies after build
+RUN npm prune --production
+
+# Production stage
+FROM node:20-slim
+
+# Set production environment
+ENV NODE_ENV=production \
+    PORT=3000
+
+# Create non-root user for security
+RUN groupadd --gid 1000 nodeuser && \
+    useradd --uid 1000 --gid 1000 --create-home --shell /bin/bash nodeuser
+
+# Set working directory
+WORKDIR /app
+
+# Copy built application and production dependencies from builder
+COPY --from=builder --chown=nodeuser:nodeuser /app/build ./build
+COPY --from=builder --chown=nodeuser:nodeuser /app/node_modules ./node_modules
+COPY --from=builder --chown=nodeuser:nodeuser /app/package.json ./package.json
+
+# Switch to non-root user
+USER nodeuser
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+    CMD node -e "require('http').get('http://localhost:${PORT}/', (r) => process.exit(r.statusCode === 200 ? 0 : 1))"
+
+# Expose port
+EXPOSE ${PORT}
+
+# Run the SvelteKit Node adapter
+CMD ["node", "build"]
+

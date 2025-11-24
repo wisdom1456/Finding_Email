@@ -10,9 +10,8 @@ from typing import Any, Dict, List, Optional
 
 import httpx
 import openai
-from openai import OpenAI
-
 from legal_portal.utils.logging_config import get_module_logger
+from openai import OpenAI
 
 logger = get_module_logger(__name__)
 
@@ -20,8 +19,15 @@ logger = get_module_logger(__name__)
 class OpenAIClient:
     """Handles all OpenAI API interactions and response processing."""
 
-    def __init__(self):
-        """Initialize OpenAI client with proper timeout and connection settings."""
+    def __init__(self, user_preferences: Optional[Dict[str, str]] = None):
+        """Initialize OpenAI client with proper timeout and connection settings.
+
+        Args:
+        ----
+            user_preferences: Optional dict of user AI model preferences by operation type
+                             e.g., {"document_analysis": "gpt-4o", "letter_generation": "gpt-4o"}
+
+        """
         # Configure HTTP client with appropriate timeouts for cloud environments
         http_client = httpx.Client(
             timeout=httpx.Timeout(
@@ -38,6 +44,24 @@ class OpenAIClient:
         self.fallback_model = "gpt-4o-mini"
         self.max_retries = 3
         self.retry_delay = 2
+
+        # Store user preferences for model selection
+        self.user_preferences = user_preferences or {}
+
+    def get_preferred_model(self, operation_type: str, fallback: str = "gpt-4o") -> str:
+        """Get the user's preferred model for a specific operation type.
+
+        Args:
+        ----
+            operation_type: Type of operation (e.g., "document_analysis", "letter_generation")
+            fallback: Fallback model if no preference is set
+
+        Returns:
+        -------
+            Model name to use
+
+        """
+        return self.user_preferences.get(operation_type, fallback)
 
     def _extract_json_content(self, content: str) -> str:
         """Intelligently extract a JSON string from the API response.
@@ -254,6 +278,7 @@ class OpenAIClient:
         messages: List[Dict[str, str]],
         temperature: float = 0.3,
         max_tokens: Optional[int] = None,
+        response_format: Optional[Dict[str, str]] = None,
     ) -> Dict[str, Any]:
         """Provide standard interface for chat completions across all services.
 
@@ -266,6 +291,7 @@ class OpenAIClient:
             messages: List of message dicts with 'role' and 'content'
             temperature: Sampling temperature (0.0-2.0)
             max_tokens: Maximum tokens to generate (None for model default)
+            response_format: Optional dict to specify response format (e.g., {"type": "json_object"})
 
         Returns:
         -------
@@ -290,13 +316,21 @@ class OpenAIClient:
                 },
             )
 
+            # Build request parameters
+            request_params = {
+                "model": model,
+                "messages": messages,
+                "temperature": temperature,
+            }
+
+            if max_tokens is not None:
+                request_params["max_tokens"] = max_tokens
+
+            if response_format is not None:
+                request_params["response_format"] = response_format
+
             # Make the API call
-            response = self.client.chat.completions.create(
-                model=model,
-                messages=messages,
-                temperature=temperature,
-                max_tokens=max_tokens,
-            )
+            response = self.client.chat.completions.create(**request_params)
 
             content = response.choices[0].message.content
             usage = response.usage

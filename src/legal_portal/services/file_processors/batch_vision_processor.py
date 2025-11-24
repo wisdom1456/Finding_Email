@@ -75,11 +75,11 @@ Format your response EXACTLY as follows:
 ## IMAGE 2: {filenames[1]}
 [Your detailed description here]
 
-{f'## IMAGE 3: {filenames[2]}' if len(filenames) > 2 else ''}
-{'[Your detailed description here]' if len(filenames) > 2 else ''}
+{f"## IMAGE 3: {filenames[2]}" if len(filenames) > 2 else ""}
+{"[Your detailed description here]" if len(filenames) > 2 else ""}
 
-{f'## IMAGE 4: {filenames[3]}' if len(filenames) > 3 else ''}
-{'[Your detailed description here]' if len(filenames) > 3 else ''}
+{f"## IMAGE 4: {filenames[3]}" if len(filenames) > 3 else ""}
+{"[Your detailed description here]" if len(filenames) > 3 else ""}
 
 For EACH image, describe:
 - What is shown (property damage, maintenance issues, water intrusion, mold, structural problems, documents, text, etc.)

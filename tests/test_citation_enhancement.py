@@ -1,4 +1,4 @@
-"""Test for Enhanced Citation Functionality
+"""Test for Enhanced Citation Functionality.
 
 This test validates the complete citation tracking system including:
 - Citation extraction from letter content
@@ -6,6 +6,7 @@ This test validates the complete citation tracking system including:
 - Appendix generation with full letter text and detailed references
 - Integration with the email generation workflow
 """
+
 from __future__ import annotations
 
 import json
@@ -263,7 +264,7 @@ def run_integration_test():
         # Test all components
         citation_map = test_citation_tracking_service()
         enhanced_prompt = test_prompt_enhancement()
-        source_docs = test_source_document_extraction()
+        test_source_document_extraction()
         detection_accuracy = test_factual_statement_detection()
 
         # Create test output

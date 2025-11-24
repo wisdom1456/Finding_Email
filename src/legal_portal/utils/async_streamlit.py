@@ -3,6 +3,7 @@
 Enables async operations and parallel processing in Streamlit applications
 to keep the UI responsive during long-running operations.
 """
+
 from __future__ import annotations
 
 import asyncio

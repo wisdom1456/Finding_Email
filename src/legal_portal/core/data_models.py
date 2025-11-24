@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 from pydantic import BaseModel, Field
 
@@ -32,6 +32,7 @@ class FileType(str, Enum):
     TXT = "text/plain"
     CSV = "text/csv"
     EML = "message/rfc822"
+    IMAGE = "image/generic"  # Generic image type
     JPG = "image/jpeg"
     PNG = "image/png"
     GIF = "image/gif"
@@ -112,6 +113,24 @@ class ProcessingError(BaseModel):
     timestamp: datetime = Field(default_factory=datetime.now)
 
 
+class AnalysisError(BaseModel):
+    """Lightweight error object returned to the UI when a step fails."""
+
+    source: str
+    error_message: str
+    error_type: Optional[str] = None
+    details: Optional[Any] = None
+    timestamp: datetime = Field(default_factory=datetime.now)
+
+
+class AIAnalysisError(Exception):
+    """Custom exception for AI analysis failures."""
+
+    def __init__(self, message: str, *, details: Any | None = None) -> None:
+        super().__init__(message)
+        self.details = details
+
+
 # ============================================================================
 # Structured Summary Models (for enhanced AI output)
 # ============================================================================
@@ -133,6 +152,39 @@ class KeyAmount(BaseModel):
     source_document: Optional[str] = None
 
 
+class ContractClause(BaseModel):
+    """A specific clause or section from a contract."""
+
+    clause_id: Optional[str] = Field(default=None, description="Section number or ID")
+    description: str = Field(description="Summary of the clause content")
+    snippet: Optional[str] = Field(default=None, description="Verbatim text snippet")
+
+
+class DocumentDate(BaseModel):
+    """Date extracted from a document."""
+
+    date: str = Field(description="YYYY-MM-DD or Month DD, YYYY")
+    event: str = Field(description="Description of the event")
+    source: Optional[str] = Field(default=None, description="Page or section reference")
+
+
+class DocumentAmount(BaseModel):
+    """Monetary amount extracted from a document."""
+
+    amount: str = Field(description="Formatted amount (e.g. $1,000.00)")
+    description: str = Field(description="What the amount represents")
+    source: Optional[str] = Field(default=None, description="Page or section reference")
+
+
+class StructuredData(BaseModel):
+    """Structured data extracted from a document."""
+
+    parties: List[str] = Field(default_factory=list, description="List of parties mentioned")
+    dates: List[DocumentDate] = Field(default_factory=list, description="Key dates found")
+    amounts: List[DocumentAmount] = Field(default_factory=list, description="Monetary amounts found")
+    contract_clauses: List[ContractClause] = Field(default_factory=list, description="Key contract clauses")
+
+
 class DocumentSummaryStructured(BaseModel):
     """Structured summary of a document for AI analysis.
 
@@ -141,19 +193,39 @@ class DocumentSummaryStructured(BaseModel):
 
     document_name: str
     document_type: str = Field(description="E.g., contract, disclosure, correspondence, evidence")
-    parties: List[str] = Field(
-        default_factory=list, description="All parties mentioned (people, companies, entities)"
+
+    # Detailed narrative fields (New Schema)
+    executive_summary: Optional[str] = Field(default=None, description="High-level overview of the document")
+    key_content: Optional[str] = Field(
+        default=None, description="Comprehensive narrative of important information"
     )
-    key_dates: List[KeyDate] = Field(
-        default_factory=list, description="Important dates (purchase, breach, notice, deadline)"
+    important_details: List[str] = Field(
+        default_factory=list, description="Critical info, risks, conflicts, or requirements"
     )
-    key_amounts: List[KeyAmount] = Field(
-        default_factory=list, description="Monetary amounts (purchase price, damages, fees)"
+    legal_significance: Optional[str] = Field(default=None, description="Why this document matters legally")
+
+    # Evidence & Citations (NEW)
+    key_quotes: List[str] = Field(
+        default_factory=list, description="Verbatim excerpts from the document that serve as evidence"
     )
-    issues_identified: List[str] = Field(
-        default_factory=list, description="Legal problems, violations, or concerns found"
+    statute_citations: List[str] = Field(
+        default_factory=list, description="Relevant Florida statutes (e.g., 'Fla. Stat. § 713.06')"
     )
-    relevance_to_case: str = Field(description="How this document relates to the client's claims")
+
+    # Structured data container
+    structured_data: Optional[StructuredData] = Field(
+        default=None, description="Organized data points (dates, amounts, parties)"
+    )
+
+    # Legacy fields (kept for compatibility, optional)
+    parties: List[str] = Field(default_factory=list)
+    key_dates: List[KeyDate] = Field(default_factory=list)
+    key_amounts: List[KeyAmount] = Field(default_factory=list)
+    issues_identified: List[str] = Field(default_factory=list)
+
+    relevance_to_case: str = Field(
+        default="Relevance to be determined", description="How this document relates to the client's claims"
+    )
     extraction_quality: str = Field(
         default="high", description="Quality of source text: 'high', 'medium', or 'low'"
     )
@@ -164,21 +236,86 @@ class DocumentSummaryStructured(BaseModel):
     class Config:
         """Pydantic configuration for DocumentSummaryStructured."""
 
-        json_schema_extra = {
-            "example": {
-                "document_name": "Property_Disclosure_Form.pdf",
-                "document_type": "Seller Disclosure",
-                "parties": ["Miguel Velasco", "Rachael Taft", "William Lichtenstein"],
-                "key_dates": [{"date": "2024-02-29", "event": "Property purchase"}],
-                "key_amounts": [{"amount": "$590,000.00", "description": "Purchase price"}],
-                "issues_identified": [
-                    "Seller answered 'I don't know' to flood history questions",
-                    "Property located in special flood hazard area",
-                ],
-                "relevance_to_case": "Shows seller failed to disclose known flood risks",
-                "extraction_quality": "high",
-            }
-        }
+        extra = "ignore"  # Allow extra fields from AI response without error
+
+
+class PartyInvolved(BaseModel):
+    """Represents an individual or organization involved in the matter."""
+
+    name: str
+    role: str
+    relationship: Optional[str] = None
+    contact_information: Optional[str] = None
+
+
+class EnhancedIntakeAnalysis(BaseModel):
+    """Rich intake analysis used by the new AI pipeline."""
+
+    client_name: Optional[str] = None
+    attorney_name: Optional[str] = None
+    case_summary: Optional[str] = None
+    case_type: Optional[str] = None
+    urgency_level: Optional[str] = None
+    client_priorities: List[str] = Field(default_factory=list)
+    desired_outcomes: List[str] = Field(default_factory=list)
+    key_facts: List[str] = Field(default_factory=list)
+    parties_involved: List[PartyInvolved] = Field(default_factory=list)
+    financial_impact: Optional[str] = None
+    legal_claims: List[str] = Field(default_factory=list)
+    timeline_events: List[Dict[str, Any]] = Field(default_factory=list)
+
+
+class DemandLetterEvaluation(BaseModel):
+    """Determines whether a demand letter is an appropriate next step."""
+
+    is_appropriate: bool = True
+    reasoning: str = ""
+    potential_outcomes: List[str] = Field(default_factory=list)
+    relevant_statutes: List[str] = Field(default_factory=list)
+
+
+class LetterType(str, Enum):
+    """Types of letters that can be generated."""
+
+    FINDINGS = "findings"
+    DEMAND = "demand"
+
+
+class DemandLetterRequest(BaseModel):
+    """API request payload for generating a demand letter."""
+
+    case_id: str
+    target_party_name: str
+    demand_amount: Optional[float] = None
+    demand_deadline: str = "10 business days"
+    specific_demands: List[str] = Field(default_factory=list)
+    attorney_name: Optional[str] = None
+    firm_name: Optional[str] = None
+    contact_phone: Optional[str] = None
+    contact_email: Optional[str] = None
+    client_name: Optional[str] = None
+
+
+class ChatMessageRequest(BaseModel):
+    """API request payload for chatting about a case."""
+
+    case_id: str
+    message: str
+
+
+class ChatMessageResponse(BaseModel):
+    """API response payload for case chat."""
+
+    response: str
+    context_used: Dict[str, Any] = Field(default_factory=dict)
+
+
+class FinalAnalysis(BaseModel):
+    """Captures final recommendations and next steps for the client."""
+
+    case_summary: Optional[str] = None
+    recommendations: Optional[str] = None
+    next_steps: List[str] = Field(default_factory=list)
 
 
 class QualityScore(BaseModel):
@@ -193,6 +330,24 @@ class QualityScore(BaseModel):
     recommendations: List[str] = Field(
         default_factory=list, description="Suggested improvements or follow-ups"
     )
+
+
+class CaseAnalysisSummary(BaseModel):
+    """High-level case analysis for display on results page.
+
+    This represents the synthesized case-level insights that are shown
+    in the Case Analysis section of the UI.
+    """
+
+    case_summary: str = Field(description="120-200 word executive summary of the case")
+    practice_area: str = Field(
+        description="Primary practice area (e.g., 'Construction Law', 'Consumer Protection')"
+    )
+    key_issues: List[str] = Field(description="List of 3-7 key legal issues identified")
+    relevant_statutes: List[Dict[str, str]] = Field(
+        description="List of {statute: 'Fla. Stat. § XXX', relevance: 'Why it applies'}"
+    )
+    additional_details: Optional[str] = Field(default=None, description="Any additional important details")
 
 
 class ProcessingResult(BaseModel):
@@ -220,6 +375,28 @@ class ProcessingResult(BaseModel):
     document_count: int = 0
     errors: List[ProcessingError] = Field(default_factory=list)
     warnings: List[str] = Field(default_factory=list, description="Non-critical warnings for user awareness")
+    citation_summary: Optional[Dict[str, Any]] = Field(
+        default=None, description="Summary stats for citation tracking"
+    )
+    citation_appendix: Optional[str] = Field(
+        default=None, description="HTML appendix listing citations and source documents"
+    )
+    citation_map: Optional[Dict[str, Any]] = Field(
+        default=None, description="Full citation map structure for diagnostics"
+    )
+    statute_validation: Optional[Dict[str, Any]] = Field(
+        default=None, description="Results from statute validation service"
+    )
+    qa_warnings: Optional[List[str]] = Field(
+        default=None, description="Lightweight QA heuristics output for reviewer awareness"
+    )
+    artifacts: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="Stored artifact metadata (paths, content types, signed URLs) and context data",
+    )
+    opposing_parties: List[Party] = Field(default_factory=list)
+    multi_stage_result: Optional[Dict[str, Any]] = None
+    generated_letters: Dict[str, str] = Field(default_factory=dict)
 
     class Config:
         """Pydantic configuration for ProcessingResult."""
@@ -234,6 +411,46 @@ class ProcessingResult(BaseModel):
                 "errors": [],
             }
         }
+
+
+class AIPreferences(BaseModel):
+    """User preferences for AI model selection per operation type."""
+
+    document_analysis: str = "gpt-4o"
+    letter_generation: str = "gpt-4o"
+    case_chat: str = "gpt-4o"
+    multi_stage_analysis: str = "gpt-4o"
+
+
+class ProfileUpdate(BaseModel):
+    """User profile update payload."""
+
+    full_name: Optional[str] = None
+    phone: Optional[str] = None
+    firm_name: Optional[str] = None
+    firm_address: Optional[str] = None
+    ai_preferences: Optional[Dict[str, str]] = None
+    bar_number: Optional[str] = None
+    email_signature: Optional[str] = None
+    default_demand_deadline: Optional[str] = None
+
+
+class ProfileResponse(BaseModel):
+    """User profile response payload."""
+
+    id: str
+    email: str
+    full_name: Optional[str] = None
+    phone: Optional[str] = None
+    firm_name: Optional[str] = None
+    firm_address: Optional[str] = None
+    ai_preferences: Optional[Dict[str, str]] = None
+    bar_number: Optional[str] = None
+    email_signature: Optional[str] = None
+    default_demand_deadline: Optional[str] = None
+    avatar_url: Optional[str] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
 
 
 # ============================================================================
@@ -269,16 +486,20 @@ class LegalAssessment(BaseModel):
 
     claim_viability: Optional[str] = None
     overall_evidence_strength: Optional[str] = None
-    potential_challenges: List[str] = Field(default_factory=list)
+    potential_challenges: Union[str, List[str], None] = None
     recommended_actions: List[str] = Field(default_factory=list)
+    demand_letter_appropriate: Optional[bool] = None
+    urgency_assessment: Optional[str] = None
 
 
 class CaseAnalysisResult(BaseModel):
     """Complete case analysis result (legacy format)."""
 
-    intake_analysis: Optional[IntakeAnalysis] = None
+    intake_analysis: Optional[Union[EnhancedIntakeAnalysis, IntakeAnalysis]] = None
     analyzed_documents: List[AnalyzedDocument] = Field(default_factory=list)
     legal_assessment: Optional[LegalAssessment] = None
+    demand_letter_evaluation: Optional[DemandLetterEvaluation] = None
+    final_analysis: Optional[FinalAnalysis] = None
     errors: List[ProcessingError] = Field(default_factory=list)
 
 
@@ -407,3 +628,188 @@ class ClioImportResult(BaseModel):
     date_range: Optional[tuple[datetime, datetime]] = None
     total_file_size_bytes: int = 0
     import_duration_seconds: float = 0
+
+
+# ============================================================================
+# Multi-Stage Analysis Models (NEW - 2025-11-21)
+# ============================================================================
+
+
+class Party(BaseModel):
+    """Party involved in the case."""
+
+    name: str
+    role: str  # "Client", "Opposing Party", "Contractor", "Landlord", "Tenant", etc.
+    contact_info: Optional[str] = None
+    first_mentioned_in: Optional[str] = None  # Source document
+    is_opposing_party: bool = False
+    entity_type: Optional[str] = None  # "individual", "LLC", "corporation", "government", etc.
+
+
+class Event(BaseModel):
+    """Chronological event in the case timeline."""
+
+    date: Union[datetime, str]  # Allow string for partial dates like "March 2025"
+    description: str
+    source_document: str
+    significance: Optional[str] = None  # Why this event matters legally
+    supporting_evidence: List[str] = Field(default_factory=list)
+
+
+class FinancialItem(BaseModel):
+    """Financial transaction or amount in the case."""
+
+    amount: float
+    description: str  # "Contract price", "Payment made", "Damages claimed"
+    date: Optional[Union[datetime, str]] = None
+    source_document: str
+    payment_type: Optional[str] = None  # "paid", "owed", "claimed", "estimated"
+    category: Optional[str] = None  # "contract_price", "payment_made", etc.
+
+
+class KeyDocument(BaseModel):
+    """Important document in the case."""
+
+    document_name: str
+    document_type: str  # "Contract", "Notice", "Correspondence", "Evidence"
+    date: Optional[Union[datetime, str]] = None
+    significance: str  # Why this document matters
+
+
+class PropertyInfo(BaseModel):
+    """Property details for real estate cases."""
+
+    address: str
+    property_type: Optional[str] = None  # "Residential", "Commercial"
+    additional_details: Dict[str, Any] = Field(default_factory=dict)
+
+
+class FactMatrix(BaseModel):
+    """Structured facts extracted from case documents."""
+
+    parties: List[Party]
+    timeline: List[Event]
+    financial_data: List[FinancialItem]
+    key_documents: List[KeyDocument]
+    preliminary_issues: List[str]  # Initial legal issues identified
+    property_details: Optional[PropertyInfo] = None
+    extraction_notes: Optional[str] = None  # Any caveats or quality issues
+
+
+class LegalIssue(BaseModel):
+    """A potential legal issue or cause of action."""
+
+    issue_name: str  # e.g., "Implied Warranty Breach"
+    category: str  # "contract", "tort", "statutory", "procedural"
+    elements: List[str]  # Legal elements that must be proven
+    potential_remedies: List[str]
+    florida_statute_references: List[str] = Field(default_factory=list)  # e.g., ["§83.51", "Chapter 558"]
+    confidence: str = "moderate"  # "strong", "moderate", "weak"
+
+
+class ProceduralStep(BaseModel):
+    """A procedural requirement that must be met."""
+
+    requirement: str  # Description of what must be done
+    deadline: Optional[str] = None  # When it must be done
+    statute_basis: Optional[str] = None  # Legal basis for requirement
+    consequences_if_missed: Optional[str] = None  # What happens if not done
+
+
+class LegalIssueMap(BaseModel):
+    """Map of all legal issues identified in the case."""
+
+    primary_issues: List[LegalIssue]
+    secondary_issues: List[LegalIssue] = Field(default_factory=list)
+    relevant_statutes: List[str] = Field(default_factory=list)  # Statute numbers to query corpus
+    procedural_requirements: List[ProceduralStep] = Field(default_factory=list)
+    case_complexity: str  # "simple" | "moderate" | "complex"
+    complexity_reasoning: Optional[str] = None  # Why this complexity level
+
+
+class IssueAnalysis(BaseModel):
+    """Detailed analysis of a single legal issue."""
+
+    issue_name: str
+    legal_standard: str  # Plain English explanation of the law
+    fact_application: str  # How facts meet/don't meet the standard
+    statute_analysis: Optional[str] = None  # Analysis with verified statute citations
+    case_law_support: Optional[str] = None  # If applicable
+    remedies_available: List[str]
+    procedural_requirements: Optional[str] = None  # Integrated into analysis
+    confidence_level: str  # "strong" | "moderate" | "weak"
+    supporting_evidence: List[str] = Field(default_factory=list)  # Key evidence supporting this claim
+
+
+class RiskAssessment(BaseModel):
+    """Assessment of risks and challenges."""
+
+    major_risks: List[str]
+    risk_mitigation_steps: List[str]
+    statute_of_limitations_concerns: Optional[str] = None
+    evidence_gaps: List[str] = Field(default_factory=list)
+
+
+class CriticalDeadline(BaseModel):
+    """A critical deadline that must be met."""
+
+    deadline_date: Optional[Union[datetime, str]] = None
+    description: str
+    consequence_if_missed: str
+    urgency: str  # "critical", "important", "normal"
+    statute_basis: Optional[str] = None
+
+
+class EvidenceAssessment(BaseModel):
+    """Assessment of evidence strength."""
+
+    strong_evidence: List[str]
+    weak_evidence: List[str]
+    missing_evidence: List[str]
+    overall_strength: str  # "strong", "moderate", "weak"
+
+
+class DeepAnalysis(BaseModel):
+    """Comprehensive legal analysis of all identified issues."""
+
+    issue_analyses: List[IssueAnalysis]
+    risk_assessment: RiskAssessment
+    deadline_tracking: List[CriticalDeadline]
+    evidence_strength: EvidenceAssessment
+    overall_case_strength: str  # "strong", "moderate", "weak"
+    key_strengths: List[str] = Field(default_factory=list)
+    key_challenges: List[str] = Field(default_factory=list)
+
+
+class LetterStructure(BaseModel):
+    """Guidance for how to structure the findings letter."""
+
+    style: str  # "simple_bullets" | "numbered_findings" | "hybrid"
+    intro: str  # "Here are the key points of our analysis:" OR "Key Findings"
+    issue_format: str  # "bullet_paragraphs" | "numbered_sections_with_headers" | "bullets_with_subheadings"
+    reasoning: Optional[str] = None  # Why this structure was chosen
+
+
+class MultiStageAnalysisResult(BaseModel):
+    """Complete result from multi-stage analysis pipeline."""
+
+    fact_matrix: FactMatrix
+    issue_map: LegalIssueMap
+    deep_analysis: DeepAnalysis
+    letter_structure: LetterStructure
+    verified_statutes: List[Dict[str, Any]] = Field(default_factory=list)  # From statute service
+    processing_time_seconds: float
+    stage_timings: Dict[str, float] = Field(default_factory=dict)  # Time per stage
+    opposing_parties: List[Party] = Field(default_factory=list)
+
+
+class CompletenessReport(BaseModel):
+    """Report on letter completeness."""
+
+    issues_addressed: List[str]
+    issues_missing: List[str]
+    statutes_cited: List[str]
+    statutes_missing: List[str]
+    completeness_score: float  # 0-1
+    recommendation: str  # "complete" | "needs_revision"
+    warnings: List[str] = Field(default_factory=list)

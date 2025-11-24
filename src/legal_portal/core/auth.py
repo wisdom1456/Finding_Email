@@ -1,4 +1,5 @@
 """Enterprise authentication and authorization module."""
+
 from __future__ import annotations
 
 import logging

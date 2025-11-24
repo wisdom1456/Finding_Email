@@ -4,10 +4,14 @@ import asyncio
 import mimetypes
 import os
 import re
-from typing import Any, Callable, List, Optional
+import uuid
+from typing import Any, Callable, Dict, List, Optional
+
+from legal_portal.config.default import settings
 
 # Import from the backend utils (to be moved to root utils later)
 from legal_portal.core.data_models import DocumentType, ProcessedDocument
+from legal_portal.services.file_compression_service import get_compression_service
 
 # Maps file content types to their respective processing functions
 from legal_portal.services.file_processors import PROCESSOR_MAP
@@ -28,6 +32,35 @@ logger = get_module_logger(__name__)
 class DocumentProcessingError(Exception):
     """Custom exception for document processing errors."""
 
+    def __init__(self, message: str, error_code: str = "PROCESSING_ERROR"):
+        """Initialize with error message and code.
+
+        Args:
+        ----
+            message: Human-readable error message
+            error_code: Machine-readable error code for categorization
+
+        """
+        super().__init__(message)
+        self.error_code = error_code
+
+
+class ValidationError(DocumentProcessingError):
+    """Validation-specific errors with categorization."""
+
+    def __init__(self, message: str, error_code: str, file_size_mb: Optional[float] = None):
+        """Initialize validation error.
+
+        Args:
+        ----
+            message: Human-readable error message
+            error_code: One of FILE_TOO_LARGE, INVALID_TYPE, CONTENT_VALIDATION, SECURITY_VIOLATION, CORRUPTED
+            file_size_mb: File size in MB if relevant
+
+        """
+        super().__init__(message, error_code)
+        self.file_size_mb = file_size_mb
+
 
 class DocumentProcessor:
     """A service class for processing uploaded documents.
@@ -37,7 +70,193 @@ class DocumentProcessor:
     """
 
     def __init__(self):
-        pass
+        """Initialize DocumentProcessor with compression service."""
+        self.compression_service = get_compression_service()
+
+    async def process_and_upload(
+        self,
+        file_content: bytes,
+        filename: str,
+        user_id: str,
+        case_id: str,
+        supabase_client,
+        is_intake_form: bool = False,
+        content_type: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Unified method to validate, compress, and upload a document.
+
+        This method provides consistent validation, compression, and storage
+        across both manual uploads and Clio imports.
+
+        Args:
+        ----
+            file_content: Raw file bytes
+            filename: Original filename
+            user_id: User ID for storage path
+            case_id: Case ID for storage path
+            supabase_client: Supabase client for storage operations
+            is_intake_form: Whether this is an intake form
+            content_type: Optional MIME type override
+
+        Returns:
+        -------
+            Document record dictionary with metadata
+
+        Raises:
+        ------
+            ValidationError: If validation fails with categorized error code
+            DocumentProcessingError: If processing fails
+
+        """
+        temp_files = []
+
+        try:
+            # 1. Validate file size
+            max_size = settings.max_file_size_mb * 1024 * 1024
+            try:
+                validate_file_size(file_content, max_size)
+            except ValueError as e:
+                raise ValidationError(
+                    str(e), error_code="FILE_TOO_LARGE", file_size_mb=len(file_content) / (1024 * 1024)
+                )
+
+            # 2. Sanitize filename and validate content
+            original_name = filename
+            sanitized_name = secure_filename(filename)
+
+            try:
+                mime_type, file_ext = validate_file_content(file_content, sanitized_name)
+            except ValueError as e:
+                error_msg = str(e)
+                if "extension" in error_msg or "not allowed" in error_msg:
+                    raise ValidationError(error_msg, error_code="INVALID_TYPE") from e
+                elif "content type" in error_msg or "magic" in error_msg.lower():
+                    raise ValidationError(error_msg, error_code="CONTENT_VALIDATION") from e
+                else:
+                    raise ValidationError(error_msg, error_code="SECURITY_VIOLATION") from e
+
+            # Use provided content_type or detected mime_type
+            final_content_type = content_type or mime_type
+
+            # 3. Check if file is empty (corruption check)
+            if len(file_content) == 0:
+                raise ValidationError("Empty files are not allowed", error_code="CORRUPTED")
+
+            logger.info(
+                f"File validation passed: {sanitized_name}",
+                extra={
+                    "original_name": original_name,
+                    "sanitized_name": sanitized_name,
+                    "mime_type": mime_type,
+                    "file_size": len(file_content),
+                },
+            )
+
+            # 4. Compress if needed
+            original_size = len(file_content)
+            compression_meta = {
+                "compressed": False,
+                "original_size": original_size,
+                "compressed_size": original_size,
+                "compression_ratio": 1.0,
+                "method": "none",
+            }
+
+            if self.compression_service.should_compress(original_size):
+                try:
+                    compression_result = self.compression_service.compress_file(
+                        file_content, sanitized_name, final_content_type
+                    )
+
+                    if compression_result.was_compressed:
+                        file_content = compression_result.compressed_data
+                        compression_meta = {
+                            "compressed": True,
+                            "original_size": compression_result.original_size,
+                            "compressed_size": compression_result.compressed_size,
+                            "compression_ratio": compression_result.compression_ratio,
+                            "method": compression_result.method_used,
+                        }
+                        logger.info(
+                            f"Compressed {sanitized_name}: "
+                            f"{original_size / (1024 * 1024):.2f}MB → "
+                            f"{len(file_content) / (1024 * 1024):.2f}MB"
+                        )
+                except Exception as e:
+                    logger.warning(f"Compression failed for {sanitized_name}: {e}, using original")
+
+            # 5. Extract text (optional, for searchability)
+            extracted_text = None
+            try:
+                # Create temporary file for text extraction
+                temp_path = create_secure_temp_file(file_content, sanitized_name)
+                temp_files.append(temp_path)
+
+                # Import the text extraction utility
+                from legal_portal.api.utils.content_extractor import DocumentProcessor as ContentExtractor
+
+                extracted_text = ContentExtractor.extract_text(
+                    file_content, final_content_type, sanitized_name
+                )
+
+                # Clean extracted text (remove null bytes for PostgreSQL)
+                if extracted_text:
+                    extracted_text = extracted_text.replace("\x00", "").replace("\u0000", "")
+            except Exception as e:
+                logger.warning(f"Text extraction failed for {sanitized_name}: {e}")
+
+            # 6. Upload to Supabase Storage
+            file_extension = sanitized_name.split(".")[-1] if "." in sanitized_name else ""
+            unique_filename = f"{uuid.uuid4()}.{file_extension}" if file_extension else str(uuid.uuid4())
+            storage_path = f"{user_id}/{case_id}/{unique_filename}"
+
+            logger.info(f"Uploading to storage: {storage_path}")
+            supabase_client.storage.from_("documents").upload(
+                storage_path, file_content, {"content-type": final_content_type}
+            )
+
+            # 7. Create document record
+            file_size = len(file_content)
+            metadata = {
+                "is_intake_form": is_intake_form,
+                "compression": compression_meta,
+                "original_filename": original_name,
+            }
+
+            doc_record = {
+                "case_id": case_id,
+                "file_name": original_name,
+                "file_type": final_content_type,
+                "file_size": file_size,
+                "storage_path": storage_path,
+                "status": "uploaded",
+                "metadata": metadata,
+            }
+
+            # Add extracted text if available
+            if extracted_text:
+                doc_record["extracted_text"] = extracted_text
+
+            logger.info(f"Document processed successfully: {original_name}")
+            return doc_record
+
+        except ValidationError:
+            # Re-raise validation errors as-is
+            raise
+        except Exception as e:
+            # Wrap other errors
+            logger.error(f"Error in process_and_upload for {filename}: {e}", exc_info=True)
+            raise DocumentProcessingError(
+                f"Failed to process document '{filename}': {str(e)}", error_code="PROCESSING_ERROR"
+            )
+        finally:
+            # Cleanup temp files
+            for temp_file in temp_files:
+                try:
+                    if os.path.exists(temp_file):
+                        os.remove(temp_file)
+                except Exception as e:
+                    logger.warning(f"Failed to cleanup temp file {temp_file}: {e}")
 
     def _get_document_type(
         self, filename: str, intake_filenames: List[str], original_filename: str = None
@@ -267,10 +486,9 @@ class DocumentProcessor:
             if doc:
                 processed_docs_count[0] += 1
                 if progress_callback:
-                    progress_callback(
+                    await progress_callback(
                         message=(
-                            f"Extracting content from document {processed_docs_count[0]} "
-                            f"of {total_docs}..."
+                            f"Extracting content from document {processed_docs_count[0]} of {total_docs}..."
                         ),
                         docs_processed=[doc.file_name],
                         phase="document_extraction",
@@ -337,10 +555,9 @@ class DocumentProcessor:
             # Update progress
             processed_docs_count[0] += len(batch_results)
             if progress_callback:
-                progress_callback(
+                await progress_callback(
                     message=(
-                        f"Processed image batch {batch_idx}/{total_batches} "
-                        f"({len(batch_results)} images)..."
+                        f"Processed image batch {batch_idx}/{total_batches} ({len(batch_results)} images)..."
                     ),
                     docs_processed=[doc.file_name for doc in batch_results],
                     phase="document_extraction",
@@ -596,10 +813,9 @@ class DocumentProcessor:
                 processed_docs.append(result)
                 processed_docs_count[0] += 1
                 if progress_callback:
-                    progress_callback(
+                    await progress_callback(
                         message=(
-                            f"Extracted content from {processed_docs_count[0]} of "
-                            f"{total_docs} documents..."
+                            f"Extracted content from {processed_docs_count[0]} of {total_docs} documents..."
                         ),
                         docs_processed=[result.file_name],
                         phase="document_extraction",

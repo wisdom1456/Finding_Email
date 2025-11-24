@@ -139,6 +139,40 @@ class Settings(BaseSettings):
         description="Show warnings when case type is outside corpus coverage areas",
     )
 
+    use_multi_stage_analysis: bool = Field(
+        True,
+        alias="USE_MULTI_STAGE_ANALYSIS",
+        description="Enable multi-stage analysis pipeline for enhanced letter quality (Fact Matrix → Issue Mapping → Deep Analysis → Structure Determination)",
+    )
+
+    # ==================================================
+    # FILE COMPRESSION CONFIGURATION
+    # ==================================================
+
+    max_file_size_mb: int = Field(
+        100,
+        alias="MAX_FILE_SIZE_MB",
+        description="Maximum file size for uploads and imports in MB",
+    )
+
+    compression_threshold_mb: float = Field(
+        10.0,
+        alias="COMPRESSION_THRESHOLD_MB",
+        description="File size threshold in MB above which compression is applied",
+    )
+
+    pdf_compression_quality: str = Field(
+        "ebook",
+        alias="PDF_COMPRESSION_QUALITY",
+        description="Ghostscript quality preset for PDF compression (screen, ebook, printer, prepress)",
+    )
+
+    image_compression_quality: int = Field(
+        85,
+        alias="IMAGE_COMPRESSION_QUALITY",
+        description="JPEG quality for image compression (0-100)",
+    )
+
     # ==================================================
     # OPTIONAL CONFIGURATION
     # ==================================================
@@ -179,6 +213,37 @@ class Settings(BaseSettings):
         """Validate that timeout is positive."""
         if v <= 0:
             msg = "OpenAI timeout must be positive"
+            raise ValueError(msg)
+        return v
+
+    @field_validator("compression_threshold_mb")
+    @classmethod
+    def validate_compression_threshold(cls, v):
+        """Validate that compression threshold is positive and reasonable."""
+        if v <= 0:
+            msg = "Compression threshold must be positive"
+            raise ValueError(msg)
+        if v > 100:
+            msg = "Compression threshold should not exceed 100MB"
+            raise ValueError(msg)
+        return v
+
+    @field_validator("pdf_compression_quality")
+    @classmethod
+    def validate_pdf_quality(cls, v):
+        """Validate PDF compression quality preset."""
+        valid_presets = ["screen", "ebook", "printer", "prepress"]
+        if v not in valid_presets:
+            msg = f"PDF compression quality must be one of: {', '.join(valid_presets)}"
+            raise ValueError(msg)
+        return v
+
+    @field_validator("image_compression_quality")
+    @classmethod
+    def validate_image_quality(cls, v):
+        """Validate image compression quality."""
+        if not 1 <= v <= 100:
+            msg = "Image compression quality must be between 1 and 100"
             raise ValueError(msg)
         return v
 
@@ -249,9 +314,7 @@ def is_production() -> bool:
 def get_openai_api_key() -> str:
     """Get the OpenAI API key with validation."""
     if not settings.openai_api_key:
-        msg = (
-            "OPENAI_API_KEY is required but not set. " "Please check your .env file or environment variables."
-        )
+        msg = "OPENAI_API_KEY is required but not set. Please check your .env file or environment variables."
         raise ValueError(msg)
     return settings.openai_api_key
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""Test script to validate document appendix template fixes.
-"""
+"""Test script to validate document appendix template fixes."""
+
 from __future__ import annotations
 
 import os

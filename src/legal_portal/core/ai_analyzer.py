@@ -8,10 +8,6 @@ from typing import TYPE_CHECKING, Any
 
 import tiktoken
 import yaml
-from openai import APIError, APITimeoutError, BadRequestError, OpenAI, RateLimitError
-from pydantic import ValidationError
-from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_fixed
-
 from legal_portal.core.data_models import (
     AIAnalysisError,
     AnalysisError,
@@ -24,14 +20,17 @@ from legal_portal.core.data_models import (
 )
 from legal_portal.utils.cache_manager import DocumentCache
 from legal_portal.utils.logging_config import get_module_logger
-
-logger = get_module_logger(__name__)
 from legal_portal.utils.validators import (
     create_fallback_demand_letter_evaluation,
     create_fallback_legal_assessment,
     preprocess_ai_output,
     safe_model_validate,
 )
+from openai import APIError, APITimeoutError, BadRequestError, OpenAI, RateLimitError
+from pydantic import ValidationError
+from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_fixed
+
+logger = get_module_logger(__name__)
 
 if TYPE_CHECKING:
     from .document_processor import DocumentProcessor
@@ -252,10 +251,10 @@ class AIAnalyzer:
             '  "summary": "Executive summary of the document (250-400 words) covering: what it is, key content, and why it matters.",\n'
             '  "detailed_findings": "Comprehensive analysis (500-800 words) extracting all relevant facts, statements, commitments, issues, and evidence. Be thorough.",\n'
             '  "key_facts": ["Array of 10-20 specific factual statements extracted from the document. Each should be concrete and verifiable."],\n'
-            '  "evidence_points": ["Array of evidentiary items (e.g., \'Contractor admitted incomplete work in email dated 5/15/25\', \'Contract specifies $128,335.77 total cost\')"],\n'
+            "  \"evidence_points\": [\"Array of evidentiary items (e.g., 'Contractor admitted incomplete work in email dated 5/15/25', 'Contract specifies $128,335.77 total cost')\"],\n"
             '  "parties_mentioned": [{"name": "Person/Company Name", "role": "Their role/relationship", "context": "What they did/said in this document"}],\n'
             '  "amounts_and_dates": [{"type": "payment|deadline|incident|meeting", "amount_or_date": "The specific amount or date", "description": "What this relates to"}],\n'
-            '  "legal_issues_identified": ["Array of potential legal issues or implications raised by this document (e.g., \'Breach of contract\', \'Statute of limitations concern\')"],\n'
+            "  \"legal_issues_identified\": [\"Array of potential legal issues or implications raised by this document (e.g., 'Breach of contract', 'Statute of limitations concern')\"],\n"
             '  "key_information": "Legacy field: Single paragraph with most critical points separated by semicolons.",\n'
             '  "relevance_to_case": "How this document supports or undermines the client\'s position, referencing specific case priorities.",\n'
             '  "timeline_events": [{"date": "YYYY-MM-DD or approximate", "description": "Event description"}]\n'
@@ -525,13 +524,13 @@ class AIAnalyzer:
             for i, doc in enumerate(analysis.analyzed_documents[:3]):  # Log first 3 docs
                 logger.info(f"AI ANALYZER: 🔍   Document {i + 1}: {doc.file_name}")
                 logger.info(
-                    f'AI ANALYZER: 🔍   Summary: {doc.summary[:150] if doc.summary else "No summary"}...'
+                    f"AI ANALYZER: 🔍   Summary: {doc.summary[:150] if doc.summary else 'No summary'}..."
                 )
                 logger.info(
-                    f'AI ANALYZER: 🔍   Key info: {doc.key_information[:150] if doc.key_information else "No key info"}...'
+                    f"AI ANALYZER: 🔍   Key info: {doc.key_information[:150] if doc.key_information else 'No key info'}..."
                 )
                 logger.info(
-                    f'AI ANALYZER: 🔍   Relevance: {doc.relevance_to_case[:100] if doc.relevance_to_case else "No relevance"}...'
+                    f"AI ANALYZER: 🔍   Relevance: {doc.relevance_to_case[:100] if doc.relevance_to_case else 'No relevance'}..."
                 )
 
         if analysis.intake_analysis:
@@ -585,7 +584,7 @@ class AIAnalyzer:
                 f"AI ANALYZER: 🔍 DEBUGGING - Video insights type for {video.file_name}: {type(video.insights)}"
             )
             logger.info(
-                f'AI ANALYZER: 🔍 DEBUGGING - Video insights keys: {list(video.insights.keys()) if isinstance(video.insights, dict) else "Not a dict"}'
+                f"AI ANALYZER: 🔍 DEBUGGING - Video insights keys: {list(video.insights.keys()) if isinstance(video.insights, dict) else 'Not a dict'}"
             )
             summarization_tasks.append(
                 self._summarize_media_content(

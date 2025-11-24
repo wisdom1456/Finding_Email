@@ -55,3 +55,20 @@ This document records the key architectural and implementation decisions made th
 - **Decision**: Implement robust file validation that goes beyond basic extension checking.
 - **Rationale**: Prevent empty, corrupted, or mismatched files from entering the processing pipeline.
 - **Consequences**: Magic number validation, enhanced empty file detection, and corruption detection for DOCX and PDF files.
+
+### Letter Structure Format Fix (November 23, 2025)
+- **Decision**: Updated letter complexity thresholds and excluded Chapter 558 from "complex procedures" flag
+- **Rationale**: AI was using numbered sections format (2., 3., 4., 5.) for standard 3-4 issue construction cases, when simple bullets format is more scannable and matches attorney style
+- **Root Causes**: 
+  - Threshold was `>= 3` issues (should be `>= 5`)
+  - Chapter 558 pre-suit notice flagged as "complex" (it's standard for FL construction)
+- **Changes**:
+  - Raised complexity threshold from 3 to 5 issues
+  - Excluded "chapter 558", "60 day", "pre-suit notice" keywords from complex procedure detection
+  - Updated comments to clarify that 3-4 issue cases are "moderate" but still use simple format
+- **Consequences**: 
+  - Construction defect cases (3-4 issues) now correctly use clean bullet format
+  - Only genuinely complex cases (5+ issues or unusual procedures) use numbered sections
+  - Better alignment with attorney-written examples (Miguel Velasco, Erik Devlin style)
+- **Files Modified**: `src/legal_portal/services/multi_stage_analyzer.py` (function: `_determine_letter_structure()`)
+- **Documentation**: `docs/ATTORNEY_LETTER_STRUCTURE_FIX.md`, `docs/LETTER_STRUCTURE_VISUAL_COMPARISON.md`, `docs/LETTER_FORMAT_QUICK_REFERENCE.md`

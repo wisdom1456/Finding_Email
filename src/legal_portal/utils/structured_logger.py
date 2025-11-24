@@ -50,13 +50,21 @@ class StructuredLogger:
         handler.setFormatter(JSONFormatter())
         self.logger.addHandler(handler)
 
-        # Add file handler for persistence
-        log_dir = Path("logs")
-        log_dir.mkdir(exist_ok=True)
+        # Add file handler for persistence (only if not in serverless environment)
+        # Vercel/serverless functions have read-only filesystems except /tmp
+        if not os.getenv("VERCEL") and not os.getenv("AWS_LAMBDA_FUNCTION_NAME"):
+            try:
+                log_dir = Path("logs")
+                log_dir.mkdir(exist_ok=True)
 
-        file_handler = logging.FileHandler(log_dir / f"{name}_{datetime.now().strftime('%Y%m%d')}.log")
-        file_handler.setFormatter(JSONFormatter())
-        self.logger.addHandler(file_handler)
+                file_handler = logging.FileHandler(
+                    log_dir / f"{name}_{datetime.now().strftime('%Y%m%d')}.log"
+                )
+                file_handler.setFormatter(JSONFormatter())
+                self.logger.addHandler(file_handler)
+            except (OSError, PermissionError):
+                # If we can't create log files, just use stdout (which is fine for serverless)
+                pass
 
     def _get_context(self) -> Dict[str, Any]:
         """Get contextual information for logs."""
@@ -109,7 +117,7 @@ class StructuredLogger:
         self._log(LogLevel.AUDIT, f"AUDIT: {action} on {resource}", **audit_data)
 
     def _log(self, level: LogLevel, message: str, **kwargs):
-        """Internal logging method."""
+        """Log message internally with structured data."""
         log_data = {**self._get_context(), "level": level.name, "message": message, "data": kwargs}
 
         # Use appropriate logging level
@@ -119,7 +127,7 @@ class StructuredLogger:
             self.logger.log(level.value, json.dumps(log_data))
 
     def performance(self, operation: str):
-        """Decorator for performance logging."""
+        """Provide decorator for performance logging."""
 
         def decorator(func):
             @wraps(func)

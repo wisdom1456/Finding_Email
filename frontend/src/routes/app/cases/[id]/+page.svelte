@@ -118,7 +118,7 @@
 
 	async function loadSettings() {
 		try {
-			const response = await fetch(`${API_URL}/api/settings/limits`);
+			const response = await fetch(`${getApiUrl()}/api/settings/limits`);
 			if (response.ok) {
 				const data = await response.json();
 				maxFileSizeMB = data.max_file_size_mb;
@@ -527,10 +527,10 @@
 					// Upload file
 					const formData = new FormData();
 					formData.append('file', file);
-					formData.append('case_id', caseId);
-					formData.append('is_intake_form', (originalIndex === intakeFormIndex).toString());
+				formData.append('case_id', caseId);
+				formData.append('is_intake_form', (originalIndex === intakeFormIndex).toString());
 
-					const response = await fetch(`${API_URL}/api/documents/upload`, {
+				const response = await fetch(`${getApiUrl()}/api/documents/upload`, {
 						method: 'POST',
 						headers: {
 							Authorization: `Bearer ${session.access_token}`
@@ -657,9 +657,9 @@
 				data: { session }
 			} = await supabase.auth.getSession();
 
-			if (!session) throw new Error('Not authenticated');
+		if (!session) throw new Error('Not authenticated');
 
-			const response = await fetch(`${API_URL}/api/documents/${docId}`, {
+		const response = await fetch(`${getApiUrl()}/api/documents/${docId}`, {
 				method: 'DELETE',
 				headers: {
 					Authorization: `Bearer ${session.access_token}`
@@ -751,9 +751,9 @@
 				data: { session }
 			} = await supabase.auth.getSession();
 
-			if (!session) throw new Error('Not authenticated');
+		if (!session) throw new Error('Not authenticated');
 
-			const response = await fetch(`${API_URL}/api/cases/${caseId}`, {
+		const response = await fetch(`${getApiUrl()}/api/cases/${caseId}`, {
 				method: 'PATCH',
 				headers: {
 					'Content-Type': 'application/json',
@@ -802,9 +802,9 @@
 				data: { session }
 			} = await supabase.auth.getSession();
 
-			if (!session) throw new Error('Not authenticated');
+		if (!session) throw new Error('Not authenticated');
 
-			const response = await fetch(`${API_URL}/api/analysis/start`, {
+		const response = await fetch(`${getApiUrl()}/api/analysis/start`, {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json',
@@ -828,10 +828,10 @@
 			const analysisId = analysisData.id;
 
 			// Reload analysis status
-			await loadAnalysisStatus();
+		await loadAnalysisStatus();
 
-			// Try SSE first, fall back to polling if not supported
-			const sseUrl = `${API_URL}/api/progress/analysis/${analysisId}?token=${session.access_token}`;
+		// Try SSE first, fall back to polling if not supported
+		const sseUrl = `${getApiUrl()}/api/progress/analysis/${analysisId}?token=${session.access_token}`;
 			const sseSupported = progressStore.isSuppported();
 
 			if (sseSupported) {

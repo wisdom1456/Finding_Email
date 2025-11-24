@@ -40,7 +40,11 @@
 			const { data: { user }, error } = await supabase.auth.getUser();
 			if (error || !user) return;
 
-			const response = await fetch(`${PUBLIC_API_URL}/api/clio/status`, {
+			const apiUrl = PUBLIC_API_URL.includes('localhost') || PUBLIC_API_URL.includes('127.0.0.1') 
+				? PUBLIC_API_URL 
+				: '';
+
+			const response = await fetch(`${apiUrl}/api/clio/status`, {
 				headers: { Authorization: `Bearer ${session.access_token}` }
 			});
 

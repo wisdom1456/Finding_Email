@@ -32,9 +32,14 @@
 			}
 
 			console.log('Checking Clio status with token:', session.access_token?.substring(0, 20) + '...');
-			console.log('API URL:', PUBLIC_API_URL);
+			// Use relative URL to avoid CORS issues - let the proxy/browser handle it
+			const apiUrl = PUBLIC_API_URL.includes('localhost') || PUBLIC_API_URL.includes('127.0.0.1') 
+				? PUBLIC_API_URL 
+				: ''; // Empty string means relative path for production (same domain)
+			
+			console.log('Using API URL prefix:', apiUrl);
 
-			const response = await fetch(`${PUBLIC_API_URL}/api/clio/status`, {
+			const response = await fetch(`${apiUrl}/api/clio/status`, {
 				headers: {
 					Authorization: `Bearer ${session.access_token}`
 				}
@@ -72,9 +77,14 @@
 
 			console.log('Initiating Clio OAuth with token:', session.access_token?.substring(0, 20) + '...');
 
+			// Use relative URL to avoid CORS issues
+			const apiUrl = PUBLIC_API_URL.includes('localhost') || PUBLIC_API_URL.includes('127.0.0.1') 
+				? PUBLIC_API_URL 
+				: '';
+
 			// Redirect to OAuth authorization with token as query param
 			// (Required because direct navigation can't set Authorization header)
-			window.location.href = `${PUBLIC_API_URL}/api/clio/authorize?token=${session.access_token}`;
+			window.location.href = `${apiUrl}/api/clio/authorize?token=${session.access_token}`;
 		} catch (error: any) {
 			console.error('Failed to initiate Clio connection:', error);
 			errorMessage = error.message || 'Failed to initiate connection';
@@ -96,7 +106,12 @@
 				return;
 			}
 
-			const response = await fetch(`${PUBLIC_API_URL}/api/clio/disconnect`, {
+			// Use relative URL to avoid CORS issues
+			const apiUrl = PUBLIC_API_URL.includes('localhost') || PUBLIC_API_URL.includes('127.0.0.1') 
+				? PUBLIC_API_URL 
+				: '';
+
+			const response = await fetch(`${apiUrl}/api/clio/disconnect`, {
 				method: 'DELETE',
 				headers: {
 					Authorization: `Bearer ${session.access_token}`

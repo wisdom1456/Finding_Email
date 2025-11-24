@@ -1,7 +1,6 @@
 {
   "framework": "sveltekit",
   "installCommand": "echo 'Vercel install skipped - handled in build script'",
-  "buildCommand": "bash scripts/vercel_build.sh",
-  "outputDirectory": "frontend/.svelte-kit/output/client"
+  "buildCommand": "bash scripts/vercel_build.sh"
 }
 

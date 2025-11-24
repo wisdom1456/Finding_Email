@@ -36,6 +36,23 @@ if [ -d "frontend" ]; then
   
   echo ">>> Building..."
   npm run build
+  
+  echo ">>> Moving build output to root..."
+  cd ..
+  mkdir -p .vercel
+  # Clean up any existing output to avoid copy issues
+  rm -rf .vercel/output
+  
+  # Copy the output directory from frontend to root
+  if [ -d "frontend/.vercel/output" ]; then
+      cp -r frontend/.vercel/output .vercel/
+      echo "Build output moved to root .vercel/output"
+      ls -la .vercel/output
+  else
+      echo "ERROR: frontend/.vercel/output not found! Adapter might not have run correctly."
+      ls -la frontend/.vercel || echo "frontend/.vercel does not exist"
+      exit 1
+  fi
 else
   echo "ERROR: frontend directory not found!"
   exit 1

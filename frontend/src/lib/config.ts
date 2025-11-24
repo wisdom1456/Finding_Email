@@ -45,10 +45,7 @@ export function getApiUrl(): string {
 
 // Export as function for runtime evaluation
 export const getApiUrlValue = getApiUrl;
-// Keep constant for backwards compatibility but it might be evaluated at module load
-// WARNING: This value is fixed at module load time. Prefer getApiUrl() for dynamic evaluation.
-// Forcing this to empty string in browser to ensure relative path is used.
-export const API_URL = typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1' 
-    ? '' 
-    : getApiUrl();
+
+// REMOVED: API_URL constant export (deprecated - use getApiUrl() instead)
+// All code has been migrated to use getApiUrl() for dynamic runtime evaluation
 

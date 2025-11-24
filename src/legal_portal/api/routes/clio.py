@@ -16,7 +16,7 @@ from legal_portal.api.services.clio_client import (
     ClioAuthError,
     ClioClient,
 )
-from legal_portal.api.utils.document_processor import DocumentProcessor as DocProc
+from legal_portal.api.utils.content_extractor import DocumentProcessor as ContentExtractor
 from legal_portal.core.document_processor import DocumentProcessor, ValidationError
 from legal_portal.services.progress_manager import ProgressManager
 from pydantic import BaseModel
@@ -161,7 +161,12 @@ async def clio_callback(
         # Determine frontend URL from request or environment
         import os
 
-        frontend_url = os.getenv("FRONTEND_URL", "http://127.0.0.1:5173")
+        # Check for Vercel URL first, then FRONTEND_URL, then default
+        vercel_url = os.getenv("VERCEL_URL")
+        if vercel_url:
+            frontend_url = f"https://{vercel_url}"
+        else:
+            frontend_url = os.getenv("FRONTEND_URL", "http://127.0.0.1:5173")
 
         # Redirect to frontend with success message
         redirect_url = f"{frontend_url}/app/cases?clio_connected=true"
@@ -171,7 +176,12 @@ async def clio_callback(
         # Redirect to frontend with error
         import os
 
-        frontend_url = os.getenv("FRONTEND_URL", "http://127.0.0.1:5173")
+        # Check for Vercel URL first, then FRONTEND_URL, then default
+        vercel_url = os.getenv("VERCEL_URL")
+        if vercel_url:
+            frontend_url = f"https://{vercel_url}"
+        else:
+            frontend_url = os.getenv("FRONTEND_URL", "http://127.0.0.1:5173")
         error_message = str(e)
         redirect_url = f"{frontend_url}/app/cases?clio_error={error_message}"
         return RedirectResponse(url=redirect_url)
@@ -559,7 +569,7 @@ async def import_clio_data(
 
                 # Download file from Clio (just download, no processing yet)
                 print("  - Downloading from Clio...")
-                file_content, content_type = DocProc.download_file(doc_url, access_token)
+                file_content, content_type = ContentExtractor.download_file(doc_url, access_token)
                 original_size = len(file_content)
                 print(f"  - Downloaded: {original_size / (1024 * 1024):.2f}MB")
 

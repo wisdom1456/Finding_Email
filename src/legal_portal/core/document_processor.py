@@ -193,9 +193,11 @@ class DocumentProcessor:
                 temp_files.append(temp_path)
 
                 # Import the text extraction utility
-                from legal_portal.api.utils.document_processor import DocumentProcessor as DocProc
+                from legal_portal.api.utils.content_extractor import DocumentProcessor as ContentExtractor
 
-                extracted_text = DocProc.extract_text(file_content, final_content_type, sanitized_name)
+                extracted_text = ContentExtractor.extract_text(
+                    file_content, final_content_type, sanitized_name
+                )
 
                 # Clean extracted text (remove null bytes for PostgreSQL)
                 if extracted_text:

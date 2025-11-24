@@ -64,3 +64,4 @@ supabase>=2.0.0
 
 # SSE (Server-Sent Events) support
 sse-starlette==2.1.3
+python-json-logger==4.0.0

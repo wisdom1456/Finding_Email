@@ -972,15 +972,17 @@ Return a JSON object with:
 Be realistic and evidence-based. Only include amounts supported by the case data."""
 
     try:
+        model = openai_client.get_preferred_model("demand_calculation", "gpt-4o-mini")
         response = await asyncio.to_thread(
             openai_client.create_chat_completion,
+            model=model,
             messages=[{"role": "user", "content": prompt}],
             response_format={"type": "json_object"},
             temperature=0.2,
             max_tokens=1000,
         )
 
-        result = json.loads(response["choices"][0]["message"]["content"])
+        result = json.loads(response["content"])
 
         return CalculateDemandAmountResponse(
             amount=result.get("amount", 0.0),

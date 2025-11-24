@@ -1,17 +1,19 @@
 """Case management endpoints."""
 
+import logging
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from legal_portal.api.dependencies import get_current_user, get_supabase_client, get_user_supabase_client
 from legal_portal.api.services.clio_client import ClioAPIError, ClioAuthError, ClioClient
-from legal_portal.api.utils.document_processor import DocumentProcessor as DocProc
+from legal_portal.api.utils.content_extractor import DocumentProcessor as ContentExtractor
 from legal_portal.core.document_processor import DocumentProcessor, ValidationError
 from legal_portal.services.progress_manager import ProgressManager, get_progress_manager
 from pydantic import BaseModel, Field
 from starlette.concurrency import run_in_threadpool
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
@@ -88,28 +90,24 @@ async def create_case(
 
     """
     try:
-        print("\n🔍 DEBUG create_case endpoint:")
-        print(f"  - User ID from token: {user['id']}")
-        print(f"  - User email: {user.get('email', 'N/A')}")
-        print(f"  - Case data: client_name={case_data.client_name}")
-
-        # Check what headers are actually being sent
-        auth_header = supabase.postgrest.session.headers.get("Authorization", "NOT SET")
-        print(
-            f"  - Authorization header in client: {auth_header[:50]}..."
-            if len(str(auth_header)) > 50
-            else f"  - Authorization header: {auth_header}"
+        logger.info(
+            "Creating new case",
+            extra={
+                "user_id": user["id"],
+                "user_email": user.get("email"),
+                "client_name": case_data.client_name,
+            },
         )
 
         # Verify profile exists
-        print(f"  - Checking if profile exists for user {user['id']}...")
+        logger.debug(f"Checking if profile exists for user {user['id']}")
         try:
             profile_check = supabase.table("profiles").select("id").eq("id", user["id"]).execute()
-            print(f"  - Profile check result: {profile_check.data}")
+            logger.debug(f"Profile check result: {len(profile_check.data)} records found")
         except Exception as pe:
-            print(f"  - Profile check error: {pe}")
+            logger.warning(f"Profile check failed: {pe}")
 
-        print("  - Attempting to insert case...")
+        logger.debug("Attempting to insert case into database")
         response = (
             supabase.table("cases")
             .insert(
@@ -124,27 +122,27 @@ async def create_case(
             .execute()
         )
 
-        print(f"  - Insert successful! Case ID: {response.data[0]['id'] if response.data else 'unknown'}")
-
         if not response.data:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to create case"
             )
 
+        case_id = response.data[0]["id"]
+        logger.info(f"Successfully created case with ID: {case_id}")
+
         return response.data[0]
     except Exception as e:
-        print("\n❌ ERROR in create_case:")
-        print(f"  - Exception type: {type(e).__name__}")
-        print(f"  - Exception message: {str(e)}")
-        print(f"  - Full exception: {repr(e)}")
-
-        # Try to extract more details from Supabase errors
-        if hasattr(e, "message"):
-            print(f"  - Error message attr: {e.message}")
-        if hasattr(e, "details"):
-            print(f"  - Error details attr: {e.details}")
-        if hasattr(e, "code"):
-            print(f"  - Error code attr: {e.code}")
+        logger.error(
+            f"Error creating case: {type(e).__name__}: {str(e)}",
+            exc_info=True,
+            extra={
+                "user_id": user.get("id"),
+                "error_type": type(e).__name__,
+                "error_message": str(e),
+                "error_details": getattr(e, "details", None),
+                "error_code": getattr(e, "code", None),
+            },
+        )
 
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error creating case: {str(e)}"
@@ -592,7 +590,7 @@ async def import_clio_documents_helper(
                 # Download file from Clio (just download, no processing yet)
                 # Run blocking download in threadpool
                 file_content, content_type = await run_in_threadpool(
-                    DocProc.download_file, doc_url, access_token
+                    ContentExtractor.download_file, doc_url, access_token
                 )
                 original_size = len(file_content)
                 print(f"    Downloaded: {original_size / (1024 * 1024):.2f}MB")

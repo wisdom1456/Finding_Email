@@ -391,9 +391,9 @@ EOF
 start_frontend() {
     log_step "Starting Streamlit application..."
 
-    # Verify app.py exists
-    if [ ! -f "app.py" ]; then
-        log_error "Application app.py not found"
+    # Verify run_app.py exists
+    if [ ! -f "run_app.py" ]; then
+        log_error "Application run_app.py not found"
         return 1
     fi
 
@@ -427,7 +427,7 @@ echo "The browser should open automatically"
 echo "Press Ctrl+C to stop the application"
 echo ""
 
-python3 -m streamlit run app.py --server.port 8501 --server.headless false
+python3 -m streamlit run run_app.py --server.port 8501 --server.headless false
 EOF
     )
 

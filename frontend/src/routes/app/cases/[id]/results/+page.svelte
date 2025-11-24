@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { PUBLIC_API_URL } from '$env/static/public';
@@ -7,22 +6,25 @@
 	import { slide } from 'svelte/transition';
 	import PageHeader from '$lib/components/ui/PageHeader.svelte';
 	import { ArrowLeft } from 'lucide-svelte';
+	import type { PageData } from './$types';
 
-	const caseId = $derived($page.params.id);
+	// Get SSR data from load function
+	let { data }: { data: PageData } = $props();
+
+	const caseId = $derived(data.caseId);
 	const API_URL = PUBLIC_API_URL || 'http://127.0.0.1:8000';
 	
-	let loading = $state(true);
-	let results = $state<any>(null);
-	let error = $state('');
+	// Initialize state from SSR data
+	let results = $state<any>(data.results);
 	let activeTab = $state<'analysis' | 'documents' | 'letters' | 'chat' | 'quality'>('analysis');
-	let findingsLetter = $state<string | null>(null);
-	let demandLetters = $state<Record<string, string>>({});
+	let findingsLetter = $state<string | null>(data.findingsLetter);
+	let demandLetters = $state<Record<string, string>>(data.demandLetters);
 	let generatingFindings = $state(false);
 	let generatingDemand = $state(false);
-	let selectedParty = $state('');
-	let demandAmount = $state<number | null>(null);
-	let demandDeadline = $state('10 business days');
-	let specificDemands = $state('');
+	let selectedParty = $state(data.selectedParty);
+	let demandAmount = $state<number | null>(data.demandAmount);
+	let demandDeadline = $state(data.demandDeadline);
+	let specificDemands = $state(data.specificDemands);
 	let chatMessages = $state<Array<{ user: string; assistant: string }>>([]);
 	let chatInput = $state('');
 	let sendingMessage = $state(false);
@@ -30,19 +32,19 @@
 	let opposingParties = $derived(results?.opposing_parties ?? []);
 	let modelsUsed = $derived(results?.artifacts?.models_used ?? null);
 
-	// Attorney information for letters (auto-filled from profile)
-	let attorneyName = $state('');
-	let firmName = $state('');
-	let contactPhone = $state('');
-	let contactEmail = $state('');
-	let profileLoaded = $state(false);
+	// Attorney information for letters (pre-loaded from profile via SSR)
+	let attorneyName = $state(data.profile?.attorneyName || '');
+	let firmName = $state(data.profile?.firmName || '');
+	let contactPhone = $state(data.profile?.contactPhone || '');
+	let contactEmail = $state(data.profile?.contactEmail || '');
+	let profileLoaded = $state(!!data.profile);
 
 	// Document viewer for quality report
 	let viewingDocument = $state<any>(null);
-	let documents = $state<any[]>([]);
+	let documents = $state<any[]>(data.documents);
 
-	// Collapsible document analysis state - all start collapsed
-	let collapsedDocs = $state<Set<string>>(new Set());
+	// Collapsible document analysis state - initialized from SSR
+	let collapsedDocs = $state<Set<string>>(new Set(data.collapsedDocs));
 
 	// Demand calculation state
 	let calculatingAmount = $state(false);
@@ -59,29 +61,8 @@
 		collapsedDocs = newSet;
 	}
 
-	onMount(async () => {
-		await loadResults();
-		await loadProfile();
-		await loadDocuments();
-	});
-
-	async function loadDocuments() {
-		try {
-			const { data, error } = await supabase
-				.from('documents')
-				.select('*')
-				.eq('case_id', caseId)
-				.order('created_at', { ascending: true });
-
-			if (error) throw error;
-			documents = data || [];
-		} catch (err: any) {
-			console.error('Failed to load documents:', err);
-		}
-	}
-
 	async function viewDocument(documentName: string) {
-		const doc = documents.find(d => d.file_name === documentName);
+		const doc = documents.find((d) => d.file_name === documentName);
 		if (!doc) {
 			alert('Document not found');
 			return;
@@ -91,220 +72,6 @@
 
 	function closeDocumentViewer() {
 		viewingDocument = null;
-	}
-
-	async function loadProfile() {
-		try {
-			const { data: { session } } = await supabase.auth.getSession();
-			if (!session) return;
-
-			const response = await fetch(`${API_URL}/api/profile`, {
-				headers: {
-					'Authorization': `Bearer ${session.access_token}`
-				}
-			});
-
-			if (response.ok) {
-				const profile = await response.json();
-				attorneyName = profile.full_name || '';
-				firmName = profile.firm_name || '';
-				contactPhone = profile.phone || '';
-				contactEmail = profile.email || '';
-				profileLoaded = true;
-			}
-		} catch (err: any) {
-			console.error('Failed to load profile for auto-fill:', err);
-		}
-	}
-
-	async function loadResults() {
-		console.log('Loading results for case:', caseId);
-		try {
-			const {
-				data: { session }
-			} = await supabase.auth.getSession();
-
-			if (!session) {
-				console.error('No active session found');
-				throw new Error('Not authenticated');
-			}
-			console.log('Session found, fetching results...');
-
-		const response = await fetch(`${API_URL}/api/analysis/results/${caseId}`, {
-			headers: {
-				Authorization: `Bearer ${session.access_token}`
-			}
-		});
-
-		console.log('Fetch response status:', response.status);
-
-		if (!response.ok) {
-			const errorText = await response.text();
-			console.error('Failed to load results:', response.status, errorText);
-			throw new Error(`Failed to load results: ${response.status} ${errorText}`);
-		}
-
-		const data = await response.json();
-		console.log('Results data received:', data ? 'yes' : 'no');
-		
-		// Parse case_analysis if it's a JSON string
-		if (data.case_analysis && typeof data.case_analysis === 'string') {
-			try {
-				data.case_analysis = JSON.parse(data.case_analysis);
-			} catch (e) {
-				console.error('Failed to parse case_analysis:', e);
-			}
-		}
-		
-		// Parse document_summaries if it's a JSON string
-		if (data.document_summaries && typeof data.document_summaries === 'string') {
-			try {
-				data.document_summaries = JSON.parse(data.document_summaries);
-			} catch (e) {
-				console.error('Failed to parse document_summaries:', e);
-			}
-		}
-		
-		results = data;
-		if (data.generated_letters) {
-			if (data.generated_letters.findings) {
-				findingsLetter = data.generated_letters.findings;
-			}
-			const demandEntries = Object.entries(data.generated_letters).filter(([key]) =>
-				key.startsWith('demand_')
-			);
-			if (demandEntries.length) {
-				demandLetters = demandEntries.reduce<Record<string, string>>((acc, [key, value]) => {
-					const partyName = key.replace('demand_', '').replace(/_/g, ' ');
-					acc[partyName] = value;
-					return acc;
-				}, {});
-			}
-		}
-
-		if (data.opposing_parties && data.opposing_parties.length > 0) {
-			selectedParty = data.opposing_parties[0].name;
-		}
-
-	// Try to prefill demand letter fields from multiple sources
-	let foundAmount = false;
-	
-	// 1. Try multi_stage_result first (most structured)
-	if (data.multi_stage_result && !foundAmount) {
-		const factMatrix = data.multi_stage_result.fact_matrix || {};
-		const financialData = factMatrix.financial_data || [];
-		
-		// Look for claimed/owed amounts first
-		const claimedAmount = financialData.find((item: any) => 
-			item.payment_type === 'claimed' || 
-			item.category === 'damages_claimed'
-		);
-		
-		if (claimedAmount && claimedAmount.amount) {
-			demandAmount = claimedAmount.amount;
-			foundAmount = true;
-			console.log('Found demand amount in fact_matrix:', demandAmount);
-		} else {
-			// Try any "owed" amount
-			const owedAmount = financialData.find((item: any) => 
-				item.payment_type === 'owed' ||
-				item.description?.toLowerCase().includes('owed') ||
-				item.description?.toLowerCase().includes('damage')
-			);
-			if (owedAmount && owedAmount.amount) {
-				demandAmount = owedAmount.amount;
-				foundAmount = true;
-				console.log('Found owed amount in fact_matrix:', demandAmount);
-			} else if (financialData.length > 0) {
-				// Fallback: use the largest amount found
-				const maxAmountItem = financialData.reduce((prev: any, current: any) => 
-					(prev.amount > current.amount) ? prev : current
-				);
-				if (maxAmountItem && maxAmountItem.amount) {
-					demandAmount = maxAmountItem.amount;
-					foundAmount = true;
-					console.log('Using largest amount in fact_matrix as fallback:', demandAmount);
-				}
-			}
-		}
-
-		// Primary issues for specific demands
-		const issueMap = data.multi_stage_result.issue_map || {};
-		const primaryIssues = issueMap.primary_issues || [];
-		if (primaryIssues.length > 0) {
-			specificDemands = primaryIssues.map((issue: any) => 
-				`Resolve the issue of ${issue.issue_name} by providing appropriate remedies.`
-			).join('\n');
-		} else {
-			specificDemands = "Provide full and timely compliance with all outstanding obligations.";
-		}
-	}
-	
-	// 2. Fall back to case_analysis financial_impact
-	if (!foundAmount && data.case_analysis?.intake_analysis?.financial_impact) {
-		const financialText = data.case_analysis.intake_analysis.financial_impact;
-		// Extract dollar amounts from text
-		const amountMatch = financialText.match(/\$[\d,]+(?:\.\d{2})?/);
-		if (amountMatch) {
-			const amountStr = amountMatch[0].replace(/[$,]/g, '');
-			demandAmount = parseFloat(amountStr);
-			foundAmount = true;
-			console.log('Found demand amount in intake financial_impact:', demandAmount);
-		}
-	}
-	
-	// 3. Fall back to document summaries key_amounts
-	if (!foundAmount && data.document_summaries && Array.isArray(data.document_summaries)) {
-		for (const doc of data.document_summaries) {
-			if (doc.key_amounts && Array.isArray(doc.key_amounts)) {
-				for (const amount of doc.key_amounts) {
-					if (amount.description?.toLowerCase().includes('damage') || 
-					    amount.description?.toLowerCase().includes('owed') ||
-					    amount.description?.toLowerCase().includes('claim')) {
-						// Extract numeric value from formatted string
-						const amountStr = amount.amount?.replace(/[$,]/g, '');
-						if (amountStr) {
-							demandAmount = parseFloat(amountStr);
-							foundAmount = true;
-							console.log('Found demand amount in document key_amounts:', demandAmount);
-							break;
-						}
-					}
-				}
-				if (foundAmount) break;
-			}
-		}
-	}
-	
-	// 4. Last resort: use any financial amount from documents
-	if (!foundAmount && data.document_summaries && Array.isArray(data.document_summaries)) {
-		for (const doc of data.document_summaries) {
-			if (doc.key_amounts && Array.isArray(doc.key_amounts) && doc.key_amounts.length > 0) {
-				const firstAmount = doc.key_amounts[0];
-				const amountStr = firstAmount.amount?.replace(/[$,]/g, '');
-				if (amountStr) {
-					demandAmount = parseFloat(amountStr);
-					foundAmount = true;
-					console.log('Using first available amount from documents:', demandAmount);
-					break;
-				}
-			}
-		}
-	}
-	
-	console.log('Final demand amount:', demandAmount || 'not found');
-
-		// Initialize all documents as collapsed
-		if (data.document_summaries && data.document_summaries.length > 0) {
-			const allDocNames = new Set(data.document_summaries.map((doc: any) => doc.document_name));
-			collapsedDocs = allDocNames;
-		}
-
-		} catch (err: any) {
-			error = err.message;
-		} finally {
-			loading = false;
-		}
 	}
 
 	async function generateFindingsLetter() {
@@ -548,36 +315,7 @@
 		{/snippet}
 	</PageHeader>
 
-	{#if loading}
-		<div class="flex items-center justify-center py-12">
-			<div class="text-center">
-				<svg
-					class="animate-spin h-8 w-8 text-blue-600 mx-auto mb-4"
-					fill="none"
-					viewBox="0 0 24 24"
-				>
-					<circle
-						class="opacity-25"
-						cx="12"
-						cy="12"
-						r="10"
-						stroke="currentColor"
-						stroke-width="4"
-					></circle>
-					<path
-						class="opacity-75"
-						fill="currentColor"
-						d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-					></path>
-				</svg>
-				<p class="text-sm text-gray-600">Loading results...</p>
-			</div>
-		</div>
-	{:else if error}
-		<div class="bg-red-50 border border-red-200 rounded-lg p-6">
-			<p class="text-red-800">{error}</p>
-		</div>
-	{:else if results}
+	{#if results}
 		<div class="border-b border-gray-200 mb-6">
 			<nav class="-mb-px flex flex-wrap gap-4">
 				<button

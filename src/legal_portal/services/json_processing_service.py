@@ -292,6 +292,48 @@ class JsonProcessingService:
             HTML letter content
 
         """
+        # --- STRUCTURE OVERRIDE START ---
+        # Robustness check: Ensure structure matches complexity rules (Updated Nov 2025)
+        # This allows "Regenerate Letter" to work with updated logic without re-running analysis
+        try:
+            num_issues = len(legal_analysis.issue_analyses)
+            current_style = structure_guidance.style
+
+            # Check if using numbered format for 1-6 issues
+            if current_style == "numbered_findings" and num_issues <= 6:
+                # Check if truly complex procedures exist (excluding standard Chapter 558)
+                has_complex_procedures = False
+                for issue in legal_analysis.issue_analyses:
+                    if issue.procedural_requirements:
+                        for req in issue.procedural_requirements:
+                            req_lower = req.requirement.lower()
+                            if (
+                                "chapter 558" in req_lower
+                                or "60 day" in req_lower
+                                or "pre-suit notice" in req_lower
+                            ):
+                                continue
+                            has_complex_procedures = True
+                            break
+                    if has_complex_procedures:
+                        break
+
+                # If no truly complex procedures, FORCE simple bullets
+                if not has_complex_procedures:
+                    logger.warning(
+                        f"Overriding letter structure from {current_style} to simple_bullets "
+                        f"(Issues: {num_issues} <= 6, no complex procedures)"
+                    )
+                    structure_guidance.style = "simple_bullets"
+                    structure_guidance.intro = "Here are the key points of our analysis:"
+                    structure_guidance.issue_format = "bullet_paragraphs"
+                    structure_guidance.reasoning = (
+                        f"Auto-corrected: Simple/moderate case with {num_issues} issues"
+                    )
+        except Exception as e:
+            logger.warning(f"Structure override check failed (using original): {e}")
+        # --- STRUCTURE OVERRIDE END ---
+
         logger.info(
             f"Generating adaptive letter with {structure_guidance.style} structure",
             extra={"structure": structure_guidance.style, "issues": len(legal_analysis.issue_analyses)},
@@ -388,6 +430,33 @@ class JsonProcessingService:
         if not markdown_response or not markdown_response.strip():
             raise ValueError("OpenAI returned empty response for adaptive letter generation")
 
+        # --- FORMATTING POLISH PASS (Second AI Call) ---
+        # Apply consistent formatting and layout
+        logger.info("Applying formatting polish pass for consistency")
+        try:
+            # Try relative import first, then absolute
+            try:
+                from src.legal_portal.utils.letter_polish import LetterPolisher
+            except ImportError:
+                from legal_portal.utils.letter_polish import LetterPolisher
+
+            polisher = LetterPolisher(self.client)
+            polish_result = polisher.polish_letter(markdown_response)
+
+            if polish_result["success"]:
+                markdown_response = polish_result["polished_letter"]
+                logger.info(
+                    f"Formatting polish applied successfully. Changes: {len(polish_result['changes_made'])}",
+                    extra={"changes": polish_result["changes_made"]},
+                )
+            else:
+                logger.warning(
+                    f"Formatting polish failed: {polish_result.get('error', 'Unknown')}. Using original."
+                )
+        except Exception as e:
+            logger.warning(f"Formatting polish pass failed: {e}. Using original letter.")
+        # --- END POLISH PASS ---
+
         # Convert to HTML
         html_content = self._convert_markdown_to_html(markdown_response)
 
@@ -439,20 +508,71 @@ class JsonProcessingService:
         instructions = "\n\nSTRUCTURE GUIDANCE:\n\n"
 
         if structure_guidance.style == "simple_bullets":
-            instructions += """Use SIMPLE BULLET LIST format:
-- Start with: "Here are the key points of our analysis:"
-- Each major legal issue as a substantive bullet paragraph
-- Mix of paragraphs and bullets for readability
-- Keep professional but approachable tone
-- This is a simple to moderate complexity case"""
+            instructions += """Use SIMPLE BULLET LIST format (REQUIRED):
+
+**CRITICAL - You MUST follow this structure:**
+1. Section 1: FACTUAL SUMMARY (numbered header)
+2. Transition: "Here are the key points of our analysis:"
+3. Each legal issue as a BULLET PARAGRAPH (•), NOT as numbered section (2., 3., 4.)
+4. Section 2: RECOMMENDED ACTION & NEXT STEPS (final numbered header)
+
+**PROHIBITED in this format:**
+❌ Do NOT create sections 2., 3., 4., 5. for each legal issue
+❌ Do NOT use "Key Findings" intro
+❌ Do NOT use numbered headers for legal issues
+
+**REQUIRED structure example:**
+```
+1. FACTUAL SUMMARY
+[paragraphs]
+
+Here are the key points of our analysis:
+
+• **Implied Warranty & Construction Defects**: [paragraph]
+• **Breach of Contract**: [paragraph]
+• **Mechanic's Liens**: [paragraph]
+
+2. RECOMMENDED ACTION & NEXT STEPS
+[paragraphs]
+```
+
+This is a simple to moderate complexity case (1-6 issues)."""
 
         elif structure_guidance.style == "numbered_findings":
-            instructions += """Use NUMBERED FINDINGS format:
-- Start with: "Key Findings" (no "Here are...")
-- Each major legal issue gets its own NUMBERED SECTION (2., 3., 4., etc.)
-- Include statute citations in section headers where applicable
-- More formal and structured approach
-- This is a complex case requiring detailed organization"""
+            instructions += """Use NUMBERED FINDINGS format (REQUIRED):
+
+**CRITICAL - You MUST follow this structure:**
+1. Section 1: FACTUAL SUMMARY (numbered header)
+2. Transition: "Key Findings" (NOT "Here are the key points...")
+3. Each legal issue gets its OWN NUMBERED SECTION (2., 3., 4., 5., etc.)
+4. Final section: RECOMMENDED ACTION & NEXT STEPS
+
+**REQUIRED in this format:**
+✅ Each legal issue has dedicated numbered section with header
+✅ Use "Key Findings" intro (not "Here are...")
+✅ Include statute citations in headers where applicable
+
+**REQUIRED structure example:**
+```
+1. FACTUAL SUMMARY
+[paragraphs]
+
+Key Findings
+
+2. IMPLIED WARRANTY & CONSTRUCTION DEFECTS (Fla. Stat. Chapter 558)
+[dedicated section]
+
+3. BREACH OF CONTRACT
+[dedicated section]
+
+4. MECHANIC'S LIENS (Fla. Stat. § 713.06)
+[dedicated section]
+
+5. RECOMMENDED ACTION & NEXT STEPS
+[paragraphs]
+```
+
+This is a complex case (5+ issues or unusual procedures) requiring detailed organization."""
 
         else:  # hybrid
             instructions += """Use HYBRID format:

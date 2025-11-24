@@ -212,3 +212,4 @@ validation_output/
 # Generated outputs
 output/letters/
 output/summaries/
+.vercel

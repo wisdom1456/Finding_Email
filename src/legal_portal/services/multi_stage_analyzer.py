@@ -553,22 +553,33 @@ Return ONLY valid JSON.
         Logic-based determination (no AI call needed).
         """
         num_primary_issues = len(issue_map.primary_issues)
-        has_complex_procedures = any(
-            issue_analysis.procedural_requirements
-            for issue_analysis in analysis.issue_analyses
-            if issue_analysis.procedural_requirements
-        )
+
+        # Check for truly complex procedures (exclude standard construction Chapter 558 pre-suit)
+        # Chapter 558 is standard for FL construction defects, not "complex"
+        has_complex_procedures = False
+        for issue_analysis in analysis.issue_analyses:
+            if issue_analysis.procedural_requirements:
+                # procedural_requirements is now a string (integrated description)
+                req_lower = issue_analysis.procedural_requirements.lower()
+                # Skip standard construction pre-suit requirements
+                if "chapter 558" in req_lower or "60 day" in req_lower or "pre-suit notice" in req_lower:
+                    continue
+                # If we get here, it's a non-standard procedural requirement
+                has_complex_procedures = True
+                break
 
         # Decision logic based on attorney examples
-        if num_primary_issues <= 2 and not has_complex_procedures:
-            # Simple cases: Use bullet list format (Miguel Velasco, Balaji Badam style)
+        # Note: Most construction defect cases (3-6 issues) should use simple bullets format
+        # Only truly complex cases with 7+ distinct legal theories need numbered sections
+        if num_primary_issues <= 6 and not has_complex_procedures:
+            # Simple/Moderate cases: Use bullet list format (Miguel Velasco, Balaji Badam, Erik Devlin style)
             return LetterStructure(
                 style="simple_bullets",
                 intro="Here are the key points of our analysis:",
                 issue_format="bullet_paragraphs",
-                reasoning=f"Simple case with {num_primary_issues} issue(s), no complex procedures",
+                reasoning=f"Simple/moderate case with {num_primary_issues} issue(s), no complex procedures",
             )
-        elif num_primary_issues >= 3 or has_complex_procedures:
+        elif num_primary_issues >= 7 or has_complex_procedures:
             # Complex cases: Use numbered findings format (Christopher Eastman style)
             return LetterStructure(
                 style="numbered_findings",

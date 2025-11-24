@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import uuid
 from datetime import datetime
 from pathlib import Path
@@ -18,8 +19,19 @@ class AuditLogger:
     def __init__(self):
         """Initialize audit logger."""
         self.logger = StructuredLogger("audit")
-        self.audit_dir = Path("logs/audit")
-        self.audit_dir.mkdir(parents=True, exist_ok=True)
+
+        # Only create audit directory if not in serverless environment
+        # Vercel/AWS Lambda have read-only filesystems
+        if not os.getenv("VERCEL") and not os.getenv("AWS_LAMBDA_FUNCTION_NAME"):
+            try:
+                self.audit_dir = Path("logs/audit")
+                self.audit_dir.mkdir(parents=True, exist_ok=True)
+            except (OSError, PermissionError):
+                # If we can't create audit dir, use None (will skip file writing)
+                self.audit_dir = None
+        else:
+            # In serverless, skip file-based audit logging (use structured logger to stdout)
+            self.audit_dir = None
 
     def log_authentication(
         self, username: str, action: str, success: bool, ip_address: Optional[str] = None, **kwargs
@@ -169,11 +181,11 @@ class AuditLogger:
         entry_json = json.dumps(audit_entry, sort_keys=True)
         audit_entry["hash"] = hashlib.sha256(entry_json.encode()).hexdigest()
 
-        # Write to daily audit file
-        audit_file = self.audit_dir / f"audit_{datetime.now().strftime('%Y%m%d')}.json"
-
-        with open(audit_file, "a") as f:
-            f.write(json.dumps(audit_entry) + "\n")
+        # Write to daily audit file (only if audit_dir is available)
+        if self.audit_dir is not None:
+            audit_file = self.audit_dir / f"audit_{datetime.now().strftime('%Y%m%d')}.json"
+            with open(audit_file, "a") as f:
+                f.write(json.dumps(audit_entry) + "\n")
 
 
 # Global audit logger instance

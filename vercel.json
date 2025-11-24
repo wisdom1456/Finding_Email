@@ -2,12 +2,6 @@
   "framework": "sveltekit",
   "installCommand": "echo 'Vercel install skipped - handled in build script'",
   "buildCommand": "bash scripts/vercel_build.sh",
-  "functions": {
-    "api/**/*.py": {
-      "runtime": "python3.9",
-      "maxDuration": 60
-    }
-  },
   "rewrites": [
     {
       "source": "/api/(.*)",

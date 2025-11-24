@@ -1,19 +1,12 @@
 # Unified Requirements for Legal Document Analysis Portal
-# Phase 4 Consolidation: Streamlit-Python Architecture with Enterprise Authentication
-
-# Core Framework - REMOVE Streamlit to save space
-# streamlit>=1.28.0
-# streamlit-authenticator==0.3.1
+# Vercel-optimized: Only essential dependencies for serverless deployment
 
 # Authentication and Security
 PyJWT==2.8.0
 bcrypt==4.1.2
-# authlib==1.3.0 # Typically not needed if using Supabase for Auth
-# pyyaml==6.0.1 # Included in pydantic-settings or core python? Keep if explicitly used.
 
 # API Integration
 requests>=2.31.0
-# requests-oauthlib>=1.3.1 # Usually not needed if using Supabase Auth or basic OAuth
 openai>=1.3.0
 tiktoken>=0.5.1
 
@@ -23,45 +16,24 @@ pydantic>=2.0.0
 pydantic-settings>=2.0.0
 PyYAML>=6.0
 
-# Document Processing - HEAVY DEPENDENCIES
-# python-docx>=1.1.0 # Keep if critical
-# PyMuPDF>=1.23.0 # Very heavy (OCR/PDF). Consider lighter alternatives or remove if optional.
-# python-magic>=0.4.27
+# Document Processing (REQUIRED for Clio import and document upload)
+python-docx>=1.1.0
+PyMuPDF>=1.23.0
 
-# Image Processing (for OCR support and compression) - VERY HEAVY
-# Pillow>=10.0.0
-# pytesseract>=0.3.10
-
-# PDF Processing and Compression
-# PyPDF2>=3.0.0 # Lighter than PyMuPDF
+# Document Output (REQUIRED for analysis results)
+html2text>=2020.1.16
 
 # Utility Libraries
 tenacity>=8.2.3
-# textstat>=0.7.8
-# numpy>=1.24.0 # Very heavy. Remove if possible.
 
-# Data Visualization for Cost Tracking - VERY HEAVY
-# plotly>=5.17.0
-
-# Additional dependencies for file output functionality
-# html2text>=2020.1.16
-# weasyprint>=60.0 # HEAVY (depends on system libs)
-# beautifulsoup4>=4.12.0
-# markdown2>=2.4.10
-
-# Optional: Redis for advanced caching and session management
-# redis>=5.0.1  # Uncomment if using Redis for session storage
-
-# FastAPI Backend (Phase 5 - SvelteKit Migration)
+# FastAPI Backend
 fastapi>=0.100.0
 uvicorn>=0.20.0
 python-multipart>=0.0.6
 supabase>=2.0.0
 
-# Removed unnecessary dependencies:
-# - pyth (not used in current implementation)
-# - sseclient-py (async/SSE not needed)
-
-# SSE (Server-Sent Events) support
+# SSE (Server-Sent Events) support for real-time progress
 sse-starlette==2.1.3
-# python-json-logger==4.0.0
+
+# Optional: PDF generation (will gracefully degrade if not available)
+# weasyprint>=60.0 # Requires system dependencies, commented for Vercel compatibility

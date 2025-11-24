@@ -1,6 +1,12 @@
 {
   "framework": "sveltekit",
   "installCommand": "echo 'Vercel install skipped - handled in build script'",
-  "buildCommand": "bash scripts/vercel_build.sh"
+  "buildCommand": "bash scripts/vercel_build.sh",
+  "rewrites": [
+    {
+      "source": "/api/(.*)",
+      "destination": "/api/index.py"
+    }
+  ]
 }
 

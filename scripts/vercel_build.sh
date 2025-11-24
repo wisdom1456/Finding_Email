@@ -58,5 +58,16 @@ else
   exit 1
 fi
 
+echo ">>> Installing Python dependencies for serverless functions..."
+if [ -f "api/requirements.txt" ]; then
+  echo "Found api/requirements.txt"
+  cd api
+  pip install -r requirements.txt --target .
+  cd ..
+  echo "Python dependencies installed"
+else
+  echo "WARNING: api/requirements.txt not found"
+fi
+
 echo ">>> VERCEL BUILD COMPLETE"
 

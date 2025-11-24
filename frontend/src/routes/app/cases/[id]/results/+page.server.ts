@@ -13,13 +13,13 @@ export const load: PageServerLoad = async ({ params, locals, fetch }) => {
 	const caseId = params.id;
 	
 	// Determine API URL for server-side fetch
-	// 1. Use VERCEL_URL if available (internal Vercel networking)
-	// 2. Use localhost if not on Vercel
-	// 3. Fallback to configured PUBLIC_API_URL if explicitly set to something else
+	// CRITICAL: On Vercel, use relative paths so SvelteKit's fetch can route internally
+	// without hitting the external edge network which requires authentication
 	let API_URL = 'http://127.0.0.1:8000';
 	
 	if (env.VERCEL_URL) {
-		API_URL = `https://${env.VERCEL_URL}`;
+		// On Vercel: Use empty string for relative paths (same as client-side)
+		API_URL = '';
 	} else if (PUBLIC_API_URL && !PUBLIC_API_URL.includes('supabase.co')) {
 		// Only use PUBLIC_API_URL if it's NOT a Supabase URL (common misconfiguration)
 		API_URL = PUBLIC_API_URL;

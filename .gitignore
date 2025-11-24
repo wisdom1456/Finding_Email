@@ -8,6 +8,12 @@
 # API Keys and Secrets
 config/secrets/
 *.json
+!package.json
+!package-lock.json
+!frontend/package.json
+!frontend/package-lock.json
+!tsconfig.json
+!frontend/tsconfig.json
 brflorida-*.json
 *-credentials.json
 brflorida-2800217d04c3.json

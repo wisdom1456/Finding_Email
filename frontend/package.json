@@ -1,0 +1,49 @@
+{
+	"name": "frontend",
+	"private": true,
+	"version": "0.0.1",
+	"type": "module",
+	"scripts": {
+		"dev": "vite dev",
+		"build": "vite build",
+		"preview": "vite preview",
+		"prepare": "svelte-kit sync || echo ''",
+		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
+		"test": "vitest",
+		"test:ui": "vitest --ui",
+		"test:run": "vitest run",
+		"test:coverage": "vitest run --coverage",
+		"test:e2e": "playwright test",
+		"test:e2e:ui": "playwright test --ui",
+		"test:e2e:debug": "playwright test --debug"
+	},
+	"devDependencies": {
+		"@playwright/test": "^1.56.1",
+		"@sveltejs/adapter-auto": "^7.0.0",
+		"@sveltejs/adapter-vercel": "^6.1.2",
+		"@sveltejs/kit": "^2.47.1",
+		"@sveltejs/vite-plugin-svelte": "^6.2.1",
+		"@testing-library/jest-dom": "^6.9.1",
+		"@testing-library/svelte": "^5.2.9",
+		"@testing-library/user-event": "^14.6.1",
+		"@vitest/ui": "^4.0.12",
+		"happy-dom": "^20.0.10",
+		"jsdom": "^27.2.0",
+		"svelte": "^5.41.0",
+		"svelte-check": "^4.3.3",
+		"typescript": "^5.9.3",
+		"vite": "^7.1.10",
+		"vitest": "^4.0.12"
+	},
+	"dependencies": {
+		"@supabase/auth-helpers-sveltekit": "^0.13.0",
+		"@supabase/ssr": "^0.7.0",
+		"@supabase/supabase-js": "^2.83.0",
+		"@tailwindcss/postcss": "^4.1.17",
+		"autoprefixer": "^10.4.22",
+		"lucide-svelte": "^0.554.0",
+		"postcss": "^8.5.6",
+		"tailwindcss": "^4.1.17"
+	}
+}

@@ -23,10 +23,15 @@ def setup_logging(app_name: str = "legal-portal", level: str = None):
     # Determine log level
     log_level = level or os.getenv("LOG_LEVEL", "INFO")
 
-    # Create logs directory structure
-    log_dir = Path("logs")
-    log_dir.mkdir(exist_ok=True)
-    (log_dir / "audit").mkdir(exist_ok=True)
+    # Create logs directory structure (only if not in serverless environment)
+    if not os.getenv("VERCEL") and not os.getenv("AWS_LAMBDA_FUNCTION_NAME"):
+        try:
+            log_dir = Path("logs")
+            log_dir.mkdir(exist_ok=True)
+            (log_dir / "audit").mkdir(exist_ok=True)
+        except (OSError, PermissionError):
+            # If we can't create log directories, skip (serverless will use stdout)
+            pass
 
     # Configure root logger
     logging.basicConfig(level=getattr(logging, log_level), format="%(message)s", handlers=[])

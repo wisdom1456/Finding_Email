@@ -17,11 +17,16 @@ if os.path.exists(packages_dir) and packages_dir not in sys.path:
 if current_dir not in sys.path:
     sys.path.insert(0, current_dir)
 
-# 3. Add root directory to path (for src/ imports)
+# 3. Add root directory to path (for imports starting with src.)
 if parent_dir not in sys.path:
     sys.path.insert(0, parent_dir)
 
-print(f"PYTHONPATH modified. Added: {packages_dir}, {current_dir}, {parent_dir}", file=sys.stderr)
+# 4. Add src directory to path (for imports starting with legal_portal.)
+src_dir = os.path.join(parent_dir, "src")
+if os.path.exists(src_dir) and src_dir not in sys.path:
+    sys.path.insert(0, src_dir)
+
+print(f"PYTHONPATH modified. Added: {packages_dir}, {current_dir}, {parent_dir}, {src_dir}", file=sys.stderr)
 # --------------------------
 
 # Check for required environment variables and provide helpful error messages

@@ -1,90 +1,41 @@
-Erik Devlin Findings Letter - Attorney Written Example
-========================================================
+Erik Devlin Findings Letter - Natural Flow Example
+==================================================
 
 Subject: Legal Review and Recommended Next Steps – LLW Construction, Inc. Dispute
 
 Good afternoon Mr. Devlin and Ms. Bell,
 
-I hope this message finds you well. Following our review of your documents and our recent discussion, I am providing a summary of the situation involving LLW Construction, Inc., along with legal considerations and our recommendations for moving forward.
+I hope you are doing well. I wanted to follow up with a summary of our findings after reviewing the documents you submitted, including the contract with LLW Construction, Inc. and the Notice to Owner, regarding your property at 3414 South Belcher Drive, Tampa, Florida 33629.
 
-1. FACTUAL SUMMARY
+As discussed, the primary concern is whether you can hold the contractor responsible for the incomplete work and how to protect your home from potential liens by unpaid subcontractors.
 
-Based on our review, we understand that the issues began after you engaged LLW Construction, Inc. to complete repairs to your home located at 3414 South Belcher Drive, Tampa, FL 33629, following damage from Hurricane Helene. The total contract amount was $128,355.77, of which $100,000 has already been paid.
+Based on our review, we understand that the issues began after you engaged LLW Construction, Inc. to complete repairs to your home following damage from Hurricane Helene. The total contract amount was $128,355.77, of which $100,000 has already been paid. Despite this substantial payment, the contractor has not completed the project, and the work performed has been substandard—including serious construction defects such as improper bathroom framing that required you to reconstruct it yourself. Since January, the contractor's only communications have been requests for more money, despite minimal progress. Additionally, you received a Notice to Owner from a subcontractor for over $3,000, indicating they were not paid by the contractor for their work.
 
-Despite this substantial payment:
-• The contractor has not completed the project.
-• The work performed has been substandard, including serious construction defects such as improper bathroom framing requiring you to reconstruct it yourself.
-• Since January, the contractor's only communications have been requests for more money, despite minimal progress.
-• The contractor has stated they are out of funds and require additional payment to continue.
+Here are the key points of our analysis:
 
-Additionally, you have received a Notice to Owner from a subcontractor for over $3,000, indicating they were not paid by the contractor for their work.
+• Under Florida law, there's an important protection called an "implied warranty of workmanlike construction." This means that contractors are required to perform their work competently, even if your contract doesn't explicitly state this. In your case, LLW Construction violated this protection by leaving the bathroom framing incomplete and ceasing communication after receiving substantial payments. What this means for you: you have a strong legal basis to demand that they either complete the work properly or reimburse you for hiring another contractor to finish the job.
 
-2. IMPLIED WARRANTY & CONSTRUCTION DEFECTS (Fla. Stat. Chapter 558)
+• Before you can pursue legal action against a contractor in Florida, you must follow a process outlined in Florida Statutes Chapter 558. This statute requires you to send a formal notice to the contractor detailing the defects in their work, giving them 60 days to respond with a plan to remedy the issues. If they propose a repair plan, they have an additional 45 days to complete the repairs. This process is mandatory and designed to encourage resolution without court intervention. For you, this means we need to initiate this notice process before considering litigation.
 
-Under Florida law, an implied warranty exists that all work will be performed in a competent and workmanlike manner. You may have claims under this implied warranty due to:
-• Defective or incomplete construction
-• Failure to meet industry standards
-• Structural and functional deficiencies
+• A breach of contract occurs when one party fails to fulfill their obligations under the contract terms. LLW Construction's failure to complete your home repairs despite receiving $100,000 constitutes a clear breach. What this means for you: you may be entitled to monetary damages, the cost of hiring a replacement contractor, and reimbursement for any subcontractor payments you've had to make.
 
-Florida Statutes, Chapter 558, requires the following steps before pursuing litigation:
-• You must provide 60 days' written notice to the contractor identifying the defects and giving them an opportunity to repair.
-• The contractor then has 45 days to respond with a proposed repair plan and timeline.
-• You cannot file suit without completing this statutory notice-and-opportunity-to-repair process.
+• You received a Notice to Owner from a subcontractor, indicating they have not been paid. In Florida, even if you have paid the general contractor, you can still be liable for unpaid subcontractors—this is called "lien exposure." This notice is the first step toward filing a construction lien against your property. If unresolved, the subcontractor can file a lien, which is a legal claim against your property that must be settled before you can sell or refinance. In the worst-case scenario, it could lead to the forced sale of your home. However, this is preventable if we act quickly.
 
-3. BREACH OF CONTRACT CLAIM
+Based on the above, a negotiated resolution would likely be your most efficient and cost-effective path forward. One option would be for our firm to send a formal demand letter to LLW Construction on your behalf, requiring them to complete the project according to the contract terms or reimburse you for the costs of hiring another contractor. This letter would also provide the required 60-day notice under Chapter 558 and seek reimbursement for payments you've made or will make to subcontractors.
 
-You may also have a breach of contract claim. To prevail, you must show:
-1. A valid contract exists (which it does),
-2. A material breach occurred (e.g., failure to complete or properly perform the work),
-3. You have sustained damages as a result.
+Additionally, you should consider paying the subcontractor directly (approximately $3,000+) to avoid a lien being placed on your home. You can then seek reimbursement of this amount from LLW Construction as part of your damages claim.
 
-The contractor's failure to perform as agreed, including leaving work unfinished and failing to meet specifications, supports a potential cause of action for breach of contract. You may be entitled to:
-• Monetary damages
-• Cost of hiring a replacement contractor
-• Reimbursement for subcontractor payments
-• Other remedies under the contract and Florida law
+If you decide to proceed with payment to the subcontractor, here's what you need to do to protect yourself:
 
-4. LIENS AND NOTICE TO OWNER (Fla. Stat. § 713.02 and § 713.06)
+• Obtain a lien waiver in writing – This document confirms the subcontractor has been paid and relinquishes their right to place a lien on your property.
+• Keep proof of payment – Save the cancelled check, receipt, or signed acknowledgment for your records.
+• Document this as part of your damages – Keep records so we can include this amount when seeking reimbursement from LLW Construction.
 
-Subcontractors who have not been paid have the right to file a mechanic's lien against your property:
-• The Notice to Owner you received is a statutory prerequisite to filing such a lien.
-• If not resolved, the subcontractor may proceed to record a lien, which can cloud title to your property and create additional legal exposure.
-• Even if you have already paid the general contractor, Florida law may still hold you liable for unpaid amounts to subcontractors.
+Please let us know if you would like us to proceed with drafting and sending the above-referenced demand letter, or whether you would prefer that we first set a phone call to discuss our review and recommendations for next steps.
 
-You may need to pay the subcontractor directly to avoid a lien and then seek reimbursement from LLW Construction.
+Thank you,
 
-5. RECOMMENDED NEXT STEPS
+Franklin Riley
+Senior Partner
 
-We recommend the following course of action:
-
-A. Issue a Letter of Representation and Demand Letter:
-
-Our firm can send a formal letter of representation and demand letter to LLW Construction on your behalf. This letter will:
-• Demand that the contractor complete the project as agreed;
-• Provide formal notice under Chapter 558;
-• Seek reimbursement for payments you've made or will make to subcontractors;
-• Initiate a resolution process that may avoid litigation and protect your property rights.
-
-B. Pay the Subcontractor to Avoid a Lien (and Potential Foreclosure Risk):
-
-You have received a Notice to Owner from a subcontractor who has not been paid by LLW Construction. This notice is the first step toward filing a construction lien against your property. In Florida, once a lien is recorded, the subcontractor may initiate a foreclosure action to enforce the lien and recover the amount owed. While this is not always immediate, the risk should not be taken lightly—foreclosure of a construction lien can ultimately lead to the forced sale of your home if not resolved.
-
-To protect your property interest and avoid this outcome, we recommend that you consider paying the subcontractor directly the amount owed—approximately $3,000+—to satisfy the underlying debt. This action would:
-• Prevent the recording of a lien or facilitate its removal if already recorded;
-• Avoid legal fees, interest, and costs that would accrue if the subcontractor proceeds with litigation;
-• Protect your property title from encumbrances, which could impact your ability to refinance or sell;
-• Allow you to maintain control over the dispute and avoid being caught in the middle of a payment conflict between the contractor and subcontractor.
-
-If you proceed with payment, we strongly advise:
-• Obtaining a written release of lien or lien waiver from the subcontractor;
-• Retaining proof of payment (cancelled check, receipt, signed acknowledgment);
-• Using this payment as part of your damages claim in pursuing reimbursement from LLW Construction, who failed in their contractual obligation to pay their vendors.
-
-This proactive step helps mitigate your risk and strengthens your position in any forthcoming demand or legal action against the contractor.
-
-C. Schedule a Call:
-
-Please let us know if you would like us to proceed with drafting and sending the above-referenced letters. We would also be happy to schedule a call to discuss any questions you may have.
-
-Thank you, and we remain committed to protecting your interests throughout this process.
-
+This analysis is based on the documents provided and represents a preliminary assessment. Additional facts may emerge that will materially affect this analysis. This communication is confidential and subject to attorney-client privilege.

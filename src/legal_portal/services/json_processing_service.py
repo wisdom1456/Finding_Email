@@ -292,51 +292,12 @@ class JsonProcessingService:
             HTML letter content
 
         """
-        # --- STRUCTURE OVERRIDE START ---
-        # Robustness check: Ensure structure matches complexity rules (Updated Nov 2025)
-        # This allows "Regenerate Letter" to work with updated logic without re-running analysis
-        try:
-            num_issues = len(legal_analysis.issue_analyses)
-            current_style = structure_guidance.style
-
-            # Check if using numbered format for 1-6 issues
-            if current_style == "numbered_findings" and num_issues <= 6:
-                # Check if truly complex procedures exist (excluding standard Chapter 558)
-                has_complex_procedures = False
-                for issue in legal_analysis.issue_analyses:
-                    if issue.procedural_requirements:
-                        for req in issue.procedural_requirements:
-                            req_lower = req.requirement.lower()
-                            if (
-                                "chapter 558" in req_lower
-                                or "60 day" in req_lower
-                                or "pre-suit notice" in req_lower
-                            ):
-                                continue
-                            has_complex_procedures = True
-                            break
-                    if has_complex_procedures:
-                        break
-
-                # If no truly complex procedures, FORCE simple bullets
-                if not has_complex_procedures:
-                    logger.warning(
-                        f"Overriding letter structure from {current_style} to simple_bullets "
-                        f"(Issues: {num_issues} <= 6, no complex procedures)"
-                    )
-                    structure_guidance.style = "simple_bullets"
-                    structure_guidance.intro = "Here are the key points of our analysis:"
-                    structure_guidance.issue_format = "bullet_paragraphs"
-                    structure_guidance.reasoning = (
-                        f"Auto-corrected: Simple/moderate case with {num_issues} issues"
-                    )
-        except Exception as e:
-            logger.warning(f"Structure override check failed (using original): {e}")
-        # --- STRUCTURE OVERRIDE END ---
-
+        # All cases now use natural_flow format - no structure override needed
+        # The analyzer always returns natural_flow regardless of complexity
+        num_issues = len(legal_analysis.issue_analyses)
         logger.info(
-            f"Generating adaptive letter with {structure_guidance.style} structure",
-            extra={"structure": structure_guidance.style, "issues": len(legal_analysis.issue_analyses)},
+            f"Generating natural flow letter with {num_issues} issues",
+            extra={"structure": "natural_flow", "issues": num_issues},
         )
 
         # Format Q&A pairs for prompt context
@@ -461,8 +422,8 @@ class JsonProcessingService:
         html_content = self._convert_markdown_to_html(markdown_response)
 
         logger.info(
-            "Successfully generated adaptive letter",
-            extra={"html_length": len(html_content), "structure": structure_guidance.style},
+            "Successfully generated natural flow letter",
+            extra={"html_length": len(html_content), "structure": "natural_flow"},
         )
 
         return html_content

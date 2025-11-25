@@ -305,35 +305,49 @@ Comprehensive compliance recommendations will follow.
         """
         sections = []
 
-        # Header
-        case_id = case_data.get("case_id", "Unknown") if case_data else "Unknown"
-        sections.append(f"LEGAL ANALYSIS DOCUMENT - CASE {case_id}")
-        sections.append("=" * 50)
+        # Natural flow format - no formal section headers
+        # Warm greeting
+        sections.append("Good afternoon,")
+        sections.append("")
+        sections.append(
+            "I hope you are doing well. I wanted to follow up with a summary "
+            "of our findings after reviewing the documents you submitted."
+        )
         sections.append("")
 
         if error_context:
-            sections.append(f"Note: Generated using fallback content due to: {error_context}")
+            sections.append(f"[Note: This is preliminary content - {error_context}]")
             sections.append("")
 
-        # Add sections
-        sections.append("FACTUAL SUMMARY")
-        sections.append("-" * 20)
+        # Factual background (natural flow, no header)
         sections.append(self.generate_fallback_factual_summary(case_data))
         sections.append("")
 
-        sections.append("LEGAL ANALYSIS")
-        sections.append("-" * 20)
+        # Legal analysis with transition
+        sections.append("Here are the key points of our analysis:")
+        sections.append("")
         sections.append(self.generate_fallback_legal_analysis(case_data))
         sections.append("")
 
-        sections.append("EVIDENCE REVIEW")
-        sections.append("-" * 20)
+        # Evidence context
         sections.append(self.generate_fallback_evidence_review(case_data))
         sections.append("")
 
-        sections.append("RECOMMENDATIONS")
-        sections.append("-" * 20)
-        sections.append(self.generate_fallback_recommendations(case_data))
+        # Recommendations (natural flow)
+        sections.append("Based on the above, " + self.generate_fallback_recommendations(case_data))
+        sections.append("")
+
+        # Call to action
+        sections.append(
+            "Please let us know if you would like us to proceed with next steps, "
+            "or whether you would prefer that we first set a phone call to discuss."
+        )
+        sections.append("")
+        sections.append("Thank you,")
+        sections.append("")
+        sections.append(
+            "This analysis is based on the documents provided and represents a preliminary assessment."
+        )
 
         return "\n".join(sections)
 

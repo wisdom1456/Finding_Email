@@ -507,80 +507,67 @@ class JsonProcessingService:
         """Create structure instruction based on letter structure guidance."""
         instructions = "\n\nSTRUCTURE GUIDANCE:\n\n"
 
-        if structure_guidance.style == "simple_bullets":
-            instructions += """Use SIMPLE BULLET LIST format (REQUIRED):
+        # All cases now use natural flow format - no formal section headers
+        instructions += """Use NATURAL FLOW format (REQUIRED):
 
-**CRITICAL - You MUST follow this structure:**
-1. Section 1: FACTUAL SUMMARY (numbered header)
-2. Transition: "Here are the key points of our analysis:"
-3. Each legal issue as a BULLET PARAGRAPH (•), NOT as numbered section (2., 3., 4.)
-4. Section 2: RECOMMENDED ACTION & NEXT STEPS (final numbered header)
+**CRITICAL - The letter should read like professional correspondence, NOT a legal memo.**
 
-**PROHIBITED in this format:**
-❌ Do NOT create sections 2., 3., 4., 5. for each legal issue
+**STRUCTURE:**
+1. Warm greeting: "Good afternoon [Name]," or "Good morning [Name],"
+2. Opening: Documents reviewed + property address + primary concern in plain English
+3. Factual narrative: 2-3 paragraphs describing what happened (NO formal "FACTUAL SUMMARY" header)
+4. Transition: "Here are the key points of our analysis:"
+5. Legal points as flowing bullet paragraphs (each bullet is a complete paragraph, NO bold headers)
+6. Recommendations paragraph: "Based on the above, a negotiated resolution..."
+7. Protective checklist if client needs to take action (with explanations)
+8. Call to action: "Please let us know if you would like us to proceed..."
+9. Signature and disclaimer
+
+**PROHIBITED:**
+❌ Do NOT use formal section headers like "FACTUAL SUMMARY" or "RECOMMENDED ACTION"
+❌ Do NOT use bold issue titles in bullets (like "**Implied Warranty**:")
 ❌ Do NOT use "Key Findings" intro
-❌ Do NOT use numbered headers for legal issues
+❌ Do NOT use numbered sections for legal issues (2., 3., 4.)
+
+**REQUIRED - PLAIN LANGUAGE:**
+- Every legal term must be explained in plain English
+- Use "What this means for you:" or similar to explain practical impact
+- Use analogies clients understand ("like a hold on your property")
 
 **REQUIRED structure example:**
 ```
-1. FACTUAL SUMMARY
-[paragraphs]
+Good afternoon Mr. Devlin and Ms. Bell,
+
+I hope you are doing well. I wanted to follow up with a summary of our findings after reviewing [documents], regarding your property at [address].
+
+As discussed, the primary concern is [plain English statement of issue].
+
+Based on our review, we understand that [2-3 paragraphs of facts without formal headers]...
 
 Here are the key points of our analysis:
 
-• **Implied Warranty & Construction Defects**: [paragraph]
-• **Breach of Contract**: [paragraph]
-• **Mechanic's Liens**: [paragraph]
+• Under Florida law, there's a protection called an "implied warranty"—this means contractors are legally required to do competent work, even if your contract doesn't say so. In your case, [application]. What this means for you: [practical impact].
 
-2. RECOMMENDED ACTION & NEXT STEPS
-[paragraphs]
+• Before you can sue a contractor in Florida, you must follow a process under Chapter 558. Think of it as a required 'cool-down period.' [explanation]. For you, this means [practical impact].
+
+• You received a Notice to Owner—this is a warning that [explanation in plain English]. Here's why this matters: [consequence chain]. This is preventable if we act now.
+
+Based on the above, a negotiated resolution would likely be your most efficient path forward. [Specific recommendations with timeline].
+
+If you decide to [action], here's what you need to do:
+• [Step with explanation of why]
+• [Step with explanation of why]
+
+Please let us know if you would like us to proceed with [action], or whether you would prefer that we first set a phone call to discuss.
+
+Thank you,
+[Signature]
+
+[Disclaimer]
 ```
+"""
 
-This is a simple to moderate complexity case (1-6 issues)."""
-
-        elif structure_guidance.style == "numbered_findings":
-            instructions += """Use NUMBERED FINDINGS format (REQUIRED):
-
-**CRITICAL - You MUST follow this structure:**
-1. Section 1: FACTUAL SUMMARY (numbered header)
-2. Transition: "Key Findings" (NOT "Here are the key points...")
-3. Each legal issue gets its OWN NUMBERED SECTION (2., 3., 4., 5., etc.)
-4. Final section: RECOMMENDED ACTION & NEXT STEPS
-
-**REQUIRED in this format:**
-✅ Each legal issue has dedicated numbered section with header
-✅ Use "Key Findings" intro (not "Here are...")
-✅ Include statute citations in headers where applicable
-
-**REQUIRED structure example:**
-```
-1. FACTUAL SUMMARY
-[paragraphs]
-
-Key Findings
-
-2. IMPLIED WARRANTY & CONSTRUCTION DEFECTS (Fla. Stat. Chapter 558)
-[dedicated section]
-
-3. BREACH OF CONTRACT
-[dedicated section]
-
-4. MECHANIC'S LIENS (Fla. Stat. § 713.06)
-[dedicated section]
-
-5. RECOMMENDED ACTION & NEXT STEPS
-[paragraphs]
-```
-
-This is a complex case (5+ issues or unusual procedures) requiring detailed organization."""
-
-        else:  # hybrid
-            instructions += """Use HYBRID format:
-- Start with: "Here are the key points of our analysis:"
-- Use bullets with subheadings for organization
-- Balance formality with accessibility"""
-
-        instructions += f"\n\nReasoning: {structure_guidance.reasoning}\n"
+        instructions += f"\n\nAdditional context: {structure_guidance.reasoning}\n"
 
         return instructions
 

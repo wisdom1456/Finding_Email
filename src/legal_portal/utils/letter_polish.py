@@ -23,39 +23,41 @@ class LetterPolisher:
         self.formatting_prompt = self._load_formatting_prompt()
 
     def _load_formatting_prompt(self) -> str:
-        """Load the strict formatting prompt."""
-        return """You are a legal document formatting specialist. Your ONLY job is to fix formatting and layout issues in the provided letter while preserving ALL legal content.
+        """Load the formatting prompt for natural flow style."""
+        return """You are a legal document formatting specialist. Your ONLY job is to ensure the letter flows naturally while preserving ALL legal content.
 
 CRITICAL RULES:
 1. Do NOT change any legal content, analysis, or wording
 2. Do NOT add or remove legal information
-3. ONLY fix formatting, spacing, and structure
+3. ONLY improve natural flow and readability
 4. Preserve all attorney signatures, dates, and case-specific details
 
-REQUIRED FORMAT:
+TARGET FORMAT - NATURAL FLOW (NOT formal legal memo):
 
 ```
 Subject: Legal Review and Recommended Next Steps – [Case Name]
 
-Dear [Client Name],
+Good afternoon [Client Name],
 
-[Opening paragraph]
+I hope you are doing well. I wanted to follow up with a summary of our findings after reviewing [documents], regarding your property at [address].
 
-1. FACTUAL SUMMARY
+As discussed, the primary concern is [plain English statement].
 
-[Paragraphs describing facts]
+[2-3 paragraphs describing the factual situation - NO formal headers]
 
 Here are the key points of our analysis:
 
-• **[Issue 1] ([Statute])**: [Explanation]
-• **[Issue 2]**: [Explanation]
-• **[Issue 3] ([Statute])**: [Explanation]
+• [Complete paragraph explaining legal concept in plain English. What this means for you: practical impact.]
 
-2. RECOMMENDED ACTION & NEXT STEPS
+• [Next complete paragraph - NO bold headers at start of bullets]
 
-[Recommendations]
+• [Additional points as needed]
 
-[Closing]
+Based on the above, [recommendations paragraph].
+
+[Protective checklist if applicable]
+
+Please let us know if you would like us to proceed with [action].
 
 Thank you,
 
@@ -67,82 +69,64 @@ Thank you,
 
 FORMATTING FIXES TO APPLY:
 
-1. SECTION NUMBERING:
-   - Ensure section 1 is: "1. FACTUAL SUMMARY"
+1. REMOVE FORMAL HEADERS:
+   - If you see "FACTUAL SUMMARY" or "1. FACTUAL SUMMARY" → REMOVE IT, let facts flow naturally
+   - If you see "RECOMMENDED ACTION & NEXT STEPS" → REMOVE IT, start with "Based on the above..."
    - If you see "Key Findings" → change to "Here are the key points of our analysis:"
-   - If you see numbered sections 2., 3., 4. for legal issues → convert to bullets (•)
-   - Final section should be numbered for recommendations
 
-2. BULLET FORMAT:
-   - All legal issues must use bullet symbol: •
-   - Format: • **[Title] ([Statute])**: [Content]
-   - NO blank lines between consecutive bullets
-   - Use dashes (-) for sub-items within a bullet
+2. REMOVE BOLD ISSUE TITLES:
+   - If you see "• **Implied Warranty**:" → change to "• Under Florida law, there's a protection called..."
+   - Bullets should be flowing paragraphs, NOT formatted headers
+   - Each bullet should read like a conversation, not a legal outline
 
-3. SPACING:
-   - 1 blank line after greeting
-   - 1 blank line before/after section headers
+3. ENSURE PLAIN LANGUAGE:
+   - Every legal term should have an explanation
+   - Look for "What this means for you:" or similar practical impact statements
+   - If missing, the content is fine - don't add, just ensure good flow
+
+4. SPACING:
    - 1 blank line between paragraphs
-   - NO blank lines between bullets (• items)
+   - 1 blank line after "Here are the key points of our analysis:"
+   - Minimal blank lines between bullet items (0-1)
    - 1 blank line before closing
 
-4. HEADERS:
-   - Section headers: NUMBER. ALL CAPS (e.g., "1. FACTUAL SUMMARY")
-   - Transition: "Here are the key points of our analysis:" (sentence case)
-   - Legal issues: • **Title Case Bold** ([Statute]):
-
-5. SUB-SECTIONS:
-   - Use bold for sub-section titles (e.g., **Pre-Litigation Requirements:**)
-   - Indent sub-items with dashes (-)
-   - 1 blank line before sub-section, no blank line after title
+5. GREETING:
+   - Prefer "Good afternoon [Name]," or "Good morning [Name],"
+   - "Dear [Name]:" is acceptable but less warm
 
 EXAMPLES OF FIXES:
 
-BEFORE:
+BEFORE (too formal):
 ```
-Key Findings
+1. FACTUAL SUMMARY
 
-2. IMPLIED WARRANTY & CONSTRUCTION DEFECTS
+Based on our review...
 
-Under Florida law...
-
-3. BREACH OF CONTRACT
-
-A breach occurs...
-```
-
-AFTER:
-```
 Here are the key points of our analysis:
 
-• **Implied Warranty & Construction Defects (Florida Statutes Chapter 558)**: Under Florida law...
+• **Implied Warranty & Construction Defects (Florida Statutes Chapter 558)**: Under Florida law, an implied warranty exists...
 
-• **Breach of Contract**: A breach occurs...
+2. RECOMMENDED ACTION & NEXT STEPS
+
+Based on the above...
 ```
 
-BEFORE (excessive spacing):
+AFTER (natural flow):
 ```
-• **Issue 1**: Text
+Based on our review, we understand that...
 
+Here are the key points of our analysis:
 
-• **Issue 2**: Text
+• Under Florida law, there's an important protection called an "implied warranty of workmanlike construction." This means contractors are legally required to do competent work, even if your contract doesn't say so. In your case, [application]. What this means for you: [impact].
 
-
-• **Issue 3**: Text
-```
-
-AFTER (correct spacing):
-```
-• **Issue 1**: Text
-• **Issue 2**: Text
-• **Issue 3**: Text
+Based on the above, a negotiated resolution would likely be your most efficient path forward...
 ```
 
 OUTPUT INSTRUCTIONS:
 - Return ONLY the formatted letter
 - No commentary, no explanations
 - Preserve ALL legal content exactly
-- Fix ONLY formatting and layout
+- Improve natural flow and remove formal headers
 """
 
     def polish_letter(self, raw_letter: str) -> Dict:
@@ -214,25 +198,21 @@ FORMATTED LETTER:"""
         if "Key Findings" in original and "Here are the key points" in polished:
             changes.append("Changed 'Key Findings' to 'Here are the key points of our analysis:'")
 
-        # Check for numbered sections converted to bullets
-        original_numbered = len(
-            [x for x in original.split("\n") if x.strip().startswith(("2.", "3.", "4.")) and x.isupper()]
-        )
-        polished_numbered = len(
-            [x for x in polished.split("\n") if x.strip().startswith(("2.", "3.", "4.")) and x.isupper()]
-        )
+        # Check for formal headers removed
+        if "FACTUAL SUMMARY" in original and "FACTUAL SUMMARY" not in polished:
+            changes.append("Removed formal 'FACTUAL SUMMARY' header for natural flow")
 
-        if original_numbered > polished_numbered:
+        if "RECOMMENDED ACTION" in original and "RECOMMENDED ACTION" not in polished:
+            changes.append("Removed formal 'RECOMMENDED ACTION' header for natural flow")
+
+        # Check for bold issue titles removed
+        original_bold_bullets = original.count("• **")
+        polished_bold_bullets = polished.count("• **")
+
+        if original_bold_bullets > polished_bold_bullets:
             changes.append(
-                f"Converted {original_numbered - polished_numbered} numbered sections to bullet format"
+                f"Converted {original_bold_bullets - polished_bold_bullets} bold bullet headers to flowing paragraphs"
             )
-
-        # Check for bullet symbol changes
-        original_bullets = original.count("• **")
-        polished_bullets = polished.count("• **")
-
-        if polished_bullets > original_bullets:
-            changes.append(f"Added {polished_bullets - original_bullets} bullet symbols")
 
         # Check for spacing improvements
         original_triple_newlines = original.count("\n\n\n")
@@ -243,9 +223,9 @@ FORMATTED LETTER:"""
                 f"Fixed {original_triple_newlines - polished_triple_newlines} excessive spacing issues"
             )
 
-        # Check for section 1 addition
-        if "1. FACTUAL SUMMARY" not in original and "1. FACTUAL SUMMARY" in polished:
-            changes.append("Added '1. FACTUAL SUMMARY' section header")
+        # Check for greeting improvement
+        if "Dear " in original and ("Good afternoon" in polished or "Good morning" in polished):
+            changes.append("Updated greeting to warmer time-of-day style")
 
         return changes
 

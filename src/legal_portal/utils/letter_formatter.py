@@ -8,11 +8,11 @@ from typing import Tuple
 
 
 class LetterFormatter:
-    """Validates and fixes letter formatting."""
+    """Validates and fixes letter formatting for natural flow style."""
 
     @staticmethod
     def validate_format(letter_text: str) -> Tuple[bool, list]:
-        """Validate letter formatting against standards.
+        """Validate letter formatting against natural flow standards.
 
         Returns
         -------
@@ -20,41 +20,55 @@ class LetterFormatter:
         """
         issues = []
 
-        # Check 1: Has section 1
-        if not re.search(r"^1\.\s+FACTUAL\s+SUMMARY", letter_text, re.MULTILINE | re.IGNORECASE):
-            issues.append("Missing '1. FACTUAL SUMMARY' section header")
-
-        # Check 2: Has transition line (not "Key Findings")
-        if "Key Findings" in letter_text and "Here are the key points" not in letter_text:
-            issues.append("Uses 'Key Findings' instead of 'Here are the key points of our analysis:'")
-
-        # Check 3: No numbered legal issues (2., 3., 4. for legal topics)
-        # Look for patterns like "2. IMPLIED" or "3. BREACH"
-        numbered_issues = re.findall(
-            r"^\d+\.\s+[A-Z]{2,}[A-Z\s&]+(?:WARRANTY|CONTRACT|LIEN|BANKRUPTCY)", letter_text, re.MULTILINE
-        )
-        if numbered_issues:
+        # Check 1: Should NOT have formal section headers (natural flow)
+        if re.search(r"^1\.\s+FACTUAL\s+SUMMARY", letter_text, re.MULTILINE | re.IGNORECASE):
             issues.append(
-                f"Found numbered legal issue headers (should be bullets): {', '.join(numbered_issues[:3])}"
+                "Has formal 'FACTUAL SUMMARY' header - should flow naturally without formal headers"
             )
 
-        # Check 4: Has bullet symbols for legal issues
-        if "• **" not in letter_text and "•**" not in letter_text:
-            issues.append("Missing bullet symbols (•) for legal issues")
+        if re.search(r"^\d+\.\s+RECOMMENDED\s+ACTION", letter_text, re.MULTILINE | re.IGNORECASE):
+            issues.append(
+                "Has formal 'RECOMMENDED ACTION' header - should start with 'Based on the above...'"
+            )
 
-        # Check 5: Excessive spacing between bullets
-        if re.search(r"• \*\*.*\n\n\n+• \*\*", letter_text):
-            issues.append("Too many blank lines between bullet items (should be 0)")
+        # Check 2: Should NOT use "Key Findings"
+        if "Key Findings" in letter_text:
+            issues.append("Uses 'Key Findings' - should use 'Here are the key points of our analysis:'")
 
-        # Check 6: Has final recommendations section
-        if not re.search(r"^\d+\.\s+RECOMMENDED\s+ACTION", letter_text, re.MULTILINE | re.IGNORECASE):
-            issues.append("Missing numbered 'RECOMMENDED ACTION' section")
+        # Check 3: Should have the transition line
+        if "Here are the key points of our analysis" not in letter_text:
+            issues.append("Missing transition line 'Here are the key points of our analysis:'")
+
+        # Check 4: Should have bullet points for legal analysis
+        if "•" not in letter_text:
+            issues.append("Missing bullet points (•) for legal analysis")
+
+        # Check 5: Bullets should NOT have bold headers (natural flow)
+        bold_bullet_count = letter_text.count("• **")
+        if bold_bullet_count > 0:
+            issues.append(
+                f"Has {bold_bullet_count} bold bullet headers - bullets should flow naturally without bold titles"
+            )
+
+        # Check 6: Should have warm greeting
+        has_warm_greeting = "Good afternoon" in letter_text or "Good morning" in letter_text
+        has_dear = "Dear " in letter_text
+        if not has_warm_greeting and not has_dear:
+            issues.append("Missing greeting - should start with 'Good afternoon/morning' or 'Dear'")
+
+        # Check 7: Should have call to action
+        if "Please let us know" not in letter_text and "please let us know" not in letter_text:
+            issues.append("Missing call to action - should include 'Please let us know if you would like...'")
+
+        # Check 8: Excessive spacing
+        if re.search(r"\n\n\n+", letter_text):
+            issues.append("Has excessive spacing (3+ blank lines in a row)")
 
         return (len(issues) == 0, issues)
 
     @staticmethod
     def fix_common_issues(letter_text: str) -> str:
-        """Automatically fix common formatting issues.
+        """Automatically fix common formatting issues for natural flow style.
 
         Args:
         ----
@@ -67,33 +81,35 @@ class LetterFormatter:
         text = letter_text
 
         # Fix 1: Replace "Key Findings" with correct transition
-        if "Key Findings" in text and "Here are the key points" not in text:
+        if "Key Findings" in text:
             text = text.replace("Key Findings", "Here are the key points of our analysis:")
 
-        # Fix 2: Remove excessive blank lines between bullets
-        # Replace 2+ blank lines between bullets with 0 blank lines
-        text = re.sub(r"(• \*\*[^\n]+)\n\n+(?=• \*\*)", r"\1\n", text)
+        # Fix 2: Remove formal section headers
+        text = re.sub(r"^\d+\.\s+FACTUAL\s+SUMMARY\s*\n+", "", text, flags=re.MULTILINE | re.IGNORECASE)
+        text = re.sub(
+            r"^\d+\.\s+RECOMMENDED\s+ACTION.*?\n+",
+            "Based on the above, ",
+            text,
+            flags=re.MULTILINE | re.IGNORECASE,
+        )
 
-        # Fix 3: Ensure proper spacing after section headers
-        # Should be exactly 1 blank line
-        text = re.sub(r"(^\d+\.\s+[A-Z\s]+)\n\n+", r"\1\n\n", text, flags=re.MULTILINE)
+        # Fix 3: Remove excessive blank lines (3+ to 2)
+        text = re.sub(r"\n\n\n+", "\n\n", text)
 
-        # Fix 4: Ensure proper spacing before section headers
-        # Should be exactly 1 blank line
-        text = re.sub(r"\n\n\n+(^\d+\.\s+[A-Z\s]+)", r"\n\n\1", text, flags=re.MULTILINE)
+        # Fix 4: Fix bullet symbols if using wrong ones
+        text = text.replace("- ", "• ")  # Replace dash bullets at line start
+        text = text.replace("* ", "• ")  # Replace asterisk bullets
 
-        # Fix 5: Fix bullet symbols if using wrong ones
-        text = text.replace("- **", "• **")  # Replace dash bullets
-        text = text.replace("* **", "• **")  # Replace asterisk bullets
-
-        # Fix 6: Remove extra spaces in section headers
-        text = re.sub(r"^\d+\.\s{2,}", lambda m: m.group(0)[:3], text, flags=re.MULTILINE)
+        # Fix 5: Ensure proper greeting format
+        if text.strip().startswith("Dear "):
+            # Keep Dear format as acceptable alternative
+            pass
 
         return text
 
     @staticmethod
     def get_formatting_report(letter_text: str) -> dict:
-        """Get a detailed formatting report.
+        """Get a detailed formatting report for natural flow style.
 
         Returns
         -------
@@ -101,14 +117,20 @@ class LetterFormatter:
         """
         is_valid, issues = LetterFormatter.validate_format(letter_text)
 
-        # Count sections
-        section_count = len(re.findall(r"^\d+\.\s+[A-Z]", letter_text, re.MULTILINE))
+        # Count formal headers (should be 0 for natural flow)
+        formal_header_count = len(re.findall(r"^\d+\.\s+[A-Z]{2,}", letter_text, re.MULTILINE))
 
         # Count bullets
-        bullet_count = letter_text.count("• **")
+        bullet_count = letter_text.count("•")
+
+        # Count bold bullet headers (should be 0 for natural flow)
+        bold_bullet_count = letter_text.count("• **")
 
         # Check spacing
         has_excessive_spacing = bool(re.search(r"\n\n\n+", letter_text))
+
+        # Check for warm greeting
+        has_warm_greeting = "Good afternoon" in letter_text or "Good morning" in letter_text
 
         # Word count
         word_count = len(letter_text.split())
@@ -116,9 +138,11 @@ class LetterFormatter:
         return {
             "is_valid": is_valid,
             "issues": issues,
-            "section_count": section_count,
+            "formal_header_count": formal_header_count,
             "bullet_count": bullet_count,
+            "bold_bullet_count": bold_bullet_count,
             "has_excessive_spacing": has_excessive_spacing,
+            "has_warm_greeting": has_warm_greeting,
             "word_count": word_count,
             "suggestions": LetterFormatter._generate_suggestions(issues),
         }
@@ -131,16 +155,24 @@ class LetterFormatter:
         for issue in issues:
             if "Key Findings" in issue:
                 suggestions.append("Change 'Key Findings' to 'Here are the key points of our analysis:'")
-            elif "numbered legal issue" in issue:
-                suggestions.append("Convert numbered sections (2., 3., 4.) to bullet format (•)")
             elif "FACTUAL SUMMARY" in issue:
-                suggestions.append("Add '1. FACTUAL SUMMARY' as the first main section")
-            elif "bullet symbols" in issue:
-                suggestions.append("Use bullet symbols (•) for legal issues, not dashes or numbers")
-            elif "blank lines" in issue:
-                suggestions.append("Remove extra blank lines between consecutive bullet items")
+                suggestions.append("Remove formal 'FACTUAL SUMMARY' header - let the letter flow naturally")
             elif "RECOMMENDED ACTION" in issue:
-                suggestions.append("Add a final numbered section for recommendations")
+                suggestions.append(
+                    "Remove formal 'RECOMMENDED ACTION' header - start with 'Based on the above...'"
+                )
+            elif "bold bullet headers" in issue:
+                suggestions.append(
+                    "Remove bold headers from bullets - each bullet should flow as a paragraph"
+                )
+            elif "bullet points" in issue:
+                suggestions.append("Add bullet points (•) for each legal concept in the analysis")
+            elif "excessive spacing" in issue:
+                suggestions.append("Reduce blank lines to maximum 2 between sections")
+            elif "greeting" in issue:
+                suggestions.append("Add a warm greeting: 'Good afternoon [Name],' or 'Dear [Name],'")
+            elif "call to action" in issue:
+                suggestions.append("Add closing: 'Please let us know if you would like us to proceed...'")
 
         return suggestions
 

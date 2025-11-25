@@ -5,6 +5,7 @@ import json
 import logging
 import os
 import shutil
+import tempfile
 import time
 import traceback
 from datetime import datetime
@@ -13,7 +14,11 @@ from email.utils import formatdate, make_msgid
 from typing import Any, Dict, List, Optional
 
 import html2text
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+
+limiter = Limiter(key_func=get_remote_address)
 from legal_portal.api.dependencies import get_current_user, get_supabase_client, get_user_supabase_client
 from legal_portal.core.data_models import (
     ChatMessageRequest,
@@ -294,12 +299,12 @@ def _download_and_extract_documents(
         )
 
         if is_video_audio:
-            print(f"  - ⏭️  Skipping video/audio file: {doc['file_name']}")
+            logger.info(f"Skipping video/audio file: {doc['file_name']}")
             continue
 
         # Check if document has extracted_text (Clio comms/notes or already processed)
         if doc.get("extracted_text"):
-            print(f"  - Using extracted text for: {doc['file_name']}")
+            logger.debug(f"Using extracted text for: {doc['file_name']}")
             # Save extracted text to temporary file
             with open(temp_path, "w", encoding="utf-8") as f:
                 f.write(doc["extracted_text"])
@@ -310,14 +315,14 @@ def _download_and_extract_documents(
                 with open(temp_path, "wb") as f:
                     f.write(file_data)
             except Exception as e:
-                print(f"  - Warning: Failed to download {doc['file_name']}: {e}")
+                logger.warning(f"Failed to download {doc['file_name']}: {e}")
                 continue  # Skip this document if download fails
 
         # Check if this is a zip file - extract it
         if doc["file_name"].lower().endswith(".zip"):
             import zipfile
 
-            print(f"  - 📦 Extracting zip file: {doc['file_name']}")
+            logger.info(f"Extracting zip file: {doc['file_name']}")
 
             try:
                 # Create subdirectory for this zip's contents
@@ -343,7 +348,7 @@ def _download_and_extract_documents(
 
                         # Skip video/audio files
                         if any(extracted_file.lower().endswith(ext) for ext in video_audio_extensions):
-                            print(f"    ⏭️  Skipping video/audio: {extracted_file}")
+                            logger.info(f"Skipping video/audio in zip: {extracted_file}")
                             continue
 
                         extracted_path = os.path.join(root, extracted_file)
@@ -357,16 +362,16 @@ def _download_and_extract_documents(
                                 f"Extracted file not found (filesystem sync issue?): {extracted_path}"
                             )
 
-                print(f"  - ✅ Extracted {extracted_count} files from {doc['file_name']}")
+                logger.info(f"Extracted {extracted_count} files from {doc['file_name']}")
 
                 # Remove the original zip file
                 os.remove(temp_path)
                 continue  # Skip adding the zip file itself to file_paths
 
             except zipfile.BadZipFile:
-                print(f"  - ⚠️  Invalid zip file: {doc['file_name']}")
+                logger.warning(f"Invalid zip file: {doc['file_name']}")
             except Exception as e:
-                print(f"  - ⚠️  Failed to extract zip file {doc['file_name']}: {e}")
+                logger.warning(f"Failed to extract zip file {doc['file_name']}: {e}")
 
         # Check if this is an intake form
         # Prioritize: 1) metadata flag, 2) PDF/DOCX files with "intake" in name, 3) other files with "intake"
@@ -398,12 +403,12 @@ def _download_and_extract_documents(
                     # Add old intake to regular files
                     file_paths.append(intake_form_path)
                     intake_form_path = temp_path
-                    print(f"  - Replaced intake form with better match: {doc['file_name']}")
+                    logger.info(f"Replaced intake form with better match: {doc['file_name']}")
                 else:
                     file_paths.append(temp_path)
             else:
                 intake_form_path = temp_path
-                print(f"  - Identified intake form: {doc['file_name']}")
+                logger.info(f"Identified intake form: {doc['file_name']}")
         else:
             file_paths.append(temp_path)
 
@@ -447,6 +452,9 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
     progress_manager = ProgressManager.get_instance()
     await progress_manager.create_channel(analysis_id)
 
+    # Create temp directory before try block so it's available in finally
+    temp_dir = tempfile.mkdtemp(prefix=f"case_{case_id}_")
+
     try:
         # Update status to processing
         supabase.table("analysis_results").update({"status": "processing"}).eq("id", analysis_id).execute()
@@ -470,9 +478,7 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
         if not documents:
             raise ValueError("No documents found for case")
 
-        # Download documents from storage
-        temp_dir = f"/tmp/case_{case_id}"
-        os.makedirs(temp_dir, exist_ok=True)
+        # Download documents to temp directory (already created above)
 
         # Download and prepare files in threadpool to avoid blocking event loop
         intake_form_path, file_paths = await run_in_threadpool(
@@ -497,8 +503,8 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
             "legal_issue": case.get("description", "General legal document analysis"),
         }
 
-        print(f"  - Processing with intake form: {os.path.basename(intake_form_path)}")
-        print(f"  - Additional documents: {len(file_paths)}")
+        logger.info(f"Processing with intake form: {os.path.basename(intake_form_path)}")
+        logger.info(f"Additional documents: {len(file_paths)}")
 
         # Create progress callback that publishes to SSE
         async def progress_callback(message: str, docs_processed=None, phase="", percent=0):
@@ -521,7 +527,7 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
             progress_callback=progress_callback,
         )
 
-        print(f"  - Processing completed with status: {result.status}")
+        logger.info(f"Processing completed with status: {result.status}")
 
         artifacts_meta = _generate_and_store_artifacts(result, case_id, analysis_id, supabase)
         if artifacts_meta:
@@ -552,9 +558,8 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
         error_message = str(e)
         error_traceback = traceback.format_exc()
 
-        print("\n❌ ERROR in process_case_background:")
-        print(f"  - Error: {error_message}")
-        print(f"  - Traceback: {error_traceback}")
+        logger.error(f"Error in process_case_background: {error_message}")
+        logger.error(f"Traceback: {error_traceback}")
 
         supabase.table("analysis_results").update(
             {"status": "error", "error": f"{error_message}\n\n{error_traceback}"}
@@ -574,18 +579,19 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
 
     finally:
         # Cleanup temporary files
-        temp_dir = f"/tmp/case_{case_id}"
-        if os.path.exists(temp_dir):
+        if temp_dir and os.path.exists(temp_dir):
             try:
                 shutil.rmtree(temp_dir)
-                print(f"  - ✅ Cleaned up temporary directory: {temp_dir}")
+                logger.debug(f"Cleaned up temporary directory: {temp_dir}")
             except Exception as cleanup_error:
-                print(f"  - ⚠️  Failed to cleanup temp dir: {cleanup_error}")
+                logger.warning(f"Failed to cleanup temp dir: {cleanup_error}")
 
 
 @router.post("/start", response_model=AnalysisResponse, status_code=status.HTTP_202_ACCEPTED)
+@limiter.limit("10/minute")  # Rate limit AI analysis to prevent abuse
 async def start_analysis(
     request: AnalysisRequest,
+    http_request: Request,  # Required for rate limiter
     background_tasks: BackgroundTasks,
     user=Depends(get_current_user),  # noqa: B008
     user_supabase=Depends(get_user_supabase_client),  # noqa: B008
@@ -772,8 +778,10 @@ async def get_analysis_results(
 
 
 @router.post("/generate-letter", response_model=LetterGenerationResponse)
+@limiter.limit("10/minute")  # Rate limit letter generation
 async def generate_letter(
     request: LetterGenerationRequest,
+    http_request: Request,  # Required for rate limiter
     user=Depends(get_current_user),  # noqa: B008
     supabase=Depends(get_user_supabase_client),  # noqa: B008
 ):

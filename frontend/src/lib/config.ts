@@ -26,19 +26,12 @@ export function getApiUrl(): string {
         
         // If we are on localhost, trust the env var (likely pointing to Python backend port 8000)
         if (hostname === 'localhost' || hostname === '127.0.0.1') {
-            console.log('getApiUrl: Localhost detected, using ENV_API_URL');
             return ENV_API_URL || 'http://127.0.0.1:8000';
         }
         
-        // For Vercel deployments (finding-emails-*.vercel.app)
-        // We MUST use relative paths to avoid CORS with Supabase URL
-        console.log('getApiUrl: Production/Preview detected, using relative path');
-        
-        // Ensure we don't accidentally return the full Vercel URL if that was passed as ENV_API_URL
-        // The Vercel URL (https://finding-emails-...) is the ORIGIN, so we want relative paths
+        // For Vercel deployments: use relative paths to avoid CORS issues
         return '';
-    } catch (e) {
-        console.error('getApiUrl error:', e);
+    } catch {
         return '';
     }
 }

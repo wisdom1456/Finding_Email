@@ -9,3 +9,4 @@ export const beforeNavigate = vi.fn();
 export const afterNavigate = vi.fn();
 export const disableScrollHandling = vi.fn();
 
+

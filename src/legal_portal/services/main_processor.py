@@ -680,7 +680,8 @@ def _detect_near_duplicates(documents: List[Any]) -> None:
             base2 = os.path.splitext(name2)[0].lower()
             similarity = SequenceMatcher(None, base1, base2).ratio()
 
-            if similarity > 0.85:  # 85% similar
+            settings = get_settings()
+            if similarity > settings.duplicate_similarity_threshold:  # Configurable threshold
                 logger.warning(
                     f"Possible near-duplicate files detected: '{name1}' and '{name2}' "
                     f"(similarity: {similarity:.1%}). Both will be processed."
@@ -762,19 +763,23 @@ def _estimate_tokens(text: str) -> int:
     return len(text) // 4
 
 
-def _create_smart_batches(documents: list, max_tokens_per_batch: int = 50000) -> list:
+def _create_smart_batches(documents: list, max_tokens_per_batch: int | None = None) -> list:
     """Group documents into batches based on token estimates.
 
     Args:
     ----
         documents: List of ProcessedDocument objects
-        max_tokens_per_batch: Maximum tokens per batch (default 50,000)
+        max_tokens_per_batch: Maximum tokens per batch (uses config default if not provided)
 
     Returns:
     -------
         List of document batches
 
     """
+    # Use configured default if not specified
+    if max_tokens_per_batch is None:
+        max_tokens_per_batch = get_settings().max_tokens_per_batch
+
     batches = []
     current_batch = []
     current_tokens = 0
@@ -865,7 +870,7 @@ Return ONLY valid JSON, no markdown code blocks.
             logger.info("Using intelligent batching to process all documents...")
 
             # Create smart batches
-            batches = _create_smart_batches(case_documents, max_tokens_per_batch=50000)
+            batches = _create_smart_batches(case_documents)  # Uses configured max_tokens_per_batch
             logger.info(f"Created {len(batches)} batches for processing")
 
             # Process each batch with detailed progress

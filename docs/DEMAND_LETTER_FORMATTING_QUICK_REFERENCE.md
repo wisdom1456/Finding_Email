@@ -416,3 +416,4 @@ letter = await service.generate_demand_letter(
 - **Visual Comparison:** See `docs/DEMAND_LETTER_FORMATTING_COMPARISON.md`
 - **Original Requirements:** See `docs/DEMAND_LETTER_IMPROVEMENTS.md`
 
+

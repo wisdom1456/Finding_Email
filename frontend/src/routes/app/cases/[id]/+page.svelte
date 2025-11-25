@@ -682,30 +682,21 @@
 		if (deleteCaseText !== 'DELETE') return;
 
 		try {
-			console.log('🗑️ Deleting case:', caseId);
-			
 			const {
 				data: { session }
 			} = await supabase.auth.getSession();
 
 			if (!session) {
-				console.error('❌ Not authenticated');
 				throw new Error('Not authenticated');
 			}
 
-			// Use getApiUrl() from config which handles Vercel/local environments correctly
 			const apiUrl = getApiUrl();
-			console.log('📡 API URL:', apiUrl || '(relative)');
-			console.log('🔑 Token:', session.access_token?.substring(0, 20) + '...');
-
 			const response = await fetch(`${apiUrl}/api/cases/${caseId}`, {
 				method: 'DELETE',
 				headers: {
 					Authorization: `Bearer ${session.access_token}`
 				}
 			});
-
-			console.log('📬 Response status:', response.status);
 
 			if (!response.ok) {
 				let errorData;
@@ -714,14 +705,12 @@
 				} catch {
 					errorData = { detail: `HTTP ${response.status}: ${response.statusText}` };
 				}
-				console.error('❌ Delete failed:', errorData);
 				throw new Error(errorData.detail || 'Failed to delete case');
 			}
 
-			console.log('✅ Case deleted successfully, redirecting...');
 			goto('/app/cases');
 		} catch (error: any) {
-			console.error('❌ Delete case error:', error);
+			console.error('Delete case failed:', error);
 			errorMessage = error.message || 'Failed to delete case';
 			deleteConfirmCase = false;
 		}
@@ -832,10 +821,9 @@
 
 		// Try SSE first, fall back to polling if not supported
 		const sseUrl = `${getApiUrl()}/api/progress/analysis/${analysisId}?token=${session.access_token}`;
-			const sseSupported = progressStore.isSuppported();
+			const sseSupported = progressStore.isSupported();
 
 			if (sseSupported) {
-				console.log('Using SSE for progress updates');
 				const connected = progressStore.connect(sseUrl, async () => {
 					// On completion, reload data
 					await loadAnalysisStatus();
@@ -845,12 +833,10 @@
 
 				if (!connected) {
 					// SSE failed, fall back to polling
-					console.warn('SSE connection failed, falling back to polling');
 					startPolling();
 				}
 			} else {
 				// SSE not supported, use polling
-				console.log('SSE not supported, using polling');
 				startPolling();
 			}
 

@@ -43,7 +43,7 @@ class OpenAIClient:
         self.default_model = "gpt-4o"
         self.fallback_model = "gpt-4o-mini"
         self.max_retries = 3
-        self.retry_delay = 2
+        self.base_retry_delay = 2  # Base delay in seconds for exponential backoff
 
         # Store user preferences for model selection
         self.user_preferences = user_preferences or {}
@@ -142,17 +142,19 @@ class OpenAIClient:
                     f"OPENAI CLIENT: ⚠️  Rate limit error (attempt {attempt + 1}/{self.max_retries}): {e}"
                 )
                 if attempt < self.max_retries - 1:
-                    logger.warning(f"OPENAI CLIENT: ⏳ Waiting {self.retry_delay}s before retry...")
-                    time.sleep(self.retry_delay)
-                    self.retry_delay *= 2  # Exponential backoff
+                    # Exponential backoff: 2s, 4s, 8s...
+                    delay = self.base_retry_delay * (2**attempt)
+                    logger.warning(f"OPENAI CLIENT: ⏳ Waiting {delay}s before retry...")
+                    time.sleep(delay)
                 else:
                     return self._create_error_response("Rate limit exceeded", e)
 
             except openai.APIError as e:
                 logger.error(f"OPENAI CLIENT: ❌ API error (attempt {attempt + 1}/{self.max_retries}): {e}")
                 if attempt < self.max_retries - 1:
-                    logger.warning(f"OPENAI CLIENT: ⏳ Waiting {self.retry_delay}s before retry...")
-                    time.sleep(self.retry_delay)
+                    delay = self.base_retry_delay * (2**attempt)
+                    logger.warning(f"OPENAI CLIENT: ⏳ Waiting {delay}s before retry...")
+                    time.sleep(delay)
                 else:
                     return self._create_error_response("API error", e)
 
@@ -161,8 +163,9 @@ class OpenAIClient:
                     f"OPENAI CLIENT: ❌ Unexpected error (attempt {attempt + 1}/{self.max_retries}): {e}"
                 )
                 if attempt < self.max_retries - 1:
-                    logger.warning(f"OPENAI CLIENT: ⏳ Waiting {self.retry_delay}s before retry...")
-                    time.sleep(self.retry_delay)
+                    delay = self.base_retry_delay * (2**attempt)
+                    logger.warning(f"OPENAI CLIENT: ⏳ Waiting {delay}s before retry...")
+                    time.sleep(delay)
                 else:
                     return self._create_error_response("Unexpected error", e)
 

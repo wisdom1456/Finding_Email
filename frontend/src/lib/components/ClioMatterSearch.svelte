@@ -147,14 +147,12 @@
 			// Start SSE for import progress if import_id is returned
 			if (result.import_id) {
 				const sseUrl = `${apiUrl}/api/progress/clio-import/${result.import_id}?token=${session.access_token}`;
-				console.log('Connecting to SSE:', sseUrl);
 				
 				// Keep phase as 'creating' or 'importing' until SSE starts
 				importPhase = 'importing';
 				
 				progressStore.connect(sseUrl, (data) => {
 					// On completion, update UI with stats
-					console.log('Import completed, data:', data);
 					importPhase = 'complete';
 					importSuccess = true;
 					
@@ -175,8 +173,6 @@
 			
 			// DON'T call parent callback immediately - let modal handle it
 		} catch (error: any) {
-			console.error('Error creating case from Clio:', error);
-			
 			importPhase = 'error';
 			importError = error.message || 'Failed to create case';
 			errorMessage = error.message || 'Failed to create case';
@@ -258,10 +254,9 @@
 			// If import_id is returned, connect to SSE stream
 			if (result.import_id) {
 				const sseUrl = `${apiUrl}/api/progress/clio-import/${result.import_id}`;
-				const sseSupported = progressStore.isSuppported();
+				const sseSupported = progressStore.isSupported();
 
 				if (sseSupported) {
-					console.log('Using SSE for Clio import progress');
 					progressStore.connect(sseUrl, () => {
 						// On completion
 						importSuccess = true;

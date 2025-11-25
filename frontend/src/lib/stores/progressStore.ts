@@ -67,7 +67,6 @@ function createProgressStore() {
 				url,
 				// onMessage
 				(event: ProgressEvent) => {
-					console.log('📊 Progress event received:', event);
 					if (event.data) finalData = event.data;
 					
 					update(state => ({
@@ -87,7 +86,6 @@ function createProgressStore() {
 				},
 				// onError
 				(error: Error) => {
-					console.error('SSE Progress error:', error);
 					update(state => ({
 						...state,
 						status: 'error',
@@ -160,7 +158,7 @@ function createProgressStore() {
 		/**
 		 * Check if SSE is supported
 		 */
-		isSuppported: (): boolean => {
+		isSupported: (): boolean => {
 			return SSEClient.isSupported();
 		}
 	};

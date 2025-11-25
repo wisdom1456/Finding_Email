@@ -54,7 +54,6 @@ export class SSEClient {
 		onComplete: SSECompleteHandler
 	): boolean {
 		if (!SSEClient.isSupported()) {
-			console.warn('SSE not supported, falling back to polling');
 			onError(new Error('SSE_NOT_SUPPORTED'));
 			return false;
 		}
@@ -70,16 +69,12 @@ export class SSEClient {
 
 			this.eventSource.onmessage = (event) => {
 				try {
-					console.log('📡 Raw SSE message received:', event.data);
-					
 					// Skip ping/keep-alive messages
 					if (event.data.trim() === '' || event.data.trim().startsWith(':')) {
-						console.log('Skipping ping/keep-alive message');
 						return;
 					}
 
 					const data: ProgressEvent = JSON.parse(event.data);
-					console.log('✅ Parsed SSE data:', data);
 					
 					if (this.onMessageHandler) {
 						this.onMessageHandler(data);
@@ -105,9 +100,7 @@ export class SSEClient {
 				}
 			};
 
-			this.eventSource.onerror = (event) => {
-				console.error('SSE connection error:', event);
-
+			this.eventSource.onerror = () => {
 				// Don't reconnect if manually disconnected
 				if (this.isManuallyDisconnected) {
 					return;
@@ -123,8 +116,6 @@ export class SSEClient {
 				if (this.reconnectAttempts < this.maxReconnectAttempts) {
 					this.reconnectAttempts++;
 					const delay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1);
-					
-					console.log(`Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})...`);
 					
 					setTimeout(() => {
 						if (!this.isManuallyDisconnected) {
@@ -143,13 +134,11 @@ export class SSEClient {
 			};
 
 			this.eventSource.onopen = () => {
-				console.log('SSE connection established');
 				this.reconnectAttempts = 0;
 			};
 
 			return true;
 		} catch (err) {
-			console.error('Failed to create EventSource:', err);
 			if (this.onErrorHandler) {
 				this.onErrorHandler(
 					new Error(`Failed to connect: ${err instanceof Error ? err.message : String(err)}`)

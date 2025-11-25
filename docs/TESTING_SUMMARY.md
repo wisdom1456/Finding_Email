@@ -245,3 +245,4 @@ cd frontend && npm run test:e2e:debug  # Step-through debugging
 
 **The focus on Playwright for GUI testing provides better reliability and maintainability than component unit tests for our use case.**
 
+

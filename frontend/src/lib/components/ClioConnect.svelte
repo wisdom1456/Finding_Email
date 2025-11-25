@@ -21,7 +21,6 @@
 		errorMessage = '';
 
 		try {
-			console.log('DEBUG_V3: ClioConnect checkConnection starting');
 			const {
 				data: { session }
 			} = await supabase.auth.getSession();
@@ -33,15 +32,7 @@
 			}
 
 			const apiUrl = getApiUrl();
-			console.log('DEBUG_V3: getApiUrl returned:', JSON.stringify(apiUrl));
-			console.log('Checking Clio status with token:', session.access_token?.substring(0, 20) + '...');
-			
-			console.log('Using API URL prefix:', apiUrl || '(relative)');
-
-			// Ensure apiUrl does not end with a slash if it's not empty, to avoid double slashes
-			// But empty string + /api is fine
 			const endpoint = `${apiUrl}/api/clio/status`;
-			console.log('Using status endpoint:', endpoint);
 
 			const response = await fetch(endpoint, {
 				headers: {
@@ -49,19 +40,15 @@
 				}
 			});
 
-			console.log('Response status:', response.status);
-
 			if (!response.ok) {
 				const errorData = await response.json().catch(() => ({}));
-				console.error('Error response:', errorData);
 				throw new Error(errorData.detail || 'Failed to check Clio status');
 			}
 
 			const status = await response.json();
-			console.log('Clio status:', status);
 			clioStore.setConnected(status.connected, status.clio_user_id, status.expires_at);
 		} catch (error: any) {
-			console.error('Clio connection check error:', error);
+			console.error('Clio connection check failed:', error);
 			errorMessage = error.message || 'Failed to check connection status';
 		} finally {
 			loading = false;
@@ -80,8 +67,6 @@
 			}
 
 			const apiUrl = getApiUrl();
-			console.log('Initiating Clio OAuth with token:', session.access_token?.substring(0, 20) + '...');
-
 			// Redirect to OAuth authorization with token as query param
 			// (Required because direct navigation can't set Authorization header)
 			window.location.href = `${apiUrl}/api/clio/authorize?token=${session.access_token}`;

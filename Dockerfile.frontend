@@ -51,3 +51,4 @@ EXPOSE ${PORT}
 # Run the SvelteKit Node adapter
 CMD ["node", "build"]
 
+

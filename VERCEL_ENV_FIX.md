@@ -31,38 +31,44 @@ Add the following environment variables. Make sure to select **Production**, **P
 
 #### Supabase Configuration (Required for Backend)
 
-```
+```env
 SUPABASE_URL=https://nqjepycmhddfekeufcle.supabase.co
 ```
 
-```
+```env
 SUPABASE_SERVICE_KEY=your-service-role-key-here
 ```
+
 **⚠️ Important:** This is your Supabase **Service Role** key (not the anon key). Find it in:
+
 - Supabase Dashboard → Project Settings → API → `service_role` key (secret)
 
-```
+```env
 SUPABASE_ANON_KEY=your-anon-key-here
 ```
+
 **Info:** This is your Supabase **anon/public** key. Find it in:
+
 - Supabase Dashboard → Project Settings → API → `anon` key (public)
 
 #### Clio Integration (Required for Clio Features)
 
-```
+```env
 CLIO_CLIENT_ID=your-clio-client-id
 ```
 
-```
+```env
 CLIO_CLIENT_SECRET=your-clio-client-secret
 ```
+
 **Info:** Get these from [Clio Developer Console](https://app.clio.com/settings/developer_applications)
 
 #### OpenAI API (Required for AI Analysis)
 
-```
+```env
 OPENAI_API_KEY=sk-your-openai-key-here
 ```
+
 **Info:** Get this from [OpenAI Platform](https://platform.openai.com/api-keys)
 
 ### Step 3: Verify Frontend Environment Variables
@@ -71,17 +77,18 @@ The frontend also needs these variables (you may have already set them):
 
 #### Frontend-Specific Variables
 
-```
+```env
 PUBLIC_SUPABASE_URL=https://nqjepycmhddfekeufcle.supabase.co
 ```
 
-```
+```env
 PUBLIC_SUPABASE_ANON_KEY=your-anon-key-here
 ```
 
-```
+```env
 PUBLIC_API_URL=https://your-vercel-domain.vercel.app
 ```
+
 **⚠️ Important:** Set this to your actual Vercel deployment URL (e.g., `https://finding-emails-63ovbt3ec-wisdom1456s-projects.vercel.app`)
 
 **However**, based on our recent fixes, the frontend should work with an **empty string** for `PUBLIC_API_URL` when deployed on Vercel, as it will use relative paths. You can try **removing** `PUBLIC_API_URL` from Vercel environment variables entirely, or set it to an empty string.

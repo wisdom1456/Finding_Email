@@ -8,6 +8,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from legal_portal.api.dependencies import get_current_user, get_supabase_client, get_user_supabase_client
 from legal_portal.api.services.clio_client import ClioAPIError, ClioAuthError, ClioClient
 from legal_portal.api.utils.content_extractor import DocumentProcessor as ContentExtractor
+from legal_portal.config.default import get_settings
 from legal_portal.core.document_processor import DocumentProcessor, ValidationError
 from legal_portal.services.progress_manager import ProgressManager, get_progress_manager
 from pydantic import BaseModel, Field
@@ -785,9 +786,10 @@ def analyze_intake_priority(doc: Dict[str, Any]) -> int:
         priority_score -= 100
 
     # Positive scores for likely filled forms
-    if file_size > 500000:  # > 500KB likely has content
+    min_content_size = get_settings().min_file_size_for_content
+    if file_size > min_content_size:  # Likely has content
         priority_score += 50
-    elif file_size > 700000:  # > 700KB very likely filled
+    elif file_size > min_content_size * 1.4:  # Very likely filled (140% of threshold)
         priority_score += 80
 
     # Prefer forms with person names or specific identifiers (usually after " - ")

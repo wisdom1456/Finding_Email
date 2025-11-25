@@ -146,6 +146,28 @@ class Settings(BaseSettings):
     )
 
     # ==================================================
+    # DOCUMENT PROCESSING CONFIGURATION
+    # ==================================================
+
+    max_tokens_per_batch: int = Field(
+        50000,
+        alias="MAX_TOKENS_PER_BATCH",
+        description="Maximum tokens per batch when processing documents with AI",
+    )
+
+    duplicate_similarity_threshold: float = Field(
+        0.85,
+        alias="DUPLICATE_SIMILARITY_THRESHOLD",
+        description="Similarity threshold (0.0-1.0) for detecting near-duplicate documents",
+    )
+
+    min_file_size_for_content: int = Field(
+        500000,
+        alias="MIN_FILE_SIZE_FOR_CONTENT",
+        description="Minimum file size in bytes to consider a file as having content (500KB default)",
+    )
+
+    # ==================================================
     # FILE COMPRESSION CONFIGURATION
     # ==================================================
 

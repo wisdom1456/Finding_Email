@@ -1,5 +1,6 @@
 """Document management endpoints."""
 
+import logging
 from datetime import datetime
 from typing import List
 
@@ -10,6 +11,7 @@ from legal_portal.core.document_processor import DocumentProcessor, ValidationEr
 from pydantic import BaseModel
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 class DocumentResponse(BaseModel):
@@ -58,25 +60,23 @@ async def upload_document(
 
     """
     try:
-        print("\n🔍 DEBUG upload_document:")
-        print(f"  - User ID: {user['id']}")
-        print(f"  - Case ID: {case_id}")
-        print(f"  - Filename: {file.filename}")
-        print(f"  - Content type: {file.content_type}")
+        logger.debug(
+            f"Upload document: user={user['id']}, case={case_id}, file={file.filename}, type={file.content_type}"
+        )
 
         # Verify case ownership (use user client for RLS)
-        print("  - Verifying case ownership...")
+        logger.debug("Verifying case ownership...")
         case_response = (
             user_supabase.table("cases").select("id").eq("id", case_id).eq("user_id", user["id"]).execute()
         )
-        print(f"  - Case found: {bool(case_response.data)}")
+        logger.debug(f"Case found: {bool(case_response.data)}")
 
         if not case_response.data:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Case not found")
 
         # Read file content
         file_content = await file.read()
-        print(f"  - File size: {len(file_content)} bytes")
+        logger.debug(f"File size: {len(file_content)} bytes")
 
         # Use unified processor for validation, compression, and upload
         processor = DocumentProcessor()
@@ -99,11 +99,11 @@ async def upload_document(
                 "file_name": file.filename,
                 "file_size_mb": e.file_size_mb,
             }
-            print(f"\n❌ Validation error: {e.error_code} - {str(e)}")
+            logger.warning(f"Validation error: {e.error_code} - {str(e)}")
             return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content=error_response)
 
         # Create document record in database (use user client for RLS)
-        print("  - Creating document record in database...")
+        logger.debug("Creating document record in database...")
         doc_response = user_supabase.table("documents").insert(doc_record).execute()
 
         if not doc_response.data:
@@ -111,7 +111,7 @@ async def upload_document(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to create document record"
             )
 
-        print(f"  - ✅ Document uploaded successfully: {doc_response.data[0]['id']}")
+        logger.info(f"Document uploaded successfully: {doc_response.data[0]['id']}")
         return doc_response.data[0]
 
     except HTTPException:
@@ -126,9 +126,7 @@ async def upload_document(
         }
         return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content=error_response)
     except Exception as e:
-        print("\n❌ ERROR in upload_document:")
-        print(f"  - Exception type: {type(e).__name__}")
-        print(f"  - Exception message: {str(e)}")
+        logger.error(f"Error in upload_document: {type(e).__name__} - {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error uploading document: {str(e)}"
         ) from e
@@ -240,9 +238,7 @@ async def delete_document(
 
     """
     try:
-        print("\n🔍 DEBUG delete_document:")
-        print(f"  - Document ID: {document_id}")
-        print(f"  - User ID: {user['id']}")
+        logger.debug(f"Delete document: doc_id={document_id}, user={user['id']}")
 
         # Get document with ownership verification
         response = (
@@ -263,20 +259,19 @@ async def delete_document(
 
         # Delete from storage (use service client to bypass storage RLS)
         storage_path = document["storage_path"]
-        print(f"  - Deleting from storage: {storage_path}")
+        logger.debug(f"Deleting from storage: {storage_path}")
         service_supabase.storage.from_("documents").remove([storage_path])
 
         # Delete database record (use user client for RLS)
-        print("  - Deleting database record")
+        logger.debug("Deleting database record")
         user_supabase.table("documents").delete().eq("id", document_id).execute()
 
-        print("  - ✅ Document deleted successfully")
+        logger.info("Document deleted successfully")
         return None
     except HTTPException:
         raise
     except Exception as e:
-        print("\n❌ ERROR in delete_document:")
-        print(f"  - Exception: {str(e)}")
+        logger.error(f"Error in delete_document: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error deleting document: {str(e)}"
         ) from e

@@ -37,7 +37,7 @@
 	<div class="sm:mx-auto sm:w-full sm:max-w-md">
 		<!-- Logo -->
 		<div class="flex justify-center mb-8">
-			<img src={logoImg} alt="Bernhardt Riley" class="h-16 w-auto" />
+			<img src={logoImg} alt="Bernhardt Riley" class="h-20 sm:h-24 w-auto" />
 		</div>
 		
 		<!-- Card -->

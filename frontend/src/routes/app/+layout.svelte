@@ -94,36 +94,36 @@
 	<!-- Navigation -->
 	<nav class="bg-contrast shadow-md">
 		<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-			<div class="flex justify-between h-16">
+			<div class="flex justify-between h-18">
 				<div class="flex">
 					<div class="flex-shrink-0 flex items-center">
 						<a href="/app" class="flex items-center">
-							<img src={logoImg} alt="Bernhardt Riley" class="h-10 w-auto" />
+							<img src={logoImg} alt="Bernhardt Riley" class="h-12 sm:h-14 w-auto" />
 						</a>
 					</div>
 					<!-- Desktop Navigation -->
 					<div class="hidden md:ml-8 md:flex md:space-x-1">
 						<a
 							href="/app"
-							class="inline-flex items-center px-4 py-2 text-sm font-medium transition-colors rounded-md {isActive('/app') && currentPath === '/app'
-								? 'bg-contrast-light/30 text-white'
-								: 'text-gray-300 hover:bg-contrast-light/20 hover:text-white'}"
+							class="inline-flex items-center px-4 py-2 text-sm font-semibold transition-colors rounded-md {isActive('/app') && currentPath === '/app'
+								? 'bg-accent text-white'
+								: 'text-white/90 hover:bg-white/10 hover:text-white'}"
 						>
 							Dashboard
 						</a>
 						<a
 							href="/app/cases"
-							class="inline-flex items-center px-4 py-2 text-sm font-medium transition-colors rounded-md {isActive('/app/cases')
-								? 'bg-contrast-light/30 text-white'
-								: 'text-gray-300 hover:bg-contrast-light/20 hover:text-white'}"
+							class="inline-flex items-center px-4 py-2 text-sm font-semibold transition-colors rounded-md {isActive('/app/cases')
+								? 'bg-accent text-white'
+								: 'text-white/90 hover:bg-white/10 hover:text-white'}"
 						>
 							Cases
 						</a>
 						<a
 							href="/app/settings"
-							class="inline-flex items-center px-4 py-2 text-sm font-medium transition-colors rounded-md {isActive('/app/settings')
-								? 'bg-contrast-light/30 text-white'
-								: 'text-gray-300 hover:bg-contrast-light/20 hover:text-white'}"
+							class="inline-flex items-center px-4 py-2 text-sm font-semibold transition-colors rounded-md {isActive('/app/settings')
+								? 'bg-accent text-white'
+								: 'text-white/90 hover:bg-white/10 hover:text-white'}"
 						>
 							Settings
 						</a>
@@ -135,15 +135,15 @@
 					<!-- Clio Integration Button -->
 					<button
 						onclick={() => (showClioModal = !showClioModal)}
-						class="inline-flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors {clioConnected
-							? 'bg-accent/20 text-accent border border-accent/30 hover:bg-accent/30'
-							: 'bg-contrast-light/20 text-gray-300 border border-contrast-light/30 hover:bg-contrast-light/30'}"
+						class="inline-flex items-center px-3 py-2 text-sm font-semibold rounded-md transition-colors {clioConnected
+							? 'bg-accent text-white hover:bg-accent-hover'
+							: 'bg-white/10 text-white/90 border border-white/20 hover:bg-white/20'}"
 						title={clioConnected ? 'Clio Connected' : 'Clio Integration'}
 					>
 						<Link2 class="h-4 w-4 mr-2" />
 						Clio
 						{#if clioConnected}
-							<span class="ml-2 inline-block h-2 w-2 rounded-full bg-accent"></span>
+							<span class="ml-2 inline-block h-2 w-2 rounded-full bg-white"></span>
 						{/if}
 					</button>
 
@@ -151,7 +151,7 @@
 					<div class="relative user-menu-container">
 						<button
 							onclick={toggleUserMenu}
-							class="flex items-center space-x-2 px-3 py-2 rounded-md text-sm font-medium text-gray-300 hover:bg-contrast-light/20 hover:text-white transition-colors"
+							class="flex items-center space-x-2 px-3 py-2 rounded-md text-sm font-semibold text-white/90 hover:bg-white/10 hover:text-white transition-colors"
 						>
 							<User class="h-5 w-5" />
 							<span class="hidden lg:block max-w-[150px] truncate">{data.user?.email}</span>
@@ -190,7 +190,7 @@
 				<div class="flex items-center md:hidden">
 					<button
 						onclick={() => (isMobileMenuOpen = !isMobileMenuOpen)}
-						class="inline-flex items-center justify-center p-2 rounded-md text-gray-300 hover:text-white hover:bg-contrast-light/20 transition-colors"
+						class="inline-flex items-center justify-center p-2 rounded-md text-white/90 hover:text-white hover:bg-white/10 transition-colors"
 						aria-expanded={isMobileMenuOpen}
 					>
 						<span class="sr-only">Open main menu</span>
@@ -206,43 +206,43 @@
 
 		<!-- Mobile Menu -->
 		{#if isMobileMenuOpen}
-			<div class="md:hidden border-t border-contrast-light/20">
+			<div class="md:hidden border-t border-white/10">
 				<div class="pt-2 pb-3 space-y-1 px-2">
 					<a
 						href="/app"
 						onclick={closeMobileMenu}
-						class="block px-3 py-2 rounded-md text-base font-medium transition-colors {isActive('/app') && currentPath === '/app'
-							? 'bg-contrast-light/30 text-white'
-							: 'text-gray-300 hover:bg-contrast-light/20 hover:text-white'}"
+						class="block px-3 py-2 rounded-md text-base font-semibold transition-colors {isActive('/app') && currentPath === '/app'
+							? 'bg-accent text-white'
+							: 'text-white/90 hover:bg-white/10 hover:text-white'}"
 					>
 						Dashboard
 					</a>
 					<a
 						href="/app/cases"
 						onclick={closeMobileMenu}
-						class="block px-3 py-2 rounded-md text-base font-medium transition-colors {isActive('/app/cases')
-							? 'bg-contrast-light/30 text-white'
-							: 'text-gray-300 hover:bg-contrast-light/20 hover:text-white'}"
+						class="block px-3 py-2 rounded-md text-base font-semibold transition-colors {isActive('/app/cases')
+							? 'bg-accent text-white'
+							: 'text-white/90 hover:bg-white/10 hover:text-white'}"
 					>
 						Cases
 					</a>
 					<a
 						href="/app/settings"
 						onclick={closeMobileMenu}
-						class="block px-3 py-2 rounded-md text-base font-medium transition-colors {isActive('/app/settings')
-							? 'bg-contrast-light/30 text-white'
-							: 'text-gray-300 hover:bg-contrast-light/20 hover:text-white'}"
+						class="block px-3 py-2 rounded-md text-base font-semibold transition-colors {isActive('/app/settings')
+							? 'bg-accent text-white'
+							: 'text-white/90 hover:bg-white/10 hover:text-white'}"
 					>
 						Settings
 					</a>
 				</div>
-				<div class="pt-4 pb-3 border-t border-contrast-light/20">
+				<div class="pt-4 pb-3 border-t border-white/10">
 					<div class="flex items-center px-5 mb-3">
 						<div class="flex-shrink-0">
-							<User class="h-8 w-8 text-gray-400" />
+							<User class="h-8 w-8 text-white/70" />
 						</div>
 						<div class="ml-3">
-							<div class="text-sm font-medium text-white">{data.user?.email}</div>
+							<div class="text-sm font-semibold text-white">{data.user?.email}</div>
 						</div>
 					</div>
 					<div class="space-y-1 px-2">
@@ -251,7 +251,7 @@
 								closeMobileMenu();
 								showClioModal = true;
 							}}
-							class="flex items-center w-full px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:bg-contrast-light/20 hover:text-white transition-colors"
+							class="flex items-center w-full px-3 py-2 rounded-md text-base font-semibold text-white/90 hover:bg-white/10 hover:text-white transition-colors"
 						>
 							<Link2 class="h-5 w-5 mr-3" />
 							Clio Integration
@@ -264,7 +264,7 @@
 								closeMobileMenu();
 								handleLogout();
 							}}
-							class="flex items-center w-full px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:bg-contrast-light/20 hover:text-white transition-colors"
+							class="flex items-center w-full px-3 py-2 rounded-md text-base font-semibold text-white/90 hover:bg-white/10 hover:text-white transition-colors"
 						>
 							<LogOut class="h-5 w-5 mr-3" />
 							Logout

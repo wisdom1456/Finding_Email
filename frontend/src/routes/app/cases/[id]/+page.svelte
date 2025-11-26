@@ -1421,9 +1421,9 @@
 										onclick={startAnalysis}
 										disabled={analyzing || (analysisStatus && analysisStatus.status === 'processing')}
 										class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white shadow-sm disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-										style="background-color: #5AB7A3;"
-										onmouseover="this.style.backgroundColor='#49998A'"
-										onmouseout="this.style.backgroundColor='#5AB7A3'"
+										style="background-color: #5AB7A3; transition: background-color 0.2s;"
+										onmouseover={(e) => { if (!e.currentTarget.disabled) e.currentTarget.style.backgroundColor = '#49998A'; }}
+										onmouseout={(e) => { if (!e.currentTarget.disabled) e.currentTarget.style.backgroundColor = '#5AB7A3'; }}
 									>
 										{#if analyzing || (analysisStatus && analysisStatus.status === 'processing')}
 											Analyzing...

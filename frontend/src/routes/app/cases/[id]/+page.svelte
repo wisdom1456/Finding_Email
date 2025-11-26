@@ -9,8 +9,11 @@
 	import UploadFailureSummary from '$lib/components/UploadFailureSummary.svelte';
 	import PageHeader from '$lib/components/ui/PageHeader.svelte';
 	import Tabs from '$lib/components/ui/Tabs.svelte';
+	import AsyncButton from '$lib/components/ui/AsyncButton.svelte';
+	import LoadingOverlay from '$lib/components/ui/LoadingOverlay.svelte';
 	import { clioStore } from '$lib/stores/clioStore';
 	import { progressStore } from '$lib/stores/progressStore';
+	import { toastStore } from '$lib/stores/toastStore';
 	import { Trash2, Edit, ArrowLeft } from 'lucide-svelte';
 	import type { CaseData } from '$lib/types';
 
@@ -1006,13 +1009,15 @@
 						>
 							Cancel
 						</button>
-						<button
+						<AsyncButton
 							type="submit"
-							disabled={savingCase || !editClientName.trim()}
-							class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-accent hover:bg-accent-hover focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent disabled:opacity-50 disabled:cursor-not-allowed"
+							disabled={!editClientName.trim()}
+							loading={savingCase}
+							variant="primary"
+							loadingText="Saving..."
 						>
-							{savingCase ? 'Saving...' : 'Save Changes'}
-						</button>
+							Save Changes
+						</AsyncButton>
 					</div>
 				</form>
 			{:else}
@@ -1256,13 +1261,14 @@
 								Select Intake Form
 							</button>
 						{/if}
-						<button
-							onclick={uploadSelectedFiles}
-							disabled={uploading}
-							class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-accent hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed"
-						>
-							{uploading ? 'Uploading...' : 'Upload Files'}
-						</button>
+					<AsyncButton
+						onclick={uploadSelectedFiles}
+						loading={uploading}
+						variant="primary"
+						loadingText="Uploading..."
+					>
+						Upload Files
+					</AsyncButton>
 					</div>
 				</div>
 			{/if}
@@ -1415,23 +1421,22 @@
 						<!-- Analysis Section -->
 						<div class="bg-white shadow rounded-lg p-6">
 							<div class="flex justify-between items-center mb-4">
-								<h3 class="text-lg font-medium text-gray-900">Analysis</h3>
-								{#if documents.length > 0}
-									<button
-										onclick={startAnalysis}
-										disabled={analyzing || (analysisStatus && analysisStatus.status === 'processing')}
-										class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-accent hover:bg-accent-hover focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-									>
-										{#if analyzing || (analysisStatus && analysisStatus.status === 'processing')}
-											Analyzing...
-										{:else if analysisStatus && (analysisStatus.status === 'completed' || analysisStatus.status === 'failed')}
-											Run New Analysis
-										{:else}
-											Start Analysis
-										{/if}
-									</button>
-								{/if}
-							</div>
+							<h3 class="text-lg font-medium text-gray-900">Analysis</h3>
+							{#if documents.length > 0}
+								<AsyncButton
+									onclick={startAnalysis}
+									loading={analyzing || (analysisStatus && analysisStatus.status === 'processing')}
+									variant="primary"
+									loadingText="Analyzing..."
+								>
+									{#if analysisStatus && (analysisStatus.status === 'completed' || analysisStatus.status === 'failed')}
+										Run New Analysis
+									{:else}
+										Start Analysis
+									{/if}
+								</AsyncButton>
+							{/if}
+						</div>
 
 			{#if !analysisStatus && documents.length === 0}
 				<p class="text-sm text-gray-500">Upload documents to start analysis.</p>
@@ -1489,33 +1494,35 @@
 							>
 								View Results
 							</a>
-							<button
-								onclick={startAnalysis}
-								disabled={analyzing}
-								class="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent disabled:opacity-50 disabled:cursor-not-allowed"
-								title="Re-run analysis with current documents"
-							>
-								<svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-								</svg>
-								{analyzing ? 'Re-running...' : 'Re-run Analysis'}
-							</button>
+						<AsyncButton
+							onclick={startAnalysis}
+							loading={analyzing}
+							variant="secondary"
+							loadingText="Re-running..."
+							title="Re-run analysis with current documents"
+						>
+							<svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+							</svg>
+							Re-run Analysis
+						</AsyncButton>
 						</div>
 					{/if}
 
 					{#if analysisStatus.status === 'error'}
-						<div>
-							<button
-								onclick={startAnalysis}
-								disabled={analyzing}
-								class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-accent hover:bg-accent-hover focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent disabled:opacity-50 disabled:cursor-not-allowed"
-							>
-								<svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-								</svg>
-								{analyzing ? 'Retrying...' : 'Retry Analysis'}
-							</button>
-						</div>
+					<div>
+						<AsyncButton
+							onclick={startAnalysis}
+							loading={analyzing}
+							variant="primary"
+							loadingText="Retrying..."
+						>
+							<svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+							</svg>
+							Retry Analysis
+						</AsyncButton>
+					</div>
 					{/if}
 
 							{#if analysisStatus.error}
@@ -1610,12 +1617,14 @@
 				>
 					Cancel
 				</button>
-				<button
+				<AsyncButton
 					onclick={() => deleteDocument(deleteConfirmDoc!)}
-					class="px-4 py-2 border border-transparent rounded-md text-sm font-medium text-white bg-red-600 hover:bg-red-700"
+					variant="danger"
+					loadingText="Deleting..."
+					class="min-w-[100px]"
 				>
 					Delete
-				</button>
+				</AsyncButton>
 			</div>
 		</div>
 	</div>
@@ -1660,13 +1669,15 @@
 				>
 					Cancel
 				</button>
-				<button
+				<AsyncButton
 					onclick={deleteCase}
 					disabled={deleteCaseText !== 'DELETE'}
-					class="px-4 py-2 border border-transparent rounded-md text-sm font-medium text-white bg-red-600 hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+					variant="danger"
+					loadingText="Deleting..."
+					class="min-w-[120px]"
 				>
 					Delete Case
-				</button>
+				</AsyncButton>
 			</div>
 		</div>
 	</div>
@@ -1823,13 +1834,14 @@
 				>
 					Cancel
 				</button>
-				<button
-					onclick={confirmIntakeSelection}
-					disabled={!selectedIntakeDocId}
-					class="px-4 py-2 border border-transparent rounded-md text-sm font-medium text-white bg-accent hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed"
-				>
-					Confirm & Start Analysis
-				</button>
+			<AsyncButton
+				onclick={confirmIntakeSelection}
+				disabled={!selectedIntakeDocId}
+				variant="primary"
+				loadingText="Starting..."
+			>
+				Confirm & Start Analysis
+			</AsyncButton>
 			</div>
 		</div>
 	</div>
@@ -1851,3 +1863,10 @@
 		onRetry={retryFailedUploads}
 	/>
 {/if}
+
+<!-- Analysis Loading Overlay -->
+<LoadingOverlay
+	show={analyzing || (analysisStatus && analysisStatus.status === 'processing')}
+	message="Analyzing Documents"
+	description={$progressStore.message || 'This may take several minutes. We\'re processing your documents with AI to extract key information...'}
+/>

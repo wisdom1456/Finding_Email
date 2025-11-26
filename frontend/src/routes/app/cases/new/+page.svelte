@@ -4,7 +4,10 @@
 	import ClioMatterSearch from '$lib/components/ClioMatterSearch.svelte';
 	import ProgressIndicator from '$lib/components/ProgressIndicator.svelte';
 	import PageHeader from '$lib/components/ui/PageHeader.svelte';
+	import AsyncButton from '$lib/components/ui/AsyncButton.svelte';
+	import LoadingOverlay from '$lib/components/ui/LoadingOverlay.svelte';
 	import { clioStore } from '$lib/stores/clioStore';
+	import { toastStore } from '$lib/stores/toastStore';
 	import { getApiUrl } from '$lib/config';
 	import { AlertTriangle, Info, ArrowLeft } from 'lucide-svelte';
 
@@ -268,27 +271,19 @@
 							<ArrowLeft class="h-4 w-4 mr-1" />
 							Back to Clio Search
 						</button>
-					{:else}
-						<div></div>
-					{/if}
-					<button
-						type="submit"
-						disabled={isCreating || !clientName.trim()}
-						class="px-4 py-2.5 rounded-md text-sm font-medium text-white bg-accent hover:bg-accent-hover focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-					>
-						{#if isCreating}
-							<span class="inline-flex items-center">
-								<svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
-									<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-									<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-								</svg>
-								Creating...
-							</span>
-						{:else}
-							Create Case
-						{/if}
-					</button>
-				</div>
+				{:else}
+					<div></div>
+				{/if}
+				<AsyncButton
+					type="submit"
+					disabled={!clientName.trim()}
+					loading={isCreating}
+					variant="primary"
+					loadingText="Creating..."
+				>
+					Create Case
+				</AsyncButton>
+			</div>
 			</form>
 		</div>
 	{/if}
@@ -316,3 +311,12 @@
 		</div>
 	{/if}
 </div>
+
+<!-- Clio Import Loading Overlay -->
+<LoadingOverlay
+	show={isCreating}
+	message="Creating Case from Clio"
+	description={progressSteps.length > 0 
+		? progressSteps.find(s => s.status === 'processing')?.label || 'Setting up your case...'
+		: 'Importing matter details and documents from Clio. This may take a few minutes...'}
+/>

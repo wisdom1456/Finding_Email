@@ -6,6 +6,7 @@
 	import PageHeader from '$lib/components/ui/PageHeader.svelte';
 	import { clioStore } from '$lib/stores/clioStore';
 	import { getApiUrl } from '$lib/config';
+	import { AlertTriangle, Info, ArrowLeft } from 'lucide-svelte';
 
 	interface ProgressStep {
 		label: string;
@@ -112,16 +113,16 @@
 </script>
 
 <svelte:head>
-	<title>Create New Case | Legal Portal</title>
+	<title>Create New Case | Bernhardt Riley</title>
 </svelte:head>
 
 <div class="space-y-6">
 	<!-- Header -->
 	<PageHeader
 		title="Create New Case"
-		subtitle="{$clioStore.connected && !showManualForm
+		subtitle={$clioStore.connected && !showManualForm
 			? 'Search for a Clio matter to automatically populate case details and documents'
-			: 'Enter case details manually'}"
+			: 'Enter case details manually'}
 		breadcrumbs={[
 			{ label: 'Dashboard', href: '/app' },
 			{ label: 'Cases', href: '/app/cases' },
@@ -129,200 +130,183 @@
 		]}
 	/>
 
-		{#if error && !partialCaseId}
-			<div class="mb-6 bg-red-50 border border-red-200 rounded-md p-4">
-				<div class="flex">
-					<svg class="h-5 w-5 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-						<path
-							stroke-linecap="round"
-							stroke-linejoin="round"
-							stroke-width="2"
-							d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-						/>
-					</svg>
-					<div class="ml-3">
-						<h3 class="text-sm font-medium text-red-800">Error Creating Case</h3>
-						<p class="mt-1 text-sm text-red-700">{error}</p>
-					</div>
+	{#if error && !partialCaseId}
+		<div class="bg-red-50 border border-red-200 rounded-lg p-4">
+			<div class="flex">
+				<AlertTriangle class="h-5 w-5 text-red-400 flex-shrink-0" />
+				<div class="ml-3">
+					<h3 class="text-sm font-medium text-red-800">Error Creating Case</h3>
+					<p class="mt-1 text-sm text-red-700">{error}</p>
 				</div>
 			</div>
-		{/if}
+		</div>
+	{/if}
 
-		{#if partialCaseId}
-			<!-- Partial Success / Error Recovery UI -->
-			<div class="bg-yellow-50 border border-yellow-200 rounded-lg p-6 mb-6">
-				<div class="flex items-start">
-					<svg class="h-6 w-6 text-yellow-400 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-						<path
-							stroke-linecap="round"
-							stroke-linejoin="round"
-							stroke-width="2"
-							d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-						/>
-					</svg>
-					<div class="ml-3 flex-1">
-						<h3 class="text-sm font-medium text-yellow-800">Import Error</h3>
-						<div class="mt-2 text-sm text-yellow-700">
-							<p>Case was created successfully, but document import encountered errors:</p>
-							<p class="mt-1 font-mono text-xs">{error}</p>
-						</div>
-						<div class="mt-4 flex space-x-3">
-							<button
-								onclick={viewPartialCase}
-								class="px-4 py-2 border border-yellow-600 rounded-md text-sm font-medium text-yellow-700 bg-white hover:bg-yellow-50"
-							>
-								View Case Anyway
-							</button>
-							<button
-								onclick={() => goto('/app/cases/new')}
-								class="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
-							>
-								Start Over
-							</button>
-						</div>
+	{#if partialCaseId}
+		<!-- Partial Success / Error Recovery UI -->
+		<div class="bg-amber-50 border border-amber-200 rounded-lg p-6">
+			<div class="flex items-start">
+				<AlertTriangle class="h-6 w-6 text-amber-500 mt-0.5 flex-shrink-0" />
+				<div class="ml-4 flex-1">
+					<h3 class="text-sm font-semibold text-amber-800">Import Error</h3>
+					<div class="mt-2 text-sm text-amber-700">
+						<p>Case was created successfully, but document import encountered errors:</p>
+						<p class="mt-1 font-mono text-xs bg-amber-100 p-2 rounded">{error}</p>
 					</div>
-				</div>
-			</div>
-		{:else if isCreating}
-			<!-- Progress Indicator -->
-			<div class="bg-white shadow rounded-lg p-6">
-				<h2 class="text-lg font-medium text-gray-900 mb-4">Creating Case from Clio Matter</h2>
-				
-				{#if progressSteps.length > 0}
-					<ProgressIndicator steps={progressSteps} showPercentage={false} />
-				{:else}
-					<div class="flex items-center space-x-3">
-						<svg class="animate-spin h-5 w-5 text-blue-600" fill="none" viewBox="0 0 24 24">
-							<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-							<path
-								class="opacity-75"
-								fill="currentColor"
-								d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-							></path>
-						</svg>
-						<p class="text-sm text-gray-600">Initializing...</p>
-					</div>
-				{/if}
-
-				<div class="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
-					<p class="text-sm text-blue-800">
-						<strong>Please wait.</strong> Do not close this window. Case creation and document import may take a few moments.
-					</p>
-				</div>
-			</div>
-		{:else if !showManualForm && $clioStore.connected}
-			<!-- Clio Search (Default State) -->
-			<div class="bg-white shadow rounded-lg p-6">
-				<h2 class="text-lg font-medium text-gray-900 mb-2">Find Your Clio Matter</h2>
-				<p class="text-sm text-gray-600 mb-4">
-					Search for the matter associated with this case. We'll automatically populate the case details and import all documents.
-				</p>
-
-				<ClioMatterSearch
-					createMode={true}
-					onCaseCreated={handleCaseCreatedFromClio}
-				/>
-
-				<div class="mt-6 pt-6 border-t border-gray-200">
-					<button
-						onclick={() => (showManualForm = true)}
-						class="text-sm text-blue-600 hover:text-blue-800 hover:underline"
-					>
-						Create case manually without Clio
-					</button>
-				</div>
-			</div>
-		{:else}
-			<!-- Manual Case Creation Form -->
-			<div class="bg-white shadow rounded-lg p-6">
-				<h2 class="text-lg font-medium text-gray-900 mb-4">Manual Case Creation</h2>
-
-				<form onsubmit={(e) => { e.preventDefault(); createManualCase(); }} class="space-y-4">
-					<div>
-						<label for="client_name" class="block text-sm font-medium text-gray-700">
-							Client Name <span class="text-red-500">*</span>
-						</label>
-						<input
-							type="text"
-							id="client_name"
-							bind:value={clientName}
-							required
-							class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm px-3 py-2 border"
-							placeholder="John Doe"
-						/>
-					</div>
-
-					<div>
-						<label for="reference_number" class="block text-sm font-medium text-gray-700">
-							Reference Number
-						</label>
-						<input
-							type="text"
-							id="reference_number"
-							bind:value={referenceNumber}
-							class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm px-3 py-2 border"
-							placeholder="2024-001"
-						/>
-					</div>
-
-					<div>
-						<label for="description" class="block text-sm font-medium text-gray-700">
-							Description
-						</label>
-						<textarea
-							id="description"
-							bind:value={description}
-							rows="3"
-							class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm px-3 py-2 border"
-							placeholder="Brief description of the case..."
-						></textarea>
-					</div>
-
-					<div class="flex items-center justify-between pt-4">
-						{#if $clioStore.connected}
-							<button
-								type="button"
-								onclick={() => (showManualForm = false)}
-								class="text-sm text-gray-600 hover:text-gray-800 hover:underline"
-							>
-								← Back to Clio Search
-							</button>
-						{:else}
-							<div></div>
-						{/if}
+					<div class="mt-4 flex space-x-3">
 						<button
-							type="submit"
-							disabled={isCreating || !clientName.trim()}
-							class="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+							onclick={viewPartialCase}
+							class="px-4 py-2 rounded-md text-sm font-medium text-amber-700 bg-white border border-amber-300 hover:bg-amber-50 transition-colors"
 						>
-							{isCreating ? 'Creating...' : 'Create Case'}
+							View Case Anyway
+						</button>
+						<button
+							onclick={() => goto('/app/cases/new')}
+							class="px-4 py-2 rounded-md text-sm font-medium text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 transition-colors"
+						>
+							Start Over
 						</button>
 					</div>
-				</form>
+				</div>
 			</div>
-		{/if}
+		</div>
+	{:else if isCreating}
+		<!-- Progress Indicator -->
+		<div class="bg-white shadow-card rounded-lg p-6">
+			<h2 class="text-lg font-heading font-semibold text-contrast mb-4">Creating Case from Clio Matter</h2>
+			
+			{#if progressSteps.length > 0}
+				<ProgressIndicator steps={progressSteps} showPercentage={false} />
+			{:else}
+				<div class="flex items-center space-x-3">
+					<div class="animate-spin rounded-full h-5 w-5 border-2 border-accent border-t-transparent"></div>
+					<p class="text-sm text-gray-600">Initializing...</p>
+				</div>
+			{/if}
+
+			<div class="mt-6 p-4 bg-contrast-light/5 border border-contrast-light/20 rounded-lg">
+				<p class="text-sm text-contrast-light">
+					<strong>Please wait.</strong> Do not close this window. Case creation and document import may take a few moments.
+				</p>
+			</div>
+		</div>
+	{:else if !showManualForm && $clioStore.connected}
+		<!-- Clio Search (Default State) -->
+		<div class="bg-white shadow-card rounded-lg p-6">
+			<h2 class="text-lg font-heading font-semibold text-contrast mb-2">Find Your Clio Matter</h2>
+			<p class="text-sm text-gray-500 mb-6">
+				Search for the matter associated with this case. We'll automatically populate the case details and import all documents.
+			</p>
+
+			<ClioMatterSearch
+				createMode={true}
+				onCaseCreated={handleCaseCreatedFromClio}
+			/>
+
+			<div class="mt-8 pt-6 border-t border-gray-100">
+				<button
+					onclick={() => (showManualForm = true)}
+					class="text-sm text-accent hover:text-accent-hover transition-colors"
+				>
+					Create case manually without Clio
+				</button>
+			</div>
+		</div>
+	{:else}
+		<!-- Manual Case Creation Form -->
+		<div class="bg-white shadow-card rounded-lg p-6">
+			<h2 class="text-lg font-heading font-semibold text-contrast mb-6">Manual Case Creation</h2>
+
+			<form onsubmit={(e) => { e.preventDefault(); createManualCase(); }} class="space-y-5">
+				<div>
+					<label for="client_name" class="block text-sm font-medium text-contrast mb-1">
+						Client Name <span class="text-red-500">*</span>
+					</label>
+					<input
+						type="text"
+						id="client_name"
+						bind:value={clientName}
+						required
+						class="block w-full px-3 py-2.5 border border-gray-300 rounded-md text-contrast placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent transition-colors"
+						placeholder="John Doe"
+					/>
+				</div>
+
+				<div>
+					<label for="reference_number" class="block text-sm font-medium text-contrast mb-1">
+						Reference Number
+					</label>
+					<input
+						type="text"
+						id="reference_number"
+						bind:value={referenceNumber}
+						class="block w-full px-3 py-2.5 border border-gray-300 rounded-md text-contrast placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent transition-colors"
+						placeholder="2024-001"
+					/>
+				</div>
+
+				<div>
+					<label for="description" class="block text-sm font-medium text-contrast mb-1">
+						Description
+					</label>
+					<textarea
+						id="description"
+						bind:value={description}
+						rows="3"
+						class="block w-full px-3 py-2.5 border border-gray-300 rounded-md text-contrast placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent transition-colors resize-none"
+						placeholder="Brief description of the case..."
+					></textarea>
+				</div>
+
+				<div class="flex items-center justify-between pt-4">
+					{#if $clioStore.connected}
+						<button
+							type="button"
+							onclick={() => (showManualForm = false)}
+							class="inline-flex items-center text-sm text-gray-600 hover:text-gray-800 transition-colors"
+						>
+							<ArrowLeft class="h-4 w-4 mr-1" />
+							Back to Clio Search
+						</button>
+					{:else}
+						<div></div>
+					{/if}
+					<button
+						type="submit"
+						disabled={isCreating || !clientName.trim()}
+						class="px-4 py-2.5 rounded-md text-sm font-medium text-white bg-accent hover:bg-accent-hover focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+					>
+						{#if isCreating}
+							<span class="inline-flex items-center">
+								<svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+									<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+									<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+								</svg>
+								Creating...
+							</span>
+						{:else}
+							Create Case
+						{/if}
+					</button>
+				</div>
+			</form>
+		</div>
+	{/if}
 
 	{#if !$clioStore.connected && !showManualForm}
 		<!-- Not Connected to Clio -->
-		<div class="bg-blue-50 border border-blue-200 rounded-lg p-6">
+		<div class="bg-contrast-light/5 border border-contrast-light/20 rounded-lg p-6">
 			<div class="flex">
-				<svg class="h-5 w-5 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-					<path
-						stroke-linecap="round"
-						stroke-linejoin="round"
-						stroke-width="2"
-						d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-					/>
-				</svg>
-				<div class="ml-3 flex-1">
-					<h3 class="text-sm font-medium text-blue-800">Clio Not Connected</h3>
-					<p class="mt-1 text-sm text-blue-700">
+				<Info class="h-5 w-5 text-contrast-light flex-shrink-0" />
+				<div class="ml-4 flex-1">
+					<h3 class="text-sm font-semibold text-contrast-light">Clio Not Connected</h3>
+					<p class="mt-1 text-sm text-gray-600">
 						Connect to Clio to search for matters and automatically import case details. You can still create cases manually.
 					</p>
 					<div class="mt-4">
 						<button
 							onclick={() => (showManualForm = true)}
-							class="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700"
+							class="px-4 py-2 rounded-md text-sm font-medium text-white bg-accent hover:bg-accent-hover transition-colors"
 						>
 							Create Manual Case
 						</button>

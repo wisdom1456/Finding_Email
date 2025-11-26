@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { CheckCircle, Loader2, XCircle, Circle, ChevronDown, ChevronUp } from 'lucide-svelte';
+	
 	interface Step {
 		label: string;
 		status: 'pending' | 'processing' | 'completed' | 'error';
@@ -23,29 +25,29 @@
 	
 	let expandedSteps = $state<Set<number>>(new Set());
 
-	function getStepIcon(status: Step['status']) {
-		switch (status) {
-			case 'completed':
-				return '✅';
-			case 'processing':
-				return '⏳';
-			case 'error':
-				return '❌';
-			default:
-				return '⭕';
-		}
-	}
-
 	function getStepColor(status: Step['status']) {
 		switch (status) {
 			case 'completed':
-				return 'text-green-600';
+				return 'text-accent';
 			case 'processing':
-				return 'text-blue-600';
+				return 'text-contrast-light';
 			case 'error':
 				return 'text-red-600';
 			default:
 				return 'text-gray-400';
+		}
+	}
+	
+	function getProgressBarColor(status: Step['status']) {
+		switch (status) {
+			case 'completed':
+				return 'bg-accent';
+			case 'processing':
+				return 'bg-contrast-light';
+			case 'error':
+				return 'bg-red-600';
+			default:
+				return 'bg-gray-300';
 		}
 	}
 </script>
@@ -53,8 +55,16 @@
 <div class="space-y-4">
 	{#each steps as step, index}
 		<div class="flex items-start space-x-3">
-			<div class="flex-shrink-0 mt-1">
-				<span class="text-2xl {getStepColor(step.status)}">{getStepIcon(step.status)}</span>
+			<div class="flex-shrink-0 mt-0.5">
+				{#if step.status === 'completed'}
+					<CheckCircle class="h-5 w-5 {getStepColor(step.status)}" />
+				{:else if step.status === 'processing'}
+					<Loader2 class="h-5 w-5 {getStepColor(step.status)} animate-spin" />
+				{:else if step.status === 'error'}
+					<XCircle class="h-5 w-5 {getStepColor(step.status)}" />
+				{:else}
+					<Circle class="h-5 w-5 {getStepColor(step.status)}" />
+				{/if}
 			</div>
 			<div class="flex-1 min-w-0">
 				<p class="text-sm font-medium {getStepColor(step.status)}">
@@ -69,16 +79,16 @@
 				{/if}
 				
 				{#if step.currentDoc}
-					<p class="text-xs text-blue-600 mt-1">
+					<p class="text-xs text-contrast-light mt-1">
 						Processing {step.currentDoc.index}/{step.currentDoc.total}: {step.currentDoc.name}
 					</p>
 				{/if}
 				
 				{#if step.status === 'processing' && step.progress !== undefined}
 					<div class="mt-2">
-						<div class="w-full bg-gray-200 rounded-full h-2">
+						<div class="w-full bg-gray-200 rounded-full h-1.5">
 							<div
-								class="bg-blue-600 h-2 rounded-full transition-all duration-300"
+								class="{getProgressBarColor(step.status)} h-1.5 rounded-full transition-all duration-300"
 								style="width: {step.progress}%"
 							></div>
 						</div>
@@ -99,9 +109,15 @@
 								}
 								expandedSteps = new Set(expandedSteps);
 							}}
-							class="text-xs text-blue-600 hover:text-blue-800 underline"
+							class="inline-flex items-center text-xs text-accent hover:text-accent-hover transition-colors"
 						>
-							{expandedSteps.has(index) ? 'Hide' : 'Show'} processed documents ({step.docsProcessed.length})
+							{#if expandedSteps.has(index)}
+								<ChevronUp class="h-3 w-3 mr-1" />
+								Hide processed documents ({step.docsProcessed.length})
+							{:else}
+								<ChevronDown class="h-3 w-3 mr-1" />
+								Show processed documents ({step.docsProcessed.length})
+							{/if}
 						</button>
 						
 						{#if expandedSteps.has(index)}
@@ -117,17 +133,3 @@
 		</div>
 	{/each}
 </div>
-
-<style>
-	/* Optional: Add pulse animation for processing state */
-	@keyframes pulse {
-		0%,
-		100% {
-			opacity: 1;
-		}
-		50% {
-			opacity: 0.5;
-		}
-	}
-</style>
-

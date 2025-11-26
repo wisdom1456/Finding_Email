@@ -8,6 +8,7 @@
 	import { clioStore } from '$lib/stores/clioStore';
 	import { Menu, X, User, Settings, LogOut, Link2 } from 'lucide-svelte';
 	import type { LayoutData } from './$types';
+	import logoImg from '$lib/assets/logo-br.png';
 
 	let { data, children }: { data: LayoutData; children: any } = $props();
 	
@@ -89,40 +90,40 @@
 	});
 </script>
 
-<div class="min-h-screen bg-gray-50">
+<div class="min-h-screen bg-[#F8FAFB]">
 	<!-- Navigation -->
-	<nav class="bg-white shadow-sm">
+	<nav class="bg-contrast shadow-md">
 		<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
 			<div class="flex justify-between h-16">
 				<div class="flex">
 					<div class="flex-shrink-0 flex items-center">
-						<a href="/app" class="text-xl font-bold text-gray-900">
-							Legal Document Analysis
+						<a href="/app" class="flex items-center">
+							<img src={logoImg} alt="Bernhardt Riley" class="h-10 w-auto" />
 						</a>
 					</div>
 					<!-- Desktop Navigation -->
-					<div class="hidden md:ml-6 md:flex md:space-x-8">
+					<div class="hidden md:ml-8 md:flex md:space-x-1">
 						<a
 							href="/app"
-							class="{isActive('/app') && currentPath === '/app'
-								? 'border-blue-500 text-gray-900'
-								: 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'} inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium transition-colors"
+							class="inline-flex items-center px-4 py-2 text-sm font-medium transition-colors rounded-md {isActive('/app') && currentPath === '/app'
+								? 'bg-contrast-light/30 text-white'
+								: 'text-gray-300 hover:bg-contrast-light/20 hover:text-white'}"
 						>
 							Dashboard
 						</a>
 						<a
 							href="/app/cases"
-							class="{isActive('/app/cases')
-								? 'border-blue-500 text-gray-900'
-								: 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'} inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium transition-colors"
+							class="inline-flex items-center px-4 py-2 text-sm font-medium transition-colors rounded-md {isActive('/app/cases')
+								? 'bg-contrast-light/30 text-white'
+								: 'text-gray-300 hover:bg-contrast-light/20 hover:text-white'}"
 						>
 							Cases
 						</a>
 						<a
 							href="/app/settings"
-							class="{isActive('/app/settings')
-								? 'border-blue-500 text-gray-900'
-								: 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'} inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium transition-colors"
+							class="inline-flex items-center px-4 py-2 text-sm font-medium transition-colors rounded-md {isActive('/app/settings')
+								? 'bg-contrast-light/30 text-white'
+								: 'text-gray-300 hover:bg-contrast-light/20 hover:text-white'}"
 						>
 							Settings
 						</a>
@@ -130,19 +131,19 @@
 				</div>
 				
 				<!-- Desktop Right Side -->
-				<div class="hidden md:flex md:items-center md:space-x-4">
+				<div class="hidden md:flex md:items-center md:space-x-3">
 					<!-- Clio Integration Button -->
 					<button
 						onclick={() => (showClioModal = !showClioModal)}
-						class="inline-flex items-center px-3 py-2 border text-sm leading-4 font-medium rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors {clioConnected
-							? 'border-green-500 text-green-700 bg-green-50 hover:bg-green-100'
-							: 'border-gray-300 text-gray-700 bg-white hover:bg-gray-50'}"
+						class="inline-flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors {clioConnected
+							? 'bg-accent/20 text-accent border border-accent/30 hover:bg-accent/30'
+							: 'bg-contrast-light/20 text-gray-300 border border-contrast-light/30 hover:bg-contrast-light/30'}"
 						title={clioConnected ? 'Clio Connected' : 'Clio Integration'}
 					>
 						<Link2 class="h-4 w-4 mr-2" />
 						Clio
 						{#if clioConnected}
-							<span class="ml-2 inline-block h-2 w-2 rounded-full bg-green-500"></span>
+							<span class="ml-2 inline-block h-2 w-2 rounded-full bg-accent"></span>
 						{/if}
 					</button>
 
@@ -150,33 +151,33 @@
 					<div class="relative user-menu-container">
 						<button
 							onclick={toggleUserMenu}
-							class="flex items-center space-x-2 px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+							class="flex items-center space-x-2 px-3 py-2 rounded-md text-sm font-medium text-gray-300 hover:bg-contrast-light/20 hover:text-white transition-colors"
 						>
 							<User class="h-5 w-5" />
-							<span class="hidden lg:block">{data.user?.email}</span>
+							<span class="hidden lg:block max-w-[150px] truncate">{data.user?.email}</span>
 						</button>
 
 						{#if isUserMenuOpen}
-							<div class="absolute right-0 mt-2 w-56 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-10">
+							<div class="absolute right-0 mt-2 w-56 rounded-lg shadow-dropdown bg-white ring-1 ring-black ring-opacity-5 z-10">
 								<div class="py-1" role="menu">
-									<div class="px-4 py-2 text-sm text-gray-700 border-b border-gray-100">
-										<p class="font-medium truncate">{data.user?.email}</p>
+									<div class="px-4 py-3 border-b border-gray-100">
+										<p class="text-sm font-medium text-contrast truncate">{data.user?.email}</p>
 									</div>
 									<a
 										href="/app/settings"
-										class="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors"
+										class="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
 										role="menuitem"
 										onclick={closeMobileMenu}
 									>
-										<Settings class="h-4 w-4 mr-3" />
+										<Settings class="h-4 w-4 mr-3 text-gray-400" />
 										Settings
 									</a>
 									<button
 										onclick={handleLogout}
-										class="w-full flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors"
+										class="w-full flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
 										role="menuitem"
 									>
-										<LogOut class="h-4 w-4 mr-3" />
+										<LogOut class="h-4 w-4 mr-3 text-gray-400" />
 										Logout
 									</button>
 								</div>
@@ -189,7 +190,7 @@
 				<div class="flex items-center md:hidden">
 					<button
 						onclick={() => (isMobileMenuOpen = !isMobileMenuOpen)}
-						class="inline-flex items-center justify-center p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
+						class="inline-flex items-center justify-center p-2 rounded-md text-gray-300 hover:text-white hover:bg-contrast-light/20 transition-colors"
 						aria-expanded={isMobileMenuOpen}
 					>
 						<span class="sr-only">Open main menu</span>
@@ -205,57 +206,57 @@
 
 		<!-- Mobile Menu -->
 		{#if isMobileMenuOpen}
-			<div class="md:hidden border-t border-gray-200">
-				<div class="pt-2 pb-3 space-y-1">
+			<div class="md:hidden border-t border-contrast-light/20">
+				<div class="pt-2 pb-3 space-y-1 px-2">
 					<a
 						href="/app"
 						onclick={closeMobileMenu}
-						class="{isActive('/app') && currentPath === '/app'
-							? 'bg-blue-50 border-blue-500 text-blue-700'
-							: 'border-transparent text-gray-600 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-800'} block pl-3 pr-4 py-2 border-l-4 text-base font-medium transition-colors"
+						class="block px-3 py-2 rounded-md text-base font-medium transition-colors {isActive('/app') && currentPath === '/app'
+							? 'bg-contrast-light/30 text-white'
+							: 'text-gray-300 hover:bg-contrast-light/20 hover:text-white'}"
 					>
 						Dashboard
 					</a>
 					<a
 						href="/app/cases"
 						onclick={closeMobileMenu}
-						class="{isActive('/app/cases')
-							? 'bg-blue-50 border-blue-500 text-blue-700'
-							: 'border-transparent text-gray-600 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-800'} block pl-3 pr-4 py-2 border-l-4 text-base font-medium transition-colors"
+						class="block px-3 py-2 rounded-md text-base font-medium transition-colors {isActive('/app/cases')
+							? 'bg-contrast-light/30 text-white'
+							: 'text-gray-300 hover:bg-contrast-light/20 hover:text-white'}"
 					>
 						Cases
 					</a>
 					<a
 						href="/app/settings"
 						onclick={closeMobileMenu}
-						class="{isActive('/app/settings')
-							? 'bg-blue-50 border-blue-500 text-blue-700'
-							: 'border-transparent text-gray-600 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-800'} block pl-3 pr-4 py-2 border-l-4 text-base font-medium transition-colors"
+						class="block px-3 py-2 rounded-md text-base font-medium transition-colors {isActive('/app/settings')
+							? 'bg-contrast-light/30 text-white'
+							: 'text-gray-300 hover:bg-contrast-light/20 hover:text-white'}"
 					>
 						Settings
 					</a>
 				</div>
-				<div class="pt-4 pb-3 border-t border-gray-200">
-					<div class="flex items-center px-4 mb-3">
+				<div class="pt-4 pb-3 border-t border-contrast-light/20">
+					<div class="flex items-center px-5 mb-3">
 						<div class="flex-shrink-0">
 							<User class="h-8 w-8 text-gray-400" />
 						</div>
 						<div class="ml-3">
-							<div class="text-sm font-medium text-gray-800">{data.user?.email}</div>
+							<div class="text-sm font-medium text-white">{data.user?.email}</div>
 						</div>
 					</div>
-					<div class="space-y-1">
+					<div class="space-y-1 px-2">
 						<button
 							onclick={() => {
 								closeMobileMenu();
 								showClioModal = true;
 							}}
-							class="flex items-center w-full px-4 py-2 text-base font-medium text-gray-600 hover:text-gray-800 hover:bg-gray-100 transition-colors"
+							class="flex items-center w-full px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:bg-contrast-light/20 hover:text-white transition-colors"
 						>
 							<Link2 class="h-5 w-5 mr-3" />
 							Clio Integration
 							{#if clioConnected}
-								<span class="ml-2 inline-block h-2 w-2 rounded-full bg-green-500"></span>
+								<span class="ml-2 inline-block h-2 w-2 rounded-full bg-accent"></span>
 							{/if}
 						</button>
 						<button
@@ -263,7 +264,7 @@
 								closeMobileMenu();
 								handleLogout();
 							}}
-							class="flex items-center w-full px-4 py-2 text-base font-medium text-gray-600 hover:text-gray-800 hover:bg-gray-100 transition-colors"
+							class="flex items-center w-full px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:bg-contrast-light/20 hover:text-white transition-colors"
 						>
 							<LogOut class="h-5 w-5 mr-3" />
 							Logout
@@ -275,7 +276,7 @@
 	</nav>
 
 	<!-- Main Content -->
-	<main class="py-10">
+	<main class="py-8">
 		<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
 			{@render children()}
 		</div>
@@ -285,7 +286,7 @@
 <!-- Clio Integration Modal -->
 {#if showClioModal}
 	<div 
-		class="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4 z-50" 
+		class="fixed inset-0 bg-contrast/60 backdrop-blur-sm flex items-center justify-center p-4 z-50" 
 		role="button"
 		tabindex="0"
 		onclick={() => showClioModal = false}
@@ -293,22 +294,20 @@
 		aria-label="Close modal"
 	>
 		<div 
-			class="bg-white rounded-lg shadow-xl max-w-md w-full p-6" 
+			class="bg-white rounded-lg shadow-lg max-w-md w-full p-6" 
 			role="dialog"
 			aria-modal="true"
 			onclick={(e) => e.stopPropagation()}
 			onkeydown={(e) => e.stopPropagation()}
 		>
 			<div class="flex justify-between items-center mb-4">
-				<h3 class="text-lg font-medium text-gray-900">Clio Integration</h3>
+				<h3 class="text-lg font-heading font-semibold text-contrast">Clio Integration</h3>
 				<button
 					onclick={() => showClioModal = false}
-					class="text-gray-400 hover:text-gray-500"
+					class="text-gray-400 hover:text-gray-500 transition-colors"
 					aria-label="Close"
 				>
-					<svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-					</svg>
+					<X class="h-5 w-5" />
 				</button>
 			</div>
 			
@@ -322,7 +321,7 @@
 			<div class="mt-6 flex justify-end">
 				<button
 					onclick={() => showClioModal = false}
-					class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+					class="inline-flex items-center px-4 py-2 text-sm font-medium rounded-md text-white bg-accent hover:bg-accent-hover transition-colors"
 				>
 					OK
 				</button>
@@ -330,4 +329,3 @@
 		</div>
 	</div>
 {/if}
-

@@ -28,7 +28,7 @@
 
 	<div class="md:flex md:items-center md:justify-between">
 		<div class="flex-1 min-w-0">
-			<h1 class="text-2xl font-bold leading-7 text-gray-900 sm:text-3xl sm:truncate">
+			<h1 class="text-2xl font-heading font-bold leading-7 text-contrast sm:text-3xl sm:truncate">
 				{title}
 			</h1>
 			{#if subtitle}
@@ -42,5 +42,3 @@
 		{/if}
 	</div>
 </div>
-
-

@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import type { PageData } from './$types';
+	import logoImg from '$lib/assets/logo-br.png';
 
 	let { data }: { data: PageData } = $props();
 
@@ -15,9 +16,16 @@
 	});
 </script>
 
-<div class="min-h-screen flex items-center justify-center">
+<svelte:head>
+	<title>Bernhardt Riley | Legal Document Analysis Portal</title>
+</svelte:head>
+
+<div class="min-h-screen flex flex-col items-center justify-center bg-contrast">
 	<div class="text-center">
-		<h1 class="text-2xl font-bold mb-4">Legal Document Analysis Portal</h1>
-		<p class="text-gray-600">Redirecting...</p>
+		<img src={logoImg} alt="Bernhardt Riley" class="h-20 w-auto mx-auto mb-8" />
+		<div class="flex items-center justify-center space-x-2">
+			<div class="animate-spin rounded-full h-5 w-5 border-2 border-accent border-t-transparent"></div>
+			<p class="text-gray-400 text-sm">Redirecting...</p>
+		</div>
 	</div>
 </div>

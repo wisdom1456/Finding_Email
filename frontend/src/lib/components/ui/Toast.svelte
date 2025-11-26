@@ -4,7 +4,7 @@
 	 * Supports success, error, warning, and info variants
 	 */
 
-	import { X } from 'lucide-svelte';
+	import { X, CheckCircle, XCircle, AlertTriangle, Info } from 'lucide-svelte';
 
 	type ToastType = 'success' | 'error' | 'warning' | 'info';
 
@@ -25,26 +25,26 @@
 		}
 	});
 
-	const styles: Record<ToastType, { bg: string; icon: string; border: string }> = {
+	const styles: Record<ToastType, { bg: string; border: string; iconColor: string }> = {
 		success: {
-			bg: 'bg-green-50',
-			icon: '✓',
-			border: 'border-green-400'
+			bg: 'bg-accent/10',
+			border: 'border-accent',
+			iconColor: 'text-accent'
 		},
 		error: {
 			bg: 'bg-red-50',
-			icon: '✕',
-			border: 'border-red-400'
+			border: 'border-red-400',
+			iconColor: 'text-red-500'
 		},
 		warning: {
 			bg: 'bg-amber-50',
-			icon: '⚠',
-			border: 'border-amber-400'
+			border: 'border-amber-400',
+			iconColor: 'text-amber-500'
 		},
 		info: {
-			bg: 'bg-blue-50',
-			icon: 'ℹ',
-			border: 'border-blue-400'
+			bg: 'bg-contrast-light/10',
+			border: 'border-contrast-light',
+			iconColor: 'text-contrast-light'
 		}
 	};
 
@@ -57,10 +57,20 @@
 	aria-live="polite"
 >
 	<div
-		class="flex items-start gap-3 p-4 rounded-lg shadow-lg border-l-4 {style.bg} {style.border}"
+		class="flex items-start gap-3 p-4 rounded-lg shadow-dropdown border-l-4 bg-white {style.border}"
 	>
-		<span class="text-lg flex-shrink-0">{style.icon}</span>
-		<p class="text-sm text-gray-800 flex-1">{message}</p>
+		<span class="flex-shrink-0 {style.iconColor}">
+			{#if type === 'success'}
+				<CheckCircle class="h-5 w-5" />
+			{:else if type === 'error'}
+				<XCircle class="h-5 w-5" />
+			{:else if type === 'warning'}
+				<AlertTriangle class="h-5 w-5" />
+			{:else}
+				<Info class="h-5 w-5" />
+			{/if}
+		</span>
+		<p class="text-sm text-contrast flex-1">{message}</p>
 		<button
 			onclick={onClose}
 			class="flex-shrink-0 text-gray-400 hover:text-gray-600 transition-colors"
@@ -87,4 +97,3 @@
 		animation: slide-up 0.3s ease-out;
 	}
 </style>
-

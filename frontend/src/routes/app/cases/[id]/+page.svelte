@@ -876,13 +876,13 @@
 	function getStatusColor(status: string) {
 		switch (status) {
 			case 'completed':
-				return 'bg-green-100 text-green-800';
+				return 'bg-accent/10 text-accent';
 			case 'processing':
-				return 'bg-blue-100 text-blue-800';
+				return 'bg-contrast-light/10 text-contrast-light';
 			case 'error':
-				return 'bg-red-100 text-red-800';
+				return 'bg-red-100 text-red-700';
 			default:
-				return 'bg-gray-100 text-gray-800';
+				return 'bg-gray-100 text-gray-700';
 		}
 	}
 
@@ -898,7 +898,7 @@
 <div class="space-y-6">
 	{#if loading}
 		<div class="p-8 text-center">
-			<div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+			<div class="inline-block animate-spin rounded-full h-8 w-8 border-2 border-accent border-t-transparent"></div>
 		</div>
 	{:else if !caseData}
 		<div class="p-8 text-center">
@@ -932,7 +932,7 @@
 					{#if !editingCase}
 						<button
 							onclick={startEditCase}
-							class="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+							class="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent transition-colors"
 						>
 							<Edit class="h-4 w-4 mr-1.5" />
 							Edit
@@ -986,7 +986,7 @@
 							type="text"
 							bind:value={editClientName}
 							required
-							class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+							class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-accent focus:border-blue-500 sm:text-sm"
 						/>
 					</div>
 
@@ -998,7 +998,7 @@
 							id="edit-reference-number"
 							type="text"
 							bind:value={editReferenceNumber}
-							class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+							class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-accent focus:border-blue-500 sm:text-sm"
 						/>
 					</div>
 
@@ -1010,7 +1010,7 @@
 							id="edit-description"
 							bind:value={editDescription}
 							rows="3"
-							class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+							class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-accent focus:border-blue-500 sm:text-sm"
 						></textarea>
 					</div>
 
@@ -1026,7 +1026,7 @@
 						<button
 							type="submit"
 							disabled={savingCase || !editClientName.trim()}
-							class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+							class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-accent hover:bg-accent-hover focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent disabled:opacity-50 disabled:cursor-not-allowed"
 						>
 							{savingCase ? 'Saving...' : 'Save Changes'}
 						</button>
@@ -1176,7 +1176,7 @@
 			<!-- Drag and Drop Upload Zone -->
 			{#if selectedFiles.length === 0}
 				<div
-					class="p-8 border-2 border-dashed rounded-lg m-4 transition-colors {dragActive ? 'border-blue-500 bg-blue-50' : 'border-gray-300 bg-gray-50'}"
+					class="p-8 border-2 border-dashed rounded-lg m-4 transition-colors {dragActive ? 'border-accent bg-accent/10' : 'border-gray-300 bg-gray-50'}"
 					ondrop={handleDrop}
 					ondragover={handleDragOver}
 					ondragleave={handleDragLeave}
@@ -1187,7 +1187,7 @@
 						</svg>
 						<div class="mt-4">
 							<label class="cursor-pointer">
-								<span class="text-blue-600 hover:text-blue-500 font-medium">Click to upload</span>
+								<span class="text-accent hover:text-blue-500 font-medium">Click to upload</span>
 								<span class="text-gray-600"> or drag and drop</span>
 								<input
 									type="file"
@@ -1276,7 +1276,7 @@
 						<button
 							onclick={uploadSelectedFiles}
 							disabled={uploading}
-							class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+							class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-accent hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed"
 						>
 							{uploading ? 'Uploading...' : 'Upload Files'}
 						</button>
@@ -1301,13 +1301,13 @@
 					
 					<div class="w-full bg-gray-200 rounded-full h-2.5">
 						<div
-							class="bg-blue-600 h-2.5 rounded-full transition-all duration-300"
+							class="bg-accent h-2.5 rounded-full transition-all duration-300"
 							style="width: {uploadProgress}%"
 						></div>
 					</div>
 					
 					<div class="flex items-center justify-center space-x-2 text-xs text-gray-500">
-						<svg class="animate-spin h-4 w-4 text-blue-600" fill="none" viewBox="0 0 24 24">
+						<svg class="animate-spin h-4 w-4 text-accent" fill="none" viewBox="0 0 24 24">
 							<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
 							<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
 						</svg>
@@ -1356,7 +1356,7 @@
 														<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
 													</svg>
 												{:else if doc.metadata?.clio_source}
-													<svg class="h-4 w-4 text-blue-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" title="Imported from Clio">
+													<svg class="h-4 w-4 text-accent flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" title="Imported from Clio">
 														<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
 													</svg>
 												{/if}
@@ -1398,7 +1398,7 @@
 														e.stopPropagation();
 														promoteToIntakeForm(doc.id);
 													}}
-													class="mt-2 text-xs text-blue-600 hover:text-blue-800 hover:underline font-medium"
+													class="mt-2 text-xs text-accent hover:text-blue-800 hover:underline font-medium"
 												>
 													✓ Use as Primary Intake
 												</button>
@@ -1437,7 +1437,7 @@
 				<button
 					onclick={startAnalysis}
 					disabled={analyzing}
-					class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed"
+					class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-accent hover:bg-accent-hover focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent disabled:opacity-50 disabled:cursor-not-allowed"
 				>
 					{analyzing ? 'Starting Analysis...' : 'Start Analysis'}
 				</button>
@@ -1457,7 +1457,7 @@
 					{#if analysisStatus.status === 'processing'}
 						<div class="space-y-3">
 						<div class="flex items-center">
-							<div class="inline-block animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600 mr-2"></div>
+							<div class="inline-block animate-spin rounded-full h-5 w-5 border-b-2 border-accent mr-2"></div>
 								<span class="text-sm text-gray-600">
 									{$progressStore.message || 'Processing documents...'}
 								</span>
@@ -1466,7 +1466,7 @@
 							{#if $progressStore.percent > 0}
 								<div class="w-full bg-gray-200 rounded-full h-2">
 									<div 
-										class="bg-blue-600 h-2 rounded-full transition-all duration-300"
+										class="bg-accent h-2 rounded-full transition-all duration-300"
 										style="width: {$progressStore.percent}%"
 									></div>
 								</div>
@@ -1491,14 +1491,14 @@
 							<a
 								href="/app/cases/{caseId}/results"
 								data-sveltekit-preload-data="off"
-								class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+								class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-accent hover:bg-accent-hover focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent"
 							>
 								View Results
 							</a>
 							<button
 								onclick={startAnalysis}
 								disabled={analyzing}
-								class="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+								class="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent disabled:opacity-50 disabled:cursor-not-allowed"
 								title="Re-run analysis with current documents"
 							>
 								<svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1514,7 +1514,7 @@
 							<button
 								onclick={startAnalysis}
 								disabled={analyzing}
-								class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed"
+								class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-accent hover:bg-accent-hover focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent disabled:opacity-50 disabled:cursor-not-allowed"
 							>
 								<svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -1554,26 +1554,26 @@
 			
 			<div class="space-y-2 mb-4">
 				{#each selectedFiles as file, index}
-					<label class="flex items-center p-3 border rounded-lg cursor-pointer hover:bg-gray-50 {index === intakeFormIndex ? 'border-blue-500 bg-blue-50' : 'border-gray-200'}">
+					<label class="flex items-center p-3 border rounded-lg cursor-pointer hover:bg-gray-50 {index === intakeFormIndex ? 'border-accent bg-accent/10' : 'border-gray-200'}">
 						<input
 							type="radio"
 							name="intake-form"
 							value={index}
 							checked={index === intakeFormIndex}
 							onchange={() => (intakeFormIndex = index)}
-							class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
+							class="h-4 w-4 text-accent focus:ring-accent border-gray-300"
 						/>
 						<span class="ml-3 text-sm font-medium text-gray-900 truncate">{file.name}</span>
 					</label>
 				{/each}
-				<label class="flex items-center p-3 border rounded-lg cursor-pointer hover:bg-gray-50 {intakeFormIndex === null ? 'border-blue-500 bg-blue-50' : 'border-gray-200'}">
+				<label class="flex items-center p-3 border rounded-lg cursor-pointer hover:bg-gray-50 {intakeFormIndex === null ? 'border-accent bg-accent/10' : 'border-gray-200'}">
 					<input
 						type="radio"
 						name="intake-form"
 						value="none"
 						checked={intakeFormIndex === null}
 						onchange={() => (intakeFormIndex = null)}
-						class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
+						class="h-4 w-4 text-accent focus:ring-accent border-gray-300"
 					/>
 					<span class="ml-3 text-sm font-medium text-gray-900">No intake form - analyze all equally</span>
 				</label>
@@ -1588,7 +1588,7 @@
 				</button>
 				<button
 					onclick={() => selectIntakeForm(intakeFormIndex)}
-					class="px-4 py-2 border border-transparent rounded-md text-sm font-medium text-white bg-blue-600 hover:bg-blue-700"
+					class="px-4 py-2 border border-transparent rounded-md text-sm font-medium text-white bg-accent hover:bg-accent-hover"
 				>
 					Confirm
 				</button>
@@ -1693,10 +1693,10 @@
 				<div class="flex-1 min-w-0">
 					<div class="flex items-center space-x-2 mb-2">
 						{#if viewingDocument.metadata?.is_intake_form}
-							<svg class="h-5 w-5 text-blue-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+							<svg class="h-5 w-5 text-accent flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
 								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
 							</svg>
-							<span class="px-2 py-0.5 text-xs font-semibold rounded-full bg-blue-600 text-white">
+							<span class="px-2 py-0.5 text-xs font-semibold rounded-full bg-accent text-white">
 								INTAKE FORM
 							</span>
 						{/if}
@@ -1763,7 +1763,7 @@
 			<div class="flex justify-end space-x-3 px-6 py-4 border-t border-gray-200">
 				<button
 					onclick={closeDocumentViewer}
-					class="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+					class="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent"
 				>
 					Close
 				</button>
@@ -1785,19 +1785,19 @@
 			
 			<div class="space-y-2 mb-6">
 				{#each intakeCandidates as doc}
-					<label class="flex items-start p-4 border rounded-lg cursor-pointer hover:bg-gray-50 transition-colors {selectedIntakeDocId === doc.id ? 'border-blue-500 bg-blue-50' : 'border-gray-200'}">
+					<label class="flex items-start p-4 border rounded-lg cursor-pointer hover:bg-gray-50 transition-colors {selectedIntakeDocId === doc.id ? 'border-accent bg-accent/10' : 'border-gray-200'}">
 						<input
 							type="radio"
 							name="intake-document"
 							value={doc.id}
 							checked={selectedIntakeDocId === doc.id}
 							onchange={() => (selectedIntakeDocId = doc.id)}
-							class="mt-1 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
+							class="mt-1 h-4 w-4 text-accent focus:ring-accent border-gray-300"
 						/>
 						<div class="ml-3 flex-1 min-w-0">
 							<div class="flex items-center space-x-2 mb-1">
 								{#if doc.metadata?.clio_source}
-									<svg class="h-4 w-4 text-blue-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+									<svg class="h-4 w-4 text-accent flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
 										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
 									</svg>
 								{/if}
@@ -1832,7 +1832,7 @@
 				<button
 					onclick={confirmIntakeSelection}
 					disabled={!selectedIntakeDocId}
-					class="px-4 py-2 border border-transparent rounded-md text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+					class="px-4 py-2 border border-transparent rounded-md text-sm font-medium text-white bg-accent hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed"
 				>
 					Confirm & Start Analysis
 				</button>

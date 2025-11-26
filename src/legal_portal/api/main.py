@@ -13,6 +13,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from legal_portal.api.rate_limiter import limiter
 from legal_portal.api.routes import (
     analysis,
     cases,
@@ -25,9 +26,8 @@ from legal_portal.api.routes import (
     settings,
 )
 from legal_portal.utils.logging_config import setup_logging
-from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
-from slowapi.util import get_remote_address
 
 # Load environment variables from .env file
 load_dotenv()
@@ -36,9 +36,7 @@ load_dotenv()
 setup_logging(app_name="legal-portal-api")
 logger = logging.getLogger(__name__)
 
-# Rate limiting configuration
-# Uses IP address by default, with generous limits for legitimate usage
-limiter = Limiter(key_func=get_remote_address, default_limits=["200/minute"])
+# Rate limiter is imported from rate_limiter.py module
 
 
 @asynccontextmanager

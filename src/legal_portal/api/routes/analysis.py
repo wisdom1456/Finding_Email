@@ -15,11 +15,8 @@ from typing import Any, Dict, List, Optional
 
 import html2text
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
-from slowapi import Limiter
-from slowapi.util import get_remote_address
-
-limiter = Limiter(key_func=get_remote_address)
 from legal_portal.api.dependencies import get_current_user, get_supabase_client, get_user_supabase_client
+from legal_portal.api.rate_limiter import limiter
 from legal_portal.core.data_models import (
     ChatMessageRequest,
     ChatMessageResponse,

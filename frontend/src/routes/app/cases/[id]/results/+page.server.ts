@@ -50,14 +50,21 @@ export const load: PageServerLoad = async ({ params, locals, fetch }) => {
 			})
 		]);
 
-		// Handle results response
+		// Handle results response - clone to avoid "body already read" errors
+		let results;
 		if (!resultsResponse.ok) {
-			const errorText = await resultsResponse.text();
+			const responseClone = resultsResponse.clone();
+			const errorText = await responseClone.text();
 			console.error('Failed to load results:', resultsResponse.status, errorText);
 			throw error(resultsResponse.status, `Failed to load results: ${errorText}`);
 		}
 
-		const results = await resultsResponse.json();
+		try {
+			results = await resultsResponse.json();
+		} catch (parseError) {
+			console.error('Failed to parse results JSON:', parseError);
+			throw error(500, 'Failed to parse analysis results');
+		}
 
 		// Parse case_analysis if it's a JSON string
 		if (results.case_analysis && typeof results.case_analysis === 'string') {
@@ -218,10 +225,14 @@ export const load: PageServerLoad = async ({ params, locals, fetch }) => {
 		// Handle documents response
 		const documents = documentsResponse.error ? [] : documentsResponse.data || [];
 
-		// Handle profile response
+		// Handle profile response - safely parse JSON
 		let profile = null;
 		if (profileResponse.ok) {
-			profile = await profileResponse.json();
+			try {
+				profile = await profileResponse.json();
+			} catch (e) {
+				console.error('Failed to parse profile JSON:', e);
+			}
 		}
 
 		return {

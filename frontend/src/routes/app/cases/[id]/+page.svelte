@@ -1416,13 +1416,19 @@
 						<div class="bg-white shadow rounded-lg p-6">
 							<div class="flex justify-between items-center mb-4">
 								<h3 class="text-lg font-medium text-gray-900">Analysis</h3>
-								{#if documents.length > 0 && (!analysisStatus || analysisStatus.status === 'completed' || analysisStatus.status === 'failed')}
+								{#if documents.length > 0}
 									<button
 										onclick={startAnalysis}
-										disabled={analyzing}
+										disabled={analyzing || (analysisStatus && analysisStatus.status === 'processing')}
 										class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-accent hover:bg-accent-hover focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent disabled:opacity-50 disabled:cursor-not-allowed"
 									>
-										{analyzing ? 'Starting Analysis...' : analysisStatus ? 'Run New Analysis' : 'Start Analysis'}
+										{#if analyzing || (analysisStatus && analysisStatus.status === 'processing')}
+											Analyzing...
+										{:else if analysisStatus && (analysisStatus.status === 'completed' || analysisStatus.status === 'failed')}
+											Run New Analysis
+										{:else}
+											Start Analysis
+										{/if}
 									</button>
 								{/if}
 							</div>

@@ -777,14 +777,14 @@ async def get_analysis_results(
 @router.post("/generate-letter", response_model=LetterGenerationResponse)
 @limiter.limit("10/minute")  # Rate limit letter generation
 async def generate_letter(
-    request: LetterGenerationRequest,
-    http_request: Request,  # Required for rate limiter
+    letter_request: LetterGenerationRequest,
+    request: Request,  # Required for rate limiter (must be named 'request')
     user=Depends(get_current_user),  # noqa: B008
     supabase=Depends(get_user_supabase_client),  # noqa: B008
 ):
     """Generate findings or demand letters on-demand."""
-    _ensure_case_access(supabase, request.case_id, user["id"])
-    analysis_record = _fetch_latest_analysis_result(supabase, request.case_id)
+    _ensure_case_access(supabase, letter_request.case_id, user["id"])
+    analysis_record = _fetch_latest_analysis_result(supabase, letter_request.case_id)
 
     result_payload = analysis_record["result"]
     processing_result = ProcessingResult(**result_payload)
@@ -800,17 +800,17 @@ async def generate_letter(
     openai_client = OpenAIClient(user_preferences=ai_preferences)
     artifacts = processing_result.artifacts or {}
     attorney_info = {
-        "name": request.attorney_name or artifacts.get("attorney_name"),
-        "firm": request.firm_name or artifacts.get("firm_name"),
-        "phone": request.contact_phone or artifacts.get("contact_phone"),
-        "email": request.contact_email or artifacts.get("contact_email"),
+        "name": letter_request.attorney_name or artifacts.get("attorney_name"),
+        "firm": letter_request.firm_name or artifacts.get("firm_name"),
+        "phone": letter_request.contact_phone or artifacts.get("contact_phone"),
+        "email": letter_request.contact_email or artifacts.get("contact_email"),
     }
 
     msr = processing_result.multi_stage_result
     letter_html: str
     target_party_name: Optional[str] = None
 
-    if request.letter_type == LetterType.FINDINGS:
+    if letter_request.letter_type == LetterType.FINDINGS:
         from legal_portal.core.data_models import DeepAnalysis, FactMatrix, LetterStructure
 
         fact_matrix = FactMatrix(**msr["fact_matrix"])
@@ -835,14 +835,14 @@ async def generate_letter(
         )
         letter_key = "findings"
     else:
-        if not request.target_party_name:
+        if not letter_request.target_party_name:
             raise HTTPException(
                 status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail="target_party_name is required for demand letters",
             )
 
-        # Extract client_name from request, fact_matrix, or artifacts
-        client_name = request.client_name
+        # Extract client_name from letter_request, fact_matrix, or artifacts
+        client_name = letter_request.client_name
         if not client_name:
             # Try to get from fact_matrix parties (find client role)
             fact_matrix_data = msr.get("fact_matrix", {})
@@ -870,16 +870,16 @@ async def generate_letter(
         letter_html = await demand_service.generate_demand_letter(
             fact_matrix_dict=msr["fact_matrix"],
             deep_analysis_dict=msr["deep_analysis"],
-            target_party_name=request.target_party_name,
-            demand_amount=request.demand_amount,
-            demand_deadline=request.demand_deadline,
-            specific_demands=request.specific_demands,
+            target_party_name=letter_request.target_party_name,
+            demand_amount=letter_request.demand_amount,
+            demand_deadline=letter_request.demand_deadline,
+            specific_demands=letter_request.specific_demands,
             attorney_info=attorney_info,
             client_name=client_name,
             document_summaries=document_summaries,
         )
-        target_party_name = request.target_party_name
-        letter_key = f"demand_{request.target_party_name.replace(' ', '_')}".lower()
+        target_party_name = letter_request.target_party_name
+        letter_key = f"demand_{letter_request.target_party_name.replace(' ', '_')}".lower()
 
     result_payload.setdefault("generated_letters", {})[letter_key] = letter_html
     supabase.table("analysis_results").update({"result": result_payload}).eq(
@@ -888,7 +888,7 @@ async def generate_letter(
 
     return LetterGenerationResponse(
         letter_html=letter_html,
-        letter_type=request.letter_type,
+        letter_type=letter_request.letter_type,
         target_party_name=target_party_name,
     )
 

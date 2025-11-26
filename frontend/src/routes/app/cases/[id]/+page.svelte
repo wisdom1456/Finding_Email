@@ -1416,6 +1416,7 @@
 						<div class="bg-white shadow rounded-lg p-6">
 							<div class="flex justify-between items-center mb-4">
 								<h3 class="text-lg font-medium text-gray-900">Analysis</h3>
+								<!-- DEBUG: Document count = {documents.length}, Status = {analysisStatus?.status || 'none'} -->
 								{#if documents.length > 0}
 									<button
 										onclick={startAnalysis}
@@ -1430,6 +1431,8 @@
 											Start Analysis
 										{/if}
 									</button>
+								{:else}
+									<!-- DEBUG: No documents found, button hidden -->
 								{/if}
 							</div>
 

@@ -1416,22 +1416,24 @@
 						<div class="bg-white shadow rounded-lg p-6">
 							<div class="flex justify-between items-center mb-4">
 								<h3 class="text-lg font-medium text-gray-900">Analysis</h3>
-								<!-- DEBUG: Document count = {documents.length}, Status = {analysisStatus?.status || 'none'} -->
-								<button
-									onclick={startAnalysis}
-									disabled={analyzing || (analysisStatus && analysisStatus.status === 'processing')}
-									class="inline-flex items-center px-4 py-2 border-4 border-red-500 text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50 disabled:cursor-not-allowed"
-									style="min-width: 150px; z-index: 9999; position: relative;"
-								>
-									DEBUG BUTTON (docs: {documents.length})
-									{#if analyzing || (analysisStatus && analysisStatus.status === 'processing')}
-										- Analyzing...
-									{:else if analysisStatus && (analysisStatus.status === 'completed' || analysisStatus.status === 'failed')}
-										- Run New Analysis
-									{:else}
-										- Start Analysis
-									{/if}
-								</button>
+								{#if documents.length > 0}
+									<button
+										onclick={startAnalysis}
+										disabled={analyzing || (analysisStatus && analysisStatus.status === 'processing')}
+										class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white shadow-sm disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+										style="background-color: #5AB7A3;"
+										onmouseover="this.style.backgroundColor='#49998A'"
+										onmouseout="this.style.backgroundColor='#5AB7A3'"
+									>
+										{#if analyzing || (analysisStatus && analysisStatus.status === 'processing')}
+											Analyzing...
+										{:else if analysisStatus && (analysisStatus.status === 'completed' || analysisStatus.status === 'failed')}
+											Run New Analysis
+										{:else}
+											Start Analysis
+										{/if}
+									</button>
+								{/if}
 							</div>
 
 			{#if !analysisStatus && documents.length === 0}

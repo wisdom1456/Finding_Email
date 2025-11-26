@@ -1417,23 +1417,21 @@
 							<div class="flex justify-between items-center mb-4">
 								<h3 class="text-lg font-medium text-gray-900">Analysis</h3>
 								<!-- DEBUG: Document count = {documents.length}, Status = {analysisStatus?.status || 'none'} -->
-								{#if documents.length > 0}
-									<button
-										onclick={startAnalysis}
-										disabled={analyzing || (analysisStatus && analysisStatus.status === 'processing')}
-										class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-accent hover:bg-accent-hover focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent disabled:opacity-50 disabled:cursor-not-allowed"
-									>
-										{#if analyzing || (analysisStatus && analysisStatus.status === 'processing')}
-											Analyzing...
-										{:else if analysisStatus && (analysisStatus.status === 'completed' || analysisStatus.status === 'failed')}
-											Run New Analysis
-										{:else}
-											Start Analysis
-										{/if}
-									</button>
-								{:else}
-									<!-- DEBUG: No documents found, button hidden -->
-								{/if}
+								<button
+									onclick={startAnalysis}
+									disabled={analyzing || (analysisStatus && analysisStatus.status === 'processing')}
+									class="inline-flex items-center px-4 py-2 border-4 border-red-500 text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50 disabled:cursor-not-allowed"
+									style="min-width: 150px; z-index: 9999; position: relative;"
+								>
+									DEBUG BUTTON (docs: {documents.length})
+									{#if analyzing || (analysisStatus && analysisStatus.status === 'processing')}
+										- Analyzing...
+									{:else if analysisStatus && (analysisStatus.status === 'completed' || analysisStatus.status === 'failed')}
+										- Run New Analysis
+									{:else}
+										- Start Analysis
+									{/if}
+								</button>
 							</div>
 
 			{#if !analysisStatus && documents.length === 0}

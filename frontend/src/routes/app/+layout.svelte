@@ -92,13 +92,13 @@
 
 <div class="min-h-screen bg-[#F8FAFB]">
 	<!-- Navigation -->
-	<nav class="bg-contrast shadow-md">
-		<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-			<div class="flex justify-between h-20">
+		<nav class="bg-contrast shadow-md">
+			<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+				<div class="flex justify-between h-36 sm:h-40">
 				<div class="flex">
 					<div class="flex-shrink-0 flex items-center">
 						<a href="/app" class="flex items-center">
-							<img src={logoImg} alt="Bernhardt Riley" class="h-14 sm:h-16 w-auto" />
+							<img src={logoImg} alt="Bernhardt Riley" class="h-28 sm:h-32 w-auto" />
 						</a>
 					</div>
 					<!-- Desktop Navigation -->

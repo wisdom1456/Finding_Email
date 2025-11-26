@@ -26,45 +26,46 @@ export const load: PageServerLoad = async ({ params, locals, fetch }) => {
 	}
 
 	try {
-		// Fetch all data in parallel for better performance
-		const [resultsResponseRaw, documentsResponse, profileResponseRaw] = await Promise.all([
-			// Fetch analysis results
+		// Fetch all data in parallel - READ BODIES IMMEDIATELY in .then() chains
+		// This prevents SvelteKit's fetch wrapper from consuming the body before we can read it
+		const [resultsData, documentsResponse, profileData] = await Promise.all([
+			// Fetch and read results immediately
 			fetch(`${API_URL}/api/analysis/results/${caseId}`, {
 				headers: {
 					Authorization: `Bearer ${session.access_token}`
 				}
+			}).then(async (res) => {
+				const text = await res.text();
+				return { ok: res.ok, status: res.status, text };
 			}),
 			
-			// Fetch documents
+			// Fetch documents (Supabase query - unchanged)
 			supabase
 				.from('documents')
 				.select('*')
 				.eq('case_id', caseId)
 				.order('created_at', { ascending: true }),
 			
-			// Fetch profile for auto-fill
+			// Fetch and read profile immediately
 			fetch(`${API_URL}/api/profile`, {
 				headers: {
 					Authorization: `Bearer ${session.access_token}`
 				}
+			}).then(async (res) => {
+				const text = await res.text();
+				return { ok: res.ok, status: res.status, text };
 			})
 		]);
 
-		// Clone responses IMMEDIATELY to avoid "body already read" errors
-		// SvelteKit's fetch wrapper can consume the body internally
-		const resultsResponse = resultsResponseRaw.clone();
-		const profileResponse = profileResponseRaw.clone();
-
-		// Handle results response
+		// Handle results - body already read as text
 		let results;
-		if (!resultsResponse.ok) {
-			const errorText = await resultsResponse.text();
-			console.error('Failed to load results:', resultsResponse.status, errorText);
-			throw error(resultsResponse.status, `Failed to load results: ${errorText}`);
+		if (!resultsData.ok) {
+			console.error('Failed to load results:', resultsData.status, resultsData.text);
+			throw error(resultsData.status, `Failed to load results: ${resultsData.text}`);
 		}
 
 		try {
-			results = await resultsResponse.json();
+			results = JSON.parse(resultsData.text);
 		} catch (parseError) {
 			console.error('Failed to parse results JSON:', parseError);
 			throw error(500, 'Failed to parse analysis results');
@@ -229,11 +230,11 @@ export const load: PageServerLoad = async ({ params, locals, fetch }) => {
 		// Handle documents response
 		const documents = documentsResponse.error ? [] : documentsResponse.data || [];
 
-		// Handle profile response - safely parse JSON
+		// Handle profile - body already read as text
 		let profile = null;
-		if (profileResponse.ok) {
+		if (profileData.ok) {
 			try {
-				profile = await profileResponse.json();
+				profile = JSON.parse(profileData.text);
 			} catch (e) {
 				console.error('Failed to parse profile JSON:', e);
 			}

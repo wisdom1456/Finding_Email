@@ -4,19 +4,47 @@
 /* Google Fonts: Raleway (headings) + Montserrat (body) */
 @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Raleway:wght@500;600;700;800&display=swap');
 
-/* CSS Custom Properties for Brand */
-:root {
-  /* Colors */
+/* Tailwind v4 Theme Configuration */
+@theme {
+  /* Brand Colors */
   --color-contrast: #181A31;
   --color-contrast-light: #39428E;
   --color-accent: #5AB7A3;
   --color-accent-hover: #49998A;
-  --color-base: #FFFFFF;
+  --color-accent-light: #E8F5F2;
+  
+  /* Primary Palette */
+  --color-primary-50: #E8F5F2;
+  --color-primary-100: #D1EBE5;
+  --color-primary-200: #A3D7CB;
+  --color-primary-300: #75C3B1;
+  --color-primary-400: #5AB7A3;
+  --color-primary-500: #49998A;
+  --color-primary-600: #3D8075;
+  --color-primary-700: #316660;
+  --color-primary-800: #254D48;
+  --color-primary-900: #193330;
   
   /* Typography */
-  --font-heading: 'Raleway', system-ui, sans-serif;
-  --font-body: 'Montserrat', system-ui, sans-serif;
+  --font-family-heading: 'Raleway', system-ui, sans-serif;
+  --font-family-body: 'Montserrat', system-ui, sans-serif;
   
+  /* Border Radius */
+  --radius-btn: 6px;
+  --radius-card: 8px;
+  --radius-pill: 9999px;
+  
+  /* Shadows */
+  --shadow-sm: 0 1px 2px 0 rgba(24, 26, 49, 0.05);
+  --shadow-DEFAULT: 0 1px 3px 0 rgba(24, 26, 49, 0.1), 0 1px 2px -1px rgba(24, 26, 49, 0.1);
+  --shadow-md: 0 4px 6px -1px rgba(24, 26, 49, 0.1), 0 2px 4px -2px rgba(24, 26, 49, 0.1);
+  --shadow-lg: 0 10px 15px -3px rgba(24, 26, 49, 0.1), 0 4px 6px -4px rgba(24, 26, 49, 0.1);
+  --shadow-card: 0 2px 8px 0 rgba(24, 26, 49, 0.08);
+  --shadow-dropdown: 0 4px 12px 0 rgba(24, 26, 49, 0.12);
+}
+
+/* Additional CSS Custom Properties (for non-Tailwind use) */
+:root {
   /* Type Scale (based on 16px base, 1.25 ratio) */
   --text-xs: 0.75rem;     /* 12px */
   --text-sm: 0.875rem;    /* 14px */
@@ -43,6 +71,15 @@
   --space-8: 2rem;      /* 32px */
   --space-10: 2.5rem;   /* 40px */
   --space-12: 3rem;     /* 48px */
+  
+  /* Re-export for convenience */
+  --color-contrast: #181A31;
+  --color-contrast-light: #39428E;
+  --color-accent: #5AB7A3;
+  --color-accent-hover: #49998A;
+  --color-base: #FFFFFF;
+  --font-heading: 'Raleway', system-ui, sans-serif;
+  --font-body: 'Montserrat', system-ui, sans-serif;
 }
 
 /* Base Typography */

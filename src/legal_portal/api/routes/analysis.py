@@ -587,8 +587,8 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
 @router.post("/start", response_model=AnalysisResponse, status_code=status.HTTP_202_ACCEPTED)
 @limiter.limit("10/minute")  # Rate limit AI analysis to prevent abuse
 async def start_analysis(
-    request: AnalysisRequest,
-    http_request: Request,  # Required for rate limiter
+    analysis_request: AnalysisRequest,
+    request: Request,  # Required for rate limiter (must be named 'request')
     background_tasks: BackgroundTasks,
     user=Depends(get_current_user),  # noqa: B008
     user_supabase=Depends(get_user_supabase_client),  # noqa: B008
@@ -613,7 +613,7 @@ async def start_analysis(
         case_response = (
             user_supabase.table("cases")
             .select("id, status")
-            .eq("id", request.case_id)
+            .eq("id", analysis_request.case_id)
             .eq("user_id", user["id"])
             .execute()
         )
@@ -632,7 +632,7 @@ async def start_analysis(
         # Create analysis record using user client
         analysis_response = (
             user_supabase.table("analysis_results")
-            .insert({"case_id": request.case_id, "status": "pending"})
+            .insert({"case_id": analysis_request.case_id, "status": "pending"})
             .execute()
         )
 
@@ -644,11 +644,11 @@ async def start_analysis(
         analysis = analysis_response.data[0]
 
         # Update case status
-        user_supabase.table("cases").update({"status": "processing"}).eq("id", request.case_id).execute()
+        user_supabase.table("cases").update({"status": "processing"}).eq("id", analysis_request.case_id).execute()
 
         # Start background processing using SERVICE client (bypasses RLS, no token expiry)
         background_tasks.add_task(
-            process_case_background, request.case_id, analysis["id"], service_supabase, request.provider
+            process_case_background, analysis_request.case_id, analysis["id"], service_supabase, analysis_request.provider
         )
 
         return analysis

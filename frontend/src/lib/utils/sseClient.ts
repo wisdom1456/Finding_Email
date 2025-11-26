@@ -36,6 +36,9 @@ export class SSEClient {
 	private onMessageHandler: SSEMessageHandler | null = null;
 	private onErrorHandler: SSEErrorHandler | null = null;
 	private onCompleteHandler: SSECompleteHandler | null = null;
+	private inactivityTimer: NodeJS.Timeout | null = null;
+	private inactivityTimeout = 300000; // 5 minutes of no messages = timeout
+	private lastMessageTime: number = 0;
 
 	/**
 	 * Check if EventSource is supported by the browser
@@ -66,15 +69,23 @@ export class SSEClient {
 
 		try {
 			this.eventSource = new EventSource(url);
+			this.lastMessageTime = Date.now();
+			this.startInactivityTimer();
 
 			this.eventSource.onmessage = (event) => {
 				try {
 					// Skip ping/keep-alive messages
 					if (event.data.trim() === '' || event.data.trim().startsWith(':')) {
+						// Reset inactivity timer even for keep-alive
+						this.resetInactivityTimer();
 						return;
 					}
 
 					const data: ProgressEvent = JSON.parse(event.data);
+					
+					// Update last message time and reset inactivity timer
+					this.lastMessageTime = Date.now();
+					this.resetInactivityTimer();
 					
 					if (this.onMessageHandler) {
 						this.onMessageHandler(data);
@@ -153,6 +164,7 @@ export class SSEClient {
 	 */
 	disconnect(): void {
 		this.isManuallyDisconnected = true;
+		this.clearInactivityTimer();
 		if (this.eventSource) {
 			this.eventSource.close();
 			this.eventSource = null;
@@ -165,6 +177,43 @@ export class SSEClient {
 	 */
 	isConnected(): boolean {
 		return this.eventSource !== null && this.eventSource.readyState === EventSource.OPEN;
+	}
+
+	/**
+	 * Start inactivity timer - triggers timeout if no messages received
+	 */
+	private startInactivityTimer(): void {
+		this.clearInactivityTimer();
+		this.inactivityTimer = setTimeout(() => {
+			const timeSinceLastMessage = Date.now() - this.lastMessageTime;
+			if (timeSinceLastMessage >= this.inactivityTimeout) {
+				console.warn('SSE stream inactive for too long, timing out');
+				if (this.onErrorHandler) {
+					this.onErrorHandler(new Error('SSE_TIMEOUT: No updates received for 5 minutes'));
+				}
+				this.disconnect();
+				if (this.onCompleteHandler) {
+					this.onCompleteHandler();
+				}
+			}
+		}, this.inactivityTimeout);
+	}
+
+	/**
+	 * Reset inactivity timer
+	 */
+	private resetInactivityTimer(): void {
+		this.startInactivityTimer();
+	}
+
+	/**
+	 * Clear inactivity timer
+	 */
+	private clearInactivityTimer(): void {
+		if (this.inactivityTimer) {
+			clearTimeout(this.inactivityTimer);
+			this.inactivityTimer = null;
+		}
 	}
 }
 

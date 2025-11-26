@@ -1,6 +1,6 @@
 import logging
 
-from fastapi import APIRouter, Query, Request
+from fastapi import APIRouter, HTTPException, Query, Request
 from legal_portal.services.progress_manager import ProgressManager
 from sse_starlette.sse import EventSourceResponse
 
@@ -38,3 +38,39 @@ async def stream_clio_import_progress(
     progress_manager = ProgressManager.get_instance()
 
     return EventSourceResponse(progress_manager.subscribe(import_id), ping=15, media_type="text/event-stream")
+
+
+@router.get("/analysis/{analysis_id}/status")
+async def get_analysis_status(
+    request: Request,
+    analysis_id: str,
+    token: str = Query(None),
+):
+    """Get current analysis progress status (polling endpoint)."""
+    progress_manager = ProgressManager.get_instance()
+
+    # Get latest status from progress manager
+    status = await progress_manager.get_latest_status(analysis_id)
+
+    if not status:
+        raise HTTPException(status_code=404, detail="Analysis not found or no status available")
+
+    return status
+
+
+@router.get("/clio-import/{import_id}/status")
+async def get_clio_import_status(
+    request: Request,
+    import_id: str,
+    token: str = Query(None),
+):
+    """Get current Clio import progress status (polling endpoint)."""
+    progress_manager = ProgressManager.get_instance()
+
+    # Get latest status from progress manager
+    status = await progress_manager.get_latest_status(import_id)
+
+    if not status:
+        raise HTTPException(status_code=404, detail="Import not found or no status available")
+
+    return status

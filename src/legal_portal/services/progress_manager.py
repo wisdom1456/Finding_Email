@@ -9,16 +9,19 @@ logger = logging.getLogger(__name__)
 
 class ProgressManager:
     """Manages progress streams for different tasks using pub/sub pattern.
+
     Uses asyncio.Queue for single-process deployments.
     """
 
     _instance = None
 
     def __new__(cls):
+        """Create or return the singleton instance."""
         if cls._instance is None:
             cls._instance = super(ProgressManager, cls).__new__(cls)
             cls._instance._channels = {}  # type: Dict[str, asyncio.Queue]
             cls._instance._last_activity = {}  # type: Dict[str, datetime]
+            cls._instance._latest_status = {}  # type: Dict[str, dict] - Store latest status for polling
         return cls._instance
 
     def __init__(self):
@@ -27,6 +30,7 @@ class ProgressManager:
 
     @classmethod
     def get_instance(cls):
+        """Get the singleton instance of the progress manager."""
         if cls._instance is None:
             cls._instance = cls()
         return cls._instance
@@ -76,6 +80,8 @@ class ProgressManager:
         try:
             await self._channels[channel_id].put(json.dumps(payload))
             self._last_activity[channel_id] = datetime.now()
+            # Store latest status for polling fallback
+            self._latest_status[channel_id] = payload
             logger.debug(f"Published progress to channel {channel_id}: {message} ({percent}%)")
         except Exception as e:
             logger.error(f"Failed to publish progress to channel {channel_id}: {e}")
@@ -126,6 +132,12 @@ class ProgressManager:
         except Exception as e:
             logger.error(f"Subscription error for {channel_id}: {e}")
 
+    async def get_latest_status(self, channel_id: str) -> dict | None:
+        """Get the latest progress status for a channel (for polling)."""
+        if channel_id in self._latest_status:
+            return self._latest_status[channel_id]
+        return None
+
     def cleanup_expired_channels(self, max_age_hours: int = 1):
         """Remove channels that haven't had activity."""
         now = datetime.now()
@@ -137,6 +149,9 @@ class ProgressManager:
         for cid in expired:
             del self._channels[cid]
             del self._last_activity[cid]
+            # Also clean up latest status
+            if cid in self._latest_status:
+                del self._latest_status[cid]
 
         if expired:
             logger.info(f"Cleaned up {len(expired)} expired progress channels")

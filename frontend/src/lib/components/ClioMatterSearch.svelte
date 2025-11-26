@@ -147,19 +147,25 @@
 			// Start SSE for import progress if import_id is returned
 			if (result.import_id) {
 				const sseUrl = `${apiUrl}/api/progress/clio-import/${result.import_id}?token=${session.access_token}`;
+				const statusUrl = `${apiUrl}/api/progress/clio-import/${result.import_id}/status`;
 				
 				// Keep phase as 'creating' or 'importing' until SSE starts
 				importPhase = 'importing';
 				
-				progressStore.connect(sseUrl, (data) => {
-					// On completion, update UI with stats
-					importPhase = 'complete';
-					importSuccess = true;
-					
-					if (data && data.import_status) {
-						importResult = data.import_status;
-					}
-				});
+				progressStore.connect(
+					sseUrl, 
+					(data) => {
+						// On completion, update UI with stats
+						importPhase = 'complete';
+						importSuccess = true;
+						
+						if (data && data.import_status) {
+							importResult = data.import_status;
+						}
+					},
+					statusUrl,  // Polling fallback URL
+					session.access_token  // Auth token
+				);
 			} else {
 				// No SSE available (legacy path?), mark as complete immediately
 				importPhase = 'complete';
@@ -253,25 +259,24 @@
 			
 			// If import_id is returned, connect to SSE stream
 			if (result.import_id) {
-				const sseUrl = `${apiUrl}/api/progress/clio-import/${result.import_id}`;
-				const sseSupported = progressStore.isSupported();
+				const sseUrl = `${apiUrl}/api/progress/clio-import/${result.import_id}?token=${session.access_token}`;
+				const statusUrl = `${apiUrl}/api/progress/clio-import/${result.import_id}/status`;
 
-				if (sseSupported) {
-					progressStore.connect(sseUrl, () => {
+				progressStore.connect(
+					sseUrl, 
+					() => {
 						// On completion
 						importSuccess = true;
 						selectedMatterId = matterId;
 						importingMatterId = null;
-					});
-				} else {
-					// No SSE support, just mark as success
-					importSuccess = true;
-					selectedMatterId = matterId;
-				}
+					},
+					statusUrl,  // Polling fallback URL
+					session.access_token  // Auth token
+				);
 			} else {
 				// No import_id, mark as success immediately
-			importSuccess = true;
-			selectedMatterId = matterId;
+				importSuccess = true;
+				selectedMatterId = matterId;
 			}
 
 			// Clear search results after successful import

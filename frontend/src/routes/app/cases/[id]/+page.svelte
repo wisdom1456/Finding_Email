@@ -819,38 +819,21 @@
 			// Reload analysis status
 		await loadAnalysisStatus();
 
-		// Try SSE first, fall back to polling if not supported
+		// Connect to progress stream with automatic polling fallback
 		const sseUrl = `${getApiUrl()}/api/progress/analysis/${analysisId}?token=${session.access_token}`;
-			const sseSupported = progressStore.isSupported();
+		const statusUrl = `${getApiUrl()}/api/progress/analysis/${analysisId}/status`;
 
-			if (sseSupported) {
-				const connected = progressStore.connect(sseUrl, async () => {
-					// On completion, reload data
-					await loadAnalysisStatus();
-					await loadCase();
-					analyzing = false;
-				});
-
-				if (!connected) {
-					// SSE failed, fall back to polling
-					startPolling();
-				}
-			} else {
-				// SSE not supported, use polling
-				startPolling();
-			}
-
-			function startPolling() {
-			const pollInterval = setInterval(async () => {
+		progressStore.connect(
+			sseUrl, 
+			async () => {
+				// On completion, reload data
 				await loadAnalysisStatus();
 				await loadCase();
-
-				if (analysisStatus && analysisStatus.status !== 'processing' && analysisStatus.status !== 'pending') {
-					clearInterval(pollInterval);
-					analyzing = false;
-				}
-			}, 5000);
-			}
+				analyzing = false;
+			},
+			statusUrl,  // Polling fallback URL
+			session.access_token  // Auth token
+		);
 		} catch (error: any) {
 			errorMessage = error.message || 'Failed to start analysis';
 			analyzing = false;

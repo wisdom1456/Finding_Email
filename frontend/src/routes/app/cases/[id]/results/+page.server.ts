@@ -27,7 +27,7 @@ export const load: PageServerLoad = async ({ params, locals, fetch }) => {
 
 	try {
 		// Fetch all data in parallel for better performance
-		const [resultsResponse, documentsResponse, profileResponse] = await Promise.all([
+		const [resultsResponseRaw, documentsResponse, profileResponseRaw] = await Promise.all([
 			// Fetch analysis results
 			fetch(`${API_URL}/api/analysis/results/${caseId}`, {
 				headers: {
@@ -50,11 +50,15 @@ export const load: PageServerLoad = async ({ params, locals, fetch }) => {
 			})
 		]);
 
-		// Handle results response - clone to avoid "body already read" errors
+		// Clone responses IMMEDIATELY to avoid "body already read" errors
+		// SvelteKit's fetch wrapper can consume the body internally
+		const resultsResponse = resultsResponseRaw.clone();
+		const profileResponse = profileResponseRaw.clone();
+
+		// Handle results response
 		let results;
 		if (!resultsResponse.ok) {
-			const responseClone = resultsResponse.clone();
-			const errorText = await responseClone.text();
+			const errorText = await resultsResponse.text();
 			console.error('Failed to load results:', resultsResponse.status, errorText);
 			throw error(resultsResponse.status, `Failed to load results: ${errorText}`);
 		}

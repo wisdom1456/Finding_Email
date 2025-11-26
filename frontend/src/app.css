@@ -220,3 +220,23 @@ button {
   background-color: var(--color-accent);
   color: white;
 }
+
+/* Loading Cursor Utilities */
+.cursor-wait {
+  cursor: wait !important;
+}
+
+.cursor-progress {
+  cursor: progress !important;
+}
+
+.cursor-not-allowed {
+  cursor: not-allowed !important;
+}
+
+/* Apply cursor to all children */
+.cursor-wait *,
+.cursor-progress *,
+.cursor-not-allowed * {
+  cursor: inherit !important;
+}

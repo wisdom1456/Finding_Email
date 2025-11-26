@@ -106,7 +106,7 @@
 						<a
 							href="/app"
 							class="inline-flex items-center px-4 py-2 text-sm font-semibold transition-colors rounded-md {isActive('/app') && currentPath === '/app'
-								? 'bg-accent text-white'
+								? 'bg-white/20 text-white border-b-2 border-accent'
 								: 'text-white/90 hover:bg-white/10 hover:text-white'}"
 						>
 							Dashboard
@@ -114,7 +114,7 @@
 						<a
 							href="/app/cases"
 							class="inline-flex items-center px-4 py-2 text-sm font-semibold transition-colors rounded-md {isActive('/app/cases')
-								? 'bg-accent text-white'
+								? 'bg-white/20 text-white border-b-2 border-accent'
 								: 'text-white/90 hover:bg-white/10 hover:text-white'}"
 						>
 							Cases
@@ -122,7 +122,7 @@
 						<a
 							href="/app/settings"
 							class="inline-flex items-center px-4 py-2 text-sm font-semibold transition-colors rounded-md {isActive('/app/settings')
-								? 'bg-accent text-white'
+								? 'bg-white/20 text-white border-b-2 border-accent'
 								: 'text-white/90 hover:bg-white/10 hover:text-white'}"
 						>
 							Settings
@@ -136,14 +136,14 @@
 					<button
 						onclick={() => (showClioModal = !showClioModal)}
 						class="inline-flex items-center px-3 py-2 text-sm font-semibold rounded-md transition-colors {clioConnected
-							? 'bg-accent text-white hover:bg-accent-hover'
+							? 'bg-white/20 text-white border border-accent hover:bg-white/25'
 							: 'bg-white/10 text-white/90 border border-white/20 hover:bg-white/20'}"
 						title={clioConnected ? 'Clio Connected' : 'Clio Integration'}
 					>
 						<Link2 class="h-4 w-4 mr-2" />
 						Clio
 						{#if clioConnected}
-							<span class="ml-2 inline-block h-2 w-2 rounded-full bg-white"></span>
+							<span class="ml-2 inline-block h-2 w-2 rounded-full bg-accent shadow-lg shadow-accent/50"></span>
 						{/if}
 					</button>
 
@@ -212,7 +212,7 @@
 						href="/app"
 						onclick={closeMobileMenu}
 						class="block px-3 py-2 rounded-md text-base font-semibold transition-colors {isActive('/app') && currentPath === '/app'
-							? 'bg-accent text-white'
+							? 'bg-white/20 text-white border-l-4 border-accent'
 							: 'text-white/90 hover:bg-white/10 hover:text-white'}"
 					>
 						Dashboard
@@ -221,7 +221,7 @@
 						href="/app/cases"
 						onclick={closeMobileMenu}
 						class="block px-3 py-2 rounded-md text-base font-semibold transition-colors {isActive('/app/cases')
-							? 'bg-accent text-white'
+							? 'bg-white/20 text-white border-l-4 border-accent'
 							: 'text-white/90 hover:bg-white/10 hover:text-white'}"
 					>
 						Cases
@@ -230,7 +230,7 @@
 						href="/app/settings"
 						onclick={closeMobileMenu}
 						class="block px-3 py-2 rounded-md text-base font-semibold transition-colors {isActive('/app/settings')
-							? 'bg-accent text-white'
+							? 'bg-white/20 text-white border-l-4 border-accent'
 							: 'text-white/90 hover:bg-white/10 hover:text-white'}"
 					>
 						Settings

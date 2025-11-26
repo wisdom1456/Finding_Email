@@ -5,7 +5,7 @@
  * when SSE is not supported or fails.
  */
 
-export interface ProgressEvent {
+export interface ProgressEvent<T = unknown> {
 	type: 'progress' | 'completed' | 'error' | 'failed';
 	message: string;
 	phase: string;
@@ -19,21 +19,21 @@ export interface ProgressEvent {
 	sub_step?: string;
 	error?: string;
 	timestamp?: string;
-	data?: any; // Arbitrary payload for results
+	data?: T; // Generic payload for results
 }
 
-export type SSEMessageHandler = (event: ProgressEvent) => void;
+export type SSEMessageHandler<T = unknown> = (event: ProgressEvent<T>) => void;
 export type SSEErrorHandler = (error: Error) => void;
 export type SSECompleteHandler = () => void;
 
-export class SSEClient {
+export class SSEClient<T = unknown> {
 	private eventSource: EventSource | null = null;
 	private reconnectAttempts = 0;
 	private maxReconnectAttempts = 3;
 	private reconnectDelay = 1000; // Start with 1 second
 	private isManuallyDisconnected = false;
 	private url: string = '';
-	private onMessageHandler: SSEMessageHandler | null = null;
+	private onMessageHandler: SSEMessageHandler<T> | null = null;
 	private onErrorHandler: SSEErrorHandler | null = null;
 	private onCompleteHandler: SSECompleteHandler | null = null;
 	private inactivityTimer: NodeJS.Timeout | null = null;
@@ -52,7 +52,7 @@ export class SSEClient {
 	 */
 	connect(
 		url: string,
-		onMessage: SSEMessageHandler,
+		onMessage: SSEMessageHandler<T>,
 		onError: SSEErrorHandler,
 		onComplete: SSECompleteHandler
 	): boolean {
@@ -81,7 +81,7 @@ export class SSEClient {
 						return;
 					}
 
-					const data: ProgressEvent = JSON.parse(event.data);
+					const data: ProgressEvent<T> = JSON.parse(event.data);
 					
 					// Update last message time and reset inactivity timer
 					this.lastMessageTime = Date.now();

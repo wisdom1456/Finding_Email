@@ -3,6 +3,20 @@
  */
 
 /**
+ * User profile data structure from the database.
+ */
+export interface Profile {
+	id: string;
+	email: string;
+	full_name: string | null;
+	avatar_url: string | null;
+	approved: boolean;
+	role: 'user' | 'admin';
+	created_at: string;
+	updated_at: string;
+}
+
+/**
  * Clio matter data stored in the database after import.
  */
 export interface ClioMatterData {
@@ -52,7 +66,7 @@ export interface DocumentData {
 		clio_id?: number;
 		clio_subject?: string;
 		clio_date?: string;
-		[key: string]: any;
+		[key: string]: unknown;
 	};
 	created_at: string;
 	updated_at: string;

@@ -48,12 +48,52 @@ const authGuard: Handle = async ({ event, resolve }) => {
   event.locals.session = session;
   event.locals.user = user;
 
+  // Not logged in - require login for /app routes
   if (!event.locals.session && event.url.pathname.startsWith('/app')) {
     throw redirect(303, '/login');
   }
 
-  if (event.locals.session && (event.url.pathname === '/login' || event.url.pathname === '/register')) {
-    throw redirect(303, '/app');
+  // Logged in - check approval status
+  if (event.locals.session) {
+    // Fetch user profile to check approval status
+    const { data: profile } = await event.locals.supabase
+      .from('profiles')
+      .select('approved, role')
+      .eq('id', event.locals.user?.id)
+      .single();
+
+    // Store profile in locals for use in load functions
+    event.locals.profile = profile;
+
+    const isApproved = profile?.approved === true;
+    const isAccessingApp = event.url.pathname.startsWith('/app');
+    const isOnPendingPage = event.url.pathname === '/account-pending';
+    const isOnAuthPage = event.url.pathname === '/login' || event.url.pathname === '/register';
+
+    // Not approved - redirect to pending page when trying to access app
+    if (!isApproved && isAccessingApp) {
+      throw redirect(303, '/account-pending');
+    }
+
+    // Not approved but on pending page - allow access
+    if (!isApproved && isOnPendingPage) {
+      return resolve(event);
+    }
+
+    // Approved and trying to access pending page - redirect to app
+    if (isApproved && isOnPendingPage) {
+      throw redirect(303, '/app');
+    }
+
+    // Approved and on auth pages - redirect to app
+    if (isApproved && isOnAuthPage) {
+      throw redirect(303, '/app');
+    }
+
+    // Not approved and on auth pages (just logged in/registered) - redirect to pending
+    if (!isApproved && isOnAuthPage) {
+      throw redirect(303, '/account-pending');
+    }
   }
 
   return resolve(event);

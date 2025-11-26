@@ -8,7 +8,7 @@ import { writable, derived } from 'svelte/store';
 import { SSEClient, type ProgressEvent } from '$lib/utils/sseClient';
 import { PollingClient } from '$lib/utils/pollingClient';
 
-export interface ProgressState {
+export interface ProgressState<T = unknown> {
 	message: string;
 	phase: string;
 	percent: number;
@@ -22,10 +22,10 @@ export interface ProgressState {
 	status: 'idle' | 'connecting' | 'active' | 'completed' | 'error';
 	error: string | null;
 	timestamp: string | null;
-	data: any | null;
+	data: T | null;
 }
 
-const initialState: ProgressState = {
+const initialState: ProgressState<unknown> = {
 	message: '',
 	phase: '',
 	percent: 0,
@@ -39,7 +39,7 @@ const initialState: ProgressState = {
 };
 
 function createProgressStore() {
-	const { subscribe, set, update } = writable<ProgressState>(initialState);
+	const { subscribe, set, update } = writable<ProgressState<unknown>>(initialState);
 	let sseClient: SSEClient | null = null;
 	let pollingClient: PollingClient | null = null;
 	let currentStatusUrl: string = '';
@@ -51,7 +51,7 @@ function createProgressStore() {
 		/**
 		 * Connect to an SSE progress stream with automatic polling fallback
 		 */
-		connect: (url: string, onComplete?: (data?: any) => void, statusUrl?: string, token?: string): boolean => {
+		connect: (url: string, onComplete?: (data?: unknown) => void, statusUrl?: string, token?: string): boolean => {
 			// Disconnect existing connections
 			if (sseClient) {
 				sseClient.disconnect();
@@ -70,7 +70,7 @@ function createProgressStore() {
 			if (statusUrl) currentStatusUrl = statusUrl;
 			if (token) currentToken = token;
 
-			let finalData: any = null;
+			let finalData: unknown = null;
 
 			// Try SSE first
 			sseClient = new SSEClient();
@@ -100,8 +100,6 @@ function createProgressStore() {
 				// If SSE times out or fails, try polling fallback
 				if ((errorMessage.includes('SSE_TIMEOUT') || errorMessage.includes('SSE_CONNECTION_FAILED')) 
 				    && currentStatusUrl && currentToken) {
-					console.log('SSE failed, falling back to polling...');
-					
 					update(state => ({
 						...state,
 						message: 'Stream timeout, switching to polling mode...',
@@ -148,8 +146,6 @@ function createProgressStore() {
 			if (!connected) {
 				// SSE not supported, try polling immediately if available
 				if (currentStatusUrl && currentToken) {
-					console.log('SSE not supported, using polling mode...');
-					
 					update(state => ({
 						...state,
 						message: 'Using polling mode...',

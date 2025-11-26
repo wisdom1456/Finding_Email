@@ -3,6 +3,73 @@ import { error } from '@sveltejs/kit';
 import { PUBLIC_API_URL } from '$env/static/public';
 import { env } from '$env/dynamic/private';
 
+// Type definitions for API data structures
+interface FinancialDataItem {
+	amount?: number;
+	payment_type?: string;
+	category?: string;
+	description?: string;
+}
+
+interface PrimaryIssue {
+	issue_name: string;
+}
+
+interface IssueMap {
+	primary_issues?: PrimaryIssue[];
+}
+
+interface FactMatrix {
+	financial_data?: FinancialDataItem[];
+}
+
+interface MultiStageResult {
+	fact_matrix?: FactMatrix;
+	issue_map?: IssueMap;
+}
+
+interface IntakeAnalysis {
+	financial_impact?: string;
+}
+
+interface CaseAnalysis {
+	intake_analysis?: IntakeAnalysis;
+}
+
+interface KeyAmount {
+	amount?: string;
+	description?: string;
+}
+
+interface DocumentSummary {
+	document_name: string;
+	key_amounts?: KeyAmount[];
+}
+
+interface OpposingParty {
+	name: string;
+}
+
+interface GeneratedLetters {
+	findings?: string;
+	[key: string]: string | undefined;
+}
+
+interface AnalysisResults {
+	case_analysis?: string | CaseAnalysis;
+	document_summaries?: string | DocumentSummary[];
+	generated_letters?: GeneratedLetters;
+	opposing_parties?: OpposingParty[];
+	multi_stage_result?: MultiStageResult;
+}
+
+interface ProfileResponse {
+	full_name?: string;
+	firm_name?: string;
+	phone?: string;
+	email?: string;
+}
+
 export const load: PageServerLoad = async ({ params, locals, fetch }) => {
 	const { session, supabase } = locals;
 
@@ -58,14 +125,14 @@ export const load: PageServerLoad = async ({ params, locals, fetch }) => {
 		]);
 
 		// Handle results - body already read as text
-		let results;
+		let results: AnalysisResults;
 		if (!resultsData.ok) {
 			console.error('Failed to load results:', resultsData.status, resultsData.text);
 			throw error(resultsData.status, `Failed to load results: ${resultsData.text}`);
 		}
 
 		try {
-			results = JSON.parse(resultsData.text);
+			results = JSON.parse(resultsData.text) as AnalysisResults;
 		} catch (parseError) {
 			console.error('Failed to parse results JSON:', parseError);
 			throw error(500, 'Failed to parse analysis results');
@@ -127,29 +194,30 @@ export const load: PageServerLoad = async ({ params, locals, fetch }) => {
 			const financialData = factMatrix.financial_data || [];
 
 			// Look for claimed/owed amounts first
-			const claimedAmount = financialData.find((item: any) =>
-				item.payment_type === 'claimed' || item.category === 'damages_claimed'
+			const claimedAmount = financialData.find(
+				(item) => item.payment_type === 'claimed' || item.category === 'damages_claimed'
 			);
 
-			if (claimedAmount && claimedAmount.amount) {
+			if (claimedAmount?.amount) {
 				demandAmount = claimedAmount.amount;
 				foundAmount = true;
 			} else {
 				// Try any "owed" amount
-				const owedAmount = financialData.find((item: any) =>
-					item.payment_type === 'owed' ||
-					item.description?.toLowerCase().includes('owed') ||
-					item.description?.toLowerCase().includes('damage')
+				const owedAmount = financialData.find(
+					(item) =>
+						item.payment_type === 'owed' ||
+						item.description?.toLowerCase().includes('owed') ||
+						item.description?.toLowerCase().includes('damage')
 				);
-				if (owedAmount && owedAmount.amount) {
+				if (owedAmount?.amount) {
 					demandAmount = owedAmount.amount;
 					foundAmount = true;
 				} else if (financialData.length > 0) {
 					// Fallback: use the largest amount found
-					const maxAmountItem = financialData.reduce((prev: any, current: any) =>
-						prev.amount > current.amount ? prev : current
+					const maxAmountItem = financialData.reduce((prev, current) =>
+						(prev.amount ?? 0) > (current.amount ?? 0) ? prev : current
 					);
-					if (maxAmountItem && maxAmountItem.amount) {
+					if (maxAmountItem?.amount) {
 						demandAmount = maxAmountItem.amount;
 						foundAmount = true;
 					}
@@ -161,7 +229,7 @@ export const load: PageServerLoad = async ({ params, locals, fetch }) => {
 			const primaryIssues = issueMap.primary_issues || [];
 			if (primaryIssues.length > 0) {
 				specificDemands = primaryIssues
-					.map((issue: any) => `Resolve the issue of ${issue.issue_name} by providing appropriate remedies.`)
+					.map((issue) => `Resolve the issue of ${issue.issue_name} by providing appropriate remedies.`)
 					.join('\n');
 			} else {
 				specificDemands = 'Provide full and timely compliance with all outstanding obligations.';
@@ -169,14 +237,16 @@ export const load: PageServerLoad = async ({ params, locals, fetch }) => {
 		}
 
 		// 2. Fall back to case_analysis financial_impact
-		if (!foundAmount && results.case_analysis?.intake_analysis?.financial_impact) {
-			const financialText = results.case_analysis.intake_analysis.financial_impact;
-			// Extract dollar amounts from text
-			const amountMatch = financialText.match(/\$[\d,]+(?:\.\d{2})?/);
-			if (amountMatch) {
-				const amountStr = amountMatch[0].replace(/[$,]/g, '');
-				demandAmount = parseFloat(amountStr);
-				foundAmount = true;
+		if (!foundAmount && typeof results.case_analysis === 'object') {
+			const financialText = results.case_analysis.intake_analysis?.financial_impact;
+			if (financialText) {
+				// Extract dollar amounts from text
+				const amountMatch = financialText.match(/\$[\d,]+(?:\.\d{2})?/);
+				if (amountMatch) {
+					const amountStr = amountMatch[0].replace(/[$,]/g, '');
+					demandAmount = parseFloat(amountStr);
+					foundAmount = true;
+				}
 			}
 		}
 
@@ -221,8 +291,8 @@ export const load: PageServerLoad = async ({ params, locals, fetch }) => {
 
 		// Initialize all documents as collapsed
 		const collapsedDocs = new Set<string>();
-		if (results.document_summaries && results.document_summaries.length > 0) {
-			results.document_summaries.forEach((doc: any) => {
+		if (Array.isArray(results.document_summaries) && results.document_summaries.length > 0) {
+			results.document_summaries.forEach((doc) => {
 				collapsedDocs.add(doc.document_name);
 			});
 		}
@@ -231,10 +301,10 @@ export const load: PageServerLoad = async ({ params, locals, fetch }) => {
 		const documents = documentsResponse.error ? [] : documentsResponse.data || [];
 
 		// Handle profile - body already read as text
-		let profile = null;
+		let profile: ProfileResponse | null = null;
 		if (profileData.ok) {
 			try {
-				profile = JSON.parse(profileData.text);
+				profile = JSON.parse(profileData.text) as ProfileResponse;
 			} catch (e) {
 				console.error('Failed to parse profile JSON:', e);
 			}
@@ -260,9 +330,10 @@ export const load: PageServerLoad = async ({ params, locals, fetch }) => {
 				  }
 				: null
 		};
-	} catch (err: any) {
+	} catch (err) {
 		console.error('Error loading results page data:', err);
-		throw error(500, err.message || 'Failed to load results');
+		const message = err instanceof Error ? err.message : 'Failed to load results';
+		throw error(500, message);
 	}
 };
 

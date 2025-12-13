@@ -18,13 +18,16 @@ class LetterPolisher:
         Args:
         ----
             openai_client: OpenAI client instance
+
         """
         self.client = openai_client
         self.formatting_prompt = self._load_formatting_prompt()
 
     def _load_formatting_prompt(self) -> str:
         """Load the formatting prompt for natural flow style."""
-        return """You are a legal document formatting specialist. Your ONLY job is to ensure the letter flows naturally while preserving ALL legal content.
+        return """You are a legal document formatting specialist.
+Your ONLY job is to ensure the letter flows naturally while preserving
+ALL legal content.
 
 CRITICAL RULES:
 1. Do NOT change any legal content, analysis, or wording
@@ -39,7 +42,8 @@ Subject: Legal Review and Recommended Next Steps – [Case Name]
 
 Good afternoon [Client Name],
 
-I hope you are doing well. I wanted to follow up with a summary of our findings after reviewing [documents], regarding your property at [address].
+I hope you are doing well. I wanted to follow up with a summary of our
+findings after reviewing [documents], regarding your property at [address].
 
 As discussed, the primary concern is [plain English statement].
 
@@ -104,7 +108,8 @@ Based on our review...
 
 Here are the key points of our analysis:
 
-• **Implied Warranty & Construction Defects (Florida Statutes Chapter 558)**: Under Florida law, an implied warranty exists...
+• **Implied Warranty & Construction Defects (Florida Statutes Chapter 558)**:
+  Under Florida law, an implied warranty exists...
 
 2. RECOMMENDED ACTION & NEXT STEPS
 
@@ -117,7 +122,10 @@ Based on our review, we understand that...
 
 Here are the key points of our analysis:
 
-• Under Florida law, there's an important protection called an "implied warranty of workmanlike construction." This means contractors are legally required to do competent work, even if your contract doesn't say so. In your case, [application]. What this means for you: [impact].
+• Under Florida law, there's an important protection called an "implied warranty
+  of workmanlike construction." This means contractors are legally required to
+  do competent work, even if your contract doesn't say so. In your case,
+  [application]. What this means for you: [impact].
 
 Based on the above, a negotiated resolution would likely be your most efficient path forward...
 ```
@@ -139,6 +147,7 @@ OUTPUT INSTRUCTIONS:
         Returns:
         -------
             dict with polished_letter, changes_made, and success status
+
         """
         try:
             logger.info("Starting letter polish pass")
@@ -152,13 +161,16 @@ LETTER TO FORMAT:
 
 FORMATTED LETTER:"""
 
-            # Make the AI call
-            response = self.client.chat.completions.create(
+            # Make the AI call using the OpenAIClient wrapper
+            response = self.client.create_chat_completion(
                 model="gpt-4o",
                 messages=[
                     {
                         "role": "system",
-                        "content": "You are a legal document formatting specialist. Fix formatting ONLY, preserve all content.",
+                        "content": (
+                            "You are a legal document formatting specialist. "
+                            "Fix formatting ONLY, preserve all content."
+                        ),
                     },
                     {"role": "user", "content": full_prompt},
                 ],
@@ -166,7 +178,7 @@ FORMATTED LETTER:"""
                 max_tokens=4000,
             )
 
-            polished_letter = response.choices[0].message.content.strip()
+            polished_letter = response["content"].strip()
 
             # Detect what changed
             changes = self._detect_changes(raw_letter, polished_letter)
@@ -211,7 +223,10 @@ FORMATTED LETTER:"""
 
         if original_bold_bullets > polished_bold_bullets:
             changes.append(
-                f"Converted {original_bold_bullets - polished_bold_bullets} bold bullet headers to flowing paragraphs"
+                (
+                    f"Converted {original_bold_bullets - polished_bold_bullets} "
+                    f"bold bullet headers to flowing paragraphs"
+                )
             )
 
         # Check for spacing improvements
@@ -241,13 +256,14 @@ async def polish_letter_async(openai_client, raw_letter: str) -> Dict:
     Returns:
     -------
         dict with polished letter and metadata
+
     """
     polisher = LetterPolisher(openai_client)
     return polisher.polish_letter(raw_letter)
 
 
 def polish_letter_sync(openai_client, raw_letter: str) -> Dict:
-    """Synchronous letter polishing.
+    """Polish letter synchronously.
 
     Args:
     ----
@@ -257,6 +273,7 @@ def polish_letter_sync(openai_client, raw_letter: str) -> Dict:
     Returns:
     -------
         dict with polished letter and metadata
+
     """
     polisher = LetterPolisher(openai_client)
     return polisher.polish_letter(raw_letter)

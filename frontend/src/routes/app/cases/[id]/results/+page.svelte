@@ -6,6 +6,7 @@
 	import { slide } from 'svelte/transition';
 	import PageHeader from '$lib/components/ui/PageHeader.svelte';
 	import { ArrowLeft } from 'lucide-svelte';
+	import { parseMarkdown } from '$lib/utils/markdown';
 	import type { PageData } from './$types';
 
 	// Get SSR data from load function
@@ -823,8 +824,12 @@
 									<div class="bg-blue-600 text-white rounded-lg px-4 py-2 max-w-[70%]">{message.user}</div>
 								</div>
 								<div class="flex justify-start">
-									<div class="bg-white border rounded-lg px-4 py-2 max-w-[70%] text-gray-800">
-										{message.assistant || '…'}
+									<div class="bg-white border rounded-lg px-4 py-2 max-w-[70%] text-gray-800 chat-prose">
+										{#if message.assistant && message.assistant !== '...'}
+											{@html parseMarkdown(message.assistant)}
+										{:else}
+											<span class="text-gray-400">…</span>
+										{/if}
 									</div>
 								</div>
 							</div>
@@ -1019,3 +1024,74 @@
 		</div>
 	</div>
 {/if}
+
+<style>
+	/* Scoped prose styles for chat markdown rendering */
+	:global(.chat-prose) {
+		line-height: 1.6;
+	}
+	
+	:global(.chat-prose p) {
+		margin-bottom: 0.75rem;
+	}
+	
+	:global(.chat-prose p:last-child) {
+		margin-bottom: 0;
+	}
+	
+	:global(.chat-prose strong) {
+		font-weight: 600;
+		color: inherit;
+	}
+	
+	:global(.chat-prose em) {
+		font-style: italic;
+	}
+	
+	:global(.chat-prose ul),
+	:global(.chat-prose ol) {
+		margin: 0.5rem 0;
+		padding-left: 1.5rem;
+	}
+	
+	:global(.chat-prose ul) {
+		list-style-type: disc;
+	}
+	
+	:global(.chat-prose ol) {
+		list-style-type: decimal;
+	}
+	
+	:global(.chat-prose li) {
+		margin-bottom: 0.25rem;
+	}
+	
+	:global(.chat-prose li:last-child) {
+		margin-bottom: 0;
+	}
+	
+	:global(.chat-prose a) {
+		color: #2563eb;
+		text-decoration: underline;
+	}
+	
+	:global(.chat-prose a:hover) {
+		color: #1d4ed8;
+	}
+	
+	:global(.chat-prose code) {
+		background-color: #f3f4f6;
+		padding: 0.125rem 0.375rem;
+		border-radius: 0.25rem;
+		font-size: 0.875em;
+		font-family: ui-monospace, monospace;
+	}
+	
+	:global(.chat-prose blockquote) {
+		border-left: 3px solid #d1d5db;
+		padding-left: 1rem;
+		margin: 0.5rem 0;
+		color: #6b7280;
+		font-style: italic;
+	}
+</style>

@@ -851,23 +851,98 @@
 			</div>
 		{:else if activeTab === 'quality'}
 			<div class="bg-white shadow rounded-lg p-6">
-				<h3 class="text-xl font-semibold text-gray-900 mb-4">Quality Report</h3>
+				<div class="flex items-center justify-between mb-4">
+					<h3 class="text-xl font-semibold text-gray-900">Quality Report</h3>
+					{#if results.quality_report && results.quality_report.length > 0}
+						{@const lowQualityCount = results.quality_report.filter((item: { score?: number }) => (item.score ?? 0) < 6).length}
+						{#if lowQualityCount > 0}
+							<span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-medium bg-red-100 text-red-800 border border-red-200">
+								<svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+									<path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+								</svg>
+								{lowQualityCount} need{lowQualityCount === 1 ? 's' : ''} review
+							</span>
+						{/if}
+					{/if}
+				</div>
+				
+				<!-- Legend -->
+				<div class="flex flex-wrap gap-4 mb-4 text-sm">
+					<div class="flex items-center gap-2">
+						<span class="w-3 h-3 rounded-full bg-red-500"></span>
+						<span class="text-gray-600">Low Quality (&lt;6) - Manual Review Required</span>
+					</div>
+					<div class="flex items-center gap-2">
+						<span class="w-3 h-3 rounded-full bg-amber-500"></span>
+						<span class="text-gray-600">Medium Quality (6-8)</span>
+					</div>
+					<div class="flex items-center gap-2">
+						<span class="w-3 h-3 rounded-full bg-green-500"></span>
+						<span class="text-gray-600">High Quality (&gt;8)</span>
+					</div>
+				</div>
+				
 				{#if results.quality_report && results.quality_report.length > 0}
-					<div class="space-y-4">
-						{#each results.quality_report as item}
-							<div class="border rounded-lg p-4 bg-gray-50">
-								<button
-									onclick={() => viewDocument(item.document)}
-									class="font-semibold text-blue-600 hover:text-blue-800 hover:underline text-left"
-									title="Click to view document"
-								>
-									{item.document}
-								</button>
-								<p class="text-sm text-gray-600 mt-1">
-									Score: {item.score?.toFixed ? item.score.toFixed(1) : item.score} / 10 • Confidence: {item.confidence_level || 'N/A'}
-								</p>
+					{@const sortedReport = [...results.quality_report].sort((a: { score?: number }, b: { score?: number }) => (a.score ?? 0) - (b.score ?? 0))}
+					<div class="space-y-3">
+						{#each sortedReport as item}
+							{@const score = item.score ?? 0}
+							{@const isLowQuality = score < 6}
+							{@const isMediumQuality = score >= 6 && score <= 8}
+							{@const isHighQuality = score > 8}
+							<div class={`border-l-4 rounded-lg p-4 transition-all ${
+								isLowQuality 
+									? 'border-l-red-500 bg-red-50 border border-red-200' 
+									: isMediumQuality 
+										? 'border-l-amber-500 bg-amber-50 border border-amber-200'
+										: 'border-l-green-500 bg-green-50 border border-green-200'
+							}`}>
+								<div class="flex items-start justify-between gap-4">
+									<div class="flex-1 min-w-0">
+										<div class="flex items-center gap-2 flex-wrap">
+											<button
+												onclick={() => viewDocument(item.document)}
+												class="font-semibold text-blue-600 hover:text-blue-800 hover:underline text-left truncate"
+												title="Click to view document"
+											>
+												{item.document}
+											</button>
+											{#if isLowQuality}
+												<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-bold bg-red-600 text-white animate-pulse">
+													<svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+														<path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+													</svg>
+													NEEDS REVIEW
+												</span>
+											{/if}
+										</div>
+										<div class="flex items-center gap-3 mt-2">
+											<!-- Score Bar -->
+											<div class="flex items-center gap-2 flex-1 max-w-xs">
+												<div class="flex-1 h-2.5 bg-gray-200 rounded-full overflow-hidden">
+													<div 
+														class={`h-full rounded-full transition-all ${
+															isLowQuality ? 'bg-red-500' : isMediumQuality ? 'bg-amber-500' : 'bg-green-500'
+														}`}
+														style="width: {(score / 10) * 100}%"
+													></div>
+												</div>
+												<span class={`text-sm font-bold min-w-[3.5rem] ${
+													isLowQuality ? 'text-red-700' : isMediumQuality ? 'text-amber-700' : 'text-green-700'
+												}`}>
+													{item.score?.toFixed ? item.score.toFixed(1) : item.score}/10
+												</span>
+											</div>
+											<span class="text-sm text-gray-500">
+												Confidence: {item.confidence_level || 'N/A'}
+											</span>
+										</div>
+									</div>
+								</div>
 								{#if item.issues && item.issues.length > 0}
-									<ul class="list-disc list-inside text-sm text-gray-700 mt-2">
+									<ul class={`list-disc list-inside text-sm mt-3 space-y-1 ${
+										isLowQuality ? 'text-red-800' : 'text-gray-700'
+									}`}>
 										{#each item.issues as issue}
 											<li>{issue}</li>
 										{/each}

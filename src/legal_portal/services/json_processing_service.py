@@ -444,7 +444,10 @@ class JsonProcessingService:
         context += (
             f"Timeline: {json.dumps([e.model_dump() for e in fact_matrix.timeline], default=str, indent=2)}\n"
         )
-        context += f"Financial Data: {json.dumps([f.model_dump() for f in fact_matrix.financial_data], default=str, indent=2)}\n\n"
+        context += (
+            f"Financial Data: "
+            f"{json.dumps([f.model_dump() for f in fact_matrix.financial_data], default=str, indent=2)}\n\n"
+        )
 
         # Legal Analysis
         context += "LEGAL ANALYSIS:\n"
@@ -461,6 +464,13 @@ class JsonProcessingService:
         context += f"\nOVERALL CASE STRENGTH: {legal_analysis.overall_case_strength}\n"
         context += f"Key Strengths: {', '.join(legal_analysis.key_strengths)}\n"
         context += f"Key Challenges: {', '.join(legal_analysis.key_challenges)}\n"
+
+        # Case Viability Assessment
+        context += "\n--- CASE VIABILITY ASSESSMENT ---\n"
+        context += f"IS_VIABLE: {legal_analysis.is_viable}\n"
+        context += f"RECOMMEND_DEMAND_LETTER: {legal_analysis.recommend_demand_letter}\n"
+        if legal_analysis.viability_reasoning:
+            context += f"VIABILITY_REASONING: {legal_analysis.viability_reasoning}\n"
 
         return context
 
@@ -499,7 +509,8 @@ class JsonProcessingService:
 ```
 Good afternoon Mr. Devlin and Ms. Bell,
 
-I hope you are doing well. I wanted to follow up with a summary of our findings after reviewing [documents], regarding your property at [address].
+I hope you are doing well. I wanted to follow up with a summary of our
+findings after reviewing [documents], regarding your property at [address].
 
 As discussed, the primary concern is [plain English statement of issue].
 
@@ -507,19 +518,28 @@ Based on our review, we understand that [2-3 paragraphs of facts without formal 
 
 Here are the key points of our analysis:
 
-• Under Florida law, there's a protection called an "implied warranty"—this means contractors are legally required to do competent work, even if your contract doesn't say so. In your case, [application]. What this means for you: [practical impact].
+• Under Florida law, there's a protection called an "implied warranty"—this
+means contractors are legally required to do competent work, even if your
+contract doesn't say so. In your case, [application]. What this means for
+you: [practical impact].
 
-• Before you can sue a contractor in Florida, you must follow a process under Chapter 558. Think of it as a required 'cool-down period.' [explanation]. For you, this means [practical impact].
+• Before you can sue a contractor in Florida, you must follow a process under
+Chapter 558. Think of it as a required 'cool-down period.' [explanation].
+For you, this means [practical impact].
 
-• You received a Notice to Owner—this is a warning that [explanation in plain English]. Here's why this matters: [consequence chain]. This is preventable if we act now.
+• You received a Notice to Owner—this is a warning that [explanation in
+plain English]. Here's why this matters: [consequence chain]. This is
+preventable if we act now.
 
-Based on the above, a negotiated resolution would likely be your most efficient path forward. [Specific recommendations with timeline].
+Based on the above, a negotiated resolution would likely be your most
+efficient path forward. [Specific recommendations with timeline].
 
 If you decide to [action], here's what you need to do:
 • [Step with explanation of why]
 • [Step with explanation of why]
 
-Please let us know if you would like us to proceed with [action], or whether you would prefer that we first set a phone call to discuss.
+Please let us know if you would like us to proceed with [action], or whether
+you would prefer that we first set a phone call to discuss.
 
 Thank you,
 [Signature]

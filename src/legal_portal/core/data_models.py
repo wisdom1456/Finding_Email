@@ -779,6 +779,14 @@ class DeepAnalysis(BaseModel):
     overall_case_strength: str  # "strong", "moderate", "weak"
     key_strengths: List[str] = Field(default_factory=list)
     key_challenges: List[str] = Field(default_factory=list)
+    # Case viability assessment
+    is_viable: bool = Field(default=True, description="Whether the case has sufficient legal merit to pursue")
+    viability_reasoning: Optional[str] = Field(
+        default=None, description="Explanation for the viability assessment, especially if not viable"
+    )
+    recommend_demand_letter: bool = Field(
+        default=True, description="Whether a demand letter is recommended as a next step"
+    )
 
 
 class LetterStructure(BaseModel):

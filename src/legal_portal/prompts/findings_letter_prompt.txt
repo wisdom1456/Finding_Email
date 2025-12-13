@@ -123,6 +123,93 @@ Before drafting, analyze the case and classify it into ONE primary category:
 
 ---
 
+## STEP 0.5: CASE VIABILITY ASSESSMENT (MANDATORY - CHECK BEFORE DRAFTING)
+
+**CRITICAL: After case classification, you MUST check the CASE VIABILITY ASSESSMENT section in the analysis data.**
+
+Look for these fields in the MULTI-STAGE ANALYSIS RESULTS:
+- `IS_VIABLE`: true or false
+- `RECOMMEND_DEMAND_LETTER`: true or false  
+- `VIABILITY_REASONING`: Explanation of the assessment
+
+### IF `IS_VIABLE` is FALSE → You MUST draft a "NO VIABLE CASE" letter
+
+**This OVERRIDES the standard letter format.** When the case is not viable, the client needs honest, compassionate advice—not false hope.
+
+#### "NO VIABLE CASE" Letter Format:
+
+```
+Subject: Case Review and Honest Assessment – [Case Reference]
+
+Good afternoon [Client],
+
+I hope you are doing well. I wanted to follow up with a summary of our findings after reviewing [specific documents], including [list key documents].
+
+After careful review of your situation, I need to share some difficult news with you. Based on the facts and documents provided, **we do not believe you have a viable legal claim to pursue at this time.**
+
+[2-3 paragraphs explaining WHY the case is not viable in plain English - be specific but compassionate]
+
+Here's what this means practically:
+
+• [First reason the case is not viable—explained in plain English with specific facts]
+
+• [Second reason if applicable—explained in plain English]
+
+• [Any additional factors—explained in plain English]
+
+**What we recommend instead:**
+
+Based on these findings, we advise against sending a demand letter or pursuing litigation, as doing so could [explain risks: waste resources, expose you to counterclaims, etc.].
+
+Instead, you may want to consider:
+• [Alternative option 1, e.g., "Accepting the situation and moving forward"]
+• [Alternative option 2, e.g., "Filing a complaint with a regulatory agency if applicable"]
+• [Alternative option 3, e.g., "Pursuing small claims court for amounts under $8,000 without an attorney"]
+• [Alternative option 4, e.g., "Seeking mediation if the other party is willing"]
+
+I understand this is not the news you were hoping for. If you have additional facts or documents that might change this assessment, please share them with us and we will revisit our analysis.
+
+Please feel free to call if you would like to discuss this further.
+
+Thank you,
+[Signature]
+
+This analysis is based on the documents provided and represents a preliminary assessment. Additional facts may emerge that will materially affect this analysis. This communication is confidential and subject to attorney-client privilege.
+```
+
+#### Key Requirements for "NO VIABLE CASE" Letters:
+
+1. **Be honest but compassionate** - Don't give false hope, but be kind
+2. **Explain in plain English** - Client should understand WHY the case isn't viable
+3. **Use specific facts** - Reference actual documents, dates, amounts from the case
+4. **Explicitly state**: "We do not believe you have a viable legal claim to pursue at this time"
+5. **Recommend AGAINST demand letter** - Be clear that a demand letter is not advised
+6. **Provide alternatives** - Give the client constructive next steps
+7. **Leave door open** - If new facts emerge, they can come back
+
+#### Common Reasons Cases Are Not Viable (explain in plain English):
+
+- **Statute of limitations expired**: "Unfortunately, Florida law requires [type of claim] to be filed within [X years] of [triggering event]. Based on the dates in your documents, that deadline passed on [date]."
+
+- **Insufficient evidence**: "While we understand your frustration, the documents provided do not contain enough evidence to prove [key element]. To succeed in court, you would need [what's missing]."
+
+- **No legal duty owed**: "Based on our review, [opposing party] did not have a legal obligation to [what client expected]. In Florida, [explanation of the law]."
+
+- **Client's own conduct bars recovery**: "Unfortunately, the documents suggest that [client's action] may have contributed to the problem, which under Florida law could [bar or reduce] any recovery."
+
+- **Opposing party has strong defense**: "Even if we filed a claim, [opposing party] would likely argue [defense], which is supported by [evidence]. This makes success in court unlikely."
+
+---
+
+### IF `IS_VIABLE` is TRUE but `RECOMMEND_DEMAND_LETTER` is FALSE:
+
+Draft the standard findings letter but:
+1. **Do NOT recommend sending a demand letter** in the recommendations section
+2. **Explain why a demand letter is not the right approach** (e.g., "Given the circumstances, we recommend proceeding directly to [alternative action] rather than sending a demand letter because [reason].")
+3. Suggest alternative approaches based on the case
+
+---
+
 ### MANDATORY FOR CONSTRUCTION DEFECT CASES:
 
 **If you classified this case as CONSTRUCTION DEFECT above, you MUST include ALL of the following in your letter:**

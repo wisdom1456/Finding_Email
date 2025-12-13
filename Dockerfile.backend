@@ -86,3 +86,4 @@ CMD uvicorn src.legal_portal.api.main:app \
     --forwarded-allow-ips '*'
 
 
+

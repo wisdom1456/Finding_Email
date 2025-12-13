@@ -478,3 +478,4 @@ def check_section_numbering(self, text: str, gold: str = None):
 **Recommendation:** Fix tests first, then polish. The foundation is solid and the letter quality is already near target.
 
 
+

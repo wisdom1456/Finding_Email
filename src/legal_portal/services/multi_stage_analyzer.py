@@ -196,7 +196,8 @@ class MultiStageAnalyzer:
                 }
             )
 
-        prompt = f"""You are a precise legal fact extractor. Extract ONLY factual information from the case materials. Do NOT perform legal analysis.
+        prompt = f"""You are a precise legal fact extractor. Extract ONLY factual
+information from the case materials. Do NOT perform legal analysis.
 
 INTAKE INFORMATION:
 {intake_content[:3000]}
@@ -342,7 +343,8 @@ RULES:
 
         Uses moderate-precision AI call (temp=0.2) for classification.
         """
-        prompt = f"""You are a Florida legal issue analyst. Based on the facts extracted, identify ALL applicable legal issues and statutes.
+        prompt = f"""You are a Florida legal issue analyst. Based on the facts
+extracted, identify ALL applicable legal issues and statutes.
 
 CASE TYPE: {case_type or "Unknown"}
 PRELIMINARY ISSUES: {", ".join(legal_issues_hint or fact_matrix.preliminary_issues)}
@@ -456,14 +458,18 @@ IDENTIFIED LEGAL ISSUES:
 
 {statute_context}
 
-For EACH primary issue, provide detailed analysis. Return JSON:
+For EACH primary issue, provide detailed analysis. ALSO evaluate overall case
+viability and whether a demand letter is appropriate.
+
+Return JSON:
 
 {{
   "issue_analyses": [
     {{
       "issue_name": "string (match issue from input)",
       "legal_standard": "Plain English explanation of the law",
-      "fact_application": "How the facts meet or don't meet this standard - BE SPECIFIC with dates/amounts/citations",
+      "fact_application": "How the facts meet or don't meet this standard -
+BE SPECIFIC with dates/amounts/citations",
       "statute_analysis": "Analysis with verified statute citations (if applicable)",
       "case_law_support": "Case law if applicable or null",
       "remedies_available": ["Specific remedy 1", "Specific remedy 2"],
@@ -495,8 +501,31 @@ For EACH primary issue, provide detailed analysis. Return JSON:
   }},
   "overall_case_strength": "strong | moderate | weak",
   "key_strengths": ["Strength 1", "Strength 2"],
-  "key_challenges": ["Challenge 1", "Challenge 2"]
+  "key_challenges": ["Challenge 1", "Challenge 2"],
+  "is_viable": true | false,
+  "viability_reasoning": "Detailed explanation of why the case is or is not
+viable. If not viable, explain what is missing or why the facts do not
+support legal claims.",
+  "recommend_demand_letter": true | false
 }}
+
+CASE VIABILITY CRITERIA:
+Set "is_viable" to FALSE if ANY of the following apply:
+- The facts do not support any recognized legal claim under Florida law
+- The statute of limitations has clearly expired with no tolling arguments
+- The client's own conduct bars recovery (e.g., unclean hands, contributory
+negligence that eliminates recovery)
+- There is insufficient evidence to prove essential elements of any claim
+- The opposing party has clear, unassailable defenses
+- The damages are trivial or unrecoverable (e.g., opposing party is judgment-proof)
+- The case is purely speculative with no concrete harm
+
+Set "recommend_demand_letter" to FALSE if:
+- The case is not viable (is_viable = false)
+- A demand letter would expose the client to counterclaims or liability
+- The situation calls for immediate litigation (e.g., imminent statute of limitations)
+- Settlement is not a realistic option (e.g., criminal matter, regulatory complaint)
+- The opposing party is unresponsive or has already rejected similar demands
 
 CRITICAL INSTRUCTIONS:
 - Use VERIFIED STATUTES PREFERENTIALLY - cite them confidently
@@ -504,6 +533,8 @@ CRITICAL INSTRUCTIONS:
 - Integrate procedural requirements WITHIN substantive analysis
 - Be specific with facts - use actual dates, amounts, names from fact matrix
 - Explain consequences with real-world impact
+- Be HONEST about case viability - do not give false hope. If the case is
+weak or not viable, say so clearly in viability_reasoning.
 
 Return ONLY valid JSON.
 """
@@ -541,6 +572,9 @@ Return ONLY valid JSON.
             overall_case_strength=analysis_data.get("overall_case_strength", "moderate"),
             key_strengths=analysis_data.get("key_strengths", []),
             key_challenges=analysis_data.get("key_challenges", []),
+            is_viable=analysis_data.get("is_viable", True),
+            viability_reasoning=analysis_data.get("viability_reasoning"),
+            recommend_demand_letter=analysis_data.get("recommend_demand_letter", True),
         )
 
     def _determine_letter_structure(

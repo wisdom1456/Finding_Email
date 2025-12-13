@@ -1,0 +1,112 @@
+# Vercel Ignore - Exclude these from deployment to reduce function size
+
+# Development files
+*.pyc
+__pycache__/
+*.pyo
+*.pyd
+.Python
+
+# Testing
+test*/
+tests/
+*.test.py
+pytest.ini
+.pytest_cache/
+
+# Documentation
+docs/
+*.md
+!README.md
+LICENSE
+CHANGELOG*
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Logs and databases
+*.log
+*.sqlite
+*.db
+logs/
+debug_output/
+cost_sessions/
+output/
+validation_output/
+test_data*/
+
+# Memory bank (development only)
+memory-bank/
+
+# Environment files (managed via Vercel dashboard)
+.env
+.env.*
+!.env.example
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Scripts (not needed in production)
+scripts/
+Makefile
+
+# Large corpus files (should be in database or CDN)
+florida_legal_corpus/
+
+# Test data
+test_data/
+test_data_old/
+test_data_v2/
+
+# Reports and temporary files
+reports/
+prompt_versions/
+schemas/
+
+# Docker files (not used on Vercel)
+Dockerfile*
+docker-compose*.yml
+cloudbuild.yaml
+
+# Virtual environments
+venv/
+env/
+.venv/
+
+# Python build artifacts
+build/
+dist/
+*.egg-info/
+
+# Node modules (already in frontend build)
+node_modules/
+
+# Frontend source (already built)
+frontend/src/
+frontend/tests/
+frontend/test-results/
+
+# Keep only the built output
+!frontend/.vercel/output/
+
+# Supabase migrations (run manually)
+supabase/migrations/
+
+# Ignore Python packages directory (will be rebuilt)
+api/packages/
+
+# Deployment docs
+*DEPLOYMENT*.md
+*SETUP*.md
+*GUIDE*.md
+*INSTRUCTIONS*.md
+*FIX*.md
+*README*.md
+!README.md
+

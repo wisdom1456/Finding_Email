@@ -1,42 +1,47 @@
-# Unified Requirements for Legal Document Analysis Portal
-# Vercel-optimized: Only essential dependencies for serverless deployment
+# Vercel-Optimized Requirements - MINIMAL for 250 MB limit
+# This file is specifically for the /api serverless function
 
-# Authentication and Security
+# Core FastAPI (Essential)
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+python-multipart==0.0.9
+
+# Authentication & Security (Essential)
 PyJWT==2.8.0
-bcrypt==4.1.2
+python-jose[cryptography]==3.3.0
 
-# API Integration
-requests>=2.31.0
-openai>=1.3.0
-tiktoken>=0.5.1
+# Supabase Client (Essential)
+supabase==2.3.4
+httpx==0.26.0
 
-# Configuration and Data Management
-python-dotenv>=1.0.0
-pydantic>=2.0.0
-pydantic-settings>=2.0.0
-PyYAML>=6.0
+# OpenAI (Essential for AI features)
+openai==1.10.0
 
-# Document Processing (REQUIRED for Clio import and document upload)
-python-docx>=1.1.0
-PyMuPDF>=1.23.0
-Pillow>=10.0.0
-PyPDF2>=3.0.0
+# Configuration (Essential)
+python-dotenv==1.0.1
+pydantic==2.5.3
+pydantic-settings==2.1.0
 
-# Document Output (REQUIRED for analysis results)
-html2text>=2020.1.16
+# Rate Limiting (Essential)
+slowapi==0.1.9
 
-# Utility Libraries
-tenacity>=8.2.3
+# SSE for streaming (Essential)
+sse-starlette==2.0.0
 
-# FastAPI Backend
-fastapi>=0.100.0
-uvicorn>=0.20.0
-python-multipart>=0.0.6
-supabase>=2.0.0
-slowapi>=0.1.9
+# Lightweight utilities (Essential)
+tenacity==8.2.3
+PyYAML==6.0.1
 
-# SSE (Server-Sent Events) support for real-time progress
-sse-starlette==2.1.3
+# Document processing - REMOVED heavy packages
+# PyMuPDF - 60 MB (removed, use Supabase Storage extraction)
+# Pillow - 20 MB (removed, use client-side or Supabase)
+# PyPDF2 - 10 MB (removed, use Supabase Storage extraction)
+# python-docx - 5 MB (removed, use Supabase Storage extraction)
 
-# Optional: PDF generation (will gracefully degrade if not available)
-# weasyprint>=60.0 # Requires system dependencies, commented for Vercel compatibility
+# Lightweight text processing only
+html2text==2020.1.16
+
+# Note: Document extraction should be done:
+# 1. Client-side before upload (preferred)
+# 2. Via Supabase Edge Functions (for PDFs)
+# 3. Via separate microservice (for heavy processing)

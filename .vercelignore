@@ -52,8 +52,9 @@ memory-bank/
 .gitignore
 .gitattributes
 
-# Scripts (not needed in production)
-scripts/
+# Scripts (keep vercel_build.sh, exclude others)
+scripts/*
+!scripts/vercel_build.sh
 Makefile
 
 # Large corpus files (should be in database or CDN)

@@ -11,8 +11,8 @@ PyJWT==2.8.0
 python-jose[cryptography]==3.3.0
 
 # Supabase Client (Essential)
-supabase==2.3.4
-httpx==0.26.0
+supabase>=2.0.0
+# httpx version is managed by supabase dependency
 
 # OpenAI (Essential for AI features)
 openai==1.10.0

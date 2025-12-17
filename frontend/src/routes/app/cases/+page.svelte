@@ -123,7 +123,7 @@
 	{/if}
 
 	<!-- Cases List -->
-	<div class="bg-white shadow-card rounded-lg">
+	<div class="bg-white shadow-card rounded-lg animate-fade-in-up">
 		{#if loading}
 			<div class="p-8 text-center">
 				<div class="inline-block animate-spin rounded-full h-8 w-8 border-2 border-accent border-t-transparent"></div>

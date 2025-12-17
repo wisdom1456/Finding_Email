@@ -115,7 +115,7 @@
 
 	{#if loading}
 		<div class="flex items-center justify-center p-4">
-			<div class="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+			<div class="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-accent"></div>
 			<span class="ml-2 text-sm text-gray-600">Checking connection...</span>
 		</div>
 	{:else if connected}
@@ -159,19 +159,19 @@
 
 			<ul class="text-sm text-gray-600 space-y-2">
 				<li class="flex items-start">
-					<svg class="h-5 w-5 text-blue-500 mr-2 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+					<svg class="h-5 w-5 text-accent mr-2 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
 					</svg>
 					<span>Import client communications and emails</span>
 				</li>
 				<li class="flex items-start">
-					<svg class="h-5 w-5 text-blue-500 mr-2 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+					<svg class="h-5 w-5 text-accent mr-2 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
 					</svg>
 					<span>Access case notes and documents</span>
 				</li>
 				<li class="flex items-start">
-					<svg class="h-5 w-5 text-blue-500 mr-2 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+					<svg class="h-5 w-5 text-accent mr-2 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
 					</svg>
 					<span>Sync matter information automatically</span>
@@ -180,7 +180,7 @@
 
 			<button
 				onclick={connectClio}
-				class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+				class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-accent hover:bg-accent-hover focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent"
 			>
 				<svg class="h-5 w-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 					<path

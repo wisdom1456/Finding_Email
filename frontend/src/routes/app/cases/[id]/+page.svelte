@@ -973,7 +973,7 @@
 							type="text"
 							bind:value={editClientName}
 							required
-							class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-accent focus:border-blue-500 sm:text-sm"
+							class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-accent focus:border-accent sm:text-sm"
 						/>
 					</div>
 
@@ -985,7 +985,7 @@
 							id="edit-reference-number"
 							type="text"
 							bind:value={editReferenceNumber}
-							class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-accent focus:border-blue-500 sm:text-sm"
+							class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-accent focus:border-accent sm:text-sm"
 						/>
 					</div>
 
@@ -997,7 +997,7 @@
 							id="edit-description"
 							bind:value={editDescription}
 							rows="3"
-							class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-accent focus:border-blue-500 sm:text-sm"
+							class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-accent focus:border-accent sm:text-sm"
 						></textarea>
 					</div>
 
@@ -1053,8 +1053,8 @@
 				</div>
 
 				<!-- Practice Area Guidance -->
-				<details class="bg-blue-50 border border-blue-200 rounded-lg">
-			<summary class="px-4 py-3 cursor-pointer text-sm font-medium text-blue-900 hover:bg-blue-100">
+				<details class="bg-accent/10 border border-accent/30 rounded-lg">
+			<summary class="px-4 py-3 cursor-pointer text-sm font-medium text-contrast hover:bg-accent/20">
 				ℹ️ Supported Practice Areas (Florida law only)
 			</summary>
 			<div class="px-4 pb-4 text-sm text-gray-700 space-y-3">
@@ -1176,7 +1176,7 @@
 						</svg>
 						<div class="mt-4">
 							<label class="cursor-pointer">
-								<span class="text-accent hover:text-blue-500 font-medium">Click to upload</span>
+								<span class="text-accent hover:text-accent-hover font-medium">Click to upload</span>
 								<span class="text-gray-600"> or drag and drop</span>
 								<input
 									type="file"
@@ -1231,7 +1231,7 @@
 									</p>
 								</div>
 								{#if index === intakeFormIndex}
-									<span class="px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
+									<span class="px-2 py-1 text-xs font-semibold rounded-full bg-accent/20 text-contrast">
 										INTAKE FORM
 									</span>
 								{/if}
@@ -1372,7 +1372,7 @@
 													</span>
 												{/if}
 											</div>
-											<p class="text-sm {isVideoAudioFile(doc.file_name) ? 'text-red-700 font-semibold' : doc.metadata?.is_intake_form ? 'text-blue-700' : doc.metadata?.is_intake_candidate ? 'text-yellow-700' : 'text-gray-500'}">
+											<p class="text-sm {isVideoAudioFile(doc.file_name) ? 'text-red-700 font-semibold' : doc.metadata?.is_intake_form ? 'text-accent' : doc.metadata?.is_intake_candidate ? 'text-yellow-700' : 'text-gray-500'}">
 												{formatFileSize(doc.file_size)} • {doc.file_type}
 												{#if isVideoAudioFile(doc.file_name)}
 													• Video/audio files are excluded from analysis
@@ -1388,7 +1388,7 @@
 														e.stopPropagation();
 														promoteToIntakeForm(doc.id);
 													}}
-													class="mt-2 text-xs text-accent hover:text-blue-800 hover:underline font-medium"
+													class="mt-2 text-xs text-accent hover:text-accent-hover hover:underline font-medium"
 												>
 													✓ Use as Primary Intake
 												</button>
@@ -1821,7 +1821,7 @@
 									</span>
 								{/if}
 								{#if doc.metadata?.is_intake_form}
-									<span class="px-2 py-0.5 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
+									<span class="px-2 py-0.5 text-xs font-semibold rounded-full bg-accent/20 text-contrast">
 										CURRENT
 									</span>
 								{/if}

@@ -215,7 +215,7 @@
 <div class="space-y-6">
 	<!-- Header -->
 	<div>
-		<a href="/app/cases/{caseId}" class="text-blue-600 hover:text-blue-800 flex items-center mb-4">
+		<a href="/app/cases/{caseId}" class="text-accent hover:text-accent-hover flex items-center mb-4">
 			← Back to Case
 		</a>
 		<h2 class="text-2xl font-bold leading-7 text-gray-900 sm:text-3xl">Review Intake Form</h2>
@@ -226,7 +226,7 @@
 
 	{#if loading}
 		<div class="flex items-center justify-center p-8">
-			<div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+			<div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-accent"></div>
 			<span class="ml-2 text-gray-600">Loading intake data...</span>
 		</div>
 	{:else}
@@ -250,7 +250,7 @@
 					</svg>
 					<div class="mt-4">
 						<label class="cursor-pointer">
-							<span class="text-blue-600 hover:text-blue-500 font-medium">Upload intake form</span>
+							<span class="text-accent hover:text-accent-hover font-medium">Upload intake form</span>
 							<input
 								type="file"
 								accept=".pdf,.docx,.doc,.txt"
@@ -264,7 +264,7 @@
 				</div>
 				{#if processing}
 					<div class="mt-4 flex items-center justify-center">
-						<div class="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+						<div class="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-accent"></div>
 						<span class="ml-2 text-sm text-gray-600">Processing intake form...</span>
 					</div>
 				{/if}
@@ -282,7 +282,7 @@
 						type="text"
 						bind:value={clientName}
 						required
-						class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+						class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-accent focus:border-accent sm:text-sm"
 						placeholder="John Doe"
 					/>
 				</div>
@@ -294,12 +294,12 @@
 				<p class="text-sm text-gray-600 mb-4">Select all relevant practice areas for this case:</p>
 				<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
 					{#each availablePracticeAreas as area}
-						<label class="flex items-center p-3 border rounded-lg cursor-pointer hover:bg-gray-50 {selectedPracticeAreas.includes(area) ? 'border-blue-500 bg-blue-50' : 'border-gray-200'}">
+						<label class="flex items-center p-3 border rounded-lg cursor-pointer hover:bg-gray-50 {selectedPracticeAreas.includes(area) ? 'border-accent bg-accent/10' : 'border-gray-200'}">
 							<input
 								type="checkbox"
 								checked={selectedPracticeAreas.includes(area)}
 								onchange={() => togglePracticeArea(area)}
-								class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+								class="h-4 w-4 text-accent focus:ring-accent border-gray-300 rounded"
 							/>
 							<span class="ml-2 text-sm text-gray-900">{area}</span>
 						</label>
@@ -313,7 +313,7 @@
 					<h3 class="text-lg font-medium text-gray-900">Questions & Answers</h3>
 					<button
 						onclick={addQAPair}
-						class="inline-flex items-center px-3 py-1.5 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
+						class="inline-flex items-center px-3 py-1.5 border border-transparent text-sm font-medium rounded-md text-white bg-accent hover:bg-accent-hover"
 					>
 						<svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
@@ -348,7 +348,7 @@
 									<input
 										type="text"
 										bind:value={pair.question}
-										class="block w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+										class="block w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-accent focus:border-accent"
 										placeholder="Enter question..."
 									/>
 								</div>
@@ -357,7 +357,7 @@
 									<textarea
 										bind:value={pair.answer}
 										rows="3"
-										class="block w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+										class="block w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-accent focus:border-accent"
 										placeholder="Enter answer..."
 									></textarea>
 								</div>

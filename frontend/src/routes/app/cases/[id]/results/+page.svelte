@@ -289,7 +289,7 @@
 					<span class="text-xs text-gray-500">AI Models:</span>
 					<div class="flex gap-2 flex-wrap">
 						{#if modelsUsed.document_analysis}
-							<span class="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200" title="Document Analysis">
+							<span class="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-accent/10 text-accent border border-accent/30" title="Document Analysis">
 								<svg class="h-3 w-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
 								</svg>
@@ -324,7 +324,7 @@
 				<button
 					class={`py-4 px-1 border-b-2 text-sm font-medium ${
 						activeTab === 'analysis'
-							? 'border-blue-500 text-blue-600'
+							? 'border-accent text-accent'
 							: 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
 					}`}
 					onclick={() => (activeTab = 'analysis')}
@@ -334,7 +334,7 @@
 				<button
 					class={`py-4 px-1 border-b-2 text-sm font-medium ${
 						activeTab === 'documents'
-							? 'border-blue-500 text-blue-600'
+							? 'border-accent text-accent'
 							: 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
 					}`}
 					onclick={() => (activeTab = 'documents')}
@@ -344,7 +344,7 @@
 				<button
 					class={`py-4 px-1 border-b-2 text-sm font-medium ${
 						activeTab === 'letters'
-							? 'border-blue-500 text-blue-600'
+							? 'border-accent text-accent'
 							: 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
 					}`}
 					onclick={() => (activeTab = 'letters')}
@@ -354,7 +354,7 @@
 				<button
 					class={`py-4 px-1 border-b-2 text-sm font-medium ${
 						activeTab === 'chat'
-							? 'border-blue-500 text-blue-600'
+							? 'border-accent text-accent'
 							: 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
 					}`}
 					onclick={() => (activeTab = 'chat')}
@@ -364,7 +364,7 @@
 				<button
 					class={`py-4 px-1 border-b-2 text-sm font-medium ${
 						activeTab === 'quality'
-							? 'border-blue-500 text-blue-600'
+							? 'border-accent text-accent'
 							: 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
 					}`}
 					onclick={() => (activeTab = 'quality')}
@@ -388,7 +388,7 @@
 						{#if results.case_analysis.practice_area}
 							<section>
 								<h3 class="text-lg font-semibold text-gray-900 mb-3">Practice Area</h3>
-								<span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
+								<span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-accent/20 text-contrast">
 									{results.case_analysis.practice_area}
 								</span>
 							</section>
@@ -437,7 +437,7 @@
 								<!-- Clickable Header -->
 								<button
 									onclick={() => toggleDoc(doc.document_name)}
-									class="w-full bg-gradient-to-r from-blue-50 to-blue-100 p-4 border-b border-gray-300 hover:from-blue-100 hover:to-blue-150 transition-colors text-left"
+									class="w-full bg-gradient-to-r from-accent/10 to-accent/20 p-4 border-b border-gray-300 hover:from-accent/20 hover:to-accent/30 transition-colors text-left"
 								>
 									<div class="flex items-center justify-between">
 										<div class="flex-1">
@@ -498,10 +498,10 @@
 									<!-- Key Quotes (Evidence) -->
 									{#if doc.key_quotes && doc.key_quotes.length > 0}
 										<div>
-											<p class="text-xs font-semibold text-blue-800 uppercase mb-2">Evidence Quotes</p>
+											<p class="text-xs font-semibold text-accent uppercase mb-2">Evidence Quotes</p>
 											<div class="space-y-2">
 												{#each doc.key_quotes as quote}
-													<blockquote class="border-l-4 border-blue-500 pl-4 py-2 bg-blue-50 rounded-r italic text-sm text-gray-800">
+													<blockquote class="border-l-4 border-accent pl-4 py-2 bg-accent/10 rounded-r italic text-sm text-gray-800">
 														"{quote}"
 													</blockquote>
 												{/each}
@@ -610,7 +610,7 @@
 								<p class="text-sm text-gray-600">Generate a client-ready findings letter on demand.</p>
 							</div>
 							<button
-								class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+								class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-accent hover:bg-accent-hover focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent"
 								onclick={generateFindingsLetter}
 								disabled={generatingFindings}
 							>
@@ -621,7 +621,7 @@
 							<div class="space-y-4">
 								<div class="flex justify-end">
 									<button
-										class="inline-flex items-center px-3 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+										class="inline-flex items-center px-3 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent"
 										onclick={() => downloadLetter(findingsLetter!, `findings-letter-${caseId}.html`)}
 									>
 										Download
@@ -643,7 +643,7 @@
 								<label class="block text-sm font-medium text-gray-700 mb-1">Opposing Party</label>
 								<select
 									bind:value={selectedParty}
-									class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm"
+									class="block w-full rounded-md border-gray-300 shadow-sm focus:border-accent focus:ring-accent text-sm"
 								>
 									<option value="">Select party</option>
 									{#each opposingParties as party}
@@ -656,7 +656,7 @@
 							<div class="flex gap-2">
 								<input
 									type="number"
-									class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm"
+									class="block w-full rounded-md border-gray-300 shadow-sm focus:border-accent focus:ring-accent text-sm"
 									min="0"
 									step="100"
 									bind:value={demandAmount}
@@ -672,15 +672,15 @@
 								</button>
 							</div>
 							{#if calculationReasoning}
-								<div class="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-md">
-									<p class="text-sm text-blue-900 font-medium">AI Calculation:</p>
-									<p class="text-sm text-blue-800 mt-1">{calculationReasoning}</p>
+								<div class="mt-2 p-3 bg-accent/10 border border-accent/30 rounded-md">
+									<p class="text-sm text-contrast font-medium">AI Calculation:</p>
+									<p class="text-sm text-gray-700 mt-1">{calculationReasoning}</p>
 									{#if calculationBreakdown && calculationBreakdown.length > 0}
 										<details class="mt-2">
-											<summary class="text-xs text-blue-700 cursor-pointer hover:text-blue-900">View breakdown</summary>
+											<summary class="text-xs text-accent cursor-pointer hover:text-accent-hover">View breakdown</summary>
 											<ul class="mt-2 space-y-1">
 												{#each calculationBreakdown as item}
-													<li class="text-xs text-blue-800 flex justify-between">
+													<li class="text-xs text-gray-700 flex justify-between">
 														<span>{item.description}</span>
 														<span class="font-mono">${item.amount.toLocaleString()}</span>
 													</li>
@@ -694,7 +694,7 @@
 							<div>
 								<label class="block text-sm font-medium text-gray-700 mb-1">Response Deadline</label>
 								<select
-									class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm"
+									class="block w-full rounded-md border-gray-300 shadow-sm focus:border-accent focus:ring-accent text-sm"
 									bind:value={demandDeadline}
 								>
 									<option>10 business days</option>
@@ -718,7 +718,7 @@
 									<input
 										type="text"
 										bind:value={attorneyName}
-										class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm"
+										class="block w-full rounded-md border-gray-300 shadow-sm focus:border-accent focus:ring-accent text-sm"
 										placeholder="Attorney name"
 									/>
 								</div>
@@ -732,7 +732,7 @@
 									<input
 										type="text"
 										bind:value={firmName}
-										class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm"
+										class="block w-full rounded-md border-gray-300 shadow-sm focus:border-accent focus:ring-accent text-sm"
 										placeholder="Firm name"
 									/>
 								</div>
@@ -746,7 +746,7 @@
 									<input
 										type="tel"
 										bind:value={contactPhone}
-										class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm"
+										class="block w-full rounded-md border-gray-300 shadow-sm focus:border-accent focus:ring-accent text-sm"
 										placeholder="Phone number"
 									/>
 								</div>
@@ -760,7 +760,7 @@
 									<input
 										type="email"
 										bind:value={contactEmail}
-										class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm"
+										class="block w-full rounded-md border-gray-300 shadow-sm focus:border-accent focus:ring-accent text-sm"
 										placeholder="Email address"
 									/>
 								</div>
@@ -771,7 +771,7 @@
 							<div>
 								<label class="block text-sm font-medium text-gray-700 mb-1">Specific Demands (one per line)</label>
 								<textarea
-									class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm"
+									class="block w-full rounded-md border-gray-300 shadow-sm focus:border-accent focus:ring-accent text-sm"
 									rows="4"
 									bind:value={specificDemands}
 								></textarea>
@@ -779,7 +779,7 @@
 						</div>
 						<div class="mt-4 flex justify-end">
 							<button
-								class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+								class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-accent hover:bg-accent-hover focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent"
 								onclick={generateDemandLetter}
 								disabled={generatingDemand || !selectedParty}
 							>
@@ -794,7 +794,7 @@
 										<div class="flex items-center justify-between mb-3">
 											<h4 class="font-semibold text-gray-900">Demand Letter to {partyName}</h4>
 											<button
-												class="inline-flex items-center px-3 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+												class="inline-flex items-center px-3 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent"
 												onclick={() => downloadLetter(letterHtml, `demand-letter-${partyName}.html`)}
 											>
 												Download
@@ -821,7 +821,7 @@
 						{#each chatMessages as message}
 							<div class="space-y-2">
 								<div class="flex justify-end">
-									<div class="bg-blue-600 text-white rounded-lg px-4 py-2 max-w-[70%]">{message.user}</div>
+									<div class="bg-accent text-white rounded-lg px-4 py-2 max-w-[70%]">{message.user}</div>
 								</div>
 								<div class="flex justify-start">
 									<div class="bg-white border rounded-lg px-4 py-2 max-w-[70%] text-gray-800 chat-prose">
@@ -838,7 +838,7 @@
 				</div>
 				<div class="flex gap-2">
 					<input
-						class="flex-1 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm"
+						class="flex-1 rounded-md border-gray-300 shadow-sm focus:border-accent focus:ring-accent text-sm"
 						type="text"
 						placeholder="Ask about this case..."
 						bind:value={chatInput}
@@ -846,7 +846,7 @@
 						disabled={sendingMessage}
 					/>
 					<button
-						class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+						class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-accent hover:bg-accent-hover focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent"
 						onclick={sendChatMessage}
 						disabled={sendingMessage || !chatInput.trim()}
 					>
@@ -907,7 +907,7 @@
 										<div class="flex items-center gap-2 flex-wrap">
 											<button
 												onclick={() => viewDocument(item.document)}
-												class="font-semibold text-blue-600 hover:text-blue-800 hover:underline text-left truncate"
+												class="font-semibold text-accent hover:text-accent-hover hover:underline text-left truncate"
 												title="Click to view document"
 											>
 												{item.document}
@@ -1000,7 +1000,7 @@
 					<p class="text-gray-500 text-sm">PDF viewer: Download the document to view it.</p>
 					<a 
 						href={`/api/documents/${viewingDocument.id}/download`}
-						class="mt-4 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
+						class="mt-4 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-accent hover:bg-accent-hover"
 						download
 					>
 						Download PDF
@@ -1016,7 +1016,7 @@
 			<div class="flex justify-end space-x-3 px-6 py-4 border-t border-gray-200">
 				<button
 					onclick={closeDocumentViewer}
-					class="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+					class="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent"
 				>
 					Close
 				</button>

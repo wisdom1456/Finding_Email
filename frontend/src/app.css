@@ -90,7 +90,10 @@ body {
   font-weight: 400;
   line-height: var(--leading-normal);
   color: var(--color-contrast);
-  background-color: #F8FAFB;
+  background: 
+    radial-gradient(ellipse at top left, rgba(90, 183, 163, 0.03) 0%, transparent 50%),
+    radial-gradient(ellipse at bottom right, rgba(57, 66, 142, 0.03) 0%, transparent 50%),
+    #F8FAFB;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -239,4 +242,66 @@ button {
 .cursor-progress *,
 .cursor-not-allowed * {
   cursor: inherit !important;
+}
+
+/* ============================================
+   Animation Utilities (Phase 1: Non-breaking)
+   ============================================ */
+
+/* Fade in up animation */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in-up {
+  animation: fadeInUp 0.4s ease-out forwards;
+  opacity: 0;
+}
+
+/* Stagger delay utilities for list animations */
+.stagger-1 { animation-delay: 0ms; }
+.stagger-2 { animation-delay: 50ms; }
+.stagger-3 { animation-delay: 100ms; }
+.stagger-4 { animation-delay: 150ms; }
+.stagger-5 { animation-delay: 200ms; }
+.stagger-6 { animation-delay: 250ms; }
+.stagger-7 { animation-delay: 300ms; }
+.stagger-8 { animation-delay: 350ms; }
+
+/* Card hover enhancement */
+.card-hover {
+  transition: all 0.2s ease-out;
+}
+
+.card-hover:hover {
+  box-shadow: var(--shadow-lg);
+  transform: translateY(-2px);
+}
+
+/* Button active state (press effect) */
+.btn-active:active {
+  transform: scale(0.98);
+}
+
+/* Respect user's motion preferences */
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-in-up {
+    animation: none;
+    opacity: 1;
+  }
+  
+  .card-hover:hover {
+    transform: none;
+  }
+  
+  .btn-active:active {
+    transform: none;
+  }
 }

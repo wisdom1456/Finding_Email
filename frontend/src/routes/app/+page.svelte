@@ -88,7 +88,7 @@
 
 	<!-- Statistics Cards -->
 	<div class="grid grid-cols-1 gap-5 sm:grid-cols-3">
-		<div class="bg-white overflow-hidden shadow-card rounded-lg">
+		<div class="bg-white overflow-hidden shadow-card rounded-lg card-hover animate-fade-in-up stagger-1">
 			<div class="p-5">
 				<div class="flex items-center">
 					<div class="flex-shrink-0 p-3 bg-contrast/5 rounded-lg">
@@ -104,7 +104,7 @@
 			</div>
 		</div>
 
-		<div class="bg-white overflow-hidden shadow-card rounded-lg">
+		<div class="bg-white overflow-hidden shadow-card rounded-lg card-hover animate-fade-in-up stagger-2">
 			<div class="p-5">
 				<div class="flex items-center">
 					<div class="flex-shrink-0 p-3 bg-contrast-light/10 rounded-lg">
@@ -120,7 +120,7 @@
 			</div>
 		</div>
 
-		<div class="bg-white overflow-hidden shadow-card rounded-lg">
+		<div class="bg-white overflow-hidden shadow-card rounded-lg card-hover animate-fade-in-up stagger-3">
 			<div class="p-5">
 				<div class="flex items-center">
 					<div class="flex-shrink-0 p-3 bg-accent/10 rounded-lg">
@@ -138,7 +138,7 @@
 	</div>
 
 	<!-- Recent Cases -->
-	<div class="bg-white shadow-card rounded-lg">
+	<div class="bg-white shadow-card rounded-lg animate-fade-in-up stagger-4">
 		<div class="px-5 py-4 border-b border-gray-100">
 			<h2 class="text-lg font-heading font-semibold text-contrast">Recent Cases</h2>
 		</div>

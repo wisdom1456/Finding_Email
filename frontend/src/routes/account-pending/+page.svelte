@@ -43,8 +43,8 @@
 			</p>
 		</div>
 
-		<div class="bg-blue-50 border border-blue-200 rounded-md p-4 mb-6">
-			<p class="text-sm text-blue-800">
+		<div class="bg-accent/10 border border-accent/30 rounded-md p-4 mb-6">
+			<p class="text-sm text-contrast">
 				You will receive an email notification once your account has been approved. This typically
 				takes 1-2 business days.
 			</p>

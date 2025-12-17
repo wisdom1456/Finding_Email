@@ -164,7 +164,7 @@ test.describe('Button Interactions - Clio Integration', () => {
 		
 		if (await connectButton.isVisible()) {
 			// Should have proper styling
-			await expect(connectButton).toHaveClass(/bg-blue-600/);
+			await expect(connectButton).toHaveClass(/bg-accent/);
 			await expect(connectButton).not.toBeDisabled();
 			
 			// Should have icon

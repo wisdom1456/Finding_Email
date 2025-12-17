@@ -40,7 +40,8 @@ export default defineConfig({
 			'$app/environment': path.resolve('./src/tests/mocks/$app/environment.ts'),
 			'$app/navigation': path.resolve('./src/tests/mocks/$app/navigation.ts'),
 			'$app/stores': path.resolve('./src/tests/mocks/$app/stores.ts'),
-			'$env/static/public': path.resolve('./src/tests/mocks/$env/static/public.ts')
+			'$env/static/public': path.resolve('./src/tests/mocks/$env/static/public.ts'),
+			'$env/dynamic/public': path.resolve('./src/tests/mocks/$env/dynamic/public.ts')
 		}
 	}
 });

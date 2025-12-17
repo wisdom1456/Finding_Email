@@ -157,12 +157,12 @@
 
 <div class="space-y-6">
 	<!-- Matter Information Card -->
-	<div class="bg-blue-50 border border-blue-200 rounded-lg p-6">
+	<div class="bg-accent/10 border border-accent/30 rounded-lg p-6">
 		<div class="flex items-start justify-between">
 			<div class="flex-1">
 				<div class="flex items-center gap-2 mb-2">
 					<svg
-						class="h-5 w-5 text-blue-600"
+						class="h-5 w-5 text-accent"
 						fill="none"
 						viewBox="0 0 24 24"
 						stroke="currentColor"
@@ -174,38 +174,38 @@
 							d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"
 						/>
 					</svg>
-					<h4 class="text-lg font-medium text-blue-900">Linked to Clio Matter</h4>
+					<h4 class="text-lg font-medium text-contrast">Linked to Clio Matter</h4>
 				</div>
 
 				<div class="space-y-2 text-sm">
 					<div class="flex items-center gap-2">
-						<span class="font-medium text-blue-900">Matter #:</span>
-						<span class="text-blue-700">{matterData.display_number}</span>
+						<span class="font-medium text-contrast">Matter #:</span>
+						<span class="text-accent">{matterData.display_number}</span>
 					</div>
 
 					<div class="flex items-center gap-2">
-						<span class="font-medium text-blue-900">Client:</span>
-						<span class="text-blue-700">{matterData.client_name}</span>
+						<span class="font-medium text-contrast">Client:</span>
+						<span class="text-accent">{matterData.client_name}</span>
 					</div>
 
 					{#if matterData.description}
 						<div class="flex items-start gap-2">
-							<span class="font-medium text-blue-900">Description:</span>
-							<span class="text-blue-700">{matterData.description}</span>
+							<span class="font-medium text-contrast">Description:</span>
+							<span class="text-gray-700">{matterData.description}</span>
 						</div>
 					{/if}
 
 					{#if matterData.practice_area}
 						<div class="flex items-center gap-2">
-							<span class="font-medium text-blue-900">Practice Area:</span>
-							<span class="text-blue-700">{matterData.practice_area}</span>
+							<span class="font-medium text-contrast">Practice Area:</span>
+							<span class="text-gray-700">{matterData.practice_area}</span>
 						</div>
 					{/if}
 
 					<div class="flex items-center gap-2">
-						<span class="font-medium text-blue-900">Status:</span>
+						<span class="font-medium text-contrast">Status:</span>
 						<span
-							class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800"
+							class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-accent/20 text-contrast"
 						>
 							{matterData.status}
 						</span>
@@ -215,8 +215,8 @@
 		</div>
 
 		<!-- Import Summary -->
-		<div class="mt-4 pt-4 border-t border-blue-200">
-			<p class="text-xs text-blue-700 mb-3">
+		<div class="mt-4 pt-4 border-t border-accent/30">
+			<p class="text-xs text-gray-600 mb-3">
 				Imported on {formatDate(matterData.imported_at)}
 			</p>
 
@@ -224,7 +224,7 @@
 				<!-- Communications -->
 				<div class="bg-white rounded-md p-3 text-center">
 					<div class="flex items-center justify-center gap-2 mb-1">
-						<svg class="h-4 w-4 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+						<svg class="h-4 w-4 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor">
 							<path
 								stroke-linecap="round"
 								stroke-linejoin="round"
@@ -232,17 +232,17 @@
 								d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
 							/>
 						</svg>
-						<span class="text-2xl font-bold text-blue-900"
+						<span class="text-2xl font-bold text-contrast"
 							>{matterData.communications_count || 0}</span
 						>
 					</div>
-					<p class="text-xs text-blue-700">Communications</p>
+					<p class="text-xs text-gray-600">Communications</p>
 				</div>
 
 				<!-- Notes -->
 				<div class="bg-white rounded-md p-3 text-center">
 					<div class="flex items-center justify-center gap-2 mb-1">
-						<svg class="h-4 w-4 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+						<svg class="h-4 w-4 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor">
 							<path
 								stroke-linecap="round"
 								stroke-linejoin="round"
@@ -250,15 +250,15 @@
 								d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
 							/>
 						</svg>
-						<span class="text-2xl font-bold text-blue-900">{matterData.notes_count || 0}</span>
+						<span class="text-2xl font-bold text-contrast">{matterData.notes_count || 0}</span>
 					</div>
-					<p class="text-xs text-blue-700">Notes</p>
+					<p class="text-xs text-gray-600">Notes</p>
 				</div>
 
 				<!-- Documents -->
 				<div class="bg-white rounded-md p-3 text-center">
 					<div class="flex items-center justify-center gap-2 mb-1">
-						<svg class="h-4 w-4 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+						<svg class="h-4 w-4 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor">
 							<path
 								stroke-linecap="round"
 								stroke-linejoin="round"
@@ -266,9 +266,9 @@
 								d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"
 							/>
 						</svg>
-						<span class="text-2xl font-bold text-blue-900">{matterData.documents_count || 0}</span>
+						<span class="text-2xl font-bold text-contrast">{matterData.documents_count || 0}</span>
 					</div>
-					<p class="text-xs text-blue-700">Documents</p>
+					<p class="text-xs text-gray-600">Documents</p>
 				</div>
 			</div>
 		</div>
@@ -282,7 +282,7 @@
 				<button
 					onclick={() => (showChangeMatterModal = true)}
 					disabled={changingMatter}
-					class="inline-flex items-center px-4 py-2 border border-blue-300 rounded-md shadow-sm text-sm font-medium text-blue-700 bg-white hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+					class="inline-flex items-center px-4 py-2 border border-accent/50 rounded-md shadow-sm text-sm font-medium text-accent bg-white hover:bg-accent/10 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent disabled:opacity-50 disabled:cursor-not-allowed"
 				>
 					<svg class="-ml-1 mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
 						<path

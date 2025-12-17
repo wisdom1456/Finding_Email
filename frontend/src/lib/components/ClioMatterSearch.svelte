@@ -330,12 +330,12 @@
 					type="text"
 					bind:value={searchQuery}
 					placeholder="Enter at least 3 characters..."
-					class="flex-1 min-w-0 block w-full px-3 py-2 rounded-l-md border border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+					class="flex-1 min-w-0 block w-full px-3 py-2 rounded-l-md border border-gray-300 focus:outline-none focus:ring-accent focus:border-accent sm:text-sm"
 				/>
 				<button
 					type="submit"
 					disabled={searching || searchQuery.length < 3}
-					class="inline-flex items-center px-4 py-2 border border-l-0 border-gray-300 text-sm font-medium rounded-r-md text-gray-700 bg-gray-50 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+					class="inline-flex items-center px-4 py-2 border border-l-0 border-gray-300 text-sm font-medium rounded-r-md text-gray-700 bg-gray-50 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent disabled:opacity-50 disabled:cursor-not-allowed"
 				>
 					{#if searching}
 						<svg
@@ -410,7 +410,7 @@
 						<div class="flex items-start justify-between">
 							<div class="flex-1 min-w-0">
 								<div class="flex items-center space-x-2">
-									<p class="text-sm font-medium text-blue-600">{matter.display_number}</p>
+									<p class="text-sm font-medium text-accent">{matter.display_number}</p>
 									{#if selectedMatterId === matter.id}
 										<span
 											class="px-2 py-0.5 text-xs font-semibold rounded-full bg-green-100 text-green-800"
@@ -450,7 +450,7 @@
 						<button
 							onclick={() => handleMatterAction(matter.id)}
 							disabled={importingMatterId === matter.id || selectedMatterId === matter.id}
-								class="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+								class="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-accent hover:bg-accent-hover focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent disabled:opacity-50 disabled:cursor-not-allowed"
 						>
 							{#if importingMatterId === matter.id}
 								<svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
@@ -474,7 +474,7 @@
 									{#if $progressStore.percent > 0}
 										<div class="mt-1 w-full bg-gray-200 rounded-full h-1.5">
 											<div 
-												class="bg-blue-600 h-1.5 rounded-full transition-all duration-300"
+												class="bg-accent h-1.5 rounded-full transition-all duration-300"
 												style="width: {$progressStore.percent}%"
 											></div>
 										</div>

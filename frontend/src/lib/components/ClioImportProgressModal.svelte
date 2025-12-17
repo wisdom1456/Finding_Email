@@ -214,7 +214,7 @@
 						</div>
 						<div class="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
 							<div
-								class="bg-blue-600 h-3 rounded-full transition-all duration-300 ease-out"
+								class="bg-accent h-3 rounded-full transition-all duration-300 ease-out"
 								style="width: {getProgressPercentage()}%"
 							></div>
 						</div>
@@ -222,11 +222,11 @@
 
 					<!-- Current Item -->
 					{#if currentStep.item_name}
-						<div class="mb-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
+						<div class="mb-4 p-3 bg-accent/10 rounded-lg border border-accent/30">
 							<div class="flex items-start">
 								<div class="flex-shrink-0">
 									<svg
-										class="h-5 w-5 text-blue-600 animate-spin"
+										class="h-5 w-5 text-accent animate-spin"
 										fill="none"
 										viewBox="0 0 24 24"
 									>
@@ -246,12 +246,12 @@
 									</svg>
 								</div>
 								<div class="ml-3 flex-1">
-									<p class="text-sm font-medium text-blue-900">
+									<p class="text-sm font-medium text-contrast">
 										{#if currentStep.current && currentStep.total}
 											{currentStep.current} of {currentStep.total}
 										{/if}
 									</p>
-									<p class="text-sm text-blue-700 truncate">{currentStep.item_name}</p>
+									<p class="text-sm text-accent truncate">{currentStep.item_name}</p>
 								</div>
 							</div>
 						</div>
@@ -299,8 +299,8 @@
 									</div>
 									<div class="text-gray-600">Communications</div>
 								</div>
-								<div class="bg-blue-50 rounded-lg p-3">
-									<div class="text-2xl font-bold text-blue-600">{importResult.notes_count || 0}</div>
+								<div class="bg-accent/10 rounded-lg p-3">
+									<div class="text-2xl font-bold text-accent">{importResult.notes_count || 0}</div>
 									<div class="text-gray-600">Notes</div>
 								</div>
 								<div class="bg-green-50 rounded-lg p-3">
@@ -358,7 +358,7 @@
 					{#if isComplete && caseId}
 						<a
 							href="/app/cases/{caseId}"
-							class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 font-medium transition-colors"
+							class="px-4 py-2 bg-accent text-white rounded-md hover:bg-accent-hover font-medium transition-colors"
 						>
 							View Case
 						</a>

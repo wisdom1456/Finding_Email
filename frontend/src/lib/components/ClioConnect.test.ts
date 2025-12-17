@@ -56,7 +56,7 @@ describe('ClioConnect', () => {
 
 		const connectButton = screen.getByRole('button', { name: /connect to clio/i });
 		expect(connectButton).toBeInTheDocument();
-		expect(connectButton).toHaveClass('bg-blue-600');
+		expect(connectButton).toHaveClass('bg-accent');
 	});
 
 	it('connect button redirects to OAuth flow', async () => {

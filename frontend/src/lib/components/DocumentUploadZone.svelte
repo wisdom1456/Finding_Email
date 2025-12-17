@@ -77,7 +77,7 @@
 
 <div
 	class="p-8 border-2 border-dashed rounded-lg transition-colors cursor-pointer
-		{dragActive ? 'border-blue-500 bg-blue-50' : 'border-gray-300 bg-gray-50'}
+		{dragActive ? 'border-accent bg-accent/10' : 'border-gray-300 bg-gray-50'}
 		{disabled ? 'opacity-50 cursor-not-allowed' : 'hover:border-gray-400'}"
 	ondrop={handleDrop}
 	ondragover={handleDragOver}
@@ -102,7 +102,7 @@
 			/>
 		</svg>
 		<div class="mt-4">
-			<span class="text-blue-600 hover:text-blue-500 font-medium">Click to upload</span>
+			<span class="text-accent hover:text-accent-hover font-medium">Click to upload</span>
 			<span class="text-gray-600"> or drag and drop</span>
 			<input
 				bind:this={fileInput}

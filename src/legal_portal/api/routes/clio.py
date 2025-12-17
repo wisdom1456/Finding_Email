@@ -74,6 +74,40 @@ class ClioImportResponse(BaseModel):
 
 
 # ===== OAuth Flow =====
+
+
+def get_clio_redirect_uri(request: Request) -> str:
+    """Get consistent Clio redirect URI.
+
+    Uses CLIO_PRODUCTION_URL if set (recommended for production),
+    otherwise falls back to dynamic URL detection.
+
+    This ensures all OAuth flows use the same redirect URI that's
+    registered in Clio's developer console.
+    """
+    import os
+
+    # First priority: explicit production URL (recommended)
+    production_url = os.getenv("CLIO_PRODUCTION_URL")
+    if production_url:
+        # Ensure no trailing slash and append callback path
+        production_url = production_url.rstrip("/")
+        return f"{production_url}/api/clio/callback"
+
+    # Second priority: CLIO_REDIRECT_URI environment variable
+    explicit_redirect = os.getenv("CLIO_REDIRECT_URI")
+    if explicit_redirect:
+        return explicit_redirect
+
+    # Fallback: dynamic detection (may cause issues with preview deployments)
+    host = request.headers.get("host", "127.0.0.1:8000")
+    if "localhost" in host:
+        host = host.replace("localhost", "127.0.0.1")
+
+    protocol = "https" if "vercel" in host or request.headers.get("x-forwarded-proto") == "https" else "http"
+    return f"{protocol}://{host}/api/clio/callback"
+
+
 @router.get("/authorize")
 async def authorize_clio(
     request: Request,
@@ -93,17 +127,10 @@ async def authorize_clio(
 
         user_id = response.user.id
 
-        # Use 127.0.0.1 instead of localhost (Clio preference)
-        host = request.headers.get("host", "127.0.0.1:8000")
-        if "localhost" in host:
-            host = host.replace("localhost", "127.0.0.1")
+        # Get consistent redirect URI
+        redirect_uri = get_clio_redirect_uri(request)
 
-        protocol = (
-            "https" if "vercel" in host or request.headers.get("x-forwarded-proto") == "https" else "http"
-        )
-        redirect_uri = f"{protocol}://{host}/api/clio/callback"
-
-        # Initialize auth service with dynamic redirect
+        # Initialize auth service with the redirect URI
         auth_service = ClioAuthService(redirect_uri=redirect_uri)
 
         # Generate state with user_id for verification
@@ -139,8 +166,12 @@ async def clio_callback(
 
         user_id = state.split("user:")[1]
 
-        # Exchange code for tokens
-        auth_service = ClioAuthService()
+        # Get the same redirect URI used in /authorize
+        # This is critical - Clio requires the redirect_uri to match exactly
+        redirect_uri = get_clio_redirect_uri(request)
+
+        # Exchange code for tokens using the same redirect URI
+        auth_service = ClioAuthService(redirect_uri=redirect_uri)
         tokens = auth_service.handle_oauth_callback(code)
 
         # Store tokens in Supabase
@@ -158,13 +189,14 @@ async def clio_callback(
         if not result.data:
             raise HTTPException(status_code=500, detail="Failed to store tokens")
 
-        # Determine frontend URL from request or environment
+        # Determine frontend URL - use production URL for consistency
         import os
+        from urllib.parse import quote
 
-        # Check for Vercel URL first, then FRONTEND_URL, then default
-        vercel_url = os.getenv("VERCEL_URL")
-        if vercel_url:
-            frontend_url = f"https://{vercel_url}"
+        # Priority: CLIO_PRODUCTION_URL > FRONTEND_URL > fallback
+        production_url = os.getenv("CLIO_PRODUCTION_URL")
+        if production_url:
+            frontend_url = production_url.rstrip("/")
         else:
             frontend_url = os.getenv("FRONTEND_URL", "http://127.0.0.1:5173")
 
@@ -175,14 +207,16 @@ async def clio_callback(
     except Exception as e:
         # Redirect to frontend with error
         import os
+        from urllib.parse import quote
 
-        # Check for Vercel URL first, then FRONTEND_URL, then default
-        vercel_url = os.getenv("VERCEL_URL")
-        if vercel_url:
-            frontend_url = f"https://{vercel_url}"
+        # Priority: CLIO_PRODUCTION_URL > FRONTEND_URL > fallback
+        production_url = os.getenv("CLIO_PRODUCTION_URL")
+        if production_url:
+            frontend_url = production_url.rstrip("/")
         else:
             frontend_url = os.getenv("FRONTEND_URL", "http://127.0.0.1:5173")
-        error_message = str(e)
+
+        error_message = quote(str(e))
         redirect_url = f"{frontend_url}/app/cases?clio_error={error_message}"
         return RedirectResponse(url=redirect_url)
 

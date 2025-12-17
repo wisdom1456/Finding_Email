@@ -30,17 +30,10 @@
 			if (error) throw error;
 
 			if (data.user) {
-				// Create profile
-				const { error: profileError } = await supabase.from('profiles').insert({
-					id: data.user.id,
-					email: data.user.email!,
-					full_name: fullName
-				});
-
-				if (profileError) throw profileError;
-
-				successMessage = 'Account created successfully! Redirecting...';
-				setTimeout(() => goto('/app'), 2000);
+				// Profile is created automatically by database trigger (handle_new_user)
+				// No need to manually insert - just redirect
+				successMessage = 'Account created! Please check your email to verify, then log in.';
+				setTimeout(() => goto('/login'), 3000);
 			}
 		} catch (error: any) {
 			errorMessage = error.message || 'An error occurred during registration';

@@ -3,14 +3,43 @@
 import io
 from typing import Optional, Tuple
 
-import fitz  # PyMuPDF
 import requests
-from docx import Document
 from legal_portal.services.file_compression_service import get_compression_service
 from legal_portal.utils.compression_utils import format_file_size
 from legal_portal.utils.logging_config import get_module_logger
 
 logger = get_module_logger(__name__)
+
+# Conditional imports for PDF extraction
+# Try pypdf first (lightweight, works on Vercel), then fitz (PyMuPDF, better quality)
+PYPDF_AVAILABLE = False
+FITZ_AVAILABLE = False
+
+try:
+    from pypdf import PdfReader
+
+    PYPDF_AVAILABLE = True
+    logger.debug("pypdf available for PDF extraction")
+except ImportError:
+    logger.debug("pypdf not available")
+
+try:
+    import fitz  # PyMuPDF
+
+    FITZ_AVAILABLE = True
+    logger.debug("PyMuPDF (fitz) available for PDF extraction")
+except ImportError:
+    logger.debug("PyMuPDF (fitz) not available")
+
+# Conditional import for DOCX
+DOCX_AVAILABLE = False
+try:
+    from docx import Document
+
+    DOCX_AVAILABLE = True
+    logger.debug("python-docx available for DOCX extraction")
+except ImportError:
+    logger.debug("python-docx not available")
 
 
 class DocumentProcessor:
@@ -48,6 +77,8 @@ class DocumentProcessor:
     def extract_text_from_pdf(file_content: bytes) -> str:
         """Extract text from PDF file.
 
+        Uses pypdf (lightweight) or falls back to PyMuPDF (fitz) if available.
+
         Args:
         ----
             file_content: PDF file bytes
@@ -57,19 +88,34 @@ class DocumentProcessor:
             Extracted text
 
         """
-        try:
-            # Open PDF from bytes
-            pdf_document = fitz.open(stream=file_content, filetype="pdf")
+        # Try PyMuPDF first (better quality extraction) if available
+        if FITZ_AVAILABLE:
+            try:
+                pdf_document = fitz.open(stream=file_content, filetype="pdf")
+                text_parts = []
+                for page_num in range(pdf_document.page_count):
+                    page = pdf_document[page_num]
+                    text_parts.append(page.get_text())
+                pdf_document.close()
+                return "\n\n".join(text_parts)
+            except Exception as e:
+                logger.warning(f"PyMuPDF extraction failed, trying pypdf: {e}")
 
-            text_parts = []
-            for page_num in range(pdf_document.page_count):
-                page = pdf_document[page_num]
-                text_parts.append(page.get_text())
+        # Fall back to pypdf (lightweight, works on Vercel)
+        if PYPDF_AVAILABLE:
+            try:
+                reader = PdfReader(io.BytesIO(file_content))
+                text_parts = []
+                for page in reader.pages:
+                    page_text = page.extract_text()
+                    if page_text:
+                        text_parts.append(page_text)
+                return "\n\n".join(text_parts)
+            except Exception as e:
+                raise Exception(f"Failed to extract text from PDF with pypdf: {str(e)}") from e
 
-            pdf_document.close()
-            return "\n\n".join(text_parts)
-        except Exception as e:
-            raise Exception(f"Failed to extract text from PDF: {str(e)}") from e
+        # No PDF library available
+        raise Exception("No PDF extraction library available (install pypdf or PyMuPDF)")
 
     @staticmethod
     def extract_text_from_docx(file_content: bytes) -> str:
@@ -84,6 +130,9 @@ class DocumentProcessor:
             Extracted text
 
         """
+        if not DOCX_AVAILABLE:
+            raise Exception("python-docx not available for DOCX extraction")
+
         try:
             doc = Document(io.BytesIO(file_content))
             text_parts = [paragraph.text for paragraph in doc.paragraphs]
@@ -138,6 +187,9 @@ class DocumentProcessor:
 
         # PDF
         if content_type == "application/pdf" or extension == "pdf":
+            if not PYPDF_AVAILABLE and not FITZ_AVAILABLE:
+                logger.warning(f"No PDF library available to extract text from {filename}")
+                return None
             return cls.extract_text_from_pdf(file_content)
 
         # DOCX
@@ -145,6 +197,9 @@ class DocumentProcessor:
             content_type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
             or extension == "docx"
         ):
+            if not DOCX_AVAILABLE:
+                logger.warning(f"python-docx not available to extract text from {filename}")
+                return None
             return cls.extract_text_from_docx(file_content)
 
         # Plain text

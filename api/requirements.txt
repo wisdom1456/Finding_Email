@@ -32,16 +32,14 @@ sse-starlette==2.0.0
 tenacity==8.2.3
 PyYAML==6.0.1
 
-# Document processing - REMOVED heavy packages
-# PyMuPDF - 60 MB (removed, use Supabase Storage extraction)
+# Document processing - Lightweight alternatives
+# PyMuPDF - 60 MB (removed, too large)
 # Pillow - 20 MB (removed, use client-side or Supabase)
-# PyPDF2 - 10 MB (removed, use Supabase Storage extraction)
+# PyPDF2 - 10 MB (removed, replaced with pypdf)
 # python-docx - 5 MB (removed, use Supabase Storage extraction)
 
-# Lightweight text processing only
-html2text==2020.1.16
+# Lightweight PDF extraction (pure Python, ~2MB)
+pypdf>=4.0.0
 
-# Note: Document extraction should be done:
-# 1. Client-side before upload (preferred)
-# 2. Via Supabase Edge Functions (for PDFs)
-# 3. Via separate microservice (for heavy processing)
+# Lightweight text processing
+html2text==2020.1.16

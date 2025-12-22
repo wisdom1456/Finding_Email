@@ -4,7 +4,6 @@ import mimetypes
 import os
 import time
 
-import fitz  # PyMuPDF
 from legal_portal.core.data_models import (
     DocumentType,
     FileMetadata,
@@ -15,6 +14,27 @@ from legal_portal.utils.logging_config import get_module_logger
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 logger = get_module_logger(__name__)
+
+# Conditional imports for PDF extraction
+# Try PyMuPDF first (better quality), then pypdf (lightweight, works on Vercel)
+FITZ_AVAILABLE = False
+PYPDF_AVAILABLE = False
+
+try:
+    import fitz  # PyMuPDF
+
+    FITZ_AVAILABLE = True
+    logger.debug("PyMuPDF (fitz) available for PDF extraction")
+except ImportError:
+    logger.debug("PyMuPDF (fitz) not available")
+
+try:
+    from pypdf import PdfReader
+
+    PYPDF_AVAILABLE = True
+    logger.debug("pypdf available for PDF extraction")
+except ImportError:
+    logger.debug("pypdf not available")
 
 
 def _wait_for_file_ready(file_path: str, max_wait_seconds: float = 2.0) -> bool:
@@ -64,13 +84,44 @@ def _wait_for_file_ready(file_path: str, max_wait_seconds: float = 2.0) -> bool:
     retry=retry_if_exception_type((IOError, OSError, FileNotFoundError)),
     reraise=True,
 )
-def _open_pdf_with_retry(file_path: str):
-    """Open PDF with retry logic for filesystem sync issues."""
+def _open_pdf_with_fitz_retry(file_path: str):
+    """Open PDF with retry logic for filesystem sync issues using PyMuPDF."""
+    if not FITZ_AVAILABLE:
+        raise ImportError("PyMuPDF (fitz) not available")
+
     # First ensure file is ready
     if not _wait_for_file_ready(file_path, max_wait_seconds=2.0):
         raise FileNotFoundError(f"File not ready after waiting: {file_path}")
 
     return fitz.open(file_path)
+
+
+def _extract_text_with_fitz(file_path: str) -> str:
+    """Extract text from PDF using PyMuPDF (fitz)."""
+    text_parts = []
+    with _open_pdf_with_fitz_retry(file_path) as doc:
+        for page in doc:
+            text_parts.append(page.get_text())
+    return "".join(text_parts)
+
+
+def _extract_text_with_pypdf(file_path: str) -> str:
+    """Extract text from PDF using pypdf (lightweight)."""
+    if not PYPDF_AVAILABLE:
+        raise ImportError("pypdf not available")
+
+    # First ensure file is ready
+    if not _wait_for_file_ready(file_path, max_wait_seconds=2.0):
+        raise FileNotFoundError(f"File not ready after waiting: {file_path}")
+
+    text_parts = []
+    with open(file_path, "rb") as f:
+        reader = PdfReader(f)
+        for page in reader.pages:
+            page_text = page.extract_text()
+            if page_text:
+                text_parts.append(page_text)
+    return "\n\n".join(text_parts)
 
 
 def detect_pdf_corruption(file_path: str) -> tuple[bool, str]:
@@ -101,20 +152,46 @@ def detect_pdf_corruption(file_path: str) -> tuple[bool, str]:
     except Exception as e:
         return False, f"Cannot read file: {str(e)}"
 
-    # Try opening
-    try:
-        with fitz.open(file_path) as doc:
-            if doc.page_count == 0:
-                return False, "No pages found"
-            return True, "Valid PDF"
-    except Exception as e:
-        return False, f"Cannot open: {str(e)}"
+    # Try opening with available library
+    if FITZ_AVAILABLE:
+        try:
+            with fitz.open(file_path) as doc:
+                if doc.page_count == 0:
+                    return False, "No pages found"
+                return True, "Valid PDF"
+        except Exception as e:
+            return False, f"Cannot open: {str(e)}"
+    elif PYPDF_AVAILABLE:
+        try:
+            with open(file_path, "rb") as f:
+                reader = PdfReader(f)
+                if len(reader.pages) == 0:
+                    return False, "No pages found"
+                return True, "Valid PDF"
+        except Exception as e:
+            return False, f"Cannot open: {str(e)}"
+    else:
+        return False, "No PDF library available"
 
 
 async def process_pdf(
     file_path: str, document_type: DocumentType, original_filename: str
 ) -> ProcessedDocument:
-    """Process a PDF file by extracting its text content using PyMuPDF from a given path."""
+    """Process a PDF file by extracting its text content.
+
+    Uses PyMuPDF (fitz) if available, falls back to pypdf (lightweight).
+
+    Args:
+    ----
+        file_path: Path to the PDF file
+        document_type: Type classification for the document
+        original_filename: Original name of the file
+
+    Returns:
+    -------
+        ProcessedDocument with extracted text content
+
+    """
     logger.debug(f"Processing PDF: {original_filename}")
 
     text_content = ""
@@ -132,21 +209,42 @@ async def process_pdf(
             logger.warning(f"Suspiciously small PDF ({file_size} bytes): {original_filename}")
             text_content = f"Error: PDF file too small to be valid ({file_size} bytes)"
         else:
-            try:
-                with _open_pdf_with_retry(file_path) as doc:
-                    for page in doc:
-                        text_content += page.get_text()
-                logger.info(f"✅ Successfully extracted text from {original_filename}")
-            except Exception as e:
-                logger.error(f"Error processing PDF {original_filename}: {e}")
-                text_content = f"Error extracting text from {original_filename}: {str(e)}"
+            # Try PyMuPDF first (better quality extraction)
+            if FITZ_AVAILABLE:
+                try:
+                    text_content = _extract_text_with_fitz(file_path)
+                    logger.info(f"✅ Successfully extracted text from {original_filename} using PyMuPDF")
+                except Exception as e:
+                    logger.warning(f"PyMuPDF extraction failed for {original_filename}: {e}")
+                    text_content = ""
+
+            # Fall back to pypdf if PyMuPDF failed or unavailable
+            if not text_content and PYPDF_AVAILABLE:
+                try:
+                    text_content = _extract_text_with_pypdf(file_path)
+                    logger.info(f"✅ Successfully extracted text from {original_filename} using pypdf")
+                except Exception as e:
+                    logger.error(f"pypdf extraction failed for {original_filename}: {e}")
+                    text_content = f"Error extracting text from {original_filename}: {str(e)}"
+
+            # No library available or both failed
+            if not text_content:
+                if not FITZ_AVAILABLE and not PYPDF_AVAILABLE:
+                    logger.error(f"No PDF library available to extract text from {original_filename}")
+                    text_content = f"Error: No PDF extraction library available for {original_filename}"
+                elif not text_content.startswith("Error"):
+                    # Extraction returned empty string (possibly scanned PDF)
+                    logger.warning(f"No text extracted from {original_filename} (possibly scanned/image PDF)")
+                    text_content = (
+                        f"[No text content extracted from {original_filename} - may be a scanned/image PDF]"
+                    )
 
     content_type, _ = mimetypes.guess_type(file_path)
 
     # Create proper FileMetadata object with required fields
     file_metadata = FileMetadata(file_name=original_filename, file_type=FileType.PDF, file_size=file_size)
 
-    if text_content.startswith("Error"):
+    if text_content.startswith("Error") or text_content.startswith("[No text"):
         logger.warning(f"⚠️ Created fallback metadata for {original_filename}, size: {file_size}")
     else:
         logger.info(f"✅ Created FileMetadata for {original_filename}, size: {file_size}")

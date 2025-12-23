@@ -457,10 +457,13 @@ async def process_case_documents(
         legal_issue_map = None
         letter_structure = None
 
+        # Always log the multi-stage setting so we can diagnose issues
+        logger.info(f"🔧 Multi-stage analysis setting: USE_MULTI_STAGE_ANALYSIS={settings.use_multi_stage_analysis}")
+        
         if settings.use_multi_stage_analysis:
             logger.info("🔬 Multi-stage analysis enabled - using enhanced 4-stage pipeline")
         else:
-            logger.warning("⚠️ Multi-stage analysis DISABLED (USE_MULTI_STAGE_ANALYSIS=false)")
+            logger.warning("⚠️ Multi-stage analysis DISABLED - letter generation will not be available")
 
             try:
                 statute_service = StatuteRecommendationService()

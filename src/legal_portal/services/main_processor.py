@@ -459,6 +459,8 @@ async def process_case_documents(
 
         if settings.use_multi_stage_analysis:
             logger.info("🔬 Multi-stage analysis enabled - using enhanced 4-stage pipeline")
+        else:
+            logger.warning("⚠️ Multi-stage analysis DISABLED (USE_MULTI_STAGE_ANALYSIS=false)")
 
             try:
                 statute_service = StatuteRecommendationService()
@@ -489,6 +491,12 @@ async def process_case_documents(
             except Exception as e:
                 logger.error(f"Multi-stage analysis failed: {e}", exc_info=True)
                 multi_stage_result = None
+                # Surface the error so it's visible in results
+                if progress_callback:
+                    await progress_callback(
+                        f"⚠️ Advanced analysis failed: {str(e)[:100]}. Basic analysis will be used.",
+                        phase="multi_stage_error",
+                    )
 
         # Derive opposing parties from fact matrix
         opposing_parties: List[Party] = []

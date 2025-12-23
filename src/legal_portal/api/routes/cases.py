@@ -147,7 +147,7 @@ async def create_case(
 
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error creating case: {str(e)}"
-        )
+        ) from e
 
 
 @router.get("", response_model=List[CaseResponse])
@@ -284,9 +284,7 @@ async def delete_case(
 
     """
     try:
-        print("\n🔍 DEBUG delete_case:")
-        print(f"  - Case ID: {case_id}")
-        print(f"  - User ID: {user['id']}")
+        logger.debug("Deleting case", extra={"case_id": case_id, "user_id": user["id"]})
 
         # Verify ownership
         existing = (
@@ -297,7 +295,7 @@ async def delete_case(
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Case not found")
 
         # Get all documents for this case to delete from storage
-        print("  - Fetching documents for storage cleanup...")
+        logger.debug("Fetching documents for storage cleanup", extra={"case_id": case_id})
         docs_response = (
             user_supabase.table("documents").select("storage_path").eq("case_id", case_id).execute()
         )
@@ -305,24 +303,23 @@ async def delete_case(
         # Delete files from storage (use service client)
         if docs_response.data:
             storage_paths = [doc["storage_path"] for doc in docs_response.data]
-            print(f"  - Deleting {len(storage_paths)} files from storage...")
+            logger.debug("Deleting files from storage", extra={"count": len(storage_paths)})
             try:
                 service_supabase.storage.from_("documents").remove(storage_paths)
-                print("  - ✅ Storage files deleted")
+                logger.debug("Storage files deleted successfully")
             except Exception as storage_error:
-                print(f"  - ⚠️  Storage deletion error (continuing): {storage_error}")
+                logger.warning("Storage deletion error (continuing)", extra={"error": str(storage_error)})
 
         # Delete case from database (cascade deletes documents and analysis_results)
-        print("  - Deleting case from database (cascade delete)...")
+        logger.debug("Deleting case from database (cascade delete)")
         user_supabase.table("cases").delete().eq("id", case_id).execute()
 
-        print("  - ✅ Case deleted successfully")
+        logger.info("Case deleted successfully", extra={"case_id": case_id})
         return None
     except HTTPException:
         raise
     except Exception as e:
-        print("\n❌ ERROR in delete_case:")
-        print(f"  - Exception: {str(e)}")
+        logger.error("Error in delete_case", extra={"case_id": case_id, "error": str(e)})
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error deleting case: {str(e)}"
         ) from e
@@ -403,13 +400,18 @@ async def import_clio_documents_helper(
 
     Args:
     ----
+        matter_id: The Clio matter ID to import from
+        case_id: The case ID to import documents into
+        user: Current authenticated user dict
+        clio_client: Initialized Clio API client
+        supabase: Supabase client instance
         progress_manager: Optional ProgressManager instance for SSE updates
         import_id: Unique ID for this import operation (for SSE tracking)
 
     """
     try:
         # Import communications
-        print(f"\n🔍 Fetching communications for matter {matter_id}...")
+        logger.debug("Fetching communications for matter", extra={"matter_id": matter_id})
         if progress_manager and import_id:
             await progress_manager.publish_progress(
                 channel_id=import_id,
@@ -419,10 +421,10 @@ async def import_clio_documents_helper(
                 percent=5,
             )
         communications = await run_in_threadpool(clio_client.get_communications, matter_id, limit=100)
-        print(f"  - Found {len(communications)} communications")
+        logger.debug("Found communications", extra={"count": len(communications)})
 
         # Import notes
-        print(f"🔍 Fetching notes for matter {matter_id}...")
+        logger.debug("Fetching notes for matter", extra={"matter_id": matter_id})
         if progress_manager and import_id:
             await progress_manager.publish_progress(
                 channel_id=import_id,
@@ -432,10 +434,10 @@ async def import_clio_documents_helper(
                 percent=10,
             )
         notes = await run_in_threadpool(clio_client.get_notes, matter_id)
-        print(f"  - Found {len(notes)} notes")
+        logger.debug("Found notes", extra={"count": len(notes)})
 
         # Import documents (metadata only)
-        print(f"🔍 Fetching documents for matter {matter_id}...")
+        logger.debug("Fetching documents for matter", extra={"matter_id": matter_id})
         if progress_manager and import_id:
             await progress_manager.publish_progress(
                 channel_id=import_id,
@@ -445,7 +447,7 @@ async def import_clio_documents_helper(
                 percent=15,
             )
         documents = await run_in_threadpool(clio_client.get_documents, matter_id)
-        print(f"  - Found {len(documents)} documents")
+        logger.debug("Found documents", extra={"count": len(documents)})
 
         comm_success = 0
         note_success = 0
@@ -549,7 +551,7 @@ async def import_clio_documents_helper(
                 errors.append(f"Note {note.get('id', 'unknown')}: {str(e)}")
 
         # Download and process document files
-        print(f"\n📄 Processing {len(documents)} Clio documents...")
+        logger.info("Processing Clio documents", extra={"count": len(documents)})
         total_docs = len(documents)
         for idx, doc in enumerate(documents):
             try:
@@ -567,13 +569,12 @@ async def import_clio_documents_helper(
                 doc_id = doc["id"]
                 doc_name = doc.get("name", "Untitled Document")
 
-                print(f"  - Document: {doc_name} (ID: {doc_id})")
+                logger.debug("Processing document", extra={"doc_name": doc_name, "doc_id": doc_id})
 
                 # Clio doesn't provide download URLs in the documents list
                 # We need to construct the download URL using the document ID
                 # Format: /api/v4/documents/{id}/download.json
                 doc_url = f"https://app.clio.com/api/v4/documents/{doc_id}/download.json"
-                print(f"    Download URL: {doc_url}")
 
                 # Get Clio access token for download
                 integration = (
@@ -594,7 +595,7 @@ async def import_clio_documents_helper(
                     ContentExtractor.download_file, doc_url, access_token
                 )
                 original_size = len(file_content)
-                print(f"    Downloaded: {original_size / (1024 * 1024):.2f}MB")
+                logger.debug("Downloaded file", extra={"size_mb": f"{original_size / (1024 * 1024):.2f}"})
 
                 # Check if this is an intake form candidate
                 is_intake_candidate = "intake" in doc_name.lower()
@@ -619,9 +620,12 @@ async def import_clio_documents_helper(
                         comp_meta = doc_record["metadata"]["compression"]
                         total_original_size += comp_meta["original_size"]
                         total_compressed_size += comp_meta["compressed_size"]
-                        print(
-                            f"    Compressed: {comp_meta['original_size'] / (1024 * 1024):.2f}MB → "
-                            f"{comp_meta['compressed_size'] / (1024 * 1024):.2f}MB"
+                        logger.debug(
+                            "File compressed",
+                            extra={
+                                "original_mb": f"{comp_meta['original_size'] / (1024 * 1024):.2f}",
+                                "compressed_mb": f"{comp_meta['compressed_size'] / (1024 * 1024):.2f}",
+                            },
                         )
 
                     # Add Clio-specific metadata
@@ -639,16 +643,16 @@ async def import_clio_documents_helper(
                     # Insert document record
                     supabase.table("documents").insert(doc_record).execute()
                     doc_success += 1
-                    print("    ✅ Successfully imported!")
+                    logger.debug("Successfully imported document", extra={"doc_name": doc_name})
 
                 except ValidationError as e:
-                    print(f"    ❌ Validation failed: {e.error_code} - {str(e)}")
+                    logger.warning("Validation failed", extra={"error_code": e.error_code, "error": str(e)})
                     raise Exception(f"Validation failed: {str(e)}") from e
 
             except Exception as e:
                 error_msg = f"Document {doc.get('id', 'unknown')} ({doc.get('name', 'unknown')}): {str(e)}"
                 errors.append(error_msg)
-                print(f"    ❌ Error: {str(e)}")
+                logger.warning("Error importing document", extra={"doc_id": doc.get("id"), "error": str(e)})
 
         result = {
             "success": len(errors) == 0,
@@ -659,31 +663,34 @@ async def import_clio_documents_helper(
             "errors": errors if errors else None,
         }
 
-        print("\n📊 Import Summary:")
-        print(f"  - Communications: {comm_success}")
-        print(f"  - Notes: {note_success}")
-        print(f"  - Documents: {doc_success}")
-        print(f"  - Total: {comm_success + note_success + doc_success}")
-        if errors:
-            print(f"  - Errors: {len(errors)}")
-            for error in errors[:5]:  # Show first 5 errors
-                print(f"    • {error}")
+        logger.info(
+            "Import summary",
+            extra={
+                "communications": comm_success,
+                "notes": note_success,
+                "documents": doc_success,
+                "total": comm_success + note_success + doc_success,
+                "errors": len(errors) if errors else 0,
+            },
+        )
 
-        # Show compression statistics if any files were compressed
+        # Log compression statistics if any files were compressed
         if files_compressed > 0:
             total_saved = total_original_size - total_compressed_size
             avg_reduction = (total_saved / total_original_size) * 100 if total_original_size > 0 else 0
-            print("\n💾 Compression Summary:")
-            print(f"  - Files compressed: {files_compressed}")
-            print(
-                f"  - Size reduction: {total_original_size / 1024 / 1024:.1f}MB → "
-                f"{total_compressed_size / 1024 / 1024:.1f}MB"
+            logger.info(
+                "Compression summary",
+                extra={
+                    "files_compressed": files_compressed,
+                    "original_mb": f"{total_original_size / 1024 / 1024:.1f}",
+                    "compressed_mb": f"{total_compressed_size / 1024 / 1024:.1f}",
+                    "saved_mb": f"{total_saved / 1024 / 1024:.1f}",
+                    "reduction_percent": f"{avg_reduction:.1f}",
+                },
             )
-            print(f"  - Space saved: {total_saved / 1024 / 1024:.1f}MB ({avg_reduction:.1f}% reduction)")
-        print("")  # Add blank line for readability
 
         # Post-processing: Prioritize intake forms
-        print("\n🎯 Prioritizing intake forms...")
+        logger.debug("Prioritizing intake forms")
         intake_docs = supabase.table("documents").select("*").eq("case_id", case_id).execute()
 
         if intake_docs.data:
@@ -692,21 +699,26 @@ async def import_clio_documents_helper(
             ]
 
             if len(intake_candidates) > 1:
-                print(f"  - Found {len(intake_candidates)} intake candidates, prioritizing...")
+                logger.debug("Found intake candidates", extra={"count": len(intake_candidates)})
 
                 # Score each candidate
                 scored = []
                 for doc in intake_candidates:
                     score = analyze_intake_priority(doc)
                     scored.append((doc, score))
-                    print(f"    • {doc['file_name']}: score={score}, size={doc['file_size']}")
+                    logger.debug(
+                        "Scored intake candidate",
+                        extra={"file_name": doc["file_name"], "score": score, "size": doc["file_size"]},
+                    )
 
                 # Sort by score (highest first)
                 scored.sort(key=lambda x: x[1], reverse=True)
 
                 # Mark the best one as is_intake_form
                 best_doc, best_score = scored[0]
-                print(f"  - ✅ Best intake: {best_doc['file_name']} (score: {best_score})")
+                logger.info(
+                    "Best intake selected", extra={"file_name": best_doc["file_name"], "score": best_score}
+                )
 
                 # Update the best one
                 best_doc["metadata"]["is_intake_form"] = True
@@ -722,7 +734,7 @@ async def import_clio_documents_helper(
                     supabase.table("documents").update({"metadata": doc["metadata"]}).eq(
                         "id", doc["id"]
                     ).execute()
-                    print(f"    • Alternate: {doc['file_name']} (score: {score})")
+                    logger.debug("Marked as alternate", extra={"file_name": doc["file_name"], "score": score})
 
             elif len(intake_candidates) == 1:
                 # Only one candidate, mark it as the intake form
@@ -732,17 +744,15 @@ async def import_clio_documents_helper(
                 supabase.table("documents").update({"metadata": doc["metadata"]}).eq(
                     "id", doc["id"]
                 ).execute()
-                print(f"  - ✅ Single intake form: {doc['file_name']}")
+                logger.info("Single intake form identified", extra={"file_name": doc["file_name"]})
 
         return result
 
     except Exception as e:
-        print("\n❌ EXCEPTION in import_clio_documents_helper:")
-        print(f"  - Error: {str(e)}")
-        print(f"  - Type: {type(e).__name__}")
-        import traceback
-
-        traceback.print_exc()
+        logger.exception(
+            "Exception in import_clio_documents_helper",
+            extra={"error": str(e), "error_type": type(e).__name__},
+        )
 
         return {
             "success": False,
@@ -860,7 +870,9 @@ def analyze_intake_documents(case_id: str, supabase) -> Dict[str, Any]:
         elif len(intake_candidates) == 1:
             message = f"✅ Intake document identified: {intake_candidates[0]['file_name']}"
         elif best_intake and best_intake["score"] > 0:
-            message = f"✅ Best intake form auto-selected: {best_intake['filename']} (score: {best_intake['score']})"
+            fname = best_intake["filename"]
+            score = best_intake["score"]
+            message = f"✅ Best intake form auto-selected: {fname} (score: {score})"
         else:
             message = f"⚠️ Multiple intake candidates found ({len(intake_candidates)}). Best match selected."
 
@@ -898,11 +910,11 @@ async def process_clio_import_background(
             sub_step="initialization",
         )
 
-        print("  - Starting document import (background)...")
+        logger.debug("Starting document import (background)")
         import_result = await import_clio_documents_helper(
             matter_id, case_id, user, clio_client, supabase, progress_manager, import_id
         )
-        print(f"  - Import completed: {import_result.get('total_imported', 0)} items")
+        logger.info("Import completed", extra={"total_imported": import_result.get("total_imported", 0)})
 
         # Update case with import counts
         # Use run_in_threadpool for supabase call just in case
@@ -930,10 +942,10 @@ async def process_clio_import_background(
             percent=90,
             sub_step="identification",
         )
-        print("  - Analyzing intake documents...")
+        logger.debug("Analyzing intake documents")
         # analyze_intake_documents likely sync? Let's wrap it
         intake_analysis = await run_in_threadpool(analyze_intake_documents, case_id, supabase)
-        print(f"  - Intake analysis: {intake_analysis.get('message', 'N/A')}")
+        logger.debug("Intake analysis complete", extra={"message": intake_analysis.get("message", "N/A")})
 
         # 5. Publish completion
         await progress_manager.publish_progress(
@@ -947,7 +959,7 @@ async def process_clio_import_background(
         )
 
     except Exception as e:
-        print(f"❌ Error in background import: {e}")
+        logger.exception("Error in background import", extra={"error": str(e)})
         await progress_manager.publish_progress(
             channel_id=import_id,
             message=f"Import failed: {str(e)}",
@@ -983,6 +995,7 @@ async def create_case_from_clio(
         user: Current authenticated user
         supabase: Supabase client
         clio_client: Authenticated Clio client
+        progress_manager: ProgressManager instance for SSE progress updates
 
     Returns:
     -------
@@ -1004,11 +1017,15 @@ async def create_case_from_clio(
             sub_step="start",
         )
 
-        print("\n🔍 DEBUG create_case_from_clio:")
-        print(f"  - User ID: {user['id']}")
-        print(f"  - Matter ID: {request.matter_id}")
-        print(f"  - Auto Import: {request.auto_import}")
-        print(f"  - Import ID: {import_id}")
+        logger.debug(
+            "Creating case from Clio",
+            extra={
+                "user_id": user["id"],
+                "matter_id": request.matter_id,
+                "auto_import": request.auto_import,
+                "import_id": import_id,
+            },
+        )
 
         # 1. Fetch matter details
         await progress_manager.publish_progress(
@@ -1018,10 +1035,13 @@ async def create_case_from_clio(
             percent=10,
             sub_step="details",
         )
-        print("  - Fetching matter details from Clio...")
+        logger.debug("Fetching matter details from Clio")
         # Run blocking call in threadpool
         matter = await run_in_threadpool(clio_client.get_matter, request.matter_id)
-        print(f"  - Matter fetched: {matter.display_number} - {matter.client_name}")
+        logger.debug(
+            "Matter fetched",
+            extra={"display_number": matter.display_number, "client_name": matter.client_name},
+        )
 
         # 2. Create case
         await progress_manager.publish_progress(
@@ -1031,7 +1051,7 @@ async def create_case_from_clio(
             percent=20,
             sub_step="database",
         )
-        print("  - Creating case...")
+        logger.debug("Creating case")
 
         clio_data = {
             "matter_id": request.matter_id,
@@ -1058,11 +1078,11 @@ async def create_case_from_clio(
         # Run DB insert in threadpool
         case_result = await run_in_threadpool(lambda: supabase.table("cases").insert(case_data).execute())
         case_id = case_result.data[0]["id"]
-        print(f"  - ✅ Case created: {case_id}")
+        logger.info("Case created", extra={"case_id": case_id})
 
         # 3. Trigger background import if auto_import
         if request.auto_import:
-            print("  - Scheduling background import...")
+            logger.debug("Scheduling background import")
             background_tasks.add_task(
                 process_clio_import_background,
                 matter_id=request.matter_id,
@@ -1104,22 +1124,22 @@ async def create_case_from_clio(
     except ClioAuthError as e:
         # Case not created yet
         error_msg = f"Clio authentication error: {str(e)}"
-        print(f"  - ❌ {error_msg}")
+        logger.error(error_msg)
         raise HTTPException(status_code=401, detail=error_msg) from e
 
     except ClioAPIError as e:
         # Case not created yet
         error_msg = f"Clio API error: {str(e)}"
-        print(f"  - ❌ {error_msg}")
+        logger.error(error_msg)
         raise HTTPException(status_code=500, detail=error_msg) from e
 
     except Exception as e:
         error_msg = str(e)
-        print(f"  - ❌ Exception: {error_msg}")
+        logger.exception("Exception in create_case_from_clio", extra={"error": error_msg})
 
         # Partial success handling
         if case_id:
-            print("  - Case was created but import failed")
+            logger.warning("Case was created but import failed", extra={"case_id": case_id})
             return CreateFromClioResponse(
                 success=False,
                 case_id=case_id,
@@ -1133,7 +1153,7 @@ async def create_case_from_clio(
 
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error creating case: {error_msg}"
-        )
+        ) from e
 
 
 @router.post("/{case_id}/set-intake-form")
@@ -1168,9 +1188,10 @@ async def set_intake_form(
         if not document_id:
             raise HTTPException(status_code=400, detail="document_id is required")
 
-        print(f"\n🎯 Setting intake form for case {case_id}:")
-        print(f"  - Document ID: {document_id}")
-        print(f"  - User ID: {user['id']}")
+        logger.debug(
+            "Setting intake form",
+            extra={"case_id": case_id, "document_id": document_id, "user_id": user["id"]},
+        )
 
         # 1. Verify case ownership
         case_result = (
@@ -1196,7 +1217,7 @@ async def set_intake_form(
         if not target_doc:
             raise HTTPException(status_code=404, detail="Document not found")
 
-        print(f"  - Target document: {target_doc['file_name']}")
+        logger.debug("Target document found", extra={"file_name": target_doc["file_name"]})
 
         # 4. Update all documents
         for doc in docs_result.data:
@@ -1206,12 +1227,12 @@ async def set_intake_form(
                 # This is the new primary intake
                 metadata["is_intake_form"] = True
                 metadata["is_intake_candidate"] = False
-                print(f"  - ✅ Set as primary: {doc['file_name']}")
+                logger.info("Set as primary intake", extra={"file_name": doc["file_name"]})
             elif "intake" in doc.get("file_name", "").lower():
                 # Other intake candidates
                 metadata["is_intake_form"] = False
                 metadata["is_intake_candidate"] = True
-                print(f"  - Set as alternate: {doc['file_name']}")
+                logger.debug("Set as alternate intake", extra={"file_name": doc["file_name"]})
             else:
                 # Regular documents
                 metadata["is_intake_form"] = False
@@ -1225,7 +1246,7 @@ async def set_intake_form(
     except HTTPException:
         raise
     except Exception as e:
-        print(f"  - ❌ Exception: {str(e)}")
+        logger.exception("Error updating intake form", extra={"error": str(e)})
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error updating intake form: {str(e)}"
         ) from e
@@ -1262,10 +1283,10 @@ async def change_clio_matter(
 
     """
     try:
-        print("\n🔍 DEBUG change_clio_matter:")
-        print(f"  - Case ID: {case_id}")
-        print(f"  - New Matter ID: {request.matter_id}")
-        print(f"  - User ID: {user['id']}")
+        logger.debug(
+            "Changing Clio matter",
+            extra={"case_id": case_id, "new_matter_id": request.matter_id, "user_id": user["id"]},
+        )
 
         # 1. Verify case ownership
         case_result = (
@@ -1278,11 +1299,11 @@ async def change_clio_matter(
         old_case = case_result.data[0]
         old_matter_id = old_case.get("clio_matter_id")
 
-        print(f"  - Old matter ID: {old_matter_id}")
+        logger.debug("Old matter ID", extra={"old_matter_id": old_matter_id})
 
         # 2. Delete old Clio documents
         if old_matter_id:
-            print("  - Deleting old Clio documents...")
+            logger.debug("Deleting old Clio documents")
             docs_result = (
                 supabase.table("documents")
                 .select("id, storage_path, metadata")
@@ -1294,31 +1315,34 @@ async def change_clio_matter(
                 doc for doc in docs_result.data if doc.get("metadata", {}).get("clio_source") is True
             ]
 
-            print(f"  - Found {len(clio_documents)} Clio documents to delete")
+            logger.debug("Found Clio documents to delete", extra={"count": len(clio_documents)})
 
             # Delete from storage
             if clio_documents:
                 storage_paths = [doc["storage_path"] for doc in clio_documents]
                 try:
                     supabase.storage.from_("documents").remove(storage_paths)
-                    print("  - ✅ Deleted from storage")
+                    logger.debug("Deleted from storage")
                 except Exception as storage_error:
-                    print(f"  - ⚠️  Storage deletion warning: {storage_error}")
+                    logger.warning("Storage deletion warning", extra={"error": str(storage_error)})
 
             # Delete from database
             if clio_documents:
                 doc_ids = [doc["id"] for doc in clio_documents]
                 for doc_id in doc_ids:
                     supabase.table("documents").delete().eq("id", doc_id).execute()
-                print("  - ✅ Deleted from database")
+                logger.debug("Deleted from database")
 
         # 3. Fetch new matter details
-        print("  - Fetching new matter details from Clio...")
+        logger.debug("Fetching new matter details from Clio")
         matter = clio_client.get_matter(request.matter_id)
-        print(f"  - New matter fetched: {matter.display_number} - {matter.client_name}")
+        logger.debug(
+            "New matter fetched",
+            extra={"display_number": matter.display_number, "client_name": matter.client_name},
+        )
 
         # 4. Update case with new matter data (before import)
-        print("  - Updating case with new matter data...")
+        logger.debug("Updating case with new matter data")
         update_data = {
             "client_name": matter.client_name,
             "description": matter.description or f"Case for {matter.client_name}",
@@ -1335,14 +1359,14 @@ async def change_clio_matter(
             },
         }
         supabase.table("cases").update(update_data).eq("id", case_id).execute()
-        print("  - ✅ Case updated")
+        logger.info("Case updated", extra={"case_id": case_id})
 
         # 5. Import documents from new matter
-        print("  - Starting document import from new matter...")
+        logger.debug("Starting document import from new matter")
         import_result = await import_clio_documents_helper(
             request.matter_id, case_id, user, clio_client, supabase
         )
-        print(f"  - Import completed: {import_result.get('total_imported', 0)} items")
+        logger.info("Import completed", extra={"total_imported": import_result.get("total_imported", 0)})
 
         # Update case with import counts
         supabase.table("cases").update(
@@ -1357,7 +1381,7 @@ async def change_clio_matter(
         ).eq("id", case_id).execute()
 
         # 6. Analyze intake candidates
-        print("  - Analyzing intake documents...")
+        logger.debug("Analyzing intake documents")
         intake_analysis = analyze_intake_documents(case_id, supabase)
 
         # 7. Get updated case
@@ -1378,7 +1402,7 @@ async def change_clio_matter(
     except ClioAPIError as e:
         raise HTTPException(status_code=500, detail=f"Clio API error: {str(e)}") from e
     except Exception as e:
-        print(f"  - ❌ Exception: {str(e)}")
+        logger.exception("Error changing matter", extra={"error": str(e)})
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error changing matter: {str(e)}"
         ) from e

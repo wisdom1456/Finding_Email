@@ -38,6 +38,27 @@ except ImportError:
 # Maximum file size: 100MB
 MAX_FILE_SIZE = 100 * 1024 * 1024  # 100MB
 
+# Magic number signatures for file type detection when python-magic is unavailable
+# Format: {extension: [(signature_bytes, offset, mime_type)]}
+# offset is the byte position where the signature starts (usually 0)
+MAGIC_SIGNATURES = {
+    ".pdf": [(b"%PDF", 0, "application/pdf")],
+    ".png": [(b"\x89PNG\r\n\x1a\n", 0, "image/png")],
+    ".jpg": [
+        (b"\xff\xd8\xff\xe0", 0, "image/jpeg"),  # JFIF
+        (b"\xff\xd8\xff\xe1", 0, "image/jpeg"),  # Exif
+        (b"\xff\xd8\xff\xdb", 0, "image/jpeg"),  # Raw JPEG
+    ],
+    ".jpeg": [
+        (b"\xff\xd8\xff\xe0", 0, "image/jpeg"),
+        (b"\xff\xd8\xff\xe1", 0, "image/jpeg"),
+        (b"\xff\xd8\xff\xdb", 0, "image/jpeg"),
+    ],
+    ".docx": [(b"PK\x03\x04", 0, "application/vnd.openxmlformats-officedocument.wordprocessingml.document")],
+    ".doc": [(b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1", 0, "application/msword")],
+    # Note: .txt, .csv, .eml don't have reliable magic numbers - they are text-based
+}
+
 # Allowed file extensions (whitelist)
 ALLOWED_EXTENSIONS = {
     ".pdf",
@@ -221,25 +242,45 @@ def validate_file_content(file_data: bytes, filename: str) -> Tuple[str, str]:
         except Exception as e:
             raise ValueError(f"Unable to determine file content type: {e!s}") from e
     else:
-        # Fallback to mimetypes.guess_type if python-magic is not available
-        # This is less secure but works in serverless environments
-        guessed_type, _ = mimetypes.guess_type(filename)
-        if guessed_type:
-            mime_type = guessed_type
+        # Fallback: Use built-in magic number detection for binary files
+        # This provides defense-in-depth when python-magic (libmagic) is unavailable
+        mime_type = None
+
+        # Check magic signatures for known binary file types
+        if ext in MAGIC_SIGNATURES:
+            for signature, offset, expected_mime in MAGIC_SIGNATURES[ext]:
+                if len(file_data) > offset + len(signature):
+                    if file_data[offset : offset + len(signature)] == signature:
+                        mime_type = expected_mime
+                        break
+
+            # If extension requires a signature but none matched, reject the file
+            if mime_type is None:
+                raise ValueError(
+                    f"File content does not match expected format for '{ext}'. "
+                    f"The file may be corrupted or disguised as a different type."
+                )
         else:
-            # Last resort: map extension to common MIME types
-            ext_to_mime = {
-                ".pdf": "application/pdf",
-                ".doc": "application/msword",
-                ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                ".txt": "text/plain",
-                ".csv": "text/csv",
-                ".eml": "message/rfc822",
-                ".jpg": "image/jpeg",
-                ".jpeg": "image/jpeg",
-                ".png": "image/png",
-            }
-            mime_type = ext_to_mime.get(ext, "application/octet-stream")
+            # For text-based formats (txt, csv, eml), use mimetypes.guess_type
+            # These don't have reliable magic numbers
+            guessed_type, _ = mimetypes.guess_type(filename)
+            if guessed_type:
+                mime_type = guessed_type
+            else:
+                # Last resort: map extension to common MIME types
+                ext_to_mime = {
+                    ".pdf": "application/pdf",
+                    ".doc": "application/msword",
+                    ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                    ".txt": "text/plain",
+                    ".csv": "text/csv",
+                    ".eml": "message/rfc822",
+                    ".rtf": "application/rtf",
+                    ".jpg": "image/jpeg",
+                    ".jpeg": "image/jpeg",
+                    ".png": "image/png",
+                }
+                mime_type = ext_to_mime.get(ext, "application/octet-stream")
 
     # Check if detected MIME type is allowed
     if mime_type not in ALLOWED_MIME_TYPES:

@@ -3,6 +3,7 @@
 Handles OAuth flow, matter search, and data import from Clio.
 """
 
+import logging
 import uuid
 from datetime import datetime, timezone
 from typing import List, Optional
@@ -22,6 +23,8 @@ from legal_portal.services.progress_manager import ProgressManager
 from pydantic import BaseModel
 
 from supabase import Client
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/clio", tags=["clio"])
 
@@ -493,7 +496,7 @@ async def import_clio_data(
                         },
                     )
             except Exception as e:
-                print(f"Warning: Failed to save communication {comm.id}: {e}")
+                logger.warning("Failed to save communication", extra={"comm_id": comm.id, "error": str(e)})
 
         await progress_manager.publish_progress(
             channel_id=import_id, message=f"Importing {len(notes)} notes...", phase="import_notes", percent=30
@@ -539,7 +542,9 @@ async def import_clio_data(
                         current_doc={"name": note_subject[:50], "index": idx, "total": len(notes)},
                     )
             except Exception as e:
-                print(f"Warning: Failed to save note {note.get('id', 'unknown')}: {e}")
+                logger.warning(
+                    "Failed to save note", extra={"note_id": note.get("id", "unknown"), "error": str(e)}
+                )
 
         await progress_manager.publish_progress(
             channel_id=import_id,
@@ -555,7 +560,7 @@ async def import_clio_data(
                 doc_name = doc.get("name", "Untitled Document")
                 doc_url = doc.get("latest_document_version", {}).get("url")
 
-                print(f"Processing Clio document: {doc_name} (ID: {doc_id})")
+                logger.debug("Processing Clio document", extra={"doc_name": doc_name, "doc_id": doc_id})
 
                 progress_pct = 50 + int((idx / len(documents)) * 40)
                 await progress_manager.publish_progress(
@@ -569,7 +574,7 @@ async def import_clio_data(
 
                 # Skip if no download URL
                 if not doc_url:
-                    print("  - No download URL, saving metadata only")
+                    logger.debug("No download URL, saving metadata only", extra={"doc_id": doc_id})
                     doc_data = {
                         "case_id": case_id,
                         "file_name": doc_name,
@@ -602,10 +607,10 @@ async def import_clio_data(
                 access_token = integration.data[0]["access_token"]
 
                 # Download file from Clio (just download, no processing yet)
-                print("  - Downloading from Clio...")
+                logger.debug("Downloading from Clio", extra={"doc_id": doc_id})
                 file_content, content_type = ContentExtractor.download_file(doc_url, access_token)
                 original_size = len(file_content)
-                print(f"  - Downloaded: {original_size / (1024 * 1024):.2f}MB")
+                logger.debug("Downloaded file", extra={"size_mb": f"{original_size / (1024 * 1024):.2f}"})
 
                 await progress_manager.publish_progress(
                     channel_id=import_id,
@@ -620,7 +625,7 @@ async def import_clio_data(
                 is_intake = "intake" in doc_name.lower()
 
                 # Use unified processor for validation, compression, and upload
-                print("  - Processing with unified validator...")
+                logger.debug("Processing with unified validator", extra={"doc_name": doc_name})
                 processor = DocumentProcessor()
 
                 try:
@@ -640,9 +645,12 @@ async def import_clio_data(
                         comp_meta = doc_record["metadata"]["compression"]
                         total_original_size += comp_meta["original_size"]
                         total_compressed_size += comp_meta["compressed_size"]
-                        print(
-                            f"  - Compressed: {comp_meta['original_size'] / (1024 * 1024):.2f}MB → "
-                            f"{comp_meta['compressed_size'] / (1024 * 1024):.2f}MB"
+                        logger.debug(
+                            "File compressed",
+                            extra={
+                                "original_mb": f"{comp_meta['original_size'] / (1024 * 1024):.2f}",
+                                "compressed_mb": f"{comp_meta['compressed_size'] / (1024 * 1024):.2f}",
+                            },
                         )
 
                     # Add Clio-specific metadata
@@ -658,16 +666,22 @@ async def import_clio_data(
 
                     # Insert document record
                     supabase.table("documents").insert(doc_record).execute()
-                    print(f"  - ✅ Document saved successfully{' (INTAKE FORM)' if is_intake else ''}")
+                    logger.debug(
+                        "Document saved successfully",
+                        extra={"doc_name": doc_name, "is_intake": is_intake},
+                    )
 
                     items_processed += 1
 
                 except ValidationError as e:
-                    print(f"  - ❌ Validation failed: {e.error_code} - {str(e)}")
+                    logger.warning("Validation failed", extra={"error_code": e.error_code, "error": str(e)})
                     raise Exception(f"Validation failed: {str(e)}") from e
 
             except Exception as e:
-                print(f"Warning: Failed to download/process document {doc.get('id', 'unknown')}: {e}")
+                logger.warning(
+                    "Failed to download/process document",
+                    extra={"doc_id": doc.get("id", "unknown"), "error": str(e)},
+                )
                 # Still save metadata even if download fails
                 try:
                     doc_data = {
@@ -722,13 +736,16 @@ async def import_clio_data(
         if files_compressed > 0:
             total_saved = total_original_size - total_compressed_size
             avg_reduction = (total_saved / total_original_size) * 100 if total_original_size > 0 else 0
-            print("\n💾 Compression Summary:")
-            print(f"  - Files compressed: {files_compressed}")
-            print(
-                f"  - Size reduction: {total_original_size / 1024 / 1024:.1f}MB → "
-                f"{total_compressed_size / 1024 / 1024:.1f}MB"
+            logger.info(
+                "Compression summary",
+                extra={
+                    "files_compressed": files_compressed,
+                    "original_mb": f"{total_original_size / 1024 / 1024:.1f}",
+                    "compressed_mb": f"{total_compressed_size / 1024 / 1024:.1f}",
+                    "saved_mb": f"{total_saved / 1024 / 1024:.1f}",
+                    "reduction_percent": f"{avg_reduction:.1f}",
+                },
             )
-            print(f"  - Space saved: {total_saved / 1024 / 1024:.1f}MB ({avg_reduction:.1f}% reduction)")
 
         await progress_manager.publish_progress(
             channel_id=import_id,
@@ -823,7 +840,7 @@ async def unlink_clio_matter(
             try:
                 supabase.storage.from_("documents").remove(storage_paths)
             except Exception as storage_error:
-                print(f"Warning: Storage deletion error (continuing): {storage_error}")
+                logger.warning("Storage deletion error (continuing)", extra={"error": str(storage_error)})
 
         # Delete Clio documents from database
         if clio_documents:

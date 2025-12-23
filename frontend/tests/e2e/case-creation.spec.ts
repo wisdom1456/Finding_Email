@@ -1,10 +1,20 @@
 /**
  * E2E tests for case creation workflow
+ *
+ * These tests require authentication and a running backend.
+ * Set RUN_FULL_E2E=true when the full stack is configured.
  */
 import { test, expect } from '@playwright/test';
 
+// Check if full stack is available
+const RUN_FULL_E2E = process.env.RUN_FULL_E2E === 'true';
+
 test.describe('Case Creation Flow', () => {
 	test.beforeEach(async ({ page }) => {
+		test.skip(
+			!RUN_FULL_E2E,
+			'Full E2E environment not configured. Set RUN_FULL_E2E=true when frontend+backend+auth are integrated.'
+		);
 		// Navigate to cases list
 		await page.goto('/app/cases');
 	});

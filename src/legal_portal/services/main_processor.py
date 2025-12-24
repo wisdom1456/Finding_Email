@@ -462,6 +462,10 @@ async def process_case_documents(
             logger.info("Using CLIO matter context for enhanced letter generation")
 
         multi_stage_error = None
+        fact_matrix = None
+        legal_issue_map = None
+        letter_structure = None
+
         # Multi-stage analysis is REQUIRED for letter generation
         # Always run it - no feature flag
         logger.info(f"🔬 Running multi-stage analysis pipeline for {jurisdiction}")

@@ -155,8 +155,8 @@ class MultiStageAnalyzer:
             # Optimization: Limit content summary length to save tokens and avoid timeouts
             # Stage 1 only needs high-level facts to build the matrix
             summary = doc_dict.get("key_content", "")
-            if len(summary) > 1000:
-                summary = summary[:1000] + "... [truncated for brevity]"
+            if len(summary) > 2500:
+                summary = summary[:2500] + "... [truncated for brevity]"
 
             docs_context.append(
                 {
@@ -172,7 +172,7 @@ class MultiStageAnalyzer:
 Extract ONLY factual information from the case materials. Do NOT perform legal analysis.
 
 INTAKE INFORMATION:
-{intake_content[:2000]}
+{intake_content[:5000]}
 
 DOCUMENT SUMMARIES:
 {json.dumps(docs_context, indent=2)}
@@ -187,7 +187,7 @@ Extract and structure the following facts:
    - Entity type (individual, LLC, corporation, partnership, government, or unknown)
 
 2. **TIMELINE**: Chronological events with dates
-   - Date (be as specific as possible)
+   - Date (be as specific as possible; if unknown, use null)
    - Description of event
    - Source document
    - Significance (why this event matters)
@@ -227,7 +227,7 @@ Return a JSON object with this EXACT structure:
   ],
   "timeline": [
     {{
-      "date": "YYYY-MM-DD or Month YYYY",
+      "date": "YYYY-MM-DD or Month YYYY or null",
       "description": "string",
       "source_document": "string",
       "significance": "string or null",
@@ -265,6 +265,7 @@ RULES:
 - Be extremely precise with dates, amounts, names
 - Include source document for everything
 - Do NOT invent facts - only extract what's clearly stated
+- If date is truly unknown, use null - do NOT guess
 - If unsure about a detail, note it in extraction_notes
 - Return ONLY valid JSON, no markdown formatting
 """
@@ -326,10 +327,10 @@ FACTS:
 - Financial: {len(fact_matrix.financial_data)} items
 
         INTAKE SUMMARY:
-{intake_content[:1000]}
+{intake_content[:3000]}
 
 DETAILED FACTS:
-{json.dumps(fact_matrix.model_dump(), indent=2, default=str)[:2000]}
+{json.dumps(fact_matrix.model_dump(), indent=2, default=str)[:4000]}
 
 Your task:
 1. Identify primary legal issues (3-5)

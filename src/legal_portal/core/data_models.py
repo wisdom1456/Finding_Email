@@ -651,7 +651,7 @@ class Party(BaseModel):
 class Event(BaseModel):
     """Chronological event in the case timeline."""
 
-    date: Union[datetime, str]  # Allow string for partial dates like "March 2025"
+    date: Optional[Union[datetime, str]] = None  # Allow null if date is unknown
     description: str
     source_document: str
     significance: Optional[str] = None  # Why this event matters legally

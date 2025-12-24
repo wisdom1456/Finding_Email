@@ -15,6 +15,9 @@ from typing import Any, Dict, List, Optional
 
 import html2text
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
+from pydantic import BaseModel, Field
+from starlette.concurrency import run_in_threadpool
+
 from legal_portal.api.dependencies import get_current_user, get_supabase_client, get_user_supabase_client
 from legal_portal.api.rate_limiter import limiter
 from legal_portal.core.data_models import (
@@ -29,8 +32,6 @@ from legal_portal.services.json_processing_service import JsonProcessingService
 from legal_portal.services.main_processor import process_case_documents
 from legal_portal.services.progress_manager import ProgressManager
 from legal_portal.utils.openai_client import OpenAIClient
-from pydantic import BaseModel, Field
-from starlette.concurrency import run_in_threadpool
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -306,14 +307,52 @@ def _download_and_extract_documents(
             with open(temp_path, "w", encoding="utf-8") as f:
                 f.write(doc["extracted_text"])
         else:
-            # Download file from Supabase Storage
-            try:
-                file_data = supabase.storage.from_("documents").download(storage_path)
-                with open(temp_path, "wb") as f:
-                    f.write(file_data)
-            except Exception as e:
-                logger.warning(f"Failed to download {doc['file_name']}: {e}")
-                continue  # Skip this document if download fails
+            # Download file from Supabase Storage with validation and retry
+            max_retries = 3
+            expected_size = doc.get("file_size", 0)
+            download_success = False
+
+            for attempt in range(max_retries):
+                try:
+                    file_data = supabase.storage.from_("documents").download(storage_path)
+                    actual_size = len(file_data)
+
+                    # Validate download size if we know expected size
+                    if expected_size > 0 and actual_size < expected_size * 0.9:
+                        logger.warning(
+                            f"Download may be truncated for {doc['file_name']}: "
+                            f"got {actual_size} bytes, expected {expected_size} bytes (attempt {attempt + 1}/{max_retries})"
+                        )
+                        if attempt < max_retries - 1:
+                            time.sleep(0.5 * (attempt + 1))  # Exponential backoff
+                            continue
+
+                    # Write file and ensure it's flushed to disk
+                    with open(temp_path, "wb") as f:
+                        f.write(file_data)
+                        f.flush()
+                        os.fsync(f.fileno())  # Force write to disk
+
+                    # Verify file was written correctly
+                    written_size = os.path.getsize(temp_path)
+                    if written_size != actual_size:
+                        logger.error(f"File write mismatch for {doc['file_name']}: wrote {written_size}, expected {actual_size}")
+                        if attempt < max_retries - 1:
+                            continue
+
+                    download_success = True
+                    logger.debug(f"Successfully downloaded {doc['file_name']} ({actual_size} bytes)")
+                    break
+
+                except Exception as e:
+                    logger.warning(f"Download attempt {attempt + 1}/{max_retries} failed for {doc['file_name']}: {e}")
+                    if attempt < max_retries - 1:
+                        time.sleep(0.5 * (attempt + 1))
+                    continue
+
+            if not download_success:
+                logger.error(f"Failed to download {doc['file_name']} after {max_retries} attempts")
+                continue  # Skip this document if all download attempts fail
 
         # Check if this is a zip file - extract it
         if doc["file_name"].lower().endswith(".zip"):

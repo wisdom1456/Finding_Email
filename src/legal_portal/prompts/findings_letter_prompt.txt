@@ -24,7 +24,7 @@ For EVERY legal term or concept, you MUST:
 "You may have claims under this implied warranty due to incomplete work and failure to meet industry standards."
 
 **✅ GOOD (Statute Explained):**
-"{{RELEVANT STATUTE}} sets up a required process before you can sue a contractor. Think of it as a mandatory 'cool-down period' where both sides get a chance to resolve the issue without going to court. Here's how it works: you send the contractor a written notice describing what's wrong, and they get a set period to respond with a repair plan. You cannot skip this step—{jurisdiction_name} law requires it before any lawsuit."
+"{{{{RELEVANT STATUTE}}}} sets up a required process before you can sue a contractor. Think of it as a mandatory 'cool-down period' where both sides get a chance to resolve the issue without going to court. Here's how it works: you send the contractor a written notice describing what's wrong, and they get a set period to respond with a repair plan. You cannot skip this step—{jurisdiction_name} law requires it before any lawsuit."
 
 **❌ BAD (Statute Without Context):**
 "{jurisdiction_name} Statutes require specific steps before pursuing litigation."
@@ -374,7 +374,7 @@ Each bullet should be a COMPLETE PARAGRAPH that:
 
 • Under {jurisdiction_name} law, there's something called an 'implied warranty'—this is a legal protection that requires contractors to do competent work, even if your contract doesn't specifically say so. Think of it as an automatic promise that comes with every construction contract in {jurisdiction_name}. In your case, LLW Construction violated this protection when they left the bathroom framing incomplete and stopped work after receiving $100,000. What this means for you: you have a solid legal basis to demand they either finish the job properly or pay for someone else to do it.
 
-• Before you can sue a contractor in {jurisdiction_name}, you must follow a specific process set out in the law. {{EXPLAIN PROCESS FOR JURISDICTION}}. You cannot skip this step—{jurisdiction_name} law requires it before any lawsuit. Why this exists: the state wants both sides to try working it out before clogging up the courts. For you, this means we need to send this notice before we can take stronger legal action.
+• Before you can sue a contractor in {jurisdiction_name}, you must follow a specific process set out in the law. {{{{EXPLAIN PROCESS FOR JURISDICTION}}}}. You cannot skip this step—{jurisdiction_name} law requires it before any lawsuit. Why this exists: the state wants both sides to try working it out before clogging up the courts. For you, this means we need to send this notice before we can take stronger legal action.
 
 • You received a Notice to Owner from a subcontractor—this is a formal warning that they haven't been paid for their work on your project. Here's why this matters to you directly: in {jurisdiction_name}, even though you already paid the general contractor, you can still be held responsible for unpaid subcontractors. If this isn't resolved, the subcontractor can place a lien on your property—a legal claim that must be paid before you can sell or refinance your home. In the worst case, they can force a FORCED SALE OF YOUR HOME to collect what they're owed. The good news: this is preventable if we act promptly."
 
@@ -793,7 +793,7 @@ Under {jurisdiction_name} law, an implied warranty exists that all work will be 
 
 **Pre-Litigation Requirements:**
 Before pursuing litigation, {jurisdiction_name} law may require specific steps:
-{{INSERT JURISDICTION SPECIFIC NOTICE REQUIREMENTS}}
+{{{{INSERT JURISDICTION SPECIFIC NOTICE REQUIREMENTS}}}}
 
 This pre-suit requirement protects both parties but means immediate litigation is not possible without first attempting resolution.
 

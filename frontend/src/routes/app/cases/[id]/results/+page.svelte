@@ -29,7 +29,11 @@
 	let chatInput = $state('');
 	let sendingMessage = $state(false);
 	let hasMultiStageSupport = $derived(!!results?.multi_stage_result);
+	let multiStageError = $derived(results?.artifacts?.multi_stage_error);
 	let opposingParties = $derived(results?.opposing_parties ?? []);
+	let analysisStatus = $derived(results?.status ?? 'completed');
+	let analysisCreatedAt = $derived(results?.created_at ? new Date(results.created_at) : new Date());
+	let isStale = $derived(analysisStatus !== 'completed' || (new Date().getTime() - analysisCreatedAt.getTime() > 1000 * 60 * 60 * 24 * 7)); // Stale if > 7 days or not completed
 	let modelsUsed = $derived(results?.artifacts?.models_used ?? null);
 
 	// Attorney information for letters (pre-loaded from profile via SSR)
@@ -318,6 +322,42 @@
 		{/snippet}
 	</PageHeader>
 
+	{#if analysisStatus !== 'completed'}
+		<div class="mb-6 p-4 rounded-lg {analysisStatus === 'error' ? 'bg-red-50 border border-red-200' : 'bg-blue-50 border border-blue-200'}">
+			<div class="flex items-center">
+				{#if analysisStatus === 'error'}
+					<svg class="h-5 w-5 text-red-400 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+					</svg>
+					<div>
+						<h3 class="text-sm font-medium text-red-800">Latest analysis attempt failed</h3>
+						<p class="text-sm text-red-700 mt-1">
+							The most recent analysis failed with error: {results?.error || 'Unknown error'}. 
+							Showing results from a previous successful analysis if available.
+						</p>
+					</div>
+				{:else}
+					<div class="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600 mr-3"></div>
+					<div>
+						<h3 class="text-sm font-medium text-blue-800">Analysis in progress</h3>
+						<p class="text-sm text-blue-700 mt-1">
+							A new analysis is currently running. These results may be outdated. 
+							Please wait for the current analysis to complete for the latest insights.
+						</p>
+					</div>
+				{/if}
+			</div>
+			<div class="mt-3">
+				<button
+					onclick={() => goto(`/app/cases/${caseId}`)}
+					class="text-sm font-medium {analysisStatus === 'error' ? 'text-red-800 hover:text-red-900' : 'text-blue-800 hover:text-blue-900'} underline"
+				>
+					Return to Case Details to check progress
+				</button>
+			</div>
+		</div>
+	{/if}
+
 	{#if results}
 		<div class="border-b border-gray-200 mb-6">
 			<nav class="-mb-px flex flex-wrap gap-4">
@@ -598,7 +638,12 @@
 				{#if !hasMultiStageSupport}
 					<div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
 						<p class="text-yellow-900">
-							On-demand letters are unavailable because this case was processed with an older workflow.
+							{#if multiStageError}
+								<strong>⚠️ Advanced analysis failed:</strong> {multiStageError}.
+								Letter generation is unavailable for this specific analysis run.
+							{:else}
+								On-demand letters are unavailable because this case was processed with an older workflow.
+							{/if}
 							Please re-run analysis to enable this feature.
 						</p>
 					</div>

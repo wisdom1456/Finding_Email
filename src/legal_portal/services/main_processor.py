@@ -461,14 +461,7 @@ async def process_case_documents(
             clio_context_str = builder.format_clio_context_for_prompt(review_data["clio_matter_context"])
             logger.info("Using CLIO matter context for enhanced letter generation")
 
-        # ==================================================
-        # MULTI-STAGE ANALYSIS PIPELINE (FEATURE FLAG)
-        # ==================================================
-        multi_stage_result = None
-        fact_matrix = None
-        legal_issue_map = None
-        letter_structure = None
-
+        multi_stage_error = None
         # Multi-stage analysis is REQUIRED for letter generation
         # Always run it - no feature flag
         logger.info(f"🔬 Running multi-stage analysis pipeline for {jurisdiction}")
@@ -503,6 +496,7 @@ async def process_case_documents(
         except Exception as e:
             logger.error(f"Multi-stage analysis failed: {e}", exc_info=True)
             multi_stage_result = None
+            multi_stage_error = str(e)
             # Surface the error so it's visible in results
             if progress_callback:
                 await progress_callback(
@@ -555,6 +549,7 @@ async def process_case_documents(
             "document_summaries_json": document_summaries_json_str,
             "models_used": models_used,
             "jurisdiction": jurisdiction,  # Include jurisdiction in artifacts
+            "multi_stage_error": multi_stage_error,  # Include error if multi-stage failed
         }
 
         result = ProcessingResult(

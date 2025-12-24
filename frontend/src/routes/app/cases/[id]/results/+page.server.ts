@@ -61,6 +61,14 @@ interface AnalysisResults {
 	generated_letters?: GeneratedLetters;
 	opposing_parties?: OpposingParty[];
 	multi_stage_result?: MultiStageResult;
+	status?: string;
+	analysis_id?: string;
+	created_at?: string;
+	error?: string;
+	artifacts?: {
+		multi_stage_error?: string;
+		[key: string]: any;
+	};
 }
 
 interface ProfileResponse {

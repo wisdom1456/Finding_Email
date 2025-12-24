@@ -845,12 +845,11 @@ async def get_analysis_results(
         if not case_response.data:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Case not found")
 
-        # Get completed analysis
+        # Get most recent analysis (regardless of status)
         response = (
             supabase.table("analysis_results")
             .select("*")
             .eq("case_id", case_id)
-            .eq("status", "completed")
             .order("created_at", desc=True)
             .limit(1)
             .execute()
@@ -858,11 +857,16 @@ async def get_analysis_results(
 
         if not response.data:
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail="No completed analysis found for this case"
+                status_code=status.HTTP_404_NOT_FOUND, detail="No analysis found for this case"
             )
 
         analysis = response.data[0]
+        # Include status in the response so frontend can handle it
         result_payload = analysis.get("result") or {}
+        result_payload["status"] = analysis.get("status")
+        result_payload["analysis_id"] = analysis.get("id")
+        result_payload["created_at"] = analysis.get("created_at")
+        result_payload["error"] = analysis.get("error")
         artifacts = result_payload.get("artifacts")
         if artifacts:
             result_payload["artifacts"] = _attach_signed_artifact_urls(service_supabase, artifacts)

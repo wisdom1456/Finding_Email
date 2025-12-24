@@ -75,12 +75,13 @@ class MultiStageAnalyzer:
             await progress_callback("Extracting key facts and timeline...", [], "fact_extraction", 20)
 
         stage_start = time.time()
+        # Optimization: Pass limited context to fact matrix extraction to avoid timeouts
         fact_matrix = await self._extract_fact_matrix(intake_content, document_summaries, jurisdiction)
         self.stage_timings["fact_extraction"] = time.time() - stage_start
         logger.info(
-            f"Stage 1 complete: {len(fact_matrix.parties)} parties, "
-            f"{len(fact_matrix.timeline)} events, "
-            f"{len(fact_matrix.financial_data)} financial items"
+            f"Stage 1 complete ({self.stage_timings['fact_extraction']:.1f}s): "
+            f"{len(fact_matrix.parties)} parties, "
+            f"{len(fact_matrix.timeline)} events"
         )
 
         # Stage 2: Map Legal Issues
@@ -92,7 +93,10 @@ class MultiStageAnalyzer:
             fact_matrix, intake_content, case_type, legal_issues, jurisdiction
         )
         self.stage_timings["issue_mapping"] = time.time() - stage_start
-        logger.info(f"Stage 2 complete: {len(issue_map.primary_issues)} primary issues mapped")
+        logger.info(
+            f"Stage 2 complete ({self.stage_timings['issue_mapping']:.1f}s): "
+            f"{len(issue_map.primary_issues)} primary issues"
+        )
 
         # Stage 3: Deep Legal Analysis
         if progress_callback:
@@ -103,7 +107,10 @@ class MultiStageAnalyzer:
             fact_matrix, issue_map, intake_content, jurisdiction
         )
         self.stage_timings["deep_analysis"] = time.time() - stage_start
-        logger.info(f"Stage 3 complete: {len(deep_analysis.issue_analyses)} issues analyzed deeply")
+        logger.info(
+            f"Stage 3 complete ({self.stage_timings['deep_analysis']:.1f}s): "
+            f"{len(deep_analysis.issue_analyses)} issues analyzed"
+        )
 
         # Stage 4: Letter Structure Determination
         stage_start = time.time()
@@ -145,10 +152,16 @@ class MultiStageAnalyzer:
         docs_context = []
         for doc in document_summaries:
             doc_dict = doc.model_dump()
+            # Optimization: Limit content summary length to save tokens and avoid timeouts
+            # Stage 1 only needs high-level facts to build the matrix
+            summary = doc_dict.get("key_content", "")
+            if len(summary) > 1000:
+                summary = summary[:1000] + "... [truncated for brevity]"
+
             docs_context.append(
                 {
                     "filename": doc_dict.get("source_document", "Unknown"),
-                    "content_summary": doc_dict.get("key_content", ""),
+                    "content_summary": summary,
                     "parties": doc_dict.get("parties_mentioned", []),
                     "dates": doc_dict.get("dates_mentioned", []),
                     "amounts": doc_dict.get("key_amounts", []),
@@ -159,7 +172,7 @@ class MultiStageAnalyzer:
 Extract ONLY factual information from the case materials. Do NOT perform legal analysis.
 
 INTAKE INFORMATION:
-{intake_content[:3000]}
+{intake_content[:2000]}
 
 DOCUMENT SUMMARIES:
 {json.dumps(docs_context, indent=2)}
@@ -312,11 +325,11 @@ FACTS:
 - Timeline: {len(fact_matrix.timeline)} events
 - Financial: {len(fact_matrix.financial_data)} items
 
-INTAKE SUMMARY:
-{intake_content[:1500]}
+        INTAKE SUMMARY:
+{intake_content[:1000]}
 
 DETAILED FACTS:
-{json.dumps(fact_matrix.model_dump(), indent=2, default=str)[:3000]}
+{json.dumps(fact_matrix.model_dump(), indent=2, default=str)[:2000]}
 
 Your task:
 1. Identify primary legal issues (3-5)

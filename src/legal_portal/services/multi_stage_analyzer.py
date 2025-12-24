@@ -120,7 +120,7 @@ class MultiStageAnalyzer:
         # Collect verified statutes from the service for inclusion in result
         verified_statutes = self.statute_service.recommend_statutes(
             case_facts=intake_content[:2000],
-            legal_issues=[i.name for i in issue_map.primary_issues],
+            legal_issues=[i.issue_name for i in issue_map.primary_issues],
             case_type=case_type,
             limit=10,
         )

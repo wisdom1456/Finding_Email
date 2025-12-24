@@ -29,8 +29,9 @@ export function getApiUrl(): string {
             return ENV_API_URL || 'http://127.0.0.1:8000';
         }
         
-        // For Vercel deployments: use relative paths to avoid CORS issues
-        return '';
+        // For Vercel deployments: use absolute origin to avoid Safari SSE issues
+        // and leverage Vercel's rewrites (which route /api/* to the backend).
+        return window.location.origin;
     } catch {
         return '';
     }

@@ -502,9 +502,19 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
         supabase.table("analysis_results").update({"status": "processing"}).eq("id", analysis_id).execute()
 
         # Publish initial progress
-        await progress_manager.publish_progress(
-            channel_id=analysis_id, message="Starting document analysis...", phase="initialization", percent=0
-        )
+        initial_payload = {
+            "message": "Starting document analysis...",
+            "phase": "initialization",
+            "percent": 0,
+            "timestamp": datetime.utcnow().isoformat(),
+        }
+        await progress_manager.publish_progress(channel_id=analysis_id, **initial_payload)
+        try:
+            supabase.table("analysis_results").update({"progress": initial_payload}).eq(
+                "id", analysis_id
+            ).execute()
+        except Exception as db_err:
+            logger.warning(f"Failed to persist initial progress to DB: {db_err}")
 
         # Get case details
         case_response = supabase.table("cases").select("*").eq("id", case_id).execute()
@@ -550,17 +560,28 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
         logger.info(f"Processing with intake form: {os.path.basename(intake_form_path)} in {jurisdiction}")
         logger.info(f"Additional documents: {len(file_paths)}")
 
-        # Create progress callback that publishes to SSE
+        # Create progress callback that publishes to SSE and stores in DB
         async def progress_callback(message: str, docs_processed=None, phase="", percent=0):
-            """Publish progress updates to SSE stream."""
-            await progress_manager.publish_progress(
-                channel_id=analysis_id,
-                message=message,
-                phase=phase,
-                percent=percent,
-                docs_processed=docs_processed or [],
-                sub_step=message,  # Use message as sub-step for granularity
-            )
+            """Publish progress updates to SSE stream and persistent storage."""
+            payload = {
+                "message": message,
+                "phase": phase,
+                "percent": percent,
+                "docs_processed": docs_processed or [],
+                "sub_step": message,
+                "timestamp": datetime.utcnow().isoformat(),
+            }
+
+            # Publish to in-memory queue for immediate SSE delivery
+            await progress_manager.publish_progress(channel_id=analysis_id, **payload)
+
+            # Persist to database so polling fallback works across Vercel instances
+            try:
+                supabase.table("analysis_results").update({"progress": payload}).eq(
+                    "id", analysis_id
+                ).execute()
+            except Exception as db_err:
+                logger.warning(f"Failed to persist progress to DB: {db_err}")
 
         # Call the actual processor
         result: ProcessingResult = await process_case_documents(
@@ -590,13 +611,20 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
         supabase.table("cases").update({"status": "completed"}).eq("id", case_id).execute()
 
         # Publish completion event
-        await progress_manager.publish_progress(
-            channel_id=analysis_id,
-            message="Analysis completed successfully!",
-            phase="completed",
-            percent=100,
-            status="completed",
-        )
+        completion_payload = {
+            "message": "Analysis completed successfully!",
+            "phase": "completed",
+            "percent": 100,
+            "status": "completed",
+            "timestamp": datetime.utcnow().isoformat(),
+        }
+        await progress_manager.publish_progress(channel_id=analysis_id, **completion_payload)
+        try:
+            supabase.table("analysis_results").update({"progress": completion_payload}).eq(
+                "id", analysis_id
+            ).execute()
+        except Exception as db_err:
+            logger.warning(f"Failed to persist completion progress to DB: {db_err}")
 
     except Exception as e:
         # Log error and update status
@@ -606,9 +634,27 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
         logger.error(f"Error in process_case_background: {error_message}")
         logger.error(f"Traceback: {error_traceback}")
 
-        supabase.table("analysis_results").update(
-            {"status": "error", "error": f"{error_message}\n\n{error_traceback}"}
-        ).eq("id", analysis_id).execute()
+        error_payload = {
+            "message": f"Analysis failed: {error_message}",
+            "phase": "error",
+            "percent": 0,
+            "status": "error",
+            "error": error_message,
+            "timestamp": datetime.utcnow().isoformat(),
+        }
+
+        await progress_manager.publish_progress(channel_id=analysis_id, **error_payload)
+
+        try:
+            supabase.table("analysis_results").update(
+                {
+                    "status": "error",
+                    "error": f"{error_message}\n\n{error_traceback}",
+                    "progress": error_payload,
+                }
+            ).eq("id", analysis_id).execute()
+        except Exception as db_err:
+            logger.warning(f"Failed to persist error progress to DB: {db_err}")
 
         supabase.table("cases").update({"status": "error"}).eq("id", case_id).execute()
 

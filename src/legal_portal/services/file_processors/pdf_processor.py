@@ -224,8 +224,15 @@ async def process_pdf(
                     text_content = _extract_text_with_pypdf(file_path)
                     logger.info(f"✅ Successfully extracted text from {original_filename} using pypdf")
                 except Exception as e:
-                    logger.error(f"pypdf extraction failed for {original_filename}: {e}")
-                    text_content = f"Error extracting text from {original_filename}: {str(e)}"
+                    error_msg = str(e)
+                    if "Stream has ended unexpectedly" in error_msg:
+                        logger.error(f"PDF stream truncated for {original_filename}: {error_msg}")
+                        text_content = (
+                            f"Error: PDF file appears to be truncated or corrupted - {original_filename}"
+                        )
+                    else:
+                        logger.error(f"pypdf extraction failed for {original_filename}: {e}")
+                        text_content = f"Error extracting text from {original_filename}: {error_msg}"
 
             # No library available or both failed
             if not text_content:

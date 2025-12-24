@@ -1,6 +1,7 @@
 import logging
 
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from legal_portal.api.dependencies import get_supabase_client
 from legal_portal.services.progress_manager import ProgressManager
 from sse_starlette.sse import EventSourceResponse
 
@@ -45,12 +46,39 @@ async def get_analysis_status(
     request: Request,
     analysis_id: str,
     token: str = Query(None),
+    supabase=Depends(get_supabase_client),
 ):
-    """Get current analysis progress status (polling endpoint)."""
+    """Get current analysis progress status (polling endpoint with DB fallback)."""
     progress_manager = ProgressManager.get_instance()
 
-    # Get latest status from progress manager
+    # Try memory first
     status = await progress_manager.get_latest_status(analysis_id)
+
+    if not status:
+        # Fallback to database for cross-instance support on Vercel
+        try:
+            response = (
+                supabase.table("analysis_results")
+                .select("progress, status")
+                .eq("id", analysis_id)
+                .single()
+                .execute()
+            )
+            if response.data:
+                if response.data.get("progress"):
+                    status = response.data["progress"]
+                    # If status is terminal in DB but not in progress payload, sync it
+                    if response.data["status"] in ["completed", "error"]:
+                        status["type"] = response.data["status"]
+                else:
+                    # Map table status to progress payload if no detailed progress exists
+                    status = {
+                        "type": response.data["status"],
+                        "message": f"Analysis state: {response.data['status']}",
+                        "percent": 100 if response.data["status"] == "completed" else 0,
+                    }
+        except Exception as e:
+            logger.warning(f"Failed to fetch progress from DB for {analysis_id}: {e}")
 
     if not status:
         raise HTTPException(status_code=404, detail="Analysis not found or no status available")

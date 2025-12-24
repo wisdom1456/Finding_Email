@@ -47,14 +47,15 @@ class ProgressManager:
         self,
         channel_id: str,
         message: str,
-        phase: str,
-        percent: int,
+        phase: str = "",
+        percent: int = 0,
         docs_processed: list = None,
         current_doc: dict = None,
         sub_step: str = None,
         status: str = "progress",
         error: str = None,
         data: dict = None,
+        **kwargs,
     ):
         """Publish a progress event to a channel."""
         if channel_id not in self._channels:
@@ -70,9 +71,14 @@ class ProgressManager:
             "docs_processed": docs_processed or [],
             "current_doc": current_doc,
             "sub_step": sub_step,
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": kwargs.get("timestamp", datetime.now().isoformat()),
             "data": data,
         }
+
+        # Add any extra kwargs to payload
+        for key, value in kwargs.items():
+            if key not in payload and key != "timestamp":
+                payload[key] = value
 
         if error:
             payload["error"] = error

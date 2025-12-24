@@ -457,49 +457,45 @@ async def process_case_documents(
         legal_issue_map = None
         letter_structure = None
 
-        # Always log the multi-stage setting so we can diagnose issues
-        logger.info(f"🔧 Multi-stage analysis setting: USE_MULTI_STAGE_ANALYSIS={settings.use_multi_stage_analysis}")
-        
-        if settings.use_multi_stage_analysis:
-            logger.info("🔬 Multi-stage analysis enabled - using enhanced 4-stage pipeline")
-        else:
-            logger.warning("⚠️ Multi-stage analysis DISABLED - letter generation will not be available")
+        # Multi-stage analysis is REQUIRED for letter generation
+        # Always run it - no feature flag
+        logger.info("🔬 Running multi-stage analysis pipeline (required for letter generation)")
 
-            try:
-                statute_service = StatuteRecommendationService()
-                multi_stage_analyzer = MultiStageAnalyzer(
-                    openai_client=openai_client_wrapper, statute_service=statute_service
+        try:
+            statute_service = StatuteRecommendationService()
+            multi_stage_analyzer = MultiStageAnalyzer(
+                openai_client=openai_client_wrapper, statute_service=statute_service
+            )
+
+            if progress_callback:
+                await progress_callback("Running multi-stage legal analysis...", phase="fact_extraction")
+
+            multi_stage_result = await multi_stage_analyzer.analyze_case(
+                intake_content=intake_content,
+                document_summaries=structured_summaries,
+                progress_callback=progress_callback,
+                case_type=case_analysis_dict.get("practice_area"),
+            )
+
+            fact_matrix = multi_stage_result.fact_matrix
+            legal_issue_map = multi_stage_result.issue_map
+            letter_structure = multi_stage_result.letter_structure
+
+            logger.info(
+                f"Multi-stage analysis complete: {len(fact_matrix.timeline)} timeline events, "
+                f"{len(legal_issue_map.primary_issues)} legal issues identified, "
+                f"letter structure: {letter_structure.style}"
+            )
+
+        except Exception as e:
+            logger.error(f"Multi-stage analysis failed: {e}", exc_info=True)
+            multi_stage_result = None
+            # Surface the error so it's visible in results
+            if progress_callback:
+                await progress_callback(
+                    f"⚠️ Advanced analysis failed: {str(e)[:100]}. Letter generation will be unavailable.",
+                    phase="multi_stage_error",
                 )
-
-                if progress_callback:
-                    await progress_callback("Running multi-stage legal analysis...", phase="fact_extraction")
-
-                multi_stage_result = await multi_stage_analyzer.analyze_case(
-                    intake_content=intake_content,
-                    document_summaries=structured_summaries,
-                    progress_callback=progress_callback,
-                    case_type=case_analysis_dict.get("practice_area"),
-                )
-
-                fact_matrix = multi_stage_result.fact_matrix
-                legal_issue_map = multi_stage_result.issue_map
-                letter_structure = multi_stage_result.letter_structure
-
-                logger.info(
-                    f"Multi-stage analysis complete: {len(fact_matrix.timeline)} timeline events, "
-                    f"{len(legal_issue_map.primary_issues)} legal issues identified, "
-                    f"letter structure: {letter_structure.style}"
-                )
-
-            except Exception as e:
-                logger.error(f"Multi-stage analysis failed: {e}", exc_info=True)
-                multi_stage_result = None
-                # Surface the error so it's visible in results
-                if progress_callback:
-                    await progress_callback(
-                        f"⚠️ Advanced analysis failed: {str(e)[:100]}. Basic analysis will be used.",
-                        phase="multi_stage_error",
-                    )
 
         # Derive opposing parties from fact matrix
         opposing_parties: List[Party] = []

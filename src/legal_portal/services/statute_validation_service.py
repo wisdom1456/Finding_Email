@@ -1,7 +1,7 @@
-"""Statute Validation Service - Florida Legal Corpus Integration.
+"""Statute Validation Service - Multi-State Legal Corpus Integration.
 
-This service validates statute citations in generated letters against the
-Florida Legal Corpus to prevent hallucinations and ensure citation accuracy.
+This service validates statute citations in generated letters against jurisdiction-specific
+legal corpora to prevent hallucinations and ensure citation accuracy.
 """
 
 from __future__ import annotations
@@ -81,53 +81,83 @@ class ValidationResult:
 
 
 class StatuteValidationService:
-    """Service for validating statute citations against Florida Legal Corpus."""
+    """Service for validating statute citations against a legal corpus."""
 
-    # Regex patterns for detecting Florida statute citations
-    CITATION_PATTERNS = [
-        # Standard formats
-        re.compile(r"Fla\.\s*Stat\.\s*§\s*(\d+)\.(\d+)", re.IGNORECASE),
-        re.compile(r"F\.S\.\s*§?\s*(\d+)\.(\d+)", re.IGNORECASE),
-        re.compile(r"Florida\s+Statute[s]?\s*§?\s*(\d+)\.(\d+)", re.IGNORECASE),
-        re.compile(r"Section\s+(\d+)\.(\d+)", re.IGNORECASE),
-        re.compile(r"s\.\s*(\d+)\.(\d+)", re.IGNORECASE),
-        # Handle variations without section symbol
-        re.compile(r"Fla\.\s*Stat\.\s*(\d+)\.(\d+)", re.IGNORECASE),
-        re.compile(r"F\.S\.\s*(\d+)\.(\d+)", re.IGNORECASE),
-    ]
+    # Regex patterns for detecting statute citations, dynamically loaded
+    CITATION_PATTERNS: Dict[str, List[re.Pattern]] = {
+        "Florida": [
+            re.compile(r"Fla\.\s*Stat\.\s*§\s*(\d+)\.(\d+)", re.IGNORECASE),
+            re.compile(r"F\.S\.\s*§?\s*(\d+)\.(\d+)", re.IGNORECASE),
+            re.compile(r"Florida\s+Statute[s]?\s*§?\s*(\d+)\.(\d+)", re.IGNORECASE),
+            re.compile(r"Section\s+(\d+)\.(\d+)", re.IGNORECASE),
+            re.compile(r"s\.\s*(\d+)\.(\d+)", re.IGNORECASE),
+            re.compile(r"Fla\.\s*Stat\.\s*(\d+)\.(\d+)", re.IGNORECASE),
+            re.compile(r"F\.S\.\s*(\d+)\.(\d+)", re.IGNORECASE),
+        ],
+        "New Mexico": [
+            re.compile(r"N\.M\.\s*Stat\.\s*Ann\.\s*§\s*([\w.-]+)", re.IGNORECASE),
+            re.compile(r"NMSA\s*1978\s*§\s*([\w.-]+)", re.IGNORECASE),
+            re.compile(r"NM\s*Stat\.\s*§\s*([\w.-]+)", re.IGNORECASE),
+            re.compile(r"Section\s*([\w.-]+)\s*NMSA", re.IGNORECASE),
+        ],
+    }
 
-    # Florida Rule citation patterns
-    RULE_PATTERNS = [
-        re.compile(r"Fla\.\s*R\.\s*Civ\.\s*P\.\s*(\d+)\.(\d+)", re.IGNORECASE),
-        re.compile(r"Florida\s+Rules?\s+of\s+Civil\s+Procedure\s*(\d+)\.(\d+)", re.IGNORECASE),
-    ]
+    # Rule citation patterns, dynamically loaded
+    RULE_PATTERNS: Dict[str, List[re.Pattern]] = {
+        "Florida": [
+            re.compile(r"Fla\.\s*R\.\s*Civ\.\s*P\.\s*(\d+)\.(\d+)", re.IGNORECASE),
+            re.compile(r"Florida\s+Rules?\s+of\s+Civil\s+Procedure\s*(\d+)\.(\d+)", re.IGNORECASE),
+        ],
+        "New Mexico": [
+            re.compile(r"Rule\s*([\w.-]+)\s*NMRA", re.IGNORECASE),
+            re.compile(r"N\.M\.\s*R\.\s*Civ\.\s*P\.\s*([\w.-]+)", re.IGNORECASE),
+        ],
+    }
 
-    def __init__(self, corpus_dir: Optional[Path] = None):
-        """Initialize the validation service with corpus directory.
+    JURISDICTION_CONFIG = {
+        "Florida": {
+            "corpus_path": "florida_legal_corpus",
+            "statutes_file": "statutes.jsonl",
+            "aliases_file": "statute_aliases.jsonl",
+            "rules_file": "florida_refs.jsonl",
+            "statute_prefix": "Fla. Stat. §",
+            "rule_prefix": "Fla. R. Civ. P.",
+        },
+        "New Mexico": {
+            "corpus_path": "new_mexico_legal_corpus",
+            "statutes_file": "statutes.jsonl",
+            "aliases_file": "statute_aliases.jsonl",
+            "rules_file": "nm_rules.jsonl",
+            "statute_prefix": "N.M. Stat. Ann. §",
+            "rule_prefix": "Rule",  # Rules are cited as "Rule X-XXX NMRA"
+        },
+    }
 
-        Args:
-        ----
-            corpus_dir: Path to Florida Legal Corpus directory
+    def __init__(self, jurisdiction: str = "Florida", corpus_dir: Optional[Path] = None):
+        """Initialize the validation service with corpus directory and jurisdiction."""
+        self.jurisdiction = jurisdiction
+        self.config = self.JURISDICTION_CONFIG.get(jurisdiction)
+        if not self.config:
+            raise ValueError(f"Unsupported jurisdiction: {jurisdiction}")
 
-        """
         if corpus_dir is None:
-            # Default to project corpus directory
+            # Default to project corpus directory based on jurisdiction
             project_root = Path(__file__).parents[3]
-            corpus_dir = project_root / "florida_legal_corpus"
+            corpus_dir = project_root / self.config["corpus_path"]
 
         self.corpus_dir = Path(corpus_dir)
         self.statutes: Dict[str, Dict] = {}
-        self.aliases: Dict[str, str] = {}  # Maps alias text -> normalized citation
+        self.aliases: Dict[str, str] = {}
         self.rules: Dict[str, Dict] = {}
         self._load_corpus()
 
     def _load_corpus(self):
-        """Load the Florida Legal Corpus from JSONL files."""
-        logger.info(f"Loading Florida Legal Corpus from {self.corpus_dir}")
+        """Load the legal corpus for the specified jurisdiction from JSONL files."""
+        logger.info(f"Loading {self.jurisdiction} Legal Corpus from {self.corpus_dir}")
 
         try:
             # Load statutes
-            statutes_file = self.corpus_dir / "statutes.jsonl"
+            statutes_file = self.corpus_dir / self.config["statutes_file"]
             if statutes_file.exists():
                 with open(statutes_file, "r", encoding="utf-8") as f:
                     for line in f:
@@ -135,56 +165,47 @@ class StatuteValidationService:
                             statute = json.loads(line)
                             self.statutes[statute["citation_text"]] = statute
                             self.statutes[statute["id"]] = statute
-                logger.info(f"Loaded {len(self.statutes) // 2} statutes")
+                logger.info(f"Loaded {len(self.statutes) // 2} {self.jurisdiction} statutes")
             else:
-                logger.warning(f"Statutes file not found: {statutes_file}")
+                logger.warning(f"Statutes file not found for {self.jurisdiction}: {statutes_file}")
 
             # Load aliases
-            aliases_file = self.corpus_dir / "statute_aliases.jsonl"
+            aliases_file = self.corpus_dir / self.config["aliases_file"]
             if aliases_file.exists():
                 with open(aliases_file, "r", encoding="utf-8") as f:
                     for line in f:
                         if line.strip():
                             alias = json.loads(line)
                             normalized = alias["normalized"]
-                            # Map each pattern to normalized citation
                             for pattern in alias.get("patterns", []):
                                 self.aliases[pattern.lower()] = normalized
-                            # Also map the alias_text itself
                             self.aliases[alias["alias_text"].lower()] = normalized
-                logger.info(f"Loaded {len(self.aliases)} alias mappings")
+                logger.info(f"Loaded {len(self.aliases)} {self.jurisdiction} alias mappings")
             else:
-                logger.warning(f"Aliases file not found: {aliases_file}")
+                logger.warning(f"Aliases file not found for {self.jurisdiction}: {aliases_file}")
 
-            # Load Florida Rules
-            rules_file = self.corpus_dir / "florida_refs.jsonl"
+            # Load Rules
+            rules_file = self.corpus_dir / self.config["rules_file"]
             if rules_file.exists():
                 with open(rules_file, "r", encoding="utf-8") as f:
                     for line in f:
                         if line.strip():
                             rule = json.loads(line)
-                            self.rules[rule["citation_key"]] = rule
+                            # Handle different key names between FL and NM
+                            citation_key = rule.get("citation_key") or rule.get("citation_text")
+                            if citation_key:
+                                self.rules[citation_key] = rule
                             self.rules[rule["id"]] = rule
-                logger.info(f"Loaded {len(self.rules) // 2} Florida rules")
+                logger.info(f"Loaded {len(self.rules) // 2} {self.jurisdiction} rules")
             else:
-                logger.warning(f"Rules file not found: {rules_file}")
+                logger.warning(f"Rules file not found for {self.jurisdiction}: {rules_file}")
 
         except Exception as e:
-            logger.error(f"Error loading corpus: {e}", exc_info=True)
+            logger.error(f"Error loading {self.jurisdiction} corpus: {e}", exc_info=True)
 
     def validate_letter(self, letter_content: str) -> ValidationResult:
-        """Validate all statute citations in a letter.
-
-        Args:
-        ----
-            letter_content: The letter text to validate
-
-        Returns:
-        -------
-            ValidationResult with detailed validation information
-
-        """
-        logger.info("Starting statute citation validation")
+        """Validate all statute citations in a letter."""
+        logger.info(f"Starting statute citation validation for {self.jurisdiction}")
         result = ValidationResult()
 
         # Extract citations from letter
@@ -223,48 +244,24 @@ class StatuteValidationService:
         return result
 
     def _extract_citations(self, text: str) -> Set[str]:
-        """Extract all Florida statute citations from text.
-
-        Args:
-        ----
-            text: Text to extract citations from
-
-        Returns:
-        -------
-            Set of unique citation strings found
-
-        """
+        """Extract all statute and rule citations from text for the current jurisdiction."""
         citations = set()
-
-        # Remove HTML tags for cleaner extraction
         clean_text = re.sub(r"<[^>]+>", "", text)
 
         # Extract statute citations
-        for pattern in self.CITATION_PATTERNS:
+        for pattern in self.CITATION_PATTERNS.get(self.jurisdiction, []):
             for match in pattern.finditer(clean_text):
-                citation_text = match.group(0)
-                citations.add(citation_text)
+                citations.add(match.group(0))
 
         # Extract rule citations
-        for pattern in self.RULE_PATTERNS:
+        for pattern in self.RULE_PATTERNS.get(self.jurisdiction, []):
             for match in pattern.finditer(clean_text):
-                citation_text = match.group(0)
-                citations.add(citation_text)
+                citations.add(match.group(0))
 
         return citations
 
     def _validate_citation(self, citation_text: str) -> StatuteReference:
-        """Validate a single citation.
-
-        Args:
-        ----
-            citation_text: The citation text to validate
-
-        Returns:
-        -------
-            StatuteReference with validation results
-
-        """
+        """Validate a single citation."""
         ref = StatuteReference(original_text=citation_text)
 
         # Try to normalize the citation
@@ -298,85 +295,58 @@ class StatuteValidationService:
         return ref
 
     def _normalize_citation(self, citation_text: str) -> Optional[str]:
-        """Normalize a citation to canonical format.
-
-        Args:
-        ----
-            citation_text: Raw citation text
-
-        Returns:
-        -------
-            Normalized citation or None if format is invalid
-
-        """
-        # Check aliases first
+        """Normalize a citation to canonical format for the current jurisdiction."""
         citation_lower = citation_text.lower().strip()
         if citation_lower in self.aliases:
             return self.aliases[citation_lower]
 
-        # Try to extract chapter and section with patterns
-        for pattern in self.CITATION_PATTERNS:
+        # Try to extract chapter and section with patterns for statutes
+        for pattern in self.CITATION_PATTERNS.get(self.jurisdiction, []):
             match = pattern.search(citation_text)
             if match:
-                chapter = match.group(1)
-                section = match.group(2)
-                return f"Fla. Stat. § {chapter}.{section}"
+                if self.jurisdiction == "Florida":
+                    chapter = match.group(1)
+                    section = match.group(2)
+                    return f"{self.config['statute_prefix']} {chapter}.{section}"
+                elif self.jurisdiction == "New Mexico":
+                    # New Mexico statutes can have alphanumeric sections
+                    section_number = match.group(1)
+                    return f"{self.config['statute_prefix']} {section_number}"
 
         # Try rule patterns
-        for pattern in self.RULE_PATTERNS:
+        for pattern in self.RULE_PATTERNS.get(self.jurisdiction, []):
             match = pattern.search(citation_text)
             if match:
-                rule_num = match.group(1)
-                subrule = match.group(2)
-                return f"Fla. R. Civ. P. {rule_num}.{subrule}"
+                if self.jurisdiction == "Florida":
+                    rule_num = match.group(1)
+                    subrule = match.group(2)
+                    return f"{self.config['rule_prefix']} {rule_num}.{subrule}"
+                elif self.jurisdiction == "New Mexico":
+                    rule_number = match.group(1)
+                    return f"{self.config['rule_prefix']} {rule_number} NMRA"
 
         return None
 
     def get_statute_by_citation(self, citation: str) -> Optional[Dict]:
-        """Get statute information by citation.
-
-        Args:
-        ----
-            citation: Citation text or ID
-
-        Returns:
-        -------
-            Statute dictionary or None if not found
-
-        """
-        # Normalize first
+        """Get statute information by citation."""
         normalized = self._normalize_citation(citation)
         if normalized and normalized in self.statutes:
             return self.statutes[normalized]
 
-        # Try direct lookup
         if citation in self.statutes:
             return self.statutes[citation]
 
         return None
 
     def find_statute_by_keyword(self, keyword: str, limit: int = 10) -> List[Dict]:
-        """Find statutes by keyword search.
-
-        Args:
-        ----
-            keyword: Keyword to search for
-            limit: Maximum number of results
-
-        Returns:
-        -------
-            List of matching statute dictionaries
-
-        """
+        """Find statutes by keyword search."""
         keyword_lower = keyword.lower()
         matches = []
 
-        # Search in statutes
         for citation, statute in self.statutes.items():
-            if not citation.startswith("statute:"):  # Skip ID entries
+            if not citation.startswith("statute:"):
                 continue
 
-            # Search in title, summary, and tags
             title = statute.get("title", "").lower()
             summary = statute.get("summary", "").lower()
             tags = " ".join(statute.get("tags", [])).lower()
@@ -390,23 +360,15 @@ class StatuteValidationService:
         return matches
 
 
-# Module-level singleton instance (replaces @st.cache_resource)
-_statute_validation_service_instance: Optional[StatuteValidationService] = None
+# Module-level dictionary for singleton instances by jurisdiction
+_statute_validation_service_instances: Dict[str, StatuteValidationService] = {}
 
 
-def get_statute_validation_service() -> StatuteValidationService:
-    """Get cached instance of StatuteValidationService.
-
-    Uses a module-level singleton pattern to cache the instance.
-    This replaces the Streamlit @st.cache_resource decorator for
-    use in FastAPI without requiring Streamlit as a dependency.
-
-    Returns
-    -------
-        Cached StatuteValidationService instance
-
-    """
-    global _statute_validation_service_instance
-    if _statute_validation_service_instance is None:
-        _statute_validation_service_instance = StatuteValidationService()
-    return _statute_validation_service_instance
+def get_statute_validation_service(jurisdiction: str = "Florida") -> StatuteValidationService:
+    """Get cached instance of StatuteValidationService for a specific jurisdiction."""
+    global _statute_validation_service_instances
+    if jurisdiction not in _statute_validation_service_instances:
+        _statute_validation_service_instances[jurisdiction] = StatuteValidationService(
+            jurisdiction=jurisdiction
+        )
+    return _statute_validation_service_instances[jurisdiction]

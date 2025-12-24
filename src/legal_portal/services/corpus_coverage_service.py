@@ -1,4 +1,4 @@
-"""Service for detecting whether a case falls within Florida Legal Corpus coverage areas."""
+"""Service for detecting whether a case falls within jurisdiction-specific Legal Corpus coverage areas."""
 
 from __future__ import annotations
 
@@ -10,104 +10,191 @@ logger = get_module_logger(__name__)
 
 
 class CorpusCoverageService:
-    """Determine if a case type is covered by the Florida Legal Corpus."""
+    """Determine if a case type is covered by the legal corpus for a given jurisdiction."""
 
-    # Define coverage areas aligned with the corpus
-    COVERAGE_AREAS = {
-        "consumer_protection": {
-            "keywords": [
-                "consumer",
-                "fdutpa",
-                "deceptive",
-                "unfair trade",
-                "false advertising",
-                "breach of contract",
-                "breach of warranty",
-                "ucc",
-                "sale of goods",
-                "timeshare",
-                "business dispute",
-                "fraud",
-                "misrepresentation",
-            ],
-            "statutes": ["501", "672", "605", "607"],
-            "name": "Consumer Protection & Business Misconduct (Florida)",
+    # Define coverage areas aligned with the corpus for each jurisdiction
+    JURISDICTION_COVERAGE_AREAS = {
+        "Florida": {
+            "consumer_protection": {
+                "keywords": [
+                    "consumer",
+                    "fdutpa",
+                    "deceptive",
+                    "unfair trade",
+                    "false advertising",
+                    "breach of contract",
+                    "breach of warranty",
+                    "ucc",
+                    "sale of goods",
+                    "timeshare",
+                    "business dispute",
+                    "fraud",
+                    "misrepresentation",
+                ],
+                "statutes": ["501", "672", "605", "607"],
+                "name": "Consumer Protection & Business Misconduct (Florida)",
+            },
+            "landlord_tenant": {
+                "keywords": [
+                    "landlord",
+                    "tenant",
+                    "eviction",
+                    "lease",
+                    "rental",
+                    "security deposit",
+                    "habitability",
+                    "rent",
+                    "possession",
+                    "unlawful detainer",
+                ],
+                "statutes": ["83"],
+                "name": "Landlord-Tenant Disputes (Florida)",
+            },
+            "foreclosure": {
+                "keywords": [
+                    "foreclosure",
+                    "mortgage",
+                    "lis pendens",
+                    "mediation",
+                    "deficiency",
+                    "deed in lieu",
+                    "loan modification",
+                ],
+                "statutes": ["702"],
+                "name": "Foreclosure Defense (Florida)",
+            },
+            "construction": {
+                "keywords": [
+                    "construction defect",
+                    "mechanic's lien",
+                    "contractor",
+                    "subcontractor",
+                    "lien",
+                    "notice to owner",
+                    "claim of lien",
+                    "building",
+                    "construction",
+                    "repair",
+                ],
+                "statutes": ["558", "713"],
+                "name": "Construction Defects & Mechanic's Liens (Florida)",
+            },
+            "insurance": {
+                "keywords": [
+                    "insurance",
+                    "property damage",
+                    "hurricane",
+                    "windstorm",
+                    "claim denial",
+                    "bad faith",
+                    "homeowner",
+                    "coverage",
+                    "insurer",
+                ],
+                "statutes": ["627"],
+                "name": "Property Insurance Claims (Florida)",
+            },
+            "civil_litigation": {
+                "keywords": [
+                    "statute of limitations",
+                    "attorney fees",
+                    "offer of judgment",
+                    "sanctions",
+                    "frivolous",
+                    "civil procedure",
+                ],
+                "statutes": ["95", "57"],
+                "name": "Civil Litigation & Attorney Fees (Florida)",
+            },
         },
-        "landlord_tenant": {
-            "keywords": [
-                "landlord",
-                "tenant",
-                "eviction",
-                "lease",
-                "rental",
-                "security deposit",
-                "habitability",
-                "rent",
-                "possession",
-                "unlawful detainer",
-            ],
-            "statutes": ["83"],
-            "name": "Landlord-Tenant Disputes (Florida)",
-        },
-        "foreclosure": {
-            "keywords": [
-                "foreclosure",
-                "mortgage",
-                "lis pendens",
-                "mediation",
-                "deficiency",
-                "deed in lieu",
-                "loan modification",
-            ],
-            "statutes": ["702"],
-            "name": "Foreclosure Defense (Florida)",
-        },
-        "construction": {
-            "keywords": [
-                "construction defect",
-                "mechanic's lien",
-                "contractor",
-                "subcontractor",
-                "lien",
-                "notice to owner",
-                "claim of lien",
-                "building",
-                "construction",
-                "repair",
-            ],
-            "statutes": ["558", "713"],
-            "name": "Construction Defects & Mechanic's Liens (Florida)",
-        },
-        "insurance": {
-            "keywords": [
-                "insurance",
-                "property damage",
-                "hurricane",
-                "windstorm",
-                "claim denial",
-                "bad faith",
-                "homeowner",
-                "coverage",
-                "insurer",
-            ],
-            "statutes": ["627"],
-            "name": "Property Insurance Claims (Florida)",
-        },
-        "civil_litigation": {
-            "keywords": [
-                "statute of limitations",
-                "attorney fees",
-                "offer of judgment",
-                "sanctions",
-                "frivolous",
-                "civil procedure",
-            ],
-            "statutes": ["95", "57"],
-            "name": "Civil Litigation & Attorney Fees (Florida)",
+        "New Mexico": {
+            "consumer_protection": {
+                "keywords": [
+                    "consumer",
+                    "unfair practices act",
+                    "deceptive",
+                    "unfair trade",
+                    "false advertising",
+                    "breach of contract",
+                    "breach of warranty",
+                    "fraud",
+                    "misrepresentation",
+                ],
+                "statutes": ["57-12"],
+                "name": "Consumer Protection (New Mexico)",
+            },
+            "landlord_tenant": {
+                "keywords": [
+                    "landlord",
+                    "tenant",
+                    "eviction",
+                    "lease",
+                    "rental",
+                    "security deposit",
+                    "habitability",
+                    "rent",
+                    "possession",
+                    "uniform owner-resident relations act",
+                ],
+                "statutes": ["47-8"],
+                "name": "Landlord-Tenant Disputes (New Mexico)",
+            },
+            "construction": {
+                "keywords": [
+                    "construction defect",
+                    "mechanic's lien",
+                    "contractor",
+                    "subcontractor",
+                    "lien",
+                    "indemnification",
+                    "building",
+                    "repair",
+                ],
+                "statutes": ["37-1", "56-7", "48-2"],
+                "name": "Construction & Liens (New Mexico)",
+            },
+            "real_estate_foreclosure": {
+                "keywords": [
+                    "foreclosure",
+                    "mortgage",
+                    "redemption",
+                    "power of sale",
+                    "deed of trust",
+                ],
+                "statutes": ["48-7", "39-5"],
+                "name": "Real Estate & Foreclosure (New Mexico)",
+            },
+            "insurance_damages": {
+                "keywords": [
+                    "insurance",
+                    "unfair claims practices",
+                    "property damage",
+                    "bad faith",
+                    "several liability",
+                    "comparative fault",
+                    "torts",
+                ],
+                "statutes": ["59A-16", "41-3A"],
+                "name": "Insurance & Damages (New Mexico)",
+            },
+            "civil_procedure": {
+                "keywords": [
+                    "civil procedure",
+                    "rules of civil procedure",
+                    "magistrate court",
+                    "metropolitan court",
+                    "appellate procedure",
+                    "rules of evidence",
+                    "sanctions",
+                    "default",
+                ],
+                "statutes": ["1-0", "2-4", "3-4", "12-2", "11-1"],  # Rule prefixes
+                "name": "Civil Procedure Rules (New Mexico)",
+            },
         },
     }
 
-    # Explicitly unsupported areas
+    # Explicitly unsupported areas (jurisdiction-agnostic)
     UNSUPPORTED_AREAS = {
         "federal": {
             "keywords": [
@@ -175,26 +262,13 @@ class CorpusCoverageService:
     }
 
     def analyze_coverage(
-        self, case_type: Optional[str] = None, case_facts: str = "", legal_issues: Optional[List[str]] = None
+        self,
+        case_type: Optional[str] = None,
+        case_facts: str = "",
+        legal_issues: Optional[List[str]] = None,
+        jurisdiction: str = "Florida",
     ) -> Dict:
-        """Analyze whether a case falls within corpus coverage.
-
-        Args:
-        ----
-            case_type: Optional case type string
-            case_facts: Case facts/intake text
-            legal_issues: Optional list of legal issues
-
-        Returns:
-        -------
-            Dict with coverage analysis including:
-            - is_covered: bool
-            - coverage_areas: List of matching coverage areas
-            - unsupported_areas: List of detected unsupported areas
-            - confidence: float (0.0-1.0)
-            - warnings: List of warning messages
-
-        """
+        """Analyze whether a case falls within corpus coverage for a given jurisdiction."""
         text_to_analyze = f"{case_type or ''} {case_facts} {' '.join(legal_issues or [])}".lower()
 
         matched_coverage = []
@@ -206,8 +280,20 @@ class CorpusCoverageService:
                 matched_unsupported.append(area_info["name"])
                 logger.warning(f"Detected unsupported area: {area_info['name']}")
 
-        # Check for supported coverage areas
-        for _area_id, area_info in self.COVERAGE_AREAS.items():
+        # Get jurisdiction-specific coverage areas
+        jurisdiction_areas = self.JURISDICTION_COVERAGE_AREAS.get(jurisdiction)
+        if not jurisdiction_areas:
+            logger.warning(f"No coverage areas defined for jurisdiction: {jurisdiction}")
+            return {
+                "is_covered": False,
+                "coverage_areas": [],
+                "unsupported_areas": matched_unsupported,
+                "confidence": 0.0,
+                "warnings": [f"No legal corpus or coverage defined for {jurisdiction}."],
+            }
+
+        # Check for supported coverage areas within the specified jurisdiction
+        for _area_id, area_info in jurisdiction_areas.items():
             if self._matches_keywords(text_to_analyze, area_info["keywords"]):
                 matched_coverage.append(area_info["name"])
 
@@ -219,13 +305,16 @@ class CorpusCoverageService:
         if matched_unsupported:
             warnings.append(
                 f"⚠️ This case appears to involve unsupported areas: {', '.join(matched_unsupported)}. "
-                "The Florida Legal Corpus does not cover these topics. Citations may not be validated."
+                f"The {jurisdiction} Legal Corpus does not cover these topics. "
+                "Citations may not be validated."
             )
         elif not matched_coverage:
+            supported_list = ", ".join(
+                [area["name"].replace(f" ({jurisdiction})", "") for area in jurisdiction_areas.values()]
+            )
             warnings.append(
-                "⚠️ Could not determine specific practice area from case information. "
-                "The Florida Legal Corpus covers: Consumer Protection, Landlord-Tenant, "
-                "Foreclosure, Construction, Insurance, and Civil Litigation matters under Florida law only."
+                f"⚠️ Could not determine specific practice area from case information for {jurisdiction}. "
+                f"The {jurisdiction} Legal Corpus covers: {supported_list}."
             )
 
         result = {
@@ -237,7 +326,7 @@ class CorpusCoverageService:
         }
 
         logger.info(
-            f"Coverage analysis: is_covered={is_covered}, "
+            f"Coverage analysis for {jurisdiction}: is_covered={is_covered}, "
             f"areas={len(matched_coverage)}, "
             f"unsupported={len(matched_unsupported)}, "
             f"confidence={confidence:.2f}"
@@ -254,27 +343,31 @@ class CorpusCoverageService:
     ) -> float:
         """Calculate confidence score for coverage determination."""
         if matched_unsupported:
-            return 0.0  # No confidence if unsupported areas detected
+            return 0.0
 
         if not matched_coverage:
-            return 0.3  # Low confidence if no matches
+            return 0.3
 
         if len(matched_coverage) == 1:
-            return 0.7  # Medium-high confidence for single match
+            return 0.7
 
         if len(matched_coverage) >= 2:
-            return 0.9  # High confidence for multiple matches
+            return 0.9
 
-        return 0.5  # Default medium confidence
+        return 0.5
 
-    def get_coverage_summary(self) -> str:
-        """Get a formatted summary of corpus coverage areas."""
-        summary_lines = ["**Florida Legal Corpus Coverage:**", ""]
+    def get_coverage_summary(self, jurisdiction: str = "Florida") -> str:
+        """Get a formatted summary of corpus coverage areas for a given jurisdiction."""
+        summary_lines = [f"**{jurisdiction} Legal Corpus Coverage:**", ""]
 
-        for _area_id, area_info in self.COVERAGE_AREAS.items():
-            summary_lines.append(f"✅ **{area_info['name']}**")
+        jurisdiction_areas = self.JURISDICTION_COVERAGE_AREAS.get(jurisdiction)
+        if not jurisdiction_areas:
+            summary_lines.append(f"No coverage areas defined for jurisdiction: {jurisdiction}.")
+        else:
+            for _area_id, area_info in jurisdiction_areas.items():
+                summary_lines.append(f"✅ **{area_info['name']}**")
 
-        summary_lines.extend(["", "**Not Supported:**", ""])
+        summary_lines.extend(["", "**Not Supported (General):**", ""])
 
         for _area_id, area_info in self.UNSUPPORTED_AREAS.items():
             summary_lines.append(f"❌ {area_info['name']}")

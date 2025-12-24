@@ -104,11 +104,32 @@ def _convert_to_case_analysis_result(
     )
 
 
+JURISDICTION_CITATION_MAP = {
+    "Florida": {
+        "name": "Florida",
+        "name_upper": "FLORIDA",
+        "statute_example": "Fla. Stat. § 718.116",
+        "statute_citation_prefix": "Florida Statute §",
+        "statute_citation_short_prefix": "Fla. Stat. §",
+        "guidance_file": "florida_guidance.md",
+    },
+    "New Mexico": {
+        "name": "New Mexico",
+        "name_upper": "NEW MEXICO",
+        "statute_example": "N.M. Stat. Ann. § 57-12-2",
+        "statute_citation_prefix": "N.M. Stat. Ann. §",
+        "statute_citation_short_prefix": "NMSA 1978 §",
+        "guidance_file": "new_mexico_guidance.md",
+    },
+}
+
+
 def _generate_case_analysis_summary(
     intake_content: str,
     structured_summaries: List[DocumentSummaryStructured],
     openai_client_wrapper: OpenAIClient,
     review_data: dict,
+    jurisdiction: str = "Florida",
 ) -> dict:
     """Generate high-level case analysis from structured summaries.
 
@@ -120,6 +141,7 @@ def _generate_case_analysis_summary(
         structured_summaries: List of DocumentSummaryStructured objects
         openai_client_wrapper: OpenAI client for API calls
         review_data: Dictionary containing legal issue and key documents
+        jurisdiction: Jurisdiction name ("Florida" or "New Mexico")
 
     Returns:
     -------
@@ -130,7 +152,12 @@ def _generate_case_analysis_summary(
     summaries_json = json.dumps([s.model_dump() for s in structured_summaries], indent=2)
     legal_issue = review_data.get("legal_issue", "") if review_data else ""
 
-    prompt = f"""You are a senior legal analyst. Based on the intake form and document summaries below, create a high-level case analysis.
+    # Get jurisdiction-specific config
+    juris_config = JURISDICTION_CITATION_MAP.get(jurisdiction, JURISDICTION_CITATION_MAP["Florida"])
+    statute_format = juris_config["statute_citation_short_prefix"] + " XXX.XX"
+
+    prompt = f"""You are a senior legal analyst. Based on the intake form and document summaries below, \
+create a high-level case analysis for a matter in {jurisdiction}.
 
 INTAKE INFORMATION:
 {intake_content}
@@ -142,9 +169,10 @@ DOCUMENT SUMMARIES:
 
 Generate a structured case analysis with:
 1. **case_summary**: 120-200 word executive summary of the case, covering who, what, when, where, why
-2. **practice_area**: Primary legal practice area (e.g., "Construction Law", "Consumer Protection", "Landlord-Tenant")
+2. **practice_area**: Primary legal practice area (e.g., "Construction Law", "Consumer Protection")
 3. **key_issues**: List 3-7 specific legal issues or problems identified
-4. **relevant_statutes**: Identify 2-5 potentially relevant Florida statutes with brief relevance notes
+4. **relevant_statutes**: Identify 2-5 potentially relevant {jurisdiction} statutes with brief \
+relevance notes (Format: {statute_format})
 5. **additional_details**: Any other important context not captured above
 
 OUTPUT AS STRICT JSON:
@@ -153,7 +181,7 @@ OUTPUT AS STRICT JSON:
   "practice_area": "...",
   "key_issues": ["issue 1", "issue 2", ...],
   "relevant_statutes": [
-    {{"statute": "Fla. Stat. § 718.116", "relevance": "HOA lien priority"}},
+    {{"statute": "{juris_config['statute_example']}", "relevance": "..."}},
     ...
   ],
   "additional_details": "..."
@@ -170,7 +198,8 @@ OUTPUT AS STRICT JSON:
         )
 
         analysis_json = json.loads(response["content"])
-        logger.info(f"Generated case analysis for practice area: {analysis_json.get('practice_area')}")
+        practice_area = analysis_json.get("practice_area")
+        logger.info(f"Generated case analysis for practice area: {practice_area} in {jurisdiction}")
 
         # Ensure all required fields are present with defaults
         return {
@@ -181,7 +210,7 @@ OUTPUT AS STRICT JSON:
             "additional_details": analysis_json.get("additional_details", None),
         }
     except Exception as e:
-        logger.error(f"Failed to generate case analysis summary: {e}", exc_info=True)
+        logger.error(f"Failed to generate case analysis summary for {jurisdiction}: {e}", exc_info=True)
         # Return minimal fallback structure
         return {
             "case_summary": "Unable to generate case summary due to processing error.",
@@ -198,31 +227,9 @@ async def process_case_documents(
     case_info: dict,
     review_data: dict,  # NEW: For key docs and legal issue
     progress_callback: Optional[Callable] = None,
+    jurisdiction: str = "Florida",  # Added jurisdiction parameter
 ) -> ProcessingResult:
-    """Decoupled document processing workflow.
-
-    Simplified 2-call workflow:
-    1. Extract intake data + summarize case documents (AI Call #1)
-    2. Generate findings letter (AI Call #2)
-
-    Args:
-    ----
-        intake_form_path: File path to the intake form
-        case_document_paths: List of file paths to case documents
-        case_info: Optional dictionary with case metadata (client name, attorney, etc.)
-        review_data: Dictionary containing key documents and legal issue from review step
-        progress_callback: Optional callback function for progress updates
-
-    Returns:
-    -------
-        ProcessingResult: Structured result containing the generated letter and analysis
-
-    Raises:
-    ------
-        ValueError: If required inputs are missing or processing fails
-        Exception: For unexpected errors during processing
-
-    """
+    """Decoupled document processing workflow."""
     start_time = time.time()
     errors = []
 
@@ -232,6 +239,8 @@ async def process_case_documents(
         openai_client_wrapper = OpenAIClient()
         doc_processor = DocumentProcessor()
         json_processing_service = JsonProcessingService(client=openai_client_wrapper, config={})
+
+        logger.info(f"Processing case for jurisdiction: {jurisdiction}")
 
         # 2. Validate inputs
         if not intake_form_path:
@@ -318,7 +327,7 @@ async def process_case_documents(
         statute_context = ""
         if settings.suggest_statutes:
             try:
-                recommendation_service = StatuteRecommendationService()
+                recommendation_service = StatuteRecommendationService(jurisdiction=jurisdiction)
                 legal_issues = []
                 if review_data and "legal_issues" in review_data:
                     legal_issues = review_data.get("legal_issues", [])
@@ -356,6 +365,7 @@ async def process_case_documents(
             review_data,  # Pass through
             progress_callback,
             statute_context,  # NEW: Pass statute context
+            jurisdiction=jurisdiction,  # NEW: Pass jurisdiction
         )
 
         # 5.5. AI Call #2.5: Generate case-level analysis summary
@@ -366,6 +376,7 @@ async def process_case_documents(
             structured_summaries,
             openai_client_wrapper,
             review_data,
+            jurisdiction=jurisdiction,
         )
         client_name_for_case = (
             (case_info or {}).get("client_name") or (case_info or {}).get("clientName") or "Client"
@@ -397,6 +408,7 @@ async def process_case_documents(
                     case_type=case_type,
                     case_facts=intake_content[:2000],
                     legal_issues=legal_issues,
+                    jurisdiction=jurisdiction,
                 )
 
                 if coverage_result["warnings"]:
@@ -406,7 +418,7 @@ async def process_case_documents(
 
                 if not coverage_result["is_covered"]:
                     logger.warning(
-                        f"Case type may be outside Florida Legal Corpus coverage. "
+                        f"Case type may be outside {jurisdiction} Legal Corpus coverage. "
                         f"Detected areas: {coverage_result.get('unsupported_areas', [])}"
                     )
             except Exception as e:
@@ -417,7 +429,7 @@ async def process_case_documents(
         try:
             from legal_portal.services.deadline_extraction_service import DeadlineExtractionService
 
-            deadline_service = DeadlineExtractionService()
+            deadline_service = DeadlineExtractionService(jurisdiction=jurisdiction)
             deadlines = deadline_service.extract_deadlines(
                 structured_summaries=structured_summaries,
                 case_type=case_analysis_dict.get("practice_area", "General"),
@@ -427,12 +439,12 @@ async def process_case_documents(
             if deadlines:
                 deadline_context = deadline_service.format_deadlines_for_prompt(deadlines)
                 logger.info(
-                    f"Extracted {len(deadlines)} deadlines: "
+                    f"Extracted {len(deadlines)} deadlines for {jurisdiction}: "
                     f"{sum(1 for d in deadlines if d.urgency == 'critical')} critical, "
                     f"{sum(1 for d in deadlines if d.urgency == 'important')} important"
                 )
         except Exception as e:
-            logger.warning(f"Failed to extract deadlines: {e}", exc_info=True)
+            logger.warning(f"Failed to extract deadlines for {jurisdiction}: {e}", exc_info=True)
 
         # Append deadline context to statute context for prompt
         if deadline_context:
@@ -459,10 +471,10 @@ async def process_case_documents(
 
         # Multi-stage analysis is REQUIRED for letter generation
         # Always run it - no feature flag
-        logger.info("🔬 Running multi-stage analysis pipeline (required for letter generation)")
+        logger.info(f"🔬 Running multi-stage analysis pipeline for {jurisdiction}")
 
         try:
-            statute_service = StatuteRecommendationService()
+            statute_service = StatuteRecommendationService(jurisdiction=jurisdiction)
             multi_stage_analyzer = MultiStageAnalyzer(
                 openai_client=openai_client_wrapper, statute_service=statute_service
             )
@@ -475,6 +487,7 @@ async def process_case_documents(
                 document_summaries=structured_summaries,
                 progress_callback=progress_callback,
                 case_type=case_analysis_dict.get("practice_area"),
+                jurisdiction=jurisdiction,  # Pass jurisdiction
             )
 
             fact_matrix = multi_stage_result.fact_matrix
@@ -541,6 +554,7 @@ async def process_case_documents(
             "confirmed_qa_pairs": confirmed_qa_pairs,
             "document_summaries_json": document_summaries_json_str,
             "models_used": models_used,
+            "jurisdiction": jurisdiction,  # Include jurisdiction in artifacts
         }
 
         result = ProcessingResult(
@@ -821,6 +835,7 @@ async def _generate_document_summaries(
     review_data: dict,  # NEW
     progress_callback: Optional[Callable] = None,
     statute_context: str = "",  # NEW: Pass statute recommendations
+    jurisdiction: str = "Florida",  # NEW: Pass jurisdiction
 ) -> Tuple[List[Dict[str, Any]], List[ProcessingError]]:
     """AI Call #1: Generate structured JSON summaries of case documents.
 
@@ -832,6 +847,8 @@ async def _generate_document_summaries(
         json_processing_service: Service for processing JSON responses from AI
         review_data: Dictionary containing key documents and legal issue from review step
         progress_callback: Optional callback function for progress updates
+        statute_context: Formatted statute recommendations
+        jurisdiction: Jurisdiction name ("Florida" or "New Mexico")
 
     Returns:
     -------
@@ -843,7 +860,7 @@ async def _generate_document_summaries(
     # Handle case with no documents - analyze intake form only
     if not case_documents:
         prompt = f"""You are a legal document analyst. \
-Given the client intake information below, provide a structured JSON analysis.
+Given the client intake information below, provide a structured JSON analysis for a matter in {jurisdiction}.
 
 INTAKE INFORMATION:
 {intake_content}
@@ -915,6 +932,7 @@ Return ONLY valid JSON, no markdown code blocks.
                     review_data,  # Pass review_data
                     errors,
                     statute_context,  # NEW: Pass statute context
+                    jurisdiction=jurisdiction,  # NEW: Pass jurisdiction
                 )
 
                 if batch_result:
@@ -945,74 +963,17 @@ Return ONLY valid JSON, no markdown code blocks.
             )  # Return empty errors for now, as errors are handled by _process_document_batch
 
         # Original single-call path for smaller document sets
-        logger.info(f"Processing {len(case_documents)} documents in single call...")
+        logger.info(f"Processing {len(case_documents)} documents in single call for {jurisdiction}...")
 
         # Build the flexible JSON prompt for documents
-        prompt = f"""You are a legal document analyst. \
-Your goal is to extract ALL relevant information from each document, not just fit data into predefined boxes.
-
-INTAKE INFORMATION:
-{intake_content}
-
-DOCUMENT QUALITY NOTES:
-{_build_quality_context(case_documents)}
-
-{IMAGE_HANDLING_INSTRUCTIONS}
-
-DOCUMENTS TO ANALYZE:
-{_format_documents_with_metadata(case_documents)}
-
----
-OUTPUT FORMAT (STRICT JSON):
-{{
-  "documents": [
-    {{
-      "document_name": "exact_filename.pdf",
-      "document_type": "Contract" | "Disclosure" | "Evidence" | "Correspondence" | "Estimate" | "Notice" | "Other",
-
-      "executive_summary": "2-3 sentence overview: What this document is, what it contains, and why it matters",
-
-      "key_content": "Comprehensive narrative of all important information. Include specific facts, obligations, evidence, statements. Capture everything relevant even if it doesn't fit structured categories.",
-
-      "structured_data": {{
-        "parties": ["Only if clearly named"],
-        "dates": [
-          {{"date": "YYYY-MM-DD", "event": "description", "source": "page ref"}}
-        ],
-        "amounts": [
-          {{"amount": "$XXX", "description": "what it represents", "source": "page ref"}}
-        ],
-        "contract_clauses": [
-          {{"clause_id": "section", "description": "content", "snippet": "quote"}}
-        ]
-      }},
-
-      "important_details": [
-        "Any critical info not captured above",
-        "Conflicts of interest: 'CONFLICT: Client is both X and Y'",
-        "Procedural requirements or deadlines",
-        "Risks, limitations, problems identified",
-        "Strong evidence or admissions"
-      ],
-
-      "legal_significance": "Why this matters legally",
-      "relevance_to_case": "How this supports/weakens the claim",
-      "extraction_quality": "high" | "medium" | "low",
-      "extraction_notes": "Only if extraction issues occurred"
-    }}
-  ]
-}}
-
-CRITICAL RULES:
-- FOCUS on comprehensive capture in "key_content" and "important_details"
-- Structured fields are OPTIONAL - only populate if clearly present
-- NEVER say "not found" - just omit fields or use empty arrays
-- If document doesn't have something (e.g., no contract clauses in an estimate), that's fine
-- Capture EVERYTHING relevant, even if unconventional
-- Flag conflicts of interest prominently
-- Be specific with facts, quotes, and references
-- Return ONLY valid JSON, no markdown code blocks
-"""
+        prompt = _build_summary_prompt(
+            intake_content,
+            case_documents,
+            review_data,
+            is_batch=False,
+            statute_context=statute_context,
+            jurisdiction=jurisdiction,
+        )
 
     # Make the API call
     model = openai_client_wrapper.get_preferred_model("document_analysis", "gpt-4o")
@@ -1078,9 +1039,13 @@ async def _process_document_batch(
     review_data: dict,  # NEW
     errors: List[ProcessingError],
     statute_context: str = "",  # NEW: Pass statute context
+    jurisdiction: str = "Florida",  # NEW: Pass jurisdiction
 ) -> Tuple[List[Dict[str, Any]], List[ProcessingError]]:
     """Process a single batch of documents."""
-    logger.info(f"📦 Processing batch {batch_num}/{total_batches} with {len(batch_documents)} documents")
+    logger.info(
+        f"📦 Processing batch {batch_num}/{total_batches} "
+        f"({len(batch_documents)} documents) for {jurisdiction}"
+    )
 
     # Build the prompt with the new context
     prompt = _build_summary_prompt(
@@ -1090,6 +1055,7 @@ async def _process_document_batch(
         is_batch=True,
         batch_info=(batch_num, total_batches),
         statute_context=statute_context,
+        jurisdiction=jurisdiction,
     )
 
     response_json, batch_errors = await json_processing_service.process_documents_to_json(prompt)
@@ -1160,6 +1126,7 @@ def _build_summary_prompt(
     is_batch: bool = False,
     batch_info: tuple = (),
     statute_context: str = "",
+    jurisdiction: str = "Florida",
 ) -> str:
     """Build the prompt for the document summarization AI call."""
     # Prepare context from review step
@@ -1180,22 +1147,32 @@ USER-DEFINED CONTEXT:
     # Add statute context if available
     statute_section = ""
     if statute_context:
+        juris_config = JURISDICTION_CITATION_MAP.get(jurisdiction, JURISDICTION_CITATION_MAP["Florida"])
         statute_section = f"""
 
-RELEVANT FLORIDA STATUTES (for cross-reference):
+RELEVANT {juris_config['name_upper']} STATUTES (for cross-reference):
 {statute_context}
 
-When analyzing documents, identify which statutes (if any) are relevant to the document's content.
-List them in the "statute_citations" field using the format: "Fla. Stat. § XXX.XX"
+When analyzing documents, identify relevant statutes from the list above.
+List them in "statute_citations" as: "{juris_config['statute_citation_prefix']} XXX.XX"
 """
 
     if is_batch:
         batch_num, total_batches = batch_info
         batch_header = f"BATCH {batch_num} of {total_batches} - "
-        main_header = "You are a legal document analyst. Analyze each document in this batch and return structured JSON with complete facts."  # noqa: E501
+        main_header = (
+            f"You are a legal document analyst for a matter in {jurisdiction}. "
+            "Analyze each document in this batch and return structured JSON with complete facts."
+        )
     else:
         batch_header = ""
-        main_header = "You are a legal document analyst. Analyze each document and return structured JSON with complete facts."  # noqa: E501
+        main_header = (
+            f"You are a legal document analyst for a matter in {jurisdiction}. "
+            "Analyze each document and return structured JSON with complete facts."
+        )
+
+    juris_config = JURISDICTION_CITATION_MAP.get(jurisdiction, JURISDICTION_CITATION_MAP["Florida"])
+    statute_placeholder = juris_config["statute_citation_prefix"] + " XXX.XX"
 
     return f"""{main_header}
 
@@ -1219,19 +1196,18 @@ OUTPUT FORMAT (STRICT JSON):
   "documents": [
     {{
       "document_name": "exact_filename.pdf",
-      "document_type": "Contract" | "Disclosure" | "Evidence" | "Correspondence" | "Estimate" | "Notice" | "Other",
+      "document_type": "Contract" | "Evidence" | "Notice" | "Other",
 
-      "executive_summary": "2-3 sentence overview: What this document is, what it contains, and why it matters to the case",
+          "executive_summary": "2-3 sentence overview: What this document is and why it matters",
 
-      "key_content": "Detailed narrative of the most important information in this document. Include specific facts, statements, admissions, obligations, or evidence. Be comprehensive - capture everything relevant even if it doesn't fit a category below.",
+          "key_content": "Detailed narrative of the most important information in this document.",
 
-      "key_quotes": [
-        "Direct verbatim excerpt from document that serves as evidence",
-        "Another important quote showing facts or admissions"
-      ],
+          "key_quotes": [
+            "Direct verbatim excerpt from document that serves as evidence"
+          ],
 
       "statute_citations": [
-        "Fla. Stat. § XXX.XX (if this document relates to a provided statute)",
+        "{statute_placeholder} (if this document relates to a provided statute)",
         "Only include statutes that are clearly relevant to this specific document"
       ],
 
@@ -1268,7 +1244,7 @@ OUTPUT FORMAT (STRICT JSON):
         "Highlight admissions, contradictions, or smoking guns"
       ],
 
-      "legal_significance": "Why this document matters legally - does it establish liability, show damages, prove notice, demonstrate violation, etc.",
+          "legal_significance": "Why this document matters legally (e.g., establishes liability)",
 
       "relevance_to_case": "How this document supports or weakens the claim",
 

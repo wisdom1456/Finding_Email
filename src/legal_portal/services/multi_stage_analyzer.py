@@ -11,7 +11,6 @@ Created: 2025-11-21
 
 from __future__ import annotations
 
-import asyncio
 import json
 import time
 from typing import Callable, List, Optional
@@ -31,7 +30,6 @@ from legal_portal.core.data_models import (
     LetterStructure,
     MultiStageAnalysisResult,
     Party,
-    ProceduralStep,
     PropertyInfo,
     RiskAssessment,
 )
@@ -50,14 +48,7 @@ class MultiStageAnalyzer:
         openai_client: OpenAIClient,
         statute_service: Optional[StatuteRecommendationService] = None,
     ):
-        """Initialize the multi-stage analyzer.
-
-        Args:
-        ----
-            openai_client: OpenAI client for AI calls
-            statute_service: Service for querying Florida statute corpus
-
-        """
+        """Initialize the multi-stage analyzer."""
         self.client = openai_client
         self.statute_service = statute_service or StatuteRecommendationService()
         self.stage_timings = {}
@@ -69,31 +60,22 @@ class MultiStageAnalyzer:
         progress_callback: Optional[Callable] = None,
         case_type: Optional[str] = None,
         legal_issues: Optional[List[str]] = None,
+        jurisdiction: str = "Florida",
     ) -> MultiStageAnalysisResult:
-        """Execute 4-stage analysis pipeline.
-
-        Args:
-        ----
-            intake_content: Processed intake form content
-            document_summaries: Structured summaries of case documents
-            progress_callback: Optional callback for progress updates
-            case_type: Optional case type hint
-            legal_issues: Optional pre-identified legal issues
-
-        Returns:
-        -------
-            MultiStageAnalysisResult with comprehensive analysis
-
-        """
+        """Execute 4-stage analysis pipeline."""
         start_time = time.time()
-        logger.info("Starting multi-stage analysis pipeline")
+        logger.info(f"Starting multi-stage analysis pipeline for {jurisdiction}")
+
+        # Ensure statute service is initialized for the correct jurisdiction
+        if self.statute_service.jurisdiction != jurisdiction:
+            self.statute_service = StatuteRecommendationService(jurisdiction=jurisdiction)
 
         # Stage 1: Extract Fact Matrix
         if progress_callback:
             await progress_callback("Extracting key facts and timeline...", [], "fact_extraction", 20)
 
         stage_start = time.time()
-        fact_matrix = await self._extract_fact_matrix(intake_content, document_summaries)
+        fact_matrix = await self._extract_fact_matrix(intake_content, document_summaries, jurisdiction)
         self.stage_timings["fact_extraction"] = time.time() - stage_start
         logger.info(
             f"Stage 1 complete: {len(fact_matrix.parties)} parties, "
@@ -103,63 +85,43 @@ class MultiStageAnalyzer:
 
         # Stage 2: Map Legal Issues
         if progress_callback:
-            await progress_callback("Mapping legal issues and statutes...", [], "issue_mapping", 35)
+            await progress_callback("Mapping legal issues and statutes...", [], "issue_mapping", 40)
 
         stage_start = time.time()
-        issue_map = await self._map_legal_issues(fact_matrix, intake_content, case_type, legal_issues)
-        self.stage_timings["issue_mapping"] = time.time() - stage_start
-        logger.info(
-            f"Stage 2 complete: {len(issue_map.primary_issues)} primary issues, "
-            f"complexity={issue_map.case_complexity}"
+        issue_map = await self._map_legal_issues(
+            fact_matrix, intake_content, case_type, legal_issues, jurisdiction
         )
-
-        # Query verified statutes from corpus
-        verified_statutes = []
-        if issue_map.relevant_statutes:
-            try:
-                recommendations = await asyncio.to_thread(
-                    self.statute_service.recommend_statutes,
-                    case_facts=intake_content[:2000],
-                    legal_issues=legal_issues or [],
-                    case_type=case_type,
-                    limit=5,
-                )
-                verified_statutes = [
-                    {
-                        "citation": rec.citation,
-                        "title": rec.title,
-                        "summary": rec.summary,
-                        "relevance": rec.relevance_reason,
-                    }
-                    for rec in recommendations
-                ]
-                logger.info(f"Retrieved {len(verified_statutes)} verified statutes from corpus")
-            except Exception as e:
-                logger.warning(f"Failed to retrieve verified statutes: {e}")
+        self.stage_timings["issue_mapping"] = time.time() - stage_start
+        logger.info(f"Stage 2 complete: {len(issue_map.primary_issues)} primary issues mapped")
 
         # Stage 3: Deep Legal Analysis
         if progress_callback:
-            await progress_callback("Performing comprehensive legal analysis...", [], "deep_analysis", 60)
+            await progress_callback("Performing deep legal analysis...", [], "deep_analysis", 70)
 
         stage_start = time.time()
-        deep_analysis = await self._perform_deep_analysis(
-            fact_matrix, issue_map, verified_statutes, document_summaries
+        deep_analysis = await self._perform_deep_legal_analysis(
+            fact_matrix, issue_map, intake_content, jurisdiction
         )
         self.stage_timings["deep_analysis"] = time.time() - stage_start
-        logger.info(
-            f"Stage 3 complete: {len(deep_analysis.issue_analyses)} issues analyzed, "
-            f"overall strength={deep_analysis.overall_case_strength}"
-        )
+        logger.info(f"Stage 3 complete: {len(deep_analysis.issue_analyses)} issues analyzed deeply")
 
-        # Stage 4: Determine Letter Structure
+        # Stage 4: Letter Structure Determination
         stage_start = time.time()
         letter_structure = self._determine_letter_structure(issue_map, deep_analysis)
         self.stage_timings["structure_determination"] = time.time() - stage_start
-        logger.info(f"Stage 4 complete: structure={letter_structure.style}")
+
+        # Collect verified statutes from the service for inclusion in result
+        verified_statutes = self.statute_service.recommend_statutes(
+            case_facts=intake_content[:2000],
+            legal_issues=[i.name for i in issue_map.primary_issues],
+            case_type=case_type,
+            limit=10,
+        )
 
         total_time = time.time() - start_time
-        logger.info(f"Multi-stage analysis complete in {total_time:.2f} seconds")
+        logger.info(f"Multi-stage analysis pipeline complete in {total_time:.2f}s")
 
+        # Derive opposing parties
         opposing_parties = self._identify_opposing_parties(fact_matrix)
 
         return MultiStageAnalysisResult(
@@ -177,12 +139,9 @@ class MultiStageAnalyzer:
         self,
         intake_content: str,
         document_summaries: List[DocumentSummaryStructured],
+        jurisdiction: str,
     ) -> FactMatrix:
-        """Stage 1: Extract structured facts from documents.
-
-        Uses high-precision AI call (temp=0.1) to build factual foundation.
-        """
-        # Prepare document summaries for context
+        """Stage 1: Extract structured facts from documents."""
         docs_context = []
         for doc in document_summaries:
             doc_dict = doc.model_dump()
@@ -196,8 +155,8 @@ class MultiStageAnalyzer:
                 }
             )
 
-        prompt = f"""You are a precise legal fact extractor. Extract ONLY factual
-information from the case materials. Do NOT perform legal analysis.
+        prompt = f"""You are a precise legal fact extractor focusing on a matter in {jurisdiction}.
+Extract ONLY factual information from the case materials. Do NOT perform legal analysis.
 
 INTAKE INFORMATION:
 {intake_content[:3000]}
@@ -303,15 +262,17 @@ RULES:
             messages=[
                 {
                     "role": "system",
-                    "content": "You are a precise legal fact extractor. Return only valid JSON.",
+                    "content": (
+                        f"You are a precise legal fact extractor for {jurisdiction} law. "
+                        "Return only valid JSON."
+                    ),
                 },
                 {"role": "user", "content": prompt},
             ],
             max_tokens=4000,
-            temperature=0.1,  # High precision for facts
+            temperature=0.1,
         )
 
-        # Parse JSON response
         raw_response = response_dict["content"].strip()
         if raw_response.startswith("```"):
             lines = raw_response.split("\n")
@@ -319,7 +280,6 @@ RULES:
 
         fact_data = json.loads(raw_response)
 
-        # Convert to FactMatrix model
         return FactMatrix(
             parties=[Party(**p) for p in fact_data.get("parties", [])],
             timeline=[Event(**e) for e in fact_data.get("timeline", [])],
@@ -336,15 +296,13 @@ RULES:
         self,
         fact_matrix: FactMatrix,
         intake_content: str,
-        case_type: Optional[str] = None,
-        legal_issues_hint: Optional[List[str]] = None,
+        case_type: Optional[str],
+        legal_issues_hint: Optional[List[str]],
+        jurisdiction: str,
     ) -> LegalIssueMap:
-        """Stage 2: Map all applicable legal issues and statutes.
-
-        Uses moderate-precision AI call (temp=0.2) for classification.
-        """
-        prompt = f"""You are a Florida legal issue analyst. Based on the facts
-extracted, identify ALL applicable legal issues and statutes.
+        """Stage 2: Map all applicable legal issues and statutes."""
+        prompt = f"""You are a {jurisdiction} legal issue analyst. Based on the facts
+extracted, identify ALL applicable legal issues and statutes under {jurisdiction} law.
 
 CASE TYPE: {case_type or "Unknown"}
 PRELIMINARY ISSUES: {", ".join(legal_issues_hint or fact_matrix.preliminary_issues)}
@@ -360,39 +318,30 @@ INTAKE SUMMARY:
 DETAILED FACTS:
 {json.dumps(fact_matrix.model_dump(), indent=2, default=str)[:3000]}
 
-Identify and classify all legal issues. Return JSON:
+Your task:
+1. Identify primary legal issues (3-5)
+2. Map applicable {jurisdiction} statutes or rules
+3. Identify secondary issues (2-4)
+4. List key facts supporting each primary issue
 
+Return JSON:
 {{
   "primary_issues": [
     {{
-      "issue_name": "Descriptive name (e.g., Implied Warranty Breach)",
-      "category": "contract | tort | statutory | procedural",
-      "elements": ["Element 1", "Element 2", "..."],
-      "potential_remedies": ["Remedy 1", "Remedy 2"],
-      "florida_statute_references": ["§83.51", "Chapter 558", "..."],
-      "confidence": "strong | moderate | weak"
+      "name": "string (e.g. Breach of Implied Warranty)",
+      "description": "Short explanation",
+      "applicable_statutes": ["{jurisdiction} Statute § ..."],
+      "supporting_fact_ids": ["timeline_id_1", "financial_id_1"]
     }}
   ],
-  "secondary_issues": [...same structure...],
-  "relevant_statutes": ["§83.51", "Chapter 558", "§713.02", "..."],
-  "procedural_requirements": [
+  "secondary_issues": [
     {{
-      "requirement": "Description",
-      "deadline": "Time limit or null",
-      "statute_basis": "Florida Statute reference or null",
-      "consequences_if_missed": "What happens"
+      "name": "string",
+      "description": "string"
     }}
   ],
-  "case_complexity": "simple | moderate | complex",
-  "complexity_reasoning": "Why this complexity level"
+  "statutory_framework": "Summary of the governing {jurisdiction} law for this case"
 }}
-
-COMPLEXITY CRITERIA:
-- simple: 1-2 straightforward issues, no complex procedures
-- moderate: 2-3 issues, some procedural requirements
-- complex: 3+ issues, complex procedures, multiple parties
-
-Return ONLY valid JSON.
 """
 
         model = self.client.get_preferred_model("multi_stage_analysis", "gpt-4o")
@@ -401,15 +350,14 @@ Return ONLY valid JSON.
             messages=[
                 {
                     "role": "system",
-                    "content": "You are a Florida legal issue analyst. Return only valid JSON.",
+                    "content": f"You are an expert {jurisdiction} legal analyst. Return only valid JSON.",
                 },
                 {"role": "user", "content": prompt},
             ],
             max_tokens=3000,
-            temperature=0.2,  # Balanced for classification
+            temperature=0.2,
         )
 
-        # Parse JSON response
         raw_response = response_dict["content"].strip()
         if raw_response.startswith("```"):
             lines = raw_response.split("\n")
@@ -420,56 +368,37 @@ Return ONLY valid JSON.
         return LegalIssueMap(
             primary_issues=[LegalIssue(**i) for i in issue_data.get("primary_issues", [])],
             secondary_issues=[LegalIssue(**i) for i in issue_data.get("secondary_issues", [])],
-            relevant_statutes=issue_data.get("relevant_statutes", []),
-            procedural_requirements=[
-                ProceduralStep(**p) for p in issue_data.get("procedural_requirements", [])
-            ],
-            case_complexity=issue_data.get("case_complexity", "moderate"),
-            complexity_reasoning=issue_data.get("complexity_reasoning"),
+            statutory_framework=issue_data.get("statutory_framework", ""),
         )
 
-    async def _perform_deep_analysis(
+    async def _perform_deep_legal_analysis(
         self,
         fact_matrix: FactMatrix,
         issue_map: LegalIssueMap,
-        verified_statutes: List[dict],
-        document_summaries: List[DocumentSummaryStructured],
+        intake_content: str,
+        jurisdiction: str,
     ) -> DeepAnalysis:
-        """Stage 3: Comprehensive analysis of each identified issue.
+        """Stage 3: Comprehensive analysis of each issue using factual matrix."""
+        # Prepare context
+        issues_to_analyze = [i.model_dump() for i in issue_map.primary_issues]
 
-        Uses balanced AI call (temp=0.3) for legal reasoning.
-        """
-        # Format verified statutes for context
-        statute_context = ""
-        if verified_statutes:
-            statute_context = "\n\nVERIFIED FLORIDA STATUTES:\n"
-            for statute in verified_statutes:
-                statute_context += f"\n{statute['citation']}: {statute['title']}\n"
-                statute_context += f"Summary: {statute['summary']}\n"
-                statute_context += f"Relevance: {statute['relevance']}\n"
+        prompt = f"""You are a senior {jurisdiction} attorney. Perform a deep legal
+analysis of the identified issues based on the factual matrix.
 
-        prompt = f"""You are a senior Florida attorney performing comprehensive legal analysis.
+JURISDICTION: {jurisdiction}
+ISSUES TO ANALYZE:
+{json.dumps(issues_to_analyze, indent=2)}
 
-FACTS:
-{json.dumps(fact_matrix.model_dump(), indent=2, default=str)}
-
-IDENTIFIED LEGAL ISSUES:
-{json.dumps([i.model_dump() for i in issue_map.primary_issues], indent=2)}
-
-{statute_context}
-
-For EACH primary issue, provide detailed analysis. ALSO evaluate overall case
-viability and whether a demand letter is appropriate.
+FACTUAL MATRIX:
+{json.dumps(fact_matrix.model_dump(), indent=2, default=str)[:5000]}
 
 Return JSON:
-
 {{
   "issue_analyses": [
     {{
       "issue_name": "string (match issue from input)",
       "legal_standard": "Plain English explanation of the law",
-      "fact_application": "How the facts meet or don't meet this standard -
-BE SPECIFIC with dates/amounts/citations",
+      "fact_application": "How the facts meet this standard - BE SPECIFIC with dates/amounts",
       "statute_analysis": "Analysis with verified statute citations (if applicable)",
       "case_law_support": "Case law if applicable or null",
       "remedies_available": ["Specific remedy 1", "Specific remedy 2"],
@@ -503,38 +432,23 @@ BE SPECIFIC with dates/amounts/citations",
   "key_strengths": ["Strength 1", "Strength 2"],
   "key_challenges": ["Challenge 1", "Challenge 2"],
   "is_viable": true | false,
-  "viability_reasoning": "Detailed explanation of why the case is or is not
-viable. If not viable, explain what is missing or why the facts do not
-support legal claims.",
+  "viability_reasoning": "Detailed explanation of why the case is or is not viable under {jurisdiction} law.",
   "recommend_demand_letter": true | false
 }}
 
 CASE VIABILITY CRITERIA:
 Set "is_viable" to FALSE if ANY of the following apply:
-- The facts do not support any recognized legal claim under Florida law
-- The statute of limitations has clearly expired with no tolling arguments
-- The client's own conduct bars recovery (e.g., unclean hands, contributory
-negligence that eliminates recovery)
-- There is insufficient evidence to prove essential elements of any claim
+- The facts do not support any recognized legal claim under {jurisdiction} law
+- The statute of limitations has clearly expired
+- The client's own conduct bars recovery
+- There is insufficient evidence to prove essential elements
 - The opposing party has clear, unassailable defenses
-- The damages are trivial or unrecoverable (e.g., opposing party is judgment-proof)
-- The case is purely speculative with no concrete harm
-
-Set "recommend_demand_letter" to FALSE if:
-- The case is not viable (is_viable = false)
-- A demand letter would expose the client to counterclaims or liability
-- The situation calls for immediate litigation (e.g., imminent statute of limitations)
-- Settlement is not a realistic option (e.g., criminal matter, regulatory complaint)
-- The opposing party is unresponsive or has already rejected similar demands
 
 CRITICAL INSTRUCTIONS:
-- Use VERIFIED STATUTES PREFERENTIALLY - cite them confidently
-- For unverified statutes, use cautious language: "Under Florida law..." without specific citation
-- Integrate procedural requirements WITHIN substantive analysis
+- Use VERIFIED STATUTES PREFERENTIALLY
+- For unverified statutes, use cautious language: "Under {jurisdiction} law..."
 - Be specific with facts - use actual dates, amounts, names from fact matrix
-- Explain consequences with real-world impact
-- Be HONEST about case viability - do not give false hope. If the case is
-weak or not viable, say so clearly in viability_reasoning.
+- Be HONEST about case viability - do not give false hope.
 
 Return ONLY valid JSON.
 """
@@ -546,17 +460,16 @@ Return ONLY valid JSON.
                 {
                     "role": "system",
                     "content": (
-                        "You are a senior Florida attorney with 20+ years experience. "
-                        "Provide comprehensive, well-reasoned analysis."
+                        f"You are a senior {jurisdiction} attorney with 20+ years experience. "
+                        "Provide comprehensive analysis."
                     ),
                 },
                 {"role": "user", "content": prompt},
             ],
             max_tokens=6000,
-            temperature=0.3,  # Balanced for legal reasoning
+            temperature=0.3,
         )
 
-        # Parse JSON response
         raw_response = response_dict["content"].strip()
         if raw_response.startswith("```"):
             lines = raw_response.split("\n")
@@ -582,15 +495,9 @@ Return ONLY valid JSON.
         issue_map: LegalIssueMap,
         analysis: DeepAnalysis,
     ) -> LetterStructure:
-        """Stage 4: Decide optimal letter structure based on complexity.
-
-        Logic-based determination (no AI call needed).
-        """
+        """Stage 4: Decide optimal letter structure."""
         num_primary_issues = len(issue_map.primary_issues)
 
-        # All cases now use natural flow format - no formal section headers
-        # Plain language explanations with flowing bullet paragraphs
-        # This matches our updated prompt and formatting rules
         return LetterStructure(
             style="natural_flow",
             intro="Here are the key points of our analysis:",

@@ -80,27 +80,106 @@ class JsonProcessingService:
             )
             return None, [error]
 
-    def _load_prompt_template(self) -> str:
-        """Load the prompt template from a file."""
+    JURISDICTION_CONFIG = {
+        "Florida": {
+            "name": "Florida",
+            "name_upper": "FLORIDA",
+            "statute_example": "Fla. Stat. § 718.116",
+            "statute_citation_prefix": "Florida Statute §",
+            "statute_citation_short_prefix": "Fla. Stat. §",
+            "guidance_file": "florida_guidance.md",
+        },
+        "New Mexico": {
+            "name": "New Mexico",
+            "name_upper": "NEW MEXICO",
+            "statute_example": "N.M. Stat. Ann. § 57-12-2",
+            "statute_citation_prefix": "N.M. Stat. Ann. §",
+            "statute_citation_short_prefix": "NMSA 1978 §",
+            "guidance_file": "new_mexico_guidance.md",
+        },
+    }
+
+    def _load_prompt_template(self, jurisdiction: str = "Florida") -> str:
+        """Load the prompt template from a file and inject jurisdiction-specific guidance."""
         prompt_path = os.path.join(os.path.dirname(__file__), "..", "prompts", "findings_letter_prompt.txt")
         try:
             with open(prompt_path, "r", encoding="utf-8") as f:
-                return f.read()
+                template = f.read()
+
+            # Dynamically load jurisdiction-specific guidance
+            guidance_file_name = self.JURISDICTION_CONFIG.get(jurisdiction, {}).get("guidance_file")
+            jurisdiction_specific_guidance = ""
+            if guidance_file_name:
+                guidance_path = os.path.join(
+                    os.path.dirname(__file__), "..", "prompts", "jurisdiction_guidance", guidance_file_name
+                )
+                if os.path.exists(guidance_path):
+                    with open(guidance_path, "r", encoding="utf-8") as f_guidance:
+                        jurisdiction_specific_guidance = f_guidance.read()
+                else:
+                    logger.warning(f"Jurisdiction-specific guidance file not found: {guidance_path}")
+            else:
+                logger.warning(f"No guidance file configured for jurisdiction: {jurisdiction}")
+
+            # Get jurisdiction-specific citation prefixes for prompt formatting
+            juris_config = self.JURISDICTION_CONFIG.get(jurisdiction, self.JURISDICTION_CONFIG["Florida"])
+            jurisdiction_name = juris_config["name"]
+            jurisdiction_name_upper = juris_config["name_upper"]
+            statute_citation_prefix = juris_config["statute_citation_prefix"]
+            statute_citation_short_prefix = juris_config["statute_citation_short_prefix"]
+            statute_example = juris_config["statute_example"]
+
+            # Format the template with dynamic values
+            # We use double braces for placeholders that should remain for the second formatting pass
+            return template.format(
+                jurisdiction=jurisdiction,
+                jurisdiction_name=jurisdiction_name,
+                jurisdiction_name_upper=jurisdiction_name_upper,
+                jurisdiction_statute_citation_prefix=statute_citation_prefix,
+                jurisdiction_statute_citation_short_prefix=statute_citation_short_prefix,
+                jurisdiction_statute_example=statute_example,
+                jurisdiction_specific_guidance=jurisdiction_specific_guidance,
+                # Other placeholders will be filled by the calling function
+                qa_context="{qa_context}",
+                intake_data="{intake_data}",
+                document_summaries="{document_summaries}",
+                quality_context="{quality_context}",
+                statute_context="{statute_context}",
+                attorney_name="{attorney_name}",
+                attorney_title="{attorney_title}",
+                firm_name="{firm_name}",
+                contact_phone="{contact_phone}",
+                contact_email="{contact_email}",
+                clio_matter_context="{clio_matter_context}",
+            )
         except FileNotFoundError as e:
             logger.error(f"Prompt template file not found at: {prompt_path}")
             raise ValueError(f"Findings letter prompt template not found at {prompt_path}") from e
 
-    def generate_html_letter(self, intake_data: str, document_summaries: str) -> str:
+    def generate_html_letter(
+        self, intake_data: str, document_summaries: str, jurisdiction: str = "Florida"
+    ) -> str:
         """Generate HTML letter content using the single master prompt."""
-        logger.info("Starting HTML letter generation using master prompt")
+        logger.info(f"Starting HTML letter generation for {jurisdiction} using master prompt")
         try:
-            prompt_template = self._load_prompt_template()
+            prompt_template = self._load_prompt_template(jurisdiction=jurisdiction)
 
             formatted_prompt = prompt_template.format(
-                intake_data=intake_data, document_summaries=document_summaries
+                intake_data=intake_data,
+                document_summaries=document_summaries,
+                # Provide empty values for other placeholders to avoid KeyError
+                qa_context="",
+                quality_context="",
+                statute_context="",
+                attorney_name="Attorney",
+                attorney_title="Partner",
+                firm_name="",
+                contact_phone="",
+                contact_email="",
+                clio_matter_context="",
             )
 
-            logger.info("Making OpenAI request with master prompt for Markdown generation using gpt-4o.")
+            logger.info(f"Making OpenAI request with master prompt for {jurisdiction} using gpt-4o.")
             markdown_response = self._make_openai_request(formatted_prompt, model="gpt-4o")
 
             if not markdown_response or not markdown_response.strip():
@@ -133,6 +212,7 @@ class JsonProcessingService:
         contact_email: str = None,
         statute_context: str = "",
         clio_matter_context: str = "",
+        jurisdiction: str = "Florida",  # Added jurisdiction parameter
     ) -> str:
         """Generate findings letter from structured JSON summaries.
 
@@ -147,16 +227,17 @@ class JsonProcessingService:
             contact_phone: Contact phone for letter footer (optional, uses placeholder if not provided)
             contact_email: Contact email for letter footer
                 (optional, uses placeholder if not provided)
-            statute_context: Context about relevant Florida statutes for the case
+            statute_context: Context about relevant statutes for the case
             clio_matter_context: Rich context from CLIO matter including timeline,
                 party relationships, communication patterns
+            jurisdiction: State jurisdiction (e.g., "Florida", "New Mexico")
 
         Returns:
         -------
             HTML letter content
 
         """
-        logger.info("Generating letter from structured JSON input")
+        logger.info(f"Generating letter for {jurisdiction} from structured JSON input")
 
         # Format Q&A pairs for prompt context
         qa_context = ""
@@ -171,8 +252,8 @@ class JsonProcessingService:
             qa_context = "No user-confirmed Q&A pairs available."
             logger.info("No confirmed Q&A pairs provided for letter generation")
 
-        # Load enhanced prompt template
-        template_content = self._load_prompt_template()
+        # Load enhanced prompt template with jurisdiction-specific guidance pre-injected
+        prompt_template = self._load_prompt_template(jurisdiction=jurisdiction)
 
         # Extract attorney name from intake if not provided
         if not attorney_name:
@@ -190,13 +271,9 @@ class JsonProcessingService:
             firm_name = firm_match.group(1) if firm_match else ""
 
         # Use provided contact info or fallback to defaults/placeholders
-        contact_phone_value = contact_phone if contact_phone else "(727) 275-9575"
+        if not contact_phone:
+            contact_phone = "(727) 275-9575" if jurisdiction == "Florida" else "(505) 555-0199"
         contact_email_value = contact_email if contact_email else "[EMAIL PLACEHOLDER]"
-
-        logger.info(
-            f"Contact info for letter: phone={'provided' if contact_phone else 'default'}, "
-            f"email={'provided' if contact_email else 'placeholder'}"
-        )
 
         # Keep statute context separate for prominence in prompt
         statute_context_formatted = statute_context if statute_context else ""
@@ -207,12 +284,10 @@ class JsonProcessingService:
             full_quality_context = f"{full_quality_context}\n\n{clio_matter_context}"
             logger.info("Added CLIO matter context to letter generation prompt")
 
-        if statute_context_formatted:
-            logger.info("Statute context will be prominently placed in prompt")
-
         # Format prompt with JSON input and signature variables
-        prompt = template_content.format(
-            qa_context=qa_context,  # NEW: User-confirmed Q&A pairs
+        # Note: _load_prompt_template already formatted jurisdiction-specific fields
+        prompt = prompt_template.format(
+            qa_context=qa_context,
             intake_data=intake_content[:5000],
             document_summaries=document_summaries_json,  # Pass JSON directly
             quality_context=full_quality_context,
@@ -220,9 +295,9 @@ class JsonProcessingService:
             attorney_name=attorney_name,
             attorney_title="Senior Partner",  # Default title
             firm_name=firm_name,
-            contact_phone=contact_phone_value,
+            contact_phone=contact_phone,
             contact_email=contact_email_value,
-            clio_matter_context=clio_matter_context,  # CLIO context for enhanced letter generation
+            clio_matter_context=clio_matter_context,
         )
 
         logger.info("Making OpenAI request for letter generation from JSON")
@@ -266,6 +341,7 @@ class JsonProcessingService:
         contact_email: str = None,
         quality_context: str = "",
         clio_matter_context: str = "",
+        jurisdiction: str = "Florida",  # Added jurisdiction parameter
     ) -> str:
         """Generate findings letter using multi-stage analysis results.
 
@@ -286,6 +362,7 @@ class JsonProcessingService:
             contact_email: Contact email
             quality_context: Quality assessment context
             clio_matter_context: CLIO matter context
+            jurisdiction: State jurisdiction (e.g., "Florida", "New Mexico")
 
         Returns:
         -------
@@ -296,8 +373,8 @@ class JsonProcessingService:
         # The analyzer always returns natural_flow regardless of complexity
         num_issues = len(legal_analysis.issue_analyses)
         logger.info(
-            f"Generating natural flow letter with {num_issues} issues",
-            extra={"structure": "natural_flow", "issues": num_issues},
+            f"Generating natural flow letter for {jurisdiction} with {num_issues} issues",
+            extra={"structure": "natural_flow", "issues": num_issues, "jurisdiction": jurisdiction},
         )
 
         # Format Q&A pairs for prompt context
@@ -310,8 +387,8 @@ class JsonProcessingService:
         else:
             qa_context = "No user-confirmed Q&A pairs available."
 
-        # Load enhanced prompt template
-        template_content = self._load_prompt_template()
+        # Load enhanced prompt template with jurisdiction-specific guidance pre-injected
+        prompt_template = self._load_prompt_template(jurisdiction=jurisdiction)
 
         # Extract attorney info if not provided
         if not attorney_name:
@@ -329,7 +406,8 @@ class JsonProcessingService:
             firm_name = firm_match.group(1) if firm_match else ""
 
         # Contact info
-        contact_phone_value = contact_phone if contact_phone else "(727) 275-9575"
+        if not contact_phone:
+            contact_phone = "(727) 275-9575" if jurisdiction == "Florida" else "(505) 555-0199"
         contact_email_value = contact_email if contact_email else "[EMAIL PLACEHOLDER]"
 
         # Format structured analysis for prompt
@@ -340,7 +418,8 @@ class JsonProcessingService:
         # Build statute context
         statute_context = ""
         if verified_statutes:
-            statute_context = "\n\nVERIFIED FLORIDA STATUTES:\n\n"
+            statute_prefix = "FLORIDA" if jurisdiction == "Florida" else "NEW MEXICO"
+            statute_context = f"\n\nVERIFIED {statute_prefix} STATUTES:\n\n"
             for statute in verified_statutes:
                 statute_context += f"{statute['citation']}: {statute['title']}\n"
                 statute_context += f"Summary: {statute['summary']}\n"
@@ -351,11 +430,12 @@ class JsonProcessingService:
         if clio_matter_context:
             full_quality_context = f"{full_quality_context}\n\n{clio_matter_context}"
 
-        # Add structure guidance to prompt
+        # Add structure instruction before the closing
         structure_instruction = self._create_structure_instruction(structure_guidance)
 
         # Format prompt
-        prompt = template_content.format(
+        # Note: _load_prompt_template already formatted jurisdiction-specific fields
+        prompt = prompt_template.format(
             qa_context=qa_context,
             intake_data=intake_content[:5000],
             document_summaries=structured_context,  # Use structured analysis instead of raw summaries
@@ -364,7 +444,7 @@ class JsonProcessingService:
             attorney_name=attorney_name,
             attorney_title="Senior Partner",
             firm_name=firm_name,
-            contact_phone=contact_phone_value,
+            contact_phone=contact_phone,
             contact_email=contact_email_value,
             clio_matter_context=clio_matter_context,
         )

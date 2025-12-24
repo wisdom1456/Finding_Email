@@ -79,7 +79,7 @@ FORMATTING FIXES TO APPLY:
    - If you see "Key Findings" → change to "Here are the key points of our analysis:"
 
 2. REMOVE BOLD ISSUE TITLES:
-   - If you see "• **Implied Warranty**:" → change to "• Under Florida law, there's a protection called..."
+   - If you see "• **Implied Warranty**:" → change to "• Under state law, there's a protection called..."
    - Bullets should be flowing paragraphs, NOT formatted headers
    - Each bullet should read like a conversation, not a legal outline
 
@@ -108,8 +108,8 @@ Based on our review...
 
 Here are the key points of our analysis:
 
-• **Implied Warranty & Construction Defects (Florida Statutes Chapter 558)**:
-  Under Florida law, an implied warranty exists...
+• **Implied Warranty & Construction Defects (Relevant Statute)**:
+  Under state law, an implied warranty exists...
 
 2. RECOMMENDED ACTION & NEXT STEPS
 
@@ -122,7 +122,7 @@ Based on our review, we understand that...
 
 Here are the key points of our analysis:
 
-• Under Florida law, there's an important protection called an "implied warranty
+• Under state law, there's an important protection called an "implied warranty
   of workmanlike construction." This means contractors are legally required to
   do competent work, even if your contract doesn't say so. In your case,
   [application]. What this means for you: [impact].

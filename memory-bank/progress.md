@@ -62,6 +62,18 @@
      *   **Consistent Pattern**: Follows same pattern as auto-filled client name field
      *   **Documentation**: Created comprehensive enhancement guide in `AI_AUTO_FILL_LEGAL_ISSUE_ENHANCEMENT.md`
 
+### Multi-State Integration & New Mexico Expansion (December 2025)
+
+*   **Objective**: Fully integrate multi-state support (Florida and New Mexico) across the entire application stack.
+*   **Status**: **Completed**
+*   **Key Outcomes**:
+    *   **Expanded NM Legal Corpus**: Increased the New Mexico corpus to 42 statutes and 8 rules, covering Consumer Protection, Landlord-Tenant, Construction & Liens, Real Estate & Foreclosure, and Insurance & Torts.
+    *   **Database Schema Update**: Added `jurisdiction` to the `cases` table and `default_jurisdiction` to the `profiles` table to store state-specific context.
+    *   **Jurisdiction-Aware Backend**: Updated all core services (`MainProcessor`, `StatuteValidationService`, `StatuteRecommendationService`, `CorpusCoverageService`, `DeadlineExtractionService`, `CaseChatService`, `JsonProcessingService`) to dynamically handle multiple jurisdictions.
+    *   **Dynamic Prompting**: Implemented jurisdiction-specific guidance injection into AI prompts, ensuring legal advice and citations follow local laws and standards.
+    *   **Frontend UI Updates**: Enhanced the "New Case", "User Settings", and "Case Details" views to allow seamless state selection and display jurisdiction-specific guidance.
+    *   **Streamlit Dashboard Support**: Updated the internal `corpus_loader` to support browsing and searching both Florida and New Mexico legal databases.
+
 ## 2. Next Steps & Future Work
 
 ### Foundational Improvements

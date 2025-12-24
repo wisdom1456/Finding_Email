@@ -31,7 +31,28 @@ class DemandLetterService:
         attorney_info: Dict[str, Optional[str]],
         client_name: Optional[str] = None,
         document_summaries: Optional[List[dict]] = None,
+        jurisdiction: str = "Florida",  # Added jurisdiction parameter
     ) -> str:
+        """Generate a formal demand letter for a specific opposing party.
+
+        Args:
+        ----
+            fact_matrix_dict: Structured fact matrix data.
+            deep_analysis_dict: Comprehensive legal analysis data.
+            target_party_name: Name of the party receiving the demand.
+            demand_amount: Optional monetary demand amount.
+            demand_deadline: Deadline for compliance.
+            specific_demands: List of specific performance demands.
+            attorney_info: Attorney contact and firm details.
+            client_name: Name of the client for representation statement.
+            document_summaries: Optional document summaries for context.
+            jurisdiction: State jurisdiction for legal context.
+
+        Returns:
+        -------
+            HTML-formatted demand letter.
+
+        """
         fact_matrix = FactMatrix(**fact_matrix_dict)
         deep_analysis = DeepAnalysis(**deep_analysis_dict)
         party = next((p for p in fact_matrix.parties if p.name == target_party_name), None)
@@ -47,6 +68,11 @@ class DemandLetterService:
                 except Exception as e:
                     logger.warning(f"Failed to parse document summary: {e}")
 
+        # Jurisdiction-specific citation prefixes
+        statute_example = "Fla. Stat. § 83.51"
+        if jurisdiction == "New Mexico":
+            statute_example = "N.M. Stat. Ann. § 57-12-2"
+
         prompt = self._load_template().format(
             target_party_name=target_party_name,
             party_context=self._build_party_context(fact_matrix, party),
@@ -59,9 +85,11 @@ class DemandLetterService:
             contact_phone=attorney_info.get("phone") or "",
             contact_email=attorney_info.get("email") or "",
             client_name=client_name or "Client",
+            jurisdiction_name=jurisdiction,
+            statute_example=statute_example,
         )
 
-        logger.info(f"Generating demand letter for {target_party_name}")
+        logger.info(f"Generating demand letter for {target_party_name} in {jurisdiction}")
         model = self.client.get_preferred_model("letter_generation", "gpt-4o")
         logger.info(f"Using model {model} for demand letter generation")
         response = self.client.create_chat_completion(
@@ -70,7 +98,7 @@ class DemandLetterService:
                 {
                     "role": "system",
                     "content": (
-                        "You are a senior Florida attorney drafting a formal demand letter. "
+                        f"You are a senior {jurisdiction} attorney drafting a formal demand letter. "
                         "Be professional, assertive, and precise. "
                         "Output clean content without markdown code fences or extra formatting. "
                         "Use proper HTML-compatible line breaks and structure."
@@ -239,7 +267,8 @@ class DemandLetterService:
         if all_case_citations:
             context_lines.append("\n=== AVAILABLE CASE CITATIONS ===")
             context_lines.append(
-                "IMPORTANT: Include these case citations in the Legal Analysis section of the demand letter."
+                "IMPORTANT: Include these case citations in the Legal Analysis section "
+                "of the demand letter."
             )
             for citation in all_case_citations:
                 context_lines.append(f"  - {citation}")
@@ -247,7 +276,8 @@ class DemandLetterService:
         if all_statute_citations:
             context_lines.append("\n=== AVAILABLE STATUTE CITATIONS ===")
             context_lines.append(
-                "IMPORTANT: Include these statute citations in the Legal Analysis section of the demand letter."
+                "IMPORTANT: Include these statute citations in the Legal Analysis section "
+                "of the demand letter."
             )
             for citation in all_statute_citations:
                 context_lines.append(f"  - {citation}")

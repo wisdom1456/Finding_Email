@@ -19,6 +19,7 @@
 	let firmAddress = $state(`2706 US-19 ALT
 Suite 213
 Palm Harbor, FL 34683`);
+	let defaultJurisdiction = $state('Florida');
 
 	// AI Model Preferences
 	let documentAnalysisModel = $state('gpt-4o');
@@ -65,6 +66,7 @@ Palm Harbor, FL 34683`);
 				phone = profile.phone || '(727) 275-9575';
 				firmName = profile.firm_name || 'Bernhardt Riley Law Firm';
 				firmAddress = profile.firm_address || firmAddress;
+				defaultJurisdiction = profile.default_jurisdiction || 'Florida';
 
 				// Load AI preferences
 				if (profile.ai_preferences) {
@@ -99,6 +101,7 @@ Palm Harbor, FL 34683`);
 				phone: phone,
 				firm_name: firmName,
 				firm_address: firmAddress,
+				default_jurisdiction: defaultJurisdiction,
 				ai_preferences: {
 					document_analysis: documentAnalysisModel,
 					letter_generation: letterGenerationModel,
@@ -227,6 +230,30 @@ Palm Harbor, FL 34683`);
 							class="w-full px-3 py-2.5 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent transition-colors resize-none"
 							placeholder="Street Address&#10;Suite/Unit&#10;City, State ZIP"
 						></textarea>
+					</div>
+				</div>
+			</div>
+
+			<!-- Legal Jurisdiction Section -->
+			<div class="bg-white shadow-card rounded-lg p-6 mb-6">
+				<h2 class="text-lg font-heading font-semibold text-contrast mb-2">Legal Jurisdiction Preference</h2>
+				<p class="text-sm text-gray-500 mb-6">
+					Set your default state for new cases. This will pre-select the appropriate legal corpus and statute validation rules.
+				</p>
+
+				<div class="space-y-4">
+					<div>
+						<label for="defaultJurisdiction" class="block text-sm font-medium text-contrast mb-1">
+							Default State
+						</label>
+						<select
+							id="defaultJurisdiction"
+							bind:value={defaultJurisdiction}
+							class="w-full px-3 py-2.5 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent transition-colors"
+						>
+							<option value="Florida">Florida</option>
+							<option value="New Mexico">New Mexico</option>
+						</select>
 					</div>
 				</div>
 			</div>

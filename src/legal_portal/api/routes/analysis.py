@@ -15,9 +15,6 @@ from typing import Any, Dict, List, Optional
 
 import html2text
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
-from pydantic import BaseModel, Field
-from starlette.concurrency import run_in_threadpool
-
 from legal_portal.api.dependencies import get_current_user, get_supabase_client, get_user_supabase_client
 from legal_portal.api.rate_limiter import limiter
 from legal_portal.core.data_models import (
@@ -32,6 +29,8 @@ from legal_portal.services.json_processing_service import JsonProcessingService
 from legal_portal.services.main_processor import process_case_documents
 from legal_portal.services.progress_manager import ProgressManager
 from legal_portal.utils.openai_client import OpenAIClient
+from pydantic import BaseModel, Field
+from starlette.concurrency import run_in_threadpool
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -253,7 +252,7 @@ class LetterGenerationResponse(BaseModel):
 def _download_and_extract_documents(
     case_id: str, documents: List[Dict[str, Any]], supabase, temp_dir: str
 ) -> tuple[Optional[str], List[str]]:
-    """Synchronous helper to download and extract documents."""
+    """Download and extract documents synchronously."""
     file_paths = []
     intake_form_path = None
 
@@ -321,7 +320,8 @@ def _download_and_extract_documents(
                     if expected_size > 0 and actual_size < expected_size * 0.9:
                         logger.warning(
                             f"Download may be truncated for {doc['file_name']}: "
-                            f"got {actual_size} bytes, expected {expected_size} bytes (attempt {attempt + 1}/{max_retries})"
+                            f"got {actual_size} bytes, expected {expected_size} bytes "
+                            f"(attempt {attempt + 1}/{max_retries})"
                         )
                         if attempt < max_retries - 1:
                             time.sleep(0.5 * (attempt + 1))  # Exponential backoff
@@ -336,7 +336,10 @@ def _download_and_extract_documents(
                     # Verify file was written correctly
                     written_size = os.path.getsize(temp_path)
                     if written_size != actual_size:
-                        logger.error(f"File write mismatch for {doc['file_name']}: wrote {written_size}, expected {actual_size}")
+                        logger.error(
+                            f"File write mismatch for {doc['file_name']}: "
+                            f"wrote {written_size}, expected {actual_size}"
+                        )
                         if attempt < max_retries - 1:
                             continue
 
@@ -345,7 +348,9 @@ def _download_and_extract_documents(
                     break
 
                 except Exception as e:
-                    logger.warning(f"Download attempt {attempt + 1}/{max_retries} failed for {doc['file_name']}: {e}")
+                    logger.warning(
+                        f"Download attempt {attempt + 1}/{max_retries} failed for {doc['file_name']}: {e}"
+                    )
                     if attempt < max_retries - 1:
                         time.sleep(0.5 * (attempt + 1))
                     continue
@@ -423,7 +428,8 @@ def _download_and_extract_documents(
                 is_intake = True
 
         if is_intake:
-            # If we already have an intake form, only replace it with a better one (PDF/DOCX over communication)
+            # If we already have an intake form, only replace it with a better one
+            # (e.g., PDF/DOCX over communication)
             if intake_form_path:
                 # Check if new candidate is a document file and current isn't, or if new is explicitly marked
                 current_is_doc = any(
@@ -506,6 +512,7 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
             raise ValueError("Case not found")
 
         case = case_response.data[0]
+        jurisdiction = case.get("jurisdiction", "Florida")  # Get jurisdiction from case
 
         # Get all documents for the case
         docs_response = supabase.table("documents").select("*").eq("case_id", case_id).execute()
@@ -531,6 +538,7 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
             "reference_number": case.get("reference_number", ""),
             "description": case.get("description", ""),
             "case_id": case_id,
+            "jurisdiction": jurisdiction,  # Include jurisdiction in case_info
         }
 
         # Prepare review_data (simplified - can be enhanced via UI later)
@@ -539,7 +547,7 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
             "legal_issue": case.get("description", "General legal document analysis"),
         }
 
-        logger.info(f"Processing with intake form: {os.path.basename(intake_form_path)}")
+        logger.info(f"Processing with intake form: {os.path.basename(intake_form_path)} in {jurisdiction}")
         logger.info(f"Additional documents: {len(file_paths)}")
 
         # Create progress callback that publishes to SSE
@@ -561,6 +569,7 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
             case_info=case_info,
             review_data=review_data,
             progress_callback=progress_callback,
+            jurisdiction=jurisdiction,  # Pass jurisdiction to main processor
         )
 
         logger.info(f"Processing completed with status: {result.status}")
@@ -637,10 +646,12 @@ async def start_analysis(
 
     Args:
     ----
-        request: Analysis request
-        background_tasks: FastAPI background tasks
+        analysis_request: Analysis request data
+        request: FastAPI request object
+        background_tasks: FastAPI background tasks handler
         user: Current authenticated user
-        supabase: Supabase client
+        user_supabase: User-scoped Supabase client
+        service_supabase: Service-role Supabase client
 
     Returns:
     -------
@@ -683,11 +694,17 @@ async def start_analysis(
         analysis = analysis_response.data[0]
 
         # Update case status
-        user_supabase.table("cases").update({"status": "processing"}).eq("id", analysis_request.case_id).execute()
+        user_supabase.table("cases").update({"status": "processing"}).eq(
+            "id", analysis_request.case_id
+        ).execute()
 
         # Start background processing using SERVICE client (bypasses RLS, no token expiry)
         background_tasks.add_task(
-            process_case_background, analysis_request.case_id, analysis["id"], service_supabase, analysis_request.provider
+            process_case_background,
+            analysis_request.case_id,
+            analysis["id"],
+            service_supabase,
+            analysis_request.provider,
         )
 
         return analysis
@@ -765,7 +782,8 @@ async def get_analysis_results(
     ----
         case_id: Case ID
         user: Current authenticated user
-        supabase: Supabase client
+        supabase: User-scoped Supabase client
+        service_supabase: Service-role Supabase client
 
     Returns:
     -------
@@ -849,6 +867,10 @@ async def generate_letter(
     letter_html: str
     target_party_name: Optional[str] = None
 
+    # Extract jurisdiction from artifacts
+    jurisdiction = artifacts.get("jurisdiction", "Florida")
+    logger.info(f"Generating {letter_request.letter_type} letter for {jurisdiction}")
+
     if letter_request.letter_type == LetterType.FINDINGS:
         from legal_portal.core.data_models import DeepAnalysis, FactMatrix, LetterStructure
 
@@ -871,6 +893,7 @@ async def generate_letter(
             contact_email=attorney_info["email"],
             quality_context=artifacts.get("quality_context", ""),
             clio_matter_context=artifacts.get("clio_matter_context", ""),
+            jurisdiction=jurisdiction,  # Pass jurisdiction
         )
         letter_key = "findings"
     else:
@@ -916,6 +939,7 @@ async def generate_letter(
             attorney_info=attorney_info,
             client_name=client_name,
             document_summaries=document_summaries,
+            jurisdiction=jurisdiction,  # Pass jurisdiction
         )
         target_party_name = letter_request.target_party_name
         letter_key = f"demand_{letter_request.target_party_name.replace(' ', '_')}".lower()
@@ -981,17 +1005,18 @@ async def calculate_demand_amount(
 
     # Filter financial items related to the target party
     party_financial_items = []
-    general_financial_items = []
+    # general_financial_items = []
 
     for item in financial_data:
         description = item.get("description", "").lower()
         if request.target_party_name.lower() in description:
             party_financial_items.append(item)
-        else:
-            general_financial_items.append(item)
+        # else:
+        #     general_financial_items.append(item)
 
     # Build AI prompt
-    prompt = f"""Analyze this case data and calculate a reasonable demand amount for the opposing party: {request.target_party_name}
+    target_party = request.target_party_name
+    prompt = f"""Analyze this case data and calculate a reasonable demand amount for: {target_party}
 
 Financial Data:
 {json.dumps(financial_data, indent=2)}
@@ -1003,7 +1028,7 @@ Legal Issues:
 {json.dumps(legal_issues, indent=2)}
 
 Instructions:
-1. Identify all amounts owed, damages claimed, or contract breaches related to {request.target_party_name}
+1. Identify all amounts owed, damages claimed, or contract breaches related to {target_party}
 2. Consider the strength of legal claims and potential recovery likelihood
 3. Include reasonable attorney fees and costs if applicable
 4. Provide a total demand amount that is justified by the evidence
@@ -1078,7 +1103,12 @@ async def case_chat(
     # Fetch user's AI preferences
     ai_preferences = await _get_user_ai_preferences(user["id"], supabase)
     openai_client = OpenAIClient(user_preferences=ai_preferences)
-    chat_service = CaseChatService(openai_client)
+
+    # Extract jurisdiction from artifacts
+    artifacts = processing_result.artifacts or {}
+    jurisdiction = artifacts.get("jurisdiction", "Florida")
+
+    chat_service = CaseChatService(openai_client, jurisdiction=jurisdiction)
     ai_response = await chat_service.send_message(
         user_message=request.message,
         analysis_result=processing_result,

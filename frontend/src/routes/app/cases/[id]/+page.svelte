@@ -1028,6 +1028,14 @@
 						<dt class="text-sm font-medium text-gray-500">Client Name</dt>
 						<dd class="mt-1 text-sm text-gray-900">{caseData.client_name}</dd>
 					</div>
+					<div>
+						<dt class="text-sm font-medium text-gray-500">Jurisdiction</dt>
+						<dd class="mt-1 text-sm text-gray-900">
+							<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium {caseData.jurisdiction === 'New Mexico' ? 'bg-indigo-100 text-indigo-800' : 'bg-orange-100 text-orange-800'}">
+								{caseData.jurisdiction || 'Florida'}
+							</span>
+						</dd>
+					</div>
 					{#if caseData.reference_number}
 						<div>
 							<dt class="text-sm font-medium text-gray-500">Reference Number</dt>
@@ -1055,15 +1063,16 @@
 				<!-- Practice Area Guidance -->
 				<details class="bg-accent/10 border border-accent/30 rounded-lg">
 			<summary class="px-4 py-3 cursor-pointer text-sm font-medium text-contrast hover:bg-accent/20">
-				ℹ️ Supported Practice Areas (Florida law only)
+				ℹ️ Supported Practice Areas ({caseData.jurisdiction || 'Florida'} law)
 			</summary>
 			<div class="px-4 pb-4 text-sm text-gray-700 space-y-3">
 				<p class="font-medium text-red-700">
-					This application is optimized for Florida civil litigation matters only. Federal claims and non-Florida jurisdictions are not currently supported.
+					This application is optimized for {caseData.jurisdiction || 'Florida'} civil litigation matters only. Federal claims and other jurisdictions are not currently supported.
 				</p>
 
+				{#if (caseData.jurisdiction || 'Florida') === 'Florida'}
 				<div>
-					<h4 class="font-semibold text-green-800 mb-2">✅ Covered Practice Areas:</h4>
+					<h4 class="font-semibold text-green-800 mb-2">✅ Covered Florida Practice Areas:</h4>
 					<ul class="space-y-2 ml-4">
 						<li><strong>1. Consumer Protection & Business Misconduct</strong>
 							<ul class="ml-4 mt-1 space-y-1 text-xs">
@@ -1089,14 +1098,48 @@
 								<li>• Attorney fees and sanctions (Ch. 57)</li>
 							</ul>
 						</li>
-						<li><strong>4. Selective Personal Injury</strong>
+					</ul>
+				</div>
+				{:else if caseData.jurisdiction === 'New Mexico'}
+				<div>
+					<h4 class="font-semibold text-green-800 mb-2">✅ Covered New Mexico Practice Areas:</h4>
+					<ul class="space-y-2 ml-4">
+						<li><strong>1. Consumer Protection & Unfair Practices</strong>
 							<ul class="ml-4 mt-1 space-y-1 text-xs">
-								<li>• Motorcycle accidents (Ch. 316 traffic law)</li>
-								<li>• Limited medical malpractice matters (Ch. 766)</li>
+								<li>• Unfair Practices Act (UPA - Ch. 57, Art. 12)</li>
+								<li>• Deceptive trade practices</li>
+								<li>• Consumer fraud and misrepresentation</li>
+							</ul>
+						</li>
+						<li><strong>2. Landlord-Tenant (UORRA)</strong>
+							<ul class="ml-4 mt-1 space-y-1 text-xs">
+								<li>• Uniform Owner-Resident Relations Act (Ch. 47, Art. 8)</li>
+								<li>• Evictions, rent disputes, and habitability</li>
+								<li>• Security deposit disputes</li>
+							</ul>
+						</li>
+						<li><strong>3. Construction & Liens</strong>
+							<ul class="ml-4 mt-1 space-y-1 text-xs">
+								<li>• Construction defects and anti-indemnity (Ch. 56, Art. 7)</li>
+								<li>• Mechanic's liens (Ch. 48, Art. 2)</li>
+								<li>• Statutes of limitation (Ch. 37, Art. 1)</li>
+							</ul>
+						</li>
+						<li><strong>4. Real Estate & Foreclosure</strong>
+							<ul class="ml-4 mt-1 space-y-1 text-xs">
+								<li>• Judicial foreclosure procedures (Ch. 48, Art. 7)</li>
+								<li>• Redemption of real property (Ch. 39, Art. 5)</li>
+							</ul>
+						</li>
+						<li><strong>5. Insurance & Torts</strong>
+							<ul class="ml-4 mt-1 space-y-1 text-xs">
+								<li>• Unfair Claims Practices (Ch. 59A, Art. 16)</li>
+								<li>• Comparative fault and several liability (Ch. 41, Art. 3A)</li>
 							</ul>
 						</li>
 					</ul>
 				</div>
+				{/if}
 
 				<div>
 					<h4 class="font-semibold text-red-800 mb-2">⚠️ Not Supported:</h4>
@@ -1106,7 +1149,7 @@
 						<li>• Immigration law</li>
 						<li>• Bankruptcy (federal jurisdiction)</li>
 						<li>• Patent/trademark law (federal jurisdiction)</li>
-						<li>• Out-of-state matters</li>
+						<li>• Out-of-state matters (non-{caseData.jurisdiction || 'Florida'})</li>
 					</ul>
 				</div>
 

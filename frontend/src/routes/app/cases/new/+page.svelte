@@ -9,6 +9,7 @@
 	import { clioStore } from '$lib/stores/clioStore';
 	import { toastStore } from '$lib/stores/toastStore';
 	import { getApiUrl } from '$lib/config';
+	import { supabase } from '$lib/supabase';
 	import { AlertTriangle, Info, ArrowLeft } from 'lucide-svelte';
 
 	interface ProgressStep {
@@ -28,6 +29,7 @@
 	let clientName = $state('');
 	let referenceNumber = $state('');
 	let description = $state('');
+	let jurisdiction = $state('Florida');
 
 	async function handleCaseCreatedFromClio(result: { caseId: string; success: boolean; error?: string }) {
 		console.log('Case created from Clio:', result);
@@ -72,7 +74,8 @@
 				body: JSON.stringify({
 					client_name: clientName,
 					reference_number: referenceNumber || null,
-					description: description || null
+					description: description || null,
+					jurisdiction: jurisdiction
 				})
 			});
 
@@ -98,7 +101,25 @@
 	}
 
 	// Prevent navigation during creation
-	onMount(() => {
+	onMount(async () => {
+		// Fetch user profile for default jurisdiction
+		try {
+			const { data: { user } } = await supabase.auth.getUser();
+			if (user) {
+				const { data: profile } = await supabase
+					.from('profiles')
+					.select('default_jurisdiction')
+					.eq('id', user.id)
+					.single();
+				
+				if (profile?.default_jurisdiction) {
+					jurisdiction = profile.default_jurisdiction;
+				}
+			}
+		} catch (err) {
+			console.error('Error fetching profile:', err);
+		}
+
 		const handleBeforeUnload = (e: BeforeUnloadEvent) => {
 			if (isCreating) {
 				e.preventDefault();
@@ -246,6 +267,24 @@
 						class="block w-full px-3 py-2.5 border border-gray-300 rounded-md text-contrast placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent transition-colors"
 						placeholder="2024-001"
 					/>
+				</div>
+
+				<div>
+					<label for="jurisdiction" class="block text-sm font-medium text-contrast mb-1">
+						Jurisdiction <span class="text-red-500">*</span>
+					</label>
+					<select
+						id="jurisdiction"
+						bind:value={jurisdiction}
+						required
+						class="block w-full px-3 py-2.5 border border-gray-300 rounded-md text-contrast focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent transition-colors"
+					>
+						<option value="Florida">Florida</option>
+						<option value="New Mexico">New Mexico</option>
+					</select>
+					<p class="mt-1 text-xs text-gray-500">
+						Determines which legal corpus and statutes will be used for analysis.
+					</p>
 				</div>
 
 				<div>

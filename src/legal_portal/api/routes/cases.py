@@ -24,6 +24,7 @@ class CaseCreate(BaseModel):
     client_name: str = Field(..., min_length=1, max_length=200)
     reference_number: Optional[str] = Field(None, max_length=100)
     description: Optional[str] = None
+    jurisdiction: str = Field(default="Florida")
 
 
 class CaseUpdate(BaseModel):
@@ -33,6 +34,7 @@ class CaseUpdate(BaseModel):
     reference_number: Optional[str] = Field(None, max_length=100)
     description: Optional[str] = None
     status: Optional[str] = Field(None, pattern="^(pending|processing|completed|error)$")
+    jurisdiction: Optional[str] = None
 
 
 class CaseResponse(BaseModel):
@@ -44,6 +46,7 @@ class CaseResponse(BaseModel):
     reference_number: Optional[str]
     description: Optional[str]
     status: str
+    jurisdiction: str
     created_at: datetime
     updated_at: datetime
     clio_matter_id: Optional[str] = None
@@ -55,6 +58,7 @@ class CreateFromClioRequest(BaseModel):
 
     matter_id: int = Field(..., description="Clio matter ID")
     auto_import: bool = Field(True, description="Auto-import documents")
+    jurisdiction: Optional[str] = Field(None, description="State jurisdiction")
 
 
 class CreateFromClioResponse(BaseModel):
@@ -117,6 +121,7 @@ async def create_case(
                     "client_name": case_data.client_name,
                     "reference_number": case_data.reference_number,
                     "description": case_data.description,
+                    "jurisdiction": case_data.jurisdiction,
                     "status": "pending",
                 }
             )
@@ -1053,6 +1058,24 @@ async def create_case_from_clio(
         )
         logger.debug("Creating case")
 
+        # Get jurisdiction (from request or user default)
+        jurisdiction = request.jurisdiction
+        if not jurisdiction:
+            try:
+                profile_resp = (
+                    supabase.table("profiles")
+                    .select("default_jurisdiction")
+                    .eq("id", user["id"])
+                    .single()
+                    .execute()
+                )
+                if profile_resp.data:
+                    jurisdiction = profile_resp.data.get("default_jurisdiction", "Florida")
+                else:
+                    jurisdiction = "Florida"
+            except Exception:
+                jurisdiction = "Florida"
+
         clio_data = {
             "matter_id": request.matter_id,
             "display_number": matter.display_number,
@@ -1071,6 +1094,7 @@ async def create_case_from_clio(
             "reference_number": matter.display_number,
             "clio_matter_id": str(request.matter_id),
             "created_via_clio": True,  # Mark as created via Clio
+            "jurisdiction": jurisdiction,
             "status": "pending",
             "clio_matter_data": clio_data,
         }

@@ -18,15 +18,16 @@ logger = get_module_logger(__name__)
 class CaseChatService:
     """Provides conversational responses about a case with full factual context."""
 
-    def __init__(self, openai_client: OpenAIClient):
+    def __init__(self, openai_client: OpenAIClient, jurisdiction: str = "Florida"):
         self.client = openai_client
+        self.jurisdiction = jurisdiction
         self._statute_service: Optional[StatuteRecommendationService] = None
 
     @property
     def statute_service(self) -> StatuteRecommendationService:
         """Lazy-load the statute recommendation service."""
         if self._statute_service is None:
-            self._statute_service = StatuteRecommendationService()
+            self._statute_service = StatuteRecommendationService(jurisdiction=self.jurisdiction)
         return self._statute_service
 
     async def send_message(
@@ -57,14 +58,22 @@ class CaseChatService:
 
     def _build_system_message(self, analysis_result: ProcessingResult) -> str:
         """Assemble complete case context into a single system message."""
+        # Jurisdiction-specific citation guidance
+        citation_format = "Fla. Stat. § [chapter].[section] (e.g., Fla. Stat. § 83.51)"
+        if self.jurisdiction == "New Mexico":
+            citation_format = (
+                "N.M. Stat. Ann. § [chapter]-[section] (e.g., N.M. Stat. Ann. § 57-12-2) "
+                "or Rule [number] NMRA"
+            )
+
         lines: List[str] = [
-            "You are an AI legal assistant with full knowledge of this case and Florida law.",
+            f"You are an AI legal assistant with full knowledge of this case and {self.jurisdiction} law.",
             "Answer questions using the facts, timeline, financial data, and legal analysis provided.",
-            "When relevant, cite Florida statutes from the verified corpus provided below.",
-            "Use proper citation format: 'Fla. Stat. § [chapter].[section]' (e.g., Fla. Stat. § 83.51).",
+            f"When relevant, cite {self.jurisdiction} statutes from the verified corpus provided below.",
+            f"Use proper citation format: '{citation_format}'.",
             "Always cite specific documents conversationally (e.g., 'According to the Contract dated...').",
             "If the data does not include the answer, say so clearly.",
-            "If a question falls outside Florida state civil law, note this limitation.",
+            f"If a question falls outside {self.jurisdiction} state civil law, note this limitation.",
             "---",
             "",
         ]
@@ -127,20 +136,22 @@ class CaseChatService:
                     lines.append(f"- {issue_name} " f"(confidence: {issue.get('confidence', 'unknown')})")
                 lines.append("")
 
-        # Add Florida statute context based on practice area
+        # Add jurisdiction-specific statute context based on practice area
         statute_context = self._get_relevant_statute_context(
             practice_area=practice_area,
             case_facts=case_summary or "",
             legal_issues=legal_issues_list if legal_issues_list else None,
         )
         if statute_context:
-            lines.append("## Florida Statutes Reference")
+            lines.append(f"## {self.jurisdiction} Statutes Reference")
             lines.append(statute_context)
             lines.append("")
 
         lines.append("---")
         lines.append("Answer the user's question in a professional, conversational tone.")
-        lines.append("When citing Florida statutes, use the verified statutes above when applicable.")
+        lines.append(
+            f"When citing {self.jurisdiction} statutes, use the verified statutes above when applicable."
+        )
 
         return "\n".join(lines)
 
@@ -182,7 +193,7 @@ class CaseChatService:
             )
 
             logger.info(
-                f"Added {len(recommendations)} Florida statutes to chat context",
+                f"Added {len(recommendations)} {self.jurisdiction} statutes to chat context",
                 extra={"practice_area": practice_area, "statute_count": len(recommendations)},
             )
 

@@ -13,6 +13,7 @@ CREATE TABLE IF NOT EXISTS profiles (
     email TEXT UNIQUE NOT NULL,
     full_name TEXT,
     avatar_url TEXT,
+    default_jurisdiction TEXT NOT NULL DEFAULT 'Florida',
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -43,6 +44,7 @@ CREATE TABLE IF NOT EXISTS cases (
     client_name TEXT NOT NULL,
     reference_number TEXT,
     description TEXT,
+    jurisdiction TEXT NOT NULL DEFAULT 'Florida',
     status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'processing', 'completed', 'error')),
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
@@ -279,4 +281,24 @@ CREATE TRIGGER update_analysis_results_updated_at
 -- SEED DATA (Optional - for development)
 -- =====================================================
 -- Example seed data can be added here for testing
+
+-- =====================================================
+-- MIGRATIONS (Dec 2025)
+-- =====================================================
+
+-- Add jurisdiction to cases table if it doesn't exist
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='cases' AND column_name='jurisdiction') THEN
+        ALTER TABLE public.cases ADD COLUMN jurisdiction text DEFAULT 'Florida'::text NOT NULL;
+    END IF;
+END $$;
+
+-- Add default_jurisdiction to profiles table if it doesn't exist
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='profiles' AND column_name='default_jurisdiction') THEN
+        ALTER TABLE public.profiles ADD COLUMN default_jurisdiction text DEFAULT 'Florida'::text NOT NULL;
+    END IF;
+END $$;
 

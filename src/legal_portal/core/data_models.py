@@ -433,6 +433,7 @@ class ProfileUpdate(BaseModel):
     bar_number: Optional[str] = None
     email_signature: Optional[str] = None
     default_demand_deadline: Optional[str] = None
+    default_jurisdiction: Optional[str] = None
 
 
 class ProfileResponse(BaseModel):
@@ -448,6 +449,7 @@ class ProfileResponse(BaseModel):
     bar_number: Optional[str] = None
     email_signature: Optional[str] = None
     default_demand_deadline: Optional[str] = None
+    default_jurisdiction: Optional[str] = "Florida"
     avatar_url: Optional[str] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None

@@ -212,6 +212,9 @@
 													Manual Case
 												</span>
 											{/if}
+											<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium {caseItem.jurisdiction === 'New Mexico' ? 'bg-indigo-100 text-indigo-800' : 'bg-orange-100 text-orange-800'}">
+												{caseItem.jurisdiction || 'Florida'}
+											</span>
 										</div>
 									</div>
 									<div class="ml-4 flex-shrink-0 flex flex-col items-end space-y-2">

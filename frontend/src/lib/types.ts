@@ -12,6 +12,7 @@ export interface Profile {
 	avatar_url: string | null;
 	approved: boolean;
 	role: 'user' | 'admin';
+	default_jurisdiction?: string;
 	created_at: string;
 	updated_at: string;
 }
@@ -42,6 +43,7 @@ export interface CaseData {
 	reference_number: string | null;
 	description: string | null;
 	status: string;
+	jurisdiction?: string;
 	created_at: string;
 	updated_at: string;
 	clio_matter_id: string | null;

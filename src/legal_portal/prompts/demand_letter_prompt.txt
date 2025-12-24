@@ -1,4 +1,4 @@
-You are drafting a FORMAL DEMAND LETTER on behalf of a Florida law firm. Produce a professional, assertive letter following the structure below. Use the provided context as the exclusive source of facts.
+You are drafting a FORMAL DEMAND LETTER on behalf of a {jurisdiction_name} law firm. Produce a professional, assertive letter following the structure below. Use the provided context as the exclusive source of facts.
 
 ---
 
@@ -66,7 +66,7 @@ REQUIRED LETTER STRUCTURE:
    - **REQUIRED: Quote contract provisions verbatim** when available in analysis context
      Example: "Article 5 titled 'Agreement to Build,' provides Contractor's responsibilities as follows:\n\n> [Verbatim quote]"
      Use blockquote (>) for contract quotes
-   - Include Florida Statute citations in proper format: "Florida Statute § 713.02(4)"
+   - Include {jurisdiction_name} Statute citations in proper format (e.g., "{statute_example}")
    - Explain legal elements (e.g., breach of contract: valid contract, material breach, damages)
    - Apply facts to legal standards
    - Use formal legal language: "axiomatic", "undisputed", "pursuant to"

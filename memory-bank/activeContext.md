@@ -108,7 +108,18 @@ CSV file support has been fully integrated into the legal document processing sy
 5.  **CSV Processor**: Created `csv_processor.py` to parse CSV files and convert to structured text format with headers, data rows, and metadata
 6.  **Processor Registration**: Registered CSV processor in file processors mapping for both `text/csv` and `application/csv` MIME types
 
+## 4. New Mexico Legal Corpus Added (Dec 2025)
+
+Successfully implemented Phase 1 of the New Mexico multi-state support plan:
+1.  **New Corpus Directory**: Created `new_mexico_legal_corpus/` directory.
+2.  **Statute Integration**: Moved and renamed `nm_statutes_full.jsonl` to `new_mexico_legal_corpus/statutes.jsonl`.
+3.  **Alias Integration**: Moved and renamed `nm_statute_aliases_full.jsonl` to `new_mexico_legal_corpus/statute_aliases.jsonl`.
+4.  **Rule Integration**: Moved and renamed `nm_rules_full.jsonl` to `new_mexico_legal_corpus/nm_rules.jsonl`.
+5.  **Documentation**: Created `new_mexico_legal_corpus/README.md` documenting the corpus structure and coverage (Consumer Protection, Landlord-Tenant, Construction Defects).
+
 ## 2. Recent Changes & Key Decisions
+
+*   **New Mexico Corpus Integration (Dec 2025)**: Completed the first phase of adding New Mexico support by establishing a structured legal corpus mirroring the Florida structure.
 
 *   **CSV File Support (Oct 2, 2025)**: Comprehensive CSV file support added throughout the system
     *   **File Processing**: CSV files are now validated, processed, and converted to structured text format

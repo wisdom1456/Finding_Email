@@ -702,9 +702,9 @@ class LegalIssue(BaseModel):
     """A potential legal issue or cause of action."""
 
     issue_name: str  # e.g., "Implied Warranty Breach"
-    category: str  # "contract", "tort", "statutory", "procedural"
-    elements: List[str]  # Legal elements that must be proven
-    potential_remedies: List[str]
+    category: str = "unknown"  # "contract", "tort", "statutory", "procedural"
+    elements: List[str] = Field(default_factory=list)  # Legal elements that must be proven
+    potential_remedies: List[str] = Field(default_factory=list)
     florida_statute_references: List[str] = Field(default_factory=list)  # e.g., ["§83.51", "Chapter 558"]
     confidence: str = "moderate"  # "strong", "moderate", "weak"
 
@@ -721,12 +721,13 @@ class ProceduralStep(BaseModel):
 class LegalIssueMap(BaseModel):
     """Map of all legal issues identified in the case."""
 
-    primary_issues: List[LegalIssue]
+    primary_issues: List[LegalIssue] = Field(default_factory=list)
     secondary_issues: List[LegalIssue] = Field(default_factory=list)
     relevant_statutes: List[str] = Field(default_factory=list)  # Statute numbers to query corpus
     procedural_requirements: List[ProceduralStep] = Field(default_factory=list)
-    case_complexity: str  # "simple" | "moderate" | "complex"
+    case_complexity: str = "moderate"  # "simple" | "moderate" | "complex"
     complexity_reasoning: Optional[str] = None  # Why this complexity level
+    statutory_framework: Optional[str] = None  # Summary of governing law
 
 
 class IssueAnalysis(BaseModel):

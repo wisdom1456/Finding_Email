@@ -342,16 +342,22 @@ Return JSON:
 {{
   "primary_issues": [
     {{
-      "name": "string (e.g. Breach of Implied Warranty)",
-      "description": "Short explanation",
-      "applicable_statutes": ["{jurisdiction} Statute § ..."],
-      "supporting_fact_ids": ["timeline_id_1", "financial_id_1"]
+      "issue_name": "string (e.g. Breach of Implied Warranty)",
+      "category": "contract | tort | statutory | procedural",
+      "elements": ["Element 1 that must be proven", "Element 2"],
+      "potential_remedies": ["Remedy 1", "Remedy 2"],
+      "florida_statute_references": ["{jurisdiction} Statute § ..."],
+      "confidence": "strong | moderate | weak"
     }}
   ],
   "secondary_issues": [
     {{
-      "name": "string",
-      "description": "string"
+      "issue_name": "string",
+      "category": "contract | tort | statutory | procedural",
+      "elements": [],
+      "potential_remedies": [],
+      "florida_statute_references": [],
+      "confidence": "weak"
     }}
   ],
   "statutory_framework": "Summary of the governing {jurisdiction} law for this case"

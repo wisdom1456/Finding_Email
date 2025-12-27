@@ -17,6 +17,9 @@ supabase>=2.0.0
 # OpenAI (Essential for AI features)
 openai==1.10.0
 
+# Google Cloud Vision (Essential for OCR - faster and cheaper than GPT-4o Vision)
+google-cloud-vision>=3.0.0
+
 # Configuration (Essential)
 python-dotenv==1.0.1
 pydantic==2.5.3

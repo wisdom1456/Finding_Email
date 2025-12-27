@@ -12,6 +12,7 @@ from legal_portal.core.data_models import (
     FileType,
     ProcessedDocument,
 )
+from legal_portal.utils.google_vision_client import GoogleVisionClient
 from legal_portal.utils.logging_config import get_module_logger
 from legal_portal.utils.openai_client import OpenAIClient
 from starlette.concurrency import run_in_threadpool
@@ -178,6 +179,144 @@ def detect_pdf_corruption(file_path: str) -> tuple[bool, str]:
         return False, "No PDF library available"
 
 
+async def _extract_text_via_google_ocr(
+    file_path: str,
+    original_filename: str,
+    progress_callback=None,
+) -> str:
+    """Extract text from scanned PDF using Google Cloud Vision OCR.
+
+    Much faster and cheaper than GPT-4o Vision (~$1.50/1000 pages vs ~$15-30).
+
+    Args:
+    ----
+        file_path: Path to the PDF file
+        original_filename: Original filename for logging
+        progress_callback: Optional callback for granular progress updates
+
+    Returns:
+    -------
+        Extracted text or empty string on failure
+
+    """
+    if not FITZ_AVAILABLE:
+        logger.warning("PyMuPDF not available for PDF rendering")
+        return ""
+
+    # Check if Google Vision is available
+    google_client = GoogleVisionClient.get_instance()
+    if not google_client.is_available:
+        logger.info("Google Vision not available, will try GPT-4o Vision fallback")
+        return ""
+
+    if not os.path.exists(file_path):
+        logger.error(f"Cannot perform Google OCR: File not found at {file_path}")
+        return ""
+
+    try:
+        logger.info(f"🔍 Starting Google Cloud Vision OCR for: {original_filename}")
+
+        import fitz
+
+        # Open the document
+        try:
+            doc = fitz.open(file_path)
+        except Exception as open_err:
+            logger.error(f"Failed to open PDF for Google OCR: {open_err}")
+            return ""
+
+        # Process all pages (Google Vision is fast enough)
+        max_pages = 50  # Higher limit since Google Vision is faster
+        page_count = doc.page_count
+        pages_to_process = min(page_count, max_pages)
+
+        if page_count > max_pages:
+            logger.warning(
+                f"Document {original_filename} has {page_count} pages. "
+                f"Limiting OCR to first {max_pages} pages."
+            )
+
+        # Send initial progress update
+        if progress_callback:
+            try:
+                await progress_callback(
+                    f"OCR: Starting Google Vision for {original_filename} ({pages_to_process} pages)",
+                    "google_ocr_start",
+                )
+            except Exception:
+                pass
+
+        extracted_parts = []
+        completed_pages = [0]
+
+        # Process pages with high concurrency (Google Vision handles it well)
+        semaphore = asyncio.Semaphore(15)
+
+        async def process_page(page_index: int) -> str:
+            """Render page and extract text via Google Vision."""
+            async with semaphore:
+                try:
+                    # Render page to image
+                    def render_page():
+                        page = doc[page_index]
+                        # 2x zoom for better OCR accuracy
+                        pix = page.get_pixmap(matrix=fitz.Matrix(2, 2))
+                        return pix.tobytes("png")
+
+                    img_data = await run_in_threadpool(render_page)
+
+                    # Send to Google Vision (in thread pool since it's sync)
+                    def do_ocr():
+                        return google_client.extract_text_from_image(img_data)
+
+                    page_text = await run_in_threadpool(do_ocr)
+
+                    # Update progress
+                    completed_pages[0] += 1
+                    if progress_callback:
+                        try:
+                            msg = (
+                                f"OCR: Page {completed_pages[0]}/{pages_to_process} "
+                                f"of {original_filename}"
+                            )
+                            await progress_callback(msg, f"page_{page_index + 1}")
+                        except Exception:
+                            pass
+
+                    if page_text and page_text.strip():
+                        return f"--- Page {page_index + 1} ---\n{page_text.strip()}"
+                    return ""
+
+                except Exception as page_err:
+                    logger.error(
+                        f"Google OCR error on page {page_index + 1} of {original_filename}: {page_err}"
+                    )
+                    completed_pages[0] += 1
+                    return ""
+
+        # Process all pages in parallel
+        tasks = [process_page(i) for i in range(pages_to_process)]
+        results = await asyncio.gather(*tasks)
+
+        # Close doc
+        doc.close()
+
+        # Filter and combine results
+        extracted_parts = [r for r in results if r]
+
+        if not extracted_parts:
+            logger.warning(f"Google OCR returned no text for {original_filename}")
+            return ""
+
+        extracted_text = "\n\n".join(extracted_parts)
+        logger.info(f"✅ Google Vision OCR extracted {len(extracted_parts)} pages from {original_filename}")
+        return f"[Extracted via Google Cloud Vision OCR]\n\n{extracted_text}"
+
+    except Exception as e:
+        logger.error(f"Google Vision OCR failed for {original_filename}: {e}")
+        return ""
+
+
 async def _extract_text_via_vision(
     file_path: str,
     original_filename: str,
@@ -186,6 +325,7 @@ async def _extract_text_via_vision(
     """Fall back to GPT-4o Vision for scanned PDFs.
 
     Render all pages to images and send to Vision API in parallel.
+    NOTE: This is now a secondary fallback after Google Cloud Vision.
 
     Args:
     ----
@@ -415,10 +555,21 @@ async def process_pdf(
                 needs_vision = True
 
             if needs_vision:
-                vision_text = await _extract_text_via_vision(file_path, original_filename, progress_callback)
+                # Try Google Cloud Vision first (faster and cheaper)
+                vision_text = await _extract_text_via_google_ocr(
+                    file_path, original_filename, progress_callback
+                )
                 if vision_text:
                     text_content = vision_text
-                    extraction_method = "GPT-4o Vision"
+                    extraction_method = "Google Cloud Vision"
+                else:
+                    # Fall back to GPT-4o Vision if Google Vision unavailable or failed
+                    vision_text = await _extract_text_via_vision(
+                        file_path, original_filename, progress_callback
+                    )
+                    if vision_text:
+                        text_content = vision_text
+                        extraction_method = "GPT-4o Vision"
 
             # No library available or all failed
             if not text_content.strip():

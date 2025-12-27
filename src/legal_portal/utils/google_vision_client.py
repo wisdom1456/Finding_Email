@@ -47,16 +47,34 @@ class GoogleVisionClient:
             # Method 1: Base64-encoded credentials JSON (for Vercel/serverless)
             creds_json_b64 = os.getenv("GOOGLE_APPLICATION_CREDENTIALS_JSON")
             if creds_json_b64:
+                logger.info("Found GOOGLE_APPLICATION_CREDENTIALS_JSON env var, attempting to parse...")
                 try:
+                    # Decode base64 to get JSON string
                     creds_json = base64.b64decode(creds_json_b64).decode("utf-8")
+                    logger.debug(f"Base64 decoded, JSON length: {len(creds_json)} chars")
+
+                    # Parse JSON to dict
                     creds_dict = json.loads(creds_json)
+                    logger.debug(f"JSON parsed, project_id: {creds_dict.get('project_id', 'N/A')}")
+
+                    # Create credentials object
                     credentials = service_account.Credentials.from_service_account_info(creds_dict)
+                    logger.debug("Service account credentials created")
+
+                    # Create Vision client
                     self.client = vision.ImageAnnotatorClient(credentials=credentials)
                     self._initialized = True
-                    logger.info("Google Vision client initialized with base64 credentials")
+                    logger.info(
+                        f"Google Vision client initialized with base64 credentials "
+                        f"(project: {creds_dict.get('project_id', 'unknown')})"
+                    )
                     return
                 except Exception as e:
-                    logger.warning(f"Failed to parse GOOGLE_APPLICATION_CREDENTIALS_JSON: {e}")
+                    logger.error(f"Failed to parse GOOGLE_APPLICATION_CREDENTIALS_JSON: {e}")
+                    # Log more details for debugging
+                    if creds_json_b64:
+                        logger.debug(f"Env var length: {len(creds_json_b64)} chars")
+                        logger.debug(f"First 50 chars: {creds_json_b64[:50]}...")
 
             # Method 2: Credentials file path
             creds_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
@@ -88,6 +106,44 @@ class GoogleVisionClient:
     def is_available(self) -> bool:
         """Check if the client is properly initialized and ready."""
         return GOOGLE_VISION_AVAILABLE and self._initialized and self.client is not None
+
+    def validate_credentials(self) -> tuple[bool, str]:
+        """Test that credentials work by making a minimal API call.
+
+        Returns
+        -------
+            Tuple of (success: bool, message: str)
+        """
+        if not self.is_available:
+            return False, "Client not initialized"
+
+        try:
+            # Create a minimal 1x1 white PNG image for testing
+            # This is a valid PNG that won't return text but will validate auth
+            minimal_png = (
+                b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01"
+                b"\x00\x00\x00\x01\x08\x02\x00\x00\x00\x90wS\xde\x00"
+                b"\x00\x00\x0cIDATx\x9cc\xf8\x0f\x00\x00\x01\x01\x00"
+                b"\x05\x18\xd8N\x00\x00\x00\x00IEND\xaeB`\x82"
+            )
+
+            logger.info("Testing Google Vision API credentials...")
+            image = vision.Image(content=minimal_png)
+            response = self.client.text_detection(image=image)
+
+            # Check for API-level errors
+            if response.error.message:
+                error_msg = f"API error: {response.error.message}"
+                logger.error(f"Google Vision credential validation failed: {error_msg}")
+                return False, error_msg
+
+            logger.info("✅ Google Vision credentials validated successfully")
+            return True, "Credentials valid"
+
+        except Exception as e:
+            error_msg = str(e)
+            logger.error(f"Google Vision credential validation failed: {error_msg}")
+            return False, error_msg
 
     def extract_text_from_image(self, image_bytes: bytes) -> str:
         """Extract text from image bytes using Google Cloud Vision OCR.

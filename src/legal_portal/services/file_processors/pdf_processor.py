@@ -204,9 +204,23 @@ async def _extract_text_via_google_ocr(
         return ""
 
     # Check if Google Vision is available
+    logger.debug("Getting Google Vision client instance...")
     google_client = GoogleVisionClient.get_instance()
+
     if not google_client.is_available:
-        logger.info("Google Vision not available, will try GPT-4o Vision fallback")
+        logger.warning(
+            "Google Vision client not available. "
+            "Check GOOGLE_APPLICATION_CREDENTIALS_JSON env var is set correctly."
+        )
+        return ""
+
+    logger.info("Google Vision client is available, validating credentials...")
+
+    # Validate credentials before proceeding
+    valid, validation_msg = google_client.validate_credentials()
+    if not valid:
+        logger.error(f"Google Vision credentials invalid: {validation_msg}")
+        logger.error("Falling back to GPT-4o Vision. Check your service account key.")
         return ""
 
     if not os.path.exists(file_path):
@@ -257,6 +271,8 @@ async def _extract_text_via_google_ocr(
             async with semaphore:
                 try:
                     # Render page to image
+                    logger.debug(f"Rendering page {page_index + 1} of {original_filename}")
+
                     def render_page():
                         page = doc[page_index]
                         # 2x zoom for better OCR accuracy
@@ -264,12 +280,27 @@ async def _extract_text_via_google_ocr(
                         return pix.tobytes("png")
 
                     img_data = await run_in_threadpool(render_page)
+                    logger.debug(f"Page {page_index + 1} rendered, size: {len(img_data)} bytes")
 
                     # Send to Google Vision (in thread pool since it's sync)
+                    # Add timeout to prevent hanging on auth issues
                     def do_ocr():
                         return google_client.extract_text_from_image(img_data)
 
-                    page_text = await run_in_threadpool(do_ocr)
+                    try:
+                        logger.debug(f"Sending page {page_index + 1} to Google Vision API")
+                        page_text = await asyncio.wait_for(
+                            run_in_threadpool(do_ocr),
+                            timeout=30.0,
+                        )
+                        logger.debug(f"Google Vision returned for page {page_index + 1}")
+                    except asyncio.TimeoutError:
+                        logger.error(
+                            f"Google Vision API timeout on page {page_index + 1} of {original_filename} "
+                            "(30s limit). Check credentials or network."
+                        )
+                        completed_pages[0] += 1
+                        return ""
 
                     # Update progress
                     completed_pages[0] += 1

@@ -113,6 +113,7 @@ class GoogleVisionClient:
         Returns
         -------
             Tuple of (success: bool, message: str)
+
         """
         if not self.is_available:
             return False, "Client not initialized"
@@ -133,6 +134,14 @@ class GoogleVisionClient:
 
             # Check for API-level errors
             if response.error.message:
+                # "Request contains an invalid argument" on a dummy image actually
+                # proves credentials worked - the API processed our request and
+                # just didn't like the tiny test image. This is a SUCCESS.
+                if "invalid argument" in response.error.message.lower():
+                    logger.info("✅ Google Vision credentials validated (API connection successful)")
+                    return True, "Credentials valid"
+
+                # Other errors are real failures
                 error_msg = f"API error: {response.error.message}"
                 logger.error(f"Google Vision credential validation failed: {error_msg}")
                 return False, error_msg
@@ -142,6 +151,12 @@ class GoogleVisionClient:
 
         except Exception as e:
             error_msg = str(e)
+            # Check if the exception message indicates the API was reached
+            # but rejected the image (still means credentials are valid)
+            if "invalid argument" in error_msg.lower():
+                logger.info("✅ Google Vision credentials validated (API connection successful)")
+                return True, "Credentials valid"
+
             logger.error(f"Google Vision credential validation failed: {error_msg}")
             return False, error_msg
 

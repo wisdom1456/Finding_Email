@@ -17,9 +17,12 @@ logger = get_module_logger(__name__)
 
 
 async def process_eml(
-    file_path: str, document_type: DocumentType, original_filename: str
+    file_path: str,
+    document_type: DocumentType,
+    original_filename: str,
+    progress_callback=None,
 ) -> ProcessedDocument:
-    """Processes an EML file by extracting its headers and body content from a given path."""
+    """Process an EML file by extracting its headers and body content from a given path."""
     logger.debug(f"Processing EML: {original_filename}")
 
     with open(file_path, "rb") as f:

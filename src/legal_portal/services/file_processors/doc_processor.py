@@ -15,9 +15,12 @@ logger = get_module_logger(__name__)
 
 
 async def process_doc(
-    file_path: str, document_type: DocumentType, original_filename: str
+    file_path: str,
+    document_type: DocumentType,
+    original_filename: str,
+    progress_callback=None,
 ) -> ProcessedDocument:
-    """Processes a legacy DOC file by extracting its content using multiple fallback methods.
+    """Process a legacy DOC file by extracting its content using multiple fallbacks.
 
     Legacy DOC-specific features:
     - Handles OLE compound document format (Office 97-2003)
@@ -70,9 +73,7 @@ async def process_doc(
                         text_content = "\n".join(paragraphs)
                         extraction_method = "python-docx-compat"
                         if text_content.strip():
-                            logger.info(
-                                f"Successfully extracted text from DOC using python-docx compatibility: {original_filename}"
-                            )
+                            logger.info(f"DOC text extracted via python-docx compat: {original_filename}")
                         else:
                             raise ValueError("Empty content from python-docx")
                 except Exception as e:
@@ -83,9 +84,11 @@ async def process_doc(
                         from oletools import olefile
 
                         if olefile.isOleFile(file_path):
-                            # This is a basic OLE file reader - more sophisticated parsing would be needed
-                            # for full text extraction, but this provides basic content detection
-                            text_content = f"Legacy DOC file detected: {original_filename}. OLE compound document format."
+                            # Basic OLE file reader - more parsing needed for full extraction
+                            text_content = (
+                                f"Legacy DOC file detected: {original_filename}. "
+                                "OLE compound document format."
+                            )
                             extraction_method = "oletools-detection"
                             logger.info(f"Detected legacy DOC format using oletools: {original_filename}")
                         else:
@@ -101,15 +104,16 @@ async def process_doc(
                             text_content = raw_text.decode("utf-8", errors="ignore")
                             extraction_method = "textract"
                             if text_content.strip():
-                                logger.info(
-                                    f"Successfully extracted text from DOC using textract: {original_filename}"
-                                )
+                                logger.info(f"DOC text extracted via textract: {original_filename}")
                             else:
                                 raise ValueError("Empty content from textract")
                         except (ImportError, Exception) as e:
                             logger.debug(f"textract failed for {original_filename}: {e}")
                             # Final fallback
-                            text_content = f"Could not extract content from legacy DOC file: {original_filename}. File may be corrupt or require specialized tools."
+                            text_content = (
+                                f"Could not extract content from legacy DOC: {original_filename}. "
+                                "File may be corrupt or require specialized tools."
+                            )
                             extraction_method = "fallback"
 
         # Clean up extracted text
@@ -132,7 +136,7 @@ async def process_doc(
     file_metadata = FileMetadata(filename=original_filename, size=file_size)
 
     logger.info(
-        f"✅ Created FileMetadata for legacy DOC {original_filename}, size: {file_size}, method: {extraction_method}"
+        f"✅ FileMetadata for DOC {original_filename}, size: {file_size}, method: {extraction_method}"
     )
 
     return ProcessedDocument(

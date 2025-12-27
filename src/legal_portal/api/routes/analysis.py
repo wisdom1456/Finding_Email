@@ -589,14 +589,30 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
         logger.info(f"Additional documents: {len(file_paths)}")
 
         # Create progress callback that publishes to SSE and stores in DB
-        async def progress_callback(message: str, docs_processed=None, phase="", percent=0):
-            """Publish progress updates to SSE stream and persistent storage."""
+        async def progress_callback(
+            message: str,
+            docs_processed=None,
+            phase="",
+            percent=0,
+            sub_step=None,
+        ):
+            """Publish progress updates to SSE stream and persistent storage.
+
+            Args:
+            ----
+                message: Main status message
+                docs_processed: List of document names being processed
+                phase: Current processing phase (e.g., "document_extraction", "analysis")
+                percent: Overall progress percentage (0-100)
+                sub_step: Optional granular sub-step info (e.g., "page_3" for Vision OCR)
+
+            """
             payload = {
                 "message": message,
                 "phase": phase,
                 "percent": percent,
                 "docs_processed": docs_processed or [],
-                "sub_step": message,
+                "sub_step": sub_step or message,  # Use sub_step if provided, else fall back to message
                 "timestamp": datetime.utcnow().isoformat(),
             }
 

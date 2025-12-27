@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Awaitable
-from typing import Callable
+from typing import Callable, Optional
 
 from legal_portal.core.data_models import (
     DocumentType,
@@ -16,8 +16,16 @@ from .image_processor import process_image
 from .pdf_processor import process_pdf
 from .txt_processor import process_txt
 
+# Type alias for progress callback used by processors
+# Signature: (message: str, sub_step: Optional[str]) -> Awaitable[None]
+ProcessorProgressCallback = Callable[[str, Optional[str]], Awaitable[None]]
+
 # Type alias for processor functions
-Processor = Callable[[str, DocumentType, str], Awaitable[ProcessedDocument]]
+# Now accepts an optional progress_callback for granular reporting
+Processor = Callable[
+    [str, DocumentType, str, Optional[ProcessorProgressCallback]],
+    Awaitable[ProcessedDocument],
+]
 
 # Map FileType enum to processor functions
 PROCESSOR_MAP: dict[str, Processor] = {
@@ -37,5 +45,5 @@ PROCESSOR_MAP: dict[str, Processor] = {
 
 
 def get_processor(file_type: str) -> Processor | None:
-    """Returns the appropriate processor for a given file content type, or None if unsupported."""
+    """Return the appropriate processor for a given file content type, or None if unsupported."""
     return PROCESSOR_MAP.get(file_type)

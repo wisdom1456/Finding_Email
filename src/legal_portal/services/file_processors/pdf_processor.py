@@ -178,10 +178,21 @@ def detect_pdf_corruption(file_path: str) -> tuple[bool, str]:
         return False, "No PDF library available"
 
 
-async def _extract_text_via_vision(file_path: str, original_filename: str) -> str:
+async def _extract_text_via_vision(
+    file_path: str,
+    original_filename: str,
+    progress_callback=None,
+) -> str:
     """Fall back to GPT-4o Vision for scanned PDFs.
 
     Render all pages to images and send to Vision API in parallel.
+
+    Args:
+    ----
+        file_path: Path to the PDF file
+        original_filename: Original filename for logging
+        progress_callback: Optional callback for granular progress updates
+
     """
     if not FITZ_AVAILABLE:
         return ""
@@ -205,9 +216,7 @@ async def _extract_text_via_vision(file_path: str, original_filename: str) -> st
             logger.error(f"Failed to open PDF for Vision extraction: {open_err}")
             return ""
 
-        # Limit to 20 pages to prevent extreme costs and timeouts, while covering most legal docs
-        # User said "entire documents", but 20 is a safe "entire" for most scanned packets.
-        # We can increase this if 20 is not enough.
+        # Limit to 25 pages to prevent extreme costs and timeouts
         max_pages = 25
         page_count = doc.page_count
         pages_to_process = min(page_count, max_pages)
@@ -217,6 +226,9 @@ async def _extract_text_via_vision(file_path: str, original_filename: str) -> st
                 f"Document {original_filename} has {page_count} pages. "
                 f"Limiting Vision extraction to first {max_pages} pages."
             )
+
+        # Track completed pages for progress reporting
+        completed_pages = [0]  # Use list for mutable in nested async
 
         async def process_page(page_index: int):
             """Process a single page: render and send to OpenAI."""
@@ -256,21 +268,44 @@ async def _extract_text_via_vision(file_path: str, original_filename: str) -> st
 
                 response = await run_in_threadpool(make_api_call)
                 page_text = response.choices[0].message.content
+
+                # Update progress after successful page extraction
+                completed_pages[0] += 1
+                if progress_callback:
+                    try:
+                        msg = (
+                            f"OCR: Extracted page {completed_pages[0]}/{pages_to_process} "
+                            f"from {original_filename}"
+                        )
+                        await progress_callback(msg, f"page_{page_index + 1}")
+                    except Exception:
+                        pass  # Don't let progress callback errors stop extraction
+
                 if page_text:
                     return f"--- Page {page_index + 1} ---\n{page_text}"
                 return ""
             except Exception as page_err:
                 logger.error(f"Error processing page {page_index + 1} of {original_filename}: {page_err}")
+                completed_pages[0] += 1  # Still count as processed even if failed
                 return f"--- Page {page_index + 1} ---\n[Error extracting text from this page]"
 
-        # Process pages in parallel
-        # We use a semaphore to limit concurrency to avoid hitting OpenAI rate limits
-        # or overwhelming the local CPU/memory with image rendering.
-        semaphore = asyncio.Semaphore(5)
+        # Process pages in parallel with increased concurrency (10 instead of 5)
+        # This speeds up large documents while staying within OpenAI rate limits
+        semaphore = asyncio.Semaphore(10)
 
         async def sem_process_page(i):
             async with semaphore:
                 return await process_page(i)
+
+        # Send initial progress update
+        if progress_callback:
+            try:
+                await progress_callback(
+                    f"OCR: Starting Vision extraction for {original_filename} ({pages_to_process} pages)",
+                    "vision_start",
+                )
+            except Exception:
+                pass
 
         tasks = [sem_process_page(i) for i in range(pages_to_process)]
         extracted_parts = await asyncio.gather(*tasks)
@@ -296,7 +331,10 @@ async def _extract_text_via_vision(file_path: str, original_filename: str) -> st
 
 
 async def process_pdf(
-    file_path: str, document_type: DocumentType, original_filename: str
+    file_path: str,
+    document_type: DocumentType,
+    original_filename: str,
+    progress_callback=None,
 ) -> ProcessedDocument:
     """Process a PDF file by extracting its text content.
 
@@ -308,6 +346,7 @@ async def process_pdf(
         file_path: Path to the PDF file
         document_type: Type classification for the document
         original_filename: Original name of the file
+        progress_callback: Optional callback for granular progress updates
 
     Returns:
     -------
@@ -376,7 +415,7 @@ async def process_pdf(
                 needs_vision = True
 
             if needs_vision:
-                vision_text = await _extract_text_via_vision(file_path, original_filename)
+                vision_text = await _extract_text_via_vision(file_path, original_filename, progress_callback)
                 if vision_text:
                     text_content = vision_text
                     extraction_method = "GPT-4o Vision"

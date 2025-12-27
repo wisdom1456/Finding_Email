@@ -118,7 +118,7 @@ class DocumentProcessor:
             except ValueError as e:
                 raise ValidationError(
                     str(e), error_code="FILE_TOO_LARGE", file_size_mb=len(file_content) / (1024 * 1024)
-                )
+                ) from e
 
             # 2. Sanitize filename and validate content
             original_name = filename
@@ -248,7 +248,7 @@ class DocumentProcessor:
             logger.error(f"Error in process_and_upload for {filename}: {e}", exc_info=True)
             raise DocumentProcessingError(
                 f"Failed to process document '{filename}': {str(e)}", error_code="PROCESSING_ERROR"
-            )
+            ) from e
         finally:
             # Cleanup temp files
             for temp_file in temp_files:
@@ -582,6 +582,7 @@ class DocumentProcessor:
         self,
         uploaded_file,
         intake_filenames: List[str],
+        progress_callback: Optional[Callable] = None,
     ) -> Optional[ProcessedDocument]:
         """Process a single uploaded file.
 
@@ -589,6 +590,7 @@ class DocumentProcessor:
         ----
             uploaded_file: Streamlit UploadedFile object
             intake_filenames: List of filenames that should be treated as intake forms
+            progress_callback: Optional callback for granular progress updates
 
         Returns:
         -------
@@ -675,8 +677,8 @@ class DocumentProcessor:
                 msg = f"No processor available for file '{sanitized_name}' with content type '{content_type}'"
                 raise DocumentProcessingError(msg)
 
-            # Use sanitized name for processing
-            processed_doc = await processor(temp_path, doc_type, sanitized_name)
+            # Use sanitized name for processing with optional progress callback
+            processed_doc = await processor(temp_path, doc_type, sanitized_name, progress_callback)
             return processed_doc
 
         except Exception as e:
@@ -737,7 +739,8 @@ class DocumentProcessor:
                 msg = f"No processor available for file '{filename}' with content type '{content_type}'"
                 raise DocumentProcessingError(msg)
 
-            processing_tasks.append(processor(file_path, doc_type, filename))
+            # Pass None for progress_callback in legacy method
+            processing_tasks.append(processor(file_path, doc_type, filename, None))
 
         return await asyncio.gather(*processing_tasks)
 
@@ -760,11 +763,37 @@ class DocumentProcessor:
             List of ProcessedDocument objects
 
         """
-        processing_tasks = []
         total_docs = len(file_paths)
         processed_docs_count = [0]
 
-        for file_path in file_paths:
+        # Create a processor-level callback wrapper that reports granular progress
+        async def create_processor_callback(filename: str):
+            """Create a callback wrapper for individual processor progress updates."""
+
+            async def processor_progress(message: str, sub_step: Optional[str] = None):
+                if progress_callback:
+                    try:
+                        await progress_callback(
+                            message=message,
+                            docs_processed=[filename],
+                            phase="document_extraction",
+                            percent=int((processed_docs_count[0] / total_docs) * 15),
+                            sub_step=sub_step,
+                        )
+                    except TypeError:
+                        # Fallback if callback doesn't support sub_step
+                        await progress_callback(
+                            message=message,
+                            docs_processed=[filename],
+                            phase="document_extraction",
+                            percent=int((processed_docs_count[0] / total_docs) * 15),
+                        )
+
+            return processor_progress
+
+        # Process documents with progress callbacks
+        async def process_single_path(file_path: str):
+            """Process a single file path with progress tracking."""
             if not os.path.exists(file_path):
                 msg = f"File not found: {file_path}"
                 raise DocumentProcessingError(msg)
@@ -799,9 +828,14 @@ class DocumentProcessor:
                 msg = f"No processor available for file '{filename}' with content type '{content_type}'"
                 raise DocumentProcessingError(msg)
 
-            processing_tasks.append(processor(file_path, doc_type, filename))
+            # Create processor-level callback for granular progress
+            proc_callback = await create_processor_callback(filename)
+
+            # Call processor with progress callback
+            return await processor(file_path, doc_type, filename, proc_callback)
 
         # Execute all tasks and collect results
+        processing_tasks = [process_single_path(fp) for fp in file_paths]
         results = await asyncio.gather(*processing_tasks, return_exceptions=True)
 
         # Filter out errors and update progress
@@ -813,13 +847,18 @@ class DocumentProcessor:
                 processed_docs.append(result)
                 processed_docs_count[0] += 1
                 if progress_callback:
-                    await progress_callback(
-                        message=(
-                            f"Extracted content from {processed_docs_count[0]} of {total_docs} documents..."
-                        ),
-                        docs_processed=[result.file_name],
-                        phase="document_extraction",
-                        percent=int((processed_docs_count[0] / total_docs) * 15),
-                    )
+                    try:
+                        msg = (
+                            f"Extracted content from {processed_docs_count[0]} "
+                            f"of {total_docs} documents..."
+                        )
+                        await progress_callback(
+                            message=msg,
+                            docs_processed=[result.file_name],
+                            phase="document_extraction",
+                            percent=int((processed_docs_count[0] / total_docs) * 15),
+                        )
+                    except Exception as e:
+                        logger.warning(f"Progress callback error: {e}")
 
         return processed_docs

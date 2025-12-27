@@ -15,9 +15,12 @@ logger = get_module_logger(__name__)
 
 
 async def process_txt(
-    file_path: str, document_type: DocumentType, original_filename: str
+    file_path: str,
+    document_type: DocumentType,
+    original_filename: str,
+    progress_callback=None,
 ) -> ProcessedDocument:
-    """Processes a TXT file by reading its content from a given path."""
+    """Process a TXT file by reading its content from a given path."""
     logger.debug(f"Processing TXT: {original_filename}")
 
     with open(file_path, encoding="utf-8") as f:

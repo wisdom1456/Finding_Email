@@ -5,7 +5,6 @@ import mimetypes
 import os
 
 import docx
-
 from legal_portal.core.data_models import (
     DocumentType,
     FileMetadata,
@@ -18,9 +17,12 @@ logger = get_module_logger(__name__)
 
 
 async def process_docx(
-    file_path: str, document_type: DocumentType, original_filename: str
+    file_path: str,
+    document_type: DocumentType,
+    original_filename: str,
+    progress_callback=None,
 ) -> ProcessedDocument:
-    """Processes a DOCX file by extracting its content from a given path."""
+    """Process a DOCX file by extracting its content from a given path."""
     logger.debug(f"Processing DOCX: {original_filename}")
 
     try:

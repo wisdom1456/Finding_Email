@@ -27,7 +27,10 @@ except ImportError:
 
 
 async def process_image(
-    file_path: str, document_type: DocumentType, original_filename: str
+    file_path: str,
+    document_type: DocumentType,
+    original_filename: str,
+    progress_callback=None,
 ) -> ProcessedDocument:
     """Process an image file by extracting text using OCR from a given path."""
     logger.debug(f"Processing Image: {original_filename}")

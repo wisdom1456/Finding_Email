@@ -16,9 +16,12 @@ logger = get_module_logger(__name__)
 
 
 async def process_csv(
-    file_path: str, document_type: DocumentType, original_filename: str
+    file_path: str,
+    document_type: DocumentType,
+    original_filename: str,
+    progress_callback=None,
 ) -> ProcessedDocument:
-    """Processes a CSV file by reading its content from a given path and converting to structured text."""
+    """Process a CSV file by reading its content from a path and converting to structured text."""
     logger.debug(f"Processing CSV: {original_filename}")
 
     # Read the CSV file

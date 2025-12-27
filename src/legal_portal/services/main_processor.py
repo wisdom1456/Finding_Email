@@ -274,12 +274,19 @@ async def process_case_documents(
             if progress_callback:
                 await progress_callback("Extracting content from documents...", [], "document_extraction", 5)
 
-            processed_docs = await doc_processor.process_documents_from_paths(
-                case_document_paths,
-                intake_filenames=[os.path.basename(intake_form_path)],
-                progress_callback=progress_callback,
-            )
-            processed_case_docs.extend(processed_docs)
+            # Filter out the intake form path from case documents to avoid double-processing
+            unique_case_document_paths = [p for p in case_document_paths if p != intake_form_path]
+
+            if unique_case_document_paths:
+                processed_docs = await doc_processor.process_documents_from_paths(
+                    unique_case_document_paths,
+                    intake_filenames=[os.path.basename(intake_form_path)],
+                    progress_callback=progress_callback,
+                )
+                processed_case_docs.extend(processed_docs)
+
+            # Add the already processed intake form to the list of documents for analysis
+            processed_case_docs.extend(processed_intake)
 
             if not processed_case_docs:
                 logger.warning("No case documents were successfully processed.")

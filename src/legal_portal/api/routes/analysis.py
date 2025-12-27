@@ -4,6 +4,7 @@ import asyncio
 import json
 import logging
 import os
+import re
 import shutil
 import tempfile
 import time
@@ -258,8 +259,10 @@ def _download_and_extract_documents(
 
     for doc in documents:
         storage_path = doc["storage_path"]
-        # Sanitize filename to avoid directory traversal and invalid characters
-        safe_filename = doc["file_name"].replace("/", "_").replace("\\", "_").replace(":", "_")
+        # Robust sanitization to avoid filesystem issues with special characters (spaces, parentheses, etc)
+        safe_filename = re.sub(r"[^a-zA-Z0-9._-]", "_", doc["file_name"])
+        # Ensure we don't have too many underscores and keep the extension
+        safe_filename = re.sub(r"_+", "_", safe_filename)
         temp_path = os.path.join(temp_dir, safe_filename)
 
         # Skip video and audio files
@@ -315,6 +318,15 @@ def _download_and_extract_documents(
                 try:
                     file_data = supabase.storage.from_("documents").download(storage_path)
                     actual_size = len(file_data)
+
+                    # Validate download content is not just whitespace (corrupted upload indicator)
+                    if actual_size > 0 and actual_size < 100 and not file_data.strip():
+                        logger.warning(
+                            f"Download for {doc['file_name']} appears to be only whitespace "
+                            f"({actual_size} bytes). Potential corrupted upload."
+                        )
+                        # We don't retry whitespace errors as they are likely permanent in storage
+                        break
 
                     # Validate download size if we know expected size
                     if expected_size > 0 and actual_size < expected_size * 0.9:

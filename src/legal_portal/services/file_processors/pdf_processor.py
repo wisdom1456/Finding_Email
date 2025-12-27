@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import mimetypes
 import os
 import time
@@ -11,6 +12,7 @@ from legal_portal.core.data_models import (
     ProcessedDocument,
 )
 from legal_portal.utils.logging_config import get_module_logger
+from legal_portal.utils.openai_client import OpenAIClient
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 logger = get_module_logger(__name__)
@@ -174,12 +176,78 @@ def detect_pdf_corruption(file_path: str) -> tuple[bool, str]:
         return False, "No PDF library available"
 
 
+async def _extract_text_via_vision(file_path: str, original_filename: str) -> str:
+    """Fall back to GPT-4o Vision for scanned PDFs.
+
+    Render first few pages to images and send to Vision API.
+    """
+    if not FITZ_AVAILABLE:
+        return ""
+
+    try:
+        logger.info(f"🔍 Attempting GPT-4o Vision extraction for scanned PDF: {original_filename}")
+
+        import fitz
+
+        openai_client_wrapper = OpenAIClient()
+        client = openai_client_wrapper.client
+
+        extracted_parts = []
+
+        with fitz.open(file_path) as doc:
+            # Process up to 2 pages for fallback to keep it fast and cost-effective
+            pages_to_process = min(doc.page_count, 2)
+
+            for i in range(pages_to_process):
+                page = doc[i]
+                # Render page to image (2x zoom for better text legibility)
+                pix = page.get_pixmap(matrix=fitz.Matrix(2, 2))
+                img_data = pix.tobytes("png")
+                base64_image = base64.b64encode(img_data).decode("utf-8")
+
+                prompt = (
+                    f"Extract all text from page {i+1} of this legal document ({original_filename}). "
+                    "Provide the text verbatim."
+                )
+
+                content = [
+                    {"type": "text", "text": prompt},
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": f"data:image/png;base64,{base64_image}"},
+                    },
+                ]
+
+                response = client.chat.completions.create(
+                    model="gpt-4o",
+                    messages=[{"role": "user", "content": content}],
+                    max_tokens=1500,
+                    temperature=0.0,
+                )
+
+                page_text = response.choices[0].message.content
+                if page_text:
+                    extracted_parts.append(f"--- Page {i+1} ---\n{page_text}")
+
+        if not extracted_parts:
+            return ""
+
+        extracted_text = "\n\n".join(extracted_parts)
+        logger.info(f"✅ Successfully extracted text via Vision for {original_filename}")
+        return f"[Extracted via GPT-4o Vision]\n\n{extracted_text}"
+
+    except Exception as e:
+        logger.error(f"Vision extraction failed for {original_filename}: {e}")
+        return ""
+
+
 async def process_pdf(
     file_path: str, document_type: DocumentType, original_filename: str
 ) -> ProcessedDocument:
     """Process a PDF file by extracting its text content.
 
     Uses PyMuPDF (fitz) if available, falls back to pypdf (lightweight).
+    If extraction yields no results, falls back to Vision API for scanned docs.
 
     Args:
     ----
@@ -196,6 +264,7 @@ async def process_pdf(
 
     text_content = ""
     file_size = 0
+    extraction_method = "standard"
 
     # Pre-validate file exists and has reasonable size
     if not os.path.exists(file_path):
@@ -207,22 +276,26 @@ async def process_pdf(
         # Reject suspiciously small PDFs (< 100 bytes likely corrupt)
         if file_size < 100:
             logger.warning(f"Suspiciously small PDF ({file_size} bytes): {original_filename}")
-            text_content = f"Error: PDF file too small to be valid ({file_size} bytes)"
+            text_content = f"Error: PDF file appears to be corrupted or empty ({file_size} bytes)"
         else:
             # Try PyMuPDF first (better quality extraction)
             if FITZ_AVAILABLE:
                 try:
                     text_content = _extract_text_with_fitz(file_path)
-                    logger.info(f"✅ Successfully extracted text from {original_filename} using PyMuPDF")
+                    if text_content.strip():
+                        logger.info(f"✅ Successfully extracted text from {original_filename} using PyMuPDF")
+                        extraction_method = "PyMuPDF"
                 except Exception as e:
                     logger.warning(f"PyMuPDF extraction failed for {original_filename}: {e}")
                     text_content = ""
 
-            # Fall back to pypdf if PyMuPDF failed or unavailable
-            if not text_content and PYPDF_AVAILABLE:
+            # Fall back to pypdf if PyMuPDF failed or returned empty
+            if not text_content.strip() and PYPDF_AVAILABLE:
                 try:
                     text_content = _extract_text_with_pypdf(file_path)
-                    logger.info(f"✅ Successfully extracted text from {original_filename} using pypdf")
+                    if text_content.strip():
+                        logger.info(f"✅ Successfully extracted text from {original_filename} using pypdf")
+                        extraction_method = "pypdf"
                 except Exception as e:
                     error_msg = str(e)
                     if "Stream has ended unexpectedly" in error_msg:
@@ -234,16 +307,37 @@ async def process_pdf(
                         logger.error(f"pypdf extraction failed for {original_filename}: {e}")
                         text_content = f"Error extracting text from {original_filename}: {error_msg}"
 
-            # No library available or both failed
-            if not text_content:
+            # Check if we need Vision fallback (empty text or error message from standard libs)
+            # Scanned PDFs often return empty text or just whitespace
+            needs_vision = not text_content.strip() or text_content.startswith("Error")
+
+            # Also use Vision if standard extraction yielded very little text (< 100 chars)
+            # while the file size is large (> 50KB), which usually indicates a scanned document
+            # with some junk text or just headers.
+            if not needs_vision and len(text_content.strip()) < 100 and file_size > 50000:
+                logger.info(
+                    f"Low text yield for {original_filename} ({len(text_content)} chars), "
+                    "trying Vision fallback"
+                )
+                needs_vision = True
+
+            if needs_vision:
+                vision_text = await _extract_text_via_vision(file_path, original_filename)
+                if vision_text:
+                    text_content = vision_text
+                    extraction_method = "GPT-4o Vision"
+
+            # No library available or all failed
+            if not text_content.strip():
                 if not FITZ_AVAILABLE and not PYPDF_AVAILABLE:
                     logger.error(f"No PDF library available to extract text from {original_filename}")
                     text_content = f"Error: No PDF extraction library available for {original_filename}"
-                elif not text_content.startswith("Error"):
-                    # Extraction returned empty string (possibly scanned PDF)
-                    logger.warning(f"No text extracted from {original_filename} (possibly scanned/image PDF)")
+                else:
+                    # Extraction returned empty string even after all attempts
+                    logger.warning(f"No text extracted from {original_filename} (even after Vision attempt)")
                     text_content = (
-                        f"[No text content extracted from {original_filename} - may be a scanned/image PDF]"
+                        f"[No text content could be extracted from {original_filename}. "
+                        f"The file may be an image scan that failed OCR.]"
                     )
 
     content_type, _ = mimetypes.guess_type(file_path)
@@ -253,8 +347,10 @@ async def process_pdf(
 
     if text_content.startswith("Error") or text_content.startswith("[No text"):
         logger.warning(f"⚠️ Created fallback metadata for {original_filename}, size: {file_size}")
+        extraction_quality = "low"
     else:
         logger.info(f"✅ Created FileMetadata for {original_filename}, size: {file_size}")
+        extraction_quality = "high" if len(text_content.strip()) > 200 else "medium"
 
     return ProcessedDocument(
         file_name=original_filename,
@@ -262,4 +358,6 @@ async def process_pdf(
         document_type=document_type,
         file_type=FileType.PDF,
         metadata=file_metadata,
+        extraction_quality=extraction_quality,
+        extraction_method=extraction_method,
     )

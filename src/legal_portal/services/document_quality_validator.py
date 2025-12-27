@@ -41,6 +41,14 @@ class DocumentQualityValidator:
         recommendations = []
         score = 10.0  # Start with perfect score, deduct for issues
 
+        # Check 0: Detect error message patterns (must come first)
+        error_indicators = ["Error:", "[No text content", "truncated", "corrupted", "failed to extract"]
+        is_error_content = any(indicator.lower() in content[:500].lower() for indicator in error_indicators)
+        if is_error_content:
+            issues.append("Document content indicates a processing error or corruption")
+            score -= 5.0
+            recommendations.append("Verify the original file is a valid, non-corrupted PDF")
+
         # Check 1: Has meaningful content
         has_content = len(content.strip()) >= self.min_content_length
         if not has_content:

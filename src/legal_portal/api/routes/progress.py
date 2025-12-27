@@ -57,26 +57,33 @@ async def get_analysis_status(
     if not status:
         # Fallback to database for cross-instance support on Vercel
         try:
+            # Check if progress column exists by selecting status first
             response = (
-                supabase.table("analysis_results")
-                .select("progress, status")
-                .eq("id", analysis_id)
-                .single()
-                .execute()
+                supabase.table("analysis_results").select("status").eq("id", analysis_id).single().execute()
             )
             if response.data:
-                if response.data.get("progress"):
-                    status = response.data["progress"]
-                    # If status is terminal in DB but not in progress payload, sync it
-                    if response.data["status"] in ["completed", "error"]:
-                        status["type"] = response.data["status"]
-                else:
-                    # Map table status to progress payload if no detailed progress exists
-                    status = {
-                        "type": response.data["status"],
-                        "message": f"Analysis state: {response.data['status']}",
-                        "percent": 100 if response.data["status"] == "completed" else 0,
-                    }
+                db_status = response.data["status"]
+                # Map table status to progress payload
+                status = {
+                    "type": db_status,
+                    "message": f"Analysis state: {db_status}",
+                    "percent": 100 if db_status == "completed" else 0,
+                }
+
+                # Try to get progress column separately if it might exist
+                try:
+                    p_res = (
+                        supabase.table("analysis_results")
+                        .select("progress")
+                        .eq("id", analysis_id)
+                        .single()
+                        .execute()
+                    )
+                    if p_res.data and p_res.data.get("progress"):
+                        status.update(p_res.data["progress"])
+                except Exception:
+                    # Column likely doesn't exist, ignore
+                    pass
         except Exception as e:
             logger.warning(f"Failed to fetch progress from DB for {analysis_id}: {e}")
 

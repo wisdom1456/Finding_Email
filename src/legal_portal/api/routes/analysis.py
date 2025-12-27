@@ -36,6 +36,27 @@ from starlette.concurrency import run_in_threadpool
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
+# Cache for database column existence checks
+_DB_COLUMNS_CACHE = {}
+
+
+async def _update_analysis_progress(supabase, analysis_id: str, payload: dict):
+    """Update analysis progress in DB with safety check for column existence."""
+    global _DB_COLUMNS_CACHE
+
+    if _DB_COLUMNS_CACHE.get("has_progress_column") is False:
+        return
+
+    try:
+        supabase.table("analysis_results").update({"progress": payload}).eq("id", analysis_id).execute()
+        _DB_COLUMNS_CACHE["has_progress_column"] = True
+    except Exception as e:
+        if "column analysis_results.progress does not exist" in str(e):
+            logger.warning("DB column analysis_results.progress missing. Disabling DB updates.")
+            _DB_COLUMNS_CACHE["has_progress_column"] = False
+        else:
+            logger.warning(f"Failed to persist progress to DB: {e}")
+
 
 async def _get_user_ai_preferences(user_id: str, supabase) -> Optional[Dict[str, str]]:
     """Fetch user's AI model preferences from profile."""
@@ -521,12 +542,7 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
             "timestamp": datetime.utcnow().isoformat(),
         }
         await progress_manager.publish_progress(channel_id=analysis_id, **initial_payload)
-        try:
-            supabase.table("analysis_results").update({"progress": initial_payload}).eq(
-                "id", analysis_id
-            ).execute()
-        except Exception as db_err:
-            logger.warning(f"Failed to persist initial progress to DB: {db_err}")
+        await _update_analysis_progress(supabase, analysis_id, initial_payload)
 
         # Get case details
         case_response = supabase.table("cases").select("*").eq("id", case_id).execute()
@@ -588,12 +604,7 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
             await progress_manager.publish_progress(channel_id=analysis_id, **payload)
 
             # Persist to database so polling fallback works across Vercel instances
-            try:
-                supabase.table("analysis_results").update({"progress": payload}).eq(
-                    "id", analysis_id
-                ).execute()
-            except Exception as db_err:
-                logger.warning(f"Failed to persist progress to DB: {db_err}")
+            await _update_analysis_progress(supabase, analysis_id, payload)
 
         # Call the actual processor
         result: ProcessingResult = await process_case_documents(
@@ -631,12 +642,7 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
             "timestamp": datetime.utcnow().isoformat(),
         }
         await progress_manager.publish_progress(channel_id=analysis_id, **completion_payload)
-        try:
-            supabase.table("analysis_results").update({"progress": completion_payload}).eq(
-                "id", analysis_id
-            ).execute()
-        except Exception as db_err:
-            logger.warning(f"Failed to persist completion progress to DB: {db_err}")
+        await _update_analysis_progress(supabase, analysis_id, completion_payload)
 
     except Exception as e:
         # Log error and update status
@@ -662,11 +668,11 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
                 {
                     "status": "error",
                     "error": f"{error_message}\n\n{error_traceback}",
-                    "progress": error_payload,
                 }
             ).eq("id", analysis_id).execute()
+            await _update_analysis_progress(supabase, analysis_id, error_payload)
         except Exception as db_err:
-            logger.warning(f"Failed to persist error progress to DB: {db_err}")
+            logger.warning(f"Failed to persist error status to DB: {db_err}")
 
         supabase.table("cases").update({"status": "error"}).eq("id", case_id).execute()
 

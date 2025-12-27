@@ -179,9 +179,13 @@ def detect_pdf_corruption(file_path: str) -> tuple[bool, str]:
 async def _extract_text_via_vision(file_path: str, original_filename: str) -> str:
     """Fall back to GPT-4o Vision for scanned PDFs.
 
-    Render first few pages to images and send to Vision API.
+    Render first page to image and send to Vision API.
     """
     if not FITZ_AVAILABLE:
+        return ""
+
+    if not os.path.exists(file_path):
+        logger.error(f"Cannot perform Vision fallback: File not found at {file_path}")
         return ""
 
     try:
@@ -194,9 +198,17 @@ async def _extract_text_via_vision(file_path: str, original_filename: str) -> st
 
         extracted_parts = []
 
-        with fitz.open(file_path) as doc:
-            # Process up to 2 pages for fallback to keep it fast and cost-effective
-            pages_to_process = min(doc.page_count, 2)
+        # Ensure file is still there and accessible
+        try:
+            doc = fitz.open(file_path)
+        except Exception as open_err:
+            logger.error(f"Failed to open PDF for Vision extraction: {open_err}")
+            return ""
+
+        with doc:
+            # Process only first page for fallback to keep it fast and avoid timeouts
+            # Most legal documents have identifying info on the first page
+            pages_to_process = min(doc.page_count, 1)
 
             for i in range(pages_to_process):
                 page = doc[i]
@@ -221,7 +233,7 @@ async def _extract_text_via_vision(file_path: str, original_filename: str) -> st
                 response = client.chat.completions.create(
                     model="gpt-4o",
                     messages=[{"role": "user", "content": content}],
-                    max_tokens=1500,
+                    max_tokens=1000,
                     temperature=0.0,
                 )
 

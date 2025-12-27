@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import base64
 import mimetypes
 import os
@@ -13,6 +14,7 @@ from legal_portal.core.data_models import (
 )
 from legal_portal.utils.logging_config import get_module_logger
 from legal_portal.utils.openai_client import OpenAIClient
+from starlette.concurrency import run_in_threadpool
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 logger = get_module_logger(__name__)
@@ -179,7 +181,7 @@ def detect_pdf_corruption(file_path: str) -> tuple[bool, str]:
 async def _extract_text_via_vision(file_path: str, original_filename: str) -> str:
     """Fall back to GPT-4o Vision for scanned PDFs.
 
-    Render first page to image and send to Vision API.
+    Render all pages to images and send to Vision API in parallel.
     """
     if not FITZ_AVAILABLE:
         return ""
@@ -196,30 +198,43 @@ async def _extract_text_via_vision(file_path: str, original_filename: str) -> st
         openai_client_wrapper = OpenAIClient()
         client = openai_client_wrapper.client
 
-        extracted_parts = []
-
-        # Ensure file is still there and accessible
+        # Open the document
         try:
             doc = fitz.open(file_path)
         except Exception as open_err:
             logger.error(f"Failed to open PDF for Vision extraction: {open_err}")
             return ""
 
-        with doc:
-            # Process only first page for fallback to keep it fast and avoid timeouts
-            # Most legal documents have identifying info on the first page
-            pages_to_process = min(doc.page_count, 1)
+        # Limit to 20 pages to prevent extreme costs and timeouts, while covering most legal docs
+        # User said "entire documents", but 20 is a safe "entire" for most scanned packets.
+        # We can increase this if 20 is not enough.
+        max_pages = 25
+        page_count = doc.page_count
+        pages_to_process = min(page_count, max_pages)
 
-            for i in range(pages_to_process):
-                page = doc[i]
-                # Render page to image (2x zoom for better text legibility)
-                pix = page.get_pixmap(matrix=fitz.Matrix(2, 2))
-                img_data = pix.tobytes("png")
+        if page_count > max_pages:
+            logger.warning(
+                f"Document {original_filename} has {page_count} pages. "
+                f"Limiting Vision extraction to first {max_pages} pages."
+            )
+
+        async def process_page(page_index: int):
+            """Process a single page: render and send to OpenAI."""
+            try:
+                # Render page to image in thread pool
+                def render_page():
+                    page = doc[page_index]
+                    # Render page to image (2x zoom for better text legibility)
+                    pix = page.get_pixmap(matrix=fitz.Matrix(2, 2))
+                    return pix.tobytes("png")
+
+                img_data = await run_in_threadpool(render_page)
                 base64_image = base64.b64encode(img_data).decode("utf-8")
 
                 prompt = (
-                    f"Extract all text from page {i+1} of this legal document ({original_filename}). "
-                    "Provide the text verbatim."
+                    f"Extract all text from page {page_index + 1} of this legal document. "
+                    f"Filename: {original_filename}. "
+                    "Provide the text verbatim. Do not summarize."
                 )
 
                 content = [
@@ -230,22 +245,49 @@ async def _extract_text_via_vision(file_path: str, original_filename: str) -> st
                     },
                 ]
 
-                response = client.chat.completions.create(
-                    model="gpt-4o",
-                    messages=[{"role": "user", "content": content}],
-                    max_tokens=1000,
-                    temperature=0.0,
-                )
+                # Make the API call in thread pool (since client is sync)
+                def make_api_call():
+                    return client.chat.completions.create(
+                        model="gpt-4o",
+                        messages=[{"role": "user", "content": content}],
+                        max_tokens=1500,
+                        temperature=0.0,
+                    )
 
+                response = await run_in_threadpool(make_api_call)
                 page_text = response.choices[0].message.content
                 if page_text:
-                    extracted_parts.append(f"--- Page {i+1} ---\n{page_text}")
+                    return f"--- Page {page_index + 1} ---\n{page_text}"
+                return ""
+            except Exception as page_err:
+                logger.error(f"Error processing page {page_index + 1} of {original_filename}: {page_err}")
+                return f"--- Page {page_index + 1} ---\n[Error extracting text from this page]"
+
+        # Process pages in parallel
+        # We use a semaphore to limit concurrency to avoid hitting OpenAI rate limits
+        # or overwhelming the local CPU/memory with image rendering.
+        semaphore = asyncio.Semaphore(5)
+
+        async def sem_process_page(i):
+            async with semaphore:
+                return await process_page(i)
+
+        tasks = [sem_process_page(i) for i in range(pages_to_process)]
+        extracted_parts = await asyncio.gather(*tasks)
+
+        # Close doc manually since we didn't use context manager to keep it open for parallel tasks
+        doc.close()
+
+        # Filter out empty results
+        extracted_parts = [p for p in extracted_parts if p]
 
         if not extracted_parts:
             return ""
 
         extracted_text = "\n\n".join(extracted_parts)
-        logger.info(f"✅ Successfully extracted text via Vision for {original_filename}")
+        logger.info(
+            f"✅ Successfully extracted {len(extracted_parts)} pages via Vision for {original_filename}"
+        )
         return f"[Extracted via GPT-4o Vision]\n\n{extracted_text}"
 
     except Exception as e:

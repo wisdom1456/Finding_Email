@@ -38,6 +38,7 @@ class GoogleVisionClient:
         """
         self.client = None
         self._initialized = False
+        self._credentials_validated = False  # Cache validation result
 
         if not GOOGLE_VISION_AVAILABLE:
             logger.warning("Google Cloud Vision SDK not installed")
@@ -107,16 +108,25 @@ class GoogleVisionClient:
         """Check if the client is properly initialized and ready."""
         return GOOGLE_VISION_AVAILABLE and self._initialized and self.client is not None
 
-    def validate_credentials(self) -> tuple[bool, str]:
+    def validate_credentials(self, force: bool = False) -> tuple[bool, str]:
         """Test that credentials work by making a minimal API call.
 
-        Returns
+        Args:
+        ----
+            force: If True, re-validate even if already validated
+
+        Returns:
         -------
             Tuple of (success: bool, message: str)
 
         """
         if not self.is_available:
             return False, "Client not initialized"
+
+        # Return cached result if already validated (avoid repeated API calls)
+        if self._credentials_validated and not force:
+            logger.debug("Using cached credential validation result")
+            return True, "Credentials valid (cached)"
 
         try:
             # Create a minimal 1x1 white PNG image for testing
@@ -139,6 +149,7 @@ class GoogleVisionClient:
                 # just didn't like the tiny test image. This is a SUCCESS.
                 if "invalid argument" in response.error.message.lower():
                     logger.info("✅ Google Vision credentials validated (API connection successful)")
+                    self._credentials_validated = True
                     return True, "Credentials valid"
 
                 # Other errors are real failures
@@ -147,6 +158,7 @@ class GoogleVisionClient:
                 return False, error_msg
 
             logger.info("✅ Google Vision credentials validated successfully")
+            self._credentials_validated = True
             return True, "Credentials valid"
 
         except Exception as e:
@@ -155,6 +167,7 @@ class GoogleVisionClient:
             # but rejected the image (still means credentials are valid)
             if "invalid argument" in error_msg.lower():
                 logger.info("✅ Google Vision credentials validated (API connection successful)")
+                self._credentials_validated = True
                 return True, "Credentials valid"
 
             logger.error(f"Google Vision credential validation failed: {error_msg}")

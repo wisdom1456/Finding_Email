@@ -918,6 +918,59 @@ async def cancel_analysis(
         ) from e
 
 
+@router.post("/cancel-case/{case_id}", status_code=status.HTTP_200_OK)
+async def cancel_case_analysis(
+    case_id: str,
+    user=Depends(get_current_user),  # noqa: B008
+    user_supabase=Depends(get_user_supabase_client),  # noqa: B008
+    service_supabase=Depends(get_supabase_client),  # noqa: B008
+):
+    r"""Cancel the most recent in-progress analysis for a case.
+
+    This enables "Cancel" from the cases list UI without needing an analysis_id.
+    """
+    try:
+        # Verify ownership of the case (RLS via user_supabase)
+        case_resp = (
+            user_supabase.table("cases").select("id").eq("id", case_id).eq("user_id", user["id"]).execute()
+        )
+        if not case_resp.data:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Case not found")
+
+        # Find the newest analysis for this case that is still pending/processing
+        analysis_resp = (
+            user_supabase.table("analysis_results")
+            .select("id, status")
+            .eq("case_id", case_id)
+            .in_("status", ["pending", "processing"])
+            .order("created_at", desc=True)
+            .limit(1)
+            .execute()
+        )
+
+        if not analysis_resp.data:
+            return {"status": "no_active_analysis", "case_id": case_id}
+
+        analysis_id = analysis_resp.data[0]["id"]
+
+        progress_manager = ProgressManager.get_instance()
+        await _cancel_analysis(
+            supabase=service_supabase,
+            case_id=case_id,
+            analysis_id=analysis_id,
+            progress_manager=progress_manager,
+        )
+
+        return {"status": "cancelled", "analysis_id": analysis_id, "case_id": case_id}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to cancel case analysis: {str(e)}",
+        ) from e
+
+
 @router.get("/status/{case_id}", response_model=AnalysisResponse)
 async def get_analysis_status(
     case_id: str,

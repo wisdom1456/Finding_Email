@@ -2,13 +2,17 @@
 	import { onMount } from 'svelte';
 	import { supabase } from '$lib/supabase';
 	import PageHeader from '$lib/components/ui/PageHeader.svelte';
-	import { Plus, Link2, FileText, Filter } from 'lucide-svelte';
+	import { getApiUrl } from '$lib/config';
+	import { toastStore } from '$lib/stores/toastStore';
+	import { Plus, Link2, FileText, Filter, Trash2, XCircle } from 'lucide-svelte';
 
 	let cases = $state<any[]>([]);
 	let filteredCases = $state<any[]>([]);
 	let loading = $state(true);
 	let errorMessage = $state('');
 	let showOnlyClioCases = $state(false);
+	let cancellingCaseId = $state<string | null>(null);
+	let deletingCaseId = $state<string | null>(null);
 
 	$effect(() => {
 		if (showOnlyClioCases) {
@@ -40,6 +44,80 @@
 			errorMessage = error.message || 'Failed to load cases';
 		} finally {
 			loading = false;
+		}
+	}
+
+	async function cancelCase(caseId: string) {
+		const ok = confirm('Cancel the current analysis for this case? This will stop processing and allow you to run a new analysis.');
+		if (!ok) return;
+
+		cancellingCaseId = caseId;
+		errorMessage = '';
+
+		try {
+			const {
+				data: { session }
+			} = await supabase.auth.getSession();
+
+			if (!session) throw new Error('Not authenticated');
+
+			const response = await fetch(`${getApiUrl()}/api/analysis/cancel-case/${caseId}`, {
+				method: 'POST',
+				headers: {
+					Authorization: `Bearer ${session.access_token}`
+				}
+			});
+
+			if (!response.ok) {
+				const detail = await response.json().catch(() => ({}));
+				throw new Error(detail?.detail || 'Failed to cancel analysis');
+			}
+
+			toastStore.success('Analysis cancelled.');
+			await loadCases();
+		} catch (err: any) {
+			console.error('Cancel analysis failed:', err);
+			errorMessage = err.message || 'Failed to cancel analysis';
+			toastStore.error(errorMessage);
+		} finally {
+			cancellingCaseId = null;
+		}
+	}
+
+	async function deleteCase(caseId: string) {
+		const ok = confirm('Delete this case and all related documents? This cannot be undone.');
+		if (!ok) return;
+
+		deletingCaseId = caseId;
+		errorMessage = '';
+
+		try {
+			const {
+				data: { session }
+			} = await supabase.auth.getSession();
+
+			if (!session) throw new Error('Not authenticated');
+
+			const response = await fetch(`${getApiUrl()}/api/cases/${caseId}`, {
+				method: 'DELETE',
+				headers: {
+					Authorization: `Bearer ${session.access_token}`
+				}
+			});
+
+			if (!response.ok) {
+				const detail = await response.json().catch(() => ({}));
+				throw new Error(detail?.detail || 'Failed to delete case');
+			}
+
+			toastStore.success('Case deleted.');
+			await loadCases();
+		} catch (err: any) {
+			console.error('Delete case failed:', err);
+			errorMessage = err.message || 'Failed to delete case';
+			toastStore.error(errorMessage);
+		} finally {
+			deletingCaseId = null;
 		}
 	}
 
@@ -223,6 +301,40 @@
 										>
 											{caseItem.status}
 										</span>
+
+										<div class="flex items-center gap-2">
+											{#if caseItem.status === 'processing'}
+												<button
+													type="button"
+													class="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+													disabled={cancellingCaseId === caseItem.id}
+													onclick={(e) => {
+														e.preventDefault();
+														e.stopPropagation();
+														cancelCase(caseItem.id);
+													}}
+													title="Cancel analysis"
+												>
+													<XCircle class="h-3.5 w-3.5" />
+													{cancellingCaseId === caseItem.id ? 'Cancelling...' : 'Cancel'}
+												</button>
+											{/if}
+
+											<button
+												type="button"
+												class="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium bg-red-50 text-red-700 hover:bg-red-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+												disabled={deletingCaseId === caseItem.id}
+												onclick={(e) => {
+													e.preventDefault();
+													e.stopPropagation();
+													deleteCase(caseItem.id);
+												}}
+												title="Delete case"
+											>
+												<Trash2 class="h-3.5 w-3.5" />
+												{deletingCaseId === caseItem.id ? 'Deleting...' : 'Delete'}
+											</button>
+										</div>
 									</div>
 								</div>
 								<div class="mt-3 text-xs text-gray-400">

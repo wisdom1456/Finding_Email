@@ -388,8 +388,9 @@ async def _extract_text_via_google_ocr(
                     f"OCR: Starting Google Vision for {original_filename} ({pages_to_process} pages)",
                     "google_ocr_start",
                 )
-            except Exception:
-                pass
+                logger.info(f"Published OCR start progress for {original_filename}")
+            except Exception as prog_err:
+                logger.warning(f"Failed to publish initial OCR progress: {prog_err}")
 
         extracted_parts = []
         completed_pages = [0]
@@ -406,12 +407,40 @@ async def _extract_text_via_google_ocr(
 
                     def render_page():
                         page = doc[page_index]
-                        # 2x zoom for better OCR accuracy
-                        pix = page.get_pixmap(matrix=fitz.Matrix(2, 2))
+
+                        # Optimization: check page size and cap zoom for extremely large pages
+                        # to avoid memory issues/hanging in serverless environments.
+                        rect = page.rect
+                        width, height = rect.width, rect.height
+
+                        zoom = 2.0
+                        if width > 3000 or height > 3000:
+                            zoom = 1.0
+                            logger.info(f"Large page detected ({width:.0f}x{height:.0f}), using 1x zoom")
+                        elif width > 1500 or height > 1500:
+                            zoom = 1.5
+                            logger.info(f"Moderate page detected ({width:.0f}x{height:.0f}), using 1.5x zoom")
+
+                        pix = page.get_pixmap(matrix=fitz.Matrix(zoom, zoom))
                         return pix.tobytes("png")
 
-                    img_data = await run_in_threadpool(render_page)
-                    logger.debug(f"Page {page_index + 1} rendered, size: {len(img_data)} bytes")
+                    try:
+                        img_data = await asyncio.wait_for(
+                            run_in_threadpool(render_page),
+                            timeout=30.0,
+                        )
+                        logger.debug(f"Page {page_index + 1} rendered, size: {len(img_data)} bytes")
+                    except asyncio.TimeoutError:
+                        logger.error(f"Rendering timeout on page {page_index + 1} of {original_filename}")
+                        completed_pages[0] += 1
+                        return ""
+                    except Exception as render_err:
+                        logger.error(
+                            f"Rendering error on page {page_index + 1} "
+                            f"of {original_filename}: {render_err}"
+                        )
+                        completed_pages[0] += 1
+                        return ""
 
                     # Send to Google Vision (in thread pool since it's sync)
                     # Add timeout to prevent hanging on auth issues
@@ -530,8 +559,14 @@ async def _extract_text_via_google_ocr_bytes(
 
         # Open from memory stream instead of file path
         try:
-            doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+            doc = await asyncio.wait_for(
+                run_in_threadpool(fitz.open, stream=pdf_bytes, filetype="pdf"),
+                timeout=15.0,
+            )
             logger.debug(f"Opened PDF from memory: {original_filename} ({len(pdf_bytes)} bytes)")
+        except asyncio.TimeoutError:
+            logger.error(f"Timeout opening PDF bytes for {original_filename}")
+            return ""
         except Exception as open_err:
             # Log bytes info for debugging invalid content
             header = pdf_bytes[:20] if pdf_bytes else b""
@@ -559,8 +594,9 @@ async def _extract_text_via_google_ocr_bytes(
                     f"OCR: Starting Google Vision for {original_filename} ({pages_to_process} pages)",
                     "google_ocr_start",
                 )
-            except Exception:
-                pass
+                logger.info(f"Published OCR start progress for {original_filename}")
+            except Exception as prog_err:
+                logger.warning(f"Failed to publish initial OCR progress: {prog_err}")
 
         extracted_parts = []
         completed_pages = [0]
@@ -577,12 +613,40 @@ async def _extract_text_via_google_ocr_bytes(
 
                     def render_page():
                         page = doc[page_index]
-                        # 2x zoom for better OCR accuracy
-                        pix = page.get_pixmap(matrix=fitz.Matrix(2, 2))
+
+                        # Optimization: check page size and cap zoom for extremely large pages
+                        # to avoid memory issues/hanging in serverless environments.
+                        rect = page.rect
+                        width, height = rect.width, rect.height
+
+                        zoom = 2.0
+                        if width > 3000 or height > 3000:
+                            zoom = 1.0
+                            logger.info(f"Large page detected ({width:.0f}x{height:.0f}), using 1x zoom")
+                        elif width > 1500 or height > 1500:
+                            zoom = 1.5
+                            logger.info(f"Moderate page detected ({width:.0f}x{height:.0f}), using 1.5x zoom")
+
+                        pix = page.get_pixmap(matrix=fitz.Matrix(zoom, zoom))
                         return pix.tobytes("png")
 
-                    img_data = await run_in_threadpool(render_page)
-                    logger.debug(f"Page {page_index + 1} rendered, size: {len(img_data)} bytes")
+                    try:
+                        img_data = await asyncio.wait_for(
+                            run_in_threadpool(render_page),
+                            timeout=30.0,
+                        )
+                        logger.debug(f"Page {page_index + 1} rendered, size: {len(img_data)} bytes")
+                    except asyncio.TimeoutError:
+                        logger.error(f"Rendering timeout on page {page_index + 1} of {original_filename}")
+                        completed_pages[0] += 1
+                        return ""
+                    except Exception as render_err:
+                        logger.error(
+                            f"Rendering error on page {page_index + 1} "
+                            f"of {original_filename}: {render_err}"
+                        )
+                        completed_pages[0] += 1
+                        return ""
 
                     # Send to Google Vision (in thread pool since it's sync)
                     # Add timeout to prevent hanging on auth issues
@@ -684,7 +748,13 @@ async def _extract_text_via_vision(
 
         # Open the document
         try:
-            doc = fitz.open(file_path)
+            doc = await asyncio.wait_for(
+                run_in_threadpool(fitz.open, file_path),
+                timeout=15.0,
+            )
+        except asyncio.TimeoutError:
+            logger.error(f"Timeout opening PDF file at {file_path}")
+            return ""
         except Exception as open_err:
             logger.error(f"Failed to open PDF for Vision extraction: {open_err}")
             return ""
@@ -739,8 +809,22 @@ async def _extract_text_via_vision(
                         temperature=0.0,
                     )
 
-                response = await run_in_threadpool(make_api_call)
-                page_text = response.choices[0].message.content
+                try:
+                    logger.debug(f"Sending page {page_index + 1} to OpenAI Vision API")
+                    response = await asyncio.wait_for(
+                        run_in_threadpool(make_api_call),
+                        timeout=60.0,  # OpenAI can be slower than Google
+                    )
+                    page_text = response.choices[0].message.content
+                    logger.debug(f"OpenAI returned for page {page_index + 1}")
+                except asyncio.TimeoutError:
+                    logger.error(f"OpenAI Vision API timeout on page {page_index + 1} of {original_filename}")
+                    completed_pages[0] += 1
+                    return f"--- Page {page_index + 1} ---\n[Extraction timed out]"
+                except Exception as api_err:
+                    logger.error(f"OpenAI Vision API error on page {page_index + 1}: {api_err}")
+                    completed_pages[0] += 1
+                    return f"--- Page {page_index + 1} ---\n[API Error: {api_err}]"
 
                 # Update progress after successful page extraction
                 completed_pages[0] += 1
@@ -893,8 +977,22 @@ async def _extract_text_via_vision_bytes(
                         temperature=0.0,
                     )
 
-                response = await run_in_threadpool(make_api_call)
-                page_text = response.choices[0].message.content
+                try:
+                    logger.debug(f"Sending page {page_index + 1} to OpenAI Vision API")
+                    response = await asyncio.wait_for(
+                        run_in_threadpool(make_api_call),
+                        timeout=60.0,  # OpenAI can be slower than Google
+                    )
+                    page_text = response.choices[0].message.content
+                    logger.debug(f"OpenAI returned for page {page_index + 1}")
+                except asyncio.TimeoutError:
+                    logger.error(f"OpenAI Vision API timeout on page {page_index + 1} of {original_filename}")
+                    completed_pages[0] += 1
+                    return f"--- Page {page_index + 1} ---\n[Extraction timed out]"
+                except Exception as api_err:
+                    logger.error(f"OpenAI Vision API error on page {page_index + 1}: {api_err}")
+                    completed_pages[0] += 1
+                    return f"--- Page {page_index + 1} ---\n[API Error: {api_err}]"
 
                 # Update progress after successful page extraction
                 completed_pages[0] += 1

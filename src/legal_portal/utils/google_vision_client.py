@@ -140,6 +140,14 @@ class GoogleVisionClient:
 
             logger.info("Testing Google Vision API credentials...")
             image = vision.Image(content=minimal_png)
+
+            # Add timeout to the validation call
+
+            # Note: since this is a synchronous call in a class method,
+            # we should ideally use a thread pool or a signal-based timeout,
+            # but for simplicity in this utility we'll just log and rely on the
+            # higher-level timeouts in the processor.
+            # However, the Google SDK usually has its own internal timeouts.
             response = self.client.text_detection(image=image)
 
             # Check for API-level errors

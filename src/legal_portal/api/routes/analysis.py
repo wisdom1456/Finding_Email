@@ -331,6 +331,11 @@ def _download_and_extract_documents(
     path_to_id_map = {}
 
     for doc in documents:
+        # Skip documents flagged as junk
+        if doc.get("is_flagged_as_junk"):
+            logger.info(f"Skipping junk-flagged document: {doc['file_name']}")
+            continue
+
         storage_path = doc["storage_path"]
         # Robust sanitization to avoid filesystem issues with special characters (spaces, parentheses, etc)
         safe_filename = re.sub(r"[^a-zA-Z0-9._-]", "_", doc["file_name"])
@@ -375,12 +380,15 @@ def _download_and_extract_documents(
             logger.info(f"Skipping video/audio file: {doc['file_name']}")
             continue
 
-        # Check if document has extracted_text (Clio comms/notes or already processed)
-        if doc.get("extracted_text"):
-            logger.debug(f"Using extracted text for: {doc['file_name']}")
-            # Save extracted text to temporary file
+        # Check if document has manual_text (user-corrected) or extracted_text
+        # Priority: manual_text > extracted_text > download and process
+        text_content = doc.get("manual_text") or doc.get("extracted_text")
+        if text_content:
+            text_source = "manual_text" if doc.get("manual_text") else "extracted_text"
+            logger.debug(f"Using {text_source} for: {doc['file_name']}")
+            # Save text to temporary file
             with open(temp_path, "w", encoding="utf-8") as f:
-                f.write(doc["extracted_text"])
+                f.write(text_content)
             path_to_id_map[temp_path] = doc["id"]
         else:
             # Download file from Supabase Storage with validation and retry

@@ -78,9 +78,28 @@ class DocumentQualityValidator:
             recommendations.append("Document extraction failed - verify file is readable")
 
         # Check 5: Check for OCR/Vision API extraction notes
-        if doc.extraction_method and "vision" in doc.extraction_method.lower():
-            issues.append("Extracted via GPT-4o Vision API - some formatting may be lost")
-            score -= 0.5  # Minor deduction for vision extraction
+        ocr_provider_display = None
+        if doc.ocr_provider:
+            # Use the explicit ocr_provider field if available
+            if doc.ocr_provider == "google_vision":
+                ocr_provider_display = "Google Cloud Vision"
+                issues.append("Extracted via Google Cloud Vision OCR - some formatting may be lost")
+                score -= 0.5  # Minor deduction for vision extraction
+            elif doc.ocr_provider == "openai":
+                ocr_provider_display = "GPT-4o Vision"
+                issues.append("Extracted via GPT-4o Vision API - some formatting may be lost")
+                score -= 0.5  # Minor deduction for vision extraction
+        elif doc.extraction_method:
+            # Fallback to extraction_method field for older data
+            method_lower = doc.extraction_method.lower()
+            if "google" in method_lower or "cloud vision" in method_lower:
+                ocr_provider_display = "Google Cloud Vision"
+                issues.append("Extracted via Google Cloud Vision OCR - some formatting may be lost")
+                score -= 0.5
+            elif "vision" in method_lower or "gpt" in method_lower:
+                ocr_provider_display = "GPT-4o Vision"
+                issues.append("Extracted via GPT-4o Vision API - some formatting may be lost")
+                score -= 0.5
 
         if doc.extraction_quality == "low":
             issues.append("Flagged as low quality by extraction service")
@@ -118,10 +137,13 @@ class DocumentQualityValidator:
 
         return QualityScore(
             document=doc.file_name,
+            document_id=doc.document_id,
             score=score,
             has_meaningful_content=has_content and has_words,
             is_complete=is_complete,
             confidence_level=confidence,
+            extraction_method=doc.extraction_method,
+            ocr_provider=ocr_provider_display or doc.ocr_provider,
             issues=issues,
             recommendations=recommendations,
         )

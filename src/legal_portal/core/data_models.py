@@ -325,10 +325,18 @@ class QualityScore(BaseModel):
     """Quality assessment for extracted content."""
 
     document: str = Field(description="The name of the document being assessed")
+    document_id: Optional[str] = Field(default=None, description="Database ID of the document")
     score: float = Field(ge=0.0, le=10.0, description="Quality score from 0-10")
     has_meaningful_content: bool = Field(description="Text contains actual information vs. noise")
     is_complete: bool = Field(description="Document appears complete (not truncated)")
     confidence_level: str = Field(description="'high', 'medium', or 'low'")
+    extraction_method: Optional[str] = Field(
+        default=None,
+        description="Method used: PyMuPDF, pypdf, Google Cloud Vision, GPT-4o Vision, text_fallback",
+    )
+    ocr_provider: Optional[str] = Field(
+        default=None, description="OCR provider if used: google_vision, openai, None"
+    )
     issues: List[str] = Field(default_factory=list, description="Any quality concerns")
     recommendations: List[str] = Field(
         default_factory=list, description="Suggested improvements or follow-ups"

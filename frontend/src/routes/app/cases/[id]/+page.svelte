@@ -7,6 +7,7 @@
 	import ClioMatterSearch from '$lib/components/ClioMatterSearch.svelte';
 	import ClioLinkedMatter from '$lib/components/ClioLinkedMatter.svelte';
 	import UploadFailureSummary from '$lib/components/UploadFailureSummary.svelte';
+	import VerificationDashboard from '$lib/components/VerificationDashboard.svelte';
 	import PageHeader from '$lib/components/ui/PageHeader.svelte';
 	import Tabs from '$lib/components/ui/Tabs.svelte';
 	import AsyncButton from '$lib/components/ui/AsyncButton.svelte';
@@ -1026,6 +1027,7 @@
 			tabs={[
 				{ id: 'overview', label: 'Overview' },
 				{ id: 'documents', label: 'Documents' },
+				{ id: 'verification', label: `Verification${documents.filter(d => !d.is_verified && !d.is_flagged_as_junk).length > 0 ? ` (${documents.filter(d => !d.is_verified && !d.is_flagged_as_junk).length})` : ''}` },
 				{ id: 'analysis', label: 'Analysis' }
 			]}
 			bind:activeTab
@@ -1535,6 +1537,34 @@
 				</div>
 			{/if}
 		</div>
+					</div>
+				{/if}
+
+				<!-- Verification Tab -->
+				{#if activeTab === 'verification'}
+					<div class="space-y-6">
+						<div class="bg-white shadow rounded-lg p-6">
+							<div class="flex justify-between items-center mb-4">
+								<div>
+									<h3 class="text-lg font-medium text-gray-900">Document Verification</h3>
+									<p class="text-sm text-gray-500 mt-1">
+										Review extracted content and remove unnecessary documents before analysis.
+									</p>
+								</div>
+							</div>
+
+							{#if documents.length === 0}
+								<div class="text-center py-12 text-gray-500">
+									<p>No documents uploaded yet. Upload documents in the Documents tab.</p>
+								</div>
+							{:else}
+								<VerificationDashboard
+									{documents}
+									{caseId}
+									onDocumentsUpdated={loadDocuments}
+								/>
+							{/if}
+						</div>
 					</div>
 				{/if}
 

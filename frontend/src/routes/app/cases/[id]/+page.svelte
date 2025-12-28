@@ -844,6 +844,46 @@
 		}
 	}
 
+	async function cancelAnalysis() {
+		try {
+			const {
+				data: { session }
+			} = await supabase.auth.getSession();
+
+			if (!session) throw new Error('Not authenticated');
+			if (!analysisStatus?.id) throw new Error('No analysis to cancel');
+
+			const ok = confirm('Cancel the current analysis? This will stop processing and allow you to run a new analysis.');
+			if (!ok) return;
+
+			// Stop any active progress stream immediately
+			progressStore.disconnect();
+
+			const response = await fetch(`${getApiUrl()}/api/analysis/cancel/${analysisStatus.id}`, {
+				method: 'POST',
+				headers: {
+					Authorization: `Bearer ${session.access_token}`
+				}
+			});
+
+			if (!response.ok) {
+				const detail = await response.json().catch(() => ({}));
+				throw new Error(detail?.detail || 'Failed to cancel analysis');
+			}
+
+			// Refresh UI state
+			await loadAnalysisStatus();
+			await loadCase();
+			analyzing = false;
+			errorMessage = '';
+			toastStore.success('Analysis cancelled.');
+		} catch (err: any) {
+			console.error('Cancel analysis failed:', err);
+			errorMessage = err.message || 'Failed to cancel analysis';
+			toastStore.error(errorMessage);
+		}
+	}
+
 	function formatDate(dateString: string) {
 		return new Date(dateString).toLocaleDateString('en-US', {
 			year: 'numeric',
@@ -1465,22 +1505,35 @@
 						<!-- Analysis Section -->
 						<div class="bg-white shadow rounded-lg p-6">
 							<div class="flex justify-between items-center mb-4">
-							<h3 class="text-lg font-medium text-gray-900">Analysis</h3>
-							{#if documents.length > 0}
-								<AsyncButton
-									onclick={startAnalysis}
-									loading={analyzing || (analysisStatus && analysisStatus.status === 'processing')}
-									variant="primary"
-									loadingText="Analyzing..."
-								>
-									{#if analysisStatus && (analysisStatus.status === 'completed' || analysisStatus.status === 'failed')}
-										Run New Analysis
-									{:else}
-										Start Analysis
-									{/if}
-								</AsyncButton>
-							{/if}
-						</div>
+								<h3 class="text-lg font-medium text-gray-900">Analysis</h3>
+								{#if documents.length > 0}
+									<div class="flex items-center gap-2">
+										{#if analysisStatus?.status === 'processing'}
+											<AsyncButton
+												onclick={cancelAnalysis}
+												loading={false}
+												variant="secondary"
+												title="Cancel the current analysis"
+											>
+												Cancel
+											</AsyncButton>
+										{/if}
+
+										<AsyncButton
+											onclick={startAnalysis}
+											loading={analyzing || (analysisStatus && analysisStatus.status === 'processing')}
+											variant="primary"
+											loadingText="Analyzing..."
+										>
+											{#if analysisStatus && (analysisStatus.status === 'completed' || analysisStatus.status === 'failed')}
+												Run New Analysis
+											{:else}
+												Start Analysis
+											{/if}
+										</AsyncButton>
+									</div>
+								{/if}
+							</div>
 
 			{#if !analysisStatus && documents.length === 0}
 				<p class="text-sm text-gray-500">Upload documents to start analysis.</p>

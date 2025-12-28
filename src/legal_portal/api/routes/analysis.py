@@ -40,6 +40,57 @@ logger = logging.getLogger(__name__)
 _DB_COLUMNS_CACHE = {}
 
 
+class AnalysisCancelledError(Exception):
+    """Raised when an in-progress analysis is cancelled by the user."""
+
+
+def _analysis_is_cancelled(supabase, analysis_id: str) -> bool:
+    """Check whether an analysis has been cancelled.
+
+    We treat either status='cancelled' or status='canceled' as cancelled.
+    """
+    try:
+        resp = supabase.table("analysis_results").select("status").eq("id", analysis_id).limit(1).execute()
+        if not resp.data:
+            return False
+        status_val = (resp.data[0].get("status") or "").lower()
+        return status_val in {"cancelled", "canceled"}
+    except Exception:
+        # Never break processing due to a cancellation check failure
+        return False
+
+
+async def _cancel_analysis(
+    *,
+    supabase,
+    case_id: str,
+    analysis_id: str,
+    progress_manager: Optional[ProgressManager] = None,
+):
+    """Cancel an analysis by updating DB state and emitting progress."""
+    # Mark analysis as cancelled
+    supabase.table("analysis_results").update({"status": "cancelled"}).eq("id", analysis_id).execute()
+
+    # Un-stick the case so a new analysis can be started
+    # (we keep the case and documents; user can retry later)
+    supabase.table("cases").update({"status": "pending"}).eq("id", case_id).execute()
+
+    # Best-effort progress update so UI can stop spinning
+    payload = {
+        "message": "Analysis cancelled by user.",
+        "phase": "cancelled",
+        "percent": 0,
+        "status": "cancelled",
+        "timestamp": datetime.utcnow().isoformat(),
+    }
+    if progress_manager is not None:
+        try:
+            await progress_manager.publish_progress(channel_id=analysis_id, **payload)
+        except Exception:
+            pass
+    await _update_analysis_progress(supabase, analysis_id, payload)
+
+
 async def _update_analysis_progress(supabase, analysis_id: str, payload: dict):
     """Update analysis progress in DB with safety check for column existence."""
     global _DB_COLUMNS_CACHE
@@ -531,6 +582,10 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
     temp_dir = tempfile.mkdtemp(prefix=f"case_{case_id}_")
 
     try:
+        # If user cancelled before we start, bail out quickly.
+        if _analysis_is_cancelled(supabase, analysis_id):
+            raise AnalysisCancelledError("Analysis cancelled before processing began.")
+
         # Update status to processing
         supabase.table("analysis_results").update({"status": "processing"}).eq("id", analysis_id).execute()
 
@@ -559,12 +614,20 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
         if not documents:
             raise ValueError("No documents found for case")
 
+        # Cooperative cancellation checkpoint before downloading and heavy work.
+        if _analysis_is_cancelled(supabase, analysis_id):
+            raise AnalysisCancelledError("Analysis cancelled before downloading documents.")
+
         # Download documents to temp directory (already created above)
 
         # Download and prepare files in threadpool to avoid blocking event loop
         intake_form_path, file_paths = await run_in_threadpool(
             _download_and_extract_documents, case_id, documents, supabase, temp_dir
         )
+
+        # Cooperative cancellation checkpoint after downloads.
+        if _analysis_is_cancelled(supabase, analysis_id):
+            raise AnalysisCancelledError("Analysis cancelled after downloading documents.")
 
         # If still no documents, we need at least one
         if not intake_form_path:
@@ -616,6 +679,10 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
                 "timestamp": datetime.utcnow().isoformat(),
             }
 
+            # Cooperative cancellation: stop processing ASAP once cancelled.
+            if _analysis_is_cancelled(supabase, analysis_id):
+                raise AnalysisCancelledError("Analysis cancelled by user.")
+
             # Publish to in-memory queue for immediate SSE delivery
             await progress_manager.publish_progress(channel_id=analysis_id, **payload)
 
@@ -660,6 +727,14 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
         await progress_manager.publish_progress(channel_id=analysis_id, **completion_payload)
         await _update_analysis_progress(supabase, analysis_id, completion_payload)
 
+    except AnalysisCancelledError:
+        await _cancel_analysis(
+            supabase=supabase,
+            case_id=case_id,
+            analysis_id=analysis_id,
+            progress_manager=progress_manager,
+        )
+        return
     except Exception as e:
         # Log error and update status
         error_message = str(e)
@@ -793,6 +868,53 @@ async def start_analysis(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error starting analysis: {str(e)}"
+        ) from e
+
+
+@router.post("/cancel/{analysis_id}", status_code=status.HTTP_200_OK)
+async def cancel_analysis(
+    analysis_id: str,
+    user=Depends(get_current_user),  # noqa: B008
+    user_supabase=Depends(get_user_supabase_client),  # noqa: B008
+    service_supabase=Depends(get_supabase_client),  # noqa: B008
+):
+    """Cancel an in-progress analysis and un-stick the case.
+
+    This is a cooperative cancel: we mark the analysis as cancelled and set the case back to pending.
+    The background worker checks this status and stops as soon as it hits a checkpoint.
+    """
+    try:
+        # Verify analysis belongs to the user (RLS via user_supabase)
+        resp = (
+            user_supabase.table("analysis_results")
+            .select("id, case_id, status")
+            .eq("id", analysis_id)
+            .execute()
+        )
+        if not resp.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Analysis not found",
+            )
+
+        analysis = resp.data[0]
+        case_id = analysis["case_id"]
+
+        progress_manager = ProgressManager.get_instance()
+        await _cancel_analysis(
+            supabase=service_supabase,
+            case_id=case_id,
+            analysis_id=analysis_id,
+            progress_manager=progress_manager,
+        )
+
+        return {"status": "cancelled", "analysis_id": analysis_id, "case_id": case_id}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to cancel analysis: {str(e)}",
         ) from e
 
 

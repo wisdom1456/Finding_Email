@@ -559,13 +559,17 @@ async def _extract_text_via_google_ocr_bytes(
 
         # Open from memory stream instead of file path
         try:
+
+            def open_pdf():
+                return fitz.open(stream=pdf_bytes, filetype="pdf")
+
             doc = await asyncio.wait_for(
-                run_in_threadpool(fitz.open, stream=pdf_bytes, filetype="pdf"),
+                run_in_threadpool(open_pdf),
                 timeout=15.0,
             )
             logger.debug(f"Opened PDF from memory: {original_filename} ({len(pdf_bytes)} bytes)")
         except asyncio.TimeoutError:
-            logger.error(f"Timeout opening PDF bytes for {original_filename}")
+            logger.error(f"Timeout opening PDF bytes for {original_filename} (15s limit)")
             return ""
         except Exception as open_err:
             # Log bytes info for debugging invalid content
@@ -748,12 +752,16 @@ async def _extract_text_via_vision(
 
         # Open the document
         try:
+
+            def open_pdf_file():
+                return fitz.open(file_path)
+
             doc = await asyncio.wait_for(
-                run_in_threadpool(fitz.open, file_path),
+                run_in_threadpool(open_pdf_file),
                 timeout=15.0,
             )
         except asyncio.TimeoutError:
-            logger.error(f"Timeout opening PDF file at {file_path}")
+            logger.error(f"Timeout opening PDF file at {file_path} (15s limit)")
             return ""
         except Exception as open_err:
             logger.error(f"Failed to open PDF for Vision extraction: {open_err}")
@@ -916,8 +924,18 @@ async def _extract_text_via_vision_bytes(
 
         # Open from memory stream instead of file path
         try:
-            doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+
+            def open_pdf_vision():
+                return fitz.open(stream=pdf_bytes, filetype="pdf")
+
+            doc = await asyncio.wait_for(
+                run_in_threadpool(open_pdf_vision),
+                timeout=15.0,
+            )
             logger.debug(f"Opened PDF from memory for Vision: {original_filename} ({len(pdf_bytes)} bytes)")
+        except asyncio.TimeoutError:
+            logger.error(f"Timeout opening PDF bytes for Vision: {original_filename} (15s limit)")
+            return ""
         except Exception as open_err:
             # Log bytes info for debugging invalid content
             header = pdf_bytes[:20] if pdf_bytes else b""
@@ -1158,13 +1176,38 @@ async def process_pdf(
             if FITZ_AVAILABLE:
                 try:
                     # Get page count using PyMuPDF if available
-                    with fitz.open(stream=pdf_bytes, filetype="pdf") as doc:
-                        page_count = doc.page_count
+                    # Use a timeout to prevent hangs on problematic PDFs
+                    def open_and_count():
+                        with fitz.open(stream=pdf_bytes, filetype="pdf") as doc:
+                            return doc.page_count
 
-                    text_content = _extract_text_with_fitz_bytes(pdf_bytes, original_filename)
-                    if text_content.strip():
-                        logger.info(f"✅ Successfully extracted text from {original_filename} using PyMuPDF")
-                        extraction_method = "PyMuPDF"
+                    try:
+                        page_count = await asyncio.wait_for(
+                            run_in_threadpool(open_and_count),
+                            timeout=15.0,
+                        )
+                    except asyncio.TimeoutError:
+                        logger.error(f"Timeout opening PDF for page count: {original_filename}")
+                        extraction_error = "Timeout opening PDF"
+                        text_content = f"Error: PDF file timed out during processing - {original_filename}"
+                    else:
+                        # Also wrap text extraction in timeout
+                        try:
+                            text_content = await asyncio.wait_for(
+                                run_in_threadpool(
+                                    _extract_text_with_fitz_bytes, pdf_bytes, original_filename
+                                ),
+                                timeout=30.0,
+                            )
+                        except asyncio.TimeoutError:
+                            logger.error(f"Timeout extracting text from PDF: {original_filename}")
+                            extraction_error = "Timeout extracting text"
+                            text_content = ""
+                        if text_content.strip():
+                            logger.info(
+                                f"✅ Successfully extracted text from {original_filename} using PyMuPDF"
+                            )
+                            extraction_method = "PyMuPDF"
                 except Exception as e:
                     logger.warning(f"PyMuPDF extraction failed for {original_filename}: {e}")
                     extraction_error = f"PyMuPDF error: {e}"
@@ -1179,10 +1222,27 @@ async def process_pdf(
 
                         from pypdf import PdfReader
 
-                        reader = PdfReader(io.BytesIO(pdf_bytes))
-                        page_count = len(reader.pages)
+                        def get_pypdf_page_count():
+                            reader = PdfReader(io.BytesIO(pdf_bytes))
+                            return len(reader.pages)
 
-                    text_content = _extract_text_with_pypdf_bytes(pdf_bytes, original_filename)
+                        try:
+                            page_count = await asyncio.wait_for(
+                                run_in_threadpool(get_pypdf_page_count),
+                                timeout=15.0,
+                            )
+                        except asyncio.TimeoutError:
+                            logger.error(f"Timeout reading PDF with pypdf: {original_filename}")
+                            page_count = 0
+
+                    try:
+                        text_content = await asyncio.wait_for(
+                            run_in_threadpool(_extract_text_with_pypdf_bytes, pdf_bytes, original_filename),
+                            timeout=30.0,
+                        )
+                    except asyncio.TimeoutError:
+                        logger.error(f"Timeout extracting text with pypdf: {original_filename}")
+                        text_content = ""
                     if text_content.strip():
                         logger.info(f"✅ Successfully extracted text from {original_filename} using pypdf")
                         extraction_method = "pypdf"

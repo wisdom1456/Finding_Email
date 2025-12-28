@@ -98,9 +98,12 @@ class ProcessedDocument(BaseModel):
     document_type: DocumentType
     file_type: FileType
     metadata: FileMetadata
+    document_id: Optional[str] = None  # NEW: Link back to database record
     page_count: Optional[int] = None
     extraction_method: Optional[str] = None
     extraction_quality: Optional[str] = None  # "high", "medium", "low"
+    extraction_error: Optional[str] = None  # NEW: Record extraction errors
+    ocr_provider: Optional[str] = None  # NEW: Record which OCR provider was used
     extracted_at: datetime = Field(default_factory=datetime.now)
 
 
@@ -364,6 +367,9 @@ class ProcessingResult(BaseModel):
     document_summaries: str = Field(description="Text summaries of all analyzed documents")
     case_analysis: str = Field(description="Detailed case analysis content")
     quality_report: Optional[List[Dict[str, Any]]] = None  # NEW: For quality report
+    processed_documents: List[ProcessedDocument] = Field(
+        default_factory=list
+    )  # NEW: For persisting extraction results
 
     # Metadata
     status: str = Field(description="Processing status: 'completed', 'partial', or 'failed'")

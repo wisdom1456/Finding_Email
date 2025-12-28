@@ -61,7 +61,8 @@ async def upload_document(
     """
     try:
         logger.debug(
-            f"Upload document: user={user['id']}, case={case_id}, file={file.filename}, type={file.content_type}"
+            f"Upload document: user={user['id']}, case={case_id}, "
+            f"file={file.filename}, type={file.content_type}"
         )
 
         # Verify case ownership (use user client for RLS)
@@ -217,6 +218,58 @@ async def get_document(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error fetching document: {str(e)}"
+        ) from e
+
+
+@router.get("/{document_id}/extracted-text")
+async def get_extracted_text(
+    document_id: str, user=Depends(get_current_user), supabase=Depends(get_user_supabase_client)
+):
+    """Get the extracted text and metadata for a specific document.
+
+    Args:
+    ----
+        document_id: Document ID
+        user: Current authenticated user
+        supabase: Supabase client
+
+    Returns:
+    -------
+        Extracted text and extraction metadata
+
+    """
+    try:
+        # Get document with case join to verify ownership
+        response = (
+            supabase.table("documents")
+            .select(
+                "extracted_text, extraction_method, extraction_quality, "
+                "extracted_at, page_count, ocr_provider, extraction_error, "
+                "cases!inner(user_id)"
+            )
+            .eq("id", document_id)
+            .execute()
+        )
+
+        if not response.data:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+
+        document = response.data[0]
+
+        # Verify ownership through case
+        if document["cases"]["user_id"] != user["id"]:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+
+        # Remove nested case data before returning
+        document.pop("cases", None)
+
+        return document
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error fetching extracted text: {str(e)}",
         ) from e
 
 

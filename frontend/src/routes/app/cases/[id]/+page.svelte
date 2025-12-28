@@ -62,6 +62,9 @@
 	// Document viewer modal state
 	let viewingDocument = $state<any>(null);
 	let documentViewerContent = $state('');
+	let documentViewerTab = $state<'preview' | 'text'>('preview');
+	let loadingExtractedText = $state(false);
+	let extractedTextData = $state<any>(null);
 	let pdfBlobUrl = $state<string | null>(null);
 	let isPdfDocument = $derived(viewingDocument?.file_type === 'application/pdf');
 	let isImageDocument = $derived(
@@ -107,6 +110,12 @@
 	
 	// Tab state
 	let activeTab = $state('overview');
+
+	$effect(() => {
+		if (viewingDocument && documentViewerTab === 'text' && !extractedTextData && !loadingExtractedText) {
+			loadExtractedText(viewingDocument.id);
+		}
+	});
 
 	onMount(async () => {
 		await loadCase();
@@ -233,6 +242,7 @@
 	async function viewDocument(doc: any) {
 		viewingDocument = doc;
 		documentViewerContent = '';
+		documentViewerTab = 'preview';
 		
 		// Clean up previous blob URL if it exists
 		if (pdfBlobUrl) {
@@ -299,6 +309,32 @@
 		}
 	}
 
+	async function loadExtractedText(docId: string) {
+		loadingExtractedText = true;
+		extractedTextData = null;
+		try {
+			const {
+				data: { session }
+			} = await supabase.auth.getSession();
+
+			if (!session) throw new Error('Not authenticated');
+
+			const response = await fetch(`${getApiUrl()}/api/documents/${docId}/extracted-text`, {
+				headers: {
+					Authorization: `Bearer ${session.access_token}`
+				}
+			});
+
+			if (!response.ok) throw new Error('Failed to fetch extracted text');
+			extractedTextData = await response.json();
+		} catch (error: any) {
+			console.error('Error fetching extracted text:', error);
+			extractedTextData = { extracted_text: `Error: ${error.message}` };
+		} finally {
+			loadingExtractedText = false;
+		}
+	}
+
 	function closeDocumentViewer() {
 		// Clean up blob URL to prevent memory leaks
 		if (pdfBlobUrl) {
@@ -307,6 +343,9 @@
 		}
 		viewingDocument = null;
 		documentViewerContent = '';
+		documentViewerTab = 'preview';
+		extractedTextData = null;
+		loadingExtractedText = false;
 	}
 
 	async function confirmIntakeSelection() {
@@ -1833,38 +1872,124 @@
 				</button>
 			</div>
 
+			<!-- Tabs -->
+			<div class="px-6 border-b border-gray-200">
+				<nav class="-mb-px flex space-x-6" aria-label="Tabs">
+					<button
+						onclick={() => (documentViewerTab = 'preview')}
+						class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm {documentViewerTab === 'preview' ? 'border-accent text-accent' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}"
+					>
+						Preview
+					</button>
+					<button
+						onclick={() => (documentViewerTab = 'text')}
+						class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm {documentViewerTab === 'text' ? 'border-accent text-accent' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}"
+					>
+						Extracted Text
+					</button>
+				</nav>
+			</div>
+
 			<!-- Content -->
 			<div class="flex-1 overflow-y-auto p-6">
-				{#if isPdfDocument && pdfBlobUrl}
-					<!-- PDF Viewer using browser's native PDF renderer -->
-					<iframe
-						src={pdfBlobUrl}
-						class="w-full h-[600px] border border-gray-300 rounded-lg"
-						title="PDF Viewer"
-					></iframe>
-				{:else if isImageDocument && pdfBlobUrl}
-					<!-- Image Viewer -->
-					<div class="flex items-center justify-center">
-						<img
+				{#if documentViewerTab === 'preview'}
+					{#if isPdfDocument && pdfBlobUrl}
+						<!-- PDF Viewer using browser's native PDF renderer -->
+						<iframe
 							src={pdfBlobUrl}
-							alt={viewingDocument.file_name}
-							class="max-w-full h-auto rounded-lg shadow-lg"
-						/>
-					</div>
-				{:else if documentViewerContent}
-					<!-- Text Content Viewer -->
-					<pre class="whitespace-pre-wrap font-mono text-sm text-gray-800 bg-gray-50 p-4 rounded-lg">{documentViewerContent}</pre>
-				{:else}
-					<!-- Loading State -->
-					<div class="flex items-center justify-center h-64">
-						<div class="text-center">
-							<svg class="mx-auto h-12 w-12 text-gray-400 animate-spin" fill="none" viewBox="0 0 24 24">
-								<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-								<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-							</svg>
-							<p class="mt-2 text-sm text-gray-500">Loading document...</p>
+							class="w-full h-[600px] border border-gray-300 rounded-lg"
+							title="PDF Viewer"
+						></iframe>
+					{:else if isImageDocument && pdfBlobUrl}
+						<!-- Image Viewer -->
+						<div class="flex items-center justify-center">
+							<img
+								src={pdfBlobUrl}
+								alt={viewingDocument.file_name}
+								class="max-w-full h-auto rounded-lg shadow-lg"
+							/>
 						</div>
-					</div>
+					{:else if documentViewerContent}
+						<!-- Text Content Viewer -->
+						<pre class="whitespace-pre-wrap font-mono text-sm text-gray-800 bg-gray-50 p-4 rounded-lg">{documentViewerContent}</pre>
+					{:else}
+						<!-- Loading State -->
+						<div class="flex items-center justify-center h-64">
+							<div class="text-center">
+								<svg class="mx-auto h-12 w-12 text-gray-400 animate-spin" fill="none" viewBox="0 0 24 24">
+									<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+									<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+								</svg>
+								<p class="mt-2 text-sm text-gray-500">Loading document preview...</p>
+							</div>
+						</div>
+					{/if}
+				{:else if documentViewerTab === 'text'}
+					{#if loadingExtractedText}
+						<div class="flex items-center justify-center h-64">
+							<div class="text-center">
+								<svg class="mx-auto h-12 w-12 text-gray-400 animate-spin" fill="none" viewBox="0 0 24 24">
+									<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+									<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+								</svg>
+								<p class="mt-2 text-sm text-gray-500">Fetching extracted text...</p>
+							</div>
+						</div>
+					{:else if extractedTextData}
+						<div class="space-y-4">
+							{#if extractedTextData.extraction_method}
+								<div class="flex items-center justify-between text-xs text-gray-500 bg-gray-50 p-2 rounded border border-gray-100">
+									<div class="flex gap-4">
+										<span>Method: <span class="font-semibold text-gray-700">{extractedTextData.extraction_method}</span></span>
+										{#if extractedTextData.extraction_quality}
+											<span>Quality: 
+												<span class="font-semibold {
+													extractedTextData.extraction_quality === 'high' ? 'text-green-600' : 
+													extractedTextData.extraction_quality === 'medium' ? 'text-yellow-600' : 'text-red-600'
+												}">{extractedTextData.extraction_quality.toUpperCase()}</span>
+											</span>
+										{/if}
+										{#if extractedTextData.page_count}
+											<span>Pages: <span class="font-semibold text-gray-700">{extractedTextData.page_count}</span></span>
+										{/if}
+									</div>
+									<button 
+										class="text-accent hover:text-accent-hover font-medium flex items-center gap-1"
+										onclick={() => {
+											navigator.clipboard.writeText(extractedTextData.extracted_text);
+											toastStore.success('Text copied to clipboard');
+										}}
+									>
+										<svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+											<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+										</svg>
+										Copy Text
+									</button>
+								</div>
+							{/if}
+
+							{#if extractedTextData.extracted_text}
+								<div class="prose prose-sm max-w-none">
+									<pre class="whitespace-pre-wrap font-mono text-sm text-gray-800 bg-white p-4 rounded-lg border border-gray-200 overflow-x-auto">{extractedTextData.extracted_text}</pre>
+								</div>
+							{:else}
+								<div class="flex flex-col items-center justify-center h-64 text-gray-400">
+									<svg class="h-12 w-12 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+									</svg>
+									<p>No text content extracted for this document yet.</p>
+									<p class="text-xs mt-1">Run analysis to extract content.</p>
+								</div>
+							{/if}
+
+							{#if extractedTextData.extraction_error}
+								<div class="mt-4 p-3 bg-red-50 text-red-700 text-xs rounded border border-red-100">
+									<p class="font-bold">Extraction Error:</p>
+									<p class="mt-1 font-mono">{extractedTextData.extraction_error}</p>
+								</div>
+							{/if}
+						</div>
+					{/if}
 				{/if}
 			</div>
 

@@ -749,6 +749,7 @@ class DocumentProcessor:
         file_paths: List[str],
         intake_filenames: List[str],
         progress_callback: Optional[Callable] = None,
+        path_to_id_map: Optional[Dict[str, str]] = None,
     ) -> List[ProcessedDocument]:
         """Process documents from file paths.
 
@@ -757,6 +758,7 @@ class DocumentProcessor:
             file_paths: List of file paths to process
             intake_filenames: List of filenames that should be treated as intake forms
             progress_callback: Optional callback for progress updates
+            path_to_id_map: Optional mapping of file_path to document_id for DB updates
 
         Returns:
         -------
@@ -832,7 +834,13 @@ class DocumentProcessor:
             proc_callback = await create_processor_callback(filename)
 
             # Call processor with progress callback
-            return await processor(file_path, doc_type, filename, proc_callback)
+            processed_doc = await processor(file_path, doc_type, filename, proc_callback)
+
+            # Link back to document record if ID is provided
+            if path_to_id_map and file_path in path_to_id_map:
+                processed_doc.document_id = path_to_id_map[file_path]
+
+            return processed_doc
 
         # Execute all tasks and collect results
         processing_tasks = [process_single_path(fp) for fp in file_paths]

@@ -324,10 +324,11 @@ class LetterGenerationResponse(BaseModel):
 
 def _download_and_extract_documents(
     case_id: str, documents: List[Dict[str, Any]], supabase, temp_dir: str
-) -> tuple[Optional[str], List[str]]:
+) -> tuple[Optional[str], List[str], Dict[str, str]]:
     """Download and extract documents synchronously."""
     file_paths = []
     intake_form_path = None
+    path_to_id_map = {}
 
     for doc in documents:
         storage_path = doc["storage_path"]
@@ -380,6 +381,7 @@ def _download_and_extract_documents(
             # Save extracted text to temporary file
             with open(temp_path, "w", encoding="utf-8") as f:
                 f.write(doc["extracted_text"])
+            path_to_id_map[temp_path] = doc["id"]
         else:
             # Download file from Supabase Storage with validation and retry
             max_retries = 3
@@ -429,6 +431,8 @@ def _download_and_extract_documents(
 
                     download_success = True
                     logger.debug(f"Successfully downloaded {doc['file_name']} ({actual_size} bytes)")
+                    # Store mapping of path to document ID
+                    path_to_id_map[temp_path] = doc["id"]
                     break
 
                 except Exception as e:
@@ -560,7 +564,7 @@ def _download_and_extract_documents(
         else:
             intake_form_path = file_paths.pop(0)
 
-    return intake_form_path, file_paths
+    return intake_form_path, file_paths, path_to_id_map
 
 
 async def process_case_background(case_id: str, analysis_id: str, supabase, provider: str = "openai"):
@@ -621,7 +625,7 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
         # Download documents to temp directory (already created above)
 
         # Download and prepare files in threadpool to avoid blocking event loop
-        intake_form_path, file_paths = await run_in_threadpool(
+        intake_form_path, file_paths, path_to_id_map = await run_in_threadpool(
             _download_and_extract_documents, case_id, documents, supabase, temp_dir
         )
 
@@ -697,7 +701,31 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
             review_data=review_data,
             progress_callback=progress_callback,
             jurisdiction=jurisdiction,  # Pass jurisdiction to main processor
+            path_to_id_map=path_to_id_map,  # Pass mapping for document linking
         )
+
+        # Persist document extraction results to the database
+        if result.processed_documents:
+            logger.info(f"Persisting extraction results for {len(result.processed_documents)} documents")
+            for doc in result.processed_documents:
+                if doc.document_id:
+                    try:
+                        # Prepare update data mapping model fields to database columns
+                        update_data = {
+                            "extracted_text": doc.content,
+                            "extraction_method": doc.extraction_method,
+                            "extraction_quality": doc.extraction_quality,
+                            "extracted_at": doc.extracted_at.isoformat(),
+                            "page_count": doc.page_count,
+                            "ocr_provider": doc.ocr_provider,
+                            "extraction_error": doc.extraction_error,
+                            "status": "processed" if doc.content.strip() else "error",
+                        }
+                        supabase.table("documents").update(update_data).eq("id", doc.document_id).execute()
+                    except Exception as db_err:
+                        logger.warning(
+                            f"Failed to persist extraction results for document {doc.document_id}: {db_err}"
+                        )
 
         logger.info(f"Processing completed with status: {result.status}")
 

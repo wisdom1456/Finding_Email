@@ -989,6 +989,9 @@ async def process_pdf(
     file_size = 0
     extraction_method = "standard"
     pdf_bytes = None
+    page_count = 0
+    ocr_provider = None
+    extraction_error = None
 
     # Pre-validate file exists and read into memory ONCE
     # This avoids race conditions in Vercel serverless where files may not be fully synced
@@ -1056,17 +1059,31 @@ async def process_pdf(
             # Try PyMuPDF first (better quality extraction) - using bytes stream
             if FITZ_AVAILABLE:
                 try:
+                    # Get page count using PyMuPDF if available
+                    with fitz.open(stream=pdf_bytes, filetype="pdf") as doc:
+                        page_count = doc.page_count
+
                     text_content = _extract_text_with_fitz_bytes(pdf_bytes, original_filename)
                     if text_content.strip():
                         logger.info(f"✅ Successfully extracted text from {original_filename} using PyMuPDF")
                         extraction_method = "PyMuPDF"
                 except Exception as e:
                     logger.warning(f"PyMuPDF extraction failed for {original_filename}: {e}")
+                    extraction_error = f"PyMuPDF error: {e}"
                     text_content = ""
 
             # Fall back to pypdf if PyMuPDF failed or returned empty - using bytes stream
             if not text_content.strip() and PYPDF_AVAILABLE:
                 try:
+                    # Update page count if not already set
+                    if page_count == 0:
+                        import io
+
+                        from pypdf import PdfReader
+
+                        reader = PdfReader(io.BytesIO(pdf_bytes))
+                        page_count = len(reader.pages)
+
                     text_content = _extract_text_with_pypdf_bytes(pdf_bytes, original_filename)
                     if text_content.strip():
                         logger.info(f"✅ Successfully extracted text from {original_filename} using pypdf")
@@ -1080,19 +1097,27 @@ async def process_pdf(
                         )
                     else:
                         logger.error(f"pypdf extraction failed for {original_filename}: {e}")
+                        extraction_error = f"pypdf error: {e}"
                         text_content = f"Error extracting text from {original_filename}: {error_msg}"
 
             # Check if we need Vision fallback (empty text or error message from standard libs)
             # Scanned PDFs often return empty text or just whitespace
             needs_vision = not text_content.strip() or text_content.startswith("Error")
 
-            # Also use Vision if standard extraction yielded very little text (< 100 chars)
-            # while the file size is large (> 50KB), which usually indicates a scanned document
-            # with some junk text or just headers.
-            if not needs_vision and len(text_content.strip()) < 100 and file_size > 50000:
+            # More robust heuristic for scanned/image-heavy detection:
+            # Trigger OCR if:
+            # 1. Total text is very low (< 200 chars total) AND file is large (> 50KB)
+            # 2. Average text per page is suspiciously low (< 50 chars/page)
+            # AND file is large enough to contain images
+            avg_text_per_page = len(text_content.strip()) / max(1, page_count)
+            is_low_yield = len(text_content.strip()) < 200 or avg_text_per_page < 50
+            is_large_enough = file_size > (25000 * max(1, page_count))  # ~25KB per page is typical for images
+
+            if not needs_vision and is_low_yield and is_large_enough:
                 logger.info(
-                    f"Low text yield for {original_filename} ({len(text_content)} chars), "
-                    "trying Vision fallback"
+                    f"Low text yield for {original_filename} ({len(text_content)} total chars, "
+                    f"{avg_text_per_page:.1f} per page). Size: {file_size} bytes. "
+                    "Likely scanned or image-heavy - trying Vision fallback."
                 )
                 needs_vision = True
 
@@ -1104,6 +1129,7 @@ async def process_pdf(
                 if vision_text:
                     text_content = vision_text
                     extraction_method = "Google Cloud Vision"
+                    ocr_provider = "Google"
                 else:
                     # Fall back to GPT-4o Vision if Google Vision unavailable or failed
                     vision_text = await _extract_text_via_vision_bytes(
@@ -1112,6 +1138,7 @@ async def process_pdf(
                     if vision_text:
                         text_content = vision_text
                         extraction_method = "GPT-4o Vision"
+                        ocr_provider = "OpenAI"
 
             # No library available or all failed
             if not text_content.strip():
@@ -1146,4 +1173,7 @@ async def process_pdf(
         metadata=file_metadata,
         extraction_quality=extraction_quality,
         extraction_method=extraction_method,
+        page_count=page_count,
+        ocr_provider=ocr_provider,
+        extraction_error=extraction_error,
     )

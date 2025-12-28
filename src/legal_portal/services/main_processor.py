@@ -228,6 +228,7 @@ async def process_case_documents(
     review_data: dict,  # NEW: For key docs and legal issue
     progress_callback: Optional[Callable] = None,
     jurisdiction: str = "Florida",  # Added jurisdiction parameter
+    path_to_id_map: Optional[Dict[str, str]] = None,  # NEW: Map path to doc ID
 ) -> ProcessingResult:
     """Decoupled document processing workflow."""
     start_time = time.time()
@@ -256,6 +257,7 @@ async def process_case_documents(
         processed_intake = await doc_processor.process_documents_from_paths(
             [intake_form_path],
             intake_filenames=[intake_filename],
+            path_to_id_map=path_to_id_map,
         )
 
         if not processed_intake:
@@ -282,6 +284,7 @@ async def process_case_documents(
                     unique_case_document_paths,
                     intake_filenames=[os.path.basename(intake_form_path)],
                     progress_callback=progress_callback,
+                    path_to_id_map=path_to_id_map,
                 )
                 processed_case_docs.extend(processed_docs)
 
@@ -584,6 +587,7 @@ async def process_case_documents(
             opposing_parties=opposing_parties,
             multi_stage_result=multi_stage_result_dict,
             generated_letters={},
+            processed_documents=processed_case_docs,  # NEW: Return processed documents for persistence
         )
         logger.info("✅ Document processing completed (letters deferred to on-demand endpoints).")
         return result

@@ -129,6 +129,67 @@ def _extract_text_with_pypdf(file_path: str) -> str:
     return "\n\n".join(text_parts)
 
 
+# ============================================================================
+# BYTES-BASED EXTRACTION FUNCTIONS
+# These avoid filesystem race conditions in Vercel serverless by working
+# directly with bytes in memory instead of file paths.
+# ============================================================================
+
+
+def _extract_text_with_fitz_bytes(pdf_bytes: bytes, original_filename: str) -> str:
+    """Extract text from PDF bytes using PyMuPDF (fitz).
+
+    Args:
+    ----
+        pdf_bytes: PDF file content as bytes
+        original_filename: Original filename for logging
+
+    Returns:
+    -------
+        Extracted text content
+
+    """
+    if not FITZ_AVAILABLE:
+        raise ImportError("PyMuPDF (fitz) not available")
+
+    import fitz
+
+    text_parts = []
+    # Open from memory stream instead of file path
+    with fitz.open(stream=pdf_bytes, filetype="pdf") as doc:
+        for page in doc:
+            text_parts.append(page.get_text())
+    return "".join(text_parts)
+
+
+def _extract_text_with_pypdf_bytes(pdf_bytes: bytes, original_filename: str) -> str:
+    """Extract text from PDF bytes using pypdf (lightweight).
+
+    Args:
+    ----
+        pdf_bytes: PDF file content as bytes
+        original_filename: Original filename for logging
+
+    Returns:
+    -------
+        Extracted text content
+
+    """
+    if not PYPDF_AVAILABLE:
+        raise ImportError("pypdf not available")
+
+    import io
+
+    text_parts = []
+    # Read from BytesIO stream instead of file
+    reader = PdfReader(io.BytesIO(pdf_bytes))
+    for page in reader.pages:
+        page_text = page.extract_text()
+        if page_text:
+            text_parts.append(page_text)
+    return "\n\n".join(text_parts)
+
+
 def detect_pdf_corruption(file_path: str) -> tuple[bool, str]:
     """Detect if PDF is corrupt and provide reason.
 
@@ -237,6 +298,172 @@ async def _extract_text_via_google_ocr(
             doc = fitz.open(file_path)
         except Exception as open_err:
             logger.error(f"Failed to open PDF for Google OCR: {open_err}")
+            return ""
+
+        # Process all pages (Google Vision is fast enough)
+        max_pages = 50  # Higher limit since Google Vision is faster
+        page_count = doc.page_count
+        pages_to_process = min(page_count, max_pages)
+
+        if page_count > max_pages:
+            logger.warning(
+                f"Document {original_filename} has {page_count} pages. "
+                f"Limiting OCR to first {max_pages} pages."
+            )
+
+        # Send initial progress update
+        if progress_callback:
+            try:
+                await progress_callback(
+                    f"OCR: Starting Google Vision for {original_filename} ({pages_to_process} pages)",
+                    "google_ocr_start",
+                )
+            except Exception:
+                pass
+
+        extracted_parts = []
+        completed_pages = [0]
+
+        # Process pages with high concurrency (Google Vision handles it well)
+        semaphore = asyncio.Semaphore(15)
+
+        async def process_page(page_index: int) -> str:
+            """Render page and extract text via Google Vision."""
+            async with semaphore:
+                try:
+                    # Render page to image
+                    logger.debug(f"Rendering page {page_index + 1} of {original_filename}")
+
+                    def render_page():
+                        page = doc[page_index]
+                        # 2x zoom for better OCR accuracy
+                        pix = page.get_pixmap(matrix=fitz.Matrix(2, 2))
+                        return pix.tobytes("png")
+
+                    img_data = await run_in_threadpool(render_page)
+                    logger.debug(f"Page {page_index + 1} rendered, size: {len(img_data)} bytes")
+
+                    # Send to Google Vision (in thread pool since it's sync)
+                    # Add timeout to prevent hanging on auth issues
+                    def do_ocr():
+                        return google_client.extract_text_from_image(img_data)
+
+                    try:
+                        logger.debug(f"Sending page {page_index + 1} to Google Vision API")
+                        page_text = await asyncio.wait_for(
+                            run_in_threadpool(do_ocr),
+                            timeout=30.0,
+                        )
+                        logger.debug(f"Google Vision returned for page {page_index + 1}")
+                    except asyncio.TimeoutError:
+                        logger.error(
+                            f"Google Vision API timeout on page {page_index + 1} of {original_filename} "
+                            "(30s limit). Check credentials or network."
+                        )
+                        completed_pages[0] += 1
+                        return ""
+
+                    # Update progress
+                    completed_pages[0] += 1
+                    if progress_callback:
+                        try:
+                            msg = (
+                                f"OCR: Page {completed_pages[0]}/{pages_to_process} "
+                                f"of {original_filename}"
+                            )
+                            await progress_callback(msg, f"page_{page_index + 1}")
+                        except Exception:
+                            pass
+
+                    if page_text and page_text.strip():
+                        return f"--- Page {page_index + 1} ---\n{page_text.strip()}"
+                    return ""
+
+                except Exception as page_err:
+                    logger.error(
+                        f"Google OCR error on page {page_index + 1} of {original_filename}: {page_err}"
+                    )
+                    completed_pages[0] += 1
+                    return ""
+
+        # Process all pages in parallel
+        tasks = [process_page(i) for i in range(pages_to_process)]
+        results = await asyncio.gather(*tasks)
+
+        # Close doc
+        doc.close()
+
+        # Filter and combine results
+        extracted_parts = [r for r in results if r]
+
+        if not extracted_parts:
+            logger.warning(f"Google OCR returned no text for {original_filename}")
+            return ""
+
+        extracted_text = "\n\n".join(extracted_parts)
+        logger.info(f"✅ Google Vision OCR extracted {len(extracted_parts)} pages from {original_filename}")
+        return f"[Extracted via Google Cloud Vision OCR]\n\n{extracted_text}"
+
+    except Exception as e:
+        logger.error(f"Google Vision OCR failed for {original_filename}: {e}")
+        return ""
+
+
+async def _extract_text_via_google_ocr_bytes(
+    pdf_bytes: bytes,
+    original_filename: str,
+    progress_callback=None,
+) -> str:
+    """Extract text from PDF bytes using Google Cloud Vision OCR.
+
+    BYTES-BASED VERSION: Works directly with PDF bytes to avoid filesystem issues.
+
+    Args:
+    ----
+        pdf_bytes: PDF file content as bytes
+        original_filename: Original filename for logging
+        progress_callback: Optional callback for granular progress updates
+
+    Returns:
+    -------
+        Extracted text or empty string on failure
+
+    """
+    if not FITZ_AVAILABLE:
+        logger.warning("PyMuPDF not available for PDF rendering")
+        return ""
+
+    # Check if Google Vision is available
+    logger.debug("Getting Google Vision client instance...")
+    google_client = GoogleVisionClient.get_instance()
+
+    if not google_client.is_available:
+        logger.warning(
+            "Google Vision client not available. "
+            "Check GOOGLE_APPLICATION_CREDENTIALS_JSON env var is set correctly."
+        )
+        return ""
+
+    logger.info("Google Vision client is available, validating credentials...")
+
+    # Validate credentials before proceeding
+    valid, validation_msg = google_client.validate_credentials()
+    if not valid:
+        logger.error(f"Google Vision credentials invalid: {validation_msg}")
+        logger.error("Falling back to GPT-4o Vision. Check your service account key.")
+        return ""
+
+    try:
+        logger.info(f"🔍 Starting Google Cloud Vision OCR for: {original_filename}")
+
+        import fitz
+
+        # Open from memory stream instead of file path
+        try:
+            doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+            logger.debug(f"Opened PDF from memory: {original_filename} ({len(pdf_bytes)} bytes)")
+        except Exception as open_err:
+            logger.error(f"Failed to open PDF bytes for Google OCR: {open_err}")
             return ""
 
         # Process all pages (Google Vision is fast enough)
@@ -501,6 +728,155 @@ async def _extract_text_via_vision(
         return ""
 
 
+async def _extract_text_via_vision_bytes(
+    pdf_bytes: bytes,
+    original_filename: str,
+    progress_callback=None,
+) -> str:
+    """Fall back to GPT-4o Vision for scanned PDFs.
+
+    BYTES-BASED VERSION: Works directly with PDF bytes to avoid filesystem issues.
+
+    Args:
+    ----
+        pdf_bytes: PDF file content as bytes
+        original_filename: Original filename for logging
+        progress_callback: Optional callback for granular progress updates
+
+    """
+    if not FITZ_AVAILABLE:
+        return ""
+
+    try:
+        logger.info(f"🔍 Attempting GPT-4o Vision extraction for scanned PDF: {original_filename}")
+
+        import fitz
+
+        openai_client_wrapper = OpenAIClient()
+        client = openai_client_wrapper.client
+
+        # Open from memory stream instead of file path
+        try:
+            doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+            logger.debug(f"Opened PDF from memory for Vision: {original_filename} ({len(pdf_bytes)} bytes)")
+        except Exception as open_err:
+            logger.error(f"Failed to open PDF bytes for Vision extraction: {open_err}")
+            return ""
+
+        # Limit to 25 pages to prevent extreme costs and timeouts
+        max_pages = 25
+        page_count = doc.page_count
+        pages_to_process = min(page_count, max_pages)
+
+        if page_count > max_pages:
+            logger.warning(
+                f"Document {original_filename} has {page_count} pages. "
+                f"Limiting Vision extraction to first {max_pages} pages."
+            )
+
+        # Track completed pages for progress reporting
+        completed_pages = [0]  # Use list for mutable in nested async
+
+        async def process_page(page_index: int):
+            """Process a single page: render and send to OpenAI."""
+            try:
+                # Render page to image in thread pool
+                def render_page():
+                    page = doc[page_index]
+                    # Render page to image (2x zoom for better text legibility)
+                    pix = page.get_pixmap(matrix=fitz.Matrix(2, 2))
+                    return pix.tobytes("png")
+
+                img_data = await run_in_threadpool(render_page)
+                base64_image = base64.b64encode(img_data).decode("utf-8")
+
+                prompt = (
+                    f"Extract all text from page {page_index + 1} of this legal document. "
+                    f"Filename: {original_filename}. "
+                    "Provide the text verbatim. Do not summarize."
+                )
+
+                content = [
+                    {"type": "text", "text": prompt},
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": f"data:image/png;base64,{base64_image}"},
+                    },
+                ]
+
+                # Make the API call in thread pool (since client is sync)
+                def make_api_call():
+                    return client.chat.completions.create(
+                        model="gpt-4o",
+                        messages=[{"role": "user", "content": content}],
+                        max_tokens=1500,
+                        temperature=0.0,
+                    )
+
+                response = await run_in_threadpool(make_api_call)
+                page_text = response.choices[0].message.content
+
+                # Update progress after successful page extraction
+                completed_pages[0] += 1
+                if progress_callback:
+                    try:
+                        msg = (
+                            f"OCR: Extracted page {completed_pages[0]}/{pages_to_process} "
+                            f"from {original_filename}"
+                        )
+                        await progress_callback(msg, f"page_{page_index + 1}")
+                    except Exception:
+                        pass  # Don't let progress callback errors stop extraction
+
+                if page_text:
+                    return f"--- Page {page_index + 1} ---\n{page_text}"
+                return ""
+            except Exception as page_err:
+                logger.error(f"Error processing page {page_index + 1} of {original_filename}: {page_err}")
+                completed_pages[0] += 1  # Still count as processed even if failed
+                return f"--- Page {page_index + 1} ---\n[Error extracting text from this page]"
+
+        # Process pages in parallel with increased concurrency (10 instead of 5)
+        # This speeds up large documents while staying within OpenAI rate limits
+        semaphore = asyncio.Semaphore(10)
+
+        async def sem_process_page(i):
+            async with semaphore:
+                return await process_page(i)
+
+        # Send initial progress update
+        if progress_callback:
+            try:
+                await progress_callback(
+                    f"OCR: Starting Vision extraction for {original_filename} ({pages_to_process} pages)",
+                    "vision_start",
+                )
+            except Exception:
+                pass
+
+        tasks = [sem_process_page(i) for i in range(pages_to_process)]
+        extracted_parts = await asyncio.gather(*tasks)
+
+        # Close doc manually since we didn't use context manager to keep it open for parallel tasks
+        doc.close()
+
+        # Filter out empty results
+        extracted_parts = [p for p in extracted_parts if p]
+
+        if not extracted_parts:
+            return ""
+
+        extracted_text = "\n\n".join(extracted_parts)
+        logger.info(
+            f"✅ Successfully extracted {len(extracted_parts)} pages via Vision for {original_filename}"
+        )
+        return f"[Extracted via GPT-4o Vision]\n\n{extracted_text}"
+
+    except Exception as e:
+        logger.error(f"Vision extraction failed for {original_filename}: {e}")
+        return ""
+
+
 async def process_pdf(
     file_path: str,
     document_type: DocumentType,
@@ -511,6 +887,9 @@ async def process_pdf(
 
     Uses PyMuPDF (fitz) if available, falls back to pypdf (lightweight).
     If extraction yields no results, falls back to Vision API for scanned docs.
+
+    IMPORTANT: Reads file into memory ONCE to avoid Vercel serverless filesystem
+    race conditions where files may not be fully synced to disk.
 
     Args:
     ----
@@ -529,23 +908,35 @@ async def process_pdf(
     text_content = ""
     file_size = 0
     extraction_method = "standard"
+    pdf_bytes = None
 
-    # Pre-validate file exists and has reasonable size
+    # Pre-validate file exists and read into memory ONCE
+    # This avoids race conditions in Vercel serverless where files may not be fully synced
     if not os.path.exists(file_path):
         logger.error(f"PDF file not found: {file_path}")
         text_content = f"Error: PDF file not found - {original_filename}"
     else:
-        file_size = os.path.getsize(file_path)
+        try:
+            # Read file into memory once - eliminates filesystem race conditions
+            with open(file_path, "rb") as f:
+                pdf_bytes = f.read()
+            file_size = len(pdf_bytes)
+            logger.debug(f"Read {file_size} bytes from {original_filename} into memory")
+        except Exception as read_err:
+            logger.error(f"Failed to read PDF into memory: {original_filename}: {read_err}")
+            text_content = f"Error: Failed to read PDF file - {original_filename}"
+            file_size = 0
 
+    if pdf_bytes:
         # Reject suspiciously small PDFs (< 100 bytes likely corrupt)
         if file_size < 100:
             logger.warning(f"Suspiciously small PDF ({file_size} bytes): {original_filename}")
             text_content = f"Error: PDF file appears to be corrupted or empty ({file_size} bytes)"
         else:
-            # Try PyMuPDF first (better quality extraction)
+            # Try PyMuPDF first (better quality extraction) - using bytes stream
             if FITZ_AVAILABLE:
                 try:
-                    text_content = _extract_text_with_fitz(file_path)
+                    text_content = _extract_text_with_fitz_bytes(pdf_bytes, original_filename)
                     if text_content.strip():
                         logger.info(f"✅ Successfully extracted text from {original_filename} using PyMuPDF")
                         extraction_method = "PyMuPDF"
@@ -553,10 +944,10 @@ async def process_pdf(
                     logger.warning(f"PyMuPDF extraction failed for {original_filename}: {e}")
                     text_content = ""
 
-            # Fall back to pypdf if PyMuPDF failed or returned empty
+            # Fall back to pypdf if PyMuPDF failed or returned empty - using bytes stream
             if not text_content.strip() and PYPDF_AVAILABLE:
                 try:
-                    text_content = _extract_text_with_pypdf(file_path)
+                    text_content = _extract_text_with_pypdf_bytes(pdf_bytes, original_filename)
                     if text_content.strip():
                         logger.info(f"✅ Successfully extracted text from {original_filename} using pypdf")
                         extraction_method = "pypdf"
@@ -586,17 +977,17 @@ async def process_pdf(
                 needs_vision = True
 
             if needs_vision:
-                # Try Google Cloud Vision first (faster and cheaper)
-                vision_text = await _extract_text_via_google_ocr(
-                    file_path, original_filename, progress_callback
+                # Try Google Cloud Vision first (faster and cheaper) - using bytes
+                vision_text = await _extract_text_via_google_ocr_bytes(
+                    pdf_bytes, original_filename, progress_callback
                 )
                 if vision_text:
                     text_content = vision_text
                     extraction_method = "Google Cloud Vision"
                 else:
                     # Fall back to GPT-4o Vision if Google Vision unavailable or failed
-                    vision_text = await _extract_text_via_vision(
-                        file_path, original_filename, progress_callback
+                    vision_text = await _extract_text_via_vision_bytes(
+                        pdf_bytes, original_filename, progress_callback
                     )
                     if vision_text:
                         text_content = vision_text

@@ -42,6 +42,62 @@ except ImportError:
     logger.debug("pypdf not available")
 
 
+def _is_likely_plain_text(data: bytes) -> tuple[bool, str]:
+    """Detect if bytes are likely plain text rather than binary data.
+
+    Used to handle .pdf files that are actually plain text (e.g., exported notes from Clio).
+
+    Args:
+    ----
+        data: Raw bytes to analyze
+
+    Returns:
+    -------
+        Tuple of (is_text: bool, decoded_text: str if is_text else "")
+
+    """
+    if not data or len(data) < 10:
+        return False, ""
+
+    # Try UTF-8 decode first
+    try:
+        decoded = data.decode("utf-8")
+    except UnicodeDecodeError:
+        # Try latin-1 as fallback (it can decode any byte sequence)
+        try:
+            decoded = data.decode("latin-1")
+        except Exception:
+            return False, ""
+
+    # Heuristic: Check if content looks like text
+    # - High ratio of printable characters (letters, digits, punctuation, whitespace)
+    # - Very few null bytes (binary files often have many)
+    # - Contains common text patterns
+
+    # Count null bytes - binary files typically have many
+    null_count = data.count(b"\x00")
+    if null_count > len(data) * 0.01:  # More than 1% null bytes = likely binary
+        return False, ""
+
+    # Count printable characters
+    printable_count = sum(1 for c in decoded if c.isprintable() or c in "\n\r\t")
+    printable_ratio = printable_count / len(decoded) if decoded else 0
+
+    # Text should be at least 85% printable characters
+    if printable_ratio < 0.85:
+        return False, ""
+
+    # Additional check: should have some common text patterns
+    # (letters, spaces, newlines)
+    has_letters = any(c.isalpha() for c in decoded[:500])
+    has_spaces = " " in decoded[:500]
+
+    if has_letters and has_spaces:
+        return True, decoded
+
+    return False, ""
+
+
 def _wait_for_file_ready(file_path: str, max_wait_seconds: float = 2.0) -> bool:
     """Wait for file to be fully written and accessible.
 
@@ -936,13 +992,27 @@ async def process_pdf(
             # Validate PDF header - must start with %PDF-
             # This catches cases where Supabase returned an error response instead of file content
             if not pdf_bytes.startswith(b"%PDF-"):
-                first_bytes = pdf_bytes[:100].decode("utf-8", errors="replace")
-                logger.error(
-                    f"Invalid PDF content for {original_filename}: "
-                    f"Expected PDF header, got: {first_bytes[:50]}..."
-                )
-                text_content = f"Error: Downloaded content is not a valid PDF - {original_filename}"
-                pdf_bytes = None  # Prevent further processing
+                # Check if this is actually plain text saved with .pdf extension
+                # (common with Clio exported notes/communications)
+                is_text, decoded_text = _is_likely_plain_text(pdf_bytes)
+
+                if is_text and decoded_text.strip():
+                    logger.info(
+                        f"Detected plain text in .pdf file: {original_filename} "
+                        f"({len(decoded_text)} chars). Using text_fallback extraction."
+                    )
+                    text_content = decoded_text
+                    extraction_method = "text_fallback"
+                    pdf_bytes = None  # Skip PDF extraction - we already have the text
+                else:
+                    # Not a valid PDF and not recognizable text
+                    first_bytes = pdf_bytes[:100].decode("utf-8", errors="replace")
+                    logger.error(
+                        f"Invalid PDF content for {original_filename}: "
+                        f"Expected PDF header, got: {first_bytes[:50]}..."
+                    )
+                    text_content = f"Error: Downloaded content is not a valid PDF - {original_filename}"
+                    pdf_bytes = None  # Prevent further processing
 
         except Exception as read_err:
             logger.error(f"Failed to read PDF into memory: {original_filename}: {read_err}")

@@ -545,8 +545,16 @@ async def _extract_text_via_google_ocr_bytes(
 
     logger.info("Google Vision client is available, validating credentials...")
 
-    # Validate credentials before proceeding
-    valid, validation_msg = google_client.validate_credentials()
+    # Validate credentials before proceeding (with timeout protection)
+    try:
+        valid, validation_msg = await asyncio.wait_for(
+            run_in_threadpool(google_client.validate_credentials),
+            timeout=10.0,
+        )
+    except asyncio.TimeoutError:
+        logger.error(f"Credential validation timed out for {original_filename}")
+        return ""
+
     if not valid:
         logger.error(f"Google Vision credentials invalid: {validation_msg}")
         logger.error("Falling back to GPT-4o Vision. Check your service account key.")
@@ -554,6 +562,7 @@ async def _extract_text_via_google_ocr_bytes(
 
     try:
         logger.info(f"🔍 Starting Google Cloud Vision OCR for: {original_filename}")
+        logger.info(f"[TRACE] About to open PDF bytes ({len(pdf_bytes)} bytes) for: {original_filename}")
 
         import fitz
 
@@ -561,13 +570,15 @@ async def _extract_text_via_google_ocr_bytes(
         try:
 
             def open_pdf():
+                logger.debug(f"[TRACE] Inside open_pdf thread for: {original_filename}")
                 return fitz.open(stream=pdf_bytes, filetype="pdf")
 
+            logger.info(f"[TRACE] Calling fitz.open with 15s timeout for: {original_filename}")
             doc = await asyncio.wait_for(
                 run_in_threadpool(open_pdf),
                 timeout=15.0,
             )
-            logger.debug(f"Opened PDF from memory: {original_filename} ({len(pdf_bytes)} bytes)")
+            logger.info(f"[TRACE] fitz.open completed for: {original_filename}")
         except asyncio.TimeoutError:
             logger.error(f"Timeout opening PDF bytes for {original_filename} (15s limit)")
             return ""

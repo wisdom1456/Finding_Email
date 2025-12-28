@@ -154,3 +154,13 @@ class TestTextDetectionHeuristic:
 
         is_text, _ = _is_likely_plain_text(b"short")
         assert is_text is False
+
+    def test_leading_whitespace_text_detected(self):
+        """Text with leading whitespace/newlines should still be detected as text."""
+        from legal_portal.services.file_processors.pdf_processor import _is_likely_plain_text
+
+        content = b"\n\n\n   \n\t\nLEGAL DESCRIPTION LOT A-2\nSANTA FE COUNTY"
+        is_text, decoded = _is_likely_plain_text(content)
+
+        assert is_text is True
+        assert "LEGAL DESCRIPTION" in decoded

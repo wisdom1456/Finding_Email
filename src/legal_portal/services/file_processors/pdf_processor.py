@@ -87,12 +87,26 @@ def _is_likely_plain_text(data: bytes) -> tuple[bool, str]:
     if printable_ratio < 0.85:
         return False, ""
 
-    # Additional check: should have some common text patterns
-    # (letters, spaces, newlines)
-    has_letters = any(c.isalpha() for c in decoded[:500])
-    has_spaces = " " in decoded[:500]
+    # Additional check: content should look "texty" somewhere near the beginning.
+    # Important: some Clio exports start with lots of leading newlines/whitespace,
+    # so we scan a larger prefix and don't require letters in the first 500 chars.
+    sample = decoded[:10_000]
+    if not sample.strip():
+        return False, ""
 
-    if has_letters and has_spaces:
+    # Treat HTML/XML as text (common for error pages or exported notes)
+    if sample.lstrip().startswith("<"):
+        return True, decoded
+
+    has_alnum = any(c.isalnum() for c in sample)
+    has_whitespace = any(c.isspace() for c in sample)
+
+    if has_alnum and has_whitespace:
+        return True, decoded
+
+    # Some valid plain-text can be dense (e.g., CSV-ish or IDs). If it's mostly printable,
+    # has at least some alnum, and no null bytes, treat as text.
+    if has_alnum:
         return True, decoded
 
     return False, ""
@@ -1006,12 +1020,26 @@ async def process_pdf(
                     pdf_bytes = None  # Skip PDF extraction - we already have the text
                 else:
                     # Not a valid PDF and not recognizable text
+                    header8 = pdf_bytes[:8]
+                    reason = None
+                    if header8.startswith(b"PK\x03\x04"):
+                        reason = "looks like a ZIP/DOCX (PK\\x03\\x04)"
+                    elif header8.startswith(b"\xFF\xD8\xFF"):
+                        reason = "looks like a JPEG (FF D8 FF)"
+                    elif header8.startswith(b"\x89PNG\r\n\x1a\n"):
+                        reason = "looks like a PNG"
+                    elif pdf_bytes.lstrip().startswith(b"<"):
+                        reason = "looks like HTML/XML"
+
                     first_bytes = pdf_bytes[:100].decode("utf-8", errors="replace")
                     logger.error(
                         f"Invalid PDF content for {original_filename}: "
                         f"Expected PDF header, got: {first_bytes[:50]}..."
                     )
-                    text_content = f"Error: Downloaded content is not a valid PDF - {original_filename}"
+                    reason_text = f" ({reason})" if reason else ""
+                    text_content = (
+                        f"Error: Downloaded content is not a valid PDF{reason_text} - {original_filename}"
+                    )
                     pdf_bytes = None  # Prevent further processing
 
         except Exception as read_err:

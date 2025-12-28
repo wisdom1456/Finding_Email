@@ -463,7 +463,12 @@ async def _extract_text_via_google_ocr_bytes(
             doc = fitz.open(stream=pdf_bytes, filetype="pdf")
             logger.debug(f"Opened PDF from memory: {original_filename} ({len(pdf_bytes)} bytes)")
         except Exception as open_err:
-            logger.error(f"Failed to open PDF bytes for Google OCR: {open_err}")
+            # Log bytes info for debugging invalid content
+            header = pdf_bytes[:20] if pdf_bytes else b""
+            logger.error(
+                f"Failed to open PDF bytes for Google OCR: {open_err}. "
+                f"Size: {len(pdf_bytes) if pdf_bytes else 0} bytes, Header: {header!r}"
+            )
             return ""
 
         # Process all pages (Google Vision is fast enough)
@@ -760,7 +765,12 @@ async def _extract_text_via_vision_bytes(
             doc = fitz.open(stream=pdf_bytes, filetype="pdf")
             logger.debug(f"Opened PDF from memory for Vision: {original_filename} ({len(pdf_bytes)} bytes)")
         except Exception as open_err:
-            logger.error(f"Failed to open PDF bytes for Vision extraction: {open_err}")
+            # Log bytes info for debugging invalid content
+            header = pdf_bytes[:20] if pdf_bytes else b""
+            logger.error(
+                f"Failed to open PDF bytes for Vision extraction: {open_err}. "
+                f"Size: {len(pdf_bytes) if pdf_bytes else 0} bytes, Header: {header!r}"
+            )
             return ""
 
         # Limit to 25 pages to prevent extreme costs and timeouts
@@ -922,6 +932,18 @@ async def process_pdf(
                 pdf_bytes = f.read()
             file_size = len(pdf_bytes)
             logger.debug(f"Read {file_size} bytes from {original_filename} into memory")
+
+            # Validate PDF header - must start with %PDF-
+            # This catches cases where Supabase returned an error response instead of file content
+            if not pdf_bytes.startswith(b"%PDF-"):
+                first_bytes = pdf_bytes[:100].decode("utf-8", errors="replace")
+                logger.error(
+                    f"Invalid PDF content for {original_filename}: "
+                    f"Expected PDF header, got: {first_bytes[:50]}..."
+                )
+                text_content = f"Error: Downloaded content is not a valid PDF - {original_filename}"
+                pdf_bytes = None  # Prevent further processing
+
         except Exception as read_err:
             logger.error(f"Failed to read PDF into memory: {original_filename}: {read_err}")
             text_content = f"Error: Failed to read PDF file - {original_filename}"

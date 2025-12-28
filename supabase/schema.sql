@@ -45,7 +45,7 @@ CREATE TABLE IF NOT EXISTS cases (
     reference_number TEXT,
     description TEXT,
     jurisdiction TEXT NOT NULL DEFAULT 'Florida',
-    status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'processing', 'completed', 'error')),
+    status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'processing', 'completed', 'error', 'cancelled')),
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -148,7 +148,7 @@ CREATE POLICY "Users can delete documents of own cases"
 CREATE TABLE IF NOT EXISTS analysis_results (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     case_id UUID REFERENCES cases(id) ON DELETE CASCADE NOT NULL,
-    status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'processing', 'completed', 'error')),
+    status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'processing', 'completed', 'error', 'cancelled')),
     result JSONB,
     error TEXT,
     completed_at TIMESTAMPTZ,

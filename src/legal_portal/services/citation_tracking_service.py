@@ -22,9 +22,10 @@ if TYPE_CHECKING:
     from legal_portal.services.statute_validation_service import StatuteValidationService
 
 import numpy as np
+from openai import OpenAI
+
 from legal_portal.core.data_models import CaseAnalysisResult
 from legal_portal.utils.logging_config import get_module_logger
-from openai import OpenAI
 
 logger = get_module_logger(__name__)
 

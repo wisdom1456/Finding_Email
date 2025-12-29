@@ -13,9 +13,10 @@ import tempfile
 from dataclasses import dataclass
 from typing import Optional, Tuple
 
+from PIL import Image
+
 from legal_portal.config.default import settings
 from legal_portal.utils.logging_config import get_module_logger
-from PIL import Image
 
 logger = get_module_logger(__name__)
 

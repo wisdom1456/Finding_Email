@@ -10,6 +10,8 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 
 try:
+    from openai import OpenAI
+
     from legal_portal.config.config_manager import ConfigManager
     from legal_portal.config.default import get_openai_config
     from legal_portal.core.data_models import (
@@ -21,7 +23,6 @@ try:
         PartyInvolved,
     )
     from legal_portal.services.json_processing_service import JsonProcessingService
-    from openai import OpenAI
 except ImportError as e:
     print(f"Import error: {e}")
     print("Make sure you're running from the project root directory")

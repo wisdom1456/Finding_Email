@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import streamlit as st
 import streamlit.components.v1 as components
+
 from legal_portal.services.document_formatter import DocumentFormatterService
 from legal_portal.utils.logging_config import get_module_logger
 
@@ -560,7 +561,7 @@ def _display_uploaded_files_list(uploaded_files):
                     # Clean up temporary file
                     try:
                         os.unlink(tmp_path)
-                    except:
+                    except Exception:
                         pass
 
             except Exception:

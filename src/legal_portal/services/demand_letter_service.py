@@ -6,6 +6,7 @@ import os
 from typing import Dict, List, Optional
 
 import markdown2
+
 from legal_portal.core.data_models import DeepAnalysis, DocumentSummaryStructured, FactMatrix, Party
 from legal_portal.services.document_formatter import DocumentFormatterService
 from legal_portal.utils.logging_config import get_module_logger

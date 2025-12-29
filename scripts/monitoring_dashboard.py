@@ -44,7 +44,7 @@ def show_monitoring_dashboard():
         st.divider()
 
         # Time range filter
-        time_range = st.selectbox(
+        _time_range = st.selectbox(
             "Time Range",
             ["Last 15 minutes", "Last hour", "Last 6 hours", "Last 24 hours", "All time"],
             index=1,
@@ -354,7 +354,7 @@ def show_audit_logs():
             selected_user = st.selectbox("User", ["All"] + users)
 
         with col3:
-            date_filter = st.date_input("Date", value=datetime.now().date())
+            _date_filter = st.date_input("Date", value=datetime.now().date())
 
         # Apply filters
         filtered_audits = all_audits

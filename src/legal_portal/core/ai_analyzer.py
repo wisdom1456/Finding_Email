@@ -8,6 +8,10 @@ from typing import TYPE_CHECKING, Any
 
 import tiktoken
 import yaml
+from openai import APIError, APITimeoutError, BadRequestError, OpenAI, RateLimitError
+from pydantic import ValidationError
+from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_fixed
+
 from legal_portal.core.data_models import (
     AIAnalysisError,
     AnalysisError,
@@ -26,9 +30,6 @@ from legal_portal.utils.validators import (
     preprocess_ai_output,
     safe_model_validate,
 )
-from openai import APIError, APITimeoutError, BadRequestError, OpenAI, RateLimitError
-from pydantic import ValidationError
-from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_fixed
 
 logger = get_module_logger(__name__)
 

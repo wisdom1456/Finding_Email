@@ -5,6 +5,7 @@ from __future__ import annotations
 from decimal import Decimal
 
 import pytest
+
 from legal_portal.core.data_models import AnalyzedDocument
 from legal_portal.utils.cost_calculator import CostCalculator
 

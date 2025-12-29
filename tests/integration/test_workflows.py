@@ -6,6 +6,7 @@ import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+
 from legal_portal.core.data_models import ProcessingResult
 from legal_portal.services.main_processor import process_case_documents
 

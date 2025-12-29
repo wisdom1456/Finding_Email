@@ -1,8 +1,9 @@
 """Settings API routes."""
 
 from fastapi import APIRouter
-from legal_portal.config.default import settings
 from pydantic import BaseModel
+
+from legal_portal.config.default import settings
 
 router = APIRouter()
 

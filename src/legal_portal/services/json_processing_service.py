@@ -6,9 +6,6 @@ import re
 from typing import List, Optional, Tuple
 
 import markdown2
-from legal_portal.core.data_models import ProcessingError
-from legal_portal.utils.logging_config import get_module_logger
-from legal_portal.utils.openai_client import OpenAIClient
 from openai import (
     APIConnectionError,
     APIError,
@@ -17,6 +14,10 @@ from openai import (
     RateLimitError,
 )
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_fixed
+
+from legal_portal.core.data_models import ProcessingError
+from legal_portal.utils.logging_config import get_module_logger
+from legal_portal.utils.openai_client import OpenAIClient
 
 logger = get_module_logger(__name__)
 

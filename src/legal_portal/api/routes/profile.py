@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, status
+
 from legal_portal.api.dependencies import get_current_user, get_user_supabase_client
 from legal_portal.core.data_models import ProfileResponse, ProfileUpdate
 from legal_portal.utils.logging_config import get_module_logger

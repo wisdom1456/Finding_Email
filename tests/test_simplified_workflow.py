@@ -14,6 +14,7 @@ from datetime import datetime
 from pathlib import Path
 
 from dotenv import load_dotenv
+
 from legal_portal.core.document_processor import DocumentProcessor
 from legal_portal.services.json_processing_service import JsonProcessingService
 from legal_portal.utils.openai_client import OpenAIClient

@@ -6,6 +6,9 @@ import mimetypes
 import os
 import time
 
+from starlette.concurrency import run_in_threadpool
+from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
+
 from legal_portal.core.data_models import (
     DocumentType,
     FileMetadata,
@@ -15,8 +18,6 @@ from legal_portal.core.data_models import (
 from legal_portal.utils.google_vision_client import GoogleVisionClient
 from legal_portal.utils.logging_config import get_module_logger
 from legal_portal.utils.openai_client import OpenAIClient
-from starlette.concurrency import run_in_threadpool
-from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 logger = get_module_logger(__name__)
 

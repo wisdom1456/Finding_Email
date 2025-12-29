@@ -5,6 +5,9 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from pydantic import BaseModel, Field
+from starlette.concurrency import run_in_threadpool
+
 from legal_portal.api.dependencies import get_current_user, get_supabase_client, get_user_supabase_client
 from legal_portal.api.services.clio_client import ClioAPIError, ClioAuthError, ClioClient
 from legal_portal.api.utils.content_extractor import DocumentProcessor as ContentExtractor
@@ -12,8 +15,6 @@ from legal_portal.config.default import get_settings
 from legal_portal.core.data_models import DocumentStatus
 from legal_portal.core.document_processor import DocumentProcessor, ValidationError
 from legal_portal.services.progress_manager import ProgressManager, get_progress_manager
-from pydantic import BaseModel, Field
-from starlette.concurrency import run_in_threadpool
 
 logger = logging.getLogger(__name__)
 router = APIRouter()

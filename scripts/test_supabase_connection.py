@@ -61,7 +61,7 @@ def test_connection():
         print("\nChecking tables...")
         for table_name in tables_to_check:
             try:
-                result = client.table(table_name).select("count", count="exact").limit(0).execute()
+                client.table(table_name).select("count", count="exact").limit(0).execute()
                 existing_tables.append(table_name)
                 print(f"   ✅ {table_name} - exists")
             except Exception as e:

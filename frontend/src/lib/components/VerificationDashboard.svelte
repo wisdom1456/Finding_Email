@@ -61,7 +61,12 @@
 			const status = doc.status;
 			if (status === 'download_failed' || status === 'corrupted') {
 				groups.critical.push(doc);
-			} else if (status === 'extraction_failed' || status === 'needs_review' || (status === 'ready' && !doc.is_verified)) {
+			} else if (
+				status === 'extraction_failed' ||
+				status === 'needs_review' ||
+				status === 'pending' ||
+				(status === 'ready' && !doc.is_verified)
+			) {
 				groups.needs_attention.push(doc);
 			} else {
 				groups.ready.push(doc);
@@ -86,7 +91,7 @@
 		const counts = { ready: 0, review: 0, failed: 0, missing: 0 };
 		for (const doc of documents) {
 			if (doc.status === 'ready') counts.ready++;
-			else if (doc.status === 'needs_review') counts.review++;
+			else if (doc.status === 'needs_review' || doc.status === 'pending') counts.review++;
 			else if (doc.status === 'extraction_failed') counts.failed++;
 			else if (doc.status === 'download_failed' || doc.status === 'corrupted') counts.missing++;
 		}
@@ -196,6 +201,39 @@
 			await onDocumentsUpdated();
 		} catch (error: any) {
 			toastStore.error(error.message);
+		}
+	}
+
+	async function handleBulkExtract() {
+		toastStore.info('Running bulk extraction on all documents...');
+		bulkActionLoading = true;
+		try {
+			const { data: { session } } = await supabase.auth.getSession();
+			if (!session) throw new Error('Not authenticated');
+
+			const response = await fetch(`${getApiUrl()}/api/documents/bulk-extract`, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					Authorization: `Bearer ${session.access_token}`,
+				},
+				body: JSON.stringify({ case_id: caseId }),
+			});
+
+			if (!response.ok) throw new Error('Bulk extraction failed');
+			const result = await response.json();
+			
+			if (result.failed_count > 0) {
+				toastStore.warning(`Extracted ${result.extracted_count} docs, but ${result.failed_count} failed.`);
+			} else {
+				toastStore.success(`Successfully extracted ${result.extracted_count} documents`);
+			}
+			
+			await onDocumentsUpdated();
+		} catch (error: any) {
+			toastStore.error(error.message);
+		} finally {
+			bulkActionLoading = false;
 		}
 	}
 
@@ -464,6 +502,20 @@
 							<Zap class="w-5 h-5" />
 						</div>
 						<h3 class="text-xl font-black text-gray-900 uppercase tracking-tight">Pending Review</h3>
+						
+						<!-- Bulk Extraction Action -->
+						{#const needsExtraction = triageGroups.needs_attention.filter(d => !d.extracted_text || d.status === 'pending').length}
+						{#if needsExtraction > 0}
+							<button 
+								onclick={handleBulkExtract}
+								disabled={bulkActionLoading}
+								class="ml-4 inline-flex items-center gap-2 px-3 py-1.5 text-xs font-bold rounded-lg bg-accent/10 text-accent hover:bg-accent/20 transition-all border border-accent/20"
+							>
+								<RefreshCw class={`w-3.5 h-3.5 ${bulkActionLoading ? 'animate-spin' : ''}`} />
+								Run OCR on {needsExtraction} Doc{needsExtraction === 1 ? '' : 's'}
+							</button>
+						{/if}
+
 						<span class="ml-auto text-xs font-bold text-amber-600 bg-amber-50 px-2 py-1 rounded-full border border-amber-100">
 							{triageGroups.needs_attention.length} Pending
 						</span>

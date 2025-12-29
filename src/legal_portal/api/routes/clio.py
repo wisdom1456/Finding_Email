@@ -10,6 +10,8 @@ from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import RedirectResponse
+from pydantic import BaseModel
+
 from legal_portal.api.dependencies import get_current_user, get_supabase_client
 from legal_portal.api.services.clio_auth_service import ClioAuthService
 from legal_portal.api.services.clio_client import (
@@ -21,8 +23,6 @@ from legal_portal.api.utils.content_extractor import DocumentProcessor as Conten
 from legal_portal.core.data_models import DocumentStatus
 from legal_portal.core.document_processor import DocumentProcessor, ValidationError
 from legal_portal.services.progress_manager import ProgressManager
-from pydantic import BaseModel
-
 from supabase import Client
 
 logger = logging.getLogger(__name__)

@@ -3,6 +3,7 @@
 import os
 
 from fastapi import APIRouter, Depends
+
 from legal_portal.api.dependencies import get_supabase_client
 
 router = APIRouter()

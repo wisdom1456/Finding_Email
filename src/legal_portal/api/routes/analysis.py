@@ -16,13 +16,17 @@ from typing import Any, Dict, List, Optional
 
 import html2text
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
+from pydantic import BaseModel, Field
+
 from legal_portal.api.dependencies import get_current_user, get_supabase_client, get_user_supabase_client
 from legal_portal.api.rate_limiter import limiter
 from legal_portal.core.data_models import (
     ChatMessageRequest,
     ChatMessageResponse,
     DocumentStatus,
+    DocumentType,
     LetterType,
+    ProcessedDocument,
     ProcessingResult,
     SkippedDocument,
 )
@@ -32,8 +36,6 @@ from legal_portal.services.json_processing_service import JsonProcessingService
 from legal_portal.services.main_processor import process_case_documents
 from legal_portal.services.progress_manager import ProgressManager
 from legal_portal.utils.openai_client import OpenAIClient
-from pydantic import BaseModel, Field
-from starlette.concurrency import run_in_threadpool
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -668,24 +670,90 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
         if not documents:
             raise ValueError("No documents found for case")
 
-        # Cooperative cancellation checkpoint before downloading and heavy work.
+        # Step 1: Prepare ProcessedDocument objects directly from DB (no re-extraction)
+        from legal_portal.core.data_models import FileMetadata, FileType
+
+        processed_intake = []
+        processed_case_docs = []
+        skipped_documents = []
+
+        for doc in documents:
+            # Skip docs with critical issues or skipped status
+            status = doc.get("status")
+            if status in [
+                DocumentStatus.DOWNLOAD_FAILED,
+                DocumentStatus.CORRUPTED,
+                DocumentStatus.SKIPPED,
+            ]:
+                skipped_documents.append(
+                    SkippedDocument(
+                        document_id=doc["id"],
+                        file_name=doc["file_name"],
+                        reason=f"Status is {status}",
+                        error_type=status or "UNKNOWN",
+                        recommendation="Fix in verification hub.",
+                    )
+                )
+                continue
+
+            if doc.get("is_flagged_as_junk"):
+                continue
+
+            # Get text from manual_text (priority) or extracted_text
+            text = doc.get("manual_text") or doc.get("extracted_text")
+            if not text:
+                skipped_documents.append(
+                    SkippedDocument(
+                        document_id=doc["id"],
+                        file_name=doc["file_name"],
+                        reason="No extracted text found",
+                        error_type="MISSING_TEXT",
+                        recommendation="Run OCR in verification hub.",
+                    )
+                )
+                continue
+
+            # Construct ProcessedDocument
+            metadata = FileMetadata(
+                file_name=doc["file_name"],
+                file_type=FileType.PDF,  # Fallback
+                file_size=doc.get("file_size", 0),
+            )
+
+            pdoc = ProcessedDocument(
+                file_name=doc["file_name"],
+                content=text,
+                document_type=(
+                    DocumentType.INTAKE_FORM
+                    if doc.get("metadata", {}).get("is_intake_form")
+                    else DocumentType.CASE_DOCUMENT
+                ),
+                file_type=FileType.PDF,
+                metadata=metadata,
+                extraction_quality=doc.get("extraction_quality", "high"),
+                extraction_method=doc.get("extraction_method", "db"),
+                page_count=doc.get("page_count"),
+                ocr_provider=doc.get("ocr_provider"),
+                document_id=doc["id"],
+            )
+
+            if pdoc.document_type == DocumentType.INTAKE_FORM:
+                processed_intake.append(pdoc)
+            else:
+                processed_case_docs.append(pdoc)
+
+        # Ensure we have at least an intake form
+        if not processed_intake:
+            # Fallback: if no doc marked as intake, use the first document
+            if processed_case_docs:
+                processed_intake = [processed_case_docs.pop(0)]
+                processed_intake[0].document_type = DocumentType.INTAKE_FORM
+            else:
+                raise ValueError("No documents with text found for analysis. Please run OCR first.")
+
+        # Cooperative cancellation checkpoint after preparing documents.
         if _analysis_is_cancelled(supabase, analysis_id):
-            raise AnalysisCancelledError("Analysis cancelled before downloading documents.")
-
-        # Download documents to temp directory (already created above)
-
-        # Download and prepare files in threadpool to avoid blocking event loop
-        intake_form_path, file_paths, path_to_id_map, skipped_documents = await run_in_threadpool(
-            _download_and_extract_documents, case_id, documents, supabase, temp_dir
-        )
-
-        # Cooperative cancellation checkpoint after downloads.
-        if _analysis_is_cancelled(supabase, analysis_id):
-            raise AnalysisCancelledError("Analysis cancelled after downloading documents.")
-
-        # If still no documents, we need at least one
-        if not intake_form_path:
-            raise ValueError("At least one document is required for analysis")
+            raise AnalysisCancelledError("Analysis cancelled after preparing documents.")
 
         # Prepare case_info
         case_info = {
@@ -698,12 +766,8 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
 
         # Prepare review_data (simplified - can be enhanced via UI later)
         review_data = {
-            "key_documents": file_paths[:3] if len(file_paths) >= 3 else file_paths,  # First 3 docs as key
             "legal_issue": case.get("description", "General legal document analysis"),
         }
-
-        logger.info(f"Processing with intake form: {os.path.basename(intake_form_path)} in {jurisdiction}")
-        logger.info(f"Additional documents: {len(file_paths)}")
 
         # Create progress callback that publishes to SSE and stores in DB
         async def progress_callback(
@@ -743,15 +807,14 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
             # Persist to database so polling fallback works across Vercel instances
             await _update_analysis_progress(supabase, analysis_id, payload)
 
-        # Call the actual processor
+        # Call the actual processor (AI passes)
         result: ProcessingResult = await process_case_documents(
-            intake_form_path=intake_form_path,
-            case_document_paths=file_paths,
+            processed_intake=processed_intake,
+            processed_case_docs=processed_case_docs,
             case_info=case_info,
             review_data=review_data,
             progress_callback=progress_callback,
             jurisdiction=jurisdiction,  # Pass jurisdiction to main processor
-            path_to_id_map=path_to_id_map,  # Pass mapping for document linking
             skipped_documents=skipped_documents,
         )
 

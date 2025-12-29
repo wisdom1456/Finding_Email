@@ -6,6 +6,7 @@ Provides user interface for connecting to CLIO and searching matters.
 from __future__ import annotations
 
 import streamlit as st
+
 from legal_portal.services.clio_auth_service import ClioAuthService
 from legal_portal.services.clio_client import ClioAPIError, ClioAuthError, ClioClient
 from legal_portal.utils.logging_config import get_module_logger

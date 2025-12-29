@@ -1,6 +1,7 @@
 """Tests for citation tracking with adaptive thresholds."""
 
 import pytest
+
 from legal_portal.services.citation_tracking_service import CitationThreshold, CitationTrackingService
 from legal_portal.services.statute_validation_service import StatuteValidationService
 

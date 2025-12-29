@@ -55,7 +55,7 @@ def test_cost_session_id_fix():
         try:
             uuid.UUID(cost_session_id)
         except ValueError:
-            raise AssertionError("cost_session_id should be a valid UUID")
+            raise AssertionError("cost_session_id should be a valid UUID") from None
 
         print("✅ FIXED: cost_session_id now properly initialized as UUID")
         print(f"   Generated cost_session_id: {cost_session_id}")

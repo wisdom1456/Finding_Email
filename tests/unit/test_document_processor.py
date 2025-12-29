@@ -5,6 +5,7 @@ from __future__ import annotations
 from unittest.mock import patch
 
 import pytest
+
 from legal_portal.core.data_models import DocumentType, FileMetadata, FileType, ProcessedDocument
 from legal_portal.core.document_processor import DocumentProcessor
 from legal_portal.services.main_processor import _build_summary_prompt

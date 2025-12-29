@@ -10,8 +10,9 @@ from typing import Any, Dict, List, Optional
 
 import httpx
 import openai
-from legal_portal.utils.logging_config import get_module_logger
 from openai import OpenAI
+
+from legal_portal.utils.logging_config import get_module_logger
 
 logger = get_module_logger(__name__)
 

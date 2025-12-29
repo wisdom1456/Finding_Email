@@ -5,6 +5,7 @@ import mimetypes
 import os
 import re
 import uuid
+from datetime import datetime
 from typing import Any, Callable, Dict, List, Optional
 
 from legal_portal.config.default import settings
@@ -185,25 +186,68 @@ class DocumentProcessor:
                 except Exception as e:
                     logger.warning(f"Compression failed for {sanitized_name}: {e}, using original")
 
-            # 5. Extract text (optional, for searchability)
+            # 5. Extract text (intelligent extraction with OCR fallback)
             extracted_text = None
+            extraction_method = "none"
+            extraction_quality = "low"
+            ocr_provider = None
+            extraction_error = None
+            page_count = None
+
             try:
                 # Create temporary file for text extraction
                 temp_path = create_secure_temp_file(file_content, sanitized_name)
                 temp_files.append(temp_path)
 
-                # Import the text extraction utility
-                from legal_portal.api.utils.content_extractor import DocumentProcessor as ContentExtractor
+                # Get the appropriate processor from PROCESSOR_MAP
+                from legal_portal.services.file_processors import PROCESSOR_MAP
 
-                extracted_text = ContentExtractor.extract_text(
-                    file_content, final_content_type, sanitized_name
-                )
+                processor = PROCESSOR_MAP.get(final_content_type)
+
+                # Fallback for incorrect mimetypes using sanitized name
+                if not processor:
+                    if sanitized_name.lower().endswith(".pdf"):
+                        processor = PROCESSOR_MAP.get("application/pdf")
+                    elif sanitized_name.lower().endswith(".docx"):
+                        processor = PROCESSOR_MAP.get(
+                            "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                        )
+                    elif sanitized_name.lower().endswith(".doc"):
+                        processor = PROCESSOR_MAP.get("application/msword")
+                    elif sanitized_name.lower().endswith(".txt"):
+                        processor = PROCESSOR_MAP.get("text/plain")
+
+                if processor:
+                    # Determine doc type for extraction
+                    doc_type = DocumentType.CASE_DOCUMENT
+                    if is_intake_form:
+                        doc_type = DocumentType.INTAKE_FORM
+
+                    # Call processor with progress callback
+                    processed_doc = await processor(temp_path, doc_type, original_name, None)
+                    extracted_text = processed_doc.content
+                    extraction_method = processed_doc.extraction_method or "unknown"
+                    extraction_quality = processed_doc.extraction_quality or "high"
+                    ocr_provider = processed_doc.ocr_provider
+                    extraction_error = processed_doc.extraction_error
+                    page_count = processed_doc.page_count
+                else:
+                    # Legacy fallback for unsupported types
+                    from legal_portal.api.utils.content_extractor import (
+                        DocumentProcessor as ContentExtractor,
+                    )
+
+                    extracted_text = ContentExtractor.extract_text(
+                        file_content, final_content_type, sanitized_name
+                    )
+                    extraction_method = "basic"
 
                 # Clean extracted text (remove null bytes for PostgreSQL)
                 if extracted_text:
                     extracted_text = extracted_text.replace("\x00", "").replace("\u0000", "")
             except Exception as e:
                 logger.warning(f"Text extraction failed for {sanitized_name}: {e}")
+                extraction_error = str(e)
 
             # 6. Upload to Supabase Storage
             file_extension = sanitized_name.split(".")[-1] if "." in sanitized_name else ""
@@ -226,21 +270,36 @@ class DocumentProcessor:
             # Import DocumentStatus
             from legal_portal.core.data_models import DocumentStatus
 
+            # Determine status based on text content quality
+            status = DocumentStatus.READY
+            if not extracted_text or len(extracted_text.strip()) == 0:
+                status = DocumentStatus.EXTRACTION_FAILED
+                extraction_quality = "low"
+            elif len(extracted_text.strip()) < 200:
+                status = DocumentStatus.NEEDS_REVIEW
+                extraction_quality = "medium"
+            else:
+                status = DocumentStatus.READY
+                extraction_quality = "high"
+
             doc_record = {
                 "case_id": case_id,
                 "file_name": original_name,
                 "file_type": final_content_type,
                 "file_size": file_size,
                 "storage_path": storage_path,
-                "status": DocumentStatus.READY if extracted_text else DocumentStatus.PENDING,
+                "status": status,
                 "metadata": metadata,
+                "extracted_text": extracted_text,
+                "extraction_method": extraction_method,
+                "extraction_quality": extraction_quality,
+                "ocr_provider": ocr_provider,
+                "extraction_error": extraction_error,
+                "page_count": page_count,
+                "extracted_at": datetime.utcnow().isoformat(),
             }
 
-            # Add extracted text if available
-            if extracted_text:
-                doc_record["extracted_text"] = extracted_text
-
-            logger.info(f"Document processed successfully: {original_name}")
+            logger.info(f"Document processed successfully: {original_name} (status: {status})")
             return doc_record
 
         except ValidationError:

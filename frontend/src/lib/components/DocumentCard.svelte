@@ -93,6 +93,34 @@
 	const config = $derived(statusConfigs[doc.status] || statusConfigs.needs_review);
 	const StatusIcon = $derived(config.icon);
 
+	// Calculate quality score from text content (same logic as CorrectionModal)
+	let calculatedQuality = $derived.by(() => {
+		const text = (doc.manual_text || doc.extracted_text || '').trim();
+		if (!text || text.length === 0) return { score: 0, level: 'low' as const, hasText: false };
+
+		let score = 10;
+
+		// Check content length
+		if (text.length < 50) score -= 5;
+		else if (text.length < 200) score -= 2;
+
+		// Check word count
+		const wordCount = text.split(/\s+/).filter((w: string) => w.length > 0).length;
+		if (wordCount < 10) score -= 3;
+
+		// Check for gibberish
+		const wordChars = text.replace(/[^a-zA-Z0-9]/g, '').length;
+		const gibberishRatio = 1 - (wordChars / text.length);
+		if (gibberishRatio > 0.5) score -= 2;
+
+		const finalScore = Math.max(0, Math.min(10, score));
+		return {
+			score: finalScore,
+			level: finalScore >= 8 ? 'high' as const : finalScore >= 5 ? 'medium' as const : 'low' as const,
+			hasText: true
+		};
+	});
+
 	// Get quality score color
 	function getQualityColor(score: number) {
 		if (score >= 8) return 'text-green-600 bg-green-100';
@@ -148,9 +176,34 @@
 				{/if}
 			</div>
 
+			<!-- Quality Score Alert for documents needing attention -->
+			{#if (doc.status === 'needs_review' || doc.status === 'extraction_failed' || (doc.status === 'ready' && !doc.is_verified))}
+				<div class="mt-3 flex items-center gap-3">
+					<div class={`flex items-center gap-2 px-2.5 py-1 rounded-lg border ${
+						calculatedQuality.score === 0 
+							? 'bg-red-100 border-red-300 text-red-700' 
+							: calculatedQuality.level === 'low' 
+								? 'bg-red-50 border-red-200 text-red-600'
+								: calculatedQuality.level === 'medium'
+									? 'bg-amber-50 border-amber-200 text-amber-600'
+									: 'bg-green-50 border-green-200 text-green-600'
+					}`}>
+						<span class="text-xs font-bold">{calculatedQuality.score.toFixed(1)}/10</span>
+						{#if calculatedQuality.score === 0}
+							<span class="text-[10px] font-bold uppercase tracking-wide">NO TEXT</span>
+						{:else}
+							<span class="text-[10px] font-bold uppercase tracking-wide">{calculatedQuality.level}</span>
+						{/if}
+					</div>
+					{#if calculatedQuality.score === 0}
+						<span class="text-xs font-medium text-red-600">⚠️ Needs text extraction or manual input</span>
+					{/if}
+				</div>
+			{/if}
+
 			<!-- Error / Status Message -->
 			{#if doc.status !== 'ready'}
-				<p class="mt-3 text-xs font-medium text-gray-600 line-clamp-2">
+				<p class="mt-2 text-xs font-medium text-gray-600 line-clamp-2">
 					{#if doc.status === 'download_failed'}
 						Could not download from Clio. The original file may be unavailable.
 					{:else if doc.status === 'extraction_failed'}

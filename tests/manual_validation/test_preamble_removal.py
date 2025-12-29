@@ -19,9 +19,10 @@ def test_preamble_removal():
 
     try:
         # Import required modules
+        from openai import OpenAI
+
         from legal_portal.config.config_manager import ConfigManager
         from legal_portal.services.json_processing_service import JsonProcessingService
-        from openai import OpenAI
 
         print("✓ Modules imported successfully")
 

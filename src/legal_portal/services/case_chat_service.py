@@ -172,6 +172,7 @@ class CaseChatService:
         Returns:
         -------
             Formatted statute context string for the system prompt
+
         """
         try:
             # Get statute recommendations based on case context

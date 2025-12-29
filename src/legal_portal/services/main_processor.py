@@ -13,16 +13,15 @@ from legal_portal.config.default import get_settings
 from legal_portal.core.data_models import (
     AnalyzedDocument,
     CaseAnalysisResult,
-    DocumentStatus,
     DocumentSummaryStructured,
     IntakeAnalysis,
     Party,
+    ProcessedDocument,
     ProcessingError,
     ProcessingResult,
     QualityScore,
     SkippedDocument,
 )
-from legal_portal.core.document_processor import DocumentProcessor
 from legal_portal.services.corpus_coverage_service import CorpusCoverageService
 from legal_portal.services.document_quality_validator import DocumentQualityValidator
 from legal_portal.services.json_processing_service import JsonProcessingService
@@ -224,16 +223,15 @@ OUTPUT AS STRICT JSON:
 
 
 async def process_case_documents(
-    intake_form_path: str,
-    case_document_paths: List[str],
+    processed_intake: List[ProcessedDocument],
+    processed_case_docs: List[ProcessedDocument],
     case_info: dict,
-    review_data: dict,  # NEW: For key docs and legal issue
+    review_data: dict,
     progress_callback: Optional[Callable] = None,
-    jurisdiction: str = "Florida",  # Added jurisdiction parameter
-    path_to_id_map: Optional[Dict[str, str]] = None,  # NEW: Map path to doc ID
-    skipped_documents: Optional[List[SkippedDocument]] = None,  # NEW: Documents skipped during download
+    jurisdiction: str = "Florida",
+    skipped_documents: Optional[List[SkippedDocument]] = None,
 ) -> ProcessingResult:
-    """Decoupled document processing workflow."""
+    """Decoupled document processing workflow using already extracted text."""
     start_time = time.time()
     errors = []
 
@@ -241,101 +239,116 @@ async def process_case_documents(
         # 1. Initialize services
         logger.info("Initializing processing services...")
         openai_client_wrapper = OpenAIClient()
-        doc_processor = DocumentProcessor()
         json_processing_service = JsonProcessingService(client=openai_client_wrapper, config={})
 
         logger.info(f"Processing case for jurisdiction: {jurisdiction}")
 
         # 2. Validate inputs
-        if not intake_form_path:
+        if not processed_intake:
             raise ValueError("An intake form is required for the analysis.")
 
-        # Case documents are optional
-        if not case_document_paths:
-            logger.warning("No case documents provided. Analysis will be based on the intake form only.")
-
-        # 3. Process intake form from its path
-        logger.info(f"Processing intake form from path: {intake_form_path}")
-        intake_filename = os.path.basename(intake_form_path)
-        processed_intake = await doc_processor.process_documents_from_paths(
-            [intake_form_path],
-            intake_filenames=[intake_filename],
-            path_to_id_map=path_to_id_map,
-        )
-
-        if not processed_intake:
-            raise ValueError("Failed to process intake form.")
-
         intake_content = processed_intake[0].content
-        logger.info(f"Intake form processed: {len(intake_content)} characters")
+        logger.info(f"Intake form loaded: {len(intake_content)} characters")
 
-        # Log data context for quality assurance
-        if os.getenv("LOG_LEVEL") == "DEBUG":
-            logger.info(f"CONTEXT CHECK - Intake preview: {intake_content[:200]}...")
+        # 3. Combine documents for analysis
+        # Combine case docs and intake (intake is added to the list for summarization)
+        all_processed_docs = []
+        all_processed_docs.extend(processed_case_docs)
+        all_processed_docs.extend(processed_intake)
 
-        # 4. Process case documents (if any)
-        processed_case_docs = []
-        if case_document_paths:
-            if progress_callback:
-                await progress_callback("Extracting content from documents...", [], "document_extraction", 5)
+        if not all_processed_docs:
+            logger.warning("No documents provided for analysis.")
 
-            # Filter out the intake form path from case documents to avoid double-processing
-            unique_case_document_paths = [p for p in case_document_paths if p != intake_form_path]
-
-            if unique_case_document_paths:
-                processed_docs = await doc_processor.process_documents_from_paths(
-                    unique_case_document_paths,
-                    intake_filenames=[os.path.basename(intake_form_path)],
-                    progress_callback=progress_callback,
-                    path_to_id_map=path_to_id_map,
-                )
-                processed_case_docs.extend(processed_docs)
-
-            # Add the already processed intake form to the list of documents for analysis
-            processed_case_docs.extend(processed_intake)
-
-            if not processed_case_docs:
-                logger.warning("No case documents were successfully processed.")
-
-            if progress_callback:
-                await progress_callback(
-                    f"Extracted content from {len(processed_case_docs)} documents",
-                    [d.file_name for d in processed_case_docs],
-                    "extraction_complete",
-                    15,
-                )
+        if progress_callback:
+            await progress_callback(
+                f"Loaded {len(all_processed_docs)} documents for analysis",
+                [d.file_name for d in all_processed_docs],
+                "extraction_complete",
+                15,
+            )
 
         # 4.3 Deduplication
-        if processed_case_docs:
-            logger.info(f"Checking {len(processed_case_docs)} documents for duplicates...")
+        if all_processed_docs:
+            logger.info(f"Checking {len(all_processed_docs)} documents for duplicates...")
             if progress_callback:
                 await progress_callback("Deduplicating documents...")
 
-            processed_case_docs = await asyncio.to_thread(_deduplicate_documents, processed_case_docs)
-            logger.info(f"After deduplication: {len(processed_case_docs)} unique documents")
+            all_processed_docs = await asyncio.to_thread(_deduplicate_documents, all_processed_docs)
+            logger.info(f"After deduplication: {len(all_processed_docs)} unique documents")
 
-            await asyncio.to_thread(_detect_near_duplicates, processed_case_docs)
+            await asyncio.to_thread(_detect_near_duplicates, all_processed_docs)
 
         # 4.5. Quality validation on processed documents
         quality_validator = DocumentQualityValidator()
         quality_results = []
-        if processed_case_docs:
+        if all_processed_docs:
             logger.info("Running document quality validation...")
             if progress_callback:
                 await progress_callback("Validating document quality...")
 
-            for doc in processed_case_docs:
+            for doc in all_processed_docs:
                 res = await asyncio.to_thread(quality_validator.validate_document, doc)
                 quality_results.append(res)
 
-                # Update document status based on quality score
+                # Update document status based on quality score if not already high
                 if res.confidence_level == "low" or res.score < 5.0:
-                    doc.status = DocumentStatus.NEEDS_REVIEW
                     doc.extraction_quality = "low"
                 elif res.confidence_level == "medium" or res.score < 8.0:
-                    doc.extraction_quality = "medium"
+                    if doc.extraction_quality != "high":
+                        doc.extraction_quality = "medium"
                 else:
                     doc.extraction_quality = "high"
+
+        # Load settings early so we can use it for statute recommendations
+        settings = get_settings()
+
+        # Pass new context to summary generation
+        # Get statute recommendations early so we can use them in document summarization
+        statute_context = ""
+        if settings.suggest_statutes:
+            try:
+                recommendation_service = StatuteRecommendationService(jurisdiction=jurisdiction)
+                legal_issues = []
+                if review_data and "legal_issues" in review_data:
+                    legal_issues = review_data.get("legal_issues", [])
+                case_type = case_info.get("caseType") if case_info else None
+                recommendations = await asyncio.to_thread(
+                    recommendation_service.recommend_statutes,
+                    case_facts=intake_content[:2000],
+                    legal_issues=legal_issues,
+                    case_type=case_type,
+                    limit=5,
+                )
+                if recommendations:
+                    statute_context = recommendation_service.get_statute_context_for_prompt(
+                        recommendations, max_statutes=5
+                    )
+                    logger.info(
+                        f"Generated {len(recommendations)} statute recommendations for document analysis",
+                        extra={"recommendation_count": len(recommendations)},
+                    )
+            except Exception as e:
+                logger.warning(f"Failed to generate statute recommendations: {e}", exc_info=True)
+
+        if progress_callback:
+            await progress_callback(
+                "Analyzing extracted content...",
+                [d.file_name for d in all_processed_docs],
+                "document_analysis",
+                15,
+            )
+        structured_summaries, errors = await _generate_document_summaries(
+            intake_content,
+            all_processed_docs,
+            openai_client_wrapper,
+            json_processing_service,  # Pass the instance here
+            review_data,  # Pass through
+            progress_callback,
+            statute_context,  # NEW: Pass statute context
+            jurisdiction=jurisdiction,  # NEW: Pass jurisdiction
+        )
+
+        # ... rest of the function continues as before ...
 
         # Aggregate quality results and create context string
         aggregated_quality_report = _aggregate_quality_results(quality_results)

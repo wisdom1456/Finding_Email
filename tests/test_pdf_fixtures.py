@@ -13,6 +13,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+
 from legal_portal.core.data_models import DocumentType
 from legal_portal.services.file_processors.pdf_processor import process_pdf
 

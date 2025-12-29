@@ -8,6 +8,8 @@ import tempfile
 from typing import Any, Dict, List
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from pydantic import BaseModel
+
 from legal_portal.api.dependencies import get_current_user
 from legal_portal.core.document_processor import DocumentProcessor
 from legal_portal.utils.helpers import (
@@ -16,7 +18,6 @@ from legal_portal.utils.helpers import (
     identify_relevant_practice_areas_from_qa,
     parse_intake_form_qa_pairs,
 )
-from pydantic import BaseModel
 
 router = APIRouter(prefix="/intake", tags=["intake"])
 
@@ -140,7 +141,7 @@ async def process_intake_form(
         if temp_file_path and os.path.exists(temp_file_path):
             try:
                 os.unlink(temp_file_path)
-            except:
+            except Exception:
                 pass
 
 

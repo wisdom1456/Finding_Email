@@ -49,7 +49,7 @@ async def process_images_batch(image_files: List[Tuple[str, DocumentType, str]])
         encoded_images = []
         filenames = []
 
-        for file_path, doc_type, original_filename in image_files:
+        for file_path, _doc_type, original_filename in image_files:
             with open(file_path, "rb") as image_file:
                 base64_image = base64.b64encode(image_file.read()).decode("utf-8")
 

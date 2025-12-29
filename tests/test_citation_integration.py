@@ -1,6 +1,7 @@
 """End-to-end integration tests for citation tracking with corpus validation."""
 
 import pytest
+
 from legal_portal.core.data_models import AnalyzedDocument, CaseAnalysisResult, IntakeAnalysis
 from legal_portal.services.citation_tracking_service import CitationTrackingService
 from legal_portal.services.corpus_coverage_service import CorpusCoverageService

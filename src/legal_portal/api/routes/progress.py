@@ -1,9 +1,10 @@
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from sse_starlette.sse import EventSourceResponse
+
 from legal_portal.api.dependencies import get_supabase_client
 from legal_portal.services.progress_manager import ProgressManager
-from sse_starlette.sse import EventSourceResponse
 
 router = APIRouter(prefix="/progress", tags=["progress"])
 logger = logging.getLogger(__name__)

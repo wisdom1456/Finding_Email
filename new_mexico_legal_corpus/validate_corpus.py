@@ -64,6 +64,7 @@ class CorpusValidator:
         Returns
         -------
             Tuple of (success: bool, errors: List[str], warnings: List[str])
+
         """
         print("=" * 70)
         print("NEW MEXICO LEGAL CORPUS VALIDATION")

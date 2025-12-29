@@ -5,18 +5,18 @@ import os
 import uuid
 
 import streamlit as st
-from legal_portal.services.main_processor import process_case_documents
-from legal_portal.utils.helpers import handle_file_uploads
-
-# Simplified logging
-from legal_portal.utils.logging_config import setup_logging
-from legal_portal.utils.structured_logger import request_id_var, session_id_var, user_id_var
 
 from app.components.ui_components import (
     case_information_form,
     file_upload_section,
     results_display_section,
 )
+from legal_portal.services.main_processor import process_case_documents
+from legal_portal.utils.helpers import handle_file_uploads
+
+# Simplified logging
+from legal_portal.utils.logging_config import setup_logging
+from legal_portal.utils.structured_logger import request_id_var, session_id_var, user_id_var
 
 # Initialize logging
 setup_logging(app_name="legal-portal", level=os.getenv("LOG_LEVEL", "INFO"))

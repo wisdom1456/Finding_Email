@@ -14,6 +14,7 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
+
 from legal_portal.core.data_models import ServiceCost
 from legal_portal.utils.cost_exporter import CostExporter
 

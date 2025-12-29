@@ -17,6 +17,7 @@ class LetterFormatter:
         Returns
         -------
             (is_valid, list_of_issues)
+
         """
         issues = []
 
@@ -77,6 +78,7 @@ class LetterFormatter:
         Returns:
         -------
             Fixed letter text
+
         """
         text = letter_text
 
@@ -114,6 +116,7 @@ class LetterFormatter:
         Returns
         -------
             dict with validation results and suggestions
+
         """
         is_valid, issues = LetterFormatter.validate_format(letter_text)
 
@@ -188,6 +191,7 @@ def format_letter(letter_text: str, auto_fix: bool = False) -> Tuple[str, dict]:
     Returns:
     -------
         (formatted_text, report)
+
     """
     formatter = LetterFormatter()
 

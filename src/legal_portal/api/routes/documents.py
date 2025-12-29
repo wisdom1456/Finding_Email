@@ -6,10 +6,11 @@ from typing import List, Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel
+
 from legal_portal.api.dependencies import get_current_user, get_supabase_client, get_user_supabase_client
 from legal_portal.core.data_models import DocumentStatus, DocumentType
 from legal_portal.core.document_processor import DocumentProcessor, ValidationError
-from pydantic import BaseModel
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -26,6 +27,20 @@ class BulkDeleteResponse(BaseModel):
 
     deleted_count: int
     failed_ids: List[str]
+    errors: List[str]
+
+
+class BulkExtractRequest(BaseModel):
+    """Request model for bulk extraction operation."""
+
+    case_id: str
+
+
+class BulkExtractResponse(BaseModel):
+    """Response model for bulk extraction operation."""
+
+    extracted_count: int
+    failed_count: int
     errors: List[str]
 
 
@@ -528,6 +543,64 @@ async def bulk_delete_documents(
         failed_ids=failed_ids,
         errors=errors,
     )
+
+
+@router.post("/bulk-extract", response_model=BulkExtractResponse)
+async def bulk_extract_documents(
+    request: BulkExtractRequest,
+    user=Depends(get_current_user),
+    user_supabase=Depends(get_user_supabase_client),
+    service_supabase=Depends(get_supabase_client),
+):
+    """Extract text from all documents in a case that don't have text yet."""
+    try:
+        logger.info(f"Bulk extraction requested for case {request.case_id} by user {user['id']}")
+
+        # Get all documents for this case that need extraction
+        # We look for documents where extracted_text is null or empty, AND status is not skipped
+        response = (
+            user_supabase.table("documents")
+            .select("id, file_name, file_type, storage_path")
+            .eq("case_id", request.case_id)
+            .neq("status", DocumentStatus.SKIPPED)
+            .or_("extracted_text.is.null,extracted_text.eq.''")
+            .execute()
+        )
+
+        documents_to_process = response.data or []
+        logger.info(f"Found {len(documents_to_process)} documents to process")
+
+        extracted_count = 0
+        failed_count = 0
+        errors = []
+
+        for doc in documents_to_process:
+            try:
+                # Call trigger_extraction for each document
+                await trigger_extraction(
+                    document_id=doc["id"],
+                    user=user,
+                    user_supabase=user_supabase,
+                    service_supabase=service_supabase,
+                )
+                extracted_count += 1
+            except Exception as e:
+                failed_count += 1
+                error_msg = f"Failed to extract {doc['file_name']} ({doc['id']}): {str(e)}"
+                logger.error(error_msg)
+                errors.append(error_msg)
+
+        return BulkExtractResponse(
+            extracted_count=extracted_count,
+            failed_count=failed_count,
+            errors=errors,
+        )
+
+    except Exception as e:
+        logger.error(f"Bulk extraction failed: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Bulk extraction failed: {str(e)}"
+        ) from e
 
 
 @router.patch("/{document_id}/verify")

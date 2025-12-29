@@ -347,7 +347,7 @@ class JsonProcessingService:
         diag_logger: Optional[DiagnosticLogger] = None,
         original_documents: Optional[Dict[str, str]] = None, # NEW: Explicit raw content
     ) -> str:
-        """Generate findings letter using multi-stage analysis results."""
+        """Generate findings letter using multi-stage analysis results.
 
         This method uses structured analysis from MultiStageAnalyzer to generate
         an attorney-quality letter with adaptive structure based on case complexity.
@@ -600,10 +600,10 @@ class JsonProcessingService:
 9. Signature and disclaimer
 
 **PROHIBITED:**
-❌ Do NOT use formal section headers like "FACTUAL SUMMARY" or "RECOMMENDED ACTION"
-❌ Do NOT use bold issue titles in bullets (like "**Implied Warranty**:")
-❌ Do NOT use "Key Findings" intro
-❌ Do NOT use numbered sections for legal issues (2., 3., 4.)
+- Do NOT use formal section headers like "FACTUAL SUMMARY" or "RECOMMENDED ACTION"
+- Do NOT use bold issue titles in bullets (like "**Implied Warranty**:")
+- Do NOT use "Key Findings" intro
+- Do NOT use numbered sections for legal issues (2., 3., 4.)
 
 **REQUIRED - PLAIN LANGUAGE:**
 - Every legal term must be explained in plain English
@@ -623,16 +623,16 @@ Based on our review, we understand that [2-3 paragraphs of facts without formal 
 
 Here are the key points of our analysis:
 
-• Under Florida law, there's a protection called an "implied warranty"—this
+- Under Florida law, there's a protection called an "implied warranty" -- this
 means contractors are legally required to do competent work, even if your
 contract doesn't say so. In your case, [application]. What this means for
 you: [practical impact].
 
-• Before you can sue a contractor in Florida, you must follow a process under
+- Before you can sue a contractor in Florida, you must follow a process under
 Chapter 558. Think of it as a required 'cool-down period.' [explanation].
 For you, this means [practical impact].
 
-• You received a Notice to Owner—this is a warning that [explanation in
+- You received a Notice to Owner -- this is a warning that [explanation in
 plain English]. Here's why this matters: [consequence chain]. This is
 preventable if we act now.
 
@@ -640,8 +640,8 @@ Based on the above, a negotiated resolution would likely be your most
 efficient path forward. [Specific recommendations with timeline].
 
 If you decide to [action], here's what you need to do:
-• [Step with explanation of why]
-• [Step with explanation of why]
+- [Step with explanation of why]
+- [Step with explanation of why]
 
 Please let us know if you would like us to proceed with [action], or whether
 you would prefer that we first set a phone call to discuss.

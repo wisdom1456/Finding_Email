@@ -7,6 +7,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from fastapi.responses import JSONResponse
 from legal_portal.api.dependencies import get_current_user, get_supabase_client, get_user_supabase_client
+from legal_portal.core.data_models import DocumentStatus, DocumentType
 from legal_portal.core.document_processor import DocumentProcessor, ValidationError
 from pydantic import BaseModel
 
@@ -44,10 +45,18 @@ class DocumentResponse(BaseModel):
     file_name: str
     file_type: str
     file_size: int
-    storage_path: str
-    status: str
+    storage_path: Optional[str] = None
+    status: DocumentStatus
     created_at: datetime
     updated_at: datetime
+    is_verified: bool = False
+    is_flagged_as_junk: bool = False
+    extracted_text: Optional[str] = None
+    manual_text: Optional[str] = None
+    extraction_method: Optional[str] = None
+    extraction_quality: Optional[str] = None
+    extraction_error: Optional[str] = None
+    metadata: Optional[dict] = None
 
 
 @router.post("/upload", response_model=DocumentResponse, status_code=status.HTTP_201_CREATED)
@@ -86,7 +95,6 @@ async def upload_document(
     import os
     import tempfile
 
-    from legal_portal.core.data_models import DocumentType
     from legal_portal.services.file_processors.pdf_processor import process_pdf
 
     try:
@@ -206,6 +214,7 @@ async def upload_document(
                     "page_count": page_count,
                     "extracted_at": datetime.utcnow().isoformat() if extracted_text else None,
                     "updated_at": datetime.utcnow().isoformat(),
+                    "status": DocumentStatus.READY if extracted_text else DocumentStatus.EXTRACTION_FAILED,
                 }
 
                 user_supabase.table("documents").update(update_data).eq("id", document_id).execute()
@@ -223,6 +232,7 @@ async def upload_document(
                         "extraction_method": "failed",
                         "extraction_quality": "low",
                         "extraction_error": str(extract_err),
+                        "status": DocumentStatus.EXTRACTION_FAILED,
                         "updated_at": datetime.utcnow().isoformat(),
                     }
                 ).eq("id", document_id).execute()
@@ -565,6 +575,7 @@ async def verify_document(
         update_data = {
             "is_verified": request.is_verified,
             "is_flagged_as_junk": request.is_flagged_as_junk,
+            "status": DocumentStatus.READY if request.is_verified else DocumentStatus.NEEDS_REVIEW,
             "updated_at": datetime.utcnow().isoformat(),
         }
 
@@ -731,4 +742,144 @@ async def trigger_extraction(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error extracting text: {str(e)}",
+        ) from e
+
+
+@router.post("/{document_id}/replace", response_model=DocumentResponse)
+async def replace_document_file(
+    document_id: str,
+    file: UploadFile = File(...),
+    user=Depends(get_current_user),
+    user_supabase=Depends(get_user_supabase_client),
+    service_supabase=Depends(get_supabase_client),
+):
+    """Replace the file for an existing document record.
+
+    Useful for fixing documents with download errors or corruption.
+    """
+    import os
+    import tempfile
+
+    from legal_portal.services.file_processors.pdf_processor import process_pdf
+
+    try:
+        logger.info(f"Replacing file for document {document_id}")
+
+        # Get existing document with ownership verification
+        response = (
+            user_supabase.table("documents")
+            .select("id, case_id, cases!inner(user_id), storage_path")
+            .eq("id", document_id)
+            .execute()
+        )
+
+        if not response.data:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+
+        existing_doc = response.data[0]
+        case_id = existing_doc["case_id"]
+
+        # Verify ownership
+        if existing_doc["cases"]["user_id"] != user["id"]:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+
+        # Read new file content
+        file_content = await file.read()
+
+        # Delete old file from storage if it exists
+        if existing_doc.get("storage_path"):
+            try:
+                service_supabase.storage.from_("documents").remove([existing_doc["storage_path"]])
+            except Exception as e:
+                logger.warning(f"Failed to delete old file {existing_doc['storage_path']}: {e}")
+
+        # Use unified processor for validation and upload
+        processor = DocumentProcessor()
+        doc_record = await processor.process_and_upload(
+            file_content=file_content,
+            filename=file.filename,
+            user_id=user["id"],
+            case_id=case_id,
+            supabase_client=service_supabase,
+            is_intake_form=False,  # Can be adjusted if needed
+            content_type=file.content_type,
+        )
+
+        # Extract text from the new file
+        extracted_text = ""
+        extraction_method = ""
+        extraction_quality = "high"
+        ocr_provider = None
+        extraction_error = None
+        page_count = None
+
+        file_type = doc_record.get("file_type", file.content_type)
+        file_name = doc_record.get("file_name", file.filename)
+
+        if file_type in ["application/pdf", "pdf"] or file_name.lower().endswith(".pdf"):
+            with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
+                tmp.write(file_content)
+                tmp_path = tmp.name
+
+            try:
+                result = await process_pdf(
+                    file_path=tmp_path,
+                    document_type=DocumentType.CASE_DOCUMENT,
+                    original_filename=file_name,
+                )
+                extracted_text = result.content
+                extraction_method = result.extraction_method or "unknown"
+                extraction_quality = result.extraction_quality or "high"
+                ocr_provider = result.ocr_provider
+                extraction_error = result.extraction_error
+                page_count = result.page_count
+            finally:
+                os.unlink(tmp_path)
+        elif file_type in ["text/plain", "txt"] or file_name.lower().endswith(".txt"):
+            try:
+                extracted_text = file_content.decode("utf-8", errors="replace")
+                extraction_method = "direct_text"
+                extraction_quality = "high"
+            except Exception as e:
+                extraction_error = f"Failed to decode text: {e}"
+                extraction_method = "failed"
+                extraction_quality = "low"
+
+        # Update existing document record
+        update_data = {
+            "file_name": file_name,
+            "file_type": file_type,
+            "file_size": doc_record["file_size"],
+            "storage_path": doc_record["storage_path"],
+            "status": DocumentStatus.READY if extracted_text else DocumentStatus.EXTRACTION_FAILED,
+            "extracted_text": extracted_text if extracted_text else None,
+            "extraction_method": extraction_method,
+            "extraction_quality": extraction_quality,
+            "ocr_provider": ocr_provider,
+            "extraction_error": extraction_error,
+            "page_count": page_count,
+            "metadata": {**existing_doc.get("metadata", {}), **doc_record["metadata"]},
+            "updated_at": datetime.utcnow().isoformat(),
+        }
+
+        update_response = user_supabase.table("documents").update(update_data).eq("id", document_id).execute()
+
+        if not update_response.data:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to update document record"
+            )
+
+        return update_response.data[0]
+
+    except HTTPException:
+        raise
+    except ValidationError as e:
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={"code": e.error_code, "detail": str(e)},
+        )
+    except Exception as e:
+        logger.error(f"Error in replace_document_file: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error replacing document: {str(e)}"
         ) from e

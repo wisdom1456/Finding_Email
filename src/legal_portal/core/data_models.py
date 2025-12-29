@@ -23,6 +23,18 @@ class DocumentType(str, Enum):
     OTHER = "other"
 
 
+class DocumentStatus(str, Enum):
+    """Refined status for document extraction and verification."""
+
+    READY = "ready"  # Extracted successfully, high quality
+    NEEDS_REVIEW = "needs_review"  # Extracted but low quality or needs attention
+    EXTRACTION_FAILED = "extraction_failed"  # File exists, but text extraction failed
+    DOWNLOAD_FAILED = "download_failed"  # File never successfully downloaded from source
+    CORRUPTED = "corrupted"  # File exists but appears damaged or unreadable
+    SKIPPED = "skipped"  # Explicitly excluded from analysis by user or system
+    PENDING = "pending"  # Waiting for processing
+
+
 class FileType(str, Enum):
     """Supported file types for document processing."""
 
@@ -105,6 +117,17 @@ class ProcessedDocument(BaseModel):
     extraction_error: Optional[str] = None  # NEW: Record extraction errors
     ocr_provider: Optional[str] = None  # NEW: Record which OCR provider was used
     extracted_at: datetime = Field(default_factory=datetime.now)
+    status: DocumentStatus = DocumentStatus.READY
+
+
+class SkippedDocument(BaseModel):
+    """Represents a document that was skipped during analysis."""
+
+    document_id: str
+    file_name: str
+    reason: str
+    error_type: str  # e.g., "DOWNLOAD_FAILED", "CORRUPTED", "EMPTY"
+    recommendation: str
 
 
 class ProcessingError(BaseModel):
@@ -378,6 +401,9 @@ class ProcessingResult(BaseModel):
     processed_documents: List[ProcessedDocument] = Field(
         default_factory=list
     )  # NEW: For persisting extraction results
+    skipped_documents: List[SkippedDocument] = Field(
+        default_factory=list
+    )  # NEW: Documents auto-skipped during analysis
 
     # Metadata
     status: str = Field(description="Processing status: 'completed', 'partial', or 'failed'")

@@ -223,13 +223,16 @@ class DocumentProcessor:
                 "original_filename": original_name,
             }
 
+            # Import DocumentStatus
+            from legal_portal.core.data_models import DocumentStatus
+
             doc_record = {
                 "case_id": case_id,
                 "file_name": original_name,
                 "file_type": final_content_type,
                 "file_size": file_size,
                 "storage_path": storage_path,
-                "status": "uploaded",
+                "status": DocumentStatus.READY if extracted_text else DocumentStatus.PENDING,
                 "metadata": metadata,
             }
 

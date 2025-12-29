@@ -21,8 +21,10 @@ from legal_portal.api.rate_limiter import limiter
 from legal_portal.core.data_models import (
     ChatMessageRequest,
     ChatMessageResponse,
+    DocumentStatus,
     LetterType,
     ProcessingResult,
+    SkippedDocument,
 )
 from legal_portal.services.case_chat_service import CaseChatService
 from legal_portal.services.demand_letter_service import DemandLetterService
@@ -324,19 +326,50 @@ class LetterGenerationResponse(BaseModel):
 
 def _download_and_extract_documents(
     case_id: str, documents: List[Dict[str, Any]], supabase, temp_dir: str
-) -> tuple[Optional[str], List[str], Dict[str, str]]:
+) -> tuple[Optional[str], List[str], Dict[str, str], List[SkippedDocument]]:
     """Download and extract documents synchronously."""
     file_paths = []
     intake_form_path = None
     path_to_id_map = {}
+    skipped_documents = []
 
     for doc in documents:
+        # Check status first - skip critical failures
+        status = doc.get("status")
+        if status in [DocumentStatus.DOWNLOAD_FAILED, DocumentStatus.CORRUPTED, DocumentStatus.SKIPPED]:
+            logger.info(f"Auto-skipping document with status {status}: {doc['file_name']}")
+            skipped_documents.append(
+                SkippedDocument(
+                    document_id=doc["id"],
+                    file_name=doc["file_name"],
+                    reason=f"Status is {status}",
+                    error_type=status or "UNKNOWN",
+                    recommendation="Re-upload or fix the document in the verification dashboard.",
+                )
+            )
+            continue
+
         # Skip documents flagged as junk
         if doc.get("is_flagged_as_junk"):
             logger.info(f"Skipping junk-flagged document: {doc['file_name']}")
             continue
 
-        storage_path = doc["storage_path"]
+        storage_path = doc.get("storage_path")
+
+        # Check if we have neither text nor a file
+        text_content = doc.get("manual_text") or doc.get("extracted_text")
+        if not text_content and not storage_path:
+            logger.warning(f"Skipping document with no content and no storage path: {doc['file_name']}")
+            skipped_documents.append(
+                SkippedDocument(
+                    document_id=doc["id"],
+                    file_name=doc["file_name"],
+                    reason="No extracted text and no storage file found.",
+                    error_type="MISSING_CONTENT",
+                    recommendation="Please re-upload this document.",
+                )
+            )
+            continue
         # Robust sanitization to avoid filesystem issues with special characters (spaces, parentheses, etc)
         safe_filename = re.sub(r"[^a-zA-Z0-9._-]", "_", doc["file_name"])
         # Ensure we don't have too many underscores and keep the extension
@@ -453,6 +486,15 @@ def _download_and_extract_documents(
 
             if not download_success:
                 logger.error(f"Failed to download {doc['file_name']} after {max_retries} attempts")
+                skipped_documents.append(
+                    SkippedDocument(
+                        document_id=doc["id"],
+                        file_name=doc["file_name"],
+                        reason=f"Failed to download after {max_retries} attempts.",
+                        error_type="DOWNLOAD_FAILED",
+                        recommendation="Please try re-uploading this document.",
+                    )
+                )
                 continue  # Skip this document if all download attempts fail
 
         # Check if this is a zip file - extract it
@@ -572,7 +614,7 @@ def _download_and_extract_documents(
         else:
             intake_form_path = file_paths.pop(0)
 
-    return intake_form_path, file_paths, path_to_id_map
+    return intake_form_path, file_paths, path_to_id_map, skipped_documents
 
 
 async def process_case_background(case_id: str, analysis_id: str, supabase, provider: str = "openai"):
@@ -633,7 +675,7 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
         # Download documents to temp directory (already created above)
 
         # Download and prepare files in threadpool to avoid blocking event loop
-        intake_form_path, file_paths, path_to_id_map = await run_in_threadpool(
+        intake_form_path, file_paths, path_to_id_map, skipped_documents = await run_in_threadpool(
             _download_and_extract_documents, case_id, documents, supabase, temp_dir
         )
 
@@ -710,6 +752,7 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
             progress_callback=progress_callback,
             jurisdiction=jurisdiction,  # Pass jurisdiction to main processor
             path_to_id_map=path_to_id_map,  # Pass mapping for document linking
+            skipped_documents=skipped_documents,
         )
 
         # Persist document extraction results to the database
@@ -727,13 +770,24 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
                             "page_count": doc.page_count,
                             "ocr_provider": doc.ocr_provider,
                             "extraction_error": doc.extraction_error,
-                            "status": "processed" if doc.content.strip() else "error",
+                            "status": (
+                                DocumentStatus.READY
+                                if doc.content.strip()
+                                else DocumentStatus.EXTRACTION_FAILED
+                            ),
                         }
                         supabase.table("documents").update(update_data).eq("id", doc.document_id).execute()
                     except Exception as db_err:
                         logger.warning(
                             f"Failed to persist extraction results for document {doc.document_id}: {db_err}"
                         )
+
+        # Store skipped documents info in analysis_results artifacts
+        if result.skipped_documents:
+            logger.info(f"Adding {len(result.skipped_documents)} skipped documents to analysis artifacts")
+            current_artifacts = result.artifacts or {}
+            current_artifacts["skipped_documents"] = [s.model_dump() for s in result.skipped_documents]
+            result.artifacts = current_artifacts
 
         logger.info(f"Processing completed with status: {result.status}")
 

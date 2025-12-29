@@ -40,7 +40,7 @@
 		}
 
 		// Check word count
-		const wordCount = text.split(/\s+/).filter(w => w.length > 0).length;
+		const wordCount = text.split(/\s+/).filter((w: string) => w.length > 0).length;
 		if (wordCount < 10) {
 			score -= 3;
 			issues.push(`Only ${wordCount} words`);
@@ -344,7 +344,7 @@
 			<div class="text-sm text-gray-500">
 				{editedText.length.toLocaleString()} characters
 				•
-				{editedText.split(/\s+/).filter(w => w.length > 0).length.toLocaleString()} words
+				{editedText.split(/\s+/).filter((w: string) => w.length > 0).length.toLocaleString()} words
 			</div>
 			<div class="flex items-center gap-3">
 				<button

@@ -580,14 +580,16 @@ async def import_clio_data(
                         "file_name": doc_name,
                         "file_type": doc.get("content_type") or "application/octet-stream",
                         "file_size": doc.get("size", 0),
-                        "storage_path": f"clio/{case_id}/doc_{doc_id}",
-                        "status": "uploaded",
+                        "storage_path": None,  # Set to None instead of fake path
+                        "status": "download_failed",
                         "extracted_text": None,
                         "metadata": {
                             "clio_source": True,
                             "clio_type": "document",
                             "clio_id": doc_id,
                             "clio_filename": doc_name,
+                            "error": "No download URL provided by Clio",
+                            "error_type": "CLIO_NO_URL",
                         },
                     }
                     supabase.table("documents").insert(doc_data).execute()
@@ -689,8 +691,8 @@ async def import_clio_data(
                         "file_name": doc.get("name", "Untitled Document"),
                         "file_type": doc.get("content_type") or "application/octet-stream",
                         "file_size": doc.get("size", 0),
-                        "storage_path": f"clio/{case_id}/doc_{doc['id']}_failed",
-                        "status": "error",
+                        "storage_path": None,  # Set to None instead of fake path
+                        "status": "download_failed",
                         "extracted_text": None,
                         "metadata": {
                             "clio_source": True,
@@ -699,6 +701,7 @@ async def import_clio_data(
                             "clio_url": doc.get("latest_document_version", {}).get("url"),
                             "clio_filename": doc.get("name"),
                             "error": str(e),
+                            "error_type": "DOWNLOAD_FAILED",
                         },
                     }
                     supabase.table("documents").insert(doc_data).execute()

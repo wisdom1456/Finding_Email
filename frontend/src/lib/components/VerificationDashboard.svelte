@@ -2,12 +2,31 @@
 	import { getApiUrl } from '$lib/config';
 	import { supabase } from '$lib/supabase';
 	import { toastStore } from '$lib/stores/toastStore';
+	import { slide, fade } from 'svelte/transition';
+	import { 
+		Search, 
+		Filter, 
+		Trash2, 
+		CheckCircle2, 
+		AlertTriangle, 
+		XCircle, 
+		RefreshCw,
+		MoreHorizontal,
+		CheckSquare,
+		Square,
+		Inbox,
+		Zap
+	} from 'lucide-svelte';
+	
 	import AsyncButton from './ui/AsyncButton.svelte';
 	import CorrectionModal from './CorrectionModal.svelte';
+	import RecoveryModal from './RecoveryModal.svelte';
+	import DocumentCard from './DocumentCard.svelte';
+	import DocumentStatusBanner from './DocumentStatusBanner.svelte';
 
 	// Props
 	let {
-		documents,
+		documents = [],
 		caseId,
 		onDocumentsUpdated,
 	}: {
@@ -19,155 +38,96 @@
 	// State
 	let selectedDocIds = $state<Set<string>>(new Set());
 	let bulkActionLoading = $state(false);
-	let viewMode = $state<'all' | 'needs-attention' | 'ready'>('all');
+	let filterQuery = $state('');
 	let editingDocument = $state<any>(null);
+	let recoveryDocument = $state<any>(null);
+	let viewMode = $state<'triage' | 'all'>('triage');
 
-	// Junk detection patterns
-	const JUNK_PATTERNS = [
-		/instructions?/i,
-		/needed.*to.*proceed/i,
-		/blank.*form/i,
-		/empty/i,
-		/template/i,
-		/attaching.*document/i,
-		/documents.*needed/i,
-	];
-
-	// Derived: Categorize documents
-	let categorizedDocs = $derived.by(() => {
-		const needsAttention: any[] = [];
-		const ready: any[] = [];
-		const junkCandidates: any[] = [];
+	// Triage Groups
+	let triageGroups = $derived.by(() => {
+		const groups = {
+			critical: [] as any[], // download_failed, corrupted
+			needs_attention: [] as any[], // extraction_failed, needs_review (low quality)
+			ready: [] as any[] // ready (high/medium quality)
+		};
 
 		for (const doc of documents) {
-			const quality = getQualityLevel(doc);
-			const isJunk = isLikelyJunk(doc);
-
-			if (doc.is_flagged_as_junk) {
-				junkCandidates.push({ ...doc, quality, isJunk: true });
-			} else if (quality === 'low' || isJunk) {
-				needsAttention.push({ ...doc, quality, isJunk });
+			const status = doc.status;
+			if (status === 'download_failed' || status === 'corrupted') {
+				groups.critical.push(doc);
+			} else if (status === 'extraction_failed' || status === 'needs_review' || (status === 'ready' && !doc.is_verified)) {
+				groups.needs_attention.push(doc);
 			} else {
-				ready.push({ ...doc, quality, isJunk: false });
+				groups.ready.push(doc);
 			}
 		}
 
-		return { needsAttention, ready, junkCandidates };
+		return groups;
 	});
 
-	// Derived: Visible documents based on filter
-	let visibleDocs = $derived.by(() => {
-		switch (viewMode) {
-			case 'needs-attention':
-				return categorizedDocs.needsAttention;
-			case 'ready':
-				return categorizedDocs.ready;
-			default:
-				return documents.map(doc => ({
-					...doc,
-					quality: getQualityLevel(doc),
-					isJunk: isLikelyJunk(doc)
-				}));
-		}
+	// Filtered list for "All" view
+	let filteredDocs = $derived.by(() => {
+		if (!filterQuery) return documents;
+		const query = filterQuery.toLowerCase();
+		return documents.filter(doc => 
+			doc.file_name.toLowerCase().includes(query) || 
+			doc.status.toLowerCase().includes(query)
+		);
 	});
 
-	// Derived: Stats
-	let stats = $derived({
-		total: documents.length,
-		needsAttention: categorizedDocs.needsAttention.length,
-		ready: categorizedDocs.ready.length,
-		junk: categorizedDocs.junkCandidates.length,
-		selected: selectedDocIds.size,
+	// Stats for Banner
+	let stats = $derived.by(() => {
+		const counts = { ready: 0, review: 0, failed: 0, missing: 0 };
+		for (const doc of documents) {
+			if (doc.status === 'ready') counts.ready++;
+			else if (doc.status === 'needs_review') counts.review++;
+			else if (doc.status === 'extraction_failed') counts.failed++;
+			else if (doc.status === 'download_failed' || doc.status === 'corrupted') counts.missing++;
+		}
+		return counts;
 	});
 
-	function getQualityLevel(doc: any): 'high' | 'medium' | 'low' | 'unknown' {
-		if (!doc.extracted_text || doc.extracted_text.trim().length === 0) {
-			return 'low';
-		}
-
-		const textLength = doc.extracted_text.trim().length;
-		const quality = doc.extraction_quality?.toLowerCase();
-
-		if (quality === 'high' || textLength > 500) {
-			return 'high';
-		} else if (quality === 'medium' || textLength > 100) {
-			return 'medium';
-		} else if (quality === 'low' || textLength < 100) {
-			return 'low';
-		}
-
-		return 'unknown';
-	}
-
-	function isLikelyJunk(doc: any): boolean {
-		const fileName = doc.file_name || '';
-		
-		// Check filename patterns
-		if (JUNK_PATTERNS.some(pattern => pattern.test(fileName))) {
-			return true;
-		}
-
-		// Check for empty or near-empty content with large file size
-		if (doc.extracted_text) {
-			const textLength = doc.extracted_text.trim().length;
-			const fileSize = doc.file_size || 0;
-			
-			// Large file with minimal text = likely blank form/image
-			if (fileSize > 100000 && textLength < 50) {
-				return true;
-			}
-		}
-
-		return false;
-	}
-
-	function getQualityColor(quality: string): string {
-		switch (quality) {
-			case 'high':
-				return 'bg-green-100 text-green-800 border-green-300';
-			case 'medium':
-				return 'bg-yellow-100 text-yellow-800 border-yellow-300';
-			case 'low':
-				return 'bg-red-100 text-red-800 border-red-300';
-			default:
-				return 'bg-gray-100 text-gray-600 border-gray-300';
-		}
-	}
-
+	// Selection Handlers
 	function toggleSelection(docId: string) {
 		const newSet = new Set(selectedDocIds);
-		if (newSet.has(docId)) {
-			newSet.delete(docId);
-		} else {
-			newSet.add(docId);
-		}
+		if (newSet.has(docId)) newSet.delete(docId);
+		else newSet.add(docId);
 		selectedDocIds = newSet;
 	}
 
-	function selectAll() {
-		selectedDocIds = new Set(visibleDocs.map(d => d.id));
+	function toggleAll() {
+		if (selectedDocIds.size === documents.length) {
+			selectedDocIds = new Set();
+		} else {
+			selectedDocIds = new Set(documents.map(d => d.id));
+		}
 	}
 
-	function clearSelection() {
-		selectedDocIds = new Set();
+	// Document Actions
+	async function handleVerify(docId: string) {
+		try {
+			const { data: { session } } = await supabase.auth.getSession();
+			if (!session) throw new Error('Not authenticated');
+
+			const response = await fetch(`${getApiUrl()}/api/documents/${docId}/verify`, {
+				method: 'PATCH',
+				headers: {
+					'Content-Type': 'application/json',
+					Authorization: `Bearer ${session.access_token}`,
+				},
+				body: JSON.stringify({ is_verified: true }),
+			});
+
+			if (!response.ok) throw new Error('Failed to verify document');
+			toastStore.success('Document verified');
+			await onDocumentsUpdated();
+		} catch (error: any) {
+			toastStore.error(error.message);
+		}
 	}
 
-	function selectJunkCandidates() {
-		const junkIds = documents
-			.filter(doc => isLikelyJunk(doc) && !doc.is_flagged_as_junk)
-			.map(doc => doc.id);
-		selectedDocIds = new Set(junkIds);
-	}
-
-	async function bulkDelete() {
-		if (selectedDocIds.size === 0) return;
-
-		const confirmed = confirm(
-			`Are you sure you want to delete ${selectedDocIds.size} document(s)? This action cannot be undone.`
-		);
-		if (!confirmed) return;
-
-		bulkActionLoading = true;
+	async function handleDelete(docId: string) {
+		if (!confirm('Are you sure you want to delete this document?')) return;
 
 		try {
 			const { data: { session } } = await supabase.auth.getSession();
@@ -179,348 +139,311 @@
 					'Content-Type': 'application/json',
 					Authorization: `Bearer ${session.access_token}`,
 				},
-				body: JSON.stringify({
-					document_ids: Array.from(selectedDocIds),
-				}),
+				body: JSON.stringify({ document_ids: [docId] }),
 			});
 
-			if (!response.ok) {
-				const error = await response.json();
-				throw new Error(error.detail || 'Failed to delete documents');
-			}
-
-			const result = await response.json();
-			
-			if (result.deleted_count > 0) {
-				toastStore.success(`Deleted ${result.deleted_count} document(s)`);
-			}
-			if (result.failed_ids.length > 0) {
-				toastStore.error(`Failed to delete ${result.failed_ids.length} document(s)`);
-			}
-
-			selectedDocIds = new Set();
+			if (!response.ok) throw new Error('Failed to delete document');
+			toastStore.success('Document deleted');
 			await onDocumentsUpdated();
 		} catch (error: any) {
-			toastStore.error(error.message || 'Failed to delete documents');
-		} finally {
-			bulkActionLoading = false;
+			toastStore.error(error.message);
 		}
 	}
 
-	async function bulkMarkAsJunk() {
-		if (selectedDocIds.size === 0) return;
-
-		bulkActionLoading = true;
-
+	async function handleReExtract(docId: string) {
+		toastStore.info('Re-extracting with Vision OCR...');
 		try {
 			const { data: { session } } = await supabase.auth.getSession();
 			if (!session) throw new Error('Not authenticated');
 
-			let successCount = 0;
-			for (const docId of selectedDocIds) {
-				const response = await fetch(`${getApiUrl()}/api/documents/${docId}/verify`, {
-					method: 'PATCH',
-					headers: {
-						'Content-Type': 'application/json',
-						Authorization: `Bearer ${session.access_token}`,
-					},
-					body: JSON.stringify({
-						is_flagged_as_junk: true,
-						is_verified: false,
-					}),
-				});
-
-				if (response.ok) {
-					successCount++;
+			const response = await fetch(`${getApiUrl()}/api/documents/${docId}/extract`, {
+				method: 'POST',
+				headers: {
+					Authorization: `Bearer ${session.access_token}`,
 				}
-			}
+			});
 
-			if (successCount > 0) {
-				toastStore.success(`Marked ${successCount} document(s) as junk`);
-			}
-
-			selectedDocIds = new Set();
+			if (!response.ok) throw new Error('Extraction failed');
+			toastStore.success('Extraction complete');
 			await onDocumentsUpdated();
 		} catch (error: any) {
-			toastStore.error(error.message || 'Failed to mark documents as junk');
-		} finally {
-			bulkActionLoading = false;
+			toastStore.error(error.message);
 		}
 	}
 
+	async function handleSkip(docId: string) {
+		try {
+			const { data: { session } } = await supabase.auth.getSession();
+			if (!session) throw new Error('Not authenticated');
+
+			const response = await fetch(`${getApiUrl()}/api/documents/${docId}/verify`, {
+				method: 'PATCH',
+				headers: {
+					'Content-Type': 'application/json',
+					Authorization: `Bearer ${session.access_token}`,
+				},
+				body: JSON.stringify({ is_verified: false, is_flagged_as_junk: true }),
+			});
+
+			if (!response.ok) throw new Error('Failed to skip document');
+			toastStore.success('Document skipped');
+			await onDocumentsUpdated();
+		} catch (error: any) {
+			toastStore.error(error.message);
+		}
+	}
+
+	// Bulk Actions
 	async function bulkVerify() {
 		if (selectedDocIds.size === 0) return;
-
 		bulkActionLoading = true;
-
 		try {
 			const { data: { session } } = await supabase.auth.getSession();
 			if (!session) throw new Error('Not authenticated');
 
-			let successCount = 0;
-			for (const docId of selectedDocIds) {
-				const response = await fetch(`${getApiUrl()}/api/documents/${docId}/verify`, {
+			for (const id of selectedDocIds) {
+				await fetch(`${getApiUrl()}/api/documents/${id}/verify`, {
 					method: 'PATCH',
 					headers: {
 						'Content-Type': 'application/json',
 						Authorization: `Bearer ${session.access_token}`,
 					},
-					body: JSON.stringify({
-						is_verified: true,
-						is_flagged_as_junk: false,
-					}),
+					body: JSON.stringify({ is_verified: true }),
 				});
-
-				if (response.ok) {
-					successCount++;
-				}
 			}
-
-			if (successCount > 0) {
-				toastStore.success(`Verified ${successCount} document(s)`);
-			}
-
+			toastStore.success(`Verified ${selectedDocIds.size} documents`);
 			selectedDocIds = new Set();
 			await onDocumentsUpdated();
-		} catch (error: any) {
-			toastStore.error(error.message || 'Failed to verify documents');
 		} finally {
 			bulkActionLoading = false;
 		}
 	}
 
-	function formatFileSize(bytes: number): string {
-		if (bytes < 1024) return bytes + ' B';
-		if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
-		return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+	async function bulkDelete() {
+		if (selectedDocIds.size === 0 || !confirm(`Delete ${selectedDocIds.size} documents?`)) return;
+		bulkActionLoading = true;
+		try {
+			const { data: { session } } = await supabase.auth.getSession();
+			if (!session) throw new Error('Not authenticated');
+
+			await fetch(`${getApiUrl()}/api/documents/bulk-delete`, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					Authorization: `Bearer ${session.access_token}`,
+				},
+				body: JSON.stringify({ document_ids: Array.from(selectedDocIds) }),
+			});
+			toastStore.success(`Deleted ${selectedDocIds.size} documents`);
+			selectedDocIds = new Set();
+			await onDocumentsUpdated();
+		} finally {
+			bulkActionLoading = false;
+		}
 	}
 </script>
 
-<div class="space-y-4">
-	<!-- Stats Bar -->
-	<div class="flex items-center justify-between bg-white rounded-lg p-4 border border-gray-200">
-		<div class="flex items-center gap-6">
-			<div class="text-center">
-				<div class="text-2xl font-bold text-gray-900">{stats.total}</div>
-				<div class="text-xs text-gray-500">Total</div>
+<div class="space-y-8" id="verification">
+	<!-- Summary Header -->
+	<div class="flex flex-col sm:flex-row sm:items-end justify-between gap-6">
+		<div class="flex-1">
+			<h2 class="text-3xl font-black text-gray-900 tracking-tight flex items-center gap-3">
+				<div class="p-2 rounded-xl bg-accent/10 text-accent">
+					<Inbox class="w-8 h-8" />
+				</div>
+				Verification Hub
+			</h2>
+			<p class="mt-2 text-gray-500 font-medium text-lg max-w-2xl">
+				Review and confirm extracted data from {documents.length} documents before running the final legal analysis.
+			</p>
+		</div>
+
+		<div class="flex items-center gap-3 p-1.5 bg-gray-100 rounded-xl">
+			<button 
+				onclick={() => viewMode = 'triage'}
+				class={`px-4 py-2 text-sm font-bold rounded-lg transition-all ${viewMode === 'triage' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+			>
+				Triage View
+			</button>
+			<button 
+				onclick={() => viewMode = 'all'}
+				class={`px-4 py-2 text-sm font-bold rounded-lg transition-all ${viewMode === 'all' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+			>
+				All Documents
+			</button>
+		</div>
+	</div>
+
+	<!-- Status Banner -->
+	<DocumentStatusBanner {stats} />
+
+	<!-- Search & Bulk Actions -->
+	<div class="sticky top-4 z-30 flex flex-col md:flex-row items-center gap-4 bg-white/80 backdrop-blur-md p-4 rounded-2xl border border-gray-200 shadow-xl shadow-black/5">
+		<div class="relative flex-1 w-full">
+			<Search class="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+			<input 
+				type="text" 
+				bind:value={filterQuery}
+				placeholder="Search documents by name or status..."
+				class="w-full pl-12 pr-4 py-3 bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-accent font-medium text-sm"
+			/>
+		</div>
+
+		{#if selectedDocIds.size > 0}
+			<div transition:fade class="flex items-center gap-3 w-full md:w-auto">
+				<span class="text-sm font-black text-accent whitespace-nowrap bg-accent/10 px-3 py-1.5 rounded-lg">
+					{selectedDocIds.size} Selected
+				</span>
+				<div class="flex gap-2 w-full md:w-auto">
+					<button 
+						onclick={bulkVerify}
+						disabled={bulkActionLoading}
+						class="flex-1 md:flex-none inline-flex items-center justify-center px-4 py-2.5 text-sm font-black rounded-xl bg-accent text-white hover:bg-accent-hover transition-all shadow-lg shadow-accent/20"
+					>
+						Verify All
+					</button>
+					<button 
+						onclick={bulkDelete}
+						disabled={bulkActionLoading}
+						class="flex-1 md:flex-none inline-flex items-center justify-center px-4 py-2.5 text-sm font-black rounded-xl bg-red-50 text-red-600 border border-red-100 hover:bg-red-100 transition-all"
+					>
+						Delete
+					</button>
+				</div>
 			</div>
-			<div class="h-8 w-px bg-gray-200"></div>
+		{:else}
 			<button 
-				onclick={() => viewMode = 'needs-attention'}
-				class="text-center px-3 py-1 rounded-md transition-colors {viewMode === 'needs-attention' ? 'bg-red-100' : 'hover:bg-gray-100'}"
+				onclick={toggleAll}
+				class="hidden md:flex items-center gap-2 px-4 py-2.5 text-sm font-bold text-gray-600 hover:bg-gray-50 rounded-xl transition-colors"
 			>
-				<div class="text-xl font-bold {stats.needsAttention > 0 ? 'text-red-600' : 'text-gray-400'}">{stats.needsAttention}</div>
-				<div class="text-xs {viewMode === 'needs-attention' ? 'text-red-600 font-medium' : 'text-gray-500'}">Needs Attention</div>
+				<CheckSquare class="w-5 h-5" />
+				Select All
 			</button>
-			<button 
-				onclick={() => viewMode = 'ready'}
-				class="text-center px-3 py-1 rounded-md transition-colors {viewMode === 'ready' ? 'bg-green-100' : 'hover:bg-gray-100'}"
-			>
-				<div class="text-xl font-bold text-green-600">{stats.ready}</div>
-				<div class="text-xs {viewMode === 'ready' ? 'text-green-600 font-medium' : 'text-gray-500'}">Ready</div>
-			</button>
-			{#if stats.junk > 0}
-				<div class="text-center px-3 py-1 bg-gray-100 rounded-md">
-					<div class="text-xl font-bold text-gray-400">{stats.junk}</div>
-					<div class="text-xs text-gray-500">Flagged Junk</div>
+		{/if}
+	</div>
+
+	<!-- Main Content Area -->
+	{#if viewMode === 'triage'}
+		<div class="space-y-12">
+			<!-- Critical Issues (Missing files, etc) -->
+			{#if triageGroups.critical.length > 0}
+				<section>
+					<div class="flex items-center gap-3 mb-6">
+						<div class="p-1.5 rounded-lg bg-red-100 text-red-600">
+							<AlertTriangle class="w-5 h-5" />
+						</div>
+						<h3 class="text-xl font-black text-gray-900 uppercase tracking-tight">Needs Immediate Attention</h3>
+						<span class="ml-auto text-xs font-bold text-red-600 bg-red-50 px-2 py-1 rounded-full border border-red-100">
+							{triageGroups.critical.length} Critical
+						</span>
+					</div>
+					<div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+						{#each triageGroups.critical as doc (doc.id)}
+							<DocumentCard 
+								{doc}
+								onReplace={() => recoveryDocument = doc}
+								onSkip={() => handleSkip(doc.id)}
+								onDelete={() => handleDelete(doc.id)}
+							/>
+						{/each}
+					</div>
+				</section>
+			{/if}
+
+			<!-- Needs Attention (Extraction failed, low quality) -->
+			{#if triageGroups.needs_attention.length > 0}
+				<section>
+					<div class="flex items-center gap-3 mb-6">
+						<div class="p-1.5 rounded-lg bg-amber-100 text-amber-600">
+							<Zap class="w-5 h-5" />
+						</div>
+						<h3 class="text-xl font-black text-gray-900 uppercase tracking-tight">Pending Review</h3>
+						<span class="ml-auto text-xs font-bold text-amber-600 bg-amber-50 px-2 py-1 rounded-full border border-amber-100">
+							{triageGroups.needs_attention.length} Pending
+						</span>
+					</div>
+					<div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+						{#each triageGroups.needs_attention as doc (doc.id)}
+							<DocumentCard 
+								{doc}
+								onEdit={() => editingDocument = doc}
+								onReExtract={() => handleReExtract(doc.id)}
+								onVerify={() => handleVerify(doc.id)}
+								onSkip={() => handleSkip(doc.id)}
+								onDelete={() => handleDelete(doc.id)}
+							/>
+						{/each}
+					</div>
+				</section>
+			{/if}
+
+			<!-- Ready for Analysis -->
+			{#if triageGroups.ready.length > 0}
+				<section>
+					<div class="flex items-center gap-3 mb-6">
+						<div class="p-1.5 rounded-lg bg-green-100 text-green-600">
+							<CheckCircle2 class="w-5 h-5" />
+						</div>
+						<h3 class="text-xl font-black text-gray-900 uppercase tracking-tight text-gray-400">Ready for Analysis</h3>
+						<span class="ml-auto text-xs font-bold text-gray-400 bg-gray-50 px-2 py-1 rounded-full border border-gray-100">
+							{triageGroups.ready.length} Ready
+						</span>
+					</div>
+					<div class="grid grid-cols-1 lg:grid-cols-2 gap-4 opacity-60 grayscale-[0.5] hover:opacity-100 hover:grayscale-0 transition-all">
+						{#each triageGroups.ready as doc (doc.id)}
+							<DocumentCard 
+								{doc}
+								onEdit={() => editingDocument = doc}
+								onDelete={() => handleDelete(doc.id)}
+							/>
+						{/each}
+					</div>
+				</section>
+			{/if}
+
+			{#if documents.length === 0}
+				<div class="flex flex-col items-center justify-center py-20 bg-gray-50 rounded-3xl border border-dashed border-gray-200">
+					<div class="p-4 rounded-full bg-white shadow-sm text-gray-300 mb-4">
+						<Inbox class="w-12 h-12" />
+					</div>
+					<h3 class="text-lg font-bold text-gray-900">No documents found</h3>
+					<p class="text-gray-500 text-sm mt-1">Upload files to get started with the analysis.</p>
 				</div>
 			{/if}
 		</div>
-		<button
-			onclick={() => viewMode = 'all'}
-			class="text-sm text-accent hover:text-accent-hover font-medium {viewMode === 'all' ? 'underline' : ''}"
-		>
-			View All
-		</button>
-	</div>
-
-	<!-- Bulk Action Toolbar -->
-	{#if selectedDocIds.size > 0}
-		<div class="sticky top-0 z-10 bg-accent/10 border border-accent/30 rounded-lg p-3 flex items-center justify-between shadow-sm">
-			<div class="flex items-center gap-4">
-				<span class="text-sm font-medium text-contrast">
-					{selectedDocIds.size} selected
-				</span>
-				<button
-					onclick={clearSelection}
-					class="text-sm text-gray-600 hover:text-gray-800"
-				>
-					Clear
-				</button>
-			</div>
-			<div class="flex items-center gap-2">
-				<AsyncButton
-					onclick={bulkVerify}
-					loading={bulkActionLoading}
-					variant="primary"
-					size="sm"
-					loadingText="Verifying..."
-				>
-					Verify Selected
-				</AsyncButton>
-				<AsyncButton
-					onclick={bulkMarkAsJunk}
-					loading={bulkActionLoading}
-					variant="secondary"
-					size="sm"
-					loadingText="Marking..."
-				>
-					Mark as Junk
-				</AsyncButton>
-				<AsyncButton
-					onclick={bulkDelete}
-					loading={bulkActionLoading}
-					variant="danger"
-					size="sm"
-					loadingText="Deleting..."
-				>
-					Delete Selected
-				</AsyncButton>
-			</div>
-		</div>
-	{/if}
-
-	<!-- Quick Actions -->
-	<div class="flex items-center gap-2 text-sm">
-		<button
-			onclick={selectAll}
-			class="text-accent hover:text-accent-hover font-medium"
-		>
-			Select All
-		</button>
-		<span class="text-gray-300">|</span>
-		<button
-			onclick={selectJunkCandidates}
-			class="text-amber-600 hover:text-amber-700 font-medium"
-		>
-			Select Suggested Junk
-		</button>
-		<span class="text-gray-300">|</span>
-		<button
-			onclick={clearSelection}
-			class="text-gray-600 hover:text-gray-800"
-		>
-			Clear Selection
-		</button>
-	</div>
-
-	<!-- Document List -->
-	<div class="space-y-2">
-		{#each visibleDocs as doc}
-			<div 
-				class="flex items-start gap-3 p-4 rounded-lg border transition-all cursor-pointer {
-					selectedDocIds.has(doc.id) 
-						? 'bg-accent/10 border-accent' 
-						: doc.isJunk 
-							? 'bg-amber-50 border-amber-200 hover:border-amber-300' 
-							: 'bg-white border-gray-200 hover:border-gray-300'
-				}"
-				role="button"
-				tabindex="0"
-				onclick={(e) => {
-					// Don't open modal if clicking on checkbox
-					if ((e.target as HTMLElement).tagName === 'INPUT') return;
-					editingDocument = doc;
-				}}
-				onkeydown={(e) => {
-					if (e.key === 'Enter' || e.key === ' ') {
-						e.preventDefault();
-						editingDocument = doc;
-					}
-				}}
-			>
-				<!-- Checkbox -->
-				<input
-					type="checkbox"
-					checked={selectedDocIds.has(doc.id)}
-					onchange={() => toggleSelection(doc.id)}
-					class="mt-1 h-4 w-4 text-accent focus:ring-accent border-gray-300 rounded cursor-pointer"
-				/>
-
-				<!-- Document Info -->
-				<div class="flex-1 min-w-0">
-					<div class="flex items-center gap-2 mb-1">
-						<span class="font-medium text-gray-900 truncate">{doc.file_name}</span>
-						
-						<!-- Quality Badge -->
-						<span class="px-2 py-0.5 text-xs font-medium rounded border {getQualityColor(doc.quality)}">
-							{doc.quality?.toUpperCase() || 'UNKNOWN'}
-						</span>
-
-						<!-- Junk Warning -->
-						{#if doc.isJunk && !doc.is_flagged_as_junk}
-							<span class="px-2 py-0.5 text-xs font-medium rounded bg-amber-100 text-amber-800 border border-amber-300">
-								SUGGESTED JUNK
-							</span>
-						{/if}
-
-						{#if doc.is_flagged_as_junk}
-							<span class="px-2 py-0.5 text-xs font-medium rounded bg-gray-200 text-gray-600 border border-gray-300 line-through">
-								JUNK
-							</span>
-						{/if}
-
-						{#if doc.is_verified}
-							<span class="px-2 py-0.5 text-xs font-medium rounded bg-green-100 text-green-800 border border-green-300">
-								VERIFIED
-							</span>
-						{/if}
-
-						<!-- Extraction Method -->
-						{#if doc.extraction_method}
-							<span class="px-2 py-0.5 text-xs font-medium rounded bg-blue-50 text-blue-700 border border-blue-200">
-								{doc.extraction_method}
-							</span>
-						{/if}
-					</div>
-
-					<div class="flex items-center gap-4 text-sm text-gray-500">
-						<span>{formatFileSize(doc.file_size)}</span>
-						{#if doc.page_count}
-							<span>{doc.page_count} page{doc.page_count !== 1 ? 's' : ''}</span>
-						{/if}
-						{#if doc.extracted_text}
-							<span>{doc.extracted_text.length.toLocaleString()} chars</span>
+	{:else}
+		<!-- All Documents List View -->
+		<div class="space-y-3">
+			{#each filteredDocs as doc (doc.id)}
+				<div class="flex items-center gap-4 group">
+					<button 
+						onclick={() => toggleSelection(doc.id)}
+						class={`p-1.5 rounded-lg transition-colors ${selectedDocIds.has(doc.id) ? 'bg-accent/10 text-accent' : 'text-gray-300 hover:text-gray-400'}`}
+					>
+						{#if selectedDocIds.has(doc.id)}
+							<CheckSquare class="w-6 h-6" />
 						{:else}
-							<span class="text-red-500">No text extracted</span>
+							<Square class="w-6 h-6" />
 						{/if}
+					</button>
+					<div class="flex-1">
+						<DocumentCard 
+							{doc}
+							onEdit={() => editingDocument = doc}
+							onReplace={() => recoveryDocument = doc}
+							onReExtract={() => handleReExtract(doc.id)}
+							onVerify={() => handleVerify(doc.id)}
+							onSkip={() => handleSkip(doc.id)}
+							onDelete={() => handleDelete(doc.id)}
+						/>
 					</div>
-
-					<!-- Preview of extracted text -->
-					{#if doc.extracted_text && doc.extracted_text.trim().length > 0}
-						<p class="mt-2 text-sm text-gray-600 line-clamp-2">
-							{doc.extracted_text.trim().substring(0, 200)}...
-						</p>
-					{:else if doc.extraction_error}
-						<p class="mt-2 text-sm text-red-600">
-							Error: {doc.extraction_error}
-						</p>
-					{/if}
 				</div>
-			</div>
-		{/each}
-	</div>
-
-	<!-- Empty State -->
-	{#if visibleDocs.length === 0}
-		<div class="text-center py-12 text-gray-500">
-			<svg class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-				<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-			</svg>
-			<p class="mt-2 text-sm">
-				{#if viewMode === 'needs-attention'}
-					All documents are in good shape!
-				{:else if viewMode === 'ready'}
-					No verified documents yet.
-				{:else}
-					No documents uploaded.
-				{/if}
-			</p>
+			{/each}
 		</div>
 	{/if}
 </div>
 
-<!-- Correction Modal -->
+<!-- Modals -->
 {#if editingDocument}
 	<CorrectionModal
 		document={editingDocument}
@@ -529,3 +452,10 @@
 	/>
 {/if}
 
+{#if recoveryDocument}
+	<RecoveryModal
+		doc={recoveryDocument}
+		bind:isOpen={recoveryDocument}
+		onSuccess={onDocumentsUpdated}
+	/>
+{/if}

@@ -1,6 +1,6 @@
 <script lang="ts">
-	import { page } from '$app/navigation';
 	import { goto } from '$app/navigation';
+	import { page } from '$app/stores';
 	import { getApiUrl } from '$lib/config';
 	import { supabase } from '$lib/supabase';
 	import { slide } from 'svelte/transition';
@@ -8,47 +8,212 @@
 	import { ArrowLeft } from 'lucide-svelte';
 	import { parseMarkdown } from '$lib/utils/markdown';
 	import type { PageData } from './$types';
+	import { onMount } from 'svelte';
+	import SkippedDocumentsAlert from '$lib/components/SkippedDocumentsAlert.svelte';
 
 	// Get SSR data from load function
 	let { data }: { data: PageData } = $props();
 
 	const caseId = $derived(data.caseId);
 	
-	// Initialize state from SSR data
-	let results = $state<any>(data.results);
+	// Initialize state
+	let results = $state<any>(null);
+	let documents = $state<any[]>([]);
+	let profile = $state<any>(null);
+	let loading = $state(true);
+	
 	let activeTab = $state<'analysis' | 'documents' | 'letters' | 'chat' | 'quality'>('analysis');
-	let findingsLetter = $state<string | null>(data.findingsLetter);
-	let demandLetters = $state<Record<string, string>>(data.demandLetters);
+	let findingsLetter = $state<string | null>(null);
+	let demandLetters = $state<Record<string, string>>({});
 	let generatingFindings = $state(false);
 	let generatingDemand = $state(false);
-	let selectedParty = $state(data.selectedParty);
-	let demandAmount = $state<number | null>(data.demandAmount);
-	let demandDeadline = $state(data.demandDeadline);
-	let specificDemands = $state(data.specificDemands);
+	let selectedParty = $state('');
+	let demandAmount = $state<number | null>(null);
+	let demandDeadline = $state('10 business days');
+	let specificDemands = $state('');
 	let chatMessages = $state<Array<{ user: string; assistant: string }>>([]);
 	let chatInput = $state('');
 	let sendingMessage = $state(false);
+	
+	// Derived state (using $derived since results starts as null)
 	let hasMultiStageSupport = $derived(!!results?.multi_stage_result);
 	let multiStageError = $derived(results?.artifacts?.multi_stage_error);
 	let opposingParties = $derived(results?.opposing_parties ?? []);
 	let analysisStatus = $derived(results?.status ?? 'completed');
 	let analysisCreatedAt = $derived(results?.created_at ? new Date(results.created_at) : new Date());
-	let isStale = $derived(analysisStatus !== 'completed' || (new Date().getTime() - analysisCreatedAt.getTime() > 1000 * 60 * 60 * 24 * 7)); // Stale if > 7 days or not completed
+	let isStale = $derived(analysisStatus !== 'completed' || (new Date().getTime() - analysisCreatedAt.getTime() > 1000 * 60 * 60 * 24 * 7));
 	let modelsUsed = $derived(results?.artifacts?.models_used ?? null);
+	let skippedDocs = $derived(results?.artifacts?.skipped_documents ?? []);
 
-	// Attorney information for letters (pre-loaded from profile via SSR)
-	let attorneyName = $state(data.profile?.attorneyName || '');
-	let firmName = $state(data.profile?.firmName || '');
-	let contactPhone = $state(data.profile?.contactPhone || '');
-	let contactEmail = $state(data.profile?.contactEmail || '');
-	let profileLoaded = $state(!!data.profile);
+	// Attorney information for letters
+	let attorneyName = $state('');
+	let firmName = $state('');
+	let contactPhone = $state('');
+	let contactEmail = $state('');
+	let profileLoaded = $state(false);
 
 	// Document viewer for quality report
 	let viewingDocument = $state<any>(null);
-	let documents = $state<any[]>(data.documents);
+	let pdfBlobUrl = $state<string | null>(null);
+	let loadingPdf = $state(false);
 
-	// Collapsible document analysis state - initialized from SSR
-	let collapsedDocs = $state<Set<string>>(new Set(data.collapsedDocs));
+	// Collapsible document analysis state
+	let collapsedDocs = $state<Set<string>>(new Set());
+
+	// Initialize from streamed data
+	onMount(async () => {
+		try {
+			// Start loading streamed data
+			const [resultsVal, docsVal, profileVal] = await Promise.all([
+				data.streamed.results,
+				data.streamed.documents,
+				data.streamed.profile
+			]);
+
+			documents = docsVal;
+			profile = profileVal;
+			
+			if (profileVal) {
+				attorneyName = profileVal.full_name || '';
+				firmName = profileVal.firm_name || '';
+				contactPhone = profileVal.phone || '';
+				contactEmail = profileVal.email || '';
+				profileLoaded = true;
+			}
+
+			// Process results
+			let res = resultsVal;
+			
+			// Parse case_analysis if it's a JSON string
+			if (res.case_analysis && typeof res.case_analysis === 'string') {
+				try {
+					res.case_analysis = JSON.parse(res.case_analysis);
+				} catch (e) {
+					console.error('Failed to parse case_analysis:', e);
+				}
+			}
+
+			// Parse document_summaries if it's a JSON string
+			if (res.document_summaries && typeof res.document_summaries === 'string') {
+				try {
+					res.document_summaries = JSON.parse(res.document_summaries);
+				} catch (e) {
+					console.error('Failed to parse document_summaries:', e);
+				}
+			}
+
+			// Parse generated letters
+			if (res.generated_letters) {
+				if (res.generated_letters.findings) {
+					findingsLetter = res.generated_letters.findings;
+				}
+				const demandEntries = Object.entries(res.generated_letters).filter(([key]) =>
+					key.startsWith('demand_')
+				);
+				if (demandEntries.length) {
+					demandLetters = demandEntries.reduce<Record<string, string>>((acc, [key, value]) => {
+						const partyName = key.replace('demand_', '').replace(/_/g, ' ');
+						acc[partyName] = value as string;
+						return acc;
+					}, {});
+				}
+			}
+
+			// Pre-fill demand letter fields
+			if (res.opposing_parties && res.opposing_parties.length > 0) {
+				selectedParty = res.opposing_parties[0].name;
+			}
+
+			// Try to find demand amount from various sources
+			let foundAmount = false;
+
+			// 1. Try multi_stage_result first
+			if (res.multi_stage_result) {
+				const factMatrix = res.multi_stage_result.fact_matrix || {};
+				const financialData = factMatrix.financial_data || [];
+				const claimedAmount = financialData.find(
+					(item: any) => item.payment_type === 'claimed' || item.category === 'damages_claimed'
+				);
+
+				if (claimedAmount?.amount) {
+					demandAmount = claimedAmount.amount;
+					foundAmount = true;
+				} else {
+					const owedAmount = financialData.find(
+						(item: any) =>
+							item.payment_type === 'owed' ||
+							item.description?.toLowerCase().includes('owed') ||
+							item.description?.toLowerCase().includes('damage')
+					);
+					if (owedAmount?.amount) {
+						demandAmount = owedAmount.amount;
+						foundAmount = true;
+					}
+				}
+
+				const issueMap = res.multi_stage_result.issue_map || {};
+				const primaryIssues = issueMap.primary_issues || [];
+				if (primaryIssues.length > 0) {
+					specificDemands = primaryIssues
+						.map((issue: any) => `Resolve the issue of ${issue.issue_name} by providing appropriate remedies.`)
+						.join('\n');
+				} else {
+					specificDemands = 'Provide full and timely compliance with all outstanding obligations.';
+				}
+			}
+
+			// 2. Fall back to case_analysis financial_impact
+			if (!foundAmount && typeof res.case_analysis === 'object') {
+				const financialText = res.case_analysis.intake_analysis?.financial_impact;
+				if (financialText) {
+					const amountMatch = financialText.match(/\$[\d,]+(?:\.\d{2})?/);
+					if (amountMatch) {
+						const amountStr = amountMatch[0].replace(/[$,]/g, '');
+						demandAmount = parseFloat(amountStr);
+						foundAmount = true;
+					}
+				}
+			}
+
+			// 3. Fall back to document summaries key_amounts
+			if (!foundAmount && res.document_summaries && Array.isArray(res.document_summaries)) {
+				for (const doc of res.document_summaries) {
+					if (doc.key_amounts && Array.isArray(doc.key_amounts)) {
+						for (const amount of doc.key_amounts) {
+							if (
+								amount.description?.toLowerCase().includes('damage') ||
+								amount.description?.toLowerCase().includes('owed') ||
+								amount.description?.toLowerCase().includes('claim')
+							) {
+								const amountStr = amount.amount?.replace(/[$,]/g, '');
+								if (amountStr) {
+									demandAmount = parseFloat(amountStr);
+									foundAmount = true;
+									break;
+								}
+							}
+						}
+						if (foundAmount) break;
+					}
+				}
+			}
+
+			// Initialize all documents as collapsed
+			const newCollapsed = new Set<string>();
+			if (Array.isArray(res.document_summaries) && res.document_summaries.length > 0) {
+				res.document_summaries.forEach((doc: any) => {
+					newCollapsed.add(doc.document_name);
+				});
+			}
+			collapsedDocs = newCollapsed;
+			
+			results = res;
+		} catch (err) {
+			console.error('Error processing results:', err);
+		} finally {
+			loading = false;
+		}
+	});
 
 	// Demand calculation state
 	let calculatingAmount = $state(false);
@@ -71,11 +236,54 @@
 			alert('Document not found');
 			return;
 		}
+		
 		viewingDocument = doc;
+		loadingPdf = true;
+
+		// Clean up previous blob URL if it exists
+		if (pdfBlobUrl) {
+			URL.revokeObjectURL(pdfBlobUrl);
+			pdfBlobUrl = null;
+		}
+
+		try {
+			// Check if it's a PDF or image - need to download as blob
+			const isPdf = doc.file_type === 'application/pdf' || doc.file_name.toLowerCase().endswith('.pdf');
+			const isImage = doc.file_type?.startsWith('image/');
+
+			if ((isPdf || isImage) && doc.storage_path) {
+				// Download from storage
+				const {
+					data: { session }
+				} = await supabase.auth.getSession();
+
+				if (!session) {
+					console.error('Not authenticated');
+					return;
+				}
+
+				const { data, error } = await supabase.storage
+					.from('documents')
+					.download(doc.storage_path);
+
+				if (error) throw error;
+
+				// Create blob URL for PDF or image
+				pdfBlobUrl = URL.createObjectURL(data);
+			}
+		} catch (error: any) {
+			console.error('Failed to load document preview:', error);
+		} finally {
+			loadingPdf = false;
+		}
 	}
 
 	function closeDocumentViewer() {
 		viewingDocument = null;
+		if (pdfBlobUrl) {
+			URL.revokeObjectURL(pdfBlobUrl);
+			pdfBlobUrl = null;
+		}
 	}
 
 	async function generateFindingsLetter() {
@@ -322,7 +530,12 @@
 		{/snippet}
 	</PageHeader>
 
-	{#if analysisStatus !== 'completed'}
+	{#if loading}
+		<div class="flex flex-col items-center justify-center py-20">
+			<div class="animate-spin rounded-full h-12 w-12 border-b-2 border-accent"></div>
+			<p class="mt-4 text-gray-500 font-medium">Loading and preparing analysis results...</p>
+		</div>
+	{:else if analysisStatus !== 'completed'}
 		<div class="mb-6 p-4 rounded-lg {analysisStatus === 'error' ? 'bg-red-50 border border-red-200' : 'bg-blue-50 border border-blue-200'}">
 			<div class="flex items-center">
 				{#if analysisStatus === 'error'}
@@ -358,8 +571,15 @@
 		</div>
 	{/if}
 
+	{#if !loading && skippedDocs.length > 0}
+		<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-6">
+			<SkippedDocumentsAlert {skippedDocs} />
+		</div>
+	{/if}
+
 	{#if results}
-		<div class="border-b border-gray-200 mb-6">
+		<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+			<div class="border-b border-gray-200 mb-6">
 			<nav class="-mb-px flex flex-wrap gap-4">
 				<button
 					class={`py-4 px-1 border-b-2 text-sm font-medium ${
@@ -1006,6 +1226,7 @@
 				{/if}
 			</div>
 		{/if}
+		</div>
 	{/if}
 
 <!-- Document Viewer Modal -->
@@ -1041,15 +1262,51 @@
 
 			<!-- Content -->
 			<div class="flex-1 overflow-y-auto p-6">
-				{#if viewingDocument.file_type === 'application/pdf'}
-					<p class="text-gray-500 text-sm">PDF viewer: Download the document to view it.</p>
-					<a 
-						href={`/api/documents/${viewingDocument.id}/download`}
-						class="mt-4 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-accent hover:bg-accent-hover"
-						download
-					>
-						Download PDF
-					</a>
+				{#if viewingDocument.file_type === 'application/pdf' || viewingDocument.file_name.toLowerCase().endsWith('.pdf')}
+					{#if loadingPdf}
+						<div class="flex items-center justify-center h-64">
+							<div class="text-center">
+								<svg class="mx-auto h-12 w-12 text-gray-400 animate-spin" fill="none" viewBox="0 0 24 24">
+									<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+									<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+								</svg>
+								<p class="mt-2 text-sm text-gray-500">Loading PDF preview...</p>
+							</div>
+						</div>
+					{:else if pdfBlobUrl}
+						<iframe 
+							src={pdfBlobUrl} 
+							title="PDF Viewer" 
+							class="w-full h-[600px] border border-gray-300 rounded-lg"
+						></iframe>
+					{:else}
+						<div class="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-4">
+							<p class="text-amber-800 text-sm">
+								<strong>Preview unavailable:</strong> The original file could not be retrieved from storage. 
+								This usually happens if the file failed to download from Clio.
+							</p>
+						</div>
+						<p class="text-gray-500 text-sm mb-4">You can still try to download the file directly if it exists:</p>
+						<a 
+							href={`/api/documents/${viewingDocument.id}/download`}
+							class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-accent hover:bg-accent-hover"
+							download
+						>
+							Download PDF
+						</a>
+					{/if}
+				{:else if viewingDocument.file_type?.startsWith('image/')}
+					{#if loadingPdf}
+						<div class="flex items-center justify-center h-64">
+							<div class="animate-spin rounded-full h-8 w-8 border-b-2 border-accent"></div>
+						</div>
+					{:else if pdfBlobUrl}
+						<div class="flex items-center justify-center">
+							<img src={pdfBlobUrl} alt={viewingDocument.file_name} class="max-w-full h-auto rounded-lg shadow-lg" />
+						</div>
+					{:else}
+						<p class="text-red-500">Failed to load image preview.</p>
+					{/if}
 				{:else if viewingDocument.extracted_text}
 					<pre class="whitespace-pre-wrap font-mono text-sm text-gray-800 bg-gray-50 p-4 rounded-lg">{viewingDocument.extracted_text}</pre>
 				{:else}

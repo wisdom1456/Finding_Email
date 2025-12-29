@@ -13,12 +13,14 @@ from legal_portal.config.default import get_settings
 from legal_portal.core.data_models import (
     AnalyzedDocument,
     CaseAnalysisResult,
+    DocumentStatus,
     DocumentSummaryStructured,
     IntakeAnalysis,
     Party,
     ProcessingError,
     ProcessingResult,
     QualityScore,
+    SkippedDocument,
 )
 from legal_portal.core.document_processor import DocumentProcessor
 from legal_portal.services.corpus_coverage_service import CorpusCoverageService
@@ -229,6 +231,7 @@ async def process_case_documents(
     progress_callback: Optional[Callable] = None,
     jurisdiction: str = "Florida",  # Added jurisdiction parameter
     path_to_id_map: Optional[Dict[str, str]] = None,  # NEW: Map path to doc ID
+    skipped_documents: Optional[List[SkippedDocument]] = None,  # NEW: Documents skipped during download
 ) -> ProcessingResult:
     """Decoupled document processing workflow."""
     start_time = time.time()
@@ -324,6 +327,15 @@ async def process_case_documents(
             for doc in processed_case_docs:
                 res = await asyncio.to_thread(quality_validator.validate_document, doc)
                 quality_results.append(res)
+
+                # Update document status based on quality score
+                if res.confidence_level == "low" or res.score < 5.0:
+                    doc.status = DocumentStatus.NEEDS_REVIEW
+                    doc.extraction_quality = "low"
+                elif res.confidence_level == "medium" or res.score < 8.0:
+                    doc.extraction_quality = "medium"
+                else:
+                    doc.extraction_quality = "high"
 
         # Aggregate quality results and create context string
         aggregated_quality_report = _aggregate_quality_results(quality_results)
@@ -588,6 +600,7 @@ async def process_case_documents(
             multi_stage_result=multi_stage_result_dict,
             generated_letters={},
             processed_documents=processed_case_docs,  # NEW: Return processed documents for persistence
+            skipped_documents=skipped_documents or [],  # NEW: Include skipped documents
         )
         logger.info("✅ Document processing completed (letters deferred to on-demand endpoints).")
         return result

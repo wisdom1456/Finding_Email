@@ -18,6 +18,7 @@ from legal_portal.api.services.clio_client import (
     ClioClient,
 )
 from legal_portal.api.utils.content_extractor import DocumentProcessor as ContentExtractor
+from legal_portal.core.data_models import DocumentStatus
 from legal_portal.core.document_processor import DocumentProcessor, ValidationError
 from legal_portal.services.progress_manager import ProgressManager
 from pydantic import BaseModel
@@ -468,7 +469,7 @@ async def import_clio_data(
                     "file_type": "text/plain",
                     "file_size": len(content.encode("utf-8")),
                     "storage_path": f"clio/{case_id}/comm_{comm.id}.txt",
-                    "status": "processed",
+                    "status": DocumentStatus.READY,
                     "extracted_text": content,
                     "metadata": {
                         "clio_source": True,
@@ -518,7 +519,7 @@ async def import_clio_data(
                     "file_type": "text/plain",
                     "file_size": len(note_detail.encode("utf-8")) if note_detail else 0,
                     "storage_path": f"clio/{case_id}/note_{note['id']}.txt",
-                    "status": "processed",
+                    "status": DocumentStatus.READY,
                     "extracted_text": note_detail,
                     "metadata": {
                         "clio_source": True,

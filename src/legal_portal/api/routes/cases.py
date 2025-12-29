@@ -9,6 +9,7 @@ from legal_portal.api.dependencies import get_current_user, get_supabase_client,
 from legal_portal.api.services.clio_client import ClioAPIError, ClioAuthError, ClioClient
 from legal_portal.api.utils.content_extractor import DocumentProcessor as ContentExtractor
 from legal_portal.config.default import get_settings
+from legal_portal.core.data_models import DocumentStatus
 from legal_portal.core.document_processor import DocumentProcessor, ValidationError
 from legal_portal.services.progress_manager import ProgressManager, get_progress_manager
 from pydantic import BaseModel, Field
@@ -495,7 +496,7 @@ async def import_clio_documents_helper(
                     "file_type": "text/plain",
                     "file_size": len(content.encode("utf-8")),
                     "storage_path": f"clio/{case_id}/comm_{comm.id}.txt",
-                    "status": "processed",
+                    "status": DocumentStatus.READY,
                     "extracted_text": content,
                     "metadata": {
                         "clio_source": True,
@@ -539,7 +540,7 @@ async def import_clio_documents_helper(
                     "file_type": "text/plain",
                     "file_size": len(note_detail.encode("utf-8")) if note_detail else 0,
                     "storage_path": f"clio/{case_id}/note_{note['id']}.txt",
-                    "status": "processed",
+                    "status": DocumentStatus.READY,
                     "extracted_text": note_detail,
                     "metadata": {
                         "clio_source": True,

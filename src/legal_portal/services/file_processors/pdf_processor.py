@@ -413,13 +413,13 @@ async def _extract_text_via_google_ocr(
                         rect = page.rect
                         width, height = rect.width, rect.height
 
-                        zoom = 2.0
+                        zoom = 3.0
                         if width > 3000 or height > 3000:
-                            zoom = 1.0
-                            logger.info(f"Large page detected ({width:.0f}x{height:.0f}), using 1x zoom")
-                        elif width > 1500 or height > 1500:
                             zoom = 1.5
-                            logger.info(f"Moderate page detected ({width:.0f}x{height:.0f}), using 1.5x zoom")
+                            logger.info(f"Large page detected ({width:.0f}x{height:.0f}), using 1.5x zoom")
+                        elif width > 1500 or height > 1500:
+                            zoom = 2.0
+                            logger.info(f"Moderate page detected ({width:.0f}x{height:.0f}), using 2.0x zoom")
 
                         pix = page.get_pixmap(matrix=fitz.Matrix(zoom, zoom))
                         return pix.tobytes("png")
@@ -634,13 +634,13 @@ async def _extract_text_via_google_ocr_bytes(
                         rect = page.rect
                         width, height = rect.width, rect.height
 
-                        zoom = 2.0
+                        zoom = 3.0
                         if width > 3000 or height > 3000:
-                            zoom = 1.0
-                            logger.info(f"Large page detected ({width:.0f}x{height:.0f}), using 1x zoom")
-                        elif width > 1500 or height > 1500:
                             zoom = 1.5
-                            logger.info(f"Moderate page detected ({width:.0f}x{height:.0f}), using 1.5x zoom")
+                            logger.info(f"Large page detected ({width:.0f}x{height:.0f}), using 1.5x zoom")
+                        elif width > 1500 or height > 1500:
+                            zoom = 2.0
+                            logger.info(f"Moderate page detected ({width:.0f}x{height:.0f}), using 2.0x zoom")
 
                         pix = page.get_pixmap(matrix=fitz.Matrix(zoom, zoom))
                         return pix.tobytes("png")
@@ -808,7 +808,10 @@ async def _extract_text_via_vision(
                 prompt = (
                     f"Extract all text from page {page_index + 1} of this legal document. "
                     f"Filename: {original_filename}. "
-                    "Provide the text verbatim. Do not summarize."
+                    "Maintain the logical structure and layout. "
+                    "If there are tables, preserve the row/column relationship "
+                    "using markdown or clear spacing. "
+                    "Provide the text verbatim including all numbers, dates, and names. Do not summarize."
                 )
 
                 content = [
@@ -986,7 +989,10 @@ async def _extract_text_via_vision_bytes(
                 prompt = (
                     f"Extract all text from page {page_index + 1} of this legal document. "
                     f"Filename: {original_filename}. "
-                    "Provide the text verbatim. Do not summarize."
+                    "Maintain the logical structure and layout. "
+                    "If there are tables, preserve the row/column relationship "
+                    "using markdown or clear spacing. "
+                    "Provide the text verbatim including all numbers, dates, and names. Do not summarize."
                 )
 
                 content = [

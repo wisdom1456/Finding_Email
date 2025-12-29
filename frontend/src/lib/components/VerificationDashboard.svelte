@@ -15,7 +15,8 @@
 		CheckSquare,
 		Square,
 		Inbox,
-		Zap
+		Zap,
+		Info
 	} from 'lucide-svelte';
 	
 	import AsyncButton from './ui/AsyncButton.svelte';
@@ -41,7 +42,12 @@
 	let filterQuery = $state('');
 	let editingDocument = $state<any>(null);
 	let recoveryDocument = $state<any>(null);
+	let showRecoveryModal = $state(false);
+	let viewingDocument = $state<any>(null);
+	let pdfBlobUrl = $state<string | null>(null);
+	let loadingPreview = $state(false);
 	let viewMode = $state<'triage' | 'all'>('triage');
+	let showInstructions = $state(false);
 
 	// Triage Groups
 	let triageGroups = $derived.by(() => {
@@ -193,6 +199,47 @@
 		}
 	}
 
+	async function handleView(doc: any) {
+		viewingDocument = doc;
+		loadingPreview = true;
+
+		// Clean up previous blob URL if it exists
+		if (pdfBlobUrl) {
+			URL.revokeObjectURL(pdfBlobUrl);
+			pdfBlobUrl = null;
+		}
+
+		try {
+			const isPdf = doc.file_type === 'application/pdf' || doc.file_name.toLowerCase().endsWith('.pdf');
+			const isImage = doc.file_type?.startsWith('image/');
+
+			if ((isPdf || isImage) && doc.storage_path) {
+				const { data: { session } } = await supabase.auth.getSession();
+				if (!session) throw new Error('Not authenticated');
+
+				const { data, error } = await supabase.storage
+					.from('documents')
+					.download(doc.storage_path);
+
+				if (error) throw error;
+				pdfBlobUrl = URL.createObjectURL(data);
+			}
+		} catch (error: any) {
+			console.error('Failed to load document preview:', error);
+			toastStore.error('Failed to load preview');
+		} finally {
+			loadingPreview = false;
+		}
+	}
+
+	function closeDocumentViewer() {
+		viewingDocument = null;
+		if (pdfBlobUrl) {
+			URL.revokeObjectURL(pdfBlobUrl);
+			pdfBlobUrl = null;
+		}
+	}
+
 	// Bulk Actions
 	async function bulkVerify() {
 		if (selectedDocIds.size === 0) return;
@@ -256,6 +303,13 @@
 			<p class="mt-2 text-gray-500 font-medium text-lg max-w-2xl">
 				Review and confirm extracted data from {documents.length} documents before running the final legal analysis.
 			</p>
+			<button 
+				onclick={() => showInstructions = !showInstructions}
+				class="mt-4 inline-flex items-center gap-2 text-sm font-bold text-accent hover:text-accent-hover transition-colors"
+			>
+				<Info class="w-4 h-4" />
+				{showInstructions ? 'Hide Instructions' : 'How to use the Verification Hub'}
+			</button>
 		</div>
 
 		<div class="flex items-center gap-3 p-1.5 bg-gray-100 rounded-xl">
@@ -273,6 +327,57 @@
 			</button>
 		</div>
 	</div>
+
+	{#if showInstructions}
+		<div transition:slide class="bg-blue-50 border border-blue-100 rounded-2xl p-6 overflow-hidden">
+			<h3 class="text-blue-900 font-black flex items-center gap-2 mb-4">
+				<Info class="w-5 h-5" />
+				Verification Hub Guide
+			</h3>
+			<div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+				<div class="space-y-3">
+					<h4 class="text-blue-800 font-bold text-sm uppercase tracking-wider">1. Review Status</h4>
+					<ul class="space-y-2">
+						<li class="flex items-start gap-2 text-sm text-blue-700">
+							<div class="w-2 h-2 rounded-full bg-red-500 mt-1.5 flex-shrink-0"></div>
+							<span><strong>Critical:</strong> Missing files or corrupted data. Must be re-uploaded.</span>
+						</li>
+						<li class="flex items-start gap-2 text-sm text-blue-700">
+							<div class="w-2 h-2 rounded-full bg-amber-500 mt-1.5 flex-shrink-0"></div>
+							<span><strong>Pending:</strong> Extraction failed or low quality. Manual review required.</span>
+						</li>
+						<li class="flex items-start gap-2 text-sm text-blue-700">
+							<div class="w-2 h-2 rounded-full bg-green-500 mt-1.5 flex-shrink-0"></div>
+							<span><strong>Ready:</strong> High quality extraction. Verify and proceed.</span>
+						</li>
+					</ul>
+				</div>
+				<div class="space-y-3">
+					<h4 class="text-blue-800 font-bold text-sm uppercase tracking-wider">2. Take Action</h4>
+					<ul class="space-y-2">
+						<li class="text-sm text-blue-700 flex gap-2">
+							<CheckCircle2 class="w-4 h-4 text-green-600 flex-shrink-0" />
+							<span><strong>Verify:</strong> Confirm the data is correct.</span>
+						</li>
+						<li class="text-sm text-blue-700 flex gap-2">
+							<Trash2 class="w-4 h-4 text-red-600 flex-shrink-0" />
+							<span><strong>Delete:</strong> Remove irrelevant documents.</span>
+						</li>
+						<li class="text-sm text-blue-700 flex gap-2">
+							<RefreshCw class="w-4 h-4 text-blue-600 flex-shrink-0" />
+							<span><strong>Re-extract:</strong> Try Vision OCR for better results.</span>
+						</li>
+					</ul>
+				</div>
+				<div class="space-y-3">
+					<h4 class="text-blue-800 font-bold text-sm uppercase tracking-wider">3. Final Step</h4>
+					<p class="text-sm text-blue-700 leading-relaxed">
+						Once all documents are <strong>Verified</strong> or <strong>Skipped</strong>, click the <strong>Run Analysis</strong> button at the top of the case details page to generate the final legal findings.
+					</p>
+				</div>
+			</div>
+		</div>
+	{/if}
 
 	<!-- Status Banner -->
 	<DocumentStatusBanner {stats} />
@@ -341,7 +446,8 @@
 						{#each triageGroups.critical as doc (doc.id)}
 							<DocumentCard 
 								{doc}
-								onReplace={() => recoveryDocument = doc}
+								onView={() => handleView(doc)}
+								onReplace={() => { recoveryDocument = doc; showRecoveryModal = true; }}
 								onSkip={() => handleSkip(doc.id)}
 								onDelete={() => handleDelete(doc.id)}
 							/>
@@ -366,6 +472,7 @@
 						{#each triageGroups.needs_attention as doc (doc.id)}
 							<DocumentCard 
 								{doc}
+								onView={() => handleView(doc)}
 								onEdit={() => editingDocument = doc}
 								onReExtract={() => handleReExtract(doc.id)}
 								onVerify={() => handleVerify(doc.id)}
@@ -393,6 +500,7 @@
 						{#each triageGroups.ready as doc (doc.id)}
 							<DocumentCard 
 								{doc}
+								onView={() => handleView(doc)}
 								onEdit={() => editingDocument = doc}
 								onDelete={() => handleDelete(doc.id)}
 							/>
@@ -429,8 +537,9 @@
 					<div class="flex-1">
 						<DocumentCard 
 							{doc}
+							onView={() => handleView(doc)}
 							onEdit={() => editingDocument = doc}
-							onReplace={() => recoveryDocument = doc}
+							onReplace={() => { recoveryDocument = doc; showRecoveryModal = true; }}
 							onReExtract={() => handleReExtract(doc.id)}
 							onVerify={() => handleVerify(doc.id)}
 							onSkip={() => handleSkip(doc.id)}
@@ -452,10 +561,78 @@
 	/>
 {/if}
 
-{#if recoveryDocument}
+{#if showRecoveryModal && recoveryDocument}
 	<RecoveryModal
 		doc={recoveryDocument}
-		bind:isOpen={recoveryDocument}
+		bind:isOpen={showRecoveryModal}
 		onSuccess={onDocumentsUpdated}
 	/>
+{/if}
+
+<!-- Document Viewer Modal -->
+{#if viewingDocument}
+	<div
+		class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-[100] flex items-center justify-center p-4"
+		onclick={closeDocumentViewer}
+	>
+		<div
+			class="relative bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] flex flex-col"
+			onclick={(e) => e.stopPropagation()}
+		>
+			<!-- Header -->
+			<div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+				<h3 class="text-xl font-bold text-gray-900 truncate">
+					{viewingDocument.file_name}
+				</h3>
+				<button
+					onclick={closeDocumentViewer}
+					class="text-gray-400 hover:text-gray-500 transition-colors"
+				>
+					<MoreHorizontal class="w-6 h-6" />
+				</button>
+			</div>
+
+			<!-- Content -->
+			<div class="flex-1 overflow-auto p-6 bg-gray-50 min-h-[400px]">
+				{#if loadingPreview}
+					<div class="flex flex-col items-center justify-center h-full py-12">
+						<RefreshCw class="w-8 h-8 text-accent animate-spin mb-4" />
+						<p class="text-gray-500 font-medium">Loading preview...</p>
+					</div>
+				{:else if pdfBlobUrl}
+					<iframe
+						src={pdfBlobUrl}
+						class="w-full h-full min-h-[600px] border-0 rounded-lg shadow-sm bg-white"
+						title="Document Preview"
+					></iframe>
+				{:else if viewingDocument.extracted_text}
+					<div class="bg-white p-8 rounded-lg shadow-sm border border-gray-200 max-w-none prose prose-sm prose-slate">
+						<pre class="whitespace-pre-wrap font-mono text-xs text-gray-800 leading-relaxed">
+							{viewingDocument.extracted_text}
+						</pre>
+					</div>
+				{:else}
+					<div class="flex flex-col items-center justify-center h-full py-20 text-center">
+						<div class="p-4 rounded-full bg-amber-50 text-amber-500 mb-4">
+							<AlertTriangle class="w-12 h-12" />
+						</div>
+						<h3 class="text-lg font-bold text-gray-900">Preview Unavailable</h3>
+						<p class="text-gray-500 text-sm mt-1 max-w-xs">
+							This document doesn't have a preview available. You can view the extracted text in the correction modal.
+						</p>
+					</div>
+				{/if}
+			</div>
+
+			<!-- Footer -->
+			<div class="px-6 py-4 border-t border-gray-200 flex justify-end">
+				<button
+					onclick={closeDocumentViewer}
+					class="px-6 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold rounded-xl transition-colors"
+				>
+					Close
+				</button>
+			</div>
+		</div>
+	</div>
 {/if}

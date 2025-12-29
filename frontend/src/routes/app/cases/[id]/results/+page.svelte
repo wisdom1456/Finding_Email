@@ -3,6 +3,7 @@
 	import { page } from '$app/stores';
 	import { getApiUrl } from '$lib/config';
 	import { supabase } from '$lib/supabase';
+	import { toastStore } from '$lib/stores/toastStore';
 	import { slide } from 'svelte/transition';
 	import PageHeader from '$lib/components/ui/PageHeader.svelte';
 	import { ArrowLeft } from 'lucide-svelte';
@@ -230,10 +231,36 @@
 		collapsedDocs = newSet;
 	}
 
-	async function viewDocument(documentName: string) {
-		const doc = documents.find((d) => d.file_name === documentName);
+	async function viewDocument(documentName: string, documentId?: string) {
+		// Priority 1: Use document_id if available
+		let doc = documentId 
+			? documents.find((d) => d.id === documentId)
+			: null;
+		
+		// Priority 2: Exact file_name match
 		if (!doc) {
-			alert('Document not found');
+			doc = documents.find((d) => d.file_name === documentName);
+		}
+		
+		// Priority 3: Case-insensitive match
+		if (!doc) {
+			const lowerName = documentName.toLowerCase();
+			doc = documents.find((d) => d.file_name.toLowerCase() === lowerName);
+		}
+		
+		// Priority 4: Basename match (partial)
+		if (!doc) {
+			const baseName = documentName.split('/').pop()?.toLowerCase();
+			if (baseName) {
+				doc = documents.find((d) => 
+					d.file_name.toLowerCase().includes(baseName) || 
+					baseName.includes(d.file_name.toLowerCase())
+				);
+			}
+		}
+
+		if (!doc) {
+			toastStore.error(`Document "${documentName}" not found`);
 			return;
 		}
 		
@@ -1171,7 +1198,7 @@
 									<div class="flex-1 min-w-0">
 										<div class="flex items-center gap-2 flex-wrap">
 											<button
-												onclick={() => viewDocument(item.document)}
+												onclick={() => viewDocument(item.document, item.document_id)}
 												class="font-semibold text-accent hover:text-accent-hover hover:underline text-left truncate"
 												title="Click to view document"
 											>

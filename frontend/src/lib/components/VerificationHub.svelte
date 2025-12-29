@@ -504,15 +504,14 @@
 						<h3 class="text-xl font-black text-gray-900 uppercase tracking-tight">Pending Review</h3>
 						
 						<!-- Bulk Extraction Action -->
-						{#const needsExtraction = triageGroups.needs_attention.filter(d => !d.extracted_text || d.status === 'pending').length}
-						{#if needsExtraction > 0}
+						{#if triageGroups.needs_attention.filter(d => !d.extracted_text || d.status === 'pending').length > 0}
 							<button 
 								onclick={handleBulkExtract}
 								disabled={bulkActionLoading}
 								class="ml-4 inline-flex items-center gap-2 px-3 py-1.5 text-xs font-bold rounded-lg bg-accent/10 text-accent hover:bg-accent/20 transition-all border border-accent/20"
 							>
 								<RefreshCw class={`w-3.5 h-3.5 ${bulkActionLoading ? 'animate-spin' : ''}`} />
-								Run OCR on {needsExtraction} Doc{needsExtraction === 1 ? '' : 's'}
+								Run OCR on {triageGroups.needs_attention.filter(d => !d.extracted_text || d.status === 'pending').length} Doc{triageGroups.needs_attention.filter(d => !d.extracted_text || d.status === 'pending').length === 1 ? '' : 's'}
 							</button>
 						{/if}
 
@@ -624,12 +623,19 @@
 <!-- Document Viewer Modal -->
 {#if viewingDocument}
 	<div
+		role="button"
+		tabindex="0"
 		class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-[100] flex items-center justify-center p-4"
 		onclick={closeDocumentViewer}
+		onkeydown={(e) => e.key === 'Escape' && closeDocumentViewer()}
 	>
 		<div
+			role="dialog"
+			aria-modal="true"
+			tabindex="-1"
 			class="relative bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] flex flex-col"
 			onclick={(e) => e.stopPropagation()}
+			onkeydown={(e) => e.stopPropagation()}
 		>
 			<!-- Header -->
 			<div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">

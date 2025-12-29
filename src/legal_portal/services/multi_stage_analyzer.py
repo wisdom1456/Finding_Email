@@ -36,6 +36,7 @@ from legal_portal.core.data_models import (
 from legal_portal.services.statute_recommendation_service import StatuteRecommendationService
 from legal_portal.utils.logging_config import get_module_logger
 from legal_portal.utils.openai_client import OpenAIClient
+from legal_portal.utils.diagnostic_logger import DiagnosticLogger
 
 logger = get_module_logger(__name__)
 
@@ -61,10 +62,15 @@ class MultiStageAnalyzer:
         case_type: Optional[str] = None,
         legal_issues: Optional[List[str]] = None,
         jurisdiction: str = "Florida",
+        diag_logger: Optional[DiagnosticLogger] = None,
     ) -> MultiStageAnalysisResult:
         """Execute 4-stage analysis pipeline."""
         start_time = time.time()
         logger.info(f"Starting multi-stage analysis pipeline for {jurisdiction}")
+
+        # Stage 2: Log Intake Content (if not already logged)
+        if diag_logger:
+            diag_logger.log_stage("stage2_intake_content", intake_content)
 
         # Ensure statute service is initialized for the correct jurisdiction
         if self.statute_service.jurisdiction != jurisdiction:
@@ -78,6 +84,10 @@ class MultiStageAnalyzer:
         # Optimization: Pass limited context to fact matrix extraction to avoid timeouts
         fact_matrix = await self._extract_fact_matrix(intake_content, document_summaries, jurisdiction)
         self.stage_timings["fact_extraction"] = time.time() - stage_start
+        
+        if diag_logger:
+            diag_logger.log_stage("multi_stage_1_fact_matrix", fact_matrix.model_dump(mode="json"))
+            
         logger.info(
             f"Stage 1 complete ({self.stage_timings['fact_extraction']:.1f}s): "
             f"{len(fact_matrix.parties)} parties, "
@@ -93,6 +103,10 @@ class MultiStageAnalyzer:
             fact_matrix, intake_content, case_type, legal_issues, jurisdiction
         )
         self.stage_timings["issue_mapping"] = time.time() - stage_start
+        
+        if diag_logger:
+            diag_logger.log_stage("multi_stage_2_issue_map", issue_map.model_dump(mode="json"))
+            
         logger.info(
             f"Stage 2 complete ({self.stage_timings['issue_mapping']:.1f}s): "
             f"{len(issue_map.primary_issues)} primary issues"
@@ -107,6 +121,10 @@ class MultiStageAnalyzer:
             fact_matrix, issue_map, intake_content, jurisdiction
         )
         self.stage_timings["deep_analysis"] = time.time() - stage_start
+        
+        if diag_logger:
+            diag_logger.log_stage("multi_stage_3_deep_analysis", deep_analysis.model_dump(mode="json"))
+            
         logger.info(
             f"Stage 3 complete ({self.stage_timings['deep_analysis']:.1f}s): "
             f"{len(deep_analysis.issue_analyses)} issues analyzed"
@@ -116,6 +134,9 @@ class MultiStageAnalyzer:
         stage_start = time.time()
         letter_structure = self._determine_letter_structure(issue_map, deep_analysis)
         self.stage_timings["structure_determination"] = time.time() - stage_start
+        
+        if diag_logger:
+            diag_logger.log_stage("multi_stage_4_letter_structure", letter_structure.model_dump(mode="json"))
 
         # Collect verified statutes from the service for inclusion in result
         verified_statutes = self.statute_service.recommend_statutes(

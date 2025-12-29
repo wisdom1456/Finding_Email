@@ -69,7 +69,7 @@ describe('ClioConnect', () => {
 		// Mock window.location
 		const originalLocation = window.location;
 		delete (window as any).location;
-		window.location = { ...originalLocation, href: '' } as any;
+		(window as any).location = { ...originalLocation, href: '' };
 
 		render(ClioConnect);
 		await screen.findByText('Connect to Clio');
@@ -81,7 +81,7 @@ describe('ClioConnect', () => {
 		expect(window.location.href).toContain('token=mock-token');
 
 		// Restore
-		window.location = originalLocation;
+		(window as any).location = originalLocation;
 	});
 
 	it('shows disconnect button when connected', async () => {

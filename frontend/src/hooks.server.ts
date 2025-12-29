@@ -54,18 +54,23 @@ const authGuard: Handle = async ({ event, resolve }) => {
   }
 
   // Logged in - check approval status
-  if (event.locals.session) {
+  if (event.locals.session && event.locals.user?.id) {
     // Fetch user profile to check approval status
     const { data: profile } = await event.locals.supabase
       .from('profiles')
       .select('approved, role')
-      .eq('id', event.locals.user?.id)
+      .eq('id', event.locals.user.id)
       .single();
 
-    // Store profile in locals for use in load functions
-    event.locals.profile = profile;
+    // Store full profile in locals for use in load functions - fetch separately
+    const { data: fullProfile } = await event.locals.supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', event.locals.user.id)
+      .single();
+    event.locals.profile = fullProfile;
 
-    const isApproved = profile?.approved === true;
+    const isApproved = (profile as { approved?: boolean } | null)?.approved === true;
     const isAccessingApp = event.url.pathname.startsWith('/app');
     const isOnPendingPage = event.url.pathname === '/account-pending';
     const isOnAuthPage = event.url.pathname === '/login' || event.url.pathname === '/register';

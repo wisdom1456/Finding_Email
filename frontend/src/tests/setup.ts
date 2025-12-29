@@ -2,7 +2,7 @@
  * Vitest setup file for SvelteKit frontend tests
  */
 import '@testing-library/jest-dom';
-import { vi } from 'vitest';
+import { vi, beforeEach } from 'vitest';
 
 // Mock window.matchMedia
 Object.defineProperty(window, 'matchMedia', {
@@ -29,6 +29,19 @@ global.IntersectionObserver = class IntersectionObserver {
 	}
 	unobserve() {}
 } as any;
+
+// Mock Element.animate for Svelte transitions (Web Animations API)
+Element.prototype.animate = vi.fn().mockImplementation(() => ({
+	onfinish: null,
+	cancel: vi.fn(),
+	finish: vi.fn(),
+	play: vi.fn(),
+	pause: vi.fn(),
+	reverse: vi.fn(),
+	addEventListener: vi.fn(),
+	removeEventListener: vi.fn(),
+	finished: Promise.resolve(),
+}));
 
 // Mock fetch if needed
 global.fetch = vi.fn();

@@ -7,7 +7,8 @@
 	import ClioMatterSearch from '$lib/components/ClioMatterSearch.svelte';
 	import ClioLinkedMatter from '$lib/components/ClioLinkedMatter.svelte';
 	import UploadFailureSummary from '$lib/components/UploadFailureSummary.svelte';
-	import VerificationDashboard from '$lib/components/VerificationDashboard.svelte';
+	// @ts-ignore
+import VerificationHub from '$lib/components/VerificationHub.svelte';
 	import PageHeader from '$lib/components/ui/PageHeader.svelte';
 	import Tabs from '$lib/components/ui/Tabs.svelte';
 	import AsyncButton from '$lib/components/ui/AsyncButton.svelte';
@@ -107,7 +108,7 @@
 	let editDescription = $state('');
 	let savingCase = $state(false);
 
-	const caseId = $derived($page.params.id);
+	const caseId = $derived($page.params.id as string);
 	
 	// Tab state
 	let activeTab = $state('overview');
@@ -207,17 +208,18 @@
 			if (error) throw error;
 			
 			// Parse clio_matter_data if it's a string
-			if (data && data.clio_matter_data) {
-				if (typeof data.clio_matter_data === 'string') {
+			const case_data = data as any;
+			if (case_data && case_data.clio_matter_data) {
+				if (typeof case_data.clio_matter_data === 'string') {
 					try {
-						data.clio_matter_data = JSON.parse(data.clio_matter_data);
+						case_data.clio_matter_data = JSON.parse(case_data.clio_matter_data);
 					} catch (e) {
 						console.error('Failed to parse clio_matter_data:', e);
 					}
 				}
 			}
 			
-			caseData = data;
+			caseData = case_data;
 		} catch (error: any) {
 			errorMessage = error.message || 'Failed to load case';
 		} finally {
@@ -230,7 +232,7 @@
 			const { data, error } = await supabase
 				.from('documents')
 				.select('*')
-				.eq('case_id', caseId)
+				.eq('case_id', caseId as string)
 				.order('created_at', { ascending: true });
 
 			if (error) throw error;
@@ -357,8 +359,8 @@
 
 		try {
 			// Update the selected document's metadata to mark it as intake form
-			const { error } = await supabase
-				.from('documents')
+			const { error } = await (supabase
+				.from('documents') as any)
 				.update({
 					metadata: { ...documents.find(d => d.id === selectedIntakeDocId)?.metadata, is_intake_form: true }
 				})
@@ -384,7 +386,7 @@
 			const { data, error } = await supabase
 				.from('analysis_results')
 				.select('*')
-				.eq('case_id', caseId)
+				.eq('case_id', caseId as string)
 				.order('created_at', { ascending: false })
 				.limit(1);
 
@@ -571,7 +573,7 @@
 					// Upload file
 					const formData = new FormData();
 					formData.append('file', file);
-				formData.append('case_id', caseId);
+				formData.append('case_id', caseId as string);
 				formData.append('is_intake_form', (originalIndex === intakeFormIndex).toString());
 
 				const response = await fetch(`${getApiUrl()}/api/documents/upload`, {
@@ -761,9 +763,11 @@
 	}
 
 	function startEditCase() {
-		editClientName = caseData.client_name;
-		editReferenceNumber = caseData.reference_number || '';
-		editDescription = caseData.description || '';
+		const data = caseData;
+		if (!data) return;
+		editClientName = data.client_name;
+		editReferenceNumber = data.reference_number || '';
+		editDescription = data.description || '';
 		editingCase = true;
 		errorMessage = '';
 	}
@@ -972,6 +976,7 @@
 			<p class="text-sm text-red-600">Case not found</p>
 		</div>
 	{:else}
+		{@const data = caseData}
 		<!-- Back Button -->
 		<a
 			href="/app/cases"
@@ -983,18 +988,18 @@
 
 		<!-- Header with Actions -->
 		<PageHeader
-			title={caseData.client_name}
-			subtitle={caseData.reference_number}
+			title={data.client_name || ''}
+			subtitle={data.reference_number || undefined}
 			breadcrumbs={[
 				{ label: 'Dashboard', href: '/app' },
 				{ label: 'Cases', href: '/app/cases' },
-				{ label: caseData.client_name }
+				{ label: data.client_name || 'Case' }
 			]}
 		>
 			{#snippet children()}
 				<div class="flex items-center space-x-3">
-					<span class="px-3 py-1 inline-flex text-sm leading-5 font-semibold rounded-full {getStatusColor(caseData.status)}">
-						{caseData.status}
+					<span class="px-3 py-1 inline-flex text-sm leading-5 font-semibold rounded-full {getStatusColor(data.status || '')}">
+						{data.status}
 					</span>
 					{#if !editingCase}
 						<button
@@ -1107,34 +1112,34 @@
 				<dl class="grid grid-cols-1 gap-x-4 gap-y-6 sm:grid-cols-2">
 					<div>
 						<dt class="text-sm font-medium text-gray-500">Client Name</dt>
-						<dd class="mt-1 text-sm text-gray-900">{caseData.client_name}</dd>
+						<dd class="mt-1 text-sm text-gray-900">{data.client_name}</dd>
 					</div>
 					<div>
 						<dt class="text-sm font-medium text-gray-500">Jurisdiction</dt>
 						<dd class="mt-1 text-sm text-gray-900">
-							<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium {caseData.jurisdiction === 'New Mexico' ? 'bg-indigo-100 text-indigo-800' : 'bg-orange-100 text-orange-800'}">
-								{caseData.jurisdiction || 'Florida'}
+							<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium {data.jurisdiction === 'New Mexico' ? 'bg-indigo-100 text-indigo-800' : 'bg-orange-100 text-orange-800'}">
+								{data.jurisdiction || 'Florida'}
 							</span>
 						</dd>
 					</div>
-					{#if caseData.reference_number}
+					{#if data.reference_number}
 						<div>
 							<dt class="text-sm font-medium text-gray-500">Reference Number</dt>
-							<dd class="mt-1 text-sm text-gray-900">{caseData.reference_number}</dd>
+							<dd class="mt-1 text-sm text-gray-900">{data.reference_number}</dd>
 						</div>
 					{/if}
 					<div>
 						<dt class="text-sm font-medium text-gray-500">Created</dt>
-						<dd class="mt-1 text-sm text-gray-900">{formatDate(caseData.created_at)}</dd>
+						<dd class="mt-1 text-sm text-gray-900">{formatDate(data.created_at)}</dd>
 					</div>
 					<div>
 						<dt class="text-sm font-medium text-gray-500">Last Updated</dt>
-						<dd class="mt-1 text-sm text-gray-900">{formatDate(caseData.updated_at)}</dd>
+						<dd class="mt-1 text-sm text-gray-900">{formatDate(data.updated_at)}</dd>
 					</div>
-					{#if caseData.description}
+					{#if data.description}
 						<div class="sm:col-span-2">
 							<dt class="text-sm font-medium text-gray-500">Description</dt>
-							<dd class="mt-1 text-sm text-gray-900">{caseData.description}</dd>
+							<dd class="mt-1 text-sm text-gray-900">{data.description}</dd>
 						</div>
 					{/if}
 				</dl>
@@ -1144,14 +1149,14 @@
 				<!-- Practice Area Guidance -->
 				<details class="bg-accent/10 border border-accent/30 rounded-lg">
 			<summary class="px-4 py-3 cursor-pointer text-sm font-medium text-contrast hover:bg-accent/20">
-				ℹ️ Supported Practice Areas ({caseData.jurisdiction || 'Florida'} law)
+				ℹ️ Supported Practice Areas ({data.jurisdiction || 'Florida'} law)
 			</summary>
 			<div class="px-4 pb-4 text-sm text-gray-700 space-y-3">
 				<p class="font-medium text-red-700">
-					This application is optimized for {caseData.jurisdiction || 'Florida'} civil litigation matters only. Federal claims and other jurisdictions are not currently supported.
+					This application is optimized for {data.jurisdiction || 'Florida'} civil litigation matters only. Federal claims and other jurisdictions are not currently supported.
 				</p>
 
-				{#if (caseData.jurisdiction || 'Florida') === 'Florida'}
+				{#if (data.jurisdiction || 'Florida') === 'Florida'}
 				<div>
 					<h4 class="font-semibold text-green-800 mb-2">✅ Covered Florida Practice Areas:</h4>
 					<ul class="space-y-2 ml-4">
@@ -1181,7 +1186,7 @@
 						</li>
 					</ul>
 				</div>
-				{:else if caseData.jurisdiction === 'New Mexico'}
+				{:else if data.jurisdiction === 'New Mexico'}
 				<div>
 					<h4 class="font-semibold text-green-800 mb-2">✅ Covered New Mexico Practice Areas:</h4>
 					<ul class="space-y-2 ml-4">
@@ -1230,7 +1235,7 @@
 						<li>• Immigration law</li>
 						<li>• Bankruptcy (federal jurisdiction)</li>
 						<li>• Patent/trademark law (federal jurisdiction)</li>
-						<li>• Out-of-state matters (non-{caseData.jurisdiction || 'Florida'})</li>
+						<li>• Out-of-state matters (non-{data.jurisdiction || 'Florida'})</li>
 					</ul>
 				</div>
 
@@ -1247,12 +1252,12 @@
 				{caseData?.clio_matter_id ? 'Clio Matter' : 'Import from Clio'}
 			</h3>
 
-			{#if caseData?.clio_matter_id && caseData?.clio_matter_data}
+			{#if data.clio_matter_id && data.clio_matter_data}
 				<!-- Show linked matter display -->
 				<ClioLinkedMatter
-					caseId={caseId}
-					matterData={caseData.clio_matter_data}
-					caseData={caseData}
+					caseId={caseId as string}
+					matterData={data.clio_matter_data}
+					caseData={data}
 					onUnlinked={async () => {
 						await loadCase();
 						await loadDocuments();
@@ -1265,7 +1270,7 @@
 			{:else}
 				<!-- Show search UI (only if no matter linked) -->
 				<ClioMatterSearch
-					caseId={caseId}
+					caseId={caseId as string}
 					onMatterSelected={async () => {
 						await loadCase();
 						await loadDocuments();
@@ -1289,10 +1294,14 @@
 			<!-- Drag and Drop Upload Zone -->
 			{#if selectedFiles.length === 0}
 				<div
+					role="button"
+					tabindex="0"
+					aria-label="Upload documents by dragging and dropping here or clicking the upload button"
 					class="p-8 border-2 border-dashed rounded-lg m-4 transition-colors {dragActive ? 'border-accent bg-accent/10' : 'border-gray-300 bg-gray-50'}"
 					ondrop={handleDrop}
 					ondragover={handleDragOver}
 					ondragleave={handleDragLeave}
+					onkeydown={(e) => e.key === 'Enter' && document.getElementById('file-upload-input')?.click()}
 				>
 					<div class="text-center">
 						<svg class="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48">
@@ -1303,6 +1312,7 @@
 								<span class="text-accent hover:text-accent-hover font-medium">Click to upload</span>
 								<span class="text-gray-600"> or drag and drop</span>
 								<input
+									id="file-upload-input"
 									type="file"
 									multiple
 									accept=".pdf,.docx,.doc,.txt,.png,.jpg,.jpeg,.zip"
@@ -1440,7 +1450,7 @@
 					<ul class="divide-y divide-gray-200">
 					{#each sortedDocuments as doc}
 							<li 
-								class="px-4 py-4 sm:px-6 group transition-colors {isVideoAudioFile(doc.file_name) ? 'bg-red-50 hover:bg-red-100 border-l-4 border-red-500 opacity-75' : doc.metadata?.is_intake_form ? 'bg-gradient-to-r from-green-50 to-green-100 hover:from-green-100 hover:to-green-150 border-l-[6px] border-green-600' : doc.metadata?.is_intake_candidate ? 'bg-yellow-50 hover:bg-yellow-100 border-l-4 border-yellow-400' : 'hover:bg-gray-50'}"
+								class="px-4 py-4 sm:px-6 group transition-colors {isVideoAudioFile(doc.file_name) ? 'bg-red-50 hover:bg-red-100 border-l-4 border-red-500 opacity-75' : doc.metadata?.is_intake_form ? 'bg-linear-to-r from-green-50 to-green-100 hover:from-green-100 hover:to-green-150 border-l-[6px] border-green-600' : doc.metadata?.is_intake_candidate ? 'bg-yellow-50 hover:bg-yellow-100 border-l-4 border-yellow-400' : 'hover:bg-gray-50'}"
 								role={doc.metadata?.is_intake_form ? 'article' : undefined}
 								aria-label={isVideoAudioFile(doc.file_name) ? 'Video/audio file - not analyzed' : doc.metadata?.is_intake_form ? 'Intake form document' : doc.metadata?.is_intake_candidate ? 'Alternate intake form candidate' : undefined}
 								aria-describedby={doc.metadata?.is_intake_form ? `intake-desc-${doc.id}` : undefined}
@@ -1451,26 +1461,33 @@
 									<span id="intake-alt-desc-${doc.id}" class="sr-only">This is an alternate intake form candidate</span>
 								{/if}
 								<div class="flex items-center justify-between">
-									<button
+									<div
+										role="button"
+										tabindex="0"
 										onclick={() => viewDocument(doc)}
-										class="flex-1 min-w-0 flex items-center space-x-3 text-left"
+										onkeydown={(e) => e.key === 'Enter' && viewDocument(doc)}
+										class="flex-1 min-w-0 flex items-center space-x-3 text-left cursor-pointer"
 									>
 										<div class="flex-1 min-w-0">
 											<div class="flex items-center space-x-2">
 												{#if isVideoAudioFile(doc.file_name)}
-													<svg class="h-5 w-5 text-red-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" title="Video/Audio - Not Analyzed" aria-hidden="true">
+													<svg class="h-5 w-5 text-red-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+														<title>Video/Audio - Not Analyzed</title>
 														<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
 													</svg>
 												{:else if doc.metadata?.is_intake_form}
-													<svg class="h-6 w-6 text-green-600 flex-shrink-0 animate-pulse" fill="none" viewBox="0 0 24 24" stroke="currentColor" title="Primary Intake Form" aria-hidden="true">
+													<svg class="h-6 w-6 text-green-600 shrink-0 animate-pulse" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+														<title>Primary Intake Form</title>
 														<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
 													</svg>
 												{:else if doc.metadata?.is_intake_candidate}
-													<svg class="h-5 w-5 text-yellow-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" title="Alternate Intake Form" aria-hidden="true">
+													<svg class="h-5 w-5 text-yellow-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+														<title>Alternate Intake Form</title>
 														<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
 													</svg>
 												{:else if doc.metadata?.clio_source}
-													<svg class="h-4 w-4 text-accent flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" title="Imported from Clio">
+													<svg class="h-4 w-4 text-accent shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+														<title>Imported from Clio</title>
 														<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
 													</svg>
 												{/if}
@@ -1521,9 +1538,10 @@
 										<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full {getStatusColor(doc.status)}">
 											{doc.status}
 										</span>
-									</button>
+									</div>
 									<button
 										onclick={() => (deleteConfirmDoc = doc.id)}
+										aria-label="Delete document"
 										class="ml-4 opacity-0 group-hover:opacity-100 transition-opacity text-gray-400 hover:text-red-600"
 									>
 										<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1558,7 +1576,7 @@
 									<p>No documents uploaded yet. Upload documents in the Documents tab.</p>
 								</div>
 							{:else}
-								<VerificationDashboard
+								<VerificationHub
 									{documents}
 									{caseId}
 									onDocumentsUpdated={loadDocuments}
@@ -1809,8 +1827,8 @@
 		<div class="bg-white rounded-lg max-w-md w-full p-6">
 			<h3 class="text-lg font-medium text-gray-900 mb-4">Delete Case</h3>
 			<div class="text-sm text-gray-600 space-y-3 mb-4">
-				<p><strong>Case:</strong> {caseData.client_name}</p>
-				{#if caseData.reference_number}
+				<p><strong>Case:</strong> {caseData?.client_name}</p>
+				{#if caseData?.reference_number}
 					<p><strong>Reference:</strong> {caseData.reference_number}</p>
 				{/if}
 				<p class="text-red-600 font-medium">
@@ -1858,20 +1876,27 @@
 
 <!-- Document Viewer Modal -->
 {#if viewingDocument}
-	<div
+	<div 
+		role="button"
+		tabindex="0"
 		class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50 flex items-center justify-center p-4"
 		onclick={closeDocumentViewer}
+		onkeydown={(e) => e.key === 'Escape' && closeDocumentViewer()}
 	>
 		<div
+			role="dialog"
+			aria-modal="true"
+			tabindex="-1"
 			class="relative bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] flex flex-col"
 			onclick={(e) => e.stopPropagation()}
+			onkeydown={(e) => e.stopPropagation()}
 		>
 			<!-- Header -->
 			<div class="flex items-start justify-between p-6 border-b border-gray-200">
 				<div class="flex-1 min-w-0">
 					<div class="flex items-center space-x-2 mb-2">
 						{#if viewingDocument.metadata?.is_intake_form}
-							<svg class="h-5 w-5 text-accent flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+							<svg class="h-5 w-5 text-accent shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
 								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
 							</svg>
 							<span class="px-2 py-0.5 text-xs font-semibold rounded-full bg-accent text-white">
@@ -2061,7 +2086,7 @@
 						<div class="ml-3 flex-1 min-w-0">
 							<div class="flex items-center space-x-2 mb-1">
 								{#if doc.metadata?.clio_source}
-									<svg class="h-4 w-4 text-accent flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+									<svg class="h-4 w-4 text-accent shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
 										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
 									</svg>
 								{/if}

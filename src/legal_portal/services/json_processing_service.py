@@ -18,6 +18,7 @@ from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_fi
 from legal_portal.core.data_models import ProcessingError
 from legal_portal.utils.logging_config import get_module_logger
 from legal_portal.utils.openai_client import OpenAIClient
+from legal_portal.utils.diagnostic_logger import DiagnosticLogger
 
 logger = get_module_logger(__name__)
 
@@ -343,8 +344,10 @@ class JsonProcessingService:
         quality_context: str = "",
         clio_matter_context: str = "",
         jurisdiction: str = "Florida",  # Added jurisdiction parameter
+        diag_logger: Optional[DiagnosticLogger] = None,
+        original_documents: Optional[Dict[str, str]] = None, # NEW: Explicit raw content
     ) -> str:
-        """Generate findings letter using multi-stage analysis results.
+        """Generate findings letter using multi-stage analysis results."""
 
         This method uses structured analysis from MultiStageAnalyzer to generate
         an attorney-quality letter with adaptive structure based on case complexity.
@@ -413,7 +416,8 @@ class JsonProcessingService:
 
         # Format structured analysis for prompt
         structured_context = self._format_multi_stage_context(
-            fact_matrix, legal_analysis, structure_guidance, verified_statutes
+            fact_matrix, legal_analysis, structure_guidance, verified_statutes,
+            original_documents=original_documents
         )
 
         # Build statute context
@@ -502,6 +506,14 @@ class JsonProcessingService:
         # Convert to HTML
         html_content = self._convert_markdown_to_html(markdown_response)
 
+        # Stage 5: Log Final Letter
+        if diag_logger:
+            diag_logger.log_stage("stage5_final_letter", html_content, {
+                "jurisdiction": jurisdiction,
+                "num_issues": num_issues,
+                "attorney_name": attorney_name
+            })
+
         logger.info(
             "Successfully generated natural flow letter",
             extra={"html_length": len(html_content), "structure": "natural_flow"},
@@ -510,7 +522,7 @@ class JsonProcessingService:
         return html_content
 
     def _format_multi_stage_context(
-        self, fact_matrix, legal_analysis, structure_guidance, verified_statutes
+        self, fact_matrix, legal_analysis, structure_guidance, verified_statutes, original_documents: Optional[Dict[str, str]] = None
     ) -> str:
         """Format multi-stage analysis results for letter generation prompt."""
         import json
@@ -529,6 +541,18 @@ class JsonProcessingService:
             f"Financial Data: "
             f"{json.dumps([f.model_dump() for f in fact_matrix.financial_data], default=str, indent=2)}\n\n"
         )
+
+        # Original Documents (Enabled for Quality Debugging)
+        if original_documents:
+            context += "--- FULL DOCUMENT CONTENT (for precision and citations) ---\n"
+            for filename, content in original_documents.items():
+                context += f"\nDOCUMENT: {filename}\n"
+                # Limit to first 10k chars to avoid extreme token counts
+                doc_content = content[:10000]
+                if len(content) > 10000:
+                    doc_content += "\n... [truncated for brevity]"
+                context += f"{doc_content}\n"
+            context += "--- END DOCUMENT CONTENT ---\n\n"
 
         # Legal Analysis
         context += "LEGAL ANALYSIS:\n"

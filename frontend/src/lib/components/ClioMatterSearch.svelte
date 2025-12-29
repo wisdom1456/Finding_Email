@@ -154,7 +154,7 @@
 				
 				progressStore.connect(
 					sseUrl, 
-					(data) => {
+					(data: any) => {
 						// On completion, update UI with stats
 						importPhase = 'complete';
 						importSuccess = true;

@@ -6,15 +6,11 @@ export default defineConfig({
 	plugins: [
 		svelte({
 			hot: !process.env.VITEST,
-			compilerOptions: {
-				// Use client-side mode for tests - runes mode
-				runes: true
-			}
 		})
 	],
 	test: {
 		include: ['src/**/*.{test,spec}.{js,ts}'],
-		environment: 'happy-dom',
+		environment: 'jsdom',
 		globals: true,
 		setupFiles: ['./src/tests/setup.ts'],
 		coverage: {
@@ -35,6 +31,7 @@ export default defineConfig({
 		}
 	},
 	resolve: {
+		conditions: ['browser'],
 		alias: {
 			'$lib': path.resolve('./src/lib'),
 			'$app/environment': path.resolve('./src/tests/mocks/$app/environment.ts'),

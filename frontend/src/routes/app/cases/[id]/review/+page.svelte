@@ -5,7 +5,7 @@
 	import { getApiUrl } from '$lib/config';
 	import { supabase } from '$lib/supabase';
 
-	const caseId = $derived($page.params.id);
+	const caseId = $derived($page.params.id as string);
 
 	let loading = $state(true);
 	let processing = $state(false);
@@ -72,13 +72,24 @@
 
 			if (caseError) throw caseError;
 
+			// Cast case data to expected shape
+			const data = caseData as { 
+				client_name?: string;
+				metadata?: { 
+					intake_processed?: boolean;
+					practice_areas?: string[];
+					qa_pairs?: Array<{question: string, answer: string}>;
+					raw_intake_content?: string;
+				};
+			};
+
 			// Check if already has intake metadata
-			if (caseData.metadata?.intake_processed) {
+			if (data.metadata?.intake_processed) {
 				// Load existing data
-				clientName = caseData.client_name || '';
-				selectedPracticeAreas = caseData.metadata.practice_areas || [];
-				qaPairs = caseData.metadata.qa_pairs || [];
-				rawContent = caseData.metadata.raw_intake_content || '';
+				clientName = data.client_name || '';
+				selectedPracticeAreas = data.metadata.practice_areas || [];
+				qaPairs = data.metadata.qa_pairs || [];
+				rawContent = data.metadata.raw_intake_content || '';
 			} else {
 				errorMessage = 'No intake form has been uploaded yet. Please upload an intake form first.';
 			}

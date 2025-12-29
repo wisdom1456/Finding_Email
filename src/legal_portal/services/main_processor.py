@@ -29,6 +29,7 @@ from legal_portal.services.multi_stage_analyzer import MultiStageAnalyzer
 from legal_portal.services.statute_recommendation_service import StatuteRecommendationService
 from legal_portal.utils.logging_config import get_module_logger
 from legal_portal.utils.openai_client import OpenAIClient
+from legal_portal.utils.diagnostic_logger import DiagnosticLogger
 
 logger = get_module_logger(__name__)
 
@@ -235,9 +236,21 @@ async def process_case_documents(
     start_time = time.time()
     errors = []
 
+    # Initialize Diagnostic Logger if enabled
+    diag_logger = None
+    if DiagnosticLogger.get_enabled():
+        diag_logger = DiagnosticLogger(session_id=case_info.get("case_id"))
+        
     try:
         # 1. Initialize services
         logger.info("Initializing processing services...")
+        
+        # Stage 1: Log Raw Extracted Text
+        if diag_logger:
+            raw_docs = {d.file_name: d.content for d in processed_case_docs}
+            raw_intake = {d.file_name: d.content for d in processed_intake}
+            diag_logger.log_stage("stage1_raw_text", {"case_docs": raw_docs, "intake_docs": raw_intake})
+
         openai_client_wrapper = OpenAIClient()
         json_processing_service = JsonProcessingService(client=openai_client_wrapper, config={})
 
@@ -403,6 +416,10 @@ async def process_case_documents(
             jurisdiction=jurisdiction,  # NEW: Pass jurisdiction
         )
 
+        # Stage 3: Log Per-Document Summaries
+        if diag_logger:
+            diag_logger.log_stage("stage3_document_summaries", [s.model_dump() for s in structured_summaries])
+
         # 5.5. AI Call #2.5: Generate case-level analysis summary
         logger.info("AI Call #2.5: Generating case-level analysis summary...")
         case_analysis_dict = await asyncio.to_thread(
@@ -413,6 +430,10 @@ async def process_case_documents(
             review_data,
             jurisdiction=jurisdiction,
         )
+        
+        # Stage 4: Log Case Synthesis
+        if diag_logger:
+            diag_logger.log_stage("stage4_case_synthesis", case_analysis_dict)
         client_name_for_case = (
             (case_info or {}).get("client_name") or (case_info or {}).get("clientName") or "Client"
         )
@@ -520,11 +541,17 @@ async def process_case_documents(
                 progress_callback=progress_callback,
                 case_type=case_analysis_dict.get("practice_area"),
                 jurisdiction=jurisdiction,  # Pass jurisdiction
+                diag_logger=diag_logger,  # Pass diagnostic logger
             )
 
             fact_matrix = multi_stage_result.fact_matrix
             legal_issue_map = multi_stage_result.issue_map
             letter_structure = multi_stage_result.letter_structure
+
+            # Attach original documents to multi-stage result for letter generation
+            multi_stage_result.original_documents = {
+                d.file_name: d.content for d in processed_case_docs + processed_intake
+            }
 
             logger.info(
                 f"Multi-stage analysis complete: {len(fact_matrix.timeline)} timeline events, "

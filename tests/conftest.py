@@ -468,13 +468,19 @@ def mock_supabase_user_client(test_user_id):
     mock_table.single.return_value = mock_table
 
     # Default to returning user's own cases
+    from datetime import timezone
     mock_table.execute.return_value = MagicMock(
         data=[
             {
                 "id": "case-001",
                 "user_id": test_user_id,
-                "case_name": "Test Case",
-                "created_at": datetime.utcnow().isoformat(),
+                "client_name": "Test Client",
+                "reference_number": "REF-001",
+                "description": "Test case",
+                "status": "pending",
+                "jurisdiction": "Florida",
+                "created_at": datetime.now(timezone.utc).isoformat(),
+                "updated_at": datetime.now(timezone.utc).isoformat(),
             }
         ],
         error=None,
@@ -522,19 +528,23 @@ async def app_client(mock_supabase_client, mock_openai_client) -> AsyncGenerator
 
 @pytest.fixture
 def case_factory(test_user_id):
-    """Factory for creating test case data."""
+    """Factory for creating test case data matching CaseResponse schema."""
 
     def _create_case(**overrides):
+        from datetime import timezone
+        now = datetime.now(timezone.utc)
         defaults = {
-            "id": f"case-{datetime.utcnow().timestamp()}",
+            "id": f"case-{now.timestamp()}",
             "user_id": test_user_id,
-            "case_name": "Test Case",
             "client_name": "John Doe",
-            "attorney_name": "Jane Smith",
-            "case_type": "Consumer Protection",
-            "status": "active",
-            "created_at": datetime.utcnow().isoformat(),
-            "updated_at": datetime.utcnow().isoformat(),
+            "reference_number": "REF-001",
+            "description": "Test case description",
+            "status": "pending",
+            "jurisdiction": "Florida",
+            "created_at": now.isoformat(),
+            "updated_at": now.isoformat(),
+            "clio_matter_id": None,
+            "created_via_clio": False,
         }
         defaults.update(overrides)
         return defaults
@@ -547,15 +557,17 @@ def document_factory(test_user_id):
     """Factory for creating test document data."""
 
     def _create_document(**overrides):
+        from datetime import timezone
+        now = datetime.now(timezone.utc)
         defaults = {
-            "id": f"doc-{datetime.utcnow().timestamp()}",
+            "id": f"doc-{now.timestamp()}",
             "user_id": test_user_id,
             "case_id": "case-001",
             "file_name": "test_document.pdf",
             "file_type": "pdf",
             "file_size": 1024,
             "storage_path": f"documents/{test_user_id}/test_document.pdf",
-            "uploaded_at": datetime.utcnow().isoformat(),
+            "uploaded_at": now.isoformat(),
         }
         defaults.update(overrides)
         return defaults

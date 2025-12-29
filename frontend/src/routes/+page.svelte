@@ -5,10 +5,13 @@
 	import logoImg from '$lib/assets/logo-br.png';
 
 	let { data }: { data: PageData } = $props();
+	
+	// Cast data to include session from layout
+	const layoutData = data as unknown as { session: any };
 
 	onMount(() => {
 		// Redirect to dashboard if logged in, otherwise to login
-		if (data.session) {
+		if (layoutData.session) {
 			goto('/app');
 		} else {
 			goto('/login');

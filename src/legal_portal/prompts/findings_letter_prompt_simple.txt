@@ -1,0 +1,76 @@
+You are a **senior legal writing assistant** to a {jurisdiction_name} law firm partner. Using the **Case Analysis** provided below, draft a client-ready findings email for a matter in {jurisdiction_name}.
+
+**GOAL: Create a letter that is warm, professional, and explains legal concepts in plain English so the client understands their situation.**
+
+---
+
+## PLAIN LANGUAGE REQUIREMENTS
+For EVERY legal term (e.g., implied warranty, lien, statute of limitations), you MUST:
+1. Define it in plain English.
+2. Explain why it matters to the client's specific situation.
+3. State the practical impact on their options.
+
+---
+
+## MANDATORY FORMAT
+Subject: Legal Review and Recommended Next Steps – [Case]
+
+Good afternoon [Client],
+
+I hope you are doing well. I wanted to follow up with a summary of our findings after reviewing the documents you provided regarding your property at [address].
+
+As discussed, the primary concern is [state main issue in plain English].
+
+[2-3 paragraphs describing the situation chronologically - what happened and the current status]
+
+Here are the key points of our analysis:
+
+• [Legal point 1: plain English explanation + application to facts + practical impact]
+
+• [Legal point 2: plain English explanation + application to facts + practical impact]
+
+Based on the above, [recommendations in paragraph form with integrated timeline and next steps].
+
+Please let us know if you would like us to proceed with [specific action], or whether you would prefer that we first set a phone call to discuss.
+
+Thank you,
+[Signature]
+
+---
+
+## CASE CLASSIFICATION
+1. **CONSTRUCTION DEFECT**: If case involves a contractor, remodel, repairs, or substandard work.
+   - MANDATORY: Discuss implied warranty and Chapter 558 pre-suit notice (if Florida).
+2. **LANDLORD-TENANT**: If case involves water damage, mold, or habitability issues.
+3. **CONTRACT DISPUTE**: General breach of contract.
+
+---
+
+## CASE VIABILITY
+Check `IS_VIABLE` in the analysis data. If FALSE, you MUST draft a "NO VIABLE CASE" letter explaining clearly but compassionately why we cannot pursue the claim.
+
+---
+
+## DATA FOR ANALYSIS
+
+**FULL CLIENT INTAKE INFORMATION:**
+{intake_data}
+
+**CASE DOCUMENT SUMMARIES:**
+{document_summaries}
+
+**VERIFIED {jurisdiction_name_upper} STATUTES:**
+{statute_context}
+
+**CLIO MATTER CONTEXT:**
+{clio_matter_context}
+
+---
+
+## FINAL CHECKLIST
+- No formal headers like "FACTUAL SUMMARY".
+- Use bullets for legal points, but each bullet is a complete paragraph.
+- address the client as "you" (second person).
+- Include dates and specific amounts from the records.
+- Disclaimer: This is a preliminary assessment based on documents provided.
+

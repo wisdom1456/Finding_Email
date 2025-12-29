@@ -852,6 +852,7 @@ class MultiStageAnalysisResult(BaseModel):
     processing_time_seconds: float
     stage_timings: Dict[str, float] = Field(default_factory=dict)  # Time per stage
     opposing_parties: List[Party] = Field(default_factory=list)
+    original_documents: Optional[Dict[str, str]] = None  # NEW: Store raw content for letter generation
 
 
 class CompletenessReport(BaseModel):

@@ -36,6 +36,7 @@ from legal_portal.services.json_processing_service import JsonProcessingService
 from legal_portal.services.main_processor import process_case_documents
 from legal_portal.services.progress_manager import ProgressManager
 from legal_portal.utils.openai_client import OpenAIClient
+from legal_portal.utils.diagnostic_logger import DiagnosticLogger
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -1283,6 +1284,11 @@ async def generate_letter(
     jurisdiction = artifacts.get("jurisdiction", "Florida")
     logger.info(f"Generating {letter_request.letter_type} letter for {jurisdiction}")
 
+    # Initialize Diagnostic Logger if enabled
+    diag_logger = None
+    if DiagnosticLogger.get_enabled():
+        diag_logger = DiagnosticLogger(session_id=letter_request.case_id)
+
     if letter_request.letter_type == LetterType.FINDINGS:
         from legal_portal.core.data_models import DeepAnalysis, FactMatrix, LetterStructure
 
@@ -1306,6 +1312,8 @@ async def generate_letter(
             quality_context=artifacts.get("quality_context", ""),
             clio_matter_context=artifacts.get("clio_matter_context", ""),
             jurisdiction=jurisdiction,  # Pass jurisdiction
+            diag_logger=diag_logger,  # Pass diagnostic logger
+            original_documents=msr.get("original_documents"), # NEW: Pass raw content
         )
         letter_key = "findings"
     else:

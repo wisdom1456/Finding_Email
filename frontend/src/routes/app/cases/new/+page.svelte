@@ -101,24 +101,27 @@
 	}
 
 	// Prevent navigation during creation
-	onMount(async () => {
+	onMount(() => {
 		// Fetch user profile for default jurisdiction
-		try {
-			const { data: { user } } = await supabase.auth.getUser();
-			if (user) {
-				const { data: profile } = await supabase
-					.from('profiles')
-					.select('default_jurisdiction')
-					.eq('id', user.id)
-					.single();
-				
-				if (profile?.default_jurisdiction) {
-					jurisdiction = profile.default_jurisdiction;
+		(async () => {
+			try {
+				const { data: { user } } = await supabase.auth.getUser();
+				if (user) {
+					const { data: profile } = await supabase
+						.from('profiles')
+						.select('default_jurisdiction')
+						.eq('id', user.id)
+						.single();
+					
+					const profileData = profile as { default_jurisdiction?: string } | null;
+					if (profileData?.default_jurisdiction) {
+						jurisdiction = profileData.default_jurisdiction;
+					}
 				}
+			} catch (err) {
+				console.error('Error fetching profile:', err);
 			}
-		} catch (err) {
-			console.error('Error fetching profile:', err);
-		}
+		})();
 
 		const handleBeforeUnload = (e: BeforeUnloadEvent) => {
 			if (isCreating) {

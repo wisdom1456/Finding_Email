@@ -86,7 +86,7 @@ CREATE TABLE IF NOT EXISTS documents (
     file_type TEXT NOT NULL,
     file_size INTEGER NOT NULL,
     storage_path TEXT UNIQUE NOT NULL,
-    status TEXT DEFAULT 'pending' CHECK (status IN ('ready', 'needs_review', 'extraction_failed', 'download_failed', 'corrupted', 'skipped', 'pending')),
+    status TEXT DEFAULT 'pending' CHECK (status IN ('ready', 'needs_review', 'extraction_failed', 'download_failed', 'corrupted', 'skipped', 'pending', 'duplicate', 'download_timeout')),
     extracted_text TEXT,
     extraction_method TEXT,
     extraction_quality TEXT,

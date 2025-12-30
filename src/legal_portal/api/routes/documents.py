@@ -11,6 +11,7 @@ from pydantic import BaseModel
 from legal_portal.api.dependencies import get_current_user, get_supabase_client, get_user_supabase_client
 from legal_portal.core.data_models import DocumentStatus, DocumentType
 from legal_portal.core.document_processor import DocumentProcessor, ValidationError
+from legal_portal.utils.security import sanitize_text_for_db
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -225,6 +226,9 @@ async def upload_document(
                     # Other file types - mark as needing extraction
                     extraction_method = "pending"
                     extraction_quality = "unknown"
+
+                # Sanitize extracted text to remove NULL characters that PostgreSQL can't store
+                extracted_text = sanitize_text_for_db(extracted_text)
 
                 # Update document with extraction results
                 update_data = {
@@ -937,6 +941,9 @@ async def trigger_extraction(
             extraction_method = "none"
             extraction_quality = "low"
 
+        # Sanitize extracted text to remove NULL characters that PostgreSQL can't store
+        extracted_text = sanitize_text_for_db(extracted_text)
+
         # Update document with extraction results
         update_data = {
             "extracted_text": extracted_text,
@@ -953,7 +960,7 @@ async def trigger_extraction(
 
         logger.info(
             f"Extraction complete for {document_id}: method={extraction_method}, "
-            f"quality={extraction_quality}, chars={len(extracted_text)}"
+            f"quality={extraction_quality}, chars={len(extracted_text or '')}"
         )
 
         return {
@@ -1076,6 +1083,9 @@ async def replace_document_file(
                 extraction_error = f"Failed to decode text: {e}"
                 extraction_method = "failed"
                 extraction_quality = "low"
+
+        # Sanitize extracted text to remove NULL characters that PostgreSQL can't store
+        extracted_text = sanitize_text_for_db(extracted_text)
 
         # Update existing document record
         update_data = {

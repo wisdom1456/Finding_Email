@@ -175,13 +175,36 @@
 		}
 	}
 
-	async function handleAlwaysDelete(docName: string) {
+	async function handleAlwaysDelete(docName: string, docId?: string) {
 		try {
 			const { data: { session } } = await supabase.auth.getSession();
 			if (!session) throw new Error('Not authenticated');
 
-			// 1. Fetch current profile
 			const apiUrl = getApiUrl();
+
+			// 1. Delete the current document (and any others with same name) - no confirmation needed
+			if (docId) {
+				// Find all documents with this name and delete them
+				const docsToDelete = documents.filter(d => d.file_name === docName);
+				const docIds = docsToDelete.map(d => d.id);
+				
+				if (docIds.length > 0) {
+					const deleteResponse = await fetch(`${apiUrl}/api/documents/bulk-delete`, {
+						method: 'POST',
+						headers: {
+							'Content-Type': 'application/json',
+							Authorization: `Bearer ${session.access_token}`,
+						},
+						body: JSON.stringify({ document_ids: docIds }),
+					});
+
+					if (!deleteResponse.ok) {
+						console.warn('Failed to delete documents, continuing with blacklist update');
+					}
+				}
+			}
+
+			// 2. Fetch current profile
 			const getResponse = await fetch(`${apiUrl}/api/profile`, {
 				headers: {
 					'Authorization': `Bearer ${session.access_token}`,
@@ -192,34 +215,33 @@
 			if (!getResponse.ok) throw new Error('Failed to fetch profile');
 			const profile = await getResponse.json();
 
-			// 2. Update blacklist
+			// 3. Update blacklist
 			const currentBlacklist = profile.ai_preferences?.blacklisted_documents || [];
-			if (currentBlacklist.includes(docName)) {
-				toastStore.info('Document name is already in blacklist');
-				return;
+			if (!currentBlacklist.includes(docName)) {
+				const updatedBlacklist = [...currentBlacklist, docName];
+				
+				const profileData = {
+					ai_preferences: {
+						...profile.ai_preferences,
+						blacklisted_documents: updatedBlacklist
+					}
+				};
+
+				// 4. Save profile
+				const updateResponse = await fetch(`${apiUrl}/api/profile`, {
+					method: 'PUT',
+					headers: {
+						'Authorization': `Bearer ${session.access_token}`,
+						'Content-Type': 'application/json'
+					},
+					body: JSON.stringify(profileData)
+				});
+
+				if (!updateResponse.ok) throw new Error('Failed to update blacklist');
 			}
 
-			const updatedBlacklist = [...currentBlacklist, docName];
-			
-			const profileData = {
-				ai_preferences: {
-					...profile.ai_preferences,
-					blacklisted_documents: updatedBlacklist
-				}
-			};
-
-			// 3. Save profile
-			const updateResponse = await fetch(`${apiUrl}/api/profile`, {
-				method: 'PUT',
-				headers: {
-					'Authorization': `Bearer ${session.access_token}`,
-					'Content-Type': 'application/json'
-				},
-				body: JSON.stringify(profileData)
-			});
-
-			if (!updateResponse.ok) throw new Error('Failed to update blacklist');
-			toastStore.success(`"${docName}" added to always-exclude list`);
+			toastStore.success(`"${docName}" will always be excluded from future imports`);
+			await onDocumentsUpdated(); // Refresh the document list
 		} catch (error: any) {
 			toastStore.error(`Blacklist error: ${error.message}`);
 		}
@@ -594,7 +616,7 @@
 								onReplace={() => { recoveryDocument = doc; showRecoveryModal = true; }}
 								onSkip={() => handleSkip(doc.id)}
 								onDelete={() => handleDelete(doc.id)}
-								onAlwaysDelete={(name) => handleAlwaysDelete(name)}
+								onAlwaysDelete={(name, id) => handleAlwaysDelete(name, id)}
 								onToggleExclusion={(id, excluded) => handleToggleExclusion(id, excluded)}
 								isProcessing={processingDocIds.has(doc.id)}
 							/>
@@ -642,7 +664,7 @@
 								onVerify={() => handleVerify(doc.id)}
 								onSkip={() => handleSkip(doc.id)}
 								onDelete={() => handleDelete(doc.id)}
-								onAlwaysDelete={(name) => handleAlwaysDelete(name)}
+								onAlwaysDelete={(name, id) => handleAlwaysDelete(name, id)}
 								onToggleExclusion={(id, excluded) => handleToggleExclusion(id, excluded)}
 								isProcessing={processingDocIds.has(doc.id)}
 							/>
@@ -670,7 +692,7 @@
 								onView={() => handleView(doc)}
 								onEdit={() => editingDocument = doc}
 								onDelete={() => handleDelete(doc.id)}
-								onAlwaysDelete={(name) => handleAlwaysDelete(name)}
+								onAlwaysDelete={(name, id) => handleAlwaysDelete(name, id)}
 								onToggleExclusion={(id, excluded) => handleToggleExclusion(id, excluded)}
 								isProcessing={processingDocIds.has(doc.id)}
 							/>
@@ -701,7 +723,7 @@
 								onView={() => handleView(doc)}
 								onEdit={() => editingDocument = doc}
 								onDelete={() => handleDelete(doc.id)}
-								onAlwaysDelete={(name) => handleAlwaysDelete(name)}
+								onAlwaysDelete={(name, id) => handleAlwaysDelete(name, id)}
 								onToggleExclusion={(id, excluded) => handleToggleExclusion(id, excluded)}
 								isProcessing={processingDocIds.has(doc.id)}
 							/>
@@ -734,7 +756,7 @@
 								onView={() => handleView(doc)}
 								onEdit={() => editingDocument = doc}
 								onDelete={() => handleDelete(doc.id)}
-								onAlwaysDelete={(name) => handleAlwaysDelete(name)}
+								onAlwaysDelete={(name, id) => handleAlwaysDelete(name, id)}
 								onToggleExclusion={(id, excluded) => handleToggleExclusion(id, excluded)}
 								isProcessing={processingDocIds.has(doc.id)}
 							/>
@@ -778,7 +800,7 @@
 							onVerify={() => handleVerify(doc.id)}
 							onSkip={() => handleSkip(doc.id)}
 							onDelete={() => handleDelete(doc.id)}
-							onAlwaysDelete={(name) => handleAlwaysDelete(name)}
+							onAlwaysDelete={(name, id) => handleAlwaysDelete(name, id)}
 							onToggleExclusion={(id, excluded) => handleToggleExclusion(id, excluded)}
 							isProcessing={processingDocIds.has(doc.id)}
 						/>

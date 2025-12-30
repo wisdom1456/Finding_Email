@@ -1,6 +1,7 @@
 """Document processing utilities for downloading and extracting text from files."""
 
 import io
+import re
 from typing import Optional, Tuple
 
 import requests
@@ -186,12 +187,14 @@ class DocumentProcessor:
         if filename and "." in filename:
             extension = filename.split(".")[-1].lower()
 
+        extracted = None
+        
         # PDF
         if content_type == "application/pdf" or extension == "pdf":
             if not PYPDF_AVAILABLE and not FITZ_AVAILABLE:
                 logger.warning(f"No PDF library available to extract text from {filename}")
                 return None
-            return cls.extract_text_from_pdf(file_content)
+            extracted = cls.extract_text_from_pdf(file_content)
 
         # DOCX
         elif (
@@ -201,15 +204,23 @@ class DocumentProcessor:
             if not DOCX_AVAILABLE:
                 logger.warning(f"python-docx not available to extract text from {filename}")
                 return None
-            return cls.extract_text_from_docx(file_content)
+            extracted = cls.extract_text_from_docx(file_content)
 
         # Plain text
         elif content_type.startswith("text/") or extension in ["txt", "text", "log", "md"]:
-            return cls.extract_text_from_txt(file_content)
-
+            extracted = cls.extract_text_from_txt(file_content)
         # Unsupported type
         else:
             return None
+
+        # Sanitize extracted text to remove NULL characters that PostgreSQL can't store
+        if extracted:
+            # Remove NULL characters (\\x00 and \\u0000)
+            extracted = extracted.replace('\x00', '')
+            # Remove other problematic control characters (except newline, tab, carriage return)
+            extracted = re.sub(r'[\x01-\x08\x0b\x0c\x0e-\x1f]', '', extracted)
+        
+        return extracted
 
     @classmethod
     def download_and_extract(

@@ -463,6 +463,31 @@ def get_safe_upload_path(base_dir: str, filename: str, subfolder: Optional[str] 
     return upload_path
 
 
+def sanitize_text_for_db(text: Optional[str]) -> Optional[str]:
+    """Sanitize text for PostgreSQL storage by removing problematic characters.
+    
+    PostgreSQL text columns cannot store NULL characters (\\u0000).
+    This function removes them and other control characters that can cause issues.
+    
+    Args:
+        text: The text to sanitize
+        
+    Returns:
+        Sanitized text safe for PostgreSQL, or None if input was None
+    """
+    if text is None:
+        return None
+    
+    # Remove NULL characters (\\u0000) - PostgreSQL cannot store these
+    sanitized = text.replace('\x00', '')
+    
+    # Optionally remove other problematic control characters (except newline, tab, carriage return)
+    # This regex removes control chars U+0001-U+0008, U+000B-U+000C, U+000E-U+001F
+    sanitized = re.sub(r'[\x01-\x08\x0b\x0c\x0e-\x1f]', '', sanitized)
+    
+    return sanitized
+
+
 # Export public interface
 __all__ = [
     "ALLOWED_EXTENSIONS",
@@ -471,6 +496,7 @@ __all__ = [
     "create_secure_temp_file",
     "get_safe_upload_path",
     "sanitize_path_component",
+    "sanitize_text_for_db",
     "secure_filename",
     "validate_file_content",
     "validate_file_path",

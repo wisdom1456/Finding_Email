@@ -25,7 +25,7 @@
 		onEdit, 
 		onReExtract, 
 		onDelete, 
-		onAlwaysDelete,
+		onAlwaysDelete, // Now expects (name: string, id: string) => void
 		onReplace,
 		onSkip,
 		onView,
@@ -37,7 +37,7 @@
 		onEdit?: (doc: any) => void;
 		onReExtract?: (id: string) => void;
 		onDelete?: (id: string) => void;
-		onAlwaysDelete?: (name: string) => void;
+		onAlwaysDelete?: (name: string, id: string) => void;
 		onReplace?: (id: string) => void;
 		onSkip?: (id: string) => void;
 		onView?: (doc: any) => void;
@@ -364,7 +364,7 @@
 					</button>
 
 					<button 
-						onclick={() => { onAlwaysDelete?.(doc.file_name); onDelete?.(doc.id); showMenu = false; }}
+						onclick={() => { onAlwaysDelete?.(doc.file_name, doc.id); showMenu = false; }}
 						class="w-full px-4 py-2 text-left text-sm font-medium text-red-700 hover:bg-red-50 flex items-center"
 					>
 						<XCircle class="w-4 h-4 mr-3" />

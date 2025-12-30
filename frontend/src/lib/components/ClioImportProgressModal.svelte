@@ -31,6 +31,8 @@
 	let steps = $state<ProgressStep[]>([]);
 	let isComplete = $state(false);
 	let hasError = $state(false);
+	let isStalled = $state(false);
+	let stallPercent = $state(0);
 	let errorMessage = $state('');
 	
 	// Map progress store phase to modal step
@@ -70,8 +72,16 @@
 					steps = [...steps, currentStep];
 				}
 			} else if (state.status === 'completed') {
-				currentStep = { step: 'complete', message: 'Import completed!' };
-				isComplete = true;
+				// Check if this is a stalled completion
+				if (state.error === 'IMPORT_STALLED') {
+					currentStep = { step: 'stalled', message: 'Import may have stopped' };
+					isStalled = true;
+					isComplete = true;
+					stallPercent = state.percent;
+				} else {
+					currentStep = { step: 'complete', message: 'Import completed!' };
+					isComplete = true;
+				}
 			} else if (state.status === 'error') {
 				currentStep = { step: 'error', message: state.error || 'An error occurred' };
 				hasError = true;
@@ -90,6 +100,7 @@
 			documents: 'Downloading Documents',
 			analyze: 'Analyzing Intake Forms',
 			complete: 'Complete',
+			stalled: 'Partial Import',
 			error: 'Error'
 		};
 		return labels[step] || step;
@@ -105,6 +116,7 @@
 			documents: '📄',
 			analyze: '🔍',
 			complete: '✅',
+			stalled: '⚠️',
 			error: '❌'
 		};
 		return icons[step] || '⚙️';
@@ -163,6 +175,8 @@
 		steps = [];
 		isComplete = false;
 		hasError = false;
+		isStalled = false;
+		stallPercent = 0;
 		errorMessage = '';
 	}
 </script>
@@ -174,7 +188,9 @@
 			<div class="px-6 py-4 border-b border-gray-200">
 				<div class="flex items-center justify-between">
 					<h3 class="text-lg font-semibold text-gray-900">
-						{#if isComplete}
+						{#if isComplete && isStalled}
+							Case Created (Partial Import)
+						{:else if isComplete}
 							Case Created Successfully
 						{:else if hasError}
 							Error Creating Case
@@ -269,6 +285,58 @@
 									</span>
 								</div>
 							{/each}
+						</div>
+					</div>
+				{:else if isComplete && isStalled}
+					<!-- Partial Success - Import Stalled -->
+					<div class="text-center py-6">
+						<div class="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-yellow-100 mb-4">
+							<svg
+								class="h-10 w-10 text-yellow-600"
+								fill="none"
+								viewBox="0 0 24 24"
+								stroke="currentColor"
+							>
+								<path
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									stroke-width="2"
+									d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+								/>
+							</svg>
+						</div>
+						<h4 class="text-lg font-semibold text-gray-900 mb-2">Case Created with Partial Import</h4>
+						<p class="text-sm text-gray-600 mb-4">
+							The import stopped at {stallPercent}%. Some documents may not have been imported, 
+							but you can still work with the case and manually add any missing items.
+						</p>
+						
+						{#if importResult}
+							<div class="mt-4 grid grid-cols-3 gap-4 text-sm">
+								<div class="bg-purple-50 rounded-lg p-3">
+									<div class="text-2xl font-bold text-purple-600">
+										{importResult.communications_count || 0}
+									</div>
+									<div class="text-gray-600">Communications</div>
+								</div>
+								<div class="bg-accent/10 rounded-lg p-3">
+									<div class="text-2xl font-bold text-accent">{importResult.notes_count || 0}</div>
+									<div class="text-gray-600">Notes</div>
+								</div>
+								<div class="bg-green-50 rounded-lg p-3">
+									<div class="text-2xl font-bold text-green-600">
+										{importResult.documents_count || 0}
+									</div>
+									<div class="text-gray-600">Documents</div>
+								</div>
+							</div>
+						{/if}
+						
+						<div class="mt-4 p-3 bg-yellow-50 rounded-lg border border-yellow-200 text-left">
+							<p class="text-sm text-yellow-800">
+								<strong>Tip:</strong> Large file imports may take longer than server limits allow. 
+								Your case has been created and you can view/edit it now.
+							</p>
 						</div>
 					</div>
 				{:else if isComplete}

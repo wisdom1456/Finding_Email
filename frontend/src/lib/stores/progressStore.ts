@@ -78,6 +78,12 @@ function createProgressStore() {
 			const messageHandler = (event: ProgressEvent) => {
 				if (event.data) finalData = event.data;
 				
+				// Determine status based on event type
+				let newStatus: ProgressState['status'] = 'active';
+				if (event.type === 'completed') newStatus = 'completed';
+				else if (event.type === 'error' || event.type === 'failed') newStatus = 'error';
+				else if (event.type === 'stalled') newStatus = 'completed'; // Treat stalled as partial completion
+				
 				update(state => ({
 					...state,
 					message: event.message,
@@ -86,9 +92,8 @@ function createProgressStore() {
 					docs_processed: event.docs_processed || state.docs_processed,
 					current_doc: event.current_doc || state.current_doc,
 					sub_step: event.sub_step || state.sub_step,
-					status: event.type === 'completed' ? 'completed' : 
-					        event.type === 'error' || event.type === 'failed' ? 'error' : 'active',
-					error: event.error || null,
+					status: newStatus,
+					error: event.type === 'stalled' ? 'IMPORT_STALLED' : (event.error || null),
 					timestamp: event.timestamp || new Date().toISOString(),
 					data: event.data || state.data
 				}));

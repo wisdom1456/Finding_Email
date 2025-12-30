@@ -116,9 +116,33 @@ export class PollingClient {
 				return;
 			}
 
-			// Check for stall (no progress for ~3 minutes) - but don't fail, just warn
+			// Check for stall (no progress for ~3 minutes) - warn periodically
 			if (this.stallCount >= this.maxStallCount && this.stallCount % 20 === 0) {
 				console.warn(`Import appears stalled at ${currentPercent}% for ${Math.round(this.stallCount * this.pollFrequency / 1000)}s`);
+			}
+
+			// After 5 minutes of stall (100 polls * 3s = 300s), treat as "stalled but maybe partial success"
+			// This handles the case where Vercel kills the serverless function
+			const maxStallBeforeGracefulExit = 100; // 5 minutes
+			if (this.stallCount >= maxStallBeforeGracefulExit) {
+				console.warn(`Import stalled for 5+ minutes at ${currentPercent}%. Treating as partial completion.`);
+				
+				// Return a special "stalled" completion instead of error
+				// The frontend can check if documents were actually imported
+				if (this.onMessageHandler) {
+					this.onMessageHandler({
+						type: 'stalled',
+						message: `Import may have stopped at ${currentPercent}%. Some documents may have been imported.`,
+						phase: 'stalled',
+						percent: currentPercent,
+						error: 'IMPORT_STALLED'
+					});
+				}
+				this.stopPolling();
+				if (this.onCompleteHandler) {
+					this.onCompleteHandler();
+				}
+				return;
 			}
 
 			// Schedule next poll

@@ -54,12 +54,18 @@
 		const groups = {
 			critical: [] as any[], // download_failed, corrupted
 			needs_attention: [] as any[], // extraction_failed, needs_review (low quality)
-			ready: [] as any[] // ready (high/medium quality)
+			ready: [] as any[], // ready (high/medium quality)
+			duplicates: [] as any[] // duplicate documents
 		};
 
 		for (const doc of documents) {
 			const status = doc.status;
-			if (status === 'download_failed' || status === 'corrupted') {
+			const isDuplicate = doc.metadata?.is_duplicate === true || status === 'duplicate';
+			
+			if (isDuplicate) {
+				// Duplicates go to their own section
+				groups.duplicates.push(doc);
+			} else if (status === 'download_failed' || status === 'corrupted') {
 				groups.critical.push(doc);
 			} else if (
 				status === 'extraction_failed' ||
@@ -88,9 +94,11 @@
 
 	// Stats for Banner
 	let stats = $derived.by(() => {
-		const counts = { ready: 0, review: 0, failed: 0, missing: 0 };
+		const counts = { ready: 0, review: 0, failed: 0, missing: 0, duplicates: 0 };
 		for (const doc of documents) {
-			if (doc.status === 'ready') counts.ready++;
+			const isDuplicate = doc.metadata?.is_duplicate === true || doc.status === 'duplicate';
+			if (isDuplicate) counts.duplicates++;
+			else if (doc.status === 'ready') counts.ready++;
 			else if (doc.status === 'needs_review' || doc.status === 'pending') counts.review++;
 			else if (doc.status === 'extraction_failed') counts.failed++;
 			else if (doc.status === 'download_failed' || doc.status === 'corrupted') counts.missing++;
@@ -198,6 +206,28 @@
 
 			if (!response.ok) throw new Error('Failed to skip document');
 			toastStore.success('Document skipped');
+			await onDocumentsUpdated();
+		} catch (error: any) {
+			toastStore.error(error.message);
+		}
+	}
+
+	async function handleToggleExclusion(docId: string, excluded: boolean) {
+		try {
+			const { data: { session } } = await supabase.auth.getSession();
+			if (!session) throw new Error('Not authenticated');
+
+			const response = await fetch(`${getApiUrl()}/api/documents/${docId}/exclusion`, {
+				method: 'PATCH',
+				headers: {
+					'Content-Type': 'application/json',
+					Authorization: `Bearer ${session.access_token}`,
+				},
+				body: JSON.stringify({ excluded }),
+			});
+
+			if (!response.ok) throw new Error('Failed to toggle exclusion');
+			toastStore.success(excluded ? 'Document excluded from analysis' : 'Document included in analysis');
 			await onDocumentsUpdated();
 		} catch (error: any) {
 			toastStore.error(error.message);
@@ -488,6 +518,7 @@
 								onReplace={() => { recoveryDocument = doc; showRecoveryModal = true; }}
 								onSkip={() => handleSkip(doc.id)}
 								onDelete={() => handleDelete(doc.id)}
+								onToggleExclusion={(id, excluded) => handleToggleExclusion(id, excluded)}
 							/>
 						{/each}
 					</div>
@@ -529,6 +560,7 @@
 								onVerify={() => handleVerify(doc.id)}
 								onSkip={() => handleSkip(doc.id)}
 								onDelete={() => handleDelete(doc.id)}
+								onToggleExclusion={(id, excluded) => handleToggleExclusion(id, excluded)}
 							/>
 						{/each}
 					</div>
@@ -554,6 +586,38 @@
 								onView={() => handleView(doc)}
 								onEdit={() => editingDocument = doc}
 								onDelete={() => handleDelete(doc.id)}
+								onToggleExclusion={(id, excluded) => handleToggleExclusion(id, excluded)}
+							/>
+						{/each}
+					</div>
+				</section>
+			{/if}
+
+			<!-- Duplicates Section (at bottom) -->
+			{#if triageGroups.duplicates.length > 0}
+				<section class="mt-8 pt-8 border-t border-purple-200">
+					<div class="flex items-center gap-3 mb-6">
+						<div class="p-1.5 rounded-lg bg-purple-100 text-purple-600">
+							<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+							</svg>
+						</div>
+						<div>
+							<h3 class="text-xl font-black text-gray-900 uppercase tracking-tight">Duplicate Documents</h3>
+							<p class="text-xs text-gray-500">These files appear to be duplicates. Review and include if needed.</p>
+						</div>
+						<span class="ml-auto text-xs font-bold text-purple-600 bg-purple-50 px-2 py-1 rounded-full border border-purple-100">
+							{triageGroups.duplicates.length} {triageGroups.duplicates.length === 1 ? 'Duplicate' : 'Duplicates'}
+						</span>
+					</div>
+					<div class="grid grid-cols-1 lg:grid-cols-2 gap-4 opacity-70 hover:opacity-100 transition-opacity">
+						{#each triageGroups.duplicates as doc (doc.id)}
+							<DocumentCard 
+								{doc}
+								onView={() => handleView(doc)}
+								onEdit={() => editingDocument = doc}
+								onDelete={() => handleDelete(doc.id)}
+								onToggleExclusion={(id, excluded) => handleToggleExclusion(id, excluded)}
 							/>
 						{/each}
 					</div>
@@ -595,6 +659,7 @@
 							onVerify={() => handleVerify(doc.id)}
 							onSkip={() => handleSkip(doc.id)}
 							onDelete={() => handleDelete(doc.id)}
+							onToggleExclusion={(id, excluded) => handleToggleExclusion(id, excluded)}
 						/>
 					</div>
 				</div>

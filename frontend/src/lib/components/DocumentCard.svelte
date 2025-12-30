@@ -12,7 +12,10 @@
 		Upload,
 		MoreVertical,
 		ChevronRight,
-		ExternalLink
+		ExternalLink,
+		Copy,
+		Check,
+		X
 	} from 'lucide-svelte';
 	import { slide } from 'svelte/transition';
 
@@ -24,7 +27,8 @@
 		onDelete, 
 		onReplace,
 		onSkip,
-		onView
+		onView,
+		onToggleExclusion
 	}: { 
 		doc: any; 
 		onVerify?: (id: string) => void;
@@ -34,6 +38,7 @@
 		onReplace?: (id: string) => void;
 		onSkip?: (id: string) => void;
 		onView?: (doc: any) => void;
+		onToggleExclusion?: (id: string, excluded: boolean) => void;
 	} = $props();
 
 	let showMenu = $state(false);
@@ -87,8 +92,20 @@
 			borderColor: 'border-gray-200',
 			label: 'Skipped',
 			textColor: 'text-gray-500'
+		},
+		duplicate: {
+			icon: Copy,
+			iconColor: 'text-purple-500',
+			bgColor: 'bg-purple-50',
+			borderColor: 'border-purple-200',
+			label: 'Duplicate',
+			textColor: 'text-purple-700'
 		}
 	};
+	
+	// Check if this is a duplicate document
+	const isDuplicate = $derived(doc.metadata?.is_duplicate === true);
+	const isExcluded = $derived(doc.metadata?.excluded === true);
 
 	const config = $derived(statusConfigs[doc.status] || statusConfigs.needs_review);
 	const StatusIcon = $derived(config.icon);
@@ -202,7 +219,7 @@
 			{/if}
 
 			<!-- Error / Status Message -->
-			{#if doc.status !== 'ready'}
+			{#if doc.status !== 'ready' || isDuplicate}
 				<p class="mt-2 text-xs font-medium text-gray-600 line-clamp-2">
 					{#if doc.status === 'download_failed'}
 						Could not download from Clio. The original file may be unavailable.
@@ -214,13 +231,48 @@
 						Extraction complete but quality is low. Review and correct if needed.
 					{:else if doc.status === 'skipped'}
 						This document will be excluded from the next analysis.
+					{:else if doc.status === 'duplicate' || isDuplicate}
+						<span class="text-purple-600">
+							{#if doc.metadata?.duplicate_reason === 'exists_in_case'}
+								This file already exists in this case.
+							{:else if doc.metadata?.duplicate_reason === 'duplicate_in_import'}
+								Duplicate of another file in this import.
+							{:else}
+								This appears to be a duplicate document.
+							{/if}
+							{#if isExcluded}
+								<strong>Currently excluded</strong> from analysis.
+							{:else}
+								<strong>Currently included</strong> in analysis.
+							{/if}
+						</span>
 					{/if}
 				</p>
 			{/if}
 
 			<!-- Actions -->
 			<div class="mt-4 flex flex-wrap items-center gap-2">
-				{#if doc.status === 'ready' || doc.status === 'needs_review' || doc.status === 'extraction_failed'}
+				{#if isDuplicate}
+					<!-- Duplicate toggle button -->
+					<button 
+						onclick={() => onToggleExclusion?.(doc.id, !isExcluded)}
+						class={`inline-flex items-center px-3 py-1.5 text-xs font-bold rounded-lg transition-colors shadow-sm ${
+							isExcluded 
+								? 'bg-green-600 text-white hover:bg-green-700' 
+								: 'bg-purple-100 border border-purple-300 text-purple-700 hover:bg-purple-200'
+						}`}
+					>
+						{#if isExcluded}
+							<Check class="w-3.5 h-3.5 mr-1.5" />
+							Include in Analysis
+						{:else}
+							<X class="w-3.5 h-3.5 mr-1.5" />
+							Exclude from Analysis
+						{/if}
+					</button>
+				{/if}
+				
+				{#if doc.status === 'ready' || doc.status === 'needs_review' || doc.status === 'extraction_failed' || doc.status === 'duplicate'}
 					<button 
 						onclick={() => onEdit?.(doc)}
 						class="inline-flex items-center px-3 py-1.5 text-xs font-bold rounded-lg bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 hover:border-gray-300 transition-colors shadow-sm"

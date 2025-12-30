@@ -678,6 +678,87 @@ async def verify_document(
         ) from e
 
 
+class ToggleExclusionRequest(BaseModel):
+    """Request model for toggling document exclusion."""
+    excluded: bool
+
+
+@router.patch("/{document_id}/exclusion")
+async def toggle_document_exclusion(
+    document_id: str,
+    request: ToggleExclusionRequest,
+    user=Depends(get_current_user),
+    user_supabase=Depends(get_user_supabase_client),
+):
+    """Toggle document exclusion status (for duplicate management).
+
+    Allows users to include/exclude duplicate documents from analysis.
+
+    Args:
+    ----
+        document_id: Document ID
+        request: Exclusion status to set
+        user: Current authenticated user
+        user_supabase: User-scoped Supabase client
+
+    Returns:
+    -------
+        Updated document with new exclusion status
+
+    """
+    try:
+        logger.debug(f"Toggle exclusion: doc_id={document_id}, excluded={request.excluded}, user={user['id']}")
+
+        # Get document with ownership verification
+        response = (
+            user_supabase.table("documents")
+            .select("id, metadata, cases!inner(user_id)")
+            .eq("id", document_id)
+            .execute()
+        )
+
+        if not response.data:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+
+        document = response.data[0]
+
+        # Verify ownership
+        if document["cases"]["user_id"] != user["id"]:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+
+        # Update metadata with new exclusion status
+        metadata = document.get("metadata", {}) or {}
+        metadata["excluded"] = request.excluded
+
+        # Update status based on exclusion
+        new_status = "duplicate" if metadata.get("is_duplicate") and request.excluded else "ready"
+
+        update_data = {
+            "metadata": metadata,
+            "status": new_status,
+            "updated_at": datetime.utcnow().isoformat(),
+        }
+
+        user_supabase.table("documents").update(update_data).eq("id", document_id).execute()
+
+        logger.info(f"Document exclusion toggled: {document_id}, excluded={request.excluded}")
+
+        return {
+            "document_id": document_id,
+            "excluded": request.excluded,
+            "status": new_status,
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error toggling document exclusion: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error toggling exclusion: {str(e)}",
+        ) from e
+
+
 @router.post("/{document_id}/extract")
 async def trigger_extraction(
     document_id: str,

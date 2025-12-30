@@ -569,6 +569,23 @@ async def import_clio_documents_helper(
         # Download and process document files
         logger.info("Processing Clio documents", extra={"count": len(documents)})
         total_docs = len(documents)
+        
+        # Build duplicate detection set from existing documents in this case
+        # This handles re-imports and duplicate files from Clio
+        existing_docs = supabase.table("documents").select("file_name, file_size, metadata").eq("case_id", case_id).execute()
+        existing_file_keys = set()  # (filename, size) tuples for quick lookup
+        for existing in existing_docs.data or []:
+            key = (existing["file_name"], existing.get("file_size", 0))
+            existing_file_keys.add(key)
+            # Also track by original filename if available
+            if existing.get("metadata", {}).get("original_filename"):
+                key2 = (existing["metadata"]["original_filename"], existing.get("file_size", 0))
+                existing_file_keys.add(key2)
+        
+        # Track duplicates seen in THIS import batch
+        import_batch_keys = set()
+        duplicates_count = 0
+        
         for idx, doc in enumerate(documents):
             try:
                 doc_name = doc.get("name", "Untitled Document")
@@ -641,6 +658,27 @@ async def import_clio_documents_helper(
                 original_size = len(file_content)
                 logger.debug("Downloaded file", extra={"size_mb": f"{original_size / (1024 * 1024):.2f}"})
 
+                # --- DUPLICATE DETECTION ---
+                # Check if this file is a duplicate (by name + size)
+                file_key = (doc_name, original_size)
+                is_duplicate = False
+                duplicate_reason = None
+                
+                if file_key in existing_file_keys:
+                    is_duplicate = True
+                    duplicate_reason = "exists_in_case"
+                    logger.info(f"Duplicate detected (exists in case): {doc_name} ({original_size} bytes)")
+                elif file_key in import_batch_keys:
+                    is_duplicate = True
+                    duplicate_reason = "duplicate_in_import"
+                    logger.info(f"Duplicate detected (in import batch): {doc_name} ({original_size} bytes)")
+                
+                # Track this file in the import batch
+                import_batch_keys.add(file_key)
+                
+                if is_duplicate:
+                    duplicates_count += 1
+
                 # Check if this is an intake form candidate
                 is_intake_candidate = "intake" in doc_name.lower()
 
@@ -689,11 +727,19 @@ async def import_clio_documents_helper(
                             "is_intake_candidate": is_intake_candidate,
                         }
                     )
+                    
+                    # Add duplicate info to metadata if detected
+                    if is_duplicate:
+                        doc_record["metadata"]["is_duplicate"] = True
+                        doc_record["metadata"]["duplicate_reason"] = duplicate_reason
+                        doc_record["metadata"]["excluded"] = True  # Excluded by default
+                        doc_record["status"] = "duplicate"
+                        logger.info(f"Marked as duplicate: {doc_name} (reason: {duplicate_reason})")
 
                     # Insert document record
                     supabase.table("documents").insert(doc_record).execute()
                     doc_success += 1
-                    logger.debug("Successfully imported document", extra={"doc_name": doc_name})
+                    logger.debug("Successfully imported document", extra={"doc_name": doc_name, "is_duplicate": is_duplicate})
 
                 except ValidationError as e:
                     logger.warning("Validation failed", extra={"error_code": e.error_code, "error": str(e)})
@@ -732,6 +778,7 @@ async def import_clio_documents_helper(
             "communications_count": comm_success,
             "notes_count": note_success,
             "documents_count": doc_success,
+            "duplicates_count": duplicates_count,
             "total_imported": comm_success + note_success + doc_success,
             "errors": errors if errors else None,
         }
@@ -742,6 +789,7 @@ async def import_clio_documents_helper(
                 "communications": comm_success,
                 "notes": note_success,
                 "documents": doc_success,
+                "duplicates": duplicates_count,
                 "total": comm_success + note_success + doc_success,
                 "errors": len(errors) if errors else 0,
             },

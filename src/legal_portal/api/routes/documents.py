@@ -963,7 +963,15 @@ async def trigger_extraction(
             "updated_at": datetime.utcnow().isoformat(),
         }
 
-        user_supabase.table("documents").update(update_data).eq("id", document_id).execute()
+        update_result = user_supabase.table("documents").update(update_data).eq("id", document_id).execute()
+
+        # CRITICAL: Verify the update actually saved to the database
+        if not update_result.data:
+            logger.error(f"Failed to save extracted text for document {document_id} - update returned no data")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to save extraction results to database. Please try again.",
+            )
 
         logger.info(
             f"Extraction complete for {document_id}: method={extraction_method}, "

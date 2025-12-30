@@ -12,7 +12,7 @@
 	import PageHeader from '$lib/components/ui/PageHeader.svelte';
 	import Tabs from '$lib/components/ui/Tabs.svelte';
 	import AsyncButton from '$lib/components/ui/AsyncButton.svelte';
-	import AnalysisProgressModal from '$lib/components/progress/AnalysisProgressModal.svelte';
+	import InlineAnalysisProgress from '$lib/components/InlineAnalysisProgress.svelte';
 	import { clioStore } from '$lib/stores/clioStore';
 	import { progressStore } from '$lib/stores/progressStore';
 	import { toastStore } from '$lib/stores/toastStore';
@@ -33,6 +33,20 @@
 	let currentUploadFile = $state<string>('');
 	let uploadedCount = $state(0);
 	let totalUploadCount = $state(0);
+
+	// Pre-flight validation state
+	let showMissingTextWarning = $state(false);
+	let runningBulkOcr = $state(false);
+
+	// Documents that are ready but missing extracted text (will be skipped in analysis)
+	let docsWithoutText = $derived(
+		documents.filter(doc => 
+			doc.status === 'ready' && 
+			!doc.extracted_text && 
+			!doc.manual_text &&
+			!doc.is_flagged_as_junk
+		)
+	);
 
 	// Find all potential intake documents (any with "intake" in filename)
 	let intakeCandidates = $derived(
@@ -820,7 +834,16 @@
 		}
 	}
 
-	async function startAnalysis() {
+	async function startAnalysis(skipMissingTextCheck = false) {
+		// Refresh documents from database first to get latest state
+		await loadDocuments();
+
+		// Pre-flight check: Warn if any documents are missing text
+		if (!skipMissingTextCheck && docsWithoutText.length > 0) {
+			showMissingTextWarning = true;
+			return;
+		}
+
 		// Check for multiple intake candidates before starting
 		if (intakeCandidates.length > 1) {
 			// Find if one is already marked
@@ -874,6 +897,46 @@
 			errorMessage = error.message || 'Failed to start analysis';
 			analyzing = false;
 		}
+	}
+
+	async function runOcrOnMissingDocs() {
+		runningBulkOcr = true;
+		try {
+			const { data: { session } } = await supabase.auth.getSession();
+			if (!session) throw new Error('Not authenticated');
+
+			const response = await fetch(`${getApiUrl()}/api/documents/bulk-extract`, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					Authorization: `Bearer ${session.access_token}`
+				},
+				body: JSON.stringify({ case_id: caseId })
+			});
+
+			if (!response.ok) throw new Error('Bulk extraction failed');
+			
+			const result = await response.json();
+			toastStore.success(`Extracted ${result.extracted_count} document(s)`);
+			
+			// Refresh documents and close warning
+			await loadDocuments();
+			showMissingTextWarning = false;
+			
+			// If all docs now have text, proceed with analysis
+			if (docsWithoutText.length === 0) {
+				await startAnalysis(true);
+			}
+		} catch (error: any) {
+			toastStore.error(`OCR failed: ${error.message}`);
+		} finally {
+			runningBulkOcr = false;
+		}
+	}
+
+	async function proceedWithoutMissingDocs() {
+		showMissingTextWarning = false;
+		await startAnalysis(true); // Skip the missing text check
 	}
 
 	async function cancelAnalysis() {
@@ -1577,11 +1640,32 @@
 				<!-- Analysis Tab -->
 				{#if activeTab === 'analysis'}
 					<div class="page-spacing">
+						<!-- Inline Progress (when analysis is running) -->
+						{#if showProgressModal && currentAnalysisId}
+							<InlineAnalysisProgress 
+								analysisId={currentAnalysisId}
+								onComplete={async () => {
+									showProgressModal = false;
+									await loadAnalysisStatus();
+									await loadCase();
+									analyzing = false;
+									goto(`/app/cases/${caseId}/results`);
+								}}
+								onError={(error) => {
+									showProgressModal = false;
+									analyzing = false;
+									errorMessage = error;
+									toastStore.error(error);
+								}}
+								onCancel={cancelAnalysis}
+							/>
+						{/if}
+
 						<!-- Analysis Section -->
 						<div class="card-standard">
 							<div class="flex justify-between items-center mb-6">
 								<h3 class="text-lg font-heading font-semibold text-contrast">Analysis</h3>
-								{#if documents.length > 0}
+								{#if documents.length > 0 && !showProgressModal}
 									<div class="flex items-center gap-2">
 										{#if analysisStatus?.status === 'processing'}
 											<AsyncButton
@@ -1595,7 +1679,7 @@
 										{/if}
 
 										<AsyncButton
-											onclick={startAnalysis}
+											onclick={() => startAnalysis()}
 											loading={analyzing || (analysisStatus && analysisStatus.status === 'processing')}
 											variant="primary"
 											loadingText="Analyzing..."
@@ -1624,38 +1708,6 @@
 							</span>
 						</dd>
 					</div>
-
-					{#if analysisStatus.status === 'processing'}
-						<div class="space-y-4">
-						<div class="flex items-center">
-							<div class="inline-block animate-spin rounded-full h-5 w-5 border-b-2 border-accent mr-2"></div>
-								<span class="text-sm font-medium text-gray-700">
-									{$progressStore.message || 'Processing documents...'}
-								</span>
-							</div>
-							
-							{#if $progressStore.percent > 0}
-								<div class="w-full bg-gray-100 rounded-full h-2">
-									<div 
-										class="bg-accent h-2 rounded-full transition-all duration-300 shadow-sm shadow-accent/20"
-										style="width: {$progressStore.percent}%"
-									></div>
-								</div>
-								<p class="text-xs text-gray-500 font-medium">{$progressStore.percent}% complete</p>
-							{/if}
-							
-							{#if $progressStore.sub_step}
-								<p class="text-xs text-gray-500 italic">{$progressStore.sub_step}</p>
-							{/if}
-							
-							{#if $progressStore.current_doc}
-								<p class="text-xs text-gray-500">
-									Processing document {$progressStore.current_doc.index}/{$progressStore.current_doc.total}: 
-									{$progressStore.current_doc.name}
-								</p>
-							{/if}
-						</div>
-					{/if}
 
 				{#if analysisStatus.status === 'completed' && analysisStatus.result}
 					<div class="flex items-center space-x-3">
@@ -2136,23 +2188,62 @@
 	/>
 {/if}
 
-<!-- Analysis Progress Modal -->
-{#if showProgressModal && currentAnalysisId}
-	<AnalysisProgressModal 
-		analysisId={currentAnalysisId}
-		onComplete={async () => {
-			showProgressModal = false;
-			await loadAnalysisStatus();
-			await loadCase();
-			analyzing = false;
-			goto(`/app/cases/${caseId}/results`);
-		}}
-		onError={(error) => {
-			showProgressModal = false;
-			analyzing = false;
-			errorMessage = error;
-			toastStore.error(error);
-		}}
-	/>
+<!-- Missing Text Warning Modal -->
+{#if showMissingTextWarning}
+	<div class="modal-overlay" onclick={() => showMissingTextWarning = false}>
+		<div class="card-standard max-w-lg w-full mx-4" onclick={(e) => e.stopPropagation()}>
+			<h3 class="text-lg font-heading font-semibold text-contrast mb-2">Documents Missing Text</h3>
+			<p class="text-sm text-gray-600 mb-4">
+				{docsWithoutText.length} document{docsWithoutText.length === 1 ? '' : 's'} {docsWithoutText.length === 1 ? "doesn't" : "don't"} have extracted text and will be <strong>skipped</strong> during analysis.
+			</p>
+			
+			<div class="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4 max-h-40 overflow-auto">
+				<ul class="text-sm text-amber-800 space-y-1">
+					{#each docsWithoutText as doc}
+						<li class="flex items-center gap-2">
+							<span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+							<span class="truncate">{doc.file_name}</span>
+						</li>
+					{/each}
+				</ul>
+			</div>
+
+			<p class="text-xs text-gray-500 mb-4">
+				Run OCR to extract text from these documents, or proceed without them.
+			</p>
+
+			<div class="flex flex-col sm:flex-row gap-3 justify-end">
+				<button 
+					onclick={() => showMissingTextWarning = false}
+					class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+				>
+					Cancel
+				</button>
+				<button 
+					onclick={proceedWithoutMissingDocs}
+					class="px-4 py-2 text-sm font-medium text-amber-700 bg-amber-100 border border-amber-300 rounded-md hover:bg-amber-200 transition-colors"
+				>
+					Skip These Documents
+				</button>
+				<button 
+					onclick={runOcrOnMissingDocs}
+					disabled={runningBulkOcr}
+					class="px-4 py-2 text-sm font-medium text-white bg-accent rounded-md hover:bg-accent-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+				>
+					{#if runningBulkOcr}
+						<svg class="animate-spin h-4 w-4" viewBox="0 0 24 24">
+							<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle>
+							<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+						</svg>
+						Running OCR...
+					{:else}
+						Run OCR on All
+					{/if}
+				</button>
+			</div>
+		</div>
+	</div>
 {/if}
+
+<!-- Analysis progress is now shown inline on the Analysis tab -->
 

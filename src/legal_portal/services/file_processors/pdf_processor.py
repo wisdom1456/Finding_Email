@@ -799,16 +799,31 @@ async def _extract_text_via_vision(
                 # Render page to image in thread pool
                 def render_page():
                     page = doc[page_index]
-                    # Render page to image (2x zoom for better text legibility)
-                    pix = page.get_pixmap(matrix=fitz.Matrix(2, 2))
+                    
+                    # Optimization: check page size and cap zoom for large pages
+                    rect = page.rect
+                    width, height = rect.width, rect.height
+                    
+                    zoom = 2.0  # Default zoom for good text legibility
+                    if width > 3000 or height > 3000:
+                        zoom = 1.0
+                        logger.info(f"GPT-4o Vision (file): Very large page ({width:.0f}x{height:.0f}), using 1.0x zoom")
+                    elif width > 1500 or height > 1500:
+                        zoom = 1.5
+                        logger.info(f"GPT-4o Vision (file): Large page ({width:.0f}x{height:.0f}), using 1.5x zoom")
+                    
+                    pix = page.get_pixmap(matrix=fitz.Matrix(zoom, zoom))
                     return pix.tobytes("png")
 
                 img_data = await run_in_threadpool(render_page)
+                logger.info(f"GPT-4o Vision (file): Page {page_index + 1} image size: {len(img_data)} bytes")
+                
                 base64_image = base64.b64encode(img_data).decode("utf-8")
 
                 prompt = (
-                    f"Extract all text from page {page_index + 1} of this legal document. "
+                    f"Extract ALL text from page {page_index + 1} of this legal document image. "
                     f"Filename: {original_filename}. "
+                    "This is a scanned document that needs OCR text extraction. "
                     "Maintain the logical structure and layout. "
                     "If there are tables, preserve the row/column relationship "
                     "using markdown or clear spacing. "
@@ -819,7 +834,10 @@ async def _extract_text_via_vision(
                     {"type": "text", "text": prompt},
                     {
                         "type": "image_url",
-                        "image_url": {"url": f"data:image/png;base64,{base64_image}"},
+                        "image_url": {
+                            "url": f"data:image/png;base64,{base64_image}",
+                            "detail": "high"  # Request high detail for OCR accuracy
+                        },
                     },
                 ]
 
@@ -828,7 +846,7 @@ async def _extract_text_via_vision(
                     return client.chat.completions.create(
                         model="gpt-4o",
                         messages=[{"role": "user", "content": content}],
-                        max_tokens=1500,
+                        max_tokens=4000,  # Increased for dense documents
                         temperature=0.0,
                     )
 
@@ -839,7 +857,7 @@ async def _extract_text_via_vision(
                         timeout=60.0,  # OpenAI can be slower than Google
                     )
                     page_text = response.choices[0].message.content
-                    logger.debug(f"OpenAI returned for page {page_index + 1}")
+                    logger.info(f"GPT-4o Vision (file): OpenAI returned for page {page_index + 1}: {len(page_text) if page_text else 0} chars")
                 except asyncio.TimeoutError:
                     logger.error(f"OpenAI Vision API timeout on page {page_index + 1} of {original_filename}")
                     completed_pages[0] += 1
@@ -980,16 +998,39 @@ async def _extract_text_via_vision_bytes(
                 # Render page to image in thread pool
                 def render_page():
                     page = doc[page_index]
-                    # Render page to image (2x zoom for better text legibility)
-                    pix = page.get_pixmap(matrix=fitz.Matrix(2, 2))
-                    return pix.tobytes("png")
+                    
+                    # Optimization: check page size and cap zoom for large pages
+                    # to avoid memory issues and excessively large images
+                    rect = page.rect
+                    width, height = rect.width, rect.height
+                    
+                    zoom = 2.0  # Default zoom for good text legibility
+                    if width > 3000 or height > 3000:
+                        zoom = 1.0
+                        logger.info(f"GPT-4o Vision (bytes): Very large page ({width:.0f}x{height:.0f}), using 1.0x zoom")
+                    elif width > 1500 or height > 1500:
+                        zoom = 1.5
+                        logger.info(f"GPT-4o Vision (bytes): Large page ({width:.0f}x{height:.0f}), using 1.5x zoom")
+                    
+                    pix = page.get_pixmap(matrix=fitz.Matrix(zoom, zoom))
+                    img_bytes = pix.tobytes("png")
+                    logger.debug(f"GPT-4o Vision (bytes): Rendered page {page_index + 1}: {len(img_bytes)} bytes, {pix.width}x{pix.height}px")
+                    return img_bytes
 
                 img_data = await run_in_threadpool(render_page)
+                
+                # Log image size for debugging Vision API issues
+                logger.info(f"GPT-4o Vision (bytes): Page {page_index + 1} image size: {len(img_data)} bytes")
+                
                 base64_image = base64.b64encode(img_data).decode("utf-8")
+                
+                # Log base64 size (should be ~1.37x raw size)
+                logger.debug(f"GPT-4o Vision (bytes): Page {page_index + 1} base64 size: {len(base64_image)} chars")
 
                 prompt = (
-                    f"Extract all text from page {page_index + 1} of this legal document. "
+                    f"Extract ALL text from page {page_index + 1} of this legal document image. "
                     f"Filename: {original_filename}. "
+                    "This is a scanned document that needs OCR text extraction. "
                     "Maintain the logical structure and layout. "
                     "If there are tables, preserve the row/column relationship "
                     "using markdown or clear spacing. "
@@ -1000,7 +1041,10 @@ async def _extract_text_via_vision_bytes(
                     {"type": "text", "text": prompt},
                     {
                         "type": "image_url",
-                        "image_url": {"url": f"data:image/png;base64,{base64_image}"},
+                        "image_url": {
+                            "url": f"data:image/png;base64,{base64_image}",
+                            "detail": "high"  # Request high detail for OCR accuracy
+                        },
                     },
                 ]
 
@@ -1009,7 +1053,7 @@ async def _extract_text_via_vision_bytes(
                     return client.chat.completions.create(
                         model="gpt-4o",
                         messages=[{"role": "user", "content": content}],
-                        max_tokens=1500,
+                        max_tokens=4000,  # Increased for dense documents
                         temperature=0.0,
                     )
 
@@ -1020,7 +1064,7 @@ async def _extract_text_via_vision_bytes(
                         timeout=60.0,  # OpenAI can be slower than Google
                     )
                     page_text = response.choices[0].message.content
-                    logger.debug(f"OpenAI returned for page {page_index + 1}")
+                    logger.info(f"GPT-4o Vision (bytes): OpenAI returned for page {page_index + 1}: {len(page_text) if page_text else 0} chars")
                 except asyncio.TimeoutError:
                     logger.error(f"OpenAI Vision API timeout on page {page_index + 1} of {original_filename}")
                     completed_pages[0] += 1

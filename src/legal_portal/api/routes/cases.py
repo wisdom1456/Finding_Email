@@ -604,29 +604,61 @@ async def import_clio_documents_helper(
 
                 access_token = integration.data[0]["access_token"]
 
-                # Download file from Clio (just download, no processing yet)
-                # Run blocking download in threadpool
-                file_content, content_type = await run_in_threadpool(
-                    ContentExtractor.download_file, doc_url, access_token
-                )
+                # Download file from Clio with timeout (60s per document to prevent Vercel timeout)
+                # Run blocking download in threadpool with asyncio timeout
+                import asyncio
+                DOC_TIMEOUT_SECONDS = 60  # Max time per document
+
+                try:
+                    file_content, content_type = await asyncio.wait_for(
+                        run_in_threadpool(ContentExtractor.download_file, doc_url, access_token),
+                        timeout=DOC_TIMEOUT_SECONDS,
+                    )
+                except asyncio.TimeoutError:
+                    logger.warning(f"Document download timed out after {DOC_TIMEOUT_SECONDS}s", extra={"doc_name": doc_name})
+                    errors.append(f"Document {doc_name}: Download timed out (>60s)")
+                    # Save metadata-only record so user knows it was skipped
+                    skip_record = {
+                        "case_id": case_id,
+                        "file_name": doc_name,
+                        "file_type": "application/octet-stream",
+                        "file_size": 0,
+                        "storage_path": None,
+                        "status": "download_timeout",
+                        "extracted_text": None,
+                        "metadata": {
+                            "clio_source": True,
+                            "clio_type": "document",
+                            "clio_id": doc_id,
+                            "clio_url": doc_url,
+                            "error": f"Download timed out after {DOC_TIMEOUT_SECONDS}s",
+                            "error_type": "TIMEOUT",
+                        },
+                    }
+                    supabase.table("documents").insert(skip_record).execute()
+                    continue  # Skip to next document
+
                 original_size = len(file_content)
                 logger.debug("Downloaded file", extra={"size_mb": f"{original_size / (1024 * 1024):.2f}"})
 
                 # Check if this is an intake form candidate
                 is_intake_candidate = "intake" in doc_name.lower()
 
-                # Use unified processor for validation, compression, and upload
+                # Use unified processor for validation, compression, and upload (also with timeout)
                 processor = DocumentProcessor()
 
                 try:
-                    doc_record = await processor.process_and_upload(
-                        file_content=file_content,
-                        filename=doc_name,
-                        user_id=user["id"],
-                        case_id=case_id,
-                        supabase_client=supabase,
-                        is_intake_form=is_intake_candidate,
-                        content_type=content_type,
+                    doc_record = await asyncio.wait_for(
+                        processor.process_and_upload(
+                            file_content=file_content,
+                            filename=doc_name,
+                            user_id=user["id"],
+                            case_id=case_id,
+                            supabase_client=supabase,
+                            is_intake_form=is_intake_candidate,
+                            content_type=content_type,
+                        ),
+                        timeout=DOC_TIMEOUT_SECONDS,
                     )
 
                     # Track compression statistics if compressed
@@ -663,6 +695,29 @@ async def import_clio_documents_helper(
                 except ValidationError as e:
                     logger.warning("Validation failed", extra={"error_code": e.error_code, "error": str(e)})
                     raise Exception(f"Validation failed: {str(e)}") from e
+                except asyncio.TimeoutError:
+                    logger.warning(f"Document processing timed out after {DOC_TIMEOUT_SECONDS}s", extra={"doc_name": doc_name})
+                    errors.append(f"Document {doc_name}: Processing timed out (>60s)")
+                    # Save metadata-only record
+                    skip_record = {
+                        "case_id": case_id,
+                        "file_name": doc_name,
+                        "file_type": content_type or "application/octet-stream",
+                        "file_size": original_size,
+                        "storage_path": None,
+                        "status": "processing_timeout",
+                        "extracted_text": None,
+                        "metadata": {
+                            "clio_source": True,
+                            "clio_type": "document",
+                            "clio_id": doc_id,
+                            "clio_url": doc_url,
+                            "error": f"Processing timed out after {DOC_TIMEOUT_SECONDS}s",
+                            "error_type": "TIMEOUT",
+                        },
+                    }
+                    supabase.table("documents").insert(skip_record).execute()
+                    continue  # Skip to next document
 
             except Exception as e:
                 error_msg = f"Document {doc.get('id', 'unknown')} ({doc.get('name', 'unknown')}): {str(e)}"

@@ -97,9 +97,7 @@ function createProgressStore() {
 
 	// Internal connect function that can be referenced by other methods
 	const connectInternal = (url: string, onComplete?: (data?: unknown) => void, statusUrl?: string, token?: string): boolean => {
-		// #region agent log
-		fetch('http://127.0.0.1:7242/ingest/4b51e513-bc36-4a25-835a-e2000a0f302b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'progressStore.ts:connectInternal',message:'Connect called',data:{url,statusUrl:statusUrl?.slice(0,50)},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H1,H3'})}).catch(()=>{});
-		// #endregion agent log
+		console.log('[progressStore] connectInternal called:', { url, statusUrl });
 
 		// Disconnect existing connections
 		if (sseClient) {
@@ -125,9 +123,7 @@ function createProgressStore() {
 		sseClient = new SSEClient();
 
 		const messageHandler = (event: ProgressEvent | any) => {
-			// #region agent log
-			fetch('http://127.0.0.1:7242/ingest/4b51e513-bc36-4a25-835a-e2000a0f302b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'progressStore.ts:messageHandler',message:'SSE message received',data:{type:event.type,message:event.message?.slice(0,50)},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H1'})}).catch(()=>{});
-			// #endregion agent log
+			console.log('[progressStore] SSE message:', event.type, event.message?.slice(0, 50));
 
 			if (event.data) finalData = event.data;
 			
@@ -181,9 +177,7 @@ function createProgressStore() {
 
 		const errorHandler = (error: Error) => {
 			const errorMessage = error.message;
-			// #region agent log
-			fetch('http://127.0.0.1:7242/ingest/4b51e513-bc36-4a25-835a-e2000a0f302b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'progressStore.ts:errorHandler',message:'SSE error',data:{error:errorMessage,hasStatusUrl:!!currentStatusUrl},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H1'})}).catch(()=>{});
-			// #endregion agent log
+			console.log('[progressStore] SSE error:', errorMessage, 'hasStatusUrl:', !!currentStatusUrl);
 			
 			// If SSE times out or fails, try polling fallback
 			if ((errorMessage.includes('SSE_TIMEOUT') || errorMessage.includes('SSE_CONNECTION_FAILED')) 
@@ -288,9 +282,7 @@ function createProgressStore() {
 		 * Start listening to a specialized analysis progress stream
 		 */
 		startListening: async (analysisId: string) => {
-			// #region agent log
-			fetch('http://127.0.0.1:7242/ingest/4b51e513-bc36-4a25-835a-e2000a0f302b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'progressStore.ts:startListening',message:'startListening called',data:{analysisId},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H1,H2'})}).catch(()=>{});
-			// #endregion agent log
+			console.log('[progressStore] startListening called:', analysisId);
 			const { data: { session } } = await supabase.auth.getSession();
 			if (!session) return;
 
@@ -298,9 +290,7 @@ function createProgressStore() {
 			// FIX: Corrected URL paths - backend has /progress/analysis/{id} not /analysis/progress/{id}
 			const streamUrl = `${apiUrl}/api/progress/analysis/${analysisId}`;
 			const statusUrl = `${apiUrl}/api/progress/analysis/${analysisId}/status`;
-			// #region agent log
-			fetch('http://127.0.0.1:7242/ingest/4b51e513-bc36-4a25-835a-e2000a0f302b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'progressStore.ts:startListening:urls',message:'URLs constructed',data:{streamUrl,statusUrl},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H1,H4'})}).catch(()=>{});
-			// #endregion agent log
+			console.log('[progressStore] URLs:', { streamUrl, statusUrl });
 
 			// FIX: Use internal connect function, not createProgressStore()
 			connectInternal(streamUrl, undefined, statusUrl, session.access_token);

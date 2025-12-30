@@ -372,6 +372,27 @@ async def search_clio_matters(
 
 
 # ===== Data Import =====
+
+
+async def save_import_progress_to_db(
+    supabase: Client,
+    case_id: str,
+    import_id: str,
+    progress_data: dict,
+) -> None:
+    """Save import progress to database for cross-instance polling support on Vercel."""
+    try:
+        import_progress = {
+            "import_id": import_id,
+            "progress": progress_data,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }
+        supabase.table("cases").update({"import_progress": import_progress}).eq("id", case_id).execute()
+    except Exception as e:
+        # Don't fail the import if progress persistence fails
+        logger.warning(f"Failed to persist import progress to DB: {e}")
+
+
 @router.post("/import", response_model=ClioImportResponse)
 async def import_clio_data(
     import_request: ClioImportRequest,
@@ -385,13 +406,27 @@ async def import_clio_data(
     progress_manager = ProgressManager.get_instance()
     await progress_manager.create_channel(import_id)
 
+    # Store case_id for progress persistence
+    case_id = import_request.case_id
+
+    async def publish_and_persist(message: str, phase: str, percent: int, **kwargs):
+        """Publish progress to in-memory manager AND persist to database."""
+        progress_data = {
+            "type": kwargs.get("status", "progress"),
+            "message": message,
+            "phase": phase,
+            "percent": percent,
+            **{k: v for k, v in kwargs.items() if k != "status"},
+        }
+        await progress_manager.publish_progress(
+            channel_id=import_id, message=message, phase=phase, percent=percent, **kwargs
+        )
+        await save_import_progress_to_db(supabase, case_id, import_id, progress_data)
+
     try:
         matter_id = import_request.matter_id
-        case_id = import_request.case_id
 
-        await progress_manager.publish_progress(
-            channel_id=import_id, message="Starting Clio import...", phase="initialization", percent=0
-        )
+        await publish_and_persist("Starting Clio import...", "initialization", 0)
 
         # Verify case belongs to user
         case_result = (
@@ -401,36 +436,22 @@ async def import_clio_data(
         if not case_result.data:
             raise HTTPException(status_code=404, detail="Case not found")
 
-        await progress_manager.publish_progress(
-            channel_id=import_id,
-            message="Fetching matter details from Clio...",
-            phase="fetch_matter",
-            percent=5,
-        )
+        await publish_and_persist("Fetching matter details from Clio...", "fetch_matter", 5)
 
         # Fetch full matter details first
         matter = clio_client.get_matter(matter_id)
 
-        await progress_manager.publish_progress(
-            channel_id=import_id,
-            message="Fetching communications...",
-            phase="fetch_communications",
-            percent=10,
-        )
+        await publish_and_persist("Fetching communications...", "fetch_communications", 10)
 
         # Import communications
         communications = clio_client.get_communications(matter_id, limit=100)
 
-        await progress_manager.publish_progress(
-            channel_id=import_id, message="Fetching notes...", phase="fetch_notes", percent=15
-        )
+        await publish_and_persist("Fetching notes...", "fetch_notes", 15)
 
         # Import notes
         notes = clio_client.get_notes(matter_id)
 
-        await progress_manager.publish_progress(
-            channel_id=import_id, message="Fetching document list...", phase="fetch_documents", percent=20
-        )
+        await publish_and_persist("Fetching document list...", "fetch_documents", 20)
 
         # Import documents (metadata only)
         documents = clio_client.get_documents(matter_id)
@@ -443,11 +464,10 @@ async def import_clio_data(
         total_items = len(communications) + len(notes) + len(documents)
         items_processed = 0
 
-        await progress_manager.publish_progress(
-            channel_id=import_id,
-            message=f"Importing {len(communications)} communications...",
-            phase="import_communications",
-            percent=25,
+        await publish_and_persist(
+            f"Importing {len(communications)} communications...",
+            "import_communications",
+            25,
         )
 
         # Save communications as document entries
@@ -485,11 +505,10 @@ async def import_clio_data(
 
                 if idx % 5 == 0:  # Update every 5 items
                     progress_pct = 25 + int((items_processed / total_items) * 25)
-                    await progress_manager.publish_progress(
-                        channel_id=import_id,
-                        message=f"Imported communication {idx}/{len(communications)}",
-                        phase="import_communications",
-                        percent=progress_pct,
+                    await publish_and_persist(
+                        f"Imported communication {idx}/{len(communications)}",
+                        "import_communications",
+                        progress_pct,
                         current_doc={
                             "name": comm.subject[:50] if comm.subject else "Untitled",
                             "index": idx,
@@ -499,9 +518,7 @@ async def import_clio_data(
             except Exception as e:
                 logger.warning("Failed to save communication", extra={"comm_id": comm.id, "error": str(e)})
 
-        await progress_manager.publish_progress(
-            channel_id=import_id, message=f"Importing {len(notes)} notes...", phase="import_notes", percent=30
-        )
+        await publish_and_persist(f"Importing {len(notes)} notes...", "import_notes", 30)
 
         # Save notes as document entries
         for idx, note in enumerate(notes, 1):
@@ -535,11 +552,10 @@ async def import_clio_data(
 
                 if idx % 5 == 0:  # Update every 5 items
                     progress_pct = 30 + int((items_processed / total_items) * 20)
-                    await progress_manager.publish_progress(
-                        channel_id=import_id,
-                        message=f"Imported note {idx}/{len(notes)}",
-                        phase="import_notes",
-                        percent=progress_pct,
+                    await publish_and_persist(
+                        f"Imported note {idx}/{len(notes)}",
+                        "import_notes",
+                        progress_pct,
                         current_doc={"name": note_subject[:50], "index": idx, "total": len(notes)},
                     )
             except Exception as e:
@@ -547,11 +563,10 @@ async def import_clio_data(
                     "Failed to save note", extra={"note_id": note.get("id", "unknown"), "error": str(e)}
                 )
 
-        await progress_manager.publish_progress(
-            channel_id=import_id,
-            message=f"Downloading and processing {len(documents)} documents...",
-            phase="import_documents",
-            percent=50,
+        await publish_and_persist(
+            f"Downloading and processing {len(documents)} documents...",
+            "import_documents",
+            50,
         )
 
         # Download and process document files (these will appear in the documents list)
@@ -564,11 +579,10 @@ async def import_clio_data(
                 logger.debug("Processing Clio document", extra={"doc_name": doc_name, "doc_id": doc_id})
 
                 progress_pct = 50 + int((idx / len(documents)) * 40)
-                await progress_manager.publish_progress(
-                    channel_id=import_id,
-                    message=f"Processing document {idx}/{len(documents)}: {doc_name[:50]}",
-                    phase="import_documents",
-                    percent=progress_pct,
+                await publish_and_persist(
+                    f"Processing document {idx}/{len(documents)}: {doc_name[:50]}",
+                    "import_documents",
+                    progress_pct,
                     current_doc={"name": doc_name[:50], "index": idx, "total": len(documents)},
                     sub_step="Downloading from Clio...",
                 )
@@ -615,11 +629,10 @@ async def import_clio_data(
                 original_size = len(file_content)
                 logger.debug("Downloaded file", extra={"size_mb": f"{original_size / (1024 * 1024):.2f}"})
 
-                await progress_manager.publish_progress(
-                    channel_id=import_id,
-                    message=f"Processing document {idx}/{len(documents)}: {doc_name[:50]}",
-                    phase="import_documents",
-                    percent=progress_pct,
+                await publish_and_persist(
+                    f"Processing document {idx}/{len(documents)}: {doc_name[:50]}",
+                    "import_documents",
+                    progress_pct,
                     current_doc={"name": doc_name[:50], "index": idx, "total": len(documents)},
                     sub_step="Validating and compressing...",
                 )
@@ -751,11 +764,10 @@ async def import_clio_data(
                 },
             )
 
-        await progress_manager.publish_progress(
-            channel_id=import_id,
-            message="Import completed successfully!",
-            phase="completed",
-            percent=100,
+        await publish_and_persist(
+            "Import completed successfully!",
+            "completed",
+            100,
             status="completed",
         )
 
@@ -769,31 +781,28 @@ async def import_clio_data(
         )
 
     except ClioAuthError as e:
-        await progress_manager.publish_progress(
-            channel_id=import_id,
-            message=f"Authentication error: {str(e)}",
-            phase="error",
-            percent=0,
+        await publish_and_persist(
+            f"Authentication error: {str(e)}",
+            "error",
+            0,
             status="error",
             error=str(e),
         )
         raise HTTPException(status_code=401, detail=f"Clio authentication error: {str(e)}") from e
     except ClioAPIError as e:
-        await progress_manager.publish_progress(
-            channel_id=import_id,
-            message=f"API error: {str(e)}",
-            phase="error",
-            percent=0,
+        await publish_and_persist(
+            f"API error: {str(e)}",
+            "error",
+            0,
             status="error",
             error=str(e),
         )
         raise HTTPException(status_code=500, detail=f"Clio API error: {str(e)}") from e
     except Exception as e:
-        await progress_manager.publish_progress(
-            channel_id=import_id,
-            message=f"Import failed: {str(e)}",
-            phase="error",
-            percent=0,
+        await publish_and_persist(
+            f"Import failed: {str(e)}",
+            "error",
+            0,
             status="error",
             error=str(e),
         )

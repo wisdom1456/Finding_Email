@@ -99,14 +99,52 @@ async def get_clio_import_status(
     request: Request,
     import_id: str,
     token: str = Query(None),
+    supabase=Depends(get_supabase_client),
 ):
-    """Get current Clio import progress status (polling endpoint)."""
+    """Get current Clio import progress status (polling endpoint with DB fallback)."""
     progress_manager = ProgressManager.get_instance()
 
-    # Get latest status from progress manager
+    # Try memory first
     status = await progress_manager.get_latest_status(import_id)
 
     if not status:
-        raise HTTPException(status_code=404, detail="Import not found or no status available")
+        # Fallback to database for cross-instance support on Vercel
+        try:
+            # Query cases table for import_progress matching import_id
+            # Using contains operator since import_progress is a JSONB column
+            response = (
+                supabase.table("cases")
+                .select("import_progress, status")
+                .filter("import_progress->>import_id", "eq", import_id)
+                .limit(1)
+                .execute()
+            )
+
+            if response.data and len(response.data) > 0:
+                case_data = response.data[0]
+                import_progress = case_data.get("import_progress", {})
+                if import_progress and import_progress.get("progress"):
+                    status = import_progress["progress"]
+                    logger.info(f"Retrieved import progress from DB for {import_id}")
+                elif case_data.get("status") == "completed":
+                    # Case is completed, import must have finished
+                    status = {
+                        "type": "completed",
+                        "message": "Import completed",
+                        "phase": "completed",
+                        "percent": 100,
+                    }
+        except Exception as e:
+            logger.warning(f"Failed to fetch import progress from DB for {import_id}: {e}")
+
+    if not status:
+        # Return a "pending" status instead of 404 to prevent error spam
+        # The import may still be in progress on another serverless instance
+        return {
+            "type": "pending",
+            "message": "Import status unavailable - it may still be in progress",
+            "phase": "unknown",
+            "percent": 0,
+        }
 
     return status

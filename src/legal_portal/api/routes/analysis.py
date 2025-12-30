@@ -680,7 +680,24 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
         processed_case_docs = []
         skipped_documents = []
 
+        # Log document analysis for debugging
+        logger.info(f"Analyzing {len(documents)} documents for case {case_id}")
+
         for doc in documents:
+            doc_name = doc.get("file_name", "unknown")
+            doc_status = doc.get("status")
+            has_extracted = bool(doc.get("extracted_text"))
+            extracted_len = len(doc.get("extracted_text") or "")
+            has_manual = bool(doc.get("manual_text"))
+            manual_len = len(doc.get("manual_text") or "")
+            
+            logger.info(
+                f"Document '{doc_name}': status={doc_status}, "
+                f"has_extracted_text={has_extracted} (len={extracted_len}), "
+                f"has_manual_text={has_manual} (len={manual_len}), "
+                f"is_junk={doc.get('is_flagged_as_junk')}"
+            )
+
             # Skip docs with critical issues or skipped status
             status = doc.get("status")
             if status in [
@@ -688,6 +705,7 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
                 DocumentStatus.CORRUPTED,
                 DocumentStatus.SKIPPED,
             ]:
+                logger.warning(f"SKIPPING '{doc_name}': bad status ({status})")
                 skipped_documents.append(
                     SkippedDocument(
                         document_id=doc["id"],
@@ -700,11 +718,13 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
                 continue
 
             if doc.get("is_flagged_as_junk"):
+                logger.warning(f"SKIPPING '{doc_name}': flagged as junk")
                 continue
 
             # Get text from manual_text (priority) or extracted_text
             text = doc.get("manual_text") or doc.get("extracted_text")
             if not text:
+                logger.warning(f"SKIPPING '{doc_name}': no text found (manual={has_manual}, extracted={has_extracted})")
                 skipped_documents.append(
                     SkippedDocument(
                         document_id=doc["id"],
@@ -715,6 +735,8 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
                     )
                 )
                 continue
+            
+            logger.info(f"PROCESSING '{doc_name}': has {len(text)} chars of text")
 
             # Construct ProcessedDocument
             metadata = FileMetadata(

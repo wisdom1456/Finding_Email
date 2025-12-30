@@ -61,8 +61,8 @@
         <div>
           <h2 class="text-2xl font-black text-white tracking-tight">AI Command Center</h2>
           <div class="flex items-center gap-2 mt-1">
-            <div class="w-2 h-2 rounded-full bg-accent animate-pulse"></div>
-            <p class="text-xs font-bold text-accent uppercase tracking-widest">
+            <div class="w-2 h-2 rounded-full bg-accent animate-pulse shadow-[0_0_8px_rgba(var(--color-accent-rgb),0.5)]"></div>
+            <p class="text-[10px] font-black text-accent uppercase tracking-[0.2em]">
               {state.message || 'Initializing Legal Brain...'}
             </p>
           </div>
@@ -81,10 +81,10 @@
     <div class="flex-1 overflow-y-auto p-8 space-y-10 custom-scrollbar">
       
       <!-- Part 1: Strategic Pipeline -->
-      <div>
-        <div class="flex items-center gap-3 mb-2">
-          <div class="w-1.5 h-1.5 rounded-full bg-accent"></div>
-          <h3 class="text-sm font-black text-white uppercase tracking-widest opacity-60">Strategic Pipeline</h3>
+      <div class="space-y-4">
+        <div class="flex items-center gap-3">
+          <div class="w-2 h-2 rounded-full bg-accent"></div>
+          <h3 class="text-xs font-black text-white uppercase tracking-[0.2em] opacity-80">Strategic Pipeline</h3>
         </div>
         <PipelineVisualizer stages={state.stages} />
       </div>
@@ -93,10 +93,10 @@
       <LiveStats stats={state.stats} />
 
       <!-- Part 3: Real-time Extraction Engine -->
-      <div>
-        <div class="flex items-center gap-3 mb-6">
-          <div class="w-1.5 h-1.5 rounded-full bg-accent"></div>
-          <h3 class="text-sm font-black text-white uppercase tracking-widest opacity-60">Real-time Extraction Engine</h3>
+      <div class="space-y-4">
+        <div class="flex items-center gap-3">
+          <div class="w-2 h-2 rounded-full bg-accent"></div>
+          <h3 class="text-xs font-black text-white uppercase tracking-[0.2em] opacity-80">Real-time Extraction Engine</h3>
         </div>
         <DocumentFlowVisualizer documents={state.documents} />
       </div>

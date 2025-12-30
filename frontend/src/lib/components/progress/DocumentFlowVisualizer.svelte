@@ -21,7 +21,7 @@
 
 <div class="bg-white/5 rounded-2xl p-6 border border-white/10">
   <div class="flex items-center justify-between mb-6">
-    <h3 class="text-sm font-black uppercase tracking-widest text-white/60">
+    <h3 class="text-xs font-black uppercase tracking-[0.2em] text-white/80">
       Document Flow
     </h3>
     <div class="flex gap-4">

@@ -645,6 +645,8 @@ async def import_clio_documents_helper(
                 is_intake_candidate = "intake" in doc_name.lower()
 
                 # Use unified processor for validation, compression, and upload (also with timeout)
+                # Skip text extraction during bulk import - extraction can be done on-demand
+                # This prevents OCR timeouts from blocking the entire import
                 processor = DocumentProcessor()
 
                 try:
@@ -657,6 +659,7 @@ async def import_clio_documents_helper(
                             supabase_client=supabase,
                             is_intake_form=is_intake_candidate,
                             content_type=content_type,
+                            skip_extraction=True,  # Defer OCR to avoid Vercel timeout
                         ),
                         timeout=DOC_TIMEOUT_SECONDS,
                     )

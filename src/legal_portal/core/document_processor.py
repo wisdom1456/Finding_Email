@@ -83,6 +83,7 @@ class DocumentProcessor:
         supabase_client,
         is_intake_form: bool = False,
         content_type: Optional[str] = None,
+        skip_extraction: bool = False,
     ) -> Dict[str, Any]:
         """Unified method to validate, compress, and upload a document.
 
@@ -98,6 +99,8 @@ class DocumentProcessor:
             supabase_client: Supabase client for storage operations
             is_intake_form: Whether this is an intake form
             content_type: Optional MIME type override
+            skip_extraction: If True, skip text extraction (useful for bulk imports
+                           where extraction can be done on-demand later)
 
         Returns:
         -------
@@ -187,6 +190,7 @@ class DocumentProcessor:
                     logger.warning(f"Compression failed for {sanitized_name}: {e}, using original")
 
             # 5. Extract text (intelligent extraction with OCR fallback)
+            # Skip extraction if requested (bulk imports can do extraction on-demand later)
             extracted_text = None
             extraction_method = "none"
             extraction_quality = "low"
@@ -194,60 +198,66 @@ class DocumentProcessor:
             extraction_error = None
             page_count = None
 
-            try:
-                # Create temporary file for text extraction
-                temp_path = create_secure_temp_file(file_content, sanitized_name)
-                temp_files.append(temp_path)
+            if skip_extraction:
+                # Mark for deferred extraction - faster bulk imports
+                extraction_method = "deferred"
+                extraction_quality = "pending"
+                logger.info(f"Skipping text extraction for {sanitized_name} (deferred mode)")
+            else:
+                try:
+                    # Create temporary file for text extraction
+                    temp_path = create_secure_temp_file(file_content, sanitized_name)
+                    temp_files.append(temp_path)
 
-                # Get the appropriate processor from PROCESSOR_MAP
-                from legal_portal.services.file_processors import PROCESSOR_MAP
+                    # Get the appropriate processor from PROCESSOR_MAP
+                    from legal_portal.services.file_processors import PROCESSOR_MAP
 
-                processor = PROCESSOR_MAP.get(final_content_type)
+                    processor = PROCESSOR_MAP.get(final_content_type)
 
-                # Fallback for incorrect mimetypes using sanitized name
-                if not processor:
-                    if sanitized_name.lower().endswith(".pdf"):
-                        processor = PROCESSOR_MAP.get("application/pdf")
-                    elif sanitized_name.lower().endswith(".docx"):
-                        processor = PROCESSOR_MAP.get(
-                            "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                    # Fallback for incorrect mimetypes using sanitized name
+                    if not processor:
+                        if sanitized_name.lower().endswith(".pdf"):
+                            processor = PROCESSOR_MAP.get("application/pdf")
+                        elif sanitized_name.lower().endswith(".docx"):
+                            processor = PROCESSOR_MAP.get(
+                                "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                            )
+                        elif sanitized_name.lower().endswith(".doc"):
+                            processor = PROCESSOR_MAP.get("application/msword")
+                        elif sanitized_name.lower().endswith(".txt"):
+                            processor = PROCESSOR_MAP.get("text/plain")
+
+                    if processor:
+                        # Determine doc type for extraction
+                        doc_type = DocumentType.CASE_DOCUMENT
+                        if is_intake_form:
+                            doc_type = DocumentType.INTAKE_FORM
+
+                        # Call processor with progress callback
+                        processed_doc = await processor(temp_path, doc_type, original_name, None)
+                        extracted_text = processed_doc.content
+                        extraction_method = processed_doc.extraction_method or "unknown"
+                        extraction_quality = processed_doc.extraction_quality or "high"
+                        ocr_provider = processed_doc.ocr_provider
+                        extraction_error = processed_doc.extraction_error
+                        page_count = processed_doc.page_count
+                    else:
+                        # Legacy fallback for unsupported types
+                        from legal_portal.api.utils.content_extractor import (
+                            DocumentProcessor as ContentExtractor,
                         )
-                    elif sanitized_name.lower().endswith(".doc"):
-                        processor = PROCESSOR_MAP.get("application/msword")
-                    elif sanitized_name.lower().endswith(".txt"):
-                        processor = PROCESSOR_MAP.get("text/plain")
 
-                if processor:
-                    # Determine doc type for extraction
-                    doc_type = DocumentType.CASE_DOCUMENT
-                    if is_intake_form:
-                        doc_type = DocumentType.INTAKE_FORM
+                        extracted_text = ContentExtractor.extract_text(
+                            file_content, final_content_type, sanitized_name
+                        )
+                        extraction_method = "basic"
 
-                    # Call processor with progress callback
-                    processed_doc = await processor(temp_path, doc_type, original_name, None)
-                    extracted_text = processed_doc.content
-                    extraction_method = processed_doc.extraction_method or "unknown"
-                    extraction_quality = processed_doc.extraction_quality or "high"
-                    ocr_provider = processed_doc.ocr_provider
-                    extraction_error = processed_doc.extraction_error
-                    page_count = processed_doc.page_count
-                else:
-                    # Legacy fallback for unsupported types
-                    from legal_portal.api.utils.content_extractor import (
-                        DocumentProcessor as ContentExtractor,
-                    )
-
-                    extracted_text = ContentExtractor.extract_text(
-                        file_content, final_content_type, sanitized_name
-                    )
-                    extraction_method = "basic"
-
-                # Clean extracted text (remove null bytes for PostgreSQL)
-                if extracted_text:
-                    extracted_text = extracted_text.replace("\x00", "").replace("\u0000", "")
-            except Exception as e:
-                logger.warning(f"Text extraction failed for {sanitized_name}: {e}")
-                extraction_error = str(e)
+                    # Clean extracted text (remove null bytes for PostgreSQL)
+                    if extracted_text:
+                        extracted_text = extracted_text.replace("\x00", "").replace("\u0000", "")
+                except Exception as e:
+                    logger.warning(f"Text extraction failed for {sanitized_name}: {e}")
+                    extraction_error = str(e)
 
             # 6. Upload to Supabase Storage
             file_extension = sanitized_name.split(".")[-1] if "." in sanitized_name else ""
@@ -272,7 +282,10 @@ class DocumentProcessor:
 
             # Determine status based on text content quality
             status = DocumentStatus.READY
-            if not extracted_text or len(extracted_text.strip()) == 0:
+            if extraction_method == "deferred":
+                # Deferred extraction - mark as ready (file is uploaded, extraction later)
+                status = DocumentStatus.READY
+            elif not extracted_text or len(extracted_text.strip()) == 0:
                 status = DocumentStatus.EXTRACTION_FAILED
                 extraction_quality = "low"
             elif len(extracted_text.strip()) < 200:

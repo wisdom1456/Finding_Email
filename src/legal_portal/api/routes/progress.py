@@ -104,8 +104,19 @@ async def get_clio_import_status(
     """Get current Clio import progress status (polling endpoint with DB fallback)."""
     progress_manager = ProgressManager.get_instance()
 
+    # #region agent log
+    import json
+    def _debug_log(msg, data, hyp):
+        logger.info(f"[DEBUG] {msg} | hyp={hyp} | data={json.dumps(data)}")
+    _debug_log("polling_entry", {"import_id": import_id}, "H2")
+    # #endregion
+
     # Try memory first
     status = await progress_manager.get_latest_status(import_id)
+
+    # #region agent log
+    _debug_log("memory_check", {"found_in_memory": status is not None, "status_type": type(status).__name__ if status else None}, "H2")
+    # #endregion
 
     if not status:
         # Fallback to database for cross-instance support on Vercel
@@ -120,9 +131,16 @@ async def get_clio_import_status(
                 .execute()
             )
 
+            # #region agent log
+            _debug_log("db_query_result", {"response_data": response.data if response else None, "data_len": len(response.data) if response and response.data else 0}, "H1,H3")
+            # #endregion
+
             if response.data and len(response.data) > 0:
                 case_data = response.data[0]
                 import_progress = case_data.get("import_progress", {})
+                # #region agent log
+                _debug_log("import_progress_from_db", {"import_progress": import_progress, "case_status": case_data.get("status")}, "H2,H3")
+                # #endregion
                 if import_progress and import_progress.get("progress"):
                     status = import_progress["progress"]
                     logger.info(f"Retrieved import progress from DB for {import_id}")
@@ -135,6 +153,9 @@ async def get_clio_import_status(
                         "percent": 100,
                     }
         except Exception as e:
+            # #region agent log
+            _debug_log("db_query_error", {"error": str(e), "error_type": type(e).__name__}, "H1")
+            # #endregion
             logger.warning(f"Failed to fetch import progress from DB for {import_id}: {e}")
 
     if not status:

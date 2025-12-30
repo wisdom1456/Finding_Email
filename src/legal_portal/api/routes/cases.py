@@ -907,8 +907,38 @@ async def process_clio_import_background(
     case_clio_data: dict,
 ):
     """Background task to handle Clio import process."""
+    # #region agent log
+    import json as _json
+    def _debug_log_bg(msg, data, hyp):
+        logger.info(f"[DEBUG] {msg} | hyp={hyp} | data={_json.dumps(data)}")
+    _debug_log_bg("bg_task_start", {"import_id": import_id, "case_id": case_id, "matter_id": matter_id}, "H2,H4")
+    # #endregion
+
+    # Helper to persist progress to DB (missing from this code path!)
+    async def save_progress_to_db(progress_data: dict):
+        # #region agent log
+        _debug_log_bg("save_progress_to_db_called", {"progress_data": progress_data}, "H2")
+        # #endregion
+        try:
+            from datetime import datetime, timezone
+            import_progress = {
+                "import_id": import_id,
+                "progress": progress_data,
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+            }
+            supabase.table("cases").update({"import_progress": import_progress}).eq("id", case_id).execute()
+            # #region agent log
+            _debug_log_bg("save_progress_to_db_success", {"case_id": case_id}, "H2")
+            # #endregion
+        except Exception as e:
+            # #region agent log
+            _debug_log_bg("save_progress_to_db_error", {"error": str(e)}, "H1,H2")
+            # #endregion
+            logger.warning(f"Failed to persist import progress to DB: {e}")
+
     try:
         # 3. Import documents
+        progress_data = {"type": "progress", "message": "Starting document import from Clio...", "phase": "import_start", "percent": 30}
         await progress_manager.publish_progress(
             channel_id=import_id,
             message="Starting document import from Clio...",
@@ -916,6 +946,7 @@ async def process_clio_import_background(
             percent=30,
             sub_step="initialization",
         )
+        await save_progress_to_db(progress_data)
 
         logger.debug("Starting document import (background)")
         import_result = await import_clio_documents_helper(
@@ -942,6 +973,7 @@ async def process_clio_import_background(
         )
 
         # 4. Analyze intake candidates
+        progress_data = {"type": "progress", "message": "Analyzing intake documents...", "phase": "analyze_intake", "percent": 90}
         await progress_manager.publish_progress(
             channel_id=import_id,
             message="Analyzing intake documents...",
@@ -949,12 +981,14 @@ async def process_clio_import_background(
             percent=90,
             sub_step="identification",
         )
+        await save_progress_to_db(progress_data)
         logger.debug("Analyzing intake documents")
         # analyze_intake_documents likely sync? Let's wrap it
         intake_analysis = await run_in_threadpool(analyze_intake_documents, case_id, supabase)
         logger.debug("Intake analysis complete", extra={"message": intake_analysis.get("message", "N/A")})
 
         # 5. Publish completion
+        progress_data = {"type": "completed", "message": "Case creation completed successfully!", "phase": "complete", "percent": 100, "status": "completed"}
         await progress_manager.publish_progress(
             channel_id=import_id,
             message="Case creation completed successfully!",
@@ -964,9 +998,14 @@ async def process_clio_import_background(
             status="completed",
             data={"import_status": import_result, "intake_analysis": intake_analysis, "success": True},
         )
+        await save_progress_to_db(progress_data)
+        # #region agent log
+        _debug_log_bg("bg_task_complete", {"import_id": import_id, "case_id": case_id}, "H2,H4")
+        # #endregion
 
     except Exception as e:
         logger.exception("Error in background import", extra={"error": str(e)})
+        progress_data = {"type": "error", "message": f"Import failed: {str(e)}", "phase": "error", "percent": 0, "status": "error"}
         await progress_manager.publish_progress(
             channel_id=import_id,
             message=f"Import failed: {str(e)}",
@@ -975,6 +1014,10 @@ async def process_clio_import_background(
             status="error",
             error=str(e),
         )
+        await save_progress_to_db(progress_data)
+        # #region agent log
+        _debug_log_bg("bg_task_error", {"import_id": import_id, "error": str(e)}, "H4")
+        # #endregion
 
 
 @router.post("/create-from-clio", response_model=CreateFromClioResponse)

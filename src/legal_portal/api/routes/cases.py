@@ -416,43 +416,52 @@ async def import_clio_documents_helper(
         import_id: Unique ID for this import operation (for SSE tracking)
 
     """
-    try:
-        # Import communications
-        logger.debug("Fetching communications for matter", extra={"matter_id": matter_id})
+    # Helper to persist progress to DB for cross-instance Vercel polling
+    async def persist_progress(message: str, phase: str, percent: int, **kwargs):
+        """Publish progress to in-memory manager AND persist to database."""
         if progress_manager and import_id:
             await progress_manager.publish_progress(
                 channel_id=import_id,
-                message="Fetching communications from Clio...",
-                phase="fetch_communications",
-                sub_step="fetch",
-                percent=5,
+                message=message,
+                phase=phase,
+                percent=percent,
+                **kwargs,
             )
+        # Always persist to DB if we have case_id and import_id
+        if case_id and import_id:
+            try:
+                from datetime import datetime, timezone
+                progress_data = {
+                    "type": kwargs.get("status", "progress"),
+                    "message": message,
+                    "phase": phase,
+                    "percent": percent,
+                }
+                import_progress = {
+                    "import_id": import_id,
+                    "progress": progress_data,
+                    "updated_at": datetime.now(timezone.utc).isoformat(),
+                }
+                supabase.table("cases").update({"import_progress": import_progress}).eq("id", case_id).execute()
+            except Exception as e:
+                logger.warning(f"Failed to persist progress to DB: {e}")
+
+    try:
+        # Import communications
+        logger.debug("Fetching communications for matter", extra={"matter_id": matter_id})
+        await persist_progress("Fetching communications from Clio...", "fetch_communications", 35)
         communications = await run_in_threadpool(clio_client.get_communications, matter_id, limit=100)
         logger.debug("Found communications", extra={"count": len(communications)})
 
         # Import notes
         logger.debug("Fetching notes for matter", extra={"matter_id": matter_id})
-        if progress_manager and import_id:
-            await progress_manager.publish_progress(
-                channel_id=import_id,
-                message="Fetching notes from Clio...",
-                phase="fetch_notes",
-                sub_step="fetch",
-                percent=10,
-            )
+        await persist_progress("Fetching notes from Clio...", "fetch_notes", 38)
         notes = await run_in_threadpool(clio_client.get_notes, matter_id)
         logger.debug("Found notes", extra={"count": len(notes)})
 
         # Import documents (metadata only)
         logger.debug("Fetching documents for matter", extra={"matter_id": matter_id})
-        if progress_manager and import_id:
-            await progress_manager.publish_progress(
-                channel_id=import_id,
-                message="Fetching documents from Clio...",
-                phase="fetch_documents",
-                sub_step="fetch",
-                percent=15,
-            )
+        await persist_progress("Fetching documents from Clio...", "fetch_documents", 40)
         documents = await run_in_threadpool(clio_client.get_documents, matter_id)
         logger.debug("Found documents", extra={"count": len(documents)})
 
@@ -470,14 +479,14 @@ async def import_clio_documents_helper(
         total_comms = len(communications)
         for idx, comm in enumerate(communications):
             try:
-                if progress_manager and import_id:
-                    subject = comm.subject or "Untitled Communication"
-                    percent = 20 + int((idx / max(total_comms, 1)) * 5)
-                    await progress_manager.publish_progress(
-                        channel_id=import_id,
-                        message=f"Processing communication {idx + 1} of {total_comms}",
-                        phase="import_communications",
-                        percent=percent,
+                subject = comm.subject or "Untitled Communication"
+                percent = 42 + int((idx / max(total_comms, 1)) * 5)
+                # Persist every 3rd item to avoid DB spam but still show progress
+                if idx % 3 == 0:
+                    await persist_progress(
+                        f"Processing communication {idx + 1} of {total_comms}",
+                        "import_communications",
+                        percent,
                         sub_step=subject[:50],
                         current_doc={"index": idx + 1, "total": total_comms, "name": subject},
                     )
@@ -517,14 +526,14 @@ async def import_clio_documents_helper(
         total_notes = len(notes)
         for idx, note in enumerate(notes):
             try:
-                if progress_manager and import_id:
-                    note_subject = note.get("subject", "Untitled Note")
-                    percent = 25 + int((idx / max(total_notes, 1)) * 5)
-                    await progress_manager.publish_progress(
-                        channel_id=import_id,
-                        message=f"Processing note {idx + 1} of {total_notes}",
-                        phase="import_notes",
-                        percent=percent,
+                note_subject = note.get("subject", "Untitled Note")
+                percent = 47 + int((idx / max(total_notes, 1)) * 5)
+                # Persist every 3rd item to avoid DB spam
+                if idx % 3 == 0:
+                    await persist_progress(
+                        f"Processing note {idx + 1} of {total_notes}",
+                        "import_notes",
+                        percent,
                         sub_step=note_subject[:50],
                         current_doc={"index": idx + 1, "total": total_notes, "name": note_subject},
                     )
@@ -562,17 +571,16 @@ async def import_clio_documents_helper(
         total_docs = len(documents)
         for idx, doc in enumerate(documents):
             try:
-                if progress_manager and import_id:
-                    doc_name = doc.get("name", "Untitled Document")
-                    percent = 30 + int((idx / max(total_docs, 1)) * 60)
-                    await progress_manager.publish_progress(
-                        channel_id=import_id,
-                        message=f"Downloading and processing document {idx + 1} of {total_docs}",
-                        phase="import_documents",
-                        percent=percent,
-                        sub_step=doc_name[:50],
-                        current_doc={"index": idx + 1, "total": total_docs, "name": doc_name},
-                    )
+                doc_name = doc.get("name", "Untitled Document")
+                percent = 52 + int((idx / max(total_docs, 1)) * 40)
+                # Persist EVERY document progress since this is the slow part
+                await persist_progress(
+                    f"Downloading document {idx + 1} of {total_docs}: {doc_name[:30]}",
+                    "import_documents",
+                    percent,
+                    sub_step=doc_name[:50],
+                    current_doc={"index": idx + 1, "total": total_docs, "name": doc_name},
+                )
                 doc_id = doc["id"]
                 doc_name = doc.get("name", "Untitled Document")
 

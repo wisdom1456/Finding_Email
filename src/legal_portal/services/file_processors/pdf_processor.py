@@ -77,7 +77,7 @@ async def _ocr_with_fallback(
                         "role": "user",
                         "content": [
                             {"type": "text", "text": prompt},
-                            {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{base64_image}", "detail": "high"}},
+                            {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}", "detail": "high"}},
                         ]
                     }],
                     max_tokens=4000,
@@ -490,21 +490,33 @@ async def _extract_text_via_google_ocr(
                     def render_page():
                         page = doc[page_index]
 
-                        # Optimization: check page size and cap zoom for extremely large pages
-                        # to avoid memory issues/hanging in serverless environments.
+                        # Optimization: cap zoom and use JPEG to keep images under 30MB
+                        # Google Vision has 40MB limit
                         rect = page.rect
                         width, height = rect.width, rect.height
-
-                        zoom = 3.0
-                        if width > 3000 or height > 3000:
-                            zoom = 1.5
-                            logger.info(f"Large page detected ({width:.0f}x{height:.0f}), using 1.5x zoom")
-                        elif width > 1500 or height > 1500:
-                            zoom = 2.0
-                            logger.info(f"Moderate page detected ({width:.0f}x{height:.0f}), using 2.0x zoom")
+                        
+                        MAX_DIMENSION = 4000  # Cap at 4000px to prevent huge images
+                        
+                        # Adjust zoom based on page size
+                        if width > 2000 or height > 2000:
+                            zoom = 1.0  # Very large pages (plats, surveys)
+                            logger.info(f"Very large page ({width:.0f}x{height:.0f}), using 1.0x zoom")
+                        elif width > 1200 or height > 1200:
+                            zoom = 1.5  # Large pages
+                        else:
+                            zoom = 2.0  # Normal pages
+                        
+                        # Further cap if still too large
+                        estimated_dim = max(width * zoom, height * zoom)
+                        if estimated_dim > MAX_DIMENSION:
+                            zoom = MAX_DIMENSION / max(width, height)
+                            logger.info(f"Capping zoom to {zoom:.2f}x for {MAX_DIMENSION}px limit")
 
                         pix = page.get_pixmap(matrix=fitz.Matrix(zoom, zoom))
-                        return pix.tobytes("png")
+                        # JPEG is 5-10x smaller than PNG, quality 85 is good for OCR
+                        img_bytes = pix.tobytes("jpeg", jpg_quality=85)
+                        logger.debug(f"Rendered: {pix.width}x{pix.height}px, {len(img_bytes)/1024:.0f}KB")
+                        return img_bytes
 
                     try:
                         img_data = await asyncio.wait_for(
@@ -697,21 +709,33 @@ async def _extract_text_via_google_ocr_bytes(
                     def render_page():
                         page = doc[page_index]
 
-                        # Optimization: check page size and cap zoom for extremely large pages
-                        # to avoid memory issues/hanging in serverless environments.
+                        # Optimization: cap zoom and use JPEG to keep images under 30MB
+                        # Google Vision has 40MB limit
                         rect = page.rect
                         width, height = rect.width, rect.height
-
-                        zoom = 3.0
-                        if width > 3000 or height > 3000:
-                            zoom = 1.5
-                            logger.info(f"Large page detected ({width:.0f}x{height:.0f}), using 1.5x zoom")
-                        elif width > 1500 or height > 1500:
-                            zoom = 2.0
-                            logger.info(f"Moderate page detected ({width:.0f}x{height:.0f}), using 2.0x zoom")
+                        
+                        MAX_DIMENSION = 4000  # Cap at 4000px to prevent huge images
+                        
+                        # Adjust zoom based on page size
+                        if width > 2000 or height > 2000:
+                            zoom = 1.0  # Very large pages (plats, surveys)
+                            logger.info(f"Very large page ({width:.0f}x{height:.0f}), using 1.0x zoom")
+                        elif width > 1200 or height > 1200:
+                            zoom = 1.5  # Large pages
+                        else:
+                            zoom = 2.0  # Normal pages
+                        
+                        # Further cap if still too large
+                        estimated_dim = max(width * zoom, height * zoom)
+                        if estimated_dim > MAX_DIMENSION:
+                            zoom = MAX_DIMENSION / max(width, height)
+                            logger.info(f"Capping zoom to {zoom:.2f}x for {MAX_DIMENSION}px limit")
 
                         pix = page.get_pixmap(matrix=fitz.Matrix(zoom, zoom))
-                        return pix.tobytes("png")
+                        # JPEG is 5-10x smaller than PNG, quality 85 is good for OCR
+                        img_bytes = pix.tobytes("jpeg", jpg_quality=85)
+                        logger.debug(f"Rendered: {pix.width}x{pix.height}px, {len(img_bytes)/1024:.0f}KB")
+                        return img_bytes
 
                     try:
                         img_data = await asyncio.wait_for(
@@ -888,7 +912,7 @@ async def _extract_text_via_vision(
                     {
                         "type": "image_url",
                         "image_url": {
-                            "url": f"data:image/png;base64,{base64_image}",
+                            "url": f"data:image/jpeg;base64,{base64_image}",
                             "detail": "high"  # Request high detail for OCR accuracy
                         },
                     },
@@ -1095,7 +1119,7 @@ async def _extract_text_via_vision_bytes(
                     {
                         "type": "image_url",
                         "image_url": {
-                            "url": f"data:image/png;base64,{base64_image}",
+                            "url": f"data:image/jpeg;base64,{base64_image}",
                             "detail": "high"  # Request high detail for OCR accuracy
                         },
                     },

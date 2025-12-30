@@ -181,6 +181,9 @@ class GoogleVisionClient:
             logger.error(f"Google Vision credential validation failed: {error_msg}")
             return False, error_msg
 
+    # Google Vision API has a 40MB payload limit
+    PAYLOAD_SIZE_LIMIT = 40 * 1024 * 1024  # 40MB
+
     def extract_text_from_image(self, image_bytes: bytes) -> str:
         """Extract text from image bytes using Google Cloud Vision OCR.
 
@@ -192,10 +195,21 @@ class GoogleVisionClient:
         -------
             Extracted text string, or empty string on failure
 
+        Raises:
+        ------
+            ValueError: If image exceeds Google Vision's 40MB payload limit
+
         """
         if not self.is_available:
             logger.warning("Google Vision client not available")
             return ""
+
+        # Check payload size before sending to API
+        if len(image_bytes) > self.PAYLOAD_SIZE_LIMIT:
+            size_mb = len(image_bytes) / (1024 * 1024)
+            error_msg = f"Image size ({size_mb:.1f}MB) exceeds Google Vision limit (40MB)"
+            logger.error(error_msg)
+            raise ValueError(error_msg)
 
         try:
             image = vision.Image(content=image_bytes)
@@ -218,6 +232,9 @@ class GoogleVisionClient:
 
             return ""
 
+        except ValueError:
+            # Re-raise size limit errors for caller to handle
+            raise
         except Exception as e:
             logger.error(f"Error extracting text with Google Vision: {e}")
             return ""

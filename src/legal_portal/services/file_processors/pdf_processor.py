@@ -21,6 +21,87 @@ from legal_portal.utils.openai_client import OpenAIClient
 
 logger = get_module_logger(__name__)
 
+
+async def _ocr_with_fallback(
+    img_data: bytes,
+    page_index: int,
+    original_filename: str,
+    google_client: GoogleVisionClient,
+) -> str:
+    """Try Google Vision OCR with automatic fallback to GPT-4o Vision.
+
+    Args:
+    ----
+        img_data: Image bytes (PNG)
+        page_index: 0-based page index
+        original_filename: Original filename for logging
+        google_client: Google Vision client instance
+
+    Returns:
+    -------
+        Extracted text or empty string on failure
+
+    """
+    # Try Google Vision first
+    try:
+        def do_ocr():
+            return google_client.extract_text_from_image(img_data)
+
+        page_text = await asyncio.wait_for(
+            run_in_threadpool(do_ocr),
+            timeout=30.0,
+        )
+        logger.debug(f"Google Vision returned for page {page_index + 1}")
+        return page_text
+
+    except ValueError as size_err:
+        # Image too large for Google Vision - fall back to GPT-4o Vision
+        logger.warning(f"Page {page_index + 1}: {size_err}. Falling back to GPT-4o Vision.")
+
+        try:
+            openai_client = OpenAIClient()
+            client = openai_client.client
+
+            base64_image = base64.b64encode(img_data).decode("utf-8")
+            prompt = (
+                f"Extract ALL text from page {page_index + 1} of this legal document image. "
+                f"Filename: {original_filename}. "
+                "This is a scanned document that needs OCR text extraction. "
+                "Maintain the logical structure and layout. Provide the text verbatim."
+            )
+
+            def gpt4o_ocr():
+                return client.chat.completions.create(
+                    model="gpt-4o",
+                    messages=[{
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": prompt},
+                            {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{base64_image}", "detail": "high"}},
+                        ]
+                    }],
+                    max_tokens=4000,
+                    temperature=0.0,
+                )
+
+            response = await asyncio.wait_for(run_in_threadpool(gpt4o_ocr), timeout=60.0)
+            page_text = response.choices[0].message.content
+            logger.info(f"GPT-4o Vision fallback succeeded for page {page_index + 1}")
+            return page_text
+
+        except Exception as gpt_err:
+            logger.error(f"GPT-4o Vision fallback also failed for page {page_index + 1}: {gpt_err}")
+            return ""
+
+    except asyncio.TimeoutError:
+        logger.error(f"Google Vision API timeout on page {page_index + 1} of {original_filename}")
+        return ""
+
+    except Exception as e:
+        logger.error(f"OCR failed for page {page_index + 1}: {e}")
+        return ""
+
+
 # Conditional imports for PDF extraction
 # Try PyMuPDF first (better quality), then pypdf (lightweight, works on Vercel)
 FITZ_AVAILABLE = False
@@ -443,25 +524,11 @@ async def _extract_text_via_google_ocr(
                         completed_pages[0] += 1
                         return ""
 
-                    # Send to Google Vision (in thread pool since it's sync)
-                    # Add timeout to prevent hanging on auth issues
-                    def do_ocr():
-                        return google_client.extract_text_from_image(img_data)
-
-                    try:
-                        logger.debug(f"Sending page {page_index + 1} to Google Vision API")
-                        page_text = await asyncio.wait_for(
-                            run_in_threadpool(do_ocr),
-                            timeout=30.0,
-                        )
-                        logger.debug(f"Google Vision returned for page {page_index + 1}")
-                    except asyncio.TimeoutError:
-                        logger.error(
-                            f"Google Vision API timeout on page {page_index + 1} of {original_filename} "
-                            "(30s limit). Check credentials or network."
-                        )
-                        completed_pages[0] += 1
-                        return ""
+                    # Send to Google Vision with automatic fallback to GPT-4o for oversized images
+                    logger.debug(f"Sending page {page_index + 1} to OCR (Google Vision with fallback)")
+                    page_text = await _ocr_with_fallback(
+                        img_data, page_index, original_filename, google_client
+                    )
 
                     # Update progress
                     completed_pages[0] += 1
@@ -664,25 +731,11 @@ async def _extract_text_via_google_ocr_bytes(
                         completed_pages[0] += 1
                         return ""
 
-                    # Send to Google Vision (in thread pool since it's sync)
-                    # Add timeout to prevent hanging on auth issues
-                    def do_ocr():
-                        return google_client.extract_text_from_image(img_data)
-
-                    try:
-                        logger.debug(f"Sending page {page_index + 1} to Google Vision API")
-                        page_text = await asyncio.wait_for(
-                            run_in_threadpool(do_ocr),
-                            timeout=30.0,
-                        )
-                        logger.debug(f"Google Vision returned for page {page_index + 1}")
-                    except asyncio.TimeoutError:
-                        logger.error(
-                            f"Google Vision API timeout on page {page_index + 1} of {original_filename} "
-                            "(30s limit). Check credentials or network."
-                        )
-                        completed_pages[0] += 1
-                        return ""
+                    # Send to Google Vision with automatic fallback to GPT-4o for oversized images
+                    logger.debug(f"Sending page {page_index + 1} to OCR (Google Vision with fallback)")
+                    page_text = await _ocr_with_fallback(
+                        img_data, page_index, original_filename, google_client
+                    )
 
                     # Update progress
                     completed_pages[0] += 1

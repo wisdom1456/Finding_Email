@@ -853,6 +853,47 @@ async def trigger_extraction(
             extraction_method = "direct_text"
             extraction_quality = "high"
 
+        elif file_type in [
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "application/msword",
+            "docx",
+            "doc",
+        ] or file_name.lower().endswith((".docx", ".doc")):
+            # Microsoft Word document - extract text directly (no OCR needed)
+            import io
+            try:
+                import docx
+                document = docx.Document(io.BytesIO(file_bytes))
+                
+                # Extract text from paragraphs
+                paragraphs = [para.text for para in document.paragraphs if para.text.strip()]
+                
+                # Also extract text from tables
+                table_text = []
+                for table in document.tables:
+                    for row in table.rows:
+                        row_text = [cell.text.strip() for cell in row.cells if cell.text.strip()]
+                        if row_text:
+                            table_text.append(" | ".join(row_text))
+                
+                # Combine paragraphs and table content
+                all_text = paragraphs + table_text
+                extracted_text = "\n".join(all_text)
+                
+                extraction_method = "docx_direct"
+                extraction_quality = "high" if len(extracted_text) > 50 else "medium"
+                logger.info(f"DOCX extraction: {len(paragraphs)} paragraphs, {len(table_text)} table rows")
+                
+            except ImportError:
+                extraction_error = "python-docx library not available for DOCX extraction"
+                extraction_method = "none"
+                extraction_quality = "low"
+            except Exception as docx_err:
+                extraction_error = f"DOCX extraction failed: {str(docx_err)}"
+                extraction_method = "none"
+                extraction_quality = "low"
+                logger.error(f"DOCX extraction error for {file_name}: {docx_err}")
+
         else:
             # Unsupported type
             extraction_error = f"Unsupported file type for extraction: {file_type}"

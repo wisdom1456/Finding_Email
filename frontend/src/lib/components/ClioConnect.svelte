@@ -110,8 +110,8 @@
 	}
 </script>
 
-<div class="bg-white shadow rounded-lg p-6">
-	<h3 class="text-lg font-medium text-gray-900 mb-4">Clio Integration</h3>
+<div class="card-standard">
+	<h3 class="text-lg font-heading font-semibold text-contrast mb-4">Clio Integration</h3>
 
 	{#if loading}
 		<div class="flex items-center justify-center p-4">

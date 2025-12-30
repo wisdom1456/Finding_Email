@@ -143,7 +143,7 @@
 	<title>Create New Case | Bernhardt Riley</title>
 </svelte:head>
 
-<div class="space-y-6">
+<div class="page-spacing">
 	<!-- Header -->
 	<PageHeader
 		title="Create New Case"
@@ -158,11 +158,11 @@
 	/>
 
 	{#if error && !partialCaseId}
-		<div class="bg-red-50 border border-red-200 rounded-lg p-4">
+		<div class="info-box border-red-200 bg-red-50">
 			<div class="flex">
-				<AlertTriangle class="h-5 w-5 text-red-400 flex-shrink-0" />
+				<AlertTriangle class="h-5 w-5 text-red-500 flex-shrink-0" />
 				<div class="ml-3">
-					<h3 class="text-sm font-medium text-red-800">Error Creating Case</h3>
+					<h3 class="text-sm font-semibold text-red-800">Error Creating Case</h3>
 					<p class="mt-1 text-sm text-red-700">{error}</p>
 				</div>
 			</div>
@@ -171,7 +171,7 @@
 
 	{#if partialCaseId}
 		<!-- Partial Success / Error Recovery UI -->
-		<div class="bg-amber-50 border border-amber-200 rounded-lg p-6">
+		<div class="info-box border-amber-200 bg-amber-50">
 			<div class="flex items-start">
 				<AlertTriangle class="h-6 w-6 text-amber-500 mt-0.5 flex-shrink-0" />
 				<div class="ml-4 flex-1">
@@ -199,7 +199,7 @@
 		</div>
 	{:else if isCreating}
 		<!-- Progress Indicator -->
-		<div class="bg-white shadow-card rounded-lg p-6">
+		<div class="card-standard">
 			<h2 class="text-lg font-heading font-semibold text-contrast mb-4">Creating Case from Clio Matter</h2>
 			
 			{#if progressSteps.length > 0}
@@ -207,11 +207,11 @@
 			{:else}
 				<div class="flex items-center space-x-3">
 					<div class="animate-spin rounded-full h-5 w-5 border-2 border-accent border-t-transparent"></div>
-					<p class="text-sm text-gray-600">Initializing...</p>
+					<p class="text-sm text-gray-500">Initializing...</p>
 				</div>
 			{/if}
 
-			<div class="mt-6 p-4 bg-contrast-light/5 border border-contrast-light/20 rounded-lg">
+			<div class="mt-6 info-box info-box-blue">
 				<p class="text-sm text-contrast-light">
 					<strong>Please wait.</strong> Do not close this window. Case creation and document import may take a few moments.
 				</p>
@@ -219,7 +219,7 @@
 		</div>
 	{:else if !showManualForm && $clioStore.connected}
 		<!-- Clio Search (Default State) -->
-		<div class="bg-white shadow-card rounded-lg p-6">
+		<div class="card-standard">
 			<h2 class="text-lg font-heading font-semibold text-contrast mb-2">Find Your Clio Matter</h2>
 			<p class="text-sm text-gray-500 mb-6">
 				Search for the matter associated with this case. We'll automatically populate the case details and import all documents.
@@ -233,7 +233,7 @@
 			<div class="mt-8 pt-6 border-t border-gray-100">
 				<button
 					onclick={() => (showManualForm = true)}
-					class="text-sm text-accent hover:text-accent-hover transition-colors"
+					class="text-sm text-accent hover:text-accent-hover font-medium transition-colors"
 				>
 					Create case manually without Clio
 				</button>
@@ -241,7 +241,7 @@
 		</div>
 	{:else}
 		<!-- Manual Case Creation Form -->
-		<div class="bg-white shadow-card rounded-lg p-6">
+		<div class="card-standard">
 			<h2 class="text-lg font-heading font-semibold text-contrast mb-6">Manual Case Creation</h2>
 
 			<form onsubmit={(e) => { e.preventDefault(); createManualCase(); }} class="space-y-5">
@@ -254,7 +254,7 @@
 						id="client_name"
 						bind:value={clientName}
 						required
-						class="block w-full px-3 py-2.5 border border-gray-300 rounded-md text-contrast placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent transition-colors"
+						class="input-standard focus:ring-2 focus:ring-accent focus:border-transparent transition-colors"
 						placeholder="John Doe"
 					/>
 				</div>
@@ -267,7 +267,7 @@
 						type="text"
 						id="reference_number"
 						bind:value={referenceNumber}
-						class="block w-full px-3 py-2.5 border border-gray-300 rounded-md text-contrast placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent transition-colors"
+						class="input-standard focus:ring-2 focus:ring-accent focus:border-transparent transition-colors"
 						placeholder="2024-001"
 					/>
 				</div>
@@ -280,7 +280,7 @@
 						id="jurisdiction"
 						bind:value={jurisdiction}
 						required
-						class="block w-full px-3 py-2.5 border border-gray-300 rounded-md text-contrast focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent transition-colors"
+						class="input-standard focus:ring-2 focus:ring-accent focus:border-transparent transition-colors"
 					>
 						<option value="Florida">Florida</option>
 						<option value="New Mexico">New Mexico</option>
@@ -298,7 +298,7 @@
 						id="description"
 						bind:value={description}
 						rows="3"
-						class="block w-full px-3 py-2.5 border border-gray-300 rounded-md text-contrast placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent transition-colors resize-none"
+						class="input-standard focus:ring-2 focus:ring-accent focus:border-transparent transition-colors resize-none"
 						placeholder="Brief description of the case..."
 					></textarea>
 				</div>
@@ -308,7 +308,7 @@
 						<button
 							type="button"
 							onclick={() => (showManualForm = false)}
-							class="inline-flex items-center text-sm text-gray-600 hover:text-gray-800 transition-colors"
+							class="inline-flex items-center text-sm text-gray-500 hover:text-gray-700 transition-colors"
 						>
 							<ArrowLeft class="h-4 w-4 mr-1" />
 							Back to Clio Search
@@ -332,7 +332,7 @@
 
 	{#if !$clioStore.connected && !showManualForm}
 		<!-- Not Connected to Clio -->
-		<div class="bg-contrast-light/5 border border-contrast-light/20 rounded-lg p-6">
+		<div class="info-box info-box-blue">
 			<div class="flex">
 				<Info class="h-5 w-5 text-contrast-light flex-shrink-0" />
 				<div class="ml-4 flex-1">

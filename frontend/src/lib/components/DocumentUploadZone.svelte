@@ -76,9 +76,9 @@
 </script>
 
 <div
-	class="p-8 border-2 border-dashed rounded-lg transition-colors cursor-pointer
-		{dragActive ? 'border-accent bg-accent/10' : 'border-gray-300 bg-gray-50'}
-		{disabled ? 'opacity-50 cursor-not-allowed' : 'hover:border-gray-400'}"
+	class="p-12 border-2 border-dashed rounded-xl transition-all cursor-pointer group
+		{dragActive ? 'border-accent bg-accent/5 ring-1 ring-accent' : 'border-gray-200 bg-gray-50/50'}
+		{disabled ? 'opacity-50 cursor-not-allowed' : 'hover:border-accent/30 hover:bg-gray-50'}"
 	ondrop={handleDrop}
 	ondragover={handleDragOver}
 	ondragleave={handleDragLeave}
@@ -89,7 +89,7 @@
 >
 	<div class="text-center">
 		<svg
-			class="mx-auto h-12 w-12 text-gray-400"
+			class="mx-auto h-16 w-16 text-gray-300 group-hover:text-accent/50 transition-colors"
 			stroke="currentColor"
 			fill="none"
 			viewBox="0 0 48 48"
@@ -101,9 +101,11 @@
 				stroke-linejoin="round"
 			/>
 		</svg>
-		<div class="mt-4">
-			<span class="text-accent hover:text-accent-hover font-medium">Click to upload</span>
-			<span class="text-gray-600"> or drag and drop</span>
+		<div class="mt-6 flex flex-col items-center">
+			<span class="inline-flex items-center px-6 py-3 border border-transparent text-sm font-bold rounded-md text-white bg-accent hover:bg-accent-hover transition-all shadow-sm shadow-accent/20">
+				Choose Files to Upload
+			</span>
+			<span class="mt-3 text-sm font-medium text-gray-500">or drag and drop here</span>
 			<input
 				bind:this={fileInput}
 				type="file"
@@ -114,8 +116,8 @@
 				{disabled}
 			/>
 		</div>
-		<p class="text-xs text-gray-500 mt-2">
-			PDF, DOCX, DOC, TXT, PNG, JPG, CSV, EML, ZIP up to {maxFileSizeMB}MB
+		<p class="text-[10px] font-bold text-gray-400 mt-4 uppercase tracking-widest italic">
+			Supported: PDF, DOCX, DOC, TXT, PNG, JPG, CSV, EML, ZIP up to {maxFileSizeMB}MB
 		</p>
 	</div>
 </div>

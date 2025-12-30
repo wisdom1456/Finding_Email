@@ -159,7 +159,7 @@
 	<title>Cases | Bernhardt Riley</title>
 </svelte:head>
 
-<div class="space-y-6">
+<div class="page-spacing">
 	<!-- Header -->
 	<PageHeader
 		title="All Cases"
@@ -182,7 +182,7 @@
 
 	<!-- Filter Toggle -->
 	{#if clioCount > 0}
-		<div class="flex items-center space-x-3 bg-white px-4 py-3 rounded-lg shadow-card">
+		<div class="flex items-center space-x-3 bg-white px-6 py-4 rounded-lg shadow-card border border-gray-100">
 			<Filter class="h-4 w-4 text-gray-400" />
 			<label class="flex items-center cursor-pointer">
 				<input
@@ -190,18 +190,18 @@
 					bind:checked={showOnlyClioCases}
 					class="h-4 w-4 text-accent focus:ring-accent border-gray-300 rounded transition-colors"
 				/>
-				<span class="ml-2 text-sm text-gray-700">Show only Clio cases</span>
+				<span class="ml-2 text-sm font-medium text-contrast">Show only Clio cases</span>
 			</label>
 			{#if showOnlyClioCases}
-				<span class="text-sm text-gray-500">
-					({filteredCases.length} of {cases.length})
+				<span class="text-xs font-semibold text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">
+					{filteredCases.length} of {cases.length}
 				</span>
 			{/if}
 		</div>
 	{/if}
 
 	<!-- Cases List -->
-	<div class="bg-white shadow-card rounded-lg animate-fade-in-up">
+	<div class="card-standard !p-0 overflow-hidden animate-fade-in-up">
 		{#if loading}
 			<div class="p-8 text-center">
 				<div class="inline-block animate-spin rounded-full h-8 w-8 border-2 border-accent border-t-transparent"></div>

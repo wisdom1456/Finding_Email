@@ -286,7 +286,7 @@
 <!-- Clio Integration Modal -->
 {#if showClioModal}
 	<div 
-		class="fixed inset-0 bg-contrast/60 backdrop-blur-sm flex items-center justify-center p-4 z-50" 
+		class="modal-overlay p-4" 
 		role="button"
 		tabindex="0"
 		onclick={() => showClioModal = false}
@@ -294,7 +294,7 @@
 		aria-label="Close modal"
 	>
 		<div 
-			class="bg-white rounded-lg shadow-lg max-w-md w-full p-6" 
+			class="card-standard max-w-md w-full" 
 			role="dialog"
 			aria-modal="true"
 			onclick={(e) => e.stopPropagation()}

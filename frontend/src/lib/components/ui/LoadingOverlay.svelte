@@ -27,17 +27,17 @@
 
 {#if show}
 	<div
-		class="fixed inset-0 bg-contrast/60 backdrop-blur-sm flex items-center justify-center z-50"
+		class="modal-overlay"
 		transition:fade={{ duration: 200 }}
 		role="dialog"
 		aria-modal="true"
 		aria-label="Loading"
 	>
-		<div class="bg-white rounded-lg shadow-lg p-8 max-w-md w-full mx-4">
+		<div class="bg-white rounded-lg shadow-2xl p-8 max-w-md w-full mx-4">
 			<div class="flex flex-col items-center text-center">
-				<Loader2 class="h-12 w-12 text-accent animate-spin mb-4" />
+				<Loader2 class="h-12 w-12 text-accent animate-spin mb-6" />
 				
-				<h3 class="text-lg font-heading-semibold text-contrast mb-2">
+				<h3 class="text-xl font-heading font-bold text-contrast mb-2">
 					{message}
 				</h3>
 				

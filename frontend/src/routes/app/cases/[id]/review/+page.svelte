@@ -223,31 +223,31 @@
 	}
 </script>
 
-<div class="space-y-6">
+<div class="page-spacing">
 	<!-- Header -->
-	<div>
-		<a href="/app/cases/{caseId}" class="text-accent hover:text-accent-hover flex items-center mb-4">
-			← Back to Case
+	<div class="flex flex-col">
+		<a href="/app/cases/{caseId}" class="text-accent hover:text-accent-hover font-bold flex items-center mb-4 transition-colors">
+			<span class="mr-2">←</span> Back to Case
 		</a>
-		<h2 class="text-2xl font-bold leading-7 text-gray-900 sm:text-3xl">Review Intake Form</h2>
-		<p class="mt-2 text-sm text-gray-600">
+		<h2 class="text-3xl font-heading font-bold text-contrast">Review Intake Form</h2>
+		<p class="mt-2 text-sm text-gray-500 font-medium">
 			Review and edit the information extracted from the intake form before starting analysis.
 		</p>
 	</div>
 
 	{#if loading}
-		<div class="flex items-center justify-center p-8">
-			<div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-accent"></div>
-			<span class="ml-2 text-gray-600">Loading intake data...</span>
+		<div class="flex items-center justify-center py-20">
+			<div class="inline-block animate-spin rounded-full h-10 w-10 border-b-2 border-accent"></div>
+			<span class="ml-4 text-gray-500 font-bold tracking-wide uppercase text-xs">Loading intake data...</span>
 		</div>
 	{:else}
 		<!-- File Upload (if no data yet) -->
 		{#if qaPairs.length === 0}
-			<div class="bg-white shadow rounded-lg p-6">
-				<h3 class="text-lg font-medium text-gray-900 mb-4">Upload Intake Form</h3>
-				<div class="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
+			<div class="card-standard">
+				<h3 class="text-lg font-heading font-bold text-contrast mb-6">Upload Intake Form</h3>
+				<div class="border-2 border-dashed border-gray-200 rounded-xl p-12 text-center bg-gray-50/50 hover:bg-gray-50 hover:border-accent/30 transition-all group">
 					<svg
-						class="mx-auto h-12 w-12 text-gray-400"
+						class="mx-auto h-16 w-16 text-gray-300 group-hover:text-accent/50 transition-colors"
 						stroke="currentColor"
 						fill="none"
 						viewBox="0 0 48 48"
@@ -259,9 +259,11 @@
 							stroke-linejoin="round"
 						/>
 					</svg>
-					<div class="mt-4">
+					<div class="mt-6">
 						<label class="cursor-pointer">
-							<span class="text-accent hover:text-accent-hover font-medium">Upload intake form</span>
+							<span class="inline-flex items-center px-6 py-3 border border-transparent text-sm font-bold rounded-md text-white bg-accent hover:bg-accent-hover transition-all shadow-sm shadow-accent/20">
+								Choose Intake File
+							</span>
 							<input
 								type="file"
 								accept=".pdf,.docx,.doc,.txt"
@@ -271,21 +273,21 @@
 							/>
 						</label>
 					</div>
-					<p class="text-xs text-gray-500 mt-2">PDF, DOCX, DOC, or TXT up to 50MB</p>
+					<p class="text-xs text-gray-400 mt-4 font-medium italic">Supported: PDF, DOCX, DOC, or TXT up to 50MB</p>
 				</div>
 				{#if processing}
-					<div class="mt-4 flex items-center justify-center">
-						<div class="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-accent"></div>
-						<span class="ml-2 text-sm text-gray-600">Processing intake form...</span>
+					<div class="mt-8 flex flex-col items-center justify-center animate-fade-in-up">
+						<div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-accent"></div>
+						<span class="mt-3 text-xs font-bold text-accent uppercase tracking-widest">AI Extraction in progress...</span>
 					</div>
 				{/if}
 			</div>
 		{:else}
 			<!-- Client Name -->
-			<div class="bg-white shadow rounded-lg p-6">
-				<h3 class="text-lg font-medium text-gray-900 mb-4">Client Information</h3>
-				<div>
-					<label for="client-name" class="block text-sm font-medium text-gray-700">
+			<div class="card-standard">
+				<h3 class="text-lg font-heading font-bold text-contrast mb-6">Client Information</h3>
+				<div class="max-w-xl">
+					<label for="client-name" class="block text-sm font-bold text-contrast mb-1.5">
 						Client Name <span class="text-red-500">*</span>
 					</label>
 					<input
@@ -293,54 +295,54 @@
 						type="text"
 						bind:value={clientName}
 						required
-						class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-accent focus:border-accent sm:text-sm"
+						class="input-standard focus:ring-accent"
 						placeholder="John Doe"
 					/>
 				</div>
 			</div>
 
 			<!-- Practice Areas -->
-			<div class="bg-white shadow rounded-lg p-6">
-				<h3 class="text-lg font-medium text-gray-900 mb-4">Practice Areas</h3>
-				<p class="text-sm text-gray-600 mb-4">Select all relevant practice areas for this case:</p>
-				<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+			<div class="card-standard">
+				<h3 class="text-lg font-heading font-bold text-contrast mb-2">Practice Areas</h3>
+				<p class="text-sm text-gray-500 mb-6 font-medium">Select all relevant practice areas for this case:</p>
+				<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
 					{#each availablePracticeAreas as area}
-						<label class="flex items-center p-3 border rounded-lg cursor-pointer hover:bg-gray-50 {selectedPracticeAreas.includes(area) ? 'border-accent bg-accent/10' : 'border-gray-200'}">
+						<label class="flex items-center p-4 border rounded-xl cursor-pointer transition-all {selectedPracticeAreas.includes(area) ? 'border-accent bg-accent/5 ring-1 ring-accent' : 'border-gray-200 hover:bg-gray-50'}">
 							<input
 								type="checkbox"
 								checked={selectedPracticeAreas.includes(area)}
 								onchange={() => togglePracticeArea(area)}
-								class="h-4 w-4 text-accent focus:ring-accent border-gray-300 rounded"
+								class="h-4 w-4 text-accent focus:ring-accent border-gray-300 rounded transition-colors"
 							/>
-							<span class="ml-2 text-sm text-gray-900">{area}</span>
+							<span class="ml-3 text-sm font-bold {selectedPracticeAreas.includes(area) ? 'text-accent' : 'text-contrast'}">{area}</span>
 						</label>
 					{/each}
 				</div>
 			</div>
 
 			<!-- Q&A Pairs -->
-			<div class="bg-white shadow rounded-lg p-6">
-				<div class="flex justify-between items-center mb-4">
-					<h3 class="text-lg font-medium text-gray-900">Questions & Answers</h3>
+			<div class="card-standard">
+				<div class="flex justify-between items-center mb-8 border-b border-gray-100 pb-4">
+					<h3 class="text-xl font-heading font-bold text-contrast">Questions & Answers</h3>
 					<button
 						onclick={addQAPair}
-						class="inline-flex items-center px-3 py-1.5 border border-transparent text-sm font-medium rounded-md text-white bg-accent hover:bg-accent-hover"
+						class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-bold rounded-md text-white bg-accent hover:bg-accent-hover transition-all shadow-sm shadow-accent/20"
 					>
-						<svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+						<svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4" />
 						</svg>
-						Add Q&A
+						Add Q&A Pair
 					</button>
 				</div>
 
-				<div class="space-y-4">
+				<div class="space-y-6">
 					{#each qaPairs as pair, index}
-						<div class="border border-gray-200 rounded-lg p-4">
-							<div class="flex justify-between items-start mb-2">
-								<span class="text-sm font-medium text-gray-700">Q&A #{index + 1}</span>
+						<div class="border border-gray-200 rounded-xl p-6 bg-gray-50/30 hover:shadow-md transition-shadow relative group">
+							<div class="flex justify-between items-start mb-4">
+								<span class="text-[10px] font-black text-gray-400 uppercase tracking-widest bg-white px-2 py-1 rounded border border-gray-100">Entry #{index + 1}</span>
 								<button
 									onclick={() => removeQAPair(index)}
-									class="text-red-600 hover:text-red-800"
+									class="text-gray-300 hover:text-red-600 transition-colors p-1"
 									title="Remove this Q&A pair"
 								>
 									<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -353,22 +355,22 @@
 									</svg>
 								</button>
 							</div>
-							<div class="space-y-2">
+							<div class="space-y-4">
 								<div>
-									<label class="block text-xs font-medium text-gray-600 mb-1">Question</label>
+									<label class="block text-[10px] font-bold text-gray-500 uppercase mb-1.5 tracking-wider">Question</label>
 									<input
 										type="text"
 										bind:value={pair.question}
-										class="block w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-accent focus:border-accent"
+										class="input-standard focus:ring-accent bg-white"
 										placeholder="Enter question..."
 									/>
 								</div>
 								<div>
-									<label class="block text-xs font-medium text-gray-600 mb-1">Answer</label>
+									<label class="block text-[10px] font-bold text-gray-500 uppercase mb-1.5 tracking-wider">Extracted Answer</label>
 									<textarea
 										bind:value={pair.answer}
 										rows="3"
-										class="block w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-accent focus:border-accent"
+										class="input-standard focus:ring-accent bg-white min-h-[80px]"
 										placeholder="Enter answer..."
 									></textarea>
 								</div>
@@ -377,8 +379,8 @@
 					{/each}
 
 					{#if qaPairs.length === 0}
-						<div class="text-center py-8 text-gray-500">
-							<p class="text-sm">No Q&A pairs yet. Click "Add Q&A" to create one.</p>
+						<div class="text-center py-16 bg-gray-50 rounded-xl border-2 border-dashed border-gray-200">
+							<p class="text-gray-400 font-medium italic">No Q&A pairs yet. Click "Add Q&A" to create one.</p>
 						</div>
 					{/if}
 				</div>

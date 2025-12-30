@@ -306,3 +306,71 @@ button {
     transform: none;
   }
 }
+
+/* ============================================
+   Unified UI Pattern Utilities
+   ============================================ */
+
+/* Standard Modal Overlay */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(24, 26, 49, 0.6);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  z-index: 50;
+}
+
+/* Standard Card Pattern (Enforced) */
+.card-standard {
+  background-color: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px 0 rgba(24, 26, 49, 0.08);
+  padding: 1.5rem; /* p-6 */
+}
+
+/* Standard Info/Alert Box */
+.info-box {
+  padding: 1rem;
+  border-radius: 8px;
+  border: 1px solid transparent;
+}
+
+.info-box-blue {
+  background-color: rgba(57, 66, 142, 0.05);
+  border-color: rgba(57, 66, 142, 0.2);
+  color: var(--color-contrast-light);
+}
+
+.info-box-teal {
+  background-color: var(--color-accent-light);
+  border-color: rgba(90, 183, 163, 0.3);
+  color: var(--color-primary-700);
+}
+
+/* Standard Form Input */
+.input-standard {
+  display: block;
+  width: 100%;
+  padding: 0.625rem 0.75rem; /* py-2.5 px-3 */
+  border: 1px solid #D1D5DB; /* border-gray-300 */
+  border-radius: 6px;
+  color: var(--color-contrast);
+  transition: all 0.15s ease;
+}
+
+.input-standard:focus {
+  outline: none;
+  ring: 2px solid var(--color-accent);
+  border-color: transparent;
+}
+
+/* Standard Page Vertical Spacing */
+.page-spacing {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem; /* space-y-6 */
+}

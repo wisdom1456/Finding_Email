@@ -99,7 +99,12 @@ async def update_profile(
         if not response.data:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profile not found")
 
-        logger.info(f"Updated profile for user {user_id}: {list(update_data.keys())}")
+        # Log the blacklist if it was updated
+        if "ai_preferences" in update_data:
+            blacklist = update_data.get("ai_preferences", {}).get("blacklisted_documents", [])
+            logger.info(f"Updated profile for user {user_id}: {list(update_data.keys())}, blacklist now has {len(blacklist)} items: {blacklist}")
+        else:
+            logger.info(f"Updated profile for user {user_id}: {list(update_data.keys())}")
         return ProfileResponse(**response.data[0])
 
     except HTTPException:

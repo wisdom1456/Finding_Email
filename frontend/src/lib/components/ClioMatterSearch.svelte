@@ -321,7 +321,7 @@
 		class="space-y-4"
 	>
 		<div>
-			<label for="search-query" class="block text-sm font-medium text-gray-700">
+			<label for="search-query" class="block text-sm font-semibold text-contrast mb-1">
 				Client Name or Matter Number
 			</label>
 			<div class="mt-1 flex rounded-md shadow-sm">
@@ -330,12 +330,12 @@
 					type="text"
 					bind:value={searchQuery}
 					placeholder="Enter at least 3 characters..."
-					class="flex-1 min-w-0 block w-full px-3 py-2 rounded-l-md border border-gray-300 focus:outline-none focus:ring-accent focus:border-accent sm:text-sm"
+					class="flex-1 min-w-0 block w-full px-3 py-2.5 rounded-l-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent sm:text-sm text-contrast"
 				/>
 				<button
 					type="submit"
 					disabled={searching || searchQuery.length < 3}
-					class="inline-flex items-center px-4 py-2 border border-l-0 border-gray-300 text-sm font-medium rounded-r-md text-gray-700 bg-gray-50 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent disabled:opacity-50 disabled:cursor-not-allowed"
+					class="inline-flex items-center px-4 py-2 border border-l-0 border-gray-300 text-sm font-semibold rounded-r-md text-gray-700 bg-gray-50 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
 				>
 					{#if searching}
 						<svg
@@ -403,31 +403,31 @@
 
 	{#if matters.length > 0}
 		<div>
-			<h4 class="text-sm font-medium text-gray-900 mb-3">Search Results ({matters.length})</h4>
-			<ul class="divide-y divide-gray-200 border border-gray-200 rounded-md">
+			<h4 class="text-sm font-bold text-contrast mb-3">Search Results ({matters.length})</h4>
+			<ul class="divide-y divide-gray-100 border border-gray-200 rounded-lg overflow-hidden bg-white shadow-sm">
 				{#each matters as matter}
 					<li class="p-4 hover:bg-gray-50 transition-colors">
 						<div class="flex items-start justify-between">
 							<div class="flex-1 min-w-0">
 								<div class="flex items-center space-x-2">
-									<p class="text-sm font-medium text-accent">{matter.display_number}</p>
+									<p class="text-sm font-bold text-accent">{matter.display_number}</p>
 									{#if selectedMatterId === matter.id}
 										<span
-											class="px-2 py-0.5 text-xs font-semibold rounded-full bg-green-100 text-green-800"
+											class="px-2 py-0.5 text-[10px] font-bold tracking-wider rounded-full bg-green-100 text-green-800 uppercase"
 										>
 											{createMode ? 'Created' : 'Imported'}
 										</span>
 									{/if}
 								</div>
-								<p class="text-sm font-semibold text-gray-900 mt-1">{matter.client_name}</p>
+								<p class="text-sm font-bold text-contrast mt-1">{matter.client_name}</p>
 								{#if matter.description}
-									<p class="text-sm text-gray-600 mt-1 line-clamp-2">{matter.description}</p>
+									<p class="text-xs text-gray-500 mt-1 line-clamp-2 italic">{matter.description}</p>
 								{/if}
-								<div class="mt-2 flex items-center space-x-4 text-xs text-gray-500">
+								<div class="mt-2 flex items-center space-x-4 text-[10px] font-medium text-gray-400 uppercase tracking-wide">
 									{#if matter.practice_area}
 										<span class="flex items-center">
 											<svg
-												class="h-4 w-4 mr-1"
+												class="h-3 w-3 mr-1"
 												fill="none"
 												stroke="currentColor"
 												viewBox="0 0 24 24"
@@ -450,16 +450,16 @@
 						<button
 							onclick={() => handleMatterAction(matter.id)}
 							disabled={importingMatterId === matter.id || selectedMatterId === matter.id}
-								class="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-accent hover:bg-accent-hover focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent disabled:opacity-50 disabled:cursor-not-allowed"
+								class="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-bold rounded-md text-white bg-accent hover:bg-accent-hover focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent disabled:opacity-50 disabled:cursor-not-allowed shadow-sm transition-all"
 						>
 							{#if importingMatterId === matter.id}
-								<svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+								<svg class="animate-spin -ml-1 mr-2 h-3.5 w-3.5 text-white" fill="none" viewBox="0 0 24 24">
 									<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
 									<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
 								</svg>
 								{createMode ? 'Creating...' : 'Importing...'}
 							{:else if selectedMatterId === matter.id}
-								<svg class="-ml-1 mr-2 h-4 w-4 text-white" fill="currentColor" viewBox="0 0 20 20">
+								<svg class="-ml-1 mr-2 h-3.5 w-3.5 text-white" fill="currentColor" viewBox="0 0 20 20">
 									<path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
 								</svg>
 								{createMode ? 'Created' : 'Imported'}

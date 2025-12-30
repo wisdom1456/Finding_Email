@@ -433,6 +433,8 @@ async def import_clio_data(
         blacklist = []
         if profile_response.data and profile_response.data[0].get("ai_preferences"):
             blacklist = profile_response.data[0]["ai_preferences"].get("blacklisted_documents", [])
+        
+        logger.info(f"Blacklist loaded for user {user['id']}: {blacklist} ({len(blacklist)} items)")
 
         # Verify case belongs to user
         case_result = (
@@ -596,6 +598,14 @@ async def import_clio_data(
                 doc_url = doc.get("latest_document_version", {}).get("url")
 
                 logger.debug("Processing Clio document", extra={"doc_name": doc_name, "doc_id": doc_id})
+
+                # Check blacklist BEFORE downloading (case-insensitive)
+                if blacklist:
+                    is_blacklisted = any(doc_name.lower() == bl.lower() for bl in blacklist)
+                    if is_blacklisted:
+                        logger.info(f"SKIPPING blacklisted document: '{doc_name}'")
+                        items_processed += 1
+                        continue
 
                 progress_pct = 50 + int((idx / len(documents)) * 40)
                 await publish_and_persist(

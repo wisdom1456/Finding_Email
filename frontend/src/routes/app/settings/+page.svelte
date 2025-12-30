@@ -151,7 +151,7 @@ Palm Harbor, FL 34683`);
 	<title>Settings | Bernhardt Riley</title>
 </svelte:head>
 
-<div class="space-y-6">
+<div class="page-spacing">
 	<PageHeader
 		title="Settings"
 		subtitle="Manage your profile information and AI model preferences"
@@ -162,34 +162,34 @@ Palm Harbor, FL 34683`);
 	/>
 
 	{#if loading}
-		<div class="bg-white shadow-card rounded-lg p-6">
+		<div class="card-standard">
 			<div class="animate-pulse space-y-4">
 				<div class="h-4 bg-gray-200 rounded w-3/4"></div>
 				<div class="h-4 bg-gray-200 rounded w-1/2"></div>
 			</div>
 		</div>
 	{:else}
-		<form onsubmit={(e) => { e.preventDefault(); saveProfile(); }}>
+		<form onsubmit={(e) => { e.preventDefault(); saveProfile(); }} class="page-spacing">
 			<!-- Contact Information Section -->
-			<div class="bg-white shadow-card rounded-lg p-6 mb-6">
-				<h2 class="text-lg font-heading font-semibold text-contrast mb-4">Contact Information</h2>
+			<div class="card-standard">
+				<h2 class="text-lg font-heading font-semibold text-contrast mb-6">Contact Information</h2>
 				
-				<div class="space-y-4">
-					<div>
-						<label for="fullName" class="block text-sm font-medium text-contrast mb-1">
+				<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+					<div class="col-span-1">
+						<label for="fullName" class="block text-sm font-semibold text-contrast mb-1">
 							Full Name
 						</label>
 						<input
 							type="text"
 							id="fullName"
 							bind:value={fullName}
-							class="w-full px-3 py-2.5 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent transition-colors"
+							class="input-standard focus:ring-accent focus:border-transparent transition-colors"
 							placeholder="John Doe"
 						/>
 					</div>
 
-					<div>
-						<label for="email" class="block text-sm font-medium text-contrast mb-1">
+					<div class="col-span-1">
+						<label for="email" class="block text-sm font-semibold text-contrast mb-1">
 							Email
 						</label>
 						<input
@@ -197,46 +197,46 @@ Palm Harbor, FL 34683`);
 							id="email"
 							value={email}
 							disabled
-							class="w-full px-3 py-2.5 border border-gray-300 rounded-md bg-gray-100 text-gray-500 cursor-not-allowed"
+							class="input-standard bg-gray-50 text-gray-500 cursor-not-allowed opacity-75"
 						/>
-						<p class="mt-1 text-xs text-gray-500">Email cannot be changed</p>
+						<p class="mt-1 text-xs text-gray-400 italic">Email cannot be changed</p>
 					</div>
 
-					<div>
-						<label for="phone" class="block text-sm font-medium text-contrast mb-1">
+					<div class="col-span-1">
+						<label for="phone" class="block text-sm font-semibold text-contrast mb-1">
 							Phone Number
 						</label>
 						<input
 							type="tel"
 							id="phone"
 							bind:value={phone}
-							class="w-full px-3 py-2.5 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent transition-colors"
+							class="input-standard focus:ring-accent focus:border-transparent transition-colors"
 							placeholder="(555) 123-4567"
 						/>
 					</div>
 
-					<div>
-						<label for="firmName" class="block text-sm font-medium text-contrast mb-1">
+					<div class="col-span-1">
+						<label for="firmName" class="block text-sm font-semibold text-contrast mb-1">
 							Firm Name
 						</label>
 						<input
 							type="text"
 							id="firmName"
 							bind:value={firmName}
-							class="w-full px-3 py-2.5 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent transition-colors"
+							class="input-standard focus:ring-accent focus:border-transparent transition-colors"
 							placeholder="Your Law Firm"
 						/>
 					</div>
 
-					<div>
-						<label for="firmAddress" class="block text-sm font-medium text-contrast mb-1">
+					<div class="col-span-2">
+						<label for="firmAddress" class="block text-sm font-semibold text-contrast mb-1">
 							Firm Address
 						</label>
 						<textarea
 							id="firmAddress"
 							bind:value={firmAddress}
 							rows="3"
-							class="w-full px-3 py-2.5 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent transition-colors resize-none"
+							class="input-standard focus:ring-accent focus:border-transparent transition-colors resize-none"
 							placeholder="Street Address&#10;Suite/Unit&#10;City, State ZIP"
 						></textarea>
 					</div>
@@ -244,103 +244,101 @@ Palm Harbor, FL 34683`);
 			</div>
 
 			<!-- Legal Jurisdiction Section -->
-			<div class="bg-white shadow-card rounded-lg p-6 mb-6">
+			<div class="card-standard">
 				<h2 class="text-lg font-heading font-semibold text-contrast mb-2">Legal Jurisdiction Preference</h2>
 				<p class="text-sm text-gray-500 mb-6">
 					Set your default state for new cases. This will pre-select the appropriate legal corpus and statute validation rules.
 				</p>
 
-				<div class="space-y-4">
-					<div>
-						<label for="defaultJurisdiction" class="block text-sm font-medium text-contrast mb-1">
-							Default State
-						</label>
-						<select
-							id="defaultJurisdiction"
-							bind:value={defaultJurisdiction}
-							class="w-full px-3 py-2.5 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent transition-colors"
-						>
-							<option value="Florida">Florida</option>
-							<option value="New Mexico">New Mexico</option>
-						</select>
-					</div>
+				<div class="max-w-md">
+					<label for="defaultJurisdiction" class="block text-sm font-semibold text-contrast mb-1">
+						Default State
+					</label>
+					<select
+						id="defaultJurisdiction"
+						bind:value={defaultJurisdiction}
+						class="input-standard focus:ring-accent focus:border-transparent transition-colors"
+					>
+						<option value="Florida">Florida</option>
+						<option value="New Mexico">New Mexico</option>
+					</select>
 				</div>
 			</div>
 
 			<!-- AI Model Preferences Section -->
-			<div class="bg-white shadow-card rounded-lg p-6 mb-6">
+			<div class="card-standard">
 				<h2 class="text-lg font-heading font-semibold text-contrast mb-2">AI Model Preferences</h2>
 				<p class="text-sm text-gray-500 mb-6">
 					Choose which AI models to use for different operations. These preferences will be applied to all your cases.
 				</p>
 
-				<div class="space-y-4">
+				<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
 					<div>
-						<label for="documentAnalysisModel" class="block text-sm font-medium text-contrast mb-1">
+						<label for="documentAnalysisModel" class="block text-sm font-semibold text-contrast mb-1">
 							Document Analysis
 						</label>
 						<select
 							id="documentAnalysisModel"
 							bind:value={documentAnalysisModel}
-							class="w-full px-3 py-2.5 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent transition-colors"
+							class="input-standard focus:ring-accent focus:border-transparent transition-colors"
 						>
 							{#each availableModels as model}
-								<option value={model.value}>{model.label} - {model.description}</option>
+								<option value={model.value}>{model.label}</option>
 							{/each}
 						</select>
 					</div>
 
 					<div>
-						<label for="letterGenerationModel" class="block text-sm font-medium text-contrast mb-1">
+						<label for="letterGenerationModel" class="block text-sm font-semibold text-contrast mb-1">
 							Letter Generation
 						</label>
 						<select
 							id="letterGenerationModel"
 							bind:value={letterGenerationModel}
-							class="w-full px-3 py-2.5 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent transition-colors"
+							class="input-standard focus:ring-accent focus:border-transparent transition-colors"
 						>
 							{#each availableModels as model}
-								<option value={model.value}>{model.label} - {model.description}</option>
+								<option value={model.value}>{model.label}</option>
 							{/each}
 						</select>
 					</div>
 
 					<div>
-						<label for="caseChatModel" class="block text-sm font-medium text-contrast mb-1">
+						<label for="caseChatModel" class="block text-sm font-semibold text-contrast mb-1">
 							Case Chat
 						</label>
 						<select
 							id="caseChatModel"
 							bind:value={caseChatModel}
-							class="w-full px-3 py-2.5 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent transition-colors"
+							class="input-standard focus:ring-accent focus:border-transparent transition-colors"
 						>
 							{#each availableModels as model}
-								<option value={model.value}>{model.label} - {model.description}</option>
+								<option value={model.value}>{model.label}</option>
 							{/each}
 						</select>
 					</div>
 
 					<div>
-						<label for="multiStageAnalysisModel" class="block text-sm font-medium text-contrast mb-1">
+						<label for="multiStageAnalysisModel" class="block text-sm font-semibold text-contrast mb-1">
 							Multi-Stage Analysis
 						</label>
 						<select
 							id="multiStageAnalysisModel"
 							bind:value={multiStageAnalysisModel}
-							class="w-full px-3 py-2.5 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent transition-colors"
+							class="input-standard focus:ring-accent focus:border-transparent transition-colors"
 						>
 							{#each availableModels as model}
-								<option value={model.value}>{model.label} - {model.description}</option>
+								<option value={model.value}>{model.label}</option>
 							{/each}
 						</select>
 					</div>
 				</div>
 
-				<div class="mt-6 bg-contrast-light/5 border border-contrast-light/20 rounded-lg p-4">
+				<div class="mt-8 info-box info-box-blue">
 					<div class="flex">
 						<Info class="h-5 w-5 text-contrast-light flex-shrink-0" />
 						<div class="ml-3">
-							<h3 class="text-sm font-medium text-contrast-light">Model Information</h3>
+							<h3 class="text-sm font-bold text-contrast-light">Model Information</h3>
 							<div class="mt-2 text-sm text-gray-600">
 								<ul class="list-disc list-inside space-y-1">
 									<li><strong>GPT-4o:</strong> Best balance of speed and quality - recommended for most cases</li>
@@ -355,61 +353,59 @@ Palm Harbor, FL 34683`);
 			</div>
 
 			<!-- Document Handling Preferences Section -->
-			<div class="bg-white shadow-card rounded-lg p-6 mb-6">
+			<div class="card-standard">
 				<h2 class="text-lg font-heading font-semibold text-contrast mb-2">Document Handling</h2>
 				<p class="text-sm text-gray-500 mb-6">
 					Configure how documents are handled during import and analysis.
 				</p>
 
-				<div class="space-y-4">
-					<div>
-						<label for="blacklistedDocuments" class="block text-sm font-medium text-contrast mb-1">
-							Always Exclude (Blacklist)
-						</label>
-						<p class="text-xs text-gray-500 mb-2">
-							Documents with these names will be automatically skipped during import. Separate names with commas.
-						</p>
-						<textarea
-							id="blacklistedDocuments"
-							bind:value={blacklistedDocuments}
-							rows="3"
-							class="w-full px-3 py-2.5 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent transition-colors resize-none"
-							placeholder="e.g. Terms of Service.pdf, Privacy Policy.docx, clio_invoice.pdf"
-						></textarea>
-					</div>
+				<div>
+					<label for="blacklistedDocuments" class="block text-sm font-semibold text-contrast mb-1">
+						Always Exclude (Blacklist)
+					</label>
+					<p class="text-xs text-gray-500 mb-3 italic">
+						Documents with these names will be automatically skipped during import. Separate names with commas.
+					</p>
+					<textarea
+						id="blacklistedDocuments"
+						bind:value={blacklistedDocuments}
+						rows="3"
+						class="input-standard focus:ring-accent focus:border-transparent transition-colors resize-none"
+						placeholder="e.g. Terms of Service.pdf, Privacy Policy.docx, clio_invoice.pdf"
+					></textarea>
 				</div>
 			</div>
 
 			<!-- Message Display -->
 			{#if message}
-				<div class="mb-6">
-					<div class="rounded-lg p-4 flex items-start {messageType === 'success' ? 'bg-accent/10 border border-accent/30' : 'bg-red-50 border border-red-200'}">
+				<div class="info-box {messageType === 'success' ? 'bg-accent/10 border-accent/30 text-accent' : 'bg-red-50 border-red-200 text-red-700'}">
+					<div class="flex items-start">
 						<div class="flex-shrink-0">
 							{#if messageType === 'success'}
-								<CheckCircle class="h-5 w-5 text-accent" />
+								<CheckCircle class="h-5 w-5" />
 							{:else}
-								<XCircle class="h-5 w-5 text-red-500" />
+								<XCircle class="h-5 w-5" />
 							{/if}
 						</div>
 						<div class="ml-3">
-							<p class="text-sm font-medium {messageType === 'success' ? 'text-accent' : 'text-red-700'}">{message}</p>
+							<p class="text-sm font-semibold">{message}</p>
 						</div>
 					</div>
 				</div>
 			{/if}
 
-		<!-- Save Button -->
-		<div class="flex justify-end">
-			<AsyncButton
-				type="submit"
-				loading={saving}
-				variant="primary"
-				loadingText="Saving..."
-				class="px-6"
-			>
-				Save Changes
-			</AsyncButton>
-		</div>
+			<!-- Save Button -->
+			<div class="flex justify-end pt-4">
+				<AsyncButton
+					type="submit"
+					loading={saving}
+					variant="primary"
+					loadingText="Saving Changes..."
+					class="px-8 py-3 text-base shadow-sm"
+				>
+					Save Changes
+				</AsyncButton>
+			</div>
 		</form>
 	{/if}
 </div>

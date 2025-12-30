@@ -66,19 +66,19 @@
 	<title>Dashboard | Bernhardt Riley</title>
 </svelte:head>
 
-<div class="space-y-8">
+<div class="page-spacing">
 	<!-- Header -->
 	<div class="md:flex md:items-center md:justify-between">
 		<div class="flex-1 min-w-0">
 			<h1 class="text-2xl font-heading font-bold text-contrast sm:text-3xl">
 				Dashboard
 			</h1>
-			<p class="mt-1 text-sm text-gray-500">Welcome back, {data.user?.email}</p>
+			<p class="mt-1 text-sm text-gray-500">Welcome back, <span class="font-semibold text-contrast">{data.user?.email}</span></p>
 		</div>
 		<div class="mt-4 md:mt-0">
 			<a
 				href="/app/cases/new"
-				class="inline-flex items-center px-4 py-2 rounded-md text-sm font-medium text-white bg-accent hover:bg-accent-hover transition-colors"
+				class="inline-flex items-center px-4 py-2 rounded-md text-sm font-semibold text-white bg-accent hover:bg-accent-hover transition-colors shadow-sm shadow-accent/20"
 			>
 				<Plus class="h-4 w-4 mr-2" />
 				New Case
@@ -87,59 +87,53 @@
 	</div>
 
 	<!-- Statistics Cards -->
-	<div class="grid grid-cols-1 gap-5 sm:grid-cols-3">
-		<div class="bg-white overflow-hidden shadow-card rounded-lg card-hover animate-fade-in-up stagger-1">
-			<div class="p-5">
-				<div class="flex items-center">
-					<div class="flex-shrink-0 p-3 bg-contrast/5 rounded-lg">
-						<FileText class="h-6 w-6 text-contrast-light" />
-					</div>
-					<div class="ml-5 w-0 flex-1">
-						<dl>
-							<dt class="text-sm font-medium text-gray-500 truncate">Total Cases</dt>
-							<dd class="text-2xl font-heading font-bold text-contrast">{totalCases}</dd>
-						</dl>
-					</div>
+	<div class="grid grid-cols-1 gap-6 sm:grid-cols-3">
+		<div class="card-standard card-hover animate-fade-in-up stagger-1">
+			<div class="flex items-center">
+				<div class="flex-shrink-0 p-3 bg-contrast/5 rounded-lg">
+					<FileText class="h-6 w-6 text-contrast-light" />
+				</div>
+				<div class="ml-5 w-0 flex-1">
+					<dl>
+						<dt class="text-sm font-medium text-gray-500 truncate">Total Cases</dt>
+						<dd class="text-2xl font-heading font-bold text-contrast">{totalCases}</dd>
+					</dl>
 				</div>
 			</div>
 		</div>
 
-		<div class="bg-white overflow-hidden shadow-card rounded-lg card-hover animate-fade-in-up stagger-2">
-			<div class="p-5">
-				<div class="flex items-center">
-					<div class="flex-shrink-0 p-3 bg-contrast-light/10 rounded-lg">
-						<Clock class="h-6 w-6 text-contrast-light" />
-					</div>
-					<div class="ml-5 w-0 flex-1">
-						<dl>
-							<dt class="text-sm font-medium text-gray-500 truncate">Processing</dt>
-							<dd class="text-2xl font-heading font-bold text-contrast">{processingCases}</dd>
-						</dl>
-					</div>
+		<div class="card-standard card-hover animate-fade-in-up stagger-2">
+			<div class="flex items-center">
+				<div class="flex-shrink-0 p-3 bg-contrast-light/10 rounded-lg">
+					<Clock class="h-6 w-6 text-contrast-light" />
+				</div>
+				<div class="ml-5 w-0 flex-1">
+					<dl>
+						<dt class="text-sm font-medium text-gray-500 truncate">Processing</dt>
+						<dd class="text-2xl font-heading font-bold text-contrast">{processingCases}</dd>
+					</dl>
 				</div>
 			</div>
 		</div>
 
-		<div class="bg-white overflow-hidden shadow-card rounded-lg card-hover animate-fade-in-up stagger-3">
-			<div class="p-5">
-				<div class="flex items-center">
-					<div class="flex-shrink-0 p-3 bg-accent/10 rounded-lg">
-						<CheckCircle class="h-6 w-6 text-accent" />
-					</div>
-					<div class="ml-5 w-0 flex-1">
-						<dl>
-							<dt class="text-sm font-medium text-gray-500 truncate">Completed</dt>
-							<dd class="text-2xl font-heading font-bold text-contrast">{completedCases}</dd>
-						</dl>
-					</div>
+		<div class="card-standard card-hover animate-fade-in-up stagger-3">
+			<div class="flex items-center">
+				<div class="flex-shrink-0 p-3 bg-accent/10 rounded-lg">
+					<CheckCircle class="h-6 w-6 text-accent" />
+				</div>
+				<div class="ml-5 w-0 flex-1">
+					<dl>
+						<dt class="text-sm font-medium text-gray-500 truncate">Completed</dt>
+						<dd class="text-2xl font-heading font-bold text-contrast">{completedCases}</dd>
+					</dl>
 				</div>
 			</div>
 		</div>
 	</div>
 
 	<!-- Recent Cases -->
-	<div class="bg-white shadow-card rounded-lg animate-fade-in-up stagger-4">
-		<div class="px-5 py-4 border-b border-gray-100">
+	<div class="card-standard !p-0 overflow-hidden animate-fade-in-up stagger-4">
+		<div class="px-6 py-4 border-b border-gray-100 bg-gray-50/50">
 			<h2 class="text-lg font-heading font-semibold text-contrast">Recent Cases</h2>
 		</div>
 

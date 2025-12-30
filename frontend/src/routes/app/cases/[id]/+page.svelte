@@ -954,7 +954,7 @@
 	}
 </script>
 
-<div class="space-y-6">
+<div class="page-spacing">
 	{#if loading}
 		<div class="p-8 text-center">
 			<div class="inline-block animate-spin rounded-full h-8 w-8 border-2 border-accent border-t-transparent"></div>
@@ -1028,18 +1028,18 @@
 			{#snippet children()}
 				<!-- Overview Tab -->
 				{#if activeTab === 'overview'}
-					<div class="space-y-6">
+					<div class="page-spacing">
 						<!-- Case Info -->
-						<div class="bg-white shadow rounded-lg p-6">
+						<div class="card-standard">
 							<div class="flex justify-between items-center mb-4">
-								<h3 class="text-lg font-medium text-gray-900">Case Details</h3>
+								<h3 class="text-lg font-semibold text-contrast">Case Details</h3>
 							</div>
 
 			{#if editingCase}
 				<!-- Edit Form -->
 				<form onsubmit={(e) => { e.preventDefault(); saveCase(); }} class="space-y-4">
 					<div>
-						<label for="edit-client-name" class="block text-sm font-medium text-gray-700">
+						<label for="edit-client-name" class="block text-sm font-medium text-contrast">
 							Client Name <span class="text-red-500">*</span>
 						</label>
 						<input
@@ -1047,31 +1047,31 @@
 							type="text"
 							bind:value={editClientName}
 							required
-							class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-accent focus:border-accent sm:text-sm"
+							class="input-standard focus:ring-accent focus:border-accent"
 						/>
 					</div>
 
 					<div>
-						<label for="edit-reference-number" class="block text-sm font-medium text-gray-700">
+						<label for="edit-reference-number" class="block text-sm font-medium text-contrast">
 							Reference Number
 						</label>
 						<input
 							id="edit-reference-number"
 							type="text"
 							bind:value={editReferenceNumber}
-							class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-accent focus:border-accent sm:text-sm"
+							class="input-standard focus:ring-accent focus:border-accent"
 						/>
 					</div>
 
 					<div>
-						<label for="edit-description" class="block text-sm font-medium text-gray-700">
+						<label for="edit-description" class="block text-sm font-medium text-contrast">
 							Description
 						</label>
 						<textarea
 							id="edit-description"
 							bind:value={editDescription}
 							rows="3"
-							class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-accent focus:border-accent sm:text-sm"
+							class="input-standard focus:ring-accent focus:border-accent"
 						></textarea>
 					</div>
 
@@ -1135,11 +1135,11 @@
 				</div>
 
 				<!-- Practice Area Guidance -->
-				<details class="bg-accent/10 border border-accent/30 rounded-lg">
-			<summary class="px-4 py-3 cursor-pointer text-sm font-medium text-contrast hover:bg-accent/20">
+				<details class="info-box info-box-teal">
+			<summary class="cursor-pointer text-sm font-semibold text-contrast hover:opacity-80">
 				ℹ️ Supported Practice Areas ({data.jurisdiction || 'Florida'} law)
 			</summary>
-			<div class="px-4 pb-4 text-sm text-gray-700 space-y-3">
+			<div class="mt-4 text-sm text-gray-700 space-y-3">
 				<p class="font-medium text-red-700">
 					This application is optimized for {data.jurisdiction || 'Florida'} civil litigation matters only. Federal claims and other jurisdictions are not currently supported.
 				</p>
@@ -1235,8 +1235,8 @@
 
 					<!-- Clio Matter Import (only show if connected) -->
 					{#if $clioStore.connected}
-						<div class="bg-white shadow rounded-lg p-6">
-			<h3 class="text-lg font-medium text-gray-900 mb-4">
+						<div class="card-standard">
+			<h3 class="text-lg font-heading font-semibold text-contrast mb-4">
 				{caseData?.clio_matter_id ? 'Clio Matter' : 'Import from Clio'}
 			</h3>
 
@@ -1272,11 +1272,11 @@
 
 				<!-- Documents Tab -->
 				{#if activeTab === 'documents'}
-					<div class="space-y-6">
+					<div class="page-spacing">
 						<!-- Enhanced Documents Section -->
-		<div class="bg-white shadow rounded-lg">
-			<div class="px-4 py-5 sm:px-6 border-b border-gray-200">
-				<h3 class="text-lg leading-6 font-medium text-gray-900">Documents</h3>
+		<div class="card-standard !p-0 overflow-hidden">
+			<div class="px-6 py-5 border-b border-gray-100">
+				<h3 class="text-lg font-heading font-semibold text-contrast">Documents</h3>
 			</div>
 
 			<!-- Drag and Drop Upload Zone -->
@@ -1548,11 +1548,11 @@
 
 				<!-- Verification Tab -->
 				{#if activeTab === 'verification'}
-					<div class="space-y-6">
-						<div class="bg-white shadow rounded-lg p-6">
-							<div class="flex justify-between items-center mb-4">
+					<div class="page-spacing">
+						<div class="card-standard">
+							<div class="flex justify-between items-center mb-6">
 								<div>
-									<h3 class="text-lg font-medium text-gray-900">Document Verification</h3>
+									<h3 class="text-lg font-heading font-semibold text-contrast">Document Verification</h3>
 									<p class="text-sm text-gray-500 mt-1">
 										Review extracted content and remove unnecessary documents before analysis.
 									</p>
@@ -1576,11 +1576,11 @@
 
 				<!-- Analysis Tab -->
 				{#if activeTab === 'analysis'}
-					<div class="space-y-6">
+					<div class="page-spacing">
 						<!-- Analysis Section -->
-						<div class="bg-white shadow rounded-lg p-6">
-							<div class="flex justify-between items-center mb-4">
-								<h3 class="text-lg font-medium text-gray-900">Analysis</h3>
+						<div class="card-standard">
+							<div class="flex justify-between items-center mb-6">
+								<h3 class="text-lg font-heading font-semibold text-contrast">Analysis</h3>
 								{#if documents.length > 0}
 									<div class="flex items-center gap-2">
 										{#if analysisStatus?.status === 'processing'}
@@ -1615,10 +1615,10 @@
 			{:else if !analysisStatus}
 				<p class="text-sm text-gray-500">Click "Start Analysis" button above to analyze your documents.</p>
 			{:else}
-				<div class="space-y-4">
+				<div class="space-y-6">
 					<div>
-						<dt class="text-sm font-medium text-gray-500">Status</dt>
-						<dd class="mt-1">
+						<dt class="text-sm font-semibold text-gray-500 uppercase tracking-wider">Status</dt>
+						<dd class="mt-2">
 							<span class="px-3 py-1 inline-flex text-sm leading-5 font-semibold rounded-full {getStatusColor(analysisStatus.status)}">
 								{analysisStatus.status}
 							</span>
@@ -1626,22 +1626,22 @@
 					</div>
 
 					{#if analysisStatus.status === 'processing'}
-						<div class="space-y-3">
+						<div class="space-y-4">
 						<div class="flex items-center">
 							<div class="inline-block animate-spin rounded-full h-5 w-5 border-b-2 border-accent mr-2"></div>
-								<span class="text-sm text-gray-600">
+								<span class="text-sm font-medium text-gray-700">
 									{$progressStore.message || 'Processing documents...'}
 								</span>
 							</div>
 							
 							{#if $progressStore.percent > 0}
-								<div class="w-full bg-gray-200 rounded-full h-2">
+								<div class="w-full bg-gray-100 rounded-full h-2">
 									<div 
-										class="bg-accent h-2 rounded-full transition-all duration-300"
+										class="bg-accent h-2 rounded-full transition-all duration-300 shadow-sm shadow-accent/20"
 										style="width: {$progressStore.percent}%"
 									></div>
 								</div>
-								<p class="text-xs text-gray-500">{$progressStore.percent}% complete</p>
+								<p class="text-xs text-gray-500 font-medium">{$progressStore.percent}% complete</p>
 							{/if}
 							
 							{#if $progressStore.sub_step}
@@ -1721,9 +1721,9 @@
 
 <!-- Intake Form Selector Modal -->
 {#if showIntakeSelector && selectedFiles.length > 0}
-	<div class="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4 z-50">
-		<div class="bg-white rounded-lg max-w-lg w-full p-6">
-			<h3 class="text-lg font-medium text-gray-900 mb-4">Select Intake Form</h3>
+	<div class="modal-overlay">
+		<div class="bg-white rounded-lg shadow-xl max-w-lg w-full p-6">
+			<h3 class="text-lg font-heading font-semibold text-contrast mb-4">Select Intake Form</h3>
 			<p class="text-sm text-gray-600 mb-4">
 				{#if selectedFiles.filter(f => f.name.toLowerCase().includes('intake')).length > 1}
 					Multiple files contain 'intake' in the name. Please select which is the intake form:
@@ -1779,13 +1779,13 @@
 
 <!-- Document Delete Confirmation Modal -->
 {#if deleteConfirmDoc}
-	<div class="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4 z-50">
-		<div class="bg-white rounded-lg max-w-md w-full p-6">
-			<h3 class="text-lg font-medium text-gray-900 mb-4">Delete Document</h3>
+	<div class="modal-overlay">
+		<div class="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+			<h3 class="text-lg font-heading font-semibold text-contrast mb-4">Delete Document</h3>
 			<p class="text-sm text-gray-600 mb-4">
 				Are you sure you want to delete this document? This action cannot be undone.
 			</p>
-			<p class="text-sm font-medium text-gray-900 mb-4">
+			<p class="text-sm font-semibold text-contrast mb-4">
 				{documents.find(d => d.id === deleteConfirmDoc)?.file_name}
 			</p>
 
@@ -1811,30 +1811,30 @@
 
 <!-- Case Delete Confirmation Modal -->
 {#if deleteConfirmCase}
-	<div class="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4 z-50">
-		<div class="bg-white rounded-lg max-w-md w-full p-6">
-			<h3 class="text-lg font-medium text-gray-900 mb-4">Delete Case</h3>
+	<div class="modal-overlay">
+		<div class="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+			<h3 class="text-lg font-heading font-semibold text-contrast mb-4">Delete Case</h3>
 			<div class="text-sm text-gray-600 space-y-3 mb-4">
-				<p><strong>Case:</strong> {caseData?.client_name}</p>
+				<p><strong class="text-contrast">Case:</strong> {caseData?.client_name}</p>
 				{#if caseData?.reference_number}
-					<p><strong>Reference:</strong> {caseData.reference_number}</p>
+					<p><strong class="text-contrast">Reference:</strong> {caseData.reference_number}</p>
 				{/if}
-				<p class="text-red-600 font-medium">
+				<p class="text-red-600 font-semibold bg-red-50 p-3 rounded-md border border-red-100">
 					⚠️ This will permanently delete the case and all {documents.length} associated document(s).
 				</p>
 				<p>This action cannot be undone.</p>
 			</div>
 
 			<div class="mb-4">
-				<label for="delete-confirm" class="block text-sm font-medium text-gray-700 mb-2">
-					Type <span class="font-mono font-bold">DELETE</span> to confirm:
+				<label for="delete-confirm" class="block text-sm font-semibold text-contrast mb-2">
+					Type <span class="font-mono font-bold text-red-600">DELETE</span> to confirm:
 				</label>
 				<input
 					id="delete-confirm"
 					type="text"
 					bind:value={deleteCaseText}
 					placeholder="DELETE"
-					class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500"
+					class="input-standard focus:ring-red-500 border-gray-300"
 				/>
 			</div>
 
@@ -1867,7 +1867,7 @@
 	<div 
 		role="button"
 		tabindex="0"
-		class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50 flex items-center justify-center p-4"
+		class="modal-overlay"
 		onclick={closeDocumentViewer}
 		onkeydown={(e) => e.key === 'Escape' && closeDocumentViewer()}
 	>
@@ -1875,38 +1875,38 @@
 			role="dialog"
 			aria-modal="true"
 			tabindex="-1"
-			class="relative bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] flex flex-col"
+			class="relative bg-white rounded-lg shadow-2xl max-w-5xl w-full max-h-[90vh] flex flex-col"
 			onclick={(e) => e.stopPropagation()}
 			onkeydown={(e) => e.stopPropagation()}
 		>
 			<!-- Header -->
-			<div class="flex items-start justify-between p-6 border-b border-gray-200">
+			<div class="flex items-start justify-between p-6 border-b border-gray-100">
 				<div class="flex-1 min-w-0">
 					<div class="flex items-center space-x-2 mb-2">
 						{#if viewingDocument.metadata?.is_intake_form}
 							<svg class="h-5 w-5 text-accent shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
 								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
 							</svg>
-							<span class="px-2 py-0.5 text-xs font-semibold rounded-full bg-accent text-white">
-								INTAKE FORM
+							<span class="px-2 py-0.5 text-[10px] font-bold tracking-wider rounded-full bg-accent text-white uppercase">
+								Primary Intake
 							</span>
 						{/if}
 						{#if viewingDocument.metadata?.clio_source}
-							<span class="px-2 py-0.5 text-xs font-semibold rounded-full bg-purple-100 text-purple-800">
-								{viewingDocument.metadata.clio_type?.toUpperCase() || 'CLIO'}
+							<span class="px-2 py-0.5 text-[10px] font-bold tracking-wider rounded-full bg-contrast/10 text-contrast uppercase">
+								{viewingDocument.metadata.clio_type || 'CLIO'}
 							</span>
 						{/if}
 					</div>
-					<h3 class="text-lg font-medium text-gray-900 truncate">
+					<h3 class="text-xl font-heading font-bold text-contrast truncate">
 						{viewingDocument.file_name}
 					</h3>
-					<p class="text-sm text-gray-500 mt-1">
+					<p class="text-xs font-medium text-gray-500 mt-1">
 						{formatFileSize(viewingDocument.file_size)} • {viewingDocument.file_type}
 					</p>
 				</div>
 				<button
 					onclick={closeDocumentViewer}
-					class="ml-4 text-gray-400 hover:text-gray-500 transition-colors"
+					class="ml-4 p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-colors"
 				>
 					<span class="sr-only">Close</span>
 					<svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">

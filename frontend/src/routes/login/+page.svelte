@@ -42,7 +42,7 @@
 		</div>
 		
 		<!-- Card -->
-		<div class="bg-white rounded-lg shadow-lg p-8">
+		<div class="bg-white rounded-lg shadow-card p-6">
 			<div class="mb-6">
 				<h2 class="text-2xl font-heading font-bold text-contrast text-center">
 					Welcome Back
@@ -64,7 +64,7 @@
 						autocomplete="email"
 						required
 						bind:value={email}
-						class="block w-full px-3 py-2.5 border border-gray-300 rounded-md text-contrast placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent transition-colors"
+						class="input-standard focus:ring-2 focus:ring-accent focus:border-transparent transition-colors"
 						placeholder="you@example.com"
 					/>
 				</div>
@@ -80,7 +80,7 @@
 						autocomplete="current-password"
 						required
 						bind:value={password}
-						class="block w-full px-3 py-2.5 border border-gray-300 rounded-md text-contrast placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent transition-colors"
+						class="input-standard focus:ring-2 focus:ring-accent focus:border-transparent transition-colors"
 						placeholder="••••••••"
 					/>
 				</div>

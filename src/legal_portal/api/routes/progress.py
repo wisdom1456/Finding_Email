@@ -19,6 +19,15 @@ async def stream_analysis_progress(
     # We'll trust the token param or header.
 ):
     """Stream analysis progress updates via SSE."""
+    # #region agent log
+    _DEBUG_LOG_PATH = "/tmp/cursor_debug.log" if __import__('os').getenv("VERCEL") else "/Users/BRFlorida/Projects/Work/Finding_Emails/.cursor/debug.log"
+    def _dbg_log(hyp: str, msg: str, data: dict = None):
+        try:
+            import json as _j, time as _t; open(_DEBUG_LOG_PATH, "a").write(_j.dumps({"hypothesisId": hyp, "location": "progress.py:stream_analysis_progress", "message": msg, "data": data or {}, "timestamp": _t.time(), "sessionId": "debug-session"}) + "\n")
+        except: pass
+    _dbg_log("H1", "SSE endpoint called", {"analysis_id": analysis_id, "has_token": token is not None})
+    # #endregion agent log
+
     # Basic channel validation
     progress_manager = ProgressManager.get_instance()
 
@@ -50,6 +59,15 @@ async def get_analysis_status(
     supabase=Depends(get_supabase_client),
 ):
     """Get current analysis progress status (polling endpoint with DB fallback)."""
+    # #region agent log
+    _DEBUG_LOG_PATH = "/tmp/cursor_debug.log" if __import__('os').getenv("VERCEL") else "/Users/BRFlorida/Projects/Work/Finding_Emails/.cursor/debug.log"
+    def _dbg_log(hyp: str, msg: str, data: dict = None):
+        try:
+            import json as _j, time as _t; open(_DEBUG_LOG_PATH, "a").write(_j.dumps({"hypothesisId": hyp, "location": "progress.py:get_analysis_status", "message": msg, "data": data or {}, "timestamp": _t.time(), "sessionId": "debug-session"}) + "\n")
+        except: pass
+    _dbg_log("H4", "Status endpoint called", {"analysis_id": analysis_id})
+    # #endregion agent log
+
     progress_manager = ProgressManager.get_instance()
 
     # Try memory first

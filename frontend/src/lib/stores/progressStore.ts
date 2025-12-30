@@ -95,6 +95,192 @@ function createProgressStore() {
 	let currentStatusUrl: string = '';
 	let currentToken: string = '';
 
+	// Internal connect function that can be referenced by other methods
+	const connectInternal = (url: string, onComplete?: (data?: unknown) => void, statusUrl?: string, token?: string): boolean => {
+		// #region agent log
+		fetch('http://127.0.0.1:7242/ingest/4b51e513-bc36-4a25-835a-e2000a0f302b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'progressStore.ts:connectInternal',message:'Connect called',data:{url,statusUrl:statusUrl?.slice(0,50)},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H1,H3'})}).catch(()=>{});
+		// #endregion agent log
+
+		// Disconnect existing connections
+		if (sseClient) {
+			sseClient.disconnect();
+		}
+		if (pollingClient) {
+			pollingClient.stopPolling();
+		}
+
+		update(state => ({
+			...initialState,
+			status: 'connecting',
+			message: 'Connecting to progress stream...'
+		}));
+
+		// Store status URL and token for polling fallback
+		if (statusUrl) currentStatusUrl = statusUrl;
+		if (token) currentToken = token;
+
+		let finalData: unknown = null;
+
+		// Try SSE first
+		sseClient = new SSEClient();
+
+		const messageHandler = (event: ProgressEvent | any) => {
+			// #region agent log
+			fetch('http://127.0.0.1:7242/ingest/4b51e513-bc36-4a25-835a-e2000a0f302b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'progressStore.ts:messageHandler',message:'SSE message received',data:{type:event.type,message:event.message?.slice(0,50)},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H1'})}).catch(()=>{});
+			// #endregion agent log
+
+			if (event.data) finalData = event.data;
+			
+			// Determine status based on event type
+			let newStatus: ProgressState['status'] = 'active';
+			if (event.type === 'completed') newStatus = 'completed';
+			else if (event.type === 'error' || event.type === 'failed') newStatus = 'error';
+			
+			update(state => {
+				// 1. Update Stages
+				let newStages = [...state.stages];
+				if (event.stage) {
+					const stageIdx = newStages.findIndex(s => s.id === event.stage.id);
+					if (stageIdx !== -1) {
+						newStages[stageIdx] = { ...newStages[stageIdx], ...event.stage };
+					}
+				}
+
+				// 2. Update Documents
+				let newDocs = [...state.documents];
+				if (event.document) {
+					const docIdx = newDocs.findIndex(d => d.id === event.document.id);
+					if (docIdx !== -1) {
+						newDocs[docIdx] = { ...newDocs[docIdx], ...event.document };
+					} else {
+						newDocs.push(event.document);
+					}
+				}
+
+				// 3. Update Stats
+				const newStats = event.stats ? { ...state.stats, ...event.stats } : state.stats;
+
+				return {
+					...state,
+					message: event.message || state.message,
+					phase: event.phase || state.phase,
+					percent: event.percent !== undefined ? event.percent : state.percent,
+					docs_processed: event.docs_processed || state.docs_processed,
+					current_doc: event.current_doc || state.current_doc,
+					sub_step: event.sub_step || state.sub_step,
+					status: newStatus,
+					error: event.error || null,
+					timestamp: event.timestamp || new Date().toISOString(),
+					data: event.data || state.data,
+					stages: newStages,
+					documents: newDocs,
+					stats: newStats
+				};
+			});
+		};
+
+		const errorHandler = (error: Error) => {
+			const errorMessage = error.message;
+			// #region agent log
+			fetch('http://127.0.0.1:7242/ingest/4b51e513-bc36-4a25-835a-e2000a0f302b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'progressStore.ts:errorHandler',message:'SSE error',data:{error:errorMessage,hasStatusUrl:!!currentStatusUrl},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H1'})}).catch(()=>{});
+			// #endregion agent log
+			
+			// If SSE times out or fails, try polling fallback
+			if ((errorMessage.includes('SSE_TIMEOUT') || errorMessage.includes('SSE_CONNECTION_FAILED')) 
+			    && currentStatusUrl && currentToken) {
+				update(state => ({
+					...state,
+					message: 'Stream timeout, switching to polling mode...',
+					status: 'active'
+				}));
+
+				// Start polling
+				pollingClient = new PollingClient();
+				pollingClient.startPolling(
+					currentStatusUrl,
+					currentToken,
+					messageHandler,
+					(pollError: Error) => {
+						update(state => ({
+							...state,
+							status: 'error',
+							error: pollError.message
+						}));
+					},
+					() => {
+						if (onComplete) {
+							onComplete(finalData);
+						}
+					}
+				);
+			} else {
+				// Non-recoverable error
+				update(state => ({
+					...state,
+					status: 'error',
+					error: errorMessage
+				}));
+			}
+		};
+
+		const completeHandler = () => {
+			if (onComplete) {
+				onComplete(finalData);
+			}
+		};
+
+		const connected = sseClient.connect(url, messageHandler, errorHandler, completeHandler);
+
+		if (!connected) {
+			// SSE not supported, try polling immediately if available
+			if (currentStatusUrl && currentToken) {
+				update(state => ({
+					...state,
+					message: 'Using polling mode...',
+					status: 'active'
+				}));
+
+				pollingClient = new PollingClient();
+				pollingClient.startPolling(
+					currentStatusUrl,
+					currentToken,
+					messageHandler,
+					(pollError: Error) => {
+						update(state => ({
+							...state,
+							status: 'error',
+							error: pollError.message
+						}));
+					},
+					completeHandler
+				);
+				return true;
+			}
+
+			update(state => ({
+				...state,
+				status: 'error',
+				error: 'SSE_NOT_SUPPORTED'
+			}));
+			return false;
+		}
+
+		return true;
+	};
+
+	// Internal disconnect function
+	const disconnectInternal = () => {
+		if (sseClient) {
+			sseClient.disconnect();
+			sseClient = null;
+		}
+		if (pollingClient) {
+			pollingClient.stopPolling();
+			pollingClient = null;
+		}
+		set(initialState);
+	};
+
 	return {
 		subscribe,
 
@@ -102,218 +288,46 @@ function createProgressStore() {
 		 * Start listening to a specialized analysis progress stream
 		 */
 		startListening: async (analysisId: string) => {
+			// #region agent log
+			fetch('http://127.0.0.1:7242/ingest/4b51e513-bc36-4a25-835a-e2000a0f302b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'progressStore.ts:startListening',message:'startListening called',data:{analysisId},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H1,H2'})}).catch(()=>{});
+			// #endregion agent log
 			const { data: { session } } = await supabase.auth.getSession();
 			if (!session) return;
 
 			const apiUrl = getApiUrl();
-			const streamUrl = `${apiUrl}/api/analysis/progress/${analysisId}`;
-			const statusUrl = `${apiUrl}/api/analysis/status/${analysisId}`;
+			// FIX: Corrected URL paths - backend has /progress/analysis/{id} not /analysis/progress/{id}
+			const streamUrl = `${apiUrl}/api/progress/analysis/${analysisId}`;
+			const statusUrl = `${apiUrl}/api/progress/analysis/${analysisId}/status`;
+			// #region agent log
+			fetch('http://127.0.0.1:7242/ingest/4b51e513-bc36-4a25-835a-e2000a0f302b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'progressStore.ts:startListening:urls',message:'URLs constructed',data:{streamUrl,statusUrl},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H1,H4'})}).catch(()=>{});
+			// #endregion agent log
 
-			// Use existing connect method
-			createProgressStore().connect(streamUrl, undefined, statusUrl, session.access_token);
+			// FIX: Use internal connect function, not createProgressStore()
+			connectInternal(streamUrl, undefined, statusUrl, session.access_token);
 		},
 
 		/**
 		 * Stop listening and reset
 		 */
 		stopListening: () => {
-			if (sseClient) sseClient.disconnect();
-			if (pollingClient) pollingClient.stopPolling();
-			set(initialState);
+			disconnectInternal();
 		},
 
 		/**
 		 * Connect to an SSE progress stream with automatic polling fallback
 		 */
-		connect: (url: string, onComplete?: (data?: unknown) => void, statusUrl?: string, token?: string): boolean => {
-			// Disconnect existing connections
-			if (sseClient) {
-				sseClient.disconnect();
-			}
-			if (pollingClient) {
-				pollingClient.stopPolling();
-			}
-
-			update(state => ({
-				...initialState,
-				status: 'connecting',
-				message: 'Connecting to progress stream...'
-			}));
-
-			// Store status URL and token for polling fallback
-			if (statusUrl) currentStatusUrl = statusUrl;
-			if (token) currentToken = token;
-
-			let finalData: unknown = null;
-
-			// Try SSE first
-			sseClient = new SSEClient();
-
-			const messageHandler = (event: ProgressEvent | any) => {
-				if (event.data) finalData = event.data;
-				
-				// Determine status based on event type
-				let newStatus: ProgressState['status'] = 'active';
-				if (event.type === 'completed') newStatus = 'completed';
-				else if (event.type === 'error' || event.type === 'failed') newStatus = 'error';
-				
-				update(state => {
-					// 1. Update Stages
-					let newStages = [...state.stages];
-					if (event.stage) {
-						const stageIdx = newStages.findIndex(s => s.id === event.stage.id);
-						if (stageIdx !== -1) {
-							newStages[stageIdx] = { ...newStages[stageIdx], ...event.stage };
-						}
-					}
-
-					// 2. Update Documents
-					let newDocs = [...state.documents];
-					if (event.document) {
-						const docIdx = newDocs.findIndex(d => d.id === event.document.id);
-						if (docIdx !== -1) {
-							newDocs[docIdx] = { ...newDocs[docIdx], ...event.document };
-						} else {
-							newDocs.push(event.document);
-						}
-					}
-
-					// 3. Update Stats
-					const newStats = event.stats ? { ...state.stats, ...event.stats } : state.stats;
-
-					return {
-						...state,
-						message: event.message || state.message,
-						phase: event.phase || state.phase,
-						percent: event.percent !== undefined ? event.percent : state.percent,
-						docs_processed: event.docs_processed || state.docs_processed,
-						current_doc: event.current_doc || state.current_doc,
-						sub_step: event.sub_step || state.sub_step,
-						status: newStatus,
-						error: event.error || null,
-						timestamp: event.timestamp || new Date().toISOString(),
-						data: event.data || state.data,
-						stages: newStages,
-						documents: newDocs,
-						stats: newStats
-					};
-				});
-			};
-
-			const errorHandler = (error: Error) => {
-				const errorMessage = error.message;
-				
-				// If SSE times out or fails, try polling fallback
-				if ((errorMessage.includes('SSE_TIMEOUT') || errorMessage.includes('SSE_CONNECTION_FAILED')) 
-				    && currentStatusUrl && currentToken) {
-					update(state => ({
-						...state,
-						message: 'Stream timeout, switching to polling mode...',
-						status: 'active'
-					}));
-
-					// Start polling
-					pollingClient = new PollingClient();
-					pollingClient.startPolling(
-						currentStatusUrl,
-						currentToken,
-						messageHandler,
-						(pollError: Error) => {
-							update(state => ({
-								...state,
-								status: 'error',
-								error: pollError.message
-							}));
-						},
-						() => {
-							if (onComplete) {
-								onComplete(finalData);
-							}
-						}
-					);
-				} else {
-					// Non-recoverable error
-					update(state => ({
-						...state,
-						status: 'error',
-						error: errorMessage
-					}));
-				}
-			};
-
-			const completeHandler = () => {
-				if (onComplete) {
-					onComplete(finalData);
-				}
-			};
-
-			const connected = sseClient.connect(url, messageHandler, errorHandler, completeHandler);
-
-			if (!connected) {
-				// SSE not supported, try polling immediately if available
-				if (currentStatusUrl && currentToken) {
-					update(state => ({
-						...state,
-						message: 'Using polling mode...',
-						status: 'active'
-					}));
-
-					pollingClient = new PollingClient();
-					pollingClient.startPolling(
-						currentStatusUrl,
-						currentToken,
-						messageHandler,
-						(pollError: Error) => {
-							update(state => ({
-								...state,
-								status: 'error',
-								error: pollError.message
-							}));
-						},
-						completeHandler
-					);
-					return true;
-				}
-
-				update(state => ({
-					...state,
-					status: 'error',
-					error: 'SSE_NOT_SUPPORTED'
-				}));
-				return false;
-			}
-
-			return true;
-		},
+		connect: connectInternal,
 
 		/**
 		 * Disconnect from the SSE stream or polling
 		 */
-		disconnect: () => {
-			if (sseClient) {
-				sseClient.disconnect();
-				sseClient = null;
-			}
-			if (pollingClient) {
-				pollingClient.stopPolling();
-				pollingClient = null;
-			}
-			set(initialState);
-		},
+		disconnect: disconnectInternal,
 
 		/**
 		 * Reset the store to initial state
 		 */
 		reset: () => {
-			if (sseClient) {
-				sseClient.disconnect();
-				sseClient = null;
-			}
-			if (pollingClient) {
-				pollingClient.stopPolling();
-				pollingClient = null;
-			}
-			set(initialState);
+			disconnectInternal();
 		},
 
 		/**
@@ -387,4 +401,3 @@ export const hasError = derived(
 	progressStore,
 	$progress => $progress.status === 'error'
 );
-

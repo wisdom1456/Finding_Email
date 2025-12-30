@@ -553,6 +553,13 @@ async def bulk_extract_documents(
     service_supabase=Depends(get_supabase_client),
 ):
     """Extract text from all documents in a case that don't have text yet."""
+    import asyncio
+    
+    # Timeout per document to prevent Vercel 300s timeout
+    DOC_TIMEOUT = 45  # seconds per document
+    # Skip PDFs larger than this (likely to timeout on OCR)
+    MAX_PDF_SIZE_FOR_BULK = 10 * 1024 * 1024  # 10MB
+    
     try:
         logger.info(f"Bulk extraction requested for case {request.case_id} by user {user['id']}")
 
@@ -560,7 +567,7 @@ async def bulk_extract_documents(
         # We look for documents where extracted_text is null or empty, AND status is not skipped
         response = (
             user_supabase.table("documents")
-            .select("id, file_name, file_type, storage_path")
+            .select("id, file_name, file_type, storage_path, file_size")
             .eq("case_id", request.case_id)
             .neq("status", DocumentStatus.SKIPPED)
             .or_("extracted_text.is.null,extracted_text.eq.''")
@@ -572,27 +579,50 @@ async def bulk_extract_documents(
 
         extracted_count = 0
         failed_count = 0
+        skipped_count = 0
         errors = []
 
         for doc in documents_to_process:
+            file_name = doc.get("file_name", "unknown")
+            file_type = doc.get("file_type", "")
+            file_size = doc.get("file_size", 0) or 0
+            
+            # Skip large PDFs in bulk mode - they need individual processing
+            is_pdf = file_type in ["application/pdf", "pdf"] or file_name.lower().endswith(".pdf")
+            if is_pdf and file_size > MAX_PDF_SIZE_FOR_BULK:
+                skipped_count += 1
+                skip_msg = f"Skipped {file_name}: PDF too large ({file_size / (1024*1024):.1f}MB) for bulk OCR. Extract individually."
+                logger.warning(skip_msg)
+                errors.append(skip_msg)
+                continue
+            
             try:
-                # Call trigger_extraction for each document
-                await trigger_extraction(
-                    document_id=doc["id"],
-                    user=user,
-                    user_supabase=user_supabase,
-                    service_supabase=service_supabase,
+                # Call trigger_extraction with timeout
+                await asyncio.wait_for(
+                    trigger_extraction(
+                        document_id=doc["id"],
+                        user=user,
+                        user_supabase=user_supabase,
+                        service_supabase=service_supabase,
+                    ),
+                    timeout=DOC_TIMEOUT,
                 )
                 extracted_count += 1
+                logger.info(f"Extracted {file_name} successfully")
+            except asyncio.TimeoutError:
+                failed_count += 1
+                error_msg = f"Timeout extracting {file_name} (>{DOC_TIMEOUT}s). Try extracting individually."
+                logger.error(error_msg)
+                errors.append(error_msg)
             except Exception as e:
                 failed_count += 1
-                error_msg = f"Failed to extract {doc['file_name']} ({doc['id']}): {str(e)}"
+                error_msg = f"Failed to extract {file_name}: {str(e)}"
                 logger.error(error_msg)
                 errors.append(error_msg)
 
         return BulkExtractResponse(
             extracted_count=extracted_count,
-            failed_count=failed_count,
+            failed_count=failed_count + skipped_count,
             errors=errors,
         )
 

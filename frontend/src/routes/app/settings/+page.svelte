@@ -252,16 +252,16 @@ Palm Harbor, FL 34683`);
 
 				<div class="max-w-md">
 					<label for="defaultJurisdiction" class="block text-sm font-semibold text-contrast mb-1">
-						Default State
-					</label>
-					<select
-						id="defaultJurisdiction"
-						bind:value={defaultJurisdiction}
+							Default State
+						</label>
+						<select
+							id="defaultJurisdiction"
+							bind:value={defaultJurisdiction}
 						class="input-standard focus:ring-accent focus:border-transparent transition-colors"
-					>
-						<option value="Florida">Florida</option>
-						<option value="New Mexico">New Mexico</option>
-					</select>
+						>
+							<option value="Florida">Florida</option>
+							<option value="New Mexico">New Mexico</option>
+						</select>
 				</div>
 			</div>
 
@@ -359,20 +359,20 @@ Palm Harbor, FL 34683`);
 					Configure how documents are handled during import and analysis.
 				</p>
 
-				<div>
+					<div>
 					<label for="blacklistedDocuments" class="block text-sm font-semibold text-contrast mb-1">
-						Always Exclude (Blacklist)
-					</label>
+							Always Exclude (Blacklist)
+						</label>
 					<p class="text-xs text-gray-500 mb-3 italic">
-						Documents with these names will be automatically skipped during import. Separate names with commas.
-					</p>
-					<textarea
-						id="blacklistedDocuments"
-						bind:value={blacklistedDocuments}
-						rows="3"
+							Documents with these names will be automatically skipped during import. Separate names with commas.
+						</p>
+						<textarea
+							id="blacklistedDocuments"
+							bind:value={blacklistedDocuments}
+							rows="3"
 						class="input-standard focus:ring-accent focus:border-transparent transition-colors resize-none"
-						placeholder="e.g. Terms of Service.pdf, Privacy Policy.docx, clio_invoice.pdf"
-					></textarea>
+							placeholder="e.g. Terms of Service.pdf, Privacy Policy.docx, clio_invoice.pdf"
+						></textarea>
 				</div>
 			</div>
 
@@ -394,20 +394,18 @@ Palm Harbor, FL 34683`);
 				</div>
 			{/if}
 
-			<!-- Save Button -->
+		<!-- Save Button -->
 			<div class="flex justify-end pt-4">
-				<AsyncButton
-					type="submit"
-					loading={saving}
-					variant="primary"
+			<AsyncButton
+				type="submit"
+				loading={saving}
+				variant="primary"
 					loadingText="Saving Changes..."
 					class="px-8 py-3 text-base shadow-sm"
-				>
-					Save Changes
-				</AsyncButton>
-			</div>
+			>
+				Save Changes
+			</AsyncButton>
+		</div>
 		</form>
 	{/if}
-</div>
-
 </div>

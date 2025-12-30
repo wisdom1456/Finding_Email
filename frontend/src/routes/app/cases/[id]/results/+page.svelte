@@ -6,6 +6,7 @@
 	import { toastStore } from '$lib/stores/toastStore';
 	import { slide } from 'svelte/transition';
 	import PageHeader from '$lib/components/ui/PageHeader.svelte';
+	import AsyncButton from '$lib/components/ui/AsyncButton.svelte';
 	import { ArrowLeft } from 'lucide-svelte';
 	import { parseMarkdown } from '$lib/utils/markdown';
 	import type { PageData } from './$types';

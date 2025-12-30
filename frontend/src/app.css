@@ -198,20 +198,6 @@ button {
   border-color: #D1D5DB;
 }
 
-/* Force white text on accent backgrounds (Tailwind v4 specificity fix) */
-.bg-accent,
-.bg-accent-hover,
-[class*="bg-accent"] {
-  color: white !important;
-}
-
-/* Except for light accent backgrounds which should have dark text */
-.bg-accent\/10,
-.bg-accent\/20,
-[class*="bg-accent/"] {
-  color: inherit !important;
-}
-
 /* Card Base Styles */
 .card {
   background-color: white;

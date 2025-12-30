@@ -1,4 +1,4 @@
-import { createBrowserClient, createServerClient, isBrowser } from '@supabase/ssr';
+import { createBrowserClient } from '@supabase/ssr';
 import { env } from '$env/dynamic/public';
 import type { Database } from './database.types';
 

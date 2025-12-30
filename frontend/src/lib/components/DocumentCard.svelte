@@ -313,7 +313,13 @@
 				{#if doc.status === 'needs_review' && !doc.is_verified}
 					<button 
 						onclick={() => onVerify?.(doc.id)}
-						class="inline-flex items-center px-3 py-1.5 text-xs font-bold rounded-lg bg-green-600 text-white hover:bg-green-700 transition-colors shadow-sm"
+						disabled={!doc.extracted_text && !doc.manual_text}
+						title={!doc.extracted_text && !doc.manual_text ? "Run OCR first to verify this document" : "Mark as ready for analysis"}
+						class={`inline-flex items-center px-3 py-1.5 text-xs font-bold rounded-lg transition-colors shadow-sm ${
+							!doc.extracted_text && !doc.manual_text
+								? 'bg-gray-100 text-gray-400 cursor-not-allowed border border-gray-200 shadow-none'
+								: 'bg-green-600 text-white hover:bg-green-700'
+						}`}
 					>
 						<CheckCircle2 class="w-3.5 h-3.5 mr-1.5" />
 						Mark Verified

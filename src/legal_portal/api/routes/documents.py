@@ -671,7 +671,7 @@ async def verify_document(
         # Get document with ownership verification
         response = (
             user_supabase.table("documents")
-            .select("id, cases!inner(user_id)")
+            .select("id, extracted_text, manual_text, cases!inner(user_id)")
             .eq("id", document_id)
             .execute()
         )
@@ -684,6 +684,13 @@ async def verify_document(
         # Verify ownership
         if document["cases"]["user_id"] != user["id"]:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+
+        # Validate that document has text if being verified as ready
+        if request.is_verified and not (document.get("extracted_text") or document.get("manual_text") or request.manual_text):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot verify document without extracted text. Please run OCR first.",
+            )
 
         # Build update payload
         update_data = {

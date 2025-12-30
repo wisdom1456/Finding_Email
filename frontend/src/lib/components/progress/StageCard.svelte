@@ -59,7 +59,7 @@
   relative p-3 rounded-xl border-2 transition-all duration-500
   ${config.bg} 
   ${config.borderColor}
-  ${isActive ? 'ring-4 ring-accent/20 scale-[1.02] z-10 shadow-2xl shadow-accent/20' : 'opacity-80'}
+  ${isActive ? 'ring-4 ring-accent/20 scale-[1.02] z-10 shadow-2xl shadow-accent/20 text-white' : 'opacity-80 text-white/70'}
 `}>
   <div class="flex items-center gap-3">
     <div class={`p-2 rounded-lg bg-black/40 backdrop-blur-md border border-white/5 ${config.color}`}>

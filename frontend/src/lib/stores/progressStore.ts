@@ -123,14 +123,19 @@ function createProgressStore() {
 		sseClient = new SSEClient();
 
 		const messageHandler = (event: ProgressEvent | any) => {
-			console.log('[progressStore] SSE message:', event.type, event.message?.slice(0, 50));
+			if (event.stage) {
+				console.log('[progressStore] Stage update:', event.stage.id, event.stage.status, event.stage.progress);
+			}
+			if (event.document) {
+				console.log('[progressStore] Document update:', event.document.name, event.document.status);
+			}
 
 			if (event.data) finalData = event.data;
 			
 			// Determine status based on event type
 			let newStatus: ProgressState['status'] = 'active';
-			if (event.type === 'completed') newStatus = 'completed';
-			else if (event.type === 'error' || event.type === 'failed') newStatus = 'error';
+			if (event.type === 'completed' || event.status === 'completed') newStatus = 'completed';
+			else if (event.type === 'error' || event.type === 'failed' || event.status === 'error') newStatus = 'error';
 			
 			update(state => {
 				// 1. Update Stages
@@ -138,7 +143,17 @@ function createProgressStore() {
 				if (event.stage) {
 					const stageIdx = newStages.findIndex(s => s.id === event.stage.id);
 					if (stageIdx !== -1) {
+						// Update the target stage
 						newStages[stageIdx] = { ...newStages[stageIdx], ...event.stage };
+
+						// Logic: If a stage is active or completed, all previous stages should be completed
+						if (event.stage.status === 'active' || event.stage.status === 'completed') {
+							for (let i = 0; i < stageIdx; i++) {
+								if (newStages[i].status !== 'completed') {
+									newStages[i] = { ...newStages[i], status: 'completed', progress: 100 };
+								}
+							}
+						}
 					}
 				}
 

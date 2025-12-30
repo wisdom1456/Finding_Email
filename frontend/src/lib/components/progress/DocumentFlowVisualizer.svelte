@@ -41,9 +41,9 @@
       <div 
         class={`
           relative group p-3 rounded-xl border transition-all duration-300
-          ${doc.status === 'processing' ? 'bg-accent/20 border-accent shadow-lg shadow-accent/10' : 'bg-white/5 border-white/10'}
-          ${doc.status === 'completed' ? 'bg-accent/10 border-accent/40' : ''}
-          ${doc.status === 'error' ? 'bg-red-500/20 border-red-400' : ''}
+          ${doc.status === 'processing' ? 'bg-accent/20 border-accent shadow-lg shadow-accent/10 text-white' : 'bg-white/5 border-white/10 text-white/70'}
+          ${doc.status === 'completed' ? 'bg-accent/10 border-accent/40 text-white' : ''}
+          ${doc.status === 'error' ? 'bg-red-500/20 border-red-400 text-red-200' : ''}
         `}
         in:fade
       >

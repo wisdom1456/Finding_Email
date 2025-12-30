@@ -634,3 +634,4 @@ class TestConcurrentProcessing:
             assert isinstance(result, ProcessedDocument)
             assert result.file_type == FileType.PDF
 
+

@@ -810,20 +810,7 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
             document: Optional[dict] = None,
             tokens_used: int = 0,
         ):
-            """Publish progress updates to SSE stream and persistent storage.
-
-            Args:
-            ----
-                message: Main status message
-                docs_processed: List of document names being processed
-                phase: Current processing phase (e.g., "document_extraction", "analysis")
-                percent: Overall progress percentage (0-100)
-                sub_step: Optional granular sub-step info (e.g., "page_3" for Vision OCR)
-                stage: Optional stage progress data
-                document: Optional individual document progress data
-                tokens_used: Optional token usage increment
-
-            """
+            """Publish progress updates to SSE stream and persistent storage."""
             nonlocal total_tokens_used
             total_tokens_used += tokens_used
 
@@ -832,7 +819,7 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
                 "phase": phase,
                 "percent": percent,
                 "docs_processed": docs_processed or [],
-                "sub_step": sub_step or message,  # Use sub_step if provided, else fall back to message
+                "sub_step": sub_step or message,
                 "timestamp": datetime.utcnow().isoformat(),
             }
 
@@ -842,23 +829,29 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
             if document:
                 payload["document"] = document
             
-            # Add stats periodically or on every call
+            # Add stats periodically
             elapsed = time.time() - analysis_start_time
             payload["stats"] = {
-                "elapsedSeconds": elapsed,  # camelCase for frontend
+                "elapsedSeconds": elapsed,
                 "tokens_used": total_tokens_used,
-                "model": "gpt-4o",  # Default model
+                "model": "gpt-4o",
             }
 
-            # Cooperative cancellation: stop processing ASAP once cancelled.
+            # Cooperative cancellation
             if _analysis_is_cancelled(supabase, analysis_id):
                 raise AnalysisCancelledError("Analysis cancelled by user.")
 
-            # Publish to in-memory queue for immediate SSE delivery
+            # Publish
             await progress_manager.publish_progress(channel_id=analysis_id, **payload)
-
-            # Persist to database so polling fallback works across Vercel instances
             await _update_analysis_progress(supabase, analysis_id, payload)
+
+        # NEW: Initial emission of all documents in pending state so they appear in UI
+        for doc in processed_intake + processed_case_docs:
+            await progress_callback(
+                message=f"Queueing {doc.file_name}...",
+                phase="initialization",
+                document={"id": doc.document_id or doc.file_name, "name": doc.file_name, "status": "pending"}
+            )
 
         # Call the actual processor (AI passes)
         result: ProcessingResult = await process_case_documents(

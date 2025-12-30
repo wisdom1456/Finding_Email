@@ -33,6 +33,7 @@ class DocumentStatus(str, Enum):
     CORRUPTED = "corrupted"  # File exists but appears damaged or unreadable
     SKIPPED = "skipped"  # Explicitly excluded from analysis by user or system
     PENDING = "pending"  # Waiting for processing
+    DUPLICATE = "duplicate"  # Duplicate of another document in the case
 
 
 class FileType(str, Enum):

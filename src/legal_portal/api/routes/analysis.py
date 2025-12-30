@@ -698,23 +698,27 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
                 f"is_junk={doc.get('is_flagged_as_junk')}"
             )
 
-            # Skip docs with critical issues or skipped status
+            # Skip docs with critical issues, skipped status, or duplicates
             status = doc.get("status")
             if status in [
                 DocumentStatus.DOWNLOAD_FAILED,
                 DocumentStatus.CORRUPTED,
                 DocumentStatus.SKIPPED,
+                DocumentStatus.DUPLICATE,
+                "duplicate",  # Also check string value for backwards compatibility
             ]:
-                logger.warning(f"SKIPPING '{doc_name}': bad status ({status})")
-                skipped_documents.append(
-                    SkippedDocument(
-                        document_id=doc["id"],
-                        file_name=doc["file_name"],
-                        reason=f"Status is {status}",
-                        error_type=status or "UNKNOWN",
-                        recommendation="Fix in verification hub.",
+                logger.info(f"SKIPPING '{doc_name}': status={status} (excluded from analysis)")
+                # Don't add duplicates to skipped list - they're expected and not errors
+                if status not in [DocumentStatus.DUPLICATE, "duplicate"]:
+                    skipped_documents.append(
+                        SkippedDocument(
+                            document_id=doc["id"],
+                            file_name=doc["file_name"],
+                            reason=f"Status is {status}",
+                            error_type=str(status) if status else "UNKNOWN",
+                            recommendation="Fix in verification hub.",
+                        )
                     )
-                )
                 continue
 
             if doc.get("is_flagged_as_junk"):

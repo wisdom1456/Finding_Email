@@ -13,7 +13,7 @@ export type PollingCompleteHandler = () => void;
 export class PollingClient {
 	private pollInterval: NodeJS.Timeout | null = null;
 	private pollFrequency = 3000; // Poll every 3 seconds
-	private maxPollAttempts = 120; // 6 minutes max (120 * 3 seconds)
+	private maxPollAttempts = 400; // 20 minutes max (400 * 3 seconds = 1200s)
 	private pollAttempts = 0;
 	private isActive = false;
 	private url: string = '';
@@ -21,6 +21,9 @@ export class PollingClient {
 	private onMessageHandler: PollingMessageHandler | null = null;
 	private onErrorHandler: PollingErrorHandler | null = null;
 	private onCompleteHandler: PollingCompleteHandler | null = null;
+	private lastProgressPercent = -1;
+	private stallCount = 0;
+	private maxStallCount = 60; // 60 polls with no progress change = ~3 minutes stall
 
 	/**
 	 * Start polling for progress updates
@@ -39,6 +42,8 @@ export class PollingClient {
 		this.onCompleteHandler = onComplete;
 		this.isActive = true;
 		this.pollAttempts = 0;
+		this.lastProgressPercent = -1;
+		this.stallCount = 0;
 
 		// Start immediate poll
 		this.poll();
@@ -87,6 +92,17 @@ export class PollingClient {
 
 			const data: ProgressEvent = await response.json();
 
+			// Track progress changes to detect stalls
+			const currentPercent = data.percent ?? 0;
+			if (currentPercent > this.lastProgressPercent) {
+				// Progress is moving, reset stall counter
+				this.lastProgressPercent = currentPercent;
+				this.stallCount = 0;
+			} else {
+				// No progress change, increment stall counter
+				this.stallCount++;
+			}
+
 			if (this.onMessageHandler) {
 				this.onMessageHandler(data);
 			}
@@ -98,6 +114,11 @@ export class PollingClient {
 					this.onCompleteHandler();
 				}
 				return;
+			}
+
+			// Check for stall (no progress for ~3 minutes) - but don't fail, just warn
+			if (this.stallCount >= this.maxStallCount && this.stallCount % 20 === 0) {
+				console.warn(`Import appears stalled at ${currentPercent}% for ${Math.round(this.stallCount * this.pollFrequency / 1000)}s`);
 			}
 
 			// Schedule next poll

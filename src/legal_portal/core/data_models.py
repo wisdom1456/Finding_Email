@@ -454,12 +454,65 @@ class ProcessingResult(BaseModel):
 
 
 class AIPreferences(BaseModel):
-    """User preferences for AI model selection per operation type."""
+    """User preferences for AI model selection and document handling."""
 
     document_analysis: str = "gpt-4o"
     letter_generation: str = "gpt-4o"
     case_chat: str = "gpt-4o"
     multi_stage_analysis: str = "gpt-4o"
+    blacklisted_documents: List[str] = Field(default_factory=list)
+
+
+class StageProgress(BaseModel):
+    """Progress information for a specific analysis stage."""
+
+    id: str  # 'doc_summary', 'fact_matrix', 'issue_mapping', 'deep_analysis'
+    name: str
+    status: Literal["pending", "active", "completed", "error"]
+    progress: int = 0  # 0-100 within stage
+    started_at: Optional[str] = None
+    completed_at: Optional[str] = None
+    extracted: Optional[dict] = None  # {"type": "parties", "count": 4, "preview": [...]}
+
+
+class DocumentProgress(BaseModel):
+    """Progress information for an individual document."""
+
+    id: str
+    name: str
+    status: Literal["pending", "processing", "completed", "error"]
+
+
+class StatsProgress(BaseModel):
+    """Real-time statistics for the analysis process."""
+
+    elapsed_seconds: float
+    estimated_remaining: Optional[float] = None
+    tokens_used: int = 0
+    model: str = "gpt-4o"
+
+
+class EnhancedProgressEvent(BaseModel):
+    """Enriched progress event for the AI Command Center."""
+
+    type: Literal["progress", "stage", "document", "stats", "completed", "error", "stream"]
+    timestamp: str
+
+    # Legacy fields (kept for backwards compatibility)
+    message: Optional[str] = None
+    phase: Optional[str] = None
+    percent: Optional[int] = None
+    docs_processed: Optional[List[str]] = None
+    sub_step: Optional[str] = None
+
+    # New structured fields
+    stage: Optional[StageProgress] = None
+    document: Optional[DocumentProgress] = None
+    stats: Optional[StatsProgress] = None
+
+    # For streaming responses
+    token: Optional[str] = None
+    stream_id: Optional[str] = None
 
 
 class ProfileUpdate(BaseModel):
@@ -469,7 +522,7 @@ class ProfileUpdate(BaseModel):
     phone: Optional[str] = None
     firm_name: Optional[str] = None
     firm_address: Optional[str] = None
-    ai_preferences: Optional[Dict[str, str]] = None
+    ai_preferences: Optional[AIPreferences] = None
     bar_number: Optional[str] = None
     email_signature: Optional[str] = None
     default_demand_deadline: Optional[str] = None
@@ -485,7 +538,7 @@ class ProfileResponse(BaseModel):
     phone: Optional[str] = None
     firm_name: Optional[str] = None
     firm_address: Optional[str] = None
-    ai_preferences: Optional[Dict[str, str]] = None
+    ai_preferences: Optional[AIPreferences] = None
     bar_number: Optional[str] = None
     email_signature: Optional[str] = None
     default_demand_deadline: Optional[str] = None

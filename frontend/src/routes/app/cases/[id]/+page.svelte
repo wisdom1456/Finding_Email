@@ -8,11 +8,11 @@
 	import ClioLinkedMatter from '$lib/components/ClioLinkedMatter.svelte';
 	import UploadFailureSummary from '$lib/components/UploadFailureSummary.svelte';
 	// @ts-ignore
-import VerificationHub from '$lib/components/VerificationHub.svelte';
+	import VerificationHub from '$lib/components/VerificationHub.svelte';
 	import PageHeader from '$lib/components/ui/PageHeader.svelte';
 	import Tabs from '$lib/components/ui/Tabs.svelte';
 	import AsyncButton from '$lib/components/ui/AsyncButton.svelte';
-	import LoadingOverlay from '$lib/components/ui/LoadingOverlay.svelte';
+	import AnalysisProgressModal from '$lib/components/progress/AnalysisProgressModal.svelte';
 	import { clioStore } from '$lib/stores/clioStore';
 	import { progressStore } from '$lib/stores/progressStore';
 	import { toastStore } from '$lib/stores/toastStore';
@@ -25,6 +25,8 @@ import VerificationHub from '$lib/components/VerificationHub.svelte';
 	let loading = $state(true);
 	let uploading = $state(false);
 	let analyzing = $state(false);
+	let showProgressModal = $state(false);
+	let currentAnalysisId = $state<string | null>(null);
 	let navigatingToResults = $state(false);
 	let errorMessage = $state('');
 	let uploadProgress = $state(0);
@@ -863,25 +865,11 @@ import VerificationHub from '$lib/components/VerificationHub.svelte';
 
 			const analysisData = await response.json();
 			const analysisId = analysisData.id;
+			currentAnalysisId = analysisId;
+			showProgressModal = true;
 
 			// Reload analysis status
-		await loadAnalysisStatus();
-
-		// Connect to progress stream with automatic polling fallback
-		const sseUrl = `${getApiUrl()}/api/progress/analysis/${analysisId}?token=${session.access_token}`;
-		const statusUrl = `${getApiUrl()}/api/progress/analysis/${analysisId}/status`;
-
-		progressStore.connect(
-			sseUrl, 
-			async () => {
-				// On completion, reload data
-				await loadAnalysisStatus();
-				await loadCase();
-				analyzing = false;
-			},
-			statusUrl,  // Polling fallback URL
-			session.access_token  // Auth token
-		);
+			await loadAnalysisStatus();
 		} catch (error: any) {
 			errorMessage = error.message || 'Failed to start analysis';
 			analyzing = false;
@@ -2148,9 +2136,23 @@ import VerificationHub from '$lib/components/VerificationHub.svelte';
 	/>
 {/if}
 
-<!-- Analysis Loading Overlay -->
-<LoadingOverlay
-	show={analyzing || (analysisStatus && analysisStatus.status === 'processing')}
-	message="Analyzing Documents"
-	description={$progressStore.message || 'This may take several minutes. We\'re processing your documents with AI to extract key information...'}
-/>
+<!-- Analysis Progress Modal -->
+{#if showProgressModal && currentAnalysisId}
+	<AnalysisProgressModal 
+		analysisId={currentAnalysisId}
+		onComplete={async () => {
+			showProgressModal = false;
+			await loadAnalysisStatus();
+			await loadCase();
+			analyzing = false;
+			goto(`/app/cases/${caseId}/results`);
+		}}
+		onError={(error) => {
+			showProgressModal = false;
+			analyzing = false;
+			errorMessage = error;
+			toastStore.error(error);
+		}}
+	/>
+{/if}
+

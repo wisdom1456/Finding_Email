@@ -75,7 +75,7 @@ class ProgressManager:
             "data": data,
         }
 
-        # Add any extra kwargs to payload
+        # Add any extra kwargs to payload (like stage, document, stats)
         for key, value in kwargs.items():
             if key not in payload and key != "timestamp":
                 payload[key] = value
@@ -91,6 +91,43 @@ class ProgressManager:
             logger.debug(f"Published progress to channel {channel_id}: {message} ({percent}%)")
         except Exception as e:
             logger.error(f"Failed to publish progress to channel {channel_id}: {e}")
+
+    async def publish_stage(self, channel_id: str, stage: dict):
+        """Publish a stage progress update."""
+        await self.publish_progress(
+            channel_id=channel_id,
+            message=f"Stage: {stage.get('name', 'Unknown')}",
+            status="stage",
+            stage=stage,
+        )
+
+    async def publish_document(self, channel_id: str, document: dict):
+        """Publish a document progress update."""
+        await self.publish_progress(
+            channel_id=channel_id,
+            message=f"Document: {document.get('name', 'Unknown')}",
+            status="document",
+            document=document,
+        )
+
+    async def publish_stats(self, channel_id: str, stats: dict):
+        """Publish stats update."""
+        await self.publish_progress(
+            channel_id=channel_id,
+            message="Stats update",
+            status="stats",
+            stats=stats,
+        )
+
+    async def publish_token(self, channel_id: str, token: str, stream_id: str):
+        """Publish a streaming token."""
+        await self.publish_progress(
+            channel_id=channel_id,
+            message="",
+            status="stream",
+            token=token,
+            stream_id=stream_id,
+        )
 
     async def subscribe(self, channel_id: str) -> AsyncGenerator[str, None]:
         """Subscribe to progress updates for a channel."""

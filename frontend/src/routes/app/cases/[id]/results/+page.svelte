@@ -315,14 +315,57 @@
 
 	async function generateFindingsLetter() {
 		generatingFindings = true;
-		await generateLetterRequest({
-			letter_type: 'findings',
-			attorney_name: attorneyName || undefined,
-			firm_name: firmName || undefined,
-			contact_phone: contactPhone || undefined,
-			contact_email: contactEmail || undefined
-		});
-		generatingFindings = false;
+		findingsLetter = ''; // Clear existing
+
+		try {
+			const {
+				data: { session }
+			} = await supabase.auth.getSession();
+			if (!session) throw new Error('Not authenticated');
+
+			const apiUrl = getApiUrl();
+			const response = await fetch(`${apiUrl}/api/analysis/${results.analysis_id}/letter/stream`, {
+				headers: { Authorization: `Bearer ${session.access_token}` }
+			});
+
+			if (!response.ok) {
+				const detail = await response.json().catch(() => ({}));
+				throw new Error(detail?.detail || 'Failed to stream letter');
+			}
+
+			const reader = response.body?.getReader();
+			if (!reader) throw new Error('No reader available');
+
+			const decoder = new TextDecoder();
+			let markdownBuffer = '';
+
+			while (true) {
+				const { done, value } = await reader.read();
+				if (done) break;
+
+				const chunk = decoder.decode(value);
+				const lines = chunk.split('\n');
+
+				for (const line of lines) {
+					if (line.startsWith('data: ')) {
+						try {
+							const data = JSON.parse(line.slice(6));
+							if (data.token) {
+								markdownBuffer += data.token;
+								// Convert markdown to HTML for preview
+								// Note: Wrap in legal-letter class for styling
+								findingsLetter = `<div class="legal-letter">${parseMarkdown(markdownBuffer)}</div>`;
+							}
+							if (data.done) break;
+						} catch (e) {}
+					}
+				}
+			}
+		} catch (err: any) {
+			toastStore.error(err.message || 'Letter generation failed');
+		} finally {
+			generatingFindings = false;
+		}
 	}
 
 	async function calculateDemandAmount() {
@@ -446,7 +489,9 @@
 		chatInput = '';
 		sendingMessage = true;
 
-		chatMessages = [...chatMessages, { user: message, assistant: '...' }];
+		// Add user message and placeholder for assistant
+		const currentMessageIndex = chatMessages.length;
+		chatMessages = [...chatMessages, { user: message, assistant: '' }];
 
 		try {
 			const {
@@ -455,13 +500,13 @@
 			if (!session) throw new Error('Not authenticated');
 
 			const apiUrl = getApiUrl();
-			const response = await fetch(`${apiUrl}/api/analysis/chat`, {
+			const response = await fetch(`${apiUrl}/api/analysis/chat/stream/${results.analysis_id}`, {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json',
 					Authorization: `Bearer ${session.access_token}`
 				},
-				body: JSON.stringify({ case_id: caseId, message })
+				body: JSON.stringify({ message })
 			});
 
 			if (!response.ok) {
@@ -469,15 +514,40 @@
 				throw new Error(detail?.detail || 'Chat request failed');
 			}
 
-			const data: ChatMessageResponse = await response.json();
-			chatMessages = chatMessages.map((entry, idx, arr) => {
-				if (idx === arr.length - 1) {
-					return { ...entry, assistant: data.response };
+			const reader = response.body?.getReader();
+			if (!reader) throw new Error('No reader available');
+
+			const decoder = new TextDecoder();
+			let assistantResponse = '';
+
+			while (true) {
+				const { done, value } = await reader.read();
+				if (done) break;
+
+				const chunk = decoder.decode(value);
+				const lines = chunk.split('\n');
+
+				for (const line of lines) {
+					if (line.startsWith('data: ')) {
+						try {
+							const data = JSON.parse(line.slice(6));
+							if (data.token) {
+								assistantResponse += data.token;
+								// Update only the last message in real-time
+								chatMessages = chatMessages.map((msg, idx) => 
+									idx === currentMessageIndex ? { ...msg, assistant: assistantResponse } : msg
+								);
+							}
+							if (data.done) break;
+						} catch (e) {
+							// Ignore parse errors for incomplete chunks
+						}
+					}
 				}
-				return entry;
-			});
+			}
 		} catch (err: any) {
-			alert(err.message || 'Chat failed');
+			toastStore.error(err.message || 'Chat failed');
+			// Remove the failed message pair
 			chatMessages = chatMessages.slice(0, -1);
 		} finally {
 			sendingMessage = false;

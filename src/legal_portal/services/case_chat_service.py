@@ -56,6 +56,31 @@ class CaseChatService:
 
         return response["content"]
 
+    async def stream_message(
+        self,
+        user_message: str,
+        analysis_result: ProcessingResult,
+        conversation_history: List[Dict[str, str]],
+    ) -> AsyncGenerator[str, None]:
+        """Stream response for a chat message with case context."""
+        system_message = self._build_system_message(analysis_result)
+        messages = (
+            [{"role": "system", "content": system_message}]
+            + conversation_history
+            + [{"role": "user", "content": user_message}]
+        )
+
+        logger.info(f"Case chat stream request with {len(conversation_history)} prior messages")
+
+        model = self.client.get_preferred_model("case_chat", "gpt-4o")
+        async for token in self.client.create_chat_completion_stream(
+            model=model,
+            messages=messages,
+            temperature=0.4,
+            max_tokens=1500,
+        ):
+            yield token
+
     def _build_system_message(self, analysis_result: ProcessingResult) -> str:
         """Assemble complete case context into a single system message."""
         # Jurisdiction-specific citation guidance

@@ -12,10 +12,11 @@ import traceback
 from datetime import datetime
 from email.message import EmailMessage
 from email.utils import formatdate, make_msgid
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Callable, AsyncGenerator
 
 import html2text
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from legal_portal.api.dependencies import get_current_user, get_supabase_client, get_user_supabase_client
@@ -770,6 +771,10 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
             "legal_issue": case.get("description", "General legal document analysis"),
         }
 
+        # Track timing and stats for the AI Command Center
+        analysis_start_time = time.time()
+        total_tokens_used = 0
+
         # Create progress callback that publishes to SSE and stores in DB
         async def progress_callback(
             message: str,
@@ -777,6 +782,10 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
             phase="",
             percent=0,
             sub_step=None,
+            # New parameters for enhanced progress
+            stage: Optional[dict] = None,
+            document: Optional[dict] = None,
+            tokens_used: int = 0,
         ):
             """Publish progress updates to SSE stream and persistent storage.
 
@@ -787,8 +796,14 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
                 phase: Current processing phase (e.g., "document_extraction", "analysis")
                 percent: Overall progress percentage (0-100)
                 sub_step: Optional granular sub-step info (e.g., "page_3" for Vision OCR)
+                stage: Optional stage progress data
+                document: Optional individual document progress data
+                tokens_used: Optional token usage increment
 
             """
+            nonlocal total_tokens_used
+            total_tokens_used += tokens_used
+
             payload = {
                 "message": message,
                 "phase": phase,
@@ -796,6 +811,20 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
                 "docs_processed": docs_processed or [],
                 "sub_step": sub_step or message,  # Use sub_step if provided, else fall back to message
                 "timestamp": datetime.utcnow().isoformat(),
+            }
+
+            # Add structured data if provided
+            if stage:
+                payload["stage"] = stage
+            if document:
+                payload["document"] = document
+            
+            # Add stats periodically or on every call
+            elapsed = time.time() - analysis_start_time
+            payload["stats"] = {
+                "elapsed_seconds": elapsed,
+                "tokens_used": total_tokens_used,
+                "model": "gpt-4o",  # Default model
             }
 
             # Cooperative cancellation: stop processing ASAP once cancelled.
@@ -939,6 +968,149 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
                 logger.debug(f"Cleaned up temporary directory: {temp_dir}")
             except Exception as cleanup_error:
                 logger.warning(f"Failed to cleanup temp dir: {cleanup_error}")
+
+
+@router.get("/{analysis_id}/letter/stream")
+async def stream_findings_letter(
+    analysis_id: str,
+    user=Depends(get_current_user),
+    supabase=Depends(get_user_supabase_client),
+):
+    """Stream findings letter generation token by token."""
+    # Verify ownership and get analysis results
+    try:
+        response = supabase.table("analysis_results").select("*").eq("id", analysis_id).execute()
+        if not response.data:
+            raise HTTPException(status_code=404, detail="Analysis not found")
+        
+        analysis_data = response.data[0]
+        result_payload = analysis_data.get("result")
+        if not result_payload:
+            raise HTTPException(status_code=400, detail="Analysis result not yet available")
+            
+        processing_result = ProcessingResult(**result_payload)
+        if not processing_result.multi_stage_result:
+            raise HTTPException(status_code=400, detail="Multi-stage analysis results missing")
+
+        async def generate():
+            openai_client = OpenAIClient()
+            json_service = JsonProcessingService(client=openai_client, config={})
+            
+            msr = processing_result.multi_stage_result
+            from legal_portal.core.data_models import DeepAnalysis, FactMatrix, LetterStructure
+            
+            fact_matrix = FactMatrix(**msr["fact_matrix"])
+            deep_analysis = DeepAnalysis(**msr["deep_analysis"])
+            letter_structure = LetterStructure(**msr["letter_structure"])
+            
+            artifacts = processing_result.artifacts or {}
+            jurisdiction = artifacts.get("jurisdiction", "Florida")
+            
+            async for token in json_service.stream_findings_letter_adaptive(
+                intake_content=processing_result.intake_content or "",
+                fact_matrix=fact_matrix,
+                legal_analysis=deep_analysis,
+                structure_guidance=letter_structure,
+                verified_statutes=msr.get("verified_statutes", []),
+                attorney_name=artifacts.get("attorney_name"),
+                firm_name=artifacts.get("firm_name"),
+                contact_phone=artifacts.get("contact_phone"),
+                contact_email=artifacts.get("contact_email"),
+                jurisdiction=jurisdiction,
+            ):
+                yield f"data: {json.dumps({'token': token})}\n\n"
+            
+            yield f"data: {json.dumps({'done': True})}\n\n"
+        
+        return StreamingResponse(
+            generate(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache, no-transform",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",
+            }
+        )
+    except Exception as e:
+        logger.error(f"Error in stream_findings_letter: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/{analysis_id}/chat/stream")
+async def stream_chat_response(
+    analysis_id: str,
+    request: ChatMessageRequest,
+    user=Depends(get_current_user),
+    supabase=Depends(get_user_supabase_client),
+):
+    """Stream chat response token by token."""
+    try:
+        # 1. Get analysis context
+        response = supabase.table("analysis_results").select("*").eq("id", analysis_id).execute()
+        if not response.data:
+            raise HTTPException(status_code=404, detail="Analysis result not found")
+        
+        analysis_data = response.data[0]
+        result_payload = analysis_data["result"]
+        processing_result = ProcessingResult(**result_payload)
+        
+        # 2. Get conversation history
+        history_response = (
+            supabase.table("case_chat_messages")
+            .select("user_message, ai_response")
+            .eq("case_id", processing_result.case_id)
+            .order("created_at", desc=False)
+            .limit(10)
+            .execute()
+        )
+        conversation_history = []
+        if history_response.data:
+            for row in history_response.data:
+                conversation_history.append({"role": "user", "content": row["user_message"]})
+                conversation_history.append({"role": "assistant", "content": row["ai_response"]})
+
+        async def generate():
+            openai_client = OpenAIClient()
+            artifacts = processing_result.artifacts or {}
+            jurisdiction = artifacts.get("jurisdiction", "Florida")
+            chat_service = CaseChatService(openai_client, jurisdiction=jurisdiction)
+            
+            full_response = ""
+            async for token in chat_service.stream_message(
+                user_message=request.message,
+                analysis_result=processing_result,
+                conversation_history=conversation_history,
+            ):
+                full_response += token
+                yield f"data: {json.dumps({'token': token})}\n\n"
+            
+            # 3. Save to database after streaming completes
+            try:
+                supabase.table("case_chat_messages").insert(
+                    {
+                        "case_id": processing_result.case_id,
+                        "user_message": request.message,
+                        "ai_response": full_response,
+                        "context_used": processing_result.multi_stage_result or {},
+                    }
+                ).execute()
+            except Exception as db_err:
+                logger.error(f"Failed to save chat message to DB: {db_err}")
+                
+            yield f"data: {json.dumps({'done': True})}\n\n"
+            
+        return StreamingResponse(
+            generate(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache, no-transform",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",
+            }
+        )
+    except Exception as e:
+        logger.error(f"Error in stream_chat_response: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/start", response_model=AnalysisResponse, status_code=status.HTTP_202_ACCEPTED)

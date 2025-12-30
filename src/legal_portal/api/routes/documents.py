@@ -128,6 +128,12 @@ async def upload_document(
         if not case_response.data:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Case not found")
 
+        # Fetch user profile for blacklist
+        profile_response = service_supabase.table("profiles").select("ai_preferences").eq("id", user["id"]).execute()
+        blacklist = []
+        if profile_response.data and profile_response.data[0].get("ai_preferences"):
+            blacklist = profile_response.data[0]["ai_preferences"].get("blacklisted_documents", [])
+
         # Read file content
         file_content = await file.read()
         logger.debug(f"File size: {len(file_content)} bytes")
@@ -144,6 +150,7 @@ async def upload_document(
                 supabase_client=service_supabase,
                 is_intake_form=is_intake_form,
                 content_type=file.content_type,
+                blacklist=blacklist,
             )
         except ValidationError as e:
             # Return structured validation error

@@ -48,6 +48,8 @@
 	let loadingPreview = $state(false);
 	let viewMode = $state<'triage' | 'all'>('triage');
 	let showInstructions = $state(false);
+	let processingDocIds = $state<Set<string>>(new Set());
+	let remainingOcrCount = $state(0);
 
 	// Triage Groups
 	let triageGroups = $derived.by(() => {
@@ -55,14 +57,18 @@
 			critical: [] as any[], // download_failed, corrupted
 			needs_attention: [] as any[], // extraction_failed, needs_review (low quality)
 			ready: [] as any[], // ready (high/medium quality)
-			duplicates: [] as any[] // duplicate documents
+			duplicates: [] as any[], // duplicate documents
+			excluded: [] as any[] // documents manually excluded from analysis
 		};
 
 		for (const doc of documents) {
 			const status = doc.status;
 			const isDuplicate = doc.metadata?.is_duplicate === true || status === 'duplicate';
+			const isExcluded = doc.metadata?.excluded === true;
 			
-			if (isDuplicate) {
+			if (isExcluded) {
+				groups.excluded.push(doc);
+			} else if (isDuplicate) {
 				// Duplicates go to their own section
 				groups.duplicates.push(doc);
 			} else if (status === 'download_failed' || status === 'corrupted') {
@@ -169,6 +175,56 @@
 		}
 	}
 
+	async function handleAlwaysDelete(docName: string) {
+		try {
+			const { data: { session } } = await supabase.auth.getSession();
+			if (!session) throw new Error('Not authenticated');
+
+			// 1. Fetch current profile
+			const apiUrl = getApiUrl();
+			const getResponse = await fetch(`${apiUrl}/api/profile`, {
+				headers: {
+					'Authorization': `Bearer ${session.access_token}`,
+					'Content-Type': 'application/json'
+				}
+			});
+
+			if (!getResponse.ok) throw new Error('Failed to fetch profile');
+			const profile = await getResponse.json();
+
+			// 2. Update blacklist
+			const currentBlacklist = profile.ai_preferences?.blacklisted_documents || [];
+			if (currentBlacklist.includes(docName)) {
+				toastStore.info('Document name is already in blacklist');
+				return;
+			}
+
+			const updatedBlacklist = [...currentBlacklist, docName];
+			
+			const profileData = {
+				ai_preferences: {
+					...profile.ai_preferences,
+					blacklisted_documents: updatedBlacklist
+				}
+			};
+
+			// 3. Save profile
+			const updateResponse = await fetch(`${apiUrl}/api/profile`, {
+				method: 'PUT',
+				headers: {
+					'Authorization': `Bearer ${session.access_token}`,
+					'Content-Type': 'application/json'
+				},
+				body: JSON.stringify(profileData)
+			});
+
+			if (!updateResponse.ok) throw new Error('Failed to update blacklist');
+			toastStore.success(`"${docName}" added to always-exclude list`);
+		} catch (error: any) {
+			toastStore.error(`Blacklist error: ${error.message}`);
+		}
+	}
+
 	async function handleReExtract(docId: string) {
 		toastStore.info('Re-extracting with Vision OCR...');
 		try {
@@ -235,35 +291,55 @@
 	}
 
 	async function handleBulkExtract() {
-		toastStore.info('Running bulk extraction on all documents...');
+		const docsToProcess = triageGroups.needs_attention.filter(d => !d.extracted_text || d.status === 'pending');
+		if (docsToProcess.length === 0) return;
+
+		toastStore.info(`Running sequential extraction on ${docsToProcess.length} documents...`);
 		bulkActionLoading = true;
+		remainingOcrCount = docsToProcess.length;
+		
 		try {
 			const { data: { session } } = await supabase.auth.getSession();
 			if (!session) throw new Error('Not authenticated');
 
-			const response = await fetch(`${getApiUrl()}/api/documents/bulk-extract`, {
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json',
-					Authorization: `Bearer ${session.access_token}`,
-				},
-				body: JSON.stringify({ case_id: caseId }),
-			});
+			let extractedCount = 0;
+			let failedCount = 0;
 
-			if (!response.ok) throw new Error('Bulk extraction failed');
-			const result = await response.json();
-			
-			if (result.failed_count > 0) {
-				toastStore.warning(`Extracted ${result.extracted_count} docs, but ${result.failed_count} failed.`);
-			} else {
-				toastStore.success(`Successfully extracted ${result.extracted_count} documents`);
+			for (const doc of docsToProcess) {
+				processingDocIds.add(doc.id);
+				
+				try {
+					const response = await fetch(`${getApiUrl()}/api/documents/${doc.id}/extract`, {
+						method: 'POST',
+						headers: {
+							Authorization: `Bearer ${session.access_token}`,
+						}
+					});
+
+					if (!response.ok) throw new Error('Extraction failed');
+					extractedCount++;
+				} catch (err) {
+					console.error(`Failed to extract ${doc.file_name}:`, err);
+					failedCount++;
+				} finally {
+					processingDocIds.delete(doc.id);
+					remainingOcrCount--;
+					// Update UI as each document completes
+					await onDocumentsUpdated();
+				}
 			}
 			
-			await onDocumentsUpdated();
+			if (failedCount > 0) {
+				toastStore.warning(`Extracted ${extractedCount} docs, but ${failedCount} failed.`);
+			} else {
+				toastStore.success(`Successfully extracted all ${extractedCount} documents`);
+			}
 		} catch (error: any) {
 			toastStore.error(error.message);
 		} finally {
 			bulkActionLoading = false;
+			remainingOcrCount = 0;
+			processingDocIds.clear();
 		}
 	}
 
@@ -518,7 +594,9 @@
 								onReplace={() => { recoveryDocument = doc; showRecoveryModal = true; }}
 								onSkip={() => handleSkip(doc.id)}
 								onDelete={() => handleDelete(doc.id)}
+								onAlwaysDelete={(name) => handleAlwaysDelete(name)}
 								onToggleExclusion={(id, excluded) => handleToggleExclusion(id, excluded)}
+								isProcessing={processingDocIds.has(doc.id)}
 							/>
 						{/each}
 					</div>
@@ -542,7 +620,11 @@
 								class="ml-4 inline-flex items-center gap-2 px-3 py-1.5 text-xs font-bold rounded-lg bg-accent/10 text-accent hover:bg-accent/20 transition-all border border-accent/20"
 							>
 								<RefreshCw class={`w-3.5 h-3.5 ${bulkActionLoading ? 'animate-spin' : ''}`} />
-								Run OCR on {triageGroups.needs_attention.filter(d => !d.extracted_text || d.status === 'pending').length} Doc{triageGroups.needs_attention.filter(d => !d.extracted_text || d.status === 'pending').length === 1 ? '' : 's'}
+								{#if bulkActionLoading}
+									Processing {remainingOcrCount} Doc{remainingOcrCount === 1 ? '' : 's'}...
+								{:else}
+									Run OCR on {triageGroups.needs_attention.filter(d => !d.extracted_text || d.status === 'pending').length} Doc{triageGroups.needs_attention.filter(d => !d.extracted_text || d.status === 'pending').length === 1 ? '' : 's'}
+								{/if}
 							</button>
 						{/if}
 
@@ -560,7 +642,9 @@
 								onVerify={() => handleVerify(doc.id)}
 								onSkip={() => handleSkip(doc.id)}
 								onDelete={() => handleDelete(doc.id)}
+								onAlwaysDelete={(name) => handleAlwaysDelete(name)}
 								onToggleExclusion={(id, excluded) => handleToggleExclusion(id, excluded)}
+								isProcessing={processingDocIds.has(doc.id)}
 							/>
 						{/each}
 					</div>
@@ -586,7 +670,40 @@
 								onView={() => handleView(doc)}
 								onEdit={() => editingDocument = doc}
 								onDelete={() => handleDelete(doc.id)}
+								onAlwaysDelete={(name) => handleAlwaysDelete(name)}
 								onToggleExclusion={(id, excluded) => handleToggleExclusion(id, excluded)}
+								isProcessing={processingDocIds.has(doc.id)}
+							/>
+						{/each}
+					</div>
+				</section>
+			{/if}
+
+			<!-- Excluded Documents Section (above duplicates) -->
+			{#if triageGroups.excluded.length > 0}
+				<section class="mt-8 pt-8 border-t border-gray-200">
+					<div class="flex items-center gap-3 mb-6">
+						<div class="p-1.5 rounded-lg bg-gray-100 text-gray-600">
+							<XCircle class="w-5 h-5" />
+						</div>
+						<div>
+							<h3 class="text-xl font-black text-gray-900 uppercase tracking-tight">Excluded from Analysis</h3>
+							<p class="text-xs text-gray-500">These files will be skipped during the next analysis run.</p>
+						</div>
+						<span class="ml-auto text-xs font-bold text-gray-600 bg-gray-50 px-2 py-1 rounded-full border border-gray-100">
+							{triageGroups.excluded.length} Excluded
+						</span>
+					</div>
+					<div class="grid grid-cols-1 lg:grid-cols-2 gap-4 opacity-60 grayscale hover:opacity-100 hover:grayscale-0 transition-all">
+						{#each triageGroups.excluded as doc (doc.id)}
+							<DocumentCard 
+								{doc}
+								onView={() => handleView(doc)}
+								onEdit={() => editingDocument = doc}
+								onDelete={() => handleDelete(doc.id)}
+								onAlwaysDelete={(name) => handleAlwaysDelete(name)}
+								onToggleExclusion={(id, excluded) => handleToggleExclusion(id, excluded)}
+								isProcessing={processingDocIds.has(doc.id)}
 							/>
 						{/each}
 					</div>
@@ -617,7 +734,9 @@
 								onView={() => handleView(doc)}
 								onEdit={() => editingDocument = doc}
 								onDelete={() => handleDelete(doc.id)}
+								onAlwaysDelete={(name) => handleAlwaysDelete(name)}
 								onToggleExclusion={(id, excluded) => handleToggleExclusion(id, excluded)}
+								isProcessing={processingDocIds.has(doc.id)}
 							/>
 						{/each}
 					</div>
@@ -659,7 +778,9 @@
 							onVerify={() => handleVerify(doc.id)}
 							onSkip={() => handleSkip(doc.id)}
 							onDelete={() => handleDelete(doc.id)}
+							onAlwaysDelete={(name) => handleAlwaysDelete(name)}
 							onToggleExclusion={(id, excluded) => handleToggleExclusion(id, excluded)}
+							isProcessing={processingDocIds.has(doc.id)}
 						/>
 					</div>
 				</div>

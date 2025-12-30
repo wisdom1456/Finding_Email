@@ -25,20 +25,24 @@
 		onEdit, 
 		onReExtract, 
 		onDelete, 
+		onAlwaysDelete,
 		onReplace,
 		onSkip,
 		onView,
-		onToggleExclusion
+		onToggleExclusion,
+		isProcessing = false
 	}: { 
 		doc: any; 
 		onVerify?: (id: string) => void;
 		onEdit?: (doc: any) => void;
 		onReExtract?: (id: string) => void;
 		onDelete?: (id: string) => void;
+		onAlwaysDelete?: (name: string) => void;
 		onReplace?: (id: string) => void;
 		onSkip?: (id: string) => void;
 		onView?: (doc: any) => void;
 		onToggleExclusion?: (id: string, excluded: boolean) => void;
+		isProcessing?: boolean;
 	} = $props();
 
 	let showMenu = $state(false);
@@ -156,12 +160,16 @@
 </script>
 
 <div 
-	class={`group relative border rounded-xl overflow-hidden transition-all duration-200 ${config.bgColor} ${config.borderColor} hover:shadow-md`}
+	class={`group relative border rounded-xl overflow-hidden transition-all duration-200 ${config.bgColor} ${config.borderColor} hover:shadow-md ${isProcessing ? 'animate-pulse' : ''}`}
 >
 	<div class="p-4 sm:p-5 flex items-start gap-4">
 		<!-- Status Icon -->
 		<div class={`mt-1 p-2 rounded-lg bg-white shadow-sm ${config.iconColor}`}>
-			<StatusIcon class="w-5 h-5" />
+			{#if isProcessing}
+				<RefreshCw class="w-5 h-5 animate-spin" />
+			{:else}
+				<StatusIcon class="w-5 h-5" />
+			{/if}
 		</div>
 
 		<!-- Content -->
@@ -353,6 +361,14 @@
 					>
 						<Trash2 class="w-4 h-4 mr-3" />
 						Delete Document
+					</button>
+
+					<button 
+						onclick={() => { onAlwaysDelete?.(doc.file_name); onDelete?.(doc.id); showMenu = false; }}
+						class="w-full px-4 py-2 text-left text-sm font-medium text-red-700 hover:bg-red-50 flex items-center"
+					>
+						<XCircle class="w-4 h-4 mr-3" />
+						Always Delete
 					</button>
 				</div>
 			{/if}

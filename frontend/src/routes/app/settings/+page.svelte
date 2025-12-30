@@ -26,6 +26,7 @@ Palm Harbor, FL 34683`);
 	let letterGenerationModel = $state('gpt-4o');
 	let caseChatModel = $state('gpt-4o');
 	let multiStageAnalysisModel = $state('gpt-4o');
+	let blacklistedDocuments = $state('');
 
 	const availableModels = [
 		{ value: 'gpt-4o', label: 'GPT-4o (Recommended)', description: 'Fastest, best for most uses' },
@@ -74,6 +75,10 @@ Palm Harbor, FL 34683`);
 					letterGenerationModel = profile.ai_preferences.letter_generation || 'gpt-4o';
 					caseChatModel = profile.ai_preferences.case_chat || 'gpt-4o';
 					multiStageAnalysisModel = profile.ai_preferences.multi_stage_analysis || 'gpt-4o';
+					
+					if (profile.ai_preferences.blacklisted_documents) {
+						blacklistedDocuments = profile.ai_preferences.blacklisted_documents.join(', ');
+					}
 				}
 			}
 		} catch (error: any) {
@@ -106,7 +111,11 @@ Palm Harbor, FL 34683`);
 					document_analysis: documentAnalysisModel,
 					letter_generation: letterGenerationModel,
 					case_chat: caseChatModel,
-					multi_stage_analysis: multiStageAnalysisModel
+					multi_stage_analysis: multiStageAnalysisModel,
+					blacklisted_documents: blacklistedDocuments
+						.split(',')
+						.map((d) => d.trim())
+						.filter((d) => d.length > 0)
 				}
 			};
 
@@ -341,6 +350,32 @@ Palm Harbor, FL 34683`);
 								</ul>
 							</div>
 						</div>
+					</div>
+				</div>
+			</div>
+
+			<!-- Document Handling Preferences Section -->
+			<div class="bg-white shadow-card rounded-lg p-6 mb-6">
+				<h2 class="text-lg font-heading font-semibold text-contrast mb-2">Document Handling</h2>
+				<p class="text-sm text-gray-500 mb-6">
+					Configure how documents are handled during import and analysis.
+				</p>
+
+				<div class="space-y-4">
+					<div>
+						<label for="blacklistedDocuments" class="block text-sm font-medium text-contrast mb-1">
+							Always Exclude (Blacklist)
+						</label>
+						<p class="text-xs text-gray-500 mb-2">
+							Documents with these names will be automatically skipped during import. Separate names with commas.
+						</p>
+						<textarea
+							id="blacklistedDocuments"
+							bind:value={blacklistedDocuments}
+							rows="3"
+							class="w-full px-3 py-2.5 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent transition-colors resize-none"
+							placeholder="e.g. Terms of Service.pdf, Privacy Policy.docx, clio_invoice.pdf"
+						></textarea>
 					</div>
 				</div>
 			</div>

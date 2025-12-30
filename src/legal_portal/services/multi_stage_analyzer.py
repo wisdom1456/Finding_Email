@@ -78,13 +78,34 @@ class MultiStageAnalyzer:
 
         # Stage 1: Extract Fact Matrix
         if progress_callback:
-            await progress_callback("Extracting key facts and timeline...", [], "fact_extraction", 20)
+            await progress_callback(
+                "Extracting key facts and timeline...", 
+                [], 
+                "fact_extraction", 
+                20,
+                stage={"id": "fact_matrix", "name": "Extracting Facts", "status": "active", "progress": 30}
+            )
 
         stage_start = time.time()
         # Optimization: Pass limited context to fact matrix extraction to avoid timeouts
         fact_matrix = await self._extract_fact_matrix(intake_content, document_summaries, jurisdiction)
         self.stage_timings["fact_extraction"] = time.time() - stage_start
         
+        if progress_callback:
+            await progress_callback(
+                "Fact extraction complete.",
+                [],
+                "fact_extraction",
+                35,
+                stage={
+                    "id": "fact_matrix", 
+                    "name": "Extracting Facts", 
+                    "status": "completed", 
+                    "progress": 100,
+                    "extracted": {"type": "parties", "count": len(fact_matrix.parties)}
+                }
+            )
+
         if diag_logger:
             diag_logger.log_stage("multi_stage_1_fact_matrix", fact_matrix.model_dump(mode="json"))
             
@@ -96,7 +117,13 @@ class MultiStageAnalyzer:
 
         # Stage 2: Map Legal Issues
         if progress_callback:
-            await progress_callback("Mapping legal issues and statutes...", [], "issue_mapping", 40)
+            await progress_callback(
+                "Mapping legal issues and statutes...", 
+                [], 
+                "issue_mapping", 
+                40,
+                stage={"id": "issue_mapping", "name": "Legal Issues", "status": "active", "progress": 20}
+            )
 
         stage_start = time.time()
         issue_map = await self._map_legal_issues(
@@ -104,6 +131,21 @@ class MultiStageAnalyzer:
         )
         self.stage_timings["issue_mapping"] = time.time() - stage_start
         
+        if progress_callback:
+            await progress_callback(
+                "Issue mapping complete.",
+                [],
+                "issue_mapping",
+                55,
+                stage={
+                    "id": "issue_mapping", 
+                    "name": "Legal Issues", 
+                    "status": "completed", 
+                    "progress": 100,
+                    "extracted": {"type": "issues", "count": len(issue_map.primary_issues)}
+                }
+            )
+
         if diag_logger:
             diag_logger.log_stage("multi_stage_2_issue_map", issue_map.model_dump(mode="json"))
             
@@ -114,7 +156,13 @@ class MultiStageAnalyzer:
 
         # Stage 3: Deep Legal Analysis
         if progress_callback:
-            await progress_callback("Performing deep legal analysis...", [], "deep_analysis", 70)
+            await progress_callback(
+                "Performing deep legal analysis...", 
+                [], 
+                "deep_analysis", 
+                70,
+                stage={"id": "deep_analysis", "name": "Deep Analysis", "status": "active", "progress": 10}
+            )
 
         stage_start = time.time()
         deep_analysis = await self._perform_deep_legal_analysis(
@@ -122,6 +170,21 @@ class MultiStageAnalyzer:
         )
         self.stage_timings["deep_analysis"] = time.time() - stage_start
         
+        if progress_callback:
+            await progress_callback(
+                "Deep legal analysis complete.",
+                [],
+                "deep_analysis",
+                90,
+                stage={
+                    "id": "deep_analysis", 
+                    "name": "Deep Analysis", 
+                    "status": "completed", 
+                    "progress": 100,
+                    "extracted": {"type": "analysis", "count": len(deep_analysis.issue_analyses)}
+                }
+            )
+
         if diag_logger:
             diag_logger.log_stage("multi_stage_3_deep_analysis", deep_analysis.model_dump(mode="json"))
             
@@ -131,9 +194,27 @@ class MultiStageAnalyzer:
         )
 
         # Stage 4: Letter Structure Determination
+        if progress_callback:
+            await progress_callback(
+                "Determining optimal letter structure...",
+                [],
+                "structure_determination",
+                95,
+                stage={"id": "letter_structure", "name": "Letter Structure", "status": "active", "progress": 50}
+            )
+
         stage_start = time.time()
         letter_structure = self._determine_letter_structure(issue_map, deep_analysis)
         self.stage_timings["structure_determination"] = time.time() - stage_start
+        
+        if progress_callback:
+            await progress_callback(
+                "Letter structure determined.",
+                [],
+                "structure_determination",
+                100,
+                stage={"id": "letter_structure", "name": "Letter Structure", "status": "completed", "progress": 100}
+            )
         
         if diag_logger:
             diag_logger.log_stage("multi_stage_4_letter_structure", letter_structure.model_dump(mode="json"))

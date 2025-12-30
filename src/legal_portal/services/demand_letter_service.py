@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import os
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, AsyncGenerator
 
 import markdown2
 
@@ -34,26 +34,49 @@ class DemandLetterService:
         document_summaries: Optional[List[dict]] = None,
         jurisdiction: str = "Florida",  # Added jurisdiction parameter
     ) -> str:
-        """Generate a formal demand letter for a specific opposing party.
+        """Generate a formal demand letter for a specific opposing party."""
+        # ... (implementation same as before, but calling sync client)
+        markdown_content = ""
+        async for token in self.stream_demand_letter(
+            fact_matrix_dict=fact_matrix_dict,
+            deep_analysis_dict=deep_analysis_dict,
+            target_party_name=target_party_name,
+            demand_amount=demand_amount,
+            demand_deadline=demand_deadline,
+            specific_demands=specific_demands,
+            attorney_info=attorney_info,
+            client_name=client_name,
+            document_summaries=document_summaries,
+            jurisdiction=jurisdiction,
+        ):
+            markdown_content += token
 
-        Args:
-        ----
-            fact_matrix_dict: Structured fact matrix data.
-            deep_analysis_dict: Comprehensive legal analysis data.
-            target_party_name: Name of the party receiving the demand.
-            demand_amount: Optional monetary demand amount.
-            demand_deadline: Deadline for compliance.
-            specific_demands: List of specific performance demands.
-            attorney_info: Attorney contact and firm details.
-            client_name: Name of the client for representation statement.
-            document_summaries: Optional document summaries for context.
-            jurisdiction: State jurisdiction for legal context.
+        # Convert markdown to HTML
+        html = markdown2.markdown(
+            markdown_content, extras=["tables", "smarty-pants", "fenced-code-blocks", "cuddled-lists"]
+        )
 
-        Returns:
-        -------
-            HTML-formatted demand letter.
+        # Apply professional formatting using DocumentFormatterService
+        formatted_html = DocumentFormatterService.format_demand_letter(
+            letter_html=html, recipient_name=target_party_name
+        )
 
-        """
+        return formatted_html
+
+    async def stream_demand_letter(
+        self,
+        fact_matrix_dict: dict,
+        deep_analysis_dict: dict,
+        target_party_name: str,
+        demand_amount: Optional[float],
+        demand_deadline: str,
+        specific_demands: List[str],
+        attorney_info: Dict[str, Optional[str]],
+        client_name: Optional[str] = None,
+        document_summaries: Optional[List[dict]] = None,
+        jurisdiction: str = "Florida",
+    ) -> AsyncGenerator[str, None]:
+        """Stream a formal demand letter for a specific opposing party."""
         fact_matrix = FactMatrix(**fact_matrix_dict)
         deep_analysis = DeepAnalysis(**deep_analysis_dict)
         party = next((p for p in fact_matrix.parties if p.name == target_party_name), None)
@@ -90,10 +113,10 @@ class DemandLetterService:
             statute_example=statute_example,
         )
 
-        logger.info(f"Generating demand letter for {target_party_name} in {jurisdiction}")
+        logger.info(f"Streaming demand letter for {target_party_name} in {jurisdiction}")
         model = self.client.get_preferred_model("letter_generation", "gpt-4o")
-        logger.info(f"Using model {model} for demand letter generation")
-        response = self.client.create_chat_completion(
+        
+        async for token in self.client.create_chat_completion_stream(
             model=model,
             messages=[
                 {
@@ -109,20 +132,8 @@ class DemandLetterService:
             ],
             temperature=0.3,
             max_tokens=8000,
-        )
-        markdown_content = response["content"].strip()
-
-        # Convert markdown to HTML
-        html = markdown2.markdown(
-            markdown_content, extras=["tables", "smarty-pants", "fenced-code-blocks", "cuddled-lists"]
-        )
-
-        # Apply professional formatting using DocumentFormatterService
-        formatted_html = DocumentFormatterService.format_demand_letter(
-            letter_html=html, recipient_name=target_party_name
-        )
-
-        return formatted_html
+        ):
+            yield token
 
     def _build_party_context(self, fact_matrix: FactMatrix, party: Party) -> str:
         timeline = [

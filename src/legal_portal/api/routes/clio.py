@@ -428,6 +428,12 @@ async def import_clio_data(
 
         await publish_and_persist("Starting Clio import...", "initialization", 0)
 
+        # Fetch user profile for blacklist
+        profile_response = supabase.table("profiles").select("ai_preferences").eq("id", user["id"]).execute()
+        blacklist = []
+        if profile_response.data and profile_response.data[0].get("ai_preferences"):
+            blacklist = profile_response.data[0]["ai_preferences"].get("blacklisted_documents", [])
+
         # Verify case belongs to user
         case_result = (
             supabase.table("cases").select("*").eq("id", case_id).eq("user_id", user["id"]).execute()
@@ -473,6 +479,12 @@ async def import_clio_data(
         # Save communications as document entries
         for idx, comm in enumerate(communications, 1):
             try:
+                # Check blacklist
+                if any(comm.subject and comm.subject.lower() == bl.lower() for bl in blacklist):
+                    logger.info(f"Skipping blacklisted communication: {comm.subject}")
+                    items_processed += 1
+                    continue
+
                 # Create a text document for each communication
                 content = f"Subject: {comm.subject}\n"
                 content += f"Date: {comm.date}\n"
@@ -524,6 +536,13 @@ async def import_clio_data(
         for idx, note in enumerate(notes, 1):
             try:
                 note_subject = note.get("subject", "No Subject")
+                
+                # Check blacklist
+                if any(note_subject.lower() == bl.lower() for bl in blacklist):
+                    logger.info(f"Skipping blacklisted note: {note_subject}")
+                    items_processed += 1
+                    continue
+
                 note_detail = note.get("detail", "")
                 note_date = note.get("date", "")
 
@@ -653,6 +672,7 @@ async def import_clio_data(
                         supabase_client=supabase,
                         is_intake_form=is_intake,
                         content_type=content_type,
+                        blacklist=blacklist,
                     )
 
                     # Track compression statistics if compressed

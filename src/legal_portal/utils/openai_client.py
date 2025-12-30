@@ -6,11 +6,11 @@ import json
 import os
 import re
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, AsyncGenerator
 
 import httpx
 import openai
-from openai import OpenAI
+from openai import OpenAI, AsyncOpenAI
 
 from legal_portal.utils.logging_config import get_module_logger
 
@@ -30,17 +30,24 @@ class OpenAIClient:
 
         """
         # Configure HTTP client with appropriate timeouts for cloud environments
-        http_client = httpx.Client(
-            timeout=httpx.Timeout(
-                connect=10.0,  # Connection timeout
-                read=60.0,  # Read timeout
-                write=30.0,  # Write timeout
-                pool=120.0,  # Pool timeout
-            ),
-            limits=httpx.Limits(max_connections=100, max_keepalive_connections=20),
+        timeout = httpx.Timeout(
+            connect=10.0,  # Connection timeout
+            read=60.0,  # Read timeout
+            write=30.0,  # Write timeout
+            pool=120.0,  # Pool timeout
+        )
+        limits = httpx.Limits(max_connections=100, max_keepalive_connections=20)
+
+        # Sync client
+        http_client = httpx.Client(timeout=timeout, limits=limits)
+        self.client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"), http_client=http_client, max_retries=3)
+
+        # Async client for streaming and parallel processing
+        async_http_client = httpx.AsyncClient(timeout=timeout, limits=limits)
+        self.async_client = AsyncOpenAI(
+            api_key=os.getenv("OPENAI_API_KEY"), http_client=async_http_client, max_retries=3
         )
 
-        self.client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"), http_client=http_client, max_retries=3)
         self.default_model = "gpt-4o"
         self.fallback_model = "gpt-4o-mini"
         self.max_retries = 3
@@ -368,6 +375,137 @@ class OpenAIClient:
             raise
         except Exception as e:
             logger.error(f"Unexpected error in chat completion: {e}")
+            raise
+
+    async def create_chat_completion_async(
+        self,
+        model: str,
+        messages: List[Dict[str, str]],
+        temperature: float = 0.3,
+        max_tokens: Optional[int] = None,
+        response_format: Optional[Dict[str, str]] = None,
+    ) -> Dict[str, Any]:
+        """Async version of create_chat_completion for parallel processing.
+
+        Args:
+        ----
+            model: Model to use (e.g., "gpt-4o", "gpt-4o-mini")
+            messages: List of message dicts with 'role' and 'content'
+            temperature: Sampling temperature (0.0-2.0)
+            max_tokens: Maximum tokens to generate (None for model default)
+            response_format: Optional dict to specify response format (e.g., {"type": "json_object"})
+
+        Returns:
+        -------
+            Dictionary with:
+                - content: The text response from the model
+                - usage: Dict with prompt_tokens, completion_tokens, total_tokens
+                - model: The model used
+
+        Raises:
+        ------
+            Exception: On API errors (logged internally)
+
+        """
+        try:
+            logger.info(
+                f"Making async chat completion request with {model}",
+                extra={
+                    "model": model,
+                    "temperature": temperature,
+                    "max_tokens": max_tokens,
+                    "message_count": len(messages),
+                },
+            )
+
+            # Build request parameters
+            request_params = {
+                "model": model,
+                "messages": messages,
+                "temperature": temperature,
+            }
+
+            if max_tokens is not None:
+                request_params["max_tokens"] = max_tokens
+
+            if response_format is not None:
+                request_params["response_format"] = response_format
+
+            # Make the API call
+            response = await self.async_client.chat.completions.create(**request_params)
+
+            content = response.choices[0].message.content
+            usage = response.usage
+
+            logger.info(
+                "Async chat completion successful",
+                extra={
+                    "model": model,
+                    "prompt_tokens": usage.prompt_tokens,
+                    "completion_tokens": usage.completion_tokens,
+                    "total_tokens": usage.total_tokens,
+                    "response_length": len(content) if content else 0,
+                },
+            )
+
+            return {
+                "content": content,
+                "usage": {
+                    "prompt_tokens": usage.prompt_tokens,
+                    "completion_tokens": usage.completion_tokens,
+                    "total_tokens": usage.total_tokens,
+                },
+                "model": model,
+            }
+
+        except openai.RateLimitError as e:
+            logger.error(f"Async rate limit error: {e}")
+            raise
+        except openai.APIError as e:
+            logger.error(f"Async API error: {e}")
+            raise
+        except Exception as e:
+            logger.error(f"Unexpected error in async chat completion: {e}")
+            raise
+
+    async def create_chat_completion_stream(
+        self,
+        model: str,
+        messages: List[Dict[str, str]],
+        temperature: float = 0.3,
+        max_tokens: Optional[int] = None,
+    ) -> AsyncGenerator[str, None]:
+        """Stream chat completion tokens.
+
+        Args:
+        ----
+            model: Model to use (e.g., "gpt-4o", "gpt-4o-mini")
+            messages: List of message dicts with 'role' and 'content'
+            temperature: Sampling temperature (0.0-2.0)
+            max_tokens: Maximum tokens to generate (None for model default)
+
+        Yields:
+        ------
+            Tokens as they are generated by the model.
+
+        """
+        try:
+            logger.info(f"Starting async chat stream with {model}")
+
+            stream = await self.async_client.chat.completions.create(
+                model=model,
+                messages=messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                stream=True,
+            )
+
+            async for chunk in stream:
+                if chunk.choices and chunk.choices[0].delta.content:
+                    yield chunk.choices[0].delta.content
+
+        except Exception as e:
+            logger.error(f"Error in async chat stream: {e}")
             raise
 
     def _create_error_response(self, error_type: str, exception: Optional[Exception]) -> Dict[str, Any]:

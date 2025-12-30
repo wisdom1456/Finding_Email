@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import os
 import re
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, AsyncGenerator, Dict
 
 import markdown2
 from openai import (
@@ -520,6 +520,94 @@ class JsonProcessingService:
         )
 
         return html_content
+
+    async def stream_findings_letter_adaptive(
+        self,
+        intake_content: str,
+        fact_matrix,  # FactMatrix
+        legal_analysis,  # DeepAnalysis
+        structure_guidance,  # LetterStructure
+        verified_statutes: list,
+        attorney_name: str = None,
+        firm_name: str = None,
+        confirmed_qa_pairs: list = None,
+        contact_phone: str = None,
+        contact_email: str = None,
+        quality_context: str = "",
+        clio_matter_context: str = "",
+        jurisdiction: str = "Florida",
+        original_documents: Optional[Dict[str, str]] = None,
+    ) -> AsyncGenerator[str, None]:
+        """Stream adaptive findings letter generation.
+
+        Note: This bypasses the formatting polish pass for real-time delivery.
+        """
+        # Format structured analysis for prompt
+        structured_context = self._format_multi_stage_context(
+            fact_matrix, legal_analysis, structure_guidance, verified_statutes,
+            original_documents=original_documents
+        )
+
+        # Build statute context
+        statute_context = ""
+        if verified_statutes:
+            statute_prefix = "FLORIDA" if jurisdiction == "Florida" else "NEW MEXICO"
+            statute_context = f"\n\nVERIFIED {statute_prefix} STATUTES:\n\n"
+            for statute in verified_statutes:
+                statute_context += f"{statute['citation']}: {statute['title']}\n"
+                statute_context += f"Summary: {statute['summary']}\n"
+                statute_context += f"Relevance: {statute['relevance']}\n\n"
+
+        # Combine contexts
+        full_quality_context = quality_context
+        if clio_matter_context:
+            full_quality_context = f"{full_quality_context}\n\n{clio_matter_context}"
+
+        # Load enhanced prompt template
+        prompt_template = self._load_prompt_template(jurisdiction=jurisdiction)
+
+        # Signature details
+        attorney_name = attorney_name or "Senior Partner"
+        contact_phone = contact_phone or ("(727) 275-9575" if jurisdiction == "Florida" else "(505) 555-0199")
+        contact_email_value = contact_email or "[EMAIL PLACEHOLDER]"
+
+        # Format prompt
+        prompt = prompt_template.format(
+            qa_context=confirmed_qa_pairs or "No user-confirmed Q&A pairs available.",
+            intake_data=intake_content[:5000],
+            document_summaries=structured_context,
+            quality_context=full_quality_context,
+            statute_context=statute_context,
+            attorney_name=attorney_name,
+            attorney_title="Senior Partner",
+            firm_name=firm_name or "",
+            contact_phone=contact_phone,
+            contact_email=contact_email_value,
+            clio_matter_context=clio_matter_context,
+        )
+
+        # Add structure instruction
+        structure_instruction = self._create_structure_instruction(structure_guidance)
+        prompt = f"{prompt}\n\n{structure_instruction}"
+
+        logger.info(f"Streaming adaptive findings letter for {jurisdiction}")
+        
+        async for token in self.client.create_chat_completion_stream(
+            model="gpt-4o",
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "You are a senior legal writing assistant. Generate an attorney-quality "
+                        "findings letter following the adaptive structure guidance provided."
+                    ),
+                },
+                {"role": "user", "content": prompt},
+            ],
+            temperature=0.3,
+            max_tokens=8000,
+        ):
+            yield token
 
     def _format_multi_stage_context(
         self, fact_matrix, legal_analysis, structure_guidance, verified_statutes, original_documents: Optional[Dict[str, str]] = None

@@ -312,57 +312,6 @@ async def process_case_documents(
                 else:
                     doc.extraction_quality = "high"
 
-        # Load settings early so we can use it for statute recommendations
-        settings = get_settings()
-
-        # Pass new context to summary generation
-        # Get statute recommendations early so we can use them in document summarization
-        statute_context = ""
-        if settings.suggest_statutes:
-            try:
-                recommendation_service = StatuteRecommendationService(jurisdiction=jurisdiction)
-                legal_issues = []
-                if review_data and "legal_issues" in review_data:
-                    legal_issues = review_data.get("legal_issues", [])
-                case_type = case_info.get("caseType") if case_info else None
-                recommendations = await asyncio.to_thread(
-                    recommendation_service.recommend_statutes,
-                    case_facts=intake_content[:2000],
-                    legal_issues=legal_issues,
-                    case_type=case_type,
-                    limit=5,
-                )
-                if recommendations:
-                    statute_context = recommendation_service.get_statute_context_for_prompt(
-                        recommendations, max_statutes=5
-                    )
-                    logger.info(
-                        f"Generated {len(recommendations)} statute recommendations for document analysis",
-                        extra={"recommendation_count": len(recommendations)},
-                    )
-            except Exception as e:
-                logger.warning(f"Failed to generate statute recommendations: {e}", exc_info=True)
-
-        if progress_callback:
-            await progress_callback(
-                "Analyzing extracted content...",
-                [d.file_name for d in all_processed_docs],
-                "document_analysis",
-                15,
-            )
-        structured_summaries, errors = await _generate_document_summaries(
-            intake_content,
-            all_processed_docs,
-            openai_client_wrapper,
-            json_processing_service,  # Pass the instance here
-            review_data,  # Pass through
-            progress_callback,
-            statute_context,  # NEW: Pass statute context
-            jurisdiction=jurisdiction,  # NEW: Pass jurisdiction
-        )
-
-        # ... rest of the function continues as before ...
-
         # Aggregate quality results and create context string
         aggregated_quality_report = _aggregate_quality_results(quality_results)
         quality_context = _format_quality_context(aggregated_quality_report)
@@ -401,13 +350,14 @@ async def process_case_documents(
         if progress_callback:
             await progress_callback(
                 "Analyzing extracted content...",
-                [d.file_name for d in processed_case_docs],
+                [d.file_name for d in all_processed_docs],
                 "document_analysis",
                 15,
+                stage={"id": "doc_summary", "name": "Document Analysis", "status": "active", "progress": 10}
             )
         structured_summaries, errors = await _generate_document_summaries(
             intake_content,
-            processed_case_docs,
+            all_processed_docs,
             openai_client_wrapper,
             json_processing_service,  # Pass the instance here
             review_data,  # Pass through
@@ -415,6 +365,15 @@ async def process_case_documents(
             statute_context,  # NEW: Pass statute context
             jurisdiction=jurisdiction,  # NEW: Pass jurisdiction
         )
+
+        if progress_callback:
+            await progress_callback(
+                "Document analysis complete.",
+                [],
+                "document_analysis",
+                20,
+                stage={"id": "doc_summary", "name": "Document Analysis", "status": "completed", "progress": 100}
+            )
 
         # Stage 3: Log Per-Document Summaries
         if diag_logger:
@@ -946,86 +905,104 @@ OUTPUT FORMAT (STRICT JSON):
 Return ONLY valid JSON, no markdown code blocks.
 """
     else:
-        # Check if we need batching (more than 8 documents or large content)
+        # Optimization: Use parallel processing for all document sets > 3 docs
+        # This provides better UI feedback and "shows off" the parallel capabilities
         total_estimated_tokens = sum(_estimate_tokens(doc.content) for doc in case_documents)
-        needs_batching = len(case_documents) > 8 or total_estimated_tokens > 40000
+        
+        # We always parallelize if there are more than 3 documents, 
+        # or if the total token count is high.
+        needs_parallel = len(case_documents) > 3 or total_estimated_tokens > 30000
 
-        if needs_batching:
+        if needs_parallel:
             logger.info(
-                f"📊 Large document set detected: {len(case_documents)} docs, ~{total_estimated_tokens:,} tokens"  # noqa: E501
+                f"🚀 Parallelizing analysis for {len(case_documents)} docs (~{total_estimated_tokens:,} tokens)"
             )
-            logger.info("Using intelligent batching to process all documents...")
 
-            # Create smart batches
-            batches = _create_smart_batches(case_documents)  # Uses configured max_tokens_per_batch
-            logger.info(f"Created {len(batches)} batches for processing")
+            # Create batches - if we want high parallelism, we keep batches small
+            # For 4-10 docs, we might just do 1 doc per batch for maximum UI feedback
+            if len(case_documents) <= 10:
+                batches = [[doc] for doc in case_documents]
+            else:
+                batches = _create_smart_batches(case_documents)
+                
+            logger.info(f"Created {len(batches)} parallel units for processing")
 
-            # Process each batch with detailed progress
-            all_summaries = []
-            total_docs_in_all_batches = len(case_documents)
+            # Process units in parallel with concurrency limit
+            semaphore = asyncio.Semaphore(5)  # Higher concurrency for individual docs
+            total_docs_count = len(case_documents)
             docs_processed_count = 0
+            all_summaries = []
 
-            for batch_num, batch in enumerate(batches, 1):
-                logger.info(f"📦 Processing batch {batch_num}/{len(batches)} ({len(batch)} documents)...")
+            async def process_unit_with_progress(unit, unit_num):
+                nonlocal docs_processed_count
+                async with semaphore:
+                    # Update UI that these docs are now being processed
+                    if progress_callback:
+                        for doc in unit:
+                            await progress_callback(
+                                message=f"Analyzing {doc.file_name}...",
+                                phase="document_analysis",
+                                document={"id": doc.id if hasattr(doc, 'id') else f"doc_{unit_num}", "name": doc.file_name, "status": "processing"}
+                            )
 
-                # Update UI progress if callback available
-                try:
-                    import streamlit as st
-
-                    if (
-                        hasattr(st, "session_state")
-                        and hasattr(st.session_state, "progress_callback")
-                        and st.session_state.progress_callback
-                    ):
-                        progress_pct = (batch_num - 1) / len(batches)
-                        st.session_state.progress_callback(
-                            progress_pct,
-                            f"Analyzing batch {batch_num} of {len(batches)} ({len(all_summaries)}/{len(case_documents)} documents complete)",  # noqa: E501
-                        )
-                except (ImportError, AttributeError):
-                    pass  # Streamlit not available or progress callback not set
-
-                batch_result, batch_errors = await _process_document_batch(
-                    batch,
-                    intake_content,
-                    batch_num,
-                    len(batches),
-                    openai_client_wrapper,
-                    json_processing_service,  # Pass json_processing_service
-                    review_data,  # Pass review_data
-                    errors,
-                    statute_context,  # NEW: Pass statute context
-                    jurisdiction=jurisdiction,  # NEW: Pass jurisdiction
-                )
-
-                if batch_result:
-                    all_summaries.extend(batch_result)
-                if batch_errors:
-                    errors.extend(batch_errors)
-
-                docs_processed_count += len(batch)
-
-                # Update UI progress if callback available
-                if progress_callback:
-                    # Calculate percentage within the 15-75% range
-                    progress_pct = 15 + int((docs_processed_count / total_docs_in_all_batches) * 60)
-                    await progress_callback(
-                        message=f"Analyzed {docs_processed_count} of {total_docs_in_all_batches} documents...",  # noqa: E501
-                        docs_processed=[s.document_name for s in all_summaries],
-                        phase="document_analysis",
-                        percent=progress_pct,
+                    unit_result, unit_errors = await _process_document_batch(
+                        unit,
+                        intake_content,
+                        unit_num,
+                        len(batches),
+                        openai_client_wrapper,
+                        json_processing_service,
+                        review_data,
+                        [],
+                        statute_context,
+                        jurisdiction=jurisdiction,
                     )
+                    
+                    docs_processed_count += len(unit)
+                    
+                    # Update UI progress as each unit completes
+                    if progress_callback:
+                        progress_pct = 15 + int((docs_processed_count / total_docs_count) * 60)
+                        
+                        # Mark each doc in the unit as completed in the UI
+                        for i, summary in enumerate(unit_result or []):
+                            doc_name = summary.document_name
+                            # Try to find the original doc to get its ID
+                            orig_doc = next((d for d in unit if d.file_name == doc_name), None)
+                            doc_id = orig_doc.id if orig_doc and hasattr(orig_doc, 'id') else f"doc_{unit_num}_{i}"
+                            
+                            await progress_callback(
+                                message=f"Completed analysis of {doc_name}",
+                                docs_processed=[doc_name],
+                                phase="document_analysis",
+                                percent=progress_pct,
+                                document={"id": doc_id, "name": doc_name, "status": "completed"}
+                            )
+                    
+                    return unit_result, unit_errors
+
+            # Create tasks for all units
+            tasks = [process_unit_with_progress(unit, i) for i, unit in enumerate(batches, 1)]
+            
+            # Execute all units in parallel (respecting semaphore)
+            results_with_errors = await asyncio.gather(*tasks)
+
+            for unit_result, unit_errors in results_with_errors:
+                if unit_result:
+                    all_summaries.extend(unit_result)
+                if unit_errors:
+                    errors.extend(unit_errors)
 
             logger.info(
-                f"✅ Batch processing complete: {len(all_summaries)} total summaries from {len(batches)} batches"  # noqa: E501
+                f"✅ Parallel processing complete: {len(all_summaries)} total summaries from {len(batches)} units"
             )
 
             return (
                 all_summaries,
                 errors,
-            )  # Return empty errors for now, as errors are handled by _process_document_batch
+            )
 
-        # Original single-call path for smaller document sets
+        # Original single-call path for very small document sets (1-3 docs)
         logger.info(f"Processing {len(case_documents)} documents in single call for {jurisdiction}...")
 
         # Build the flexible JSON prompt for documents

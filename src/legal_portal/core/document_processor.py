@@ -84,6 +84,7 @@ class DocumentProcessor:
         is_intake_form: bool = False,
         content_type: Optional[str] = None,
         skip_extraction: bool = False,
+        blacklist: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
         """Unified method to validate, compress, and upload a document.
 
@@ -101,6 +102,7 @@ class DocumentProcessor:
             content_type: Optional MIME type override
             skip_extraction: If True, skip text extraction (useful for bulk imports
                            where extraction can be done on-demand later)
+            blacklist: Optional list of blacklisted document names (case-insensitive)
 
         Returns:
         -------
@@ -115,6 +117,33 @@ class DocumentProcessor:
         temp_files = []
 
         try:
+            # 0. Check blacklist before doing any work
+            if blacklist:
+                blacklisted_names = [name.lower() for name in blacklist]
+                if filename.lower() in blacklisted_names:
+                    logger.info(f"Document '{filename}' is blacklisted, marking as SKIPPED.")
+                    from legal_portal.core.data_models import DocumentStatus
+                    return {
+                        "case_id": case_id,
+                        "file_name": filename,
+                        "file_type": content_type or "unknown",
+                        "file_size": len(file_content),
+                        "storage_path": None,
+                        "status": DocumentStatus.SKIPPED,
+                        "metadata": {
+                            "is_intake_form": is_intake_form,
+                            "original_filename": filename,
+                            "skipped_reason": "Blacklisted by user preference",
+                        },
+                        "extracted_text": None,
+                        "extraction_method": "skipped",
+                        "extraction_quality": "none",
+                        "ocr_provider": None,
+                        "extraction_error": "Document name is in user's blacklist.",
+                        "page_count": None,
+                        "extracted_at": datetime.utcnow().isoformat(),
+                    }
+
             # 1. Validate file size
             max_size = settings.max_file_size_mb * 1024 * 1024
             try:

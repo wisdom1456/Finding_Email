@@ -367,6 +367,12 @@ async def process_case_documents(
         )
 
         if progress_callback:
+            # #region agent log - H7: doc_summary complete
+            import json as _json
+            _debug_log_path = "/Users/BRFlorida/Projects/Work/Finding_Emails/.cursor/debug.log"
+            with open(_debug_log_path, "a") as _f:
+                _f.write(_json.dumps({"location": "main_processor.py:375", "message": "Publishing doc_summary COMPLETED", "hypothesisId": "H7", "data": {"num_summaries": len(structured_summaries)}, "timestamp": time.time()}) + "\n")
+            # #endregion
             await progress_callback(
                 "Document analysis complete.",
                 [],

@@ -679,7 +679,30 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
         processed_case_docs = []
         skipped_documents = []
 
+        # #region agent log - H1-H5: Document skip analysis
+        import json as _json
+        _debug_log_path = "/Users/BRFlorida/Projects/Work/Finding_Emails/.cursor/debug.log"
+        with open(_debug_log_path, "a") as _f:
+            _f.write(_json.dumps({"location": "analysis.py:682", "message": "Starting document analysis", "hypothesisId": "H1-H5", "data": {"total_documents": len(documents), "case_id": case_id}, "timestamp": time.time()}) + "\n")
+        # #endregion
+
         for doc in documents:
+            # #region agent log - H1-H5: Per-document analysis
+            _doc_info = {
+                "file_name": doc.get("file_name"),
+                "status": doc.get("status"),
+                "is_flagged_as_junk": doc.get("is_flagged_as_junk"),
+                "has_extracted_text": bool(doc.get("extracted_text")),
+                "extracted_text_len": len(doc.get("extracted_text") or ""),
+                "has_manual_text": bool(doc.get("manual_text")),
+                "manual_text_len": len(doc.get("manual_text") or ""),
+                "extraction_quality": doc.get("extraction_quality"),
+                "metadata_excluded": doc.get("metadata", {}).get("excluded") if doc.get("metadata") else None,
+            }
+            with open(_debug_log_path, "a") as _f:
+                _f.write(_json.dumps({"location": "analysis.py:695", "message": "Analyzing document", "hypothesisId": "H1-H5", "data": _doc_info, "timestamp": time.time()}) + "\n")
+            # #endregion
+
             # Skip docs with critical issues or skipped status
             status = doc.get("status")
             if status in [
@@ -687,6 +710,10 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
                 DocumentStatus.CORRUPTED,
                 DocumentStatus.SKIPPED,
             ]:
+                # #region agent log - H1: Status skip
+                with open(_debug_log_path, "a") as _f:
+                    _f.write(_json.dumps({"location": "analysis.py:705", "message": "SKIPPED: Bad status", "hypothesisId": "H1", "data": {"file_name": doc["file_name"], "status": status}, "timestamp": time.time()}) + "\n")
+                # #endregion
                 skipped_documents.append(
                     SkippedDocument(
                         document_id=doc["id"],
@@ -699,11 +726,19 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
                 continue
 
             if doc.get("is_flagged_as_junk"):
+                # #region agent log - H3: Junk skip
+                with open(_debug_log_path, "a") as _f:
+                    _f.write(_json.dumps({"location": "analysis.py:720", "message": "SKIPPED: Flagged as junk", "hypothesisId": "H3", "data": {"file_name": doc["file_name"]}, "timestamp": time.time()}) + "\n")
+                # #endregion
                 continue
 
             # Get text from manual_text (priority) or extracted_text
             text = doc.get("manual_text") or doc.get("extracted_text")
             if not text:
+                # #region agent log - H2: Missing text skip
+                with open(_debug_log_path, "a") as _f:
+                    _f.write(_json.dumps({"location": "analysis.py:732", "message": "SKIPPED: No text", "hypothesisId": "H2", "data": {"file_name": doc["file_name"], "status": doc.get("status"), "extraction_method": doc.get("extraction_method")}, "timestamp": time.time()}) + "\n")
+                # #endregion
                 skipped_documents.append(
                     SkippedDocument(
                         document_id=doc["id"],
@@ -743,6 +778,11 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
                 processed_intake.append(pdoc)
             else:
                 processed_case_docs.append(pdoc)
+
+        # #region agent log - H1-H5: Document processing summary
+        with open(_debug_log_path, "a") as _f:
+            _f.write(_json.dumps({"location": "analysis.py:780", "message": "Document processing complete", "hypothesisId": "H1-H5", "data": {"processed_intake": len(processed_intake), "processed_case_docs": len(processed_case_docs), "skipped_count": len(skipped_documents), "skipped_reasons": [{"name": s.file_name, "reason": s.reason, "error_type": s.error_type} for s in skipped_documents]}, "timestamp": time.time()}) + "\n")
+        # #endregion
 
         # Ensure we have at least an intake form
         if not processed_intake:
@@ -822,7 +862,7 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
             # Add stats periodically or on every call
             elapsed = time.time() - analysis_start_time
             payload["stats"] = {
-                "elapsed_seconds": elapsed,
+                "elapsedSeconds": elapsed,  # camelCase for frontend
                 "tokens_used": total_tokens_used,
                 "model": "gpt-4o",  # Default model
             }

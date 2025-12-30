@@ -23,7 +23,7 @@
         
         {#if i < stages.length - 1}
           <div class="hidden md:flex absolute top-1/2 -right-4 -translate-y-1/2 z-0">
-            <ArrowRight class={`w-4 h-4 transition-colors duration-500 ${stage.status === 'completed' ? 'text-accent' : 'text-gray-300'}`} />
+            <ArrowRight class={`w-4 h-4 transition-colors duration-500 ${stage.status === 'completed' ? 'text-accent' : 'text-gray-600'}`} />
           </div>
           
           <!-- Particle Flow Effect -->

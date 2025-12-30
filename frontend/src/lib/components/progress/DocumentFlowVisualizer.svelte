@@ -19,9 +19,9 @@
   const errorCount = $derived(documents.filter(d => d.status === 'error').length);
 </script>
 
-<div class="bg-contrast/5 rounded-2xl p-6 border border-contrast/10">
+<div class="bg-white/5 rounded-2xl p-6 border border-white/10">
   <div class="flex items-center justify-between mb-6">
-    <h3 class="text-sm font-black uppercase tracking-widest text-contrast/60">
+    <h3 class="text-sm font-black uppercase tracking-widest text-white/60">
       Document Flow
     </h3>
     <div class="flex gap-4">
@@ -29,8 +29,8 @@
         <div class="w-2 h-2 rounded-full bg-accent animate-pulse"></div>
         {processingCount} Processing
       </div>
-      <div class="flex items-center gap-1.5 text-[10px] font-bold text-gray-500">
-        <div class="w-2 h-2 rounded-full bg-gray-300"></div>
+      <div class="flex items-center gap-1.5 text-[10px] font-bold text-gray-400">
+        <div class="w-2 h-2 rounded-full bg-gray-500"></div>
         {completedCount} Ready
       </div>
     </div>
@@ -41,9 +41,9 @@
       <div 
         class={`
           relative group p-3 rounded-xl border transition-all duration-300
-          ${doc.status === 'processing' ? 'bg-accent/5 border-accent animate-pulse' : 'bg-white border-gray-100'}
-          ${doc.status === 'completed' ? 'border-accent/30' : ''}
-          ${doc.status === 'error' ? 'bg-red-50 border-red-200' : ''}
+          ${doc.status === 'processing' ? 'bg-accent/20 border-accent shadow-lg shadow-accent/10' : 'bg-white/5 border-white/10'}
+          ${doc.status === 'completed' ? 'bg-accent/10 border-accent/40' : ''}
+          ${doc.status === 'error' ? 'bg-red-500/20 border-red-400' : ''}
         `}
         in:fade
       >
@@ -55,9 +55,9 @@
         <div class="flex flex-col items-center text-center gap-2">
           <div class={`
             p-2 rounded-lg 
-            ${doc.status === 'processing' ? 'text-accent' : 'text-gray-400'}
+            ${doc.status === 'processing' ? 'text-accent' : 'text-gray-500'}
             ${doc.status === 'completed' ? 'text-accent' : ''}
-            ${doc.status === 'error' ? 'text-red-500' : ''}
+            ${doc.status === 'error' ? 'text-red-400' : ''}
           `}>
             {#if doc.status === 'processing'}
               <Loader2 class="w-6 h-6 animate-spin" />
@@ -69,13 +69,13 @@
               <FileText class="w-6 h-6" />
             {/if}
           </div>
-          <span class="text-[10px] font-bold text-contrast truncate w-full px-1">
+          <span class="text-[10px] font-bold text-white truncate w-full px-1">
             {doc.name}
           </span>
         </div>
 
         {#if doc.status === 'completed'}
-          <div class="absolute -top-1 -right-1 bg-accent text-white p-0.5 rounded-full shadow-sm">
+          <div class="absolute -top-1 -right-1 bg-accent text-white p-0.5 rounded-full shadow-sm shadow-accent/30">
             <FileCheck class="w-2.5 h-2.5" />
           </div>
         {/if}
@@ -84,10 +84,9 @@
   </div>
 
   {#if documents.length === 0}
-    <div class="py-12 flex flex-col items-center justify-center text-gray-400">
+    <div class="py-12 flex flex-col items-center justify-center text-gray-500">
       <FileText class="w-12 h-12 mb-2 opacity-20" />
       <p class="text-xs font-medium">No documents detected in stream yet</p>
     </div>
   {/if}
 </div>
-

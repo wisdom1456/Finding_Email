@@ -68,6 +68,13 @@ class MultiStageAnalyzer:
         start_time = time.time()
         logger.info(f"Starting multi-stage analysis pipeline for {jurisdiction}")
 
+        # #region agent log - H6: Multi-stage analyzer started
+        import json as _json
+        _debug_log_path = "/Users/BRFlorida/Projects/Work/Finding_Emails/.cursor/debug.log"
+        with open(_debug_log_path, "a") as _f:
+            _f.write(_json.dumps({"location": "multi_stage_analyzer.py:70", "message": "Multi-stage analyzer started", "hypothesisId": "H6", "data": {"jurisdiction": jurisdiction, "num_doc_summaries": len(document_summaries), "has_callback": progress_callback is not None}, "timestamp": time.time()}) + "\n")
+        # #endregion
+
         # Stage 2: Log Intake Content (if not already logged)
         if diag_logger:
             diag_logger.log_stage("stage2_intake_content", intake_content)
@@ -78,6 +85,10 @@ class MultiStageAnalyzer:
 
         # Stage 1: Extract Fact Matrix
         if progress_callback:
+            # #region agent log - H6: Stage 1 fact_matrix starting
+            with open(_debug_log_path, "a") as _f:
+                _f.write(_json.dumps({"location": "multi_stage_analyzer.py:98", "message": "Publishing fact_matrix ACTIVE", "hypothesisId": "H6", "data": {"stage_id": "fact_matrix"}, "timestamp": time.time()}) + "\n")
+            # #endregion
             await progress_callback(
                 "Extracting key facts and timeline...", 
                 [], 

@@ -501,7 +501,7 @@
 			if (!session) throw new Error('Not authenticated');
 
 			const apiUrl = getApiUrl();
-			const response = await fetch(`${apiUrl}/api/analysis/chat/stream/${results.analysis_id}`, {
+			const response = await fetch(`${apiUrl}/api/analysis/${results.analysis_id}/chat/stream`, {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json',

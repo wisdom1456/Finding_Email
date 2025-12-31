@@ -51,11 +51,21 @@
 				headers: { Authorization: `Bearer ${session.access_token}` }
 			});
 
+			// #region agent log
+			fetch('http://127.0.0.1:7242/ingest/4b51e513-bc36-4a25-835a-e2000a0f302b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'+layout.svelte:checkClioStatus',message:'Clio status response',data:{ok:response.ok,status:response.status},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'A-B'})}).catch(()=>{});
+			// #endregion
+
 			if (response.ok) {
 				const status = await response.json();
+				// #region agent log
+				fetch('http://127.0.0.1:7242/ingest/4b51e513-bc36-4a25-835a-e2000a0f302b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'+layout.svelte:checkClioStatus',message:'Clio status parsed',data:{connected:status.connected,clioUserId:status.clio_user_id,expiresAt:status.expires_at,rawKeys:Object.keys(status)},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'B'})}).catch(()=>{});
+				// #endregion
 				clioStore.setConnected(status.connected, status.clio_user_id, status.expires_at);
 			}
-		} catch (error) {
+		} catch (error: any) {
+			// #region agent log
+			fetch('http://127.0.0.1:7242/ingest/4b51e513-bc36-4a25-835a-e2000a0f302b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'+layout.svelte:checkClioStatus:catch',message:'Clio status error',data:{errorType:typeof error,hasMessage:!!error?.message,errorMessage:error?.message,errorString:String(error)},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'A'})}).catch(()=>{});
+			// #endregion
 			// Silently fail - user can still manually check via modal
 			console.log('Could not check Clio status on load:', error);
 		}

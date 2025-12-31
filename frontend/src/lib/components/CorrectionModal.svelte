@@ -3,6 +3,8 @@
 	import { supabase } from '$lib/supabase';
 	import { toastStore } from '$lib/stores/toastStore';
 	import AsyncButton from './ui/AsyncButton.svelte';
+	import Modal from './ui/Modal.svelte';
+	import Badge from './ui/Badge.svelte';
 
 	// Props
 	let {
@@ -16,11 +18,19 @@
 	} = $props();
 
 	// State
+	let isOpen = $state(true);
 	let editedText = $state(document?.manual_text || document?.extracted_text || '');
 	let saving = $state(false);
 	let triggeringExtraction = $state(false);
 	let pdfBlobUrl = $state<string | null>(null);
 	let loadingPreview = $state(true);
+
+	// When modal closes, call parent's onClose
+	$effect(() => {
+		if (!isOpen) {
+			onClose();
+		}
+	});
 
 	// Derived: Quality score based on content
 	let qualityScore = $derived.by(() => {
@@ -128,20 +138,20 @@
 				}),
 			});
 
-			if (!response.ok) {
-				const error = await response.json();
-				throw new Error(error.detail || 'Failed to save');
-			}
-
-			toastStore.success('Document text saved and verified');
-			await onSaved();
-			onClose();
-		} catch (error: any) {
-			toastStore.error(error.message || 'Failed to save');
-		} finally {
-			saving = false;
+		if (!response.ok) {
+			const error = await response.json();
+			throw new Error(error.detail || 'Failed to save');
 		}
+
+		toastStore.success('Document text saved and verified');
+		await onSaved();
+		isOpen = false;
+	} catch (error: any) {
+		toastStore.error(error.message || 'Failed to save');
+	} finally {
+		saving = false;
 	}
+}
 
 	async function triggerReExtraction() {
 		triggeringExtraction = true;
@@ -198,158 +208,140 @@
 	}
 </script>
 
-<!-- Modal Backdrop -->
-<div
-	class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50 flex items-center justify-center p-4"
-	role="dialog"
-	aria-modal="true"
-	aria-labelledby="correction-modal-title"
+<!-- Modal Wrapper -->
+<Modal
+	bind:open={isOpen}
+	title="Edit Extracted Text"
+	size="full"
 >
-	<div class="relative bg-white rounded-lg shadow-xl max-w-7xl w-full max-h-[90vh] flex flex-col">
-		<!-- Header -->
-		<div class="flex items-center justify-between px-6 py-4 border-b border-gray-200">
-			<div>
-				<h2 id="correction-modal-title" class="text-lg font-medium text-gray-900">
-					Edit Extracted Text
-				</h2>
-				<p class="text-sm text-gray-500 mt-1">
-					{document.file_name}
-				</p>
-			</div>
-			<div class="flex items-center gap-4">
-				<!-- Real-time Quality Score -->
-				<div class="flex items-center gap-2 px-3 py-1.5 rounded-lg border {getQualityColor(qualityScore.level)}">
-					<span class="text-sm font-medium">Quality:</span>
-					<span class="text-lg font-bold">{qualityScore.score.toFixed(1)}/10</span>
-					<span class="text-xs uppercase font-medium">({qualityScore.level})</span>
-				</div>
-				<button
-					onclick={onClose}
-					class="text-gray-400 hover:text-gray-500 transition-colors"
-					aria-label="Close"
+	<!-- Subtitle in the content area since it's specific to the doc -->
+	<div class="mb-4 px-1">
+		<p class="text-sm text-gray-500">
+			{document.file_name}
+		</p>
+	</div>
+
+	<!-- Content: Side-by-Side Layout -->
+	<div class="flex-1 overflow-hidden flex min-h-[500px] border border-gray-200 rounded-lg">
+		<!-- Left: Preview Panel -->
+		<div class="w-1/2 border-r border-gray-200 flex flex-col">
+			<div class="px-4 py-2 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
+				<span class="text-sm font-medium text-gray-700">Original Document</span>
+				<AsyncButton
+					onclick={triggerReExtraction}
+					loading={triggeringExtraction}
+					variant="secondary"
+					size="sm"
+					loadingText="Extracting..."
 				>
-					<svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-					</svg>
-				</button>
+					Re-Extract Text
+				</AsyncButton>
 			</div>
-		</div>
-
-		<!-- Content: Side-by-Side Layout -->
-		<div class="flex-1 overflow-hidden flex">
-			<!-- Left: Preview Panel -->
-			<div class="w-1/2 border-r border-gray-200 flex flex-col">
-				<div class="px-4 py-2 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
-					<span class="text-sm font-medium text-gray-700">Original Document</span>
-					<AsyncButton
-						onclick={triggerReExtraction}
-						loading={triggeringExtraction}
-						variant="secondary"
-						size="sm"
-						loadingText="Extracting..."
-					>
-						Re-Extract Text
-					</AsyncButton>
-				</div>
-				<div class="flex-1 overflow-auto p-4 bg-gray-100">
-					{#if loadingPreview}
-						<div class="flex items-center justify-center h-full">
-							<svg class="animate-spin h-8 w-8 text-gray-400" fill="none" viewBox="0 0 24 24">
-								<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-								<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-							</svg>
-						</div>
-					{:else if pdfBlobUrl}
-						{#if document.file_type === 'application/pdf'}
-							<iframe
-								src={pdfBlobUrl}
-								class="w-full h-full border border-gray-300 rounded-lg bg-white"
-								title="PDF Preview"
-							></iframe>
-						{:else if document.file_type?.startsWith('image/')}
-							<img
-								src={pdfBlobUrl}
-								alt={document.file_name}
-								class="max-w-full h-auto rounded-lg shadow-lg mx-auto"
-							/>
-						{/if}
-					{:else}
-						<div class="flex flex-col items-center justify-center h-full text-gray-400">
-							<svg class="h-12 w-12 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-							</svg>
-							<p class="text-sm">Preview not available for this file type</p>
-							<p class="text-xs mt-1">{document.file_type}</p>
-						</div>
+			<div class="flex-1 overflow-auto p-4 bg-gray-100">
+				{#if loadingPreview}
+					<div class="flex items-center justify-center h-full">
+						<svg class="animate-spin h-8 w-8 text-gray-400" fill="none" viewBox="0 0 24 24">
+							<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+							<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+						</svg>
+					</div>
+				{:else if pdfBlobUrl}
+					{#if document.file_type === 'application/pdf'}
+						<iframe
+							src={pdfBlobUrl}
+							class="w-full h-full border border-gray-300 rounded-lg bg-white"
+							title="PDF Preview"
+						></iframe>
+					{:else if document.file_type?.startsWith('image/')}
+						<img
+							src={pdfBlobUrl}
+							alt={document.file_name}
+							class="max-w-full h-auto rounded-lg shadow-lg mx-auto"
+						/>
 					{/if}
-				</div>
-			</div>
-
-			<!-- Right: Editor Panel -->
-			<div class="w-1/2 flex flex-col">
-				<div class="px-4 py-2 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
-					<div class="flex items-center gap-2">
-						<span class="text-sm font-medium text-gray-700">Extracted Text</span>
-						{#if hasChanges}
-							<span class="text-xs px-2 py-0.5 bg-amber-100 text-amber-700 rounded-full font-medium">
-								Unsaved Changes
-							</span>
-						{/if}
-					</div>
-					<div class="flex items-center gap-2">
-						<button
-							onclick={copyToClipboard}
-							class="text-sm text-gray-600 hover:text-gray-800 flex items-center gap-1"
-							title="Copy to clipboard"
-						>
-							<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
-							</svg>
-							Copy
-						</button>
-						<button
-							onclick={clearText}
-							class="text-sm text-red-600 hover:text-red-800"
-							title="Clear all text"
-						>
-							Clear
-						</button>
-					</div>
-				</div>
-				<div class="flex-1 p-4">
-					<textarea
-						bind:value={editedText}
-						class="w-full h-full resize-none p-4 font-mono text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-accent focus:border-transparent"
-						placeholder="Paste or type the document text here..."
-					></textarea>
-				</div>
-
-				<!-- Quality Issues -->
-				{#if qualityScore.issues.length > 0}
-					<div class="px-4 pb-2">
-						<div class="flex flex-wrap gap-2">
-							{#each qualityScore.issues as issue}
-								<span class="text-xs px-2 py-1 rounded-full {getQualityColor(qualityScore.level)}">
-									{issue}
-								</span>
-							{/each}
-						</div>
+				{:else}
+					<div class="flex flex-col items-center justify-center h-full text-gray-400">
+						<svg class="h-12 w-12 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+						</svg>
+						<p class="text-sm">Preview not available for this file type</p>
+						<p class="text-xs mt-1">{document.file_type}</p>
 					</div>
 				{/if}
 			</div>
 		</div>
 
-		<!-- Footer -->
-		<div class="flex items-center justify-between px-6 py-4 border-t border-gray-200 bg-gray-50">
+		<!-- Right: Editor Panel -->
+		<div class="w-1/2 flex flex-col">
+			<div class="px-4 py-2 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
+				<div class="flex items-center gap-2">
+					<span class="text-sm font-medium text-gray-700">Extracted Text</span>
+					{#if hasChanges}
+						<Badge variant="warning" size="xs">
+							Unsaved Changes
+						</Badge>
+					{/if}
+				</div>
+				<div class="flex items-center gap-2">
+					<button
+						onclick={copyToClipboard}
+						class="text-sm text-gray-600 hover:text-gray-800 flex items-center gap-1"
+						title="Copy to clipboard"
+					>
+						<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+						</svg>
+						Copy
+					</button>
+					<button
+						onclick={clearText}
+						class="text-sm text-red-600 hover:text-red-800"
+						title="Clear all text"
+					>
+						Clear
+					</button>
+				</div>
+			</div>
+			<div class="flex-1 p-4">
+				<textarea
+					bind:value={editedText}
+					class="w-full h-full resize-none p-4 font-mono text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-accent focus:border-transparent"
+					placeholder="Paste or type the document text here..."
+				></textarea>
+			</div>
+
+			<!-- Quality Issues -->
+			{#if qualityScore.issues.length > 0}
+				<div class="px-4 pb-2">
+					<div class="flex flex-wrap gap-2">
+						{#each qualityScore.issues as issue}
+							<Badge variant={qualityScore.level === 'high' ? 'ready' : qualityScore.level === 'medium' ? 'needs_review' : 'error'} size="xs">
+								{issue}
+							</Badge>
+						{/each}
+					</div>
+				</div>
+			{/if}
+		</div>
+	</div>
+
+	{#snippet footer()}
+		<div class="flex items-center justify-between w-full">
 			<div class="text-sm text-gray-500">
 				{editedText.length.toLocaleString()} characters
 				•
 				{editedText.split(/\s+/).filter((w: string) => w.length > 0).length.toLocaleString()} words
 			</div>
 			<div class="flex items-center gap-3">
+				<!-- Quality Score in footer -->
+				<Badge variant={qualityScore.level === 'high' ? 'ready' : qualityScore.level === 'medium' ? 'needs_review' : 'error'} class="py-1.5 px-3">
+					<span class="mr-1 opacity-70">Quality:</span>
+					<span class="font-bold">{qualityScore.score.toFixed(1)}/10</span>
+				</Badge>
+				
 				<button
 					onclick={onClose}
-					class="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
+					class="btn btn-secondary"
 				>
 					Cancel
 				</button>
@@ -364,6 +356,6 @@
 				</AsyncButton>
 			</div>
 		</div>
-	</div>
-</div>
+	{/snippet}
+</Modal>
 

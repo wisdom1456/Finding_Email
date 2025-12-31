@@ -20,6 +20,9 @@
 	} from 'lucide-svelte';
 	
 	import AsyncButton from './ui/AsyncButton.svelte';
+	import Badge from './ui/Badge.svelte';
+	import Modal from './ui/Modal.svelte';
+	import ConfirmDialog from './ui/ConfirmDialog.svelte';
 	import CorrectionModal from './CorrectionModal.svelte';
 	import RecoveryModal from './RecoveryModal.svelte';
 	import DocumentCard from './DocumentCard.svelte';
@@ -50,6 +53,14 @@
 	let showInstructions = $state(false);
 	let processingDocIds = $state<Set<string>>(new Set());
 	let remainingOcrCount = $state(0);
+
+	// Confirmation dialog state
+	let confirmDialog = $state<{
+		open: boolean;
+		type: 'delete' | 'bulk-delete' | 'skip';
+		docId?: string;
+		count?: number;
+	}>({ open: false, type: 'delete' });
 
 	// Triage Groups
 	let triageGroups = $derived.by(() => {
@@ -152,8 +163,10 @@
 	}
 
 	async function handleDelete(docId: string) {
-		if (!confirm('Are you sure you want to delete this document?')) return;
+		confirmDialog = { open: true, type: 'delete', docId };
+	}
 
+	async function performDelete(docId: string) {
 		try {
 			const { data: { session } } = await supabase.auth.getSession();
 			if (!session) throw new Error('Not authenticated');
@@ -433,7 +446,11 @@
 	}
 
 	async function bulkDelete() {
-		if (selectedDocIds.size === 0 || !confirm(`Delete ${selectedDocIds.size} documents?`)) return;
+		if (selectedDocIds.size === 0) return;
+		confirmDialog = { open: true, type: 'bulk-delete', count: selectedDocIds.size };
+	}
+
+	async function performBulkDelete() {
 		bulkActionLoading = true;
 		try {
 			const { data: { session } } = await supabase.auth.getSession();
@@ -450,8 +467,19 @@
 			toastStore.success(`Deleted ${selectedDocIds.size} documents`);
 			selectedDocIds = new Set();
 			await onDocumentsUpdated();
+		} catch (error: any) {
+			toastStore.error(error.message);
 		} finally {
 			bulkActionLoading = false;
+		}
+	}
+
+	async function handleConfirmAction() {
+		const { type, docId } = confirmDialog;
+		if (type === 'delete' && docId) {
+			await performDelete(docId);
+		} else if (type === 'bulk-delete') {
+			await performBulkDelete();
 		}
 	}
 </script>
@@ -830,75 +858,63 @@
 
 <!-- Document Viewer Modal -->
 {#if viewingDocument}
-	<div
-		role="button"
-		tabindex="0"
-		class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-[100] flex items-center justify-center p-4"
-		onclick={closeDocumentViewer}
-		onkeydown={(e) => e.key === 'Escape' && closeDocumentViewer()}
+	<Modal
+		open={true}
+		title={viewingDocument.file_name}
+		size="full"
 	>
-		<div
-			role="dialog"
-			aria-modal="true"
-			tabindex="-1"
-			class="relative bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] flex flex-col"
-			onclick={(e) => e.stopPropagation()}
-			onkeydown={(e) => e.stopPropagation()}
-		>
-			<!-- Header -->
-			<div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-				<h3 class="text-xl font-bold text-gray-900 truncate">
-					{viewingDocument.file_name}
-				</h3>
-				<button
-					onclick={closeDocumentViewer}
-					class="text-gray-400 hover:text-gray-500 transition-colors"
-				>
-					<MoreHorizontal class="w-6 h-6" />
-				</button>
-			</div>
-
-			<!-- Content -->
-			<div class="flex-1 overflow-auto p-6 bg-gray-50 min-h-[400px]">
-				{#if loadingPreview}
-					<div class="flex flex-col items-center justify-center h-full py-12">
-						<RefreshCw class="w-8 h-8 text-accent animate-spin mb-4" />
-						<p class="text-gray-500 font-medium">Loading preview...</p>
+		<div class="bg-gray-50 min-h-[400px] rounded-lg overflow-hidden">
+			{#if loadingPreview}
+				<div class="flex flex-col items-center justify-center h-full py-12">
+					<RefreshCw class="w-8 h-8 text-accent animate-spin mb-4" />
+					<p class="text-gray-500 font-medium">Loading preview...</p>
+				</div>
+			{:else if pdfBlobUrl}
+				<iframe
+					src={pdfBlobUrl}
+					class="w-full h-full min-h-[600px] border-0 bg-white"
+					title="Document Preview"
+				></iframe>
+			{:else if viewingDocument.extracted_text}
+				<div class="bg-white p-8 border border-gray-200 max-w-none prose prose-sm prose-slate h-full overflow-auto">
+					<pre class="whitespace-pre-wrap font-mono text-xs text-gray-800 leading-relaxed">
+						{viewingDocument.extracted_text}
+					</pre>
+				</div>
+			{:else}
+				<div class="flex flex-col items-center justify-center h-full py-20 text-center">
+					<div class="p-4 rounded-full bg-amber-50 text-amber-500 mb-4">
+						<AlertTriangle class="w-12 w-12" />
 					</div>
-				{:else if pdfBlobUrl}
-					<iframe
-						src={pdfBlobUrl}
-						class="w-full h-full min-h-[600px] border-0 rounded-lg shadow-sm bg-white"
-						title="Document Preview"
-					></iframe>
-				{:else if viewingDocument.extracted_text}
-					<div class="bg-white p-8 rounded-lg shadow-sm border border-gray-200 max-w-none prose prose-sm prose-slate">
-						<pre class="whitespace-pre-wrap font-mono text-xs text-gray-800 leading-relaxed">
-							{viewingDocument.extracted_text}
-						</pre>
-					</div>
-				{:else}
-					<div class="flex flex-col items-center justify-center h-full py-20 text-center">
-						<div class="p-4 rounded-full bg-amber-50 text-amber-500 mb-4">
-							<AlertTriangle class="w-12 h-12" />
-						</div>
-						<h3 class="text-lg font-bold text-gray-900">Preview Unavailable</h3>
-						<p class="text-gray-500 text-sm mt-1 max-w-xs">
-							This document doesn't have a preview available. You can view the extracted text in the correction modal.
-						</p>
-					</div>
-				{/if}
-			</div>
-
-			<!-- Footer -->
-			<div class="px-6 py-4 border-t border-gray-200 flex justify-end">
-				<button
-					onclick={closeDocumentViewer}
-					class="px-6 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold rounded-xl transition-colors"
-				>
-					Close
-				</button>
-			</div>
+					<h3 class="text-lg font-bold text-gray-900">Preview Unavailable</h3>
+					<p class="text-gray-500 text-sm mt-1 max-w-xs mx-auto">
+						This document doesn't have a preview available. You can view the extracted text in the correction modal.
+					</p>
+				</div>
+			{/if}
 		</div>
-	</div>
+
+		{#snippet footer()}
+			<button
+				onclick={closeDocumentViewer}
+				class="btn btn-secondary px-6"
+			>
+				Close
+			</button>
+		{/snippet}
+	</Modal>
 {/if}
+
+<!-- Confirmation Dialog -->
+<ConfirmDialog
+	bind:open={confirmDialog.open}
+	title={confirmDialog.type === 'delete' ? 'Delete Document' : 'Delete Documents'}
+	message={confirmDialog.type === 'delete' 
+		? 'Are you sure you want to delete this document? This cannot be undone.'
+		: `Are you sure you want to delete ${confirmDialog.count} documents? This cannot be undone.`
+	}
+	confirmText="Delete"
+	variant="danger"
+	loading={bulkActionLoading}
+	onConfirm={handleConfirmAction}
+/>

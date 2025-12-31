@@ -18,6 +18,7 @@
 		X
 	} from 'lucide-svelte';
 	import { slide } from 'svelte/transition';
+	import Badge from './ui/Badge.svelte';
 
 	let { 
 		doc, 
@@ -185,9 +186,9 @@
 						<span class="text-xs text-gray-500">{formatSize(doc.file_size)}</span>
 						{#if doc.extraction_quality && doc.status === 'ready'}
 							<span class="text-xs text-gray-400">•</span>
-							<span class={`px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${getQualityColor(doc.extraction_quality === 'high' ? 9 : doc.extraction_quality === 'medium' ? 6 : 3)}`}>
+							<Badge variant={doc.extraction_quality === 'high' ? 'ready' : doc.extraction_quality === 'medium' ? 'needs_review' : 'error'} size="xs">
 								{doc.extraction_quality} Quality
-							</span>
+							</Badge>
 						{/if}
 					</div>
 				</div>
@@ -204,22 +205,17 @@
 			<!-- Quality Score Alert for documents needing attention -->
 			{#if (doc.status === 'needs_review' || doc.status === 'extraction_failed' || (doc.status === 'ready' && !doc.is_verified))}
 				<div class="mt-3 flex items-center gap-3">
-					<div class={`flex items-center gap-2 px-2.5 py-1 rounded-lg border ${
-						calculatedQuality.score === 0 
-							? 'bg-red-100 border-red-300 text-red-700' 
-							: calculatedQuality.level === 'low' 
-								? 'bg-red-50 border-red-200 text-red-600'
-								: calculatedQuality.level === 'medium'
-									? 'bg-amber-50 border-amber-200 text-amber-600'
-									: 'bg-green-50 border-green-200 text-green-600'
-					}`}>
-						<span class="text-xs font-bold">{calculatedQuality.score.toFixed(1)}/10</span>
+					<Badge 
+						variant={calculatedQuality.score === 0 ? 'error' : calculatedQuality.level === 'low' ? 'error' : calculatedQuality.level === 'medium' ? 'needs_review' : 'ready'} 
+						class="font-bold py-1 px-3"
+					>
+						{calculatedQuality.score.toFixed(1)}/10
 						{#if calculatedQuality.score === 0}
-							<span class="text-[10px] font-bold uppercase tracking-wide">NO TEXT</span>
+							<span class="ml-1 opacity-70">NO TEXT</span>
 						{:else}
-							<span class="text-[10px] font-bold uppercase tracking-wide">{calculatedQuality.level}</span>
+							<span class="ml-1 opacity-70">{calculatedQuality.level}</span>
 						{/if}
-					</div>
+					</Badge>
 					{#if calculatedQuality.score === 0}
 						<span class="text-xs font-medium text-red-600">⚠️ Needs text extraction or manual input</span>
 					{/if}

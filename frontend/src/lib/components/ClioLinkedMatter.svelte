@@ -3,6 +3,8 @@
 	import { supabase } from '$lib/supabase';
 	import type { ClioMatterData, CaseData } from '$lib/types';
 	import ClioMatterSearch from './ClioMatterSearch.svelte';
+	import ConfirmDialog from './ui/ConfirmDialog.svelte';
+	import Badge from './ui/Badge.svelte';
 
 	let { 
 		caseId, 
@@ -23,20 +25,14 @@
 	let showChangeMatterModal = $state(false);
 	let showAdvanced = $state(false);
 	let errorMessage = $state('');
+	let showUnlinkConfirm = $state(false);
+	let showChangeMatterConfirm = $state(false);
+	let selectedMatterId = $state<number | null>(null);
 
 	// Determine if this case was created via Clio
 	const createdViaClio = $derived(caseData?.created_via_clio || false);
 
 	async function handleUnlink() {
-		const confirmed = confirm(
-			'Are you sure you want to completely remove the Clio link?\n\n' +
-				'This will delete all imported communications, notes, and documents from this case.'
-		);
-
-		if (!confirmed) {
-			return;
-		}
-
 		unlinking = true;
 		errorMessage = '';
 
@@ -87,17 +83,6 @@
 	}
 
 	async function changeMatter(matterId: number) {
-		const confirmed = confirm(
-			`Replace current matter with new matter?\n\n` +
-				`Old Matter: ${matterData.display_number} - ${matterData.client_name}\n` +
-				`New Matter ID: ${matterId}\n\n` +
-				`This will delete all old Clio documents and import documents from the new matter.`
-		);
-
-		if (!confirmed) {
-			return;
-		}
-
 		changingMatter = true;
 		errorMessage = '';
 
@@ -139,6 +124,18 @@
 			errorMessage = error.message || 'Failed to change matter';
 		} finally {
 			changingMatter = false;
+		}
+	}
+
+	function handleMatterSelection(matterId: number) {
+		selectedMatterId = matterId;
+		showChangeMatterConfirm = true;
+	}
+
+	async function confirmChangeMatter() {
+		if (selectedMatterId !== null) {
+			await changeMatter(selectedMatterId);
+			selectedMatterId = null;
 		}
 	}
 
@@ -204,11 +201,9 @@
 
 					<div class="flex items-center gap-2">
 						<span class="font-medium text-contrast">Status:</span>
-						<span
-							class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-accent/20 text-contrast"
-						>
+						<Badge variant="info" size="sm">
 							{matterData.status}
-						</span>
+						</Badge>
 					</div>
 				</div>
 			</div>
@@ -312,9 +307,9 @@
 					</summary>
 					<div class="mt-2 pl-5">
 						<button
-							onclick={handleUnlink}
+							onclick={() => showUnlinkConfirm = true}
 							disabled={unlinking}
-							class="inline-flex items-center px-3 py-1.5 border border-red-300 rounded-md text-xs font-medium text-red-700 bg-white hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50 disabled:cursor-not-allowed"
+							class="btn btn-secondary text-red-600 hover:text-red-700 border-red-200 hover:border-red-300 text-xs px-3 py-1.5"
 						>
 							{#if unlinking}
 								<svg
@@ -359,7 +354,7 @@
 	{#if errorMessage}
 		<div class="rounded-md bg-red-50 p-4">
 			<div class="flex">
-				<div class="flex-shrink-0">
+				<div class="shrink-0">
 					<svg class="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
 						<path
 							fill-rule="evenodd"
@@ -421,11 +416,30 @@
 				<ClioMatterSearch
 					{caseId}
 					createMode={false}
-					onMatterSelected={async (matterId) => {
-						await changeMatter(matterId);
-					}}
+					onMatterSelected={handleMatterSelection}
 				/>
 			</div>
 		</div>
 	</div>
 {/if}
+
+<!-- Confirmation Dialogs -->
+<ConfirmDialog
+	bind:open={showUnlinkConfirm}
+	title="Remove Clio Link"
+	message="Are you sure you want to completely remove the Clio link? This will delete all imported communications, notes, and documents from this case."
+	confirmText="Remove Link"
+	variant="danger"
+	loading={unlinking}
+	onConfirm={handleUnlink}
+/>
+
+<ConfirmDialog
+	bind:open={showChangeMatterConfirm}
+	title="Change Clio Matter"
+	message={`Replace current matter "${matterData.display_number} - ${matterData.client_name}" with new matter? This will delete all old Clio documents and import documents from the new matter.`}
+	confirmText="Change Matter"
+	variant="warning"
+	loading={changingMatter}
+	onConfirm={confirmChangeMatter}
+/>

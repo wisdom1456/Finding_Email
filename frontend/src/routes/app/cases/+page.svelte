@@ -2,6 +2,8 @@
 	import { onMount } from 'svelte';
 	import { supabase } from '$lib/supabase';
 	import PageHeader from '$lib/components/ui/PageHeader.svelte';
+	import Badge from '$lib/components/ui/Badge.svelte';
+	import ConfirmDialog from '$lib/components/ui/ConfirmDialog.svelte';
 	import { getApiUrl } from '$lib/config';
 	import { toastStore } from '$lib/stores/toastStore';
 	import { Plus, Link2, FileText, Filter, Trash2, XCircle } from 'lucide-svelte';
@@ -13,6 +15,14 @@
 	let showOnlyClioCases = $state(false);
 	let cancellingCaseId = $state<string | null>(null);
 	let deletingCaseId = $state<string | null>(null);
+
+	// Confirmation dialog state
+	let confirmDialog = $state<{
+		open: boolean;
+		type: 'delete' | 'cancel';
+		caseId: string;
+		caseName: string;
+	}>({ open: false, type: 'delete', caseId: '', caseName: '' });
 
 	$effect(() => {
 		if (showOnlyClioCases) {
@@ -47,25 +57,39 @@
 		}
 	}
 
-	async function cancelCase(caseId: string) {
-		const ok = confirm('Cancel the current analysis for this case? This will stop processing and allow you to run a new analysis.');
-		if (!ok) return;
+	function openDeleteDialog(caseId: string, caseName: string, event: MouseEvent) {
+		event.preventDefault();
+		event.stopPropagation();
+		confirmDialog = { open: true, type: 'delete', caseId, caseName };
+	}
 
+	function openCancelDialog(caseId: string, caseName: string, event: MouseEvent) {
+		event.preventDefault();
+		event.stopPropagation();
+		confirmDialog = { open: true, type: 'cancel', caseId, caseName };
+	}
+
+	async function handleConfirmAction() {
+		const { type, caseId } = confirmDialog;
+		
+		if (type === 'delete') {
+			await performDelete(caseId);
+		} else {
+			await performCancel(caseId);
+		}
+	}
+
+	async function performCancel(caseId: string) {
 		cancellingCaseId = caseId;
 		errorMessage = '';
 
 		try {
-			const {
-				data: { session }
-			} = await supabase.auth.getSession();
-
+			const { data: { session } } = await supabase.auth.getSession();
 			if (!session) throw new Error('Not authenticated');
 
 			const response = await fetch(`${getApiUrl()}/api/analysis/cancel-case/${caseId}`, {
 				method: 'POST',
-				headers: {
-					Authorization: `Bearer ${session.access_token}`
-				}
+				headers: { Authorization: `Bearer ${session.access_token}` }
 			});
 
 			if (!response.ok) {
@@ -84,25 +108,17 @@
 		}
 	}
 
-	async function deleteCase(caseId: string) {
-		const ok = confirm('Delete this case and all related documents? This cannot be undone.');
-		if (!ok) return;
-
+	async function performDelete(caseId: string) {
 		deletingCaseId = caseId;
 		errorMessage = '';
 
 		try {
-			const {
-				data: { session }
-			} = await supabase.auth.getSession();
-
+			const { data: { session } } = await supabase.auth.getSession();
 			if (!session) throw new Error('Not authenticated');
 
 			const response = await fetch(`${getApiUrl()}/api/cases/${caseId}`, {
 				method: 'DELETE',
-				headers: {
-					Authorization: `Bearer ${session.access_token}`
-				}
+				headers: { Authorization: `Bearer ${session.access_token}` }
 			});
 
 			if (!response.ok) {
@@ -129,19 +145,6 @@
 			hour: '2-digit',
 			minute: '2-digit'
 		});
-	}
-
-	function getStatusColor(status: string) {
-		switch (status) {
-			case 'completed':
-				return 'bg-accent/10 text-accent';
-			case 'processing':
-				return 'bg-contrast-light/10 text-contrast-light';
-			case 'error':
-				return 'bg-red-100 text-red-700';
-			default:
-				return 'bg-gray-100 text-gray-700';
-		}
 	}
 
 	function getClioMatterNumber(caseItem: any): string | null {
@@ -172,7 +175,7 @@
 		{#snippet children()}
 			<a
 				href="/app/cases/new"
-				class="inline-flex items-center px-4 py-2 rounded-md text-sm font-medium text-white bg-accent hover:bg-accent-hover transition-colors"
+				class="btn bg-accent hover:bg-accent-hover text-white"
 			>
 				<Plus class="h-4 w-4 mr-2" />
 				New Case
@@ -182,7 +185,7 @@
 
 	<!-- Filter Toggle -->
 	{#if clioCount > 0}
-		<div class="flex items-center space-x-3 bg-white px-6 py-4 rounded-lg shadow-card border border-gray-100">
+		<div class="flex items-center space-x-3 bg-white px-6 py-4 rounded-card shadow-card border border-gray-100">
 			<Filter class="h-4 w-4 text-gray-400" />
 			<label class="flex items-center cursor-pointer">
 				<input
@@ -193,9 +196,9 @@
 				<span class="ml-2 text-sm font-medium text-contrast">Show only Clio cases</span>
 			</label>
 			{#if showOnlyClioCases}
-				<span class="text-xs font-semibold text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">
+				<Badge variant="neutral" size="xs">
 					{filteredCases.length} of {cases.length}
-				</span>
+				</Badge>
 			{/if}
 		</div>
 	{/if}
@@ -227,7 +230,7 @@
 					<p class="mt-3 text-sm text-gray-500">No cases yet. Create your first case to get started.</p>
 					<a
 						href="/app/cases/new"
-						class="mt-4 inline-flex items-center px-4 py-2 text-sm font-medium rounded-md text-accent bg-accent/10 hover:bg-accent/20 transition-colors"
+						class="mt-4 inline-flex items-center px-4 py-2 text-sm font-medium rounded-btn text-accent bg-accent/10 hover:bg-accent/20 transition-colors"
 					>
 						<Plus class="h-4 w-4 mr-2" />
 						Create Case
@@ -245,6 +248,7 @@
 							<div class="px-5 py-4">
 								<div class="flex items-start justify-between">
 									<div class="flex-1 min-w-0">
+										<!-- Client Name -->
 										<div class="flex items-center gap-2 mb-1">
 											{#if hasClioMatter(caseItem)}
 												<Link2 class="h-4 w-4 text-accent flex-shrink-0" />
@@ -253,28 +257,33 @@
 												{caseItem.client_name}
 											</p>
 										</div>
+										
+										<!-- Matter Number & Practice Area -->
 										{#if getClioMatterNumber(caseItem)}
-											<p class="text-sm text-gray-600 font-medium">
-												#{getClioMatterNumber(caseItem)}
+											<p class="text-sm text-gray-600">
+												<span class="font-medium">#{getClioMatterNumber(caseItem)}</span>
 												{#if caseItem.clio_matter_data?.practice_area}
-													· {caseItem.clio_matter_data.practice_area}
+													<span class="text-gray-400 mx-1">·</span>
+													<span class="text-gray-500">{caseItem.clio_matter_data.practice_area}</span>
 												{/if}
 											</p>
 										{/if}
+										
+										<!-- Description (de-emphasized) -->
 										{#if caseItem.description}
-											<p class="mt-1 text-sm text-gray-500 line-clamp-2">
+											<p class="mt-1 text-sm text-gray-400 line-clamp-1">
 												{caseItem.description}
 											</p>
 										{/if}
 
-										<!-- Stats Row -->
-										<div class="mt-3 flex items-center flex-wrap gap-2 text-xs">
+										<!-- Metadata Row - simplified -->
+										<div class="mt-3 flex items-center flex-wrap gap-2">
 											{#if caseItem.clio_matter_data}
 												{@const totalDocs = (caseItem.clio_matter_data.communications_count || 0) + 
 													(caseItem.clio_matter_data.notes_count || 0) + 
 													(caseItem.clio_matter_data.documents_count || 0)}
 												{#if totalDocs > 0}
-													<span class="flex items-center text-gray-500">
+													<span class="flex items-center text-xs text-gray-500">
 														<FileText class="h-3.5 w-3.5 mr-1" />
 														{totalDocs} document{totalDocs !== 1 ? 's' : ''}
 													</span>
@@ -282,37 +291,28 @@
 											{/if}
 											
 											{#if hasClioMatter(caseItem)}
-												<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-accent/10 text-accent">
-													Linked to Clio
-												</span>
+												<Badge variant="accent" size="xs">Linked to Clio</Badge>
 											{:else}
-												<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
-													Manual Case
-												</span>
+												<Badge variant="neutral" size="xs">Manual Case</Badge>
 											{/if}
-											<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium {caseItem.jurisdiction === 'New Mexico' ? 'bg-indigo-100 text-indigo-800' : 'bg-orange-100 text-orange-800'}">
+											
+											<Badge variant={caseItem.jurisdiction === 'New Mexico' ? 'new-mexico' : 'florida'} size="xs">
 												{caseItem.jurisdiction || 'Florida'}
-											</span>
+											</Badge>
 										</div>
 									</div>
+									
+									<!-- Right Column: Status & Actions -->
 									<div class="ml-4 flex-shrink-0 flex flex-col items-end space-y-2">
-										<span
-											class="px-2.5 py-0.5 inline-flex text-xs font-medium rounded-full {getStatusColor(caseItem.status)}"
-										>
-											{caseItem.status}
-										</span>
+										<Badge variant={caseItem.status}>{caseItem.status}</Badge>
 
 										<div class="flex items-center gap-2">
 											{#if caseItem.status === 'processing'}
 												<button
 													type="button"
-													class="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+													class="inline-flex items-center gap-1 rounded-btn px-2 py-1 text-xs font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
 													disabled={cancellingCaseId === caseItem.id}
-													onclick={(e) => {
-														e.preventDefault();
-														e.stopPropagation();
-														cancelCase(caseItem.id);
-													}}
+													onclick={(e) => openCancelDialog(caseItem.id, caseItem.client_name, e)}
 													title="Cancel analysis"
 												>
 													<XCircle class="h-3.5 w-3.5" />
@@ -322,13 +322,9 @@
 
 											<button
 												type="button"
-												class="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium bg-red-50 text-red-700 hover:bg-red-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+												class="inline-flex items-center gap-1 rounded-btn px-2 py-1 text-xs font-medium bg-red-50 text-red-700 hover:bg-red-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
 												disabled={deletingCaseId === caseItem.id}
-												onclick={(e) => {
-													e.preventDefault();
-													e.stopPropagation();
-													deleteCase(caseItem.id);
-												}}
+												onclick={(e) => openDeleteDialog(caseItem.id, caseItem.client_name, e)}
 												title="Delete case"
 											>
 												<Trash2 class="h-3.5 w-3.5" />
@@ -337,6 +333,8 @@
 										</div>
 									</div>
 								</div>
+								
+								<!-- Timestamp - subtle footer -->
 								<div class="mt-3 text-xs text-gray-400">
 									Created {formatDate(caseItem.created_at)}
 								</div>
@@ -348,3 +346,17 @@
 		{/if}
 	</div>
 </div>
+
+<!-- Confirmation Dialog -->
+<ConfirmDialog
+	bind:open={confirmDialog.open}
+	title={confirmDialog.type === 'delete' ? 'Delete Case' : 'Cancel Analysis'}
+	message={confirmDialog.type === 'delete' 
+		? `Are you sure you want to delete "${confirmDialog.caseName}" and all related documents? This cannot be undone.`
+		: `Cancel the current analysis for "${confirmDialog.caseName}"? This will stop processing and allow you to run a new analysis.`
+	}
+	confirmText={confirmDialog.type === 'delete' ? 'Delete' : 'Cancel Analysis'}
+	variant={confirmDialog.type === 'delete' ? 'danger' : 'warning'}
+	loading={confirmDialog.type === 'delete' ? deletingCaseId === confirmDialog.caseId : cancellingCaseId === confirmDialog.caseId}
+	onConfirm={handleConfirmAction}
+/>

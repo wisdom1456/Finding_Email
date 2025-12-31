@@ -3,9 +3,13 @@
 	import { getApiUrl } from '$lib/config';
 	import { supabase } from '$lib/supabase';
 	import { clioStore } from '$lib/stores/clioStore';
+	import ConfirmDialog from './ui/ConfirmDialog.svelte';
+	import Badge from './ui/Badge.svelte';
+	import { Zap, CheckCircle2, XCircle } from 'lucide-svelte';
 
 	let loading = $state(true);
 	let errorMessage = $state('');
+	let showDisconnectConfirm = $state(false);
 	
 	// Subscribe to store
 	let connected = $derived($clioStore.connected);
@@ -77,10 +81,6 @@
 	}
 
 	async function disconnectClio() {
-		if (!confirm('Are you sure you want to disconnect Clio? This will remove your saved credentials.')) {
-			return;
-		}
-
 		try {
 			const {
 				data: { session }
@@ -122,19 +122,12 @@
 		<div class="space-y-4">
 			<div class="flex items-center">
 				<div class="flex-shrink-0">
-					<svg class="h-6 w-6 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-						<path
-							stroke-linecap="round"
-							stroke-linejoin="round"
-							stroke-width="2"
-							d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-						/>
-					</svg>
+					<CheckCircle2 class="h-6 w-6 text-green-500" />
 				</div>
 				<div class="ml-3">
 					<p class="text-sm font-medium text-gray-900">Connected to Clio</p>
 					{#if clioUserId}
-						<p class="text-xs text-gray-500">User ID: {clioUserId}</p>
+						<p class="text-xs text-gray-500 font-mono">User ID: {clioUserId}</p>
 					{/if}
 				</div>
 			</div>
@@ -144,10 +137,10 @@
 			</p>
 
 			<button
-				onclick={disconnectClio}
-				class="inline-flex items-center px-4 py-2 border border-red-300 shadow-sm text-sm font-medium rounded-md text-red-700 bg-white hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+				onclick={() => showDisconnectConfirm = true}
+				class="btn btn-secondary text-red-600 hover:text-red-700 border-red-200 hover:border-red-300"
 			>
-				Disconnect
+				Disconnect Clio
 			</button>
 		</div>
 	{:else}
@@ -159,46 +152,43 @@
 
 			<ul class="text-sm text-gray-600 space-y-2">
 				<li class="flex items-start">
-					<svg class="h-5 w-5 text-accent mr-2 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-					</svg>
+					<CheckCircle2 class="h-5 w-5 text-accent mr-2 mt-0.5" />
 					<span>Import client communications and emails</span>
 				</li>
 				<li class="flex items-start">
-					<svg class="h-5 w-5 text-accent mr-2 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-					</svg>
+					<CheckCircle2 class="h-5 w-5 text-accent mr-2 mt-0.5" />
 					<span>Access case notes and documents</span>
 				</li>
 				<li class="flex items-start">
-					<svg class="h-5 w-5 text-accent mr-2 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-					</svg>
+					<CheckCircle2 class="h-5 w-5 text-accent mr-2 mt-0.5" />
 					<span>Sync matter information automatically</span>
 				</li>
 			</ul>
 
 			<button
 				onclick={connectClio}
-				class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-accent hover:bg-accent-hover focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent"
+				class="btn btn-primary w-full sm:w-auto"
 			>
-				<svg class="h-5 w-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-					<path
-						stroke-linecap="round"
-						stroke-linejoin="round"
-						stroke-width="2"
-						d="M13 10V3L4 14h7v7l9-11h-7z"
-					/>
-				</svg>
+				<Zap class="h-5 w-5 mr-2" />
 				Connect to Clio
 			</button>
 		</div>
 	{/if}
 
 	{#if errorMessage}
-		<div class="mt-4 rounded-md bg-red-50 p-4">
+		<div class="mt-4 rounded-lg bg-red-50 p-4 border border-red-100 flex items-start gap-3">
+			<XCircle class="h-5 w-5 text-red-600 shrink-0" />
 			<p class="text-sm text-red-800">{errorMessage}</p>
 		</div>
 	{/if}
 </div>
+
+<ConfirmDialog
+	bind:open={showDisconnectConfirm}
+	title="Disconnect Clio"
+	message="Are you sure you want to disconnect Clio? This will remove your saved credentials and stop active imports."
+	confirmText="Disconnect"
+	variant="danger"
+	onConfirm={disconnectClio}
+/>
 

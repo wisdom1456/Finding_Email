@@ -6,19 +6,21 @@
 	- Prevents multiple clicks
 	- Shows spinner during operation
 	- Cursor changes to 'wait'
-	- Maintains all standard button props
+	- Uses central design system btn classes
 -->
 <script lang="ts">
 	import { Loader2 } from 'lucide-svelte';
 	
-	// Props
+	type Variant = 'primary' | 'secondary' | 'danger' | 'ghost';
+	type Size = 'sm' | 'default' | 'lg';
+	
 	let {
 		onclick,
 		disabled = false,
 		loading = $bindable(false),
 		loadingText = 'Loading...',
-		variant = 'primary', // 'primary' | 'secondary' | 'danger' | 'ghost'
-		size = 'default', // 'sm' | 'default' | 'lg'
+		variant = 'primary',
+		size = 'default',
 		class: className = '',
 		children,
 		...restProps
@@ -27,8 +29,8 @@
 		disabled?: boolean;
 		loading?: boolean;
 		loadingText?: string;
-		variant?: 'primary' | 'secondary' | 'danger' | 'ghost';
-		size?: 'sm' | 'default' | 'lg';
+		variant?: Variant;
+		size?: Size;
 		class?: string;
 		children?: any;
 		[key: string]: any;
@@ -58,25 +60,34 @@
 		}
 	}
 	
-	// Variant styles
-	const variantClasses = {
-		primary: 'bg-accent hover:bg-accent-hover text-white',
-		secondary: 'bg-white hover:bg-gray-50 text-gray-700 border border-gray-300',
-		danger: 'bg-red-600 hover:bg-red-700 text-white',
-		ghost: 'bg-transparent hover:bg-gray-100 text-gray-700'
+	// Variant styles - aligned with app.css .btn system
+	const variantClasses: Record<Variant, string> = {
+		primary: 'bg-accent hover:bg-accent-hover text-white focus:ring-accent',
+		secondary: 'bg-white hover:bg-gray-50 text-contrast border border-gray-300 focus:ring-accent',
+		danger: 'bg-red-600 hover:bg-red-700 text-white focus:ring-red-500',
+		ghost: 'bg-transparent hover:bg-gray-100 text-contrast focus:ring-accent'
 	};
 	
-	// Size styles
-	const sizeClasses = {
+	// Size styles - consistent with design system spacing
+	const sizeClasses: Record<Size, string> = {
 		sm: 'px-3 py-1.5 text-xs',
 		default: 'px-4 py-2 text-sm',
-		lg: 'px-6 py-3 text-base'
+		lg: 'px-5 py-2.5 text-base'
 	};
 	
-	const baseClasses = 'inline-flex items-center justify-center font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent disabled:opacity-50 disabled:cursor-not-allowed';
-	const loadingCursor = isLoading ? 'cursor-wait' : '';
+	// Icon sizes per button size
+	const iconSizeClasses: Record<Size, string> = {
+		sm: 'h-3.5 w-3.5',
+		default: 'h-4 w-4',
+		lg: 'h-5 w-5'
+	};
 	
-	const buttonClasses = `${baseClasses} ${variantClasses[variant]} ${sizeClasses[size]} ${loadingCursor} ${className}`;
+	const baseClasses = 'btn inline-flex items-center justify-center font-medium rounded-btn transition-all focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed btn-active';
+	
+	// Use $derived to capture reactive isLoading state
+	const buttonClasses = $derived(
+		`${baseClasses} ${variantClasses[variant]} ${sizeClasses[size]} ${isLoading ? 'cursor-wait' : ''} ${className}`
+	);
 </script>
 
 <button
@@ -86,18 +97,10 @@
 	{...restProps}
 >
 	{#if isLoading || loading}
-		<Loader2 class="h-4 w-4 mr-2 animate-spin" />
+		<Loader2 class="{iconSizeClasses[size]} mr-2 animate-spin" />
 		{loadingText}
 	{:else}
-		{@render children()}
+		{@render children?.()}
 	{/if}
 </button>
-
-<style>
-	/* Ensure cursor changes immediately */
-	button.cursor-wait,
-	button.cursor-wait * {
-		cursor: wait !important;
-	}
-</style>
 

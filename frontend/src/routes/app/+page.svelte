@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { supabase } from '$lib/supabase';
-	import { goto } from '$app/navigation';
+	import Badge from '$lib/components/ui/Badge.svelte';
 	import { FileText, Clock, CheckCircle, Plus } from 'lucide-svelte';
 	import type { PageData } from './$types';
 
@@ -43,19 +43,6 @@
 			day: 'numeric'
 		});
 	}
-
-	function getStatusColor(status: string) {
-		switch (status) {
-			case 'completed':
-				return 'bg-accent/10 text-accent';
-			case 'processing':
-				return 'bg-contrast-light/10 text-contrast-light';
-			case 'error':
-				return 'bg-red-100 text-red-700';
-			default:
-				return 'bg-gray-100 text-gray-700';
-		}
-	}
 	
 	const totalCases = $derived(cases.length);
 	const processingCases = $derived(cases.filter((c) => c.status === 'processing').length);
@@ -78,7 +65,7 @@
 		<div class="mt-4 md:mt-0">
 			<a
 				href="/app/cases/new"
-				class="inline-flex items-center px-4 py-2 rounded-md text-sm font-semibold text-white bg-accent hover:bg-accent-hover transition-colors shadow-sm shadow-accent/20"
+				class="btn bg-accent hover:bg-accent-hover text-white shadow-sm shadow-accent/20"
 			>
 				<Plus class="h-4 w-4 mr-2" />
 				New Case
@@ -152,7 +139,7 @@
 				<p class="mt-3 text-sm text-gray-500">No cases yet. Create your first case to get started.</p>
 				<a
 					href="/app/cases/new"
-					class="mt-4 inline-flex items-center px-4 py-2 text-sm font-medium rounded-md text-accent bg-accent/10 hover:bg-accent/20 transition-colors"
+					class="mt-4 btn bg-accent/10 hover:bg-accent/20 text-accent"
 				>
 					<Plus class="h-4 w-4 mr-2" />
 					Create Case
@@ -177,11 +164,7 @@
 										{/if}
 									</div>
 									<div class="ml-4 flex-shrink-0">
-										<span
-											class="px-2.5 py-0.5 inline-flex text-xs font-medium rounded-full {getStatusColor(caseItem.status)}"
-										>
-											{caseItem.status}
-										</span>
+										<Badge variant={caseItem.status}>{caseItem.status}</Badge>
 									</div>
 								</div>
 								<div class="mt-2">

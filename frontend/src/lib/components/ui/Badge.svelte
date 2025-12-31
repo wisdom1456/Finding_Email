@@ -29,8 +29,8 @@
   // Map variants to Tailwind classes using brand colors
   const variantClasses: Record<string, string> = {
     // Status variants (case/document status)
-    ready: 'bg-accent/10 text-accent',
-    completed: 'bg-accent/10 text-accent',
+    ready: 'bg-green-100 text-green-700',
+    completed: 'bg-green-100 text-green-700',
     processing: 'bg-contrast-light/10 text-contrast-light',
     error: 'bg-red-100 text-red-700',
     pending: 'bg-gray-100 text-gray-600',
@@ -39,7 +39,7 @@
     duplicate: 'bg-purple-100 text-purple-700',
     
     // Semantic variants
-    success: 'bg-accent/10 text-accent',
+    success: 'bg-green-100 text-green-700',
     warning: 'bg-amber-100 text-amber-700',
     info: 'bg-contrast-light/10 text-contrast-light',
     neutral: 'bg-gray-100 text-gray-600',

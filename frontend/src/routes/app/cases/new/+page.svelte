@@ -183,13 +183,13 @@
 					<div class="mt-4 flex space-x-3">
 						<button
 							onclick={viewPartialCase}
-							class="px-4 py-2 rounded-md text-sm font-medium text-amber-700 bg-white border border-amber-300 hover:bg-amber-50 transition-colors"
+							class="btn btn-secondary text-amber-700 border-amber-300 hover:bg-amber-50"
 						>
 							View Case Anyway
 						</button>
 						<button
 							onclick={() => goto('/app/cases/new')}
-							class="px-4 py-2 rounded-md text-sm font-medium text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 transition-colors"
+							class="btn btn-secondary"
 						>
 							Start Over
 						</button>
@@ -343,7 +343,7 @@
 					<div class="mt-4">
 						<button
 							onclick={() => (showManualForm = true)}
-							class="px-4 py-2 rounded-md text-sm font-medium text-white bg-accent hover:bg-accent-hover transition-colors"
+							class="btn btn-primary"
 						>
 							Create Manual Case
 						</button>

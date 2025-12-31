@@ -597,14 +597,14 @@
 					<button 
 						onclick={bulkVerify}
 						disabled={bulkActionLoading}
-						class="flex-1 md:flex-none inline-flex items-center justify-center px-4 py-2.5 text-sm font-black rounded-xl bg-accent text-white hover:bg-accent-hover transition-all shadow-lg shadow-accent/20"
+						class="btn btn-primary flex-1 md:flex-none py-2.5 font-black shadow-lg shadow-accent/20"
 					>
 						Verify All
 					</button>
 					<button 
 						onclick={bulkDelete}
 						disabled={bulkActionLoading}
-						class="flex-1 md:flex-none inline-flex items-center justify-center px-4 py-2.5 text-sm font-black rounded-xl bg-red-50 text-red-600 border border-red-100 hover:bg-red-100 transition-all"
+						class="btn btn-secondary flex-1 md:flex-none py-2.5 font-black text-red-600 border-red-200 hover:bg-red-50"
 					>
 						Delete
 					</button>
@@ -667,7 +667,7 @@
 							<button 
 								onclick={handleBulkExtract}
 								disabled={bulkActionLoading}
-								class="ml-4 inline-flex items-center gap-2 px-3 py-1.5 text-xs font-bold rounded-lg bg-accent/10 text-accent hover:bg-accent/20 transition-all border border-accent/20"
+								class="ml-4 btn btn-secondary py-1.5 text-xs font-bold text-accent border-accent/20 hover:bg-accent/5"
 							>
 								<RefreshCw class={`w-3.5 h-3.5 ${bulkActionLoading ? 'animate-spin' : ''}`} />
 								{#if bulkActionLoading}

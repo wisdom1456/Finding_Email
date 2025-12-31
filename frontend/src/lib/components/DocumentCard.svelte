@@ -260,10 +260,10 @@
 					<!-- Duplicate toggle button -->
 					<button 
 						onclick={() => onToggleExclusion?.(doc.id, !isExcluded)}
-						class={`inline-flex items-center px-3 py-1.5 text-xs font-bold rounded-lg transition-colors shadow-sm ${
+						class={`btn text-xs font-bold shadow-sm ${
 							isExcluded 
-								? 'bg-green-600 text-white hover:bg-green-700' 
-								: 'bg-purple-100 border border-purple-300 text-purple-700 hover:bg-purple-200'
+								? 'btn-success px-3 py-1.5' 
+								: 'bg-purple-100 border border-purple-300 text-purple-700 hover:bg-purple-200 px-3 py-1.5'
 						}`}
 					>
 						{#if isExcluded}
@@ -289,7 +289,7 @@
 				{#if doc.status === 'extraction_failed'}
 					<button 
 						onclick={() => onReExtract?.(doc.id)}
-						class="inline-flex items-center px-3 py-1.5 text-xs font-bold rounded-lg bg-accent text-white hover:bg-accent-hover transition-colors shadow-sm"
+						class="btn btn-primary px-3 py-1.5 text-xs font-bold shadow-sm"
 					>
 						<RefreshCw class="w-3.5 h-3.5 mr-1.5" />
 						Try Vision OCR
@@ -299,7 +299,7 @@
 				{#if doc.status === 'download_failed' || doc.status === 'corrupted'}
 					<button 
 						onclick={() => onReplace?.(doc.id)}
-						class="inline-flex items-center px-3 py-1.5 text-xs font-bold rounded-lg bg-accent text-white hover:bg-accent-hover transition-colors shadow-sm"
+						class="btn btn-primary px-3 py-1.5 text-xs font-bold shadow-sm"
 					>
 						<Upload class="w-3.5 h-3.5 mr-1.5" />
 						Re-upload File
@@ -311,10 +311,10 @@
 						onclick={() => onVerify?.(doc.id)}
 						disabled={!doc.extracted_text && !doc.manual_text}
 						title={!doc.extracted_text && !doc.manual_text ? "Run OCR first to verify this document" : "Mark as ready for analysis"}
-						class={`inline-flex items-center px-3 py-1.5 text-xs font-bold rounded-lg transition-colors shadow-sm ${
+						class={`btn text-xs font-bold shadow-sm ${
 							!doc.extracted_text && !doc.manual_text
-								? 'bg-gray-100 text-gray-400 cursor-not-allowed border border-gray-200 shadow-none'
-								: 'bg-green-600 text-white hover:bg-green-700'
+								? 'bg-gray-100 text-gray-400 cursor-not-allowed border border-gray-200 shadow-none px-3 py-1.5'
+								: 'btn-success px-3 py-1.5'
 						}`}
 					>
 						<CheckCircle2 class="w-3.5 h-3.5 mr-1.5" />
@@ -325,7 +325,7 @@
 				{#if doc.status !== 'ready' && doc.status !== 'skipped'}
 					<button 
 						onclick={() => onSkip?.(doc.id)}
-						class="inline-flex items-center px-3 py-1.5 text-xs font-bold rounded-lg bg-white border border-gray-200 text-gray-500 hover:bg-gray-50 transition-colors"
+						class="btn btn-secondary px-3 py-1.5 text-xs font-bold text-gray-500"
 					>
 						Skip
 					</button>
@@ -334,7 +334,7 @@
 				{#if doc.storage_path}
 					<button 
 						onclick={() => onView?.(doc)}
-						class="inline-flex items-center px-3 py-1.5 text-xs font-bold rounded-lg bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 transition-colors"
+						class="btn btn-secondary px-3 py-1.5 text-xs font-bold"
 					>
 						<Eye class="w-3.5 h-3.5 mr-1.5" />
 						Preview

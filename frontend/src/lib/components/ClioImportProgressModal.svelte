@@ -426,14 +426,14 @@
 					{#if isComplete && caseId}
 						<a
 							href="/app/cases/{caseId}"
-							class="px-4 py-2 bg-accent text-white rounded-md hover:bg-accent-hover font-medium transition-colors"
+							class="btn btn-primary"
 						>
 							View Case
 						</a>
 					{/if}
 					<button
 						onclick={onClose}
-						class="px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 font-medium transition-colors"
+						class="btn btn-secondary"
 					>
 						{isComplete ? 'Close' : 'Dismiss'}
 					</button>

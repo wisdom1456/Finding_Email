@@ -65,7 +65,7 @@
 		<div class="mt-4 md:mt-0">
 			<a
 				href="/app/cases/new"
-				class="btn bg-accent hover:bg-accent-hover text-white shadow-sm shadow-accent/20"
+				class="btn btn-primary shadow-sm shadow-accent/20"
 			>
 				<Plus class="h-4 w-4 mr-2" />
 				New Case
@@ -139,7 +139,7 @@
 				<p class="mt-3 text-sm text-gray-500">No cases yet. Create your first case to get started.</p>
 				<a
 					href="/app/cases/new"
-					class="mt-4 btn bg-accent/10 hover:bg-accent/20 text-accent"
+					class="mt-4 btn btn-primary px-6"
 				>
 					<Plus class="h-4 w-4 mr-2" />
 					Create Case

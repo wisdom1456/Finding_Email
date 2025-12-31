@@ -175,7 +175,7 @@
 		{#snippet children()}
 			<a
 				href="/app/cases/new"
-				class="btn bg-accent hover:bg-accent-hover text-white"
+				class="btn btn-primary"
 			>
 				<Plus class="h-4 w-4 mr-2" />
 				New Case
@@ -230,7 +230,7 @@
 					<p class="mt-3 text-sm text-gray-500">No cases yet. Create your first case to get started.</p>
 					<a
 						href="/app/cases/new"
-						class="mt-4 inline-flex items-center px-4 py-2 text-sm font-medium rounded-btn text-accent bg-accent/10 hover:bg-accent/20 transition-colors"
+						class="mt-4 btn btn-primary px-6"
 					>
 						<Plus class="h-4 w-4 mr-2" />
 						Create Case

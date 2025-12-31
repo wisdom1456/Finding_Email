@@ -62,10 +62,10 @@
 	
 	// Variant styles - aligned with app.css .btn system
 	const variantClasses: Record<Variant, string> = {
-		primary: 'bg-accent hover:bg-accent-hover text-white focus:ring-accent',
-		secondary: 'bg-white hover:bg-gray-50 text-contrast border border-gray-300 focus:ring-accent',
-		danger: 'bg-red-600 hover:bg-red-700 text-white focus:ring-red-500',
-		ghost: 'bg-transparent hover:bg-gray-100 text-contrast focus:ring-accent'
+		primary: 'btn-primary focus:ring-accent',
+		secondary: 'btn-secondary focus:ring-accent',
+		danger: 'btn-danger focus:ring-red-500',
+		ghost: 'btn-ghost focus:ring-accent'
 	};
 	
 	// Size styles - consistent with design system spacing

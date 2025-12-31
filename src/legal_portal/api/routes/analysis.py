@@ -1688,6 +1688,8 @@ async def case_chat(
     supabase=Depends(get_user_supabase_client),  # noqa: B008
 ):
     """Chat about a case with the AI assistant."""
+    if not request.case_id:
+        raise HTTPException(status_code=400, detail="case_id is required for this endpoint")
     _ensure_case_access(supabase, request.case_id, user["id"])
     analysis_record = _fetch_latest_analysis_result(supabase, request.case_id)
 

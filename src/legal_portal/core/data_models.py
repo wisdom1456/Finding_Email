@@ -326,7 +326,7 @@ class DemandLetterRequest(BaseModel):
 class ChatMessageRequest(BaseModel):
     """API request payload for chatting about a case."""
 
-    case_id: str
+    case_id: Optional[str] = None  # Optional for streaming endpoint (gets case from analysis_id)
     message: str
 
 

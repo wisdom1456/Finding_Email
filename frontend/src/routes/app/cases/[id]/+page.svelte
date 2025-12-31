@@ -6,6 +6,7 @@
 	import { getApiUrl } from '$lib/config';
 	import ClioMatterSearch from '$lib/components/ClioMatterSearch.svelte';
 	import ClioLinkedMatter from '$lib/components/ClioLinkedMatter.svelte';
+	import FailedClioDownloads from '$lib/components/FailedClioDownloads.svelte';
 	import UploadFailureSummary from '$lib/components/UploadFailureSummary.svelte';
 	// @ts-ignore
 	import VerificationHub from '$lib/components/VerificationHub.svelte';
@@ -1299,37 +1300,39 @@
 					<!-- Clio Matter Import (only show if connected) -->
 					{#if $clioStore.connected}
 						<div class="card-standard">
-			<h3 class="text-lg font-heading font-semibold text-contrast mb-4">
-				{caseData?.clio_matter_id ? 'Clio Matter' : 'Import from Clio'}
-			</h3>
+							<h3 class="text-lg font-heading font-semibold text-contrast mb-4">
+								{caseData?.clio_matter_id ? 'Clio Matter' : 'Import from Clio'}
+							</h3>
 
-			{#if data.clio_matter_id && data.clio_matter_data}
-				<!-- Show linked matter display -->
-				<ClioLinkedMatter
-					caseId={caseId as string}
-					matterData={data.clio_matter_data}
-					caseData={data}
-					onUnlinked={async () => {
-						await loadCase();
-						await loadDocuments();
-					}}
-					onMatterChanged={async () => {
-						await loadCase();
-						await loadDocuments();
-					}}
-				/>
-			{:else}
-				<!-- Show search UI (only if no matter linked) -->
-				<ClioMatterSearch
-					caseId={caseId as string}
-					onMatterSelected={async () => {
-						await loadCase();
-						await loadDocuments();
-					}}
-					/>
-				{/if}
-			</div>
-		{/if}
+							{#if data.clio_matter_id && data.clio_matter_data}
+								<!-- Show linked matter display -->
+								<ClioLinkedMatter
+									caseId={caseId as string}
+									matterData={data.clio_matter_data}
+									caseData={data}
+									onUnlinked={async () => {
+										await loadCase();
+										await loadDocuments();
+									}}
+									onMatterChanged={async () => {
+										await loadCase();
+										await loadDocuments();
+									}}
+								/>
+							{:else}
+								<!-- Show search UI (only if no matter linked) -->
+								<ClioMatterSearch
+									caseId={caseId as string}
+									onMatterSelected={async () => {
+										await loadCase();
+										await loadDocuments();
+									}}
+								/>
+							{/if}
+						</div>
+
+						<FailedClioDownloads {documents} onDocumentsUpdated={loadDocuments} />
+					{/if}
 					</div>
 				{/if}
 

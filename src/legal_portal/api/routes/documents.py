@@ -609,7 +609,7 @@ async def bulk_extract_documents(
             
             try:
                 # Call trigger_extraction with timeout
-                await asyncio.wait_for(
+                result = await asyncio.wait_for(
                     trigger_extraction(
                         document_id=doc["id"],
                         user=user,
@@ -618,8 +618,15 @@ async def bulk_extract_documents(
                     ),
                     timeout=DOC_TIMEOUT,
                 )
-                extracted_count += 1
-                logger.info(f"Extracted {file_name} successfully")
+                
+                if result.get("content_length", 0) > 0:
+                    extracted_count += 1
+                    logger.info(f"Extracted {file_name}: {result['content_length']} chars")
+                else:
+                    failed_count += 1
+                    error_msg = f"No text extracted from {file_name} ({result.get('extraction_error', 'unsupported format')})"
+                    logger.warning(error_msg)
+                    errors.append(error_msg)
             except asyncio.TimeoutError:
                 failed_count += 1
                 error_msg = f"Timeout extracting {file_name} (>{DOC_TIMEOUT}s). Try extracting individually."
@@ -959,8 +966,9 @@ async def trigger_extraction(
             "ocr_provider": ocr_provider,
             "extraction_error": extraction_error,
             "page_count": page_count,
-            "extracted_at": datetime.utcnow().isoformat(),
+            "extracted_at": datetime.utcnow().isoformat() if extracted_text else None,
             "updated_at": datetime.utcnow().isoformat(),
+            "status": DocumentStatus.READY if extracted_text and extracted_text.strip() else DocumentStatus.EXTRACTION_FAILED,
         }
 
         update_result = user_supabase.table("documents").update(update_data).eq("id", document_id).execute()

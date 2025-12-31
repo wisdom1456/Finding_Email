@@ -671,14 +671,11 @@
 	{/if}
 
 	{#if !loading && skippedDocs.length > 0}
-		<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-6">
-			<SkippedDocumentsAlert {skippedDocs} />
-		</div>
+		<SkippedDocumentsAlert {skippedDocs} />
 	{/if}
 
 	{#if results}
-		<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-			<div class="border-b border-gray-200 mb-6">
+		<div class="border-b border-gray-200 mb-6">
 			<nav class="-mb-px flex flex-wrap gap-4">
 				<button
 					class={`py-4 px-1 border-b-2 text-sm font-medium ${
@@ -956,10 +953,12 @@
 					</div>
 				</div>
 			{:else}
-				<p class="text-gray-500">No document summaries available.</p>
+				<div class="card-standard">
+					<p class="text-gray-500">No document summaries available.</p>
+				</div>
 			{/if}
 		{:else if activeTab === 'letters'}
-			<div class="page-spacing">
+			<div class="space-y-6">
 				{#if !hasMultiStageSupport}
 					<div class="info-box border-amber-200 bg-amber-50">
 						<p class="text-amber-900 font-medium">
@@ -988,7 +987,19 @@
 								Generate Letter
 							</AsyncButton>
 						</div>
-						{#if findingsLetter}
+						{#if generatingFindings && findingsLetter}
+							<!-- Streaming preview - shows text to avoid iframe blinking -->
+							<div class="space-y-4 animate-fade-in-up">
+								<div class="flex items-center gap-2 text-sm text-accent font-medium">
+									<div class="animate-spin rounded-full h-4 w-4 border-2 border-accent border-t-transparent"></div>
+									Generating letter...
+								</div>
+								<div class="border border-gray-200 rounded-lg overflow-hidden bg-white shadow-inner p-6 h-[600px] overflow-y-auto prose prose-sm max-w-none">
+									{@html findingsLetter}
+								</div>
+							</div>
+						{:else if findingsLetter}
+							<!-- Completed letter - show in iframe -->
 							<div class="space-y-4 animate-fade-in-up">
 								<div class="flex justify-end">
 									<button
@@ -999,7 +1010,7 @@
 									</button>
 								</div>
 								<div class="border border-gray-200 rounded-lg overflow-hidden bg-white shadow-inner">
-									<iframe srcdoc={findingsLetter.replace(/\\n/g, '\n')} title="Findings Letter" class="w-full h-[600px] border-0" sandbox="allow-same-origin"></iframe>
+									<iframe srcdoc={findingsLetter.replace(/\\n/g, '\n')} title="Findings Letter" class="w-full h-[600px] border-0" sandbox="allow-same-origin allow-scripts"></iframe>
 								</div>
 							</div>
 						{:else}
@@ -1152,7 +1163,7 @@
 										</div>
 										<div class="p-4">
 											<div class="border border-gray-200 rounded-lg bg-white overflow-hidden shadow-inner">
-												<iframe srcdoc={letterHtml.replace(/\\n/g, '\n')} title={`Demand Letter ${partyName}`} class="w-full h-[400px] border-0" sandbox="allow-same-origin"></iframe>
+												<iframe srcdoc={letterHtml.replace(/\\n/g, '\n')} title={`Demand Letter ${partyName}`} class="w-full h-[400px] border-0" sandbox="allow-same-origin allow-scripts"></iframe>
 											</div>
 										</div>
 									</div>
@@ -1341,7 +1352,6 @@
 				{/if}
 			</div>
 		{/if}
-		</div>
 	{/if}
 </div>
 

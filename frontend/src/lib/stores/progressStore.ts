@@ -95,9 +95,15 @@ function createProgressStore() {
 	let currentStatusUrl: string = '';
 	let currentToken: string = '';
 
+	// Track last logged document states to prevent console spam
+	let lastLoggedDocStates: Record<string, string> = {};
+
 	// Internal connect function that can be referenced by other methods
 	const connectInternal = (url: string, onComplete?: (data?: unknown) => void, statusUrl?: string, token?: string): boolean => {
 		console.log('[progressStore] connectInternal called:', { url, statusUrl });
+
+		// Reset document state tracking on new connection
+		lastLoggedDocStates = {};
 
 		// Disconnect existing connections
 		if (sseClient) {
@@ -123,11 +129,17 @@ function createProgressStore() {
 		sseClient = new SSEClient();
 
 		const messageHandler = (event: ProgressEvent | any) => {
+			// Only log stage changes (less frequent and more meaningful)
 			if (event.stage) {
-				console.log('[progressStore] Stage update:', event.stage.id, event.stage.status, event.stage.progress);
+				console.log('[progressStore] Stage:', event.stage.id, event.stage.status);
 			}
+			// Only log document updates when status actually changes
 			if (event.document) {
-				console.log('[progressStore] Document update:', event.document.name, event.document.status);
+				const key = event.document.id || event.document.name;
+				if (lastLoggedDocStates[key] !== event.document.status) {
+					console.log('[progressStore] Document:', event.document.name, event.document.status);
+					lastLoggedDocStates[key] = event.document.status;
+				}
 			}
 
 			if (event.data) finalData = event.data;

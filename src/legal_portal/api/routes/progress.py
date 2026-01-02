@@ -1,4 +1,5 @@
 import logging
+from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sse_starlette.sse import EventSourceResponse
@@ -109,6 +110,9 @@ async def get_analysis_status(
     if not status:
         raise HTTPException(status_code=404, detail="Analysis not found or no status available")
 
+    # Add server timestamp for client-side staleness detection
+    status["server_time"] = datetime.utcnow().isoformat()
+    
     return status
 
 
@@ -179,11 +183,14 @@ async def get_clio_import_status(
     if not status:
         # Return a "pending" status instead of 404 to prevent error spam
         # The import may still be in progress on another serverless instance
-        return {
+        status = {
             "type": "pending",
             "message": "Import status unavailable - it may still be in progress",
             "phase": "unknown",
             "percent": 0,
         }
 
+    # Add server timestamp for client-side staleness detection
+    status["server_time"] = datetime.utcnow().isoformat()
+    
     return status

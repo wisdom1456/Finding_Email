@@ -23,7 +23,8 @@ export class PollingClient {
 	private onCompleteHandler: PollingCompleteHandler | null = null;
 	private lastProgressPercent = -1;
 	private stallCount = 0;
-	private maxStallCount = 60; // 60 polls with no progress change = ~3 minutes stall
+	private maxStallCount = 30; // 30 polls * 3s = 90 seconds (earlier warning)
+	private lastEventFingerprint = ''; // Track last event to prevent duplicate processing
 
 	/**
 	 * Start polling for progress updates
@@ -61,6 +62,13 @@ export class PollingClient {
 	}
 
 	/**
+	 * Generate fingerprint for an event to detect duplicates
+	 */
+	private getEventFingerprint(data: ProgressEvent): string {
+		return `${data.percent}|${data.phase}|${data.timestamp}|${data.document?.status}`;
+	}
+
+	/**
 	 * Perform a single poll
 	 */
 	private async poll(): Promise<void> {
@@ -90,22 +98,33 @@ export class PollingClient {
 				throw new Error(`Polling request failed: ${response.status} ${response.statusText}`);
 			}
 
-			const data: ProgressEvent = await response.json();
+		const data: ProgressEvent = await response.json();
 
-			// Track progress changes to detect stalls
-			const currentPercent = data.percent ?? 0;
-			if (currentPercent > this.lastProgressPercent) {
-				// Progress is moving, reset stall counter
-				this.lastProgressPercent = currentPercent;
-				this.stallCount = 0;
-			} else {
-				// No progress change, increment stall counter
-				this.stallCount++;
+		// Check for duplicate events to prevent console spam
+		const fingerprint = this.getEventFingerprint(data);
+		if (fingerprint === this.lastEventFingerprint) {
+			// Duplicate event, skip processing but continue polling
+			if (this.isActive) {
+				this.pollInterval = setTimeout(() => this.poll(), this.pollFrequency);
 			}
+			return;
+		}
+		this.lastEventFingerprint = fingerprint;
 
-			if (this.onMessageHandler) {
-				this.onMessageHandler(data);
-			}
+		// Track progress changes to detect stalls
+		const currentPercent = data.percent ?? 0;
+		if (currentPercent > this.lastProgressPercent) {
+			// Progress is moving, reset stall counter
+			this.lastProgressPercent = currentPercent;
+			this.stallCount = 0;
+		} else {
+			// No progress change, increment stall counter
+			this.stallCount++;
+		}
+
+		if (this.onMessageHandler) {
+			this.onMessageHandler(data);
+		}
 
 			// Check if terminal state
 			if (data.type === 'completed' || data.type === 'failed' || data.type === 'error') {
@@ -116,10 +135,23 @@ export class PollingClient {
 				return;
 			}
 
-			// Check for stall (no progress for ~3 minutes) - warn periodically
-			if (this.stallCount >= this.maxStallCount && this.stallCount % 20 === 0) {
-				console.warn(`Import appears stalled at ${currentPercent}% for ${Math.round(this.stallCount * this.pollFrequency / 1000)}s`);
+		// Check for stall - warn at 90 seconds and provide user-facing message
+		if (this.stallCount === this.maxStallCount) {
+			console.warn(`Processing paused at ${currentPercent}% - server may be working on a large document`);
+			if (this.onMessageHandler) {
+				this.onMessageHandler({
+					type: 'progress',
+					message: `Processing large document... (${currentPercent}% complete)`,
+					phase: data.phase,
+					percent: currentPercent,
+				});
 			}
+		}
+		
+		// Continue warning periodically after initial stall
+		if (this.stallCount >= this.maxStallCount && this.stallCount % 20 === 0) {
+			console.warn(`Import appears stalled at ${currentPercent}% for ${Math.round(this.stallCount * this.pollFrequency / 1000)}s`);
+		}
 
 			// After 5 minutes of stall (100 polls * 3s = 300s), treat as "stalled but maybe partial success"
 			// This handles the case where Vercel kills the serverless function

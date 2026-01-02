@@ -1,6 +1,6 @@
 # Active Context
 
-*Date: 2025-10-02*
+*Date: 2026-01-02*
 
 ## 1. Current Focus: Enhanced Document Analysis Extraction (OPTIMIZED)
 
@@ -118,6 +118,13 @@ Successfully implemented Phase 1 of the New Mexico multi-state support plan:
 5.  **Documentation**: Created `new_mexico_legal_corpus/README.md` documenting the corpus structure and coverage (Consumer Protection, Landlord-Tenant, Construction Defects).
 
 ## 2. Recent Changes & Key Decisions
+
+*   **GPT-5.2 Migration (Jan 2026)**: Migrated all AI services from GPT-4o to GPT-5.2 and GPT-5-mini
+    *   **Primary Model**: `gpt-5.2` for complex legal analysis, letter generation, multi-stage analysis
+    *   **Cost-Optimized**: `gpt-5-mini` for document summaries, chat, simpler tasks
+    *   **New Parameters**: `reasoning_effort` (none/low/medium/high/xhigh), `verbosity` (low/medium/high), `max_output_tokens`
+    *   **Implementation**: Using `extra_body` in Chat Completions API for SDK compatibility
+    *   **Files Updated**: `openai_client.py`, `multi_stage_analyzer.py`, `case_chat_service.py`, `demand_letter_service.py`, `main_processor.py`, `json_processing_service.py`
 
 *   **New Mexico Corpus Integration (Dec 2025)**: Completed the first phase of adding New Mexico support by establishing a structured legal corpus mirroring the Florida structure.
 

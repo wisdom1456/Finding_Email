@@ -6,7 +6,7 @@
 *   **Frontend Framework**: SvelteKit 2 (Svelte 5 with Runes)
 *   **Backend API**: FastAPI with Uvicorn
 *   **Internal Tools**: Streamlit (for development/admin tools)
-*   **Primary AI Service**: OpenAI API (GPT-4)
+*   **Primary AI Service**: OpenAI API (GPT-5.2 and GPT-5-mini)
 *   **Database & Auth**: Supabase (PostgreSQL, Authentication, Storage, Realtime)
 *   **Deployment Environment**: Vercel (frontend), Docker (backend), Google Cloud (production target)
 
@@ -25,6 +25,58 @@
 *   **`supabase-py`**: Python client for Supabase services
 *   **`sse-starlette`**: Server-Sent Events support for real-time updates
 *   **`pydantic`**: Data validation and settings management
+
+### OpenAI / GPT-5.2 Integration
+*   **SDK Version**: `openai>=1.70.0` (required for GPT-5.2 support)
+*   **Primary Model**: `gpt-5.2` - Complex reasoning, legal analysis, letter generation
+*   **Cost-Optimized Model**: `gpt-5-mini` - Document summaries, chat, simpler tasks
+*   **API**: Chat Completions API with `extra_body` for GPT-5 specific parameters
+
+#### GPT-5.2 Parameters (via extra_body)
+*   **`reasoning_effort`**: Controls reasoning depth
+    *   `none` - Fastest, minimal reasoning (default for GPT-5.2)
+    *   `low` - Light reasoning
+    *   `medium` - Balanced reasoning
+    *   `high` - Thorough reasoning
+    *   `xhigh` - Maximum reasoning effort
+*   **`verbosity`**: Controls output length
+    *   `low` - Concise responses
+    *   `medium` - Balanced (default)
+    *   `high` - Detailed, thorough explanations
+*   **`max_output_tokens`**: Replaces `max_tokens` for GPT-5 models
+
+#### Implementation Pattern
+```python
+# Using OpenAIClient.create_response() with GPT-5.2
+response = client.create_response(
+    model="gpt-5.2",
+    input="Your prompt here",
+    instructions="System instructions",
+    reasoning_effort="medium",
+    verbosity="high",
+    max_output_tokens=4000,
+)
+
+# Parameters are passed via extra_body for SDK compatibility
+request_params = {
+    "model": model,
+    "messages": messages,
+    "extra_body": {
+        "reasoning_effort": "medium",
+        "verbosity": "high",
+        "max_output_tokens": 4000,
+    }
+}
+```
+
+#### Model Selection Guidelines
+| Use Case | Model | Reasoning | Verbosity |
+|----------|-------|-----------|-----------|
+| Multi-stage legal analysis | gpt-5.2 | medium | medium |
+| Demand letter generation | gpt-5.2 | low | high |
+| Document summaries | gpt-5-mini | none | medium |
+| Case chat | gpt-5-mini | none | low |
+| Complex calculations | gpt-5.2 | high | medium |
 
 ### Core Application
 *   **`legal_portal`**: The unified, in-house Python package containing all backend logic.

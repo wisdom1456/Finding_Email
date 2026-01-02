@@ -11,6 +11,7 @@ Created: 2025-11-21
 
 from __future__ import annotations
 
+import asyncio
 import json
 import time
 from typing import Callable, List, Optional
@@ -220,7 +221,9 @@ class MultiStageAnalyzer:
             diag_logger.log_stage("multi_stage_4_letter_structure", letter_structure.model_dump(mode="json"))
 
         # Collect verified statutes from the service for inclusion in result
-        verified_statutes = self.statute_service.recommend_statutes(
+        # Run in thread to avoid potential blocking
+        verified_statutes = await asyncio.to_thread(
+            self.statute_service.recommend_statutes,
             case_facts=intake_content[:2000],
             legal_issues=[i.issue_name for i in issue_map.primary_issues],
             case_type=case_type,
@@ -373,7 +376,9 @@ RULES:
 """
 
         model = self.client.get_preferred_model("multi_stage_analysis", "gpt-4o")
-        response_dict = self.client.create_chat_completion(
+        # Use asyncio.to_thread to avoid blocking the event loop during API call
+        response_dict = await asyncio.to_thread(
+            self.client.create_chat_completion,
             model=model,
             messages=[
                 {
@@ -467,7 +472,9 @@ Return JSON:
 """
 
         model = self.client.get_preferred_model("multi_stage_analysis", "gpt-4o")
-        response_dict = self.client.create_chat_completion(
+        # Use asyncio.to_thread to avoid blocking the event loop during API call
+        response_dict = await asyncio.to_thread(
+            self.client.create_chat_completion,
             model=model,
             messages=[
                 {
@@ -576,7 +583,9 @@ Return ONLY valid JSON.
 """
 
         model = self.client.get_preferred_model("multi_stage_analysis", "gpt-4o")
-        response_dict = self.client.create_chat_completion(
+        # Use asyncio.to_thread to avoid blocking the event loop during API call
+        response_dict = await asyncio.to_thread(
+            self.client.create_chat_completion,
             model=model,
             messages=[
                 {

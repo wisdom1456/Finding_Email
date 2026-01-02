@@ -44,7 +44,10 @@ class OpenAIClient:
 
         # #region agent log
         import json
-        with open('/Users/BRFlorida/Projects/Work/Finding_Emails/.cursor/debug.log', 'a') as f:
+        import os as _os
+        _log_dir = '/Users/BRFlorida/Projects/Work/Finding_Emails/.cursor'
+        _os.makedirs(_log_dir, exist_ok=True)
+        with open(_log_dir + '/debug.log', 'a') as f:
             f.write(json.dumps({"sessionId":"debug-session","runId":"initial","hypothesisId":"H1,H4","location":"openai_client.py:__init__","message":"OpenAI client initialized","data":{"openai_version":__import__('openai').__version__ if hasattr(__import__('openai'), '__version__') else "unknown","has_responses":hasattr(self.client, 'responses'),"client_attrs":str(dir(self.client))[:500]},"timestamp":__import__('time').time()*1000}) + '\n')
         # #endregion
 
@@ -529,8 +532,13 @@ class OpenAIClient:
         """Create a response using the new Responses API."""
         # #region agent log
         import json
-        with open('/Users/BRFlorida/Projects/Work/Finding_Emails/.cursor/debug.log', 'a') as f:
-            f.write(json.dumps({"sessionId":"debug-session","runId":"initial","hypothesisId":"H1,H2,H3","location":"openai_client.py:create_response:entry","message":"create_response called","data":{"model":model,"has_responses_attr":hasattr(self.client, 'responses'),"client_type":type(self.client).__name__,"client_module":type(self.client).__module__,"client_dir":str(dir(self.client))[:500]},"timestamp":__import__('time').time()*1000}) + '\n')
+        import os as _os
+        _log_dir = '/Users/BRFlorida/Projects/Work/Finding_Emails/.cursor'
+        try:
+            _os.makedirs(_log_dir, exist_ok=True)
+            with open(_log_dir + '/debug.log', 'a') as f:
+                f.write(json.dumps({"sessionId":"debug-session","runId":"initial","hypothesisId":"H1,H2,H3","location":"openai_client.py:create_response:entry","message":"create_response called","data":{"model":model,"has_responses_attr":hasattr(self.client, 'responses'),"client_type":type(self.client).__name__,"client_module":type(self.client).__module__,"client_dir":str(dir(self.client))[:500]},"timestamp":__import__('time').time()*1000}) + '\n')
+        except: pass
         # #endregion
         try:
             logger.info(
@@ -561,8 +569,11 @@ class OpenAIClient:
                 request_params["max_output_tokens"] = max_output_tokens
 
             # #region agent log
-            with open('/Users/BRFlorida/Projects/Work/Finding_Emails/.cursor/debug.log', 'a') as f:
-                f.write(json.dumps({"sessionId":"debug-session","runId":"initial","hypothesisId":"H1,H3","location":"openai_client.py:create_response:before_api_call","message":"About to call responses.create","data":{"request_params":str(request_params)[:500]},"timestamp":__import__('time').time()*1000}) + '\n')
+            try:
+                _os.makedirs(_log_dir, exist_ok=True)
+                with open(_log_dir + '/debug.log', 'a') as f:
+                    f.write(json.dumps({"sessionId":"debug-session","runId":"initial","hypothesisId":"H1,H3","location":"openai_client.py:create_response:before_api_call","message":"About to call responses.create","data":{"request_params":str(request_params)[:500]},"timestamp":__import__('time').time()*1000}) + '\n')
+            except: pass
             # #endregion
 
             # Make the API call
@@ -582,8 +593,11 @@ class OpenAIClient:
             )
 
             # #region agent log
-            with open('/Users/BRFlorida/Projects/Work/Finding_Emails/.cursor/debug.log', 'a') as f:
-                f.write(json.dumps({"sessionId":"debug-session","runId":"initial","hypothesisId":"H1","location":"openai_client.py:create_response:success","message":"Responses API call succeeded","data":{"response_type":type(response).__name__},"timestamp":__import__('time').time()*1000}) + '\n')
+            try:
+                _os.makedirs(_log_dir, exist_ok=True)
+                with open(_log_dir + '/debug.log', 'a') as f:
+                    f.write(json.dumps({"sessionId":"debug-session","runId":"initial","hypothesisId":"H1","location":"openai_client.py:create_response:success","message":"Responses API call succeeded","data":{"response_type":type(response).__name__},"timestamp":__import__('time').time()*1000}) + '\n')
+            except: pass
             # #endregion
 
             return {
@@ -598,8 +612,11 @@ class OpenAIClient:
 
         except Exception as e:
             # #region agent log
-            with open('/Users/BRFlorida/Projects/Work/Finding_Emails/.cursor/debug.log', 'a') as f:
-                f.write(json.dumps({"sessionId":"debug-session","runId":"initial","hypothesisId":"H1,H3,H5","location":"openai_client.py:create_response:error","message":"Responses API call failed","data":{"error_type":type(e).__name__,"error_message":str(e),"has_chat":hasattr(self.client, 'chat'),"has_completions":hasattr(self.client.chat, 'completions') if hasattr(self.client, 'chat') else False},"timestamp":__import__('time').time()*1000}) + '\n')
+            try:
+                _os.makedirs(_log_dir, exist_ok=True)
+                with open(_log_dir + '/debug.log', 'a') as f:
+                    f.write(json.dumps({"sessionId":"debug-session","runId":"initial","hypothesisId":"H1,H3,H5","location":"openai_client.py:create_response:error","message":"Responses API call failed","data":{"error_type":type(e).__name__,"error_message":str(e),"has_chat":hasattr(self.client, 'chat'),"has_completions":hasattr(self.client.chat, 'completions') if hasattr(self.client, 'chat') else False},"timestamp":__import__('time').time()*1000}) + '\n')
+            except: pass
             # #endregion
             logger.error(f"Error in Responses API call: {e}")
             raise

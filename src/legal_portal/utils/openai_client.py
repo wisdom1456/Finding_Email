@@ -48,8 +48,8 @@ class OpenAIClient:
             api_key=os.getenv("OPENAI_API_KEY"), http_client=async_http_client, max_retries=3
         )
 
-        self.default_model = "gpt-4o"
-        self.fallback_model = "gpt-4o-mini"
+        self.default_model = "gpt-5.2"
+        self.fallback_model = "gpt-5-mini"
         self.max_retries = 3
         self.base_retry_delay = 2  # Base delay in seconds for exponential backoff
 
@@ -233,8 +233,11 @@ class OpenAIClient:
 
     def estimate_cost(self, prompt_tokens: int, completion_tokens: int, model: str) -> float:
         """Estimate cost of API call based on token usage."""
-        # Pricing as of 2024 (prices per 1K tokens)
+        # Pricing as of 2025 (prices per 1K tokens)
         pricing = {
+            "gpt-5.2": {"input": 0.01, "output": 0.03},
+            "gpt-5.2-pro": {"input": 0.015, "output": 0.045},
+            "gpt-5-mini": {"input": 0.0001, "output": 0.0004},
             "gpt-4o": {"input": 0.005, "output": 0.015},
             "gpt-4o-mini": {"input": 0.00015, "output": 0.0006},
             "gpt-4": {"input": 0.03, "output": 0.06},
@@ -506,6 +509,160 @@ class OpenAIClient:
 
         except Exception as e:
             logger.error(f"Error in async chat stream: {e}")
+            raise
+
+    def create_response(
+        self,
+        model: str,
+        input: str,
+        instructions: Optional[str] = None,
+        reasoning_effort: Optional[str] = None,
+        verbosity: Optional[str] = None,
+        max_output_tokens: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        """Create a response using the new Responses API."""
+        try:
+            logger.info(
+                f"Making Responses API request with {model}",
+                extra={
+                    "model": model,
+                    "reasoning_effort": reasoning_effort,
+                    "verbosity": verbosity,
+                },
+            )
+
+            # Build request parameters
+            request_params = {
+                "model": model,
+                "input": input,
+            }
+
+            if instructions:
+                request_params["instructions"] = instructions
+
+            if reasoning_effort:
+                request_params["reasoning"] = {"effort": reasoning_effort}
+
+            if verbosity:
+                request_params["text"] = {"verbosity": verbosity}
+
+            if max_output_tokens:
+                request_params["max_output_tokens"] = max_output_tokens
+
+            # Make the API call
+            response = self.client.responses.create(**request_params)
+
+            content = response.output_text
+            usage = response.usage
+
+            logger.info(
+                "Responses API call successful",
+                extra={
+                    "model": model,
+                    "prompt_tokens": usage.prompt_tokens,
+                    "completion_tokens": usage.completion_tokens,
+                    "total_tokens": usage.total_tokens,
+                },
+            )
+
+            return {
+                "content": content,
+                "usage": {
+                    "prompt_tokens": usage.prompt_tokens,
+                    "completion_tokens": usage.completion_tokens,
+                    "total_tokens": usage.total_tokens,
+                },
+                "model": model,
+            }
+
+        except Exception as e:
+            logger.error(f"Error in Responses API call: {e}")
+            raise
+
+    async def create_response_async(
+        self,
+        model: str,
+        input: str,
+        instructions: Optional[str] = None,
+        reasoning_effort: Optional[str] = None,
+        verbosity: Optional[str] = None,
+        max_output_tokens: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        """Async version of create_response."""
+        try:
+            logger.info(f"Making async Responses API request with {model}")
+
+            request_params = {
+                "model": model,
+                "input": input,
+            }
+
+            if instructions:
+                request_params["instructions"] = instructions
+
+            if reasoning_effort:
+                request_params["reasoning"] = {"effort": reasoning_effort}
+
+            if verbosity:
+                request_params["text"] = {"verbosity": verbosity}
+
+            if max_output_tokens:
+                request_params["max_output_tokens"] = max_output_tokens
+
+            response = await self.async_client.responses.create(**request_params)
+
+            content = response.output_text
+            usage = response.usage
+
+            return {
+                "content": content,
+                "usage": {
+                    "prompt_tokens": usage.prompt_tokens,
+                    "completion_tokens": usage.completion_tokens,
+                    "total_tokens": usage.total_tokens,
+                },
+                "model": model,
+            }
+
+        except Exception as e:
+            logger.error(f"Error in async Responses API call: {e}")
+            raise
+
+    async def create_response_stream(
+        self,
+        model: str,
+        input: str,
+        instructions: Optional[str] = None,
+        reasoning_effort: Optional[str] = None,
+        verbosity: Optional[str] = None,
+    ) -> AsyncGenerator[str, None]:
+        """Stream response tokens using the Responses API."""
+        try:
+            logger.info(f"Starting async Responses API stream with {model}")
+
+            request_params = {
+                "model": model,
+                "input": input,
+                "stream": True,
+            }
+
+            if instructions:
+                request_params["instructions"] = instructions
+
+            if reasoning_effort:
+                request_params["reasoning"] = {"effort": reasoning_effort}
+
+            if verbosity:
+                request_params["text"] = {"verbosity": verbosity}
+
+            stream = await self.async_client.responses.create(**request_params)
+
+            async for event in stream:
+                if event.type == "response.output_text.delta":
+                    yield event.delta
+
+        except Exception as e:
+            logger.error(f"Error in async Responses API stream: {e}")
             raise
 
     def _create_error_response(self, error_type: str, exception: Optional[Exception]) -> Dict[str, Any]:

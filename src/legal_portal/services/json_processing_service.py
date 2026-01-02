@@ -181,8 +181,13 @@ class JsonProcessingService:
                 clio_matter_context="",
             )
 
-            logger.info(f"Making OpenAI request with master prompt for {jurisdiction} using gpt-4o.")
-            markdown_response = self._make_openai_request(formatted_prompt, model="gpt-4o")
+            logger.info(f"Making OpenAI request with master prompt for {jurisdiction} using gpt-5.2.")
+            markdown_response = self._make_openai_request_responses_api(
+                formatted_prompt, 
+                model="gpt-5.2",
+                reasoning_effort="low",
+                verbosity="high"
+            )
 
             if not markdown_response or not markdown_response.strip():
                 error_msg = "OpenAI returned empty response for Markdown generation"
@@ -307,12 +312,13 @@ class JsonProcessingService:
         loop = asyncio.get_running_loop()
         markdown_response = await loop.run_in_executor(
             None,  # Use the default thread pool executor
-            self._make_openai_request,
+            self._make_openai_request_responses_api,
             prompt,
-            "gpt-4o",  # model
-            0.3,  # temperature
-            12000,  # max_tokens
-            (  # system_message
+            "gpt-5.2",  # model
+            "low",  # reasoning_effort
+            "high",  # verbosity
+            12000,  # max_output_tokens
+            (  # instructions
                 "You are a senior legal writing assistant helping to draft professional "
                 "client findings letters. Follow the template structure exactly and "
                 "provide comprehensive, well-reasoned legal analysis."
@@ -462,10 +468,11 @@ class JsonProcessingService:
         loop = asyncio.get_running_loop()
         markdown_response = await loop.run_in_executor(
             None,
-            self._make_openai_request,
+            self._make_openai_request_responses_api,
             prompt,
-            "gpt-4o",
-            0.3,
+            "gpt-5.2",
+            "low",
+            "high",
             12000,
             (
                 "You are a senior legal writing assistant. Generate an attorney-quality "
@@ -592,20 +599,15 @@ class JsonProcessingService:
 
         logger.info(f"Streaming adaptive findings letter for {jurisdiction}")
         
-        async for token in self.client.create_chat_completion_stream(
-            model="gpt-4o",
-            messages=[
-                {
-                    "role": "system",
-                    "content": (
-                        "You are a senior legal writing assistant. Generate an attorney-quality "
-                        "findings letter following the adaptive structure guidance provided."
-                    ),
-                },
-                {"role": "user", "content": prompt},
-            ],
-            temperature=0.3,
-            max_tokens=8000,
+        async for token in self.client.create_response_stream(
+            model="gpt-5.2",
+            instructions=(
+                "You are a senior legal writing assistant. Generate an attorney-quality "
+                "findings letter following the adaptive structure guidance provided."
+            ),
+            input=prompt,
+            reasoning_effort="low",
+            verbosity="high",
         ):
             yield token
 
@@ -865,7 +867,7 @@ Thank you,
         max_tokens: int = 12000,
         system_message: str = None,
     ) -> Optional[str]:
-        """Make OpenAI API request with comprehensive error handling following OpenAI best practices."""
+        """Make OpenAI API request with comprehensive error handling (legacy Chat Completions API)."""
         # Default system message for JSON output (document analysis)
         if system_message is None:
             system_message = "You are a helpful assistant designed to output JSON."
@@ -895,5 +897,59 @@ Thank you,
             return response_dict["content"]
         except Exception as e:
             logger.exception(f"An error occurred during the OpenAI request: {e}")
+            # Depending on desired behavior, you might want to return None or re-raise
+            return None
+
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_fixed(2),
+        retry=retry_if_exception_type(
+            (
+                RateLimitError,
+                APIError,
+                APITimeoutError,
+                APIConnectionError,
+                InternalServerError,
+            )
+        ),
+    )
+    def _make_openai_request_responses_api(
+        self,
+        prompt: str,
+        model: Optional[str] = "gpt-5.2",
+        reasoning_effort: Optional[str] = "low",
+        verbosity: Optional[str] = "high",
+        max_output_tokens: int = 12000,
+        instructions: str = None,
+    ) -> Optional[str]:
+        """Make OpenAI API request using Responses API with reasoning and verbosity controls."""
+        # Default instructions
+        if instructions is None:
+            instructions = "You are a helpful assistant designed to output JSON."
+
+        logger.info(
+            "Making Responses API request",
+            extra={
+                "method": "_make_openai_request_responses_api",
+                "model": model,
+                "prompt_length": len(prompt),
+                "reasoning_effort": reasoning_effort,
+                "verbosity": verbosity,
+                "max_output_tokens": max_output_tokens,
+            },
+        )
+
+        try:
+            response_dict = self.client.create_response(
+                model=model,
+                input=prompt,
+                instructions=instructions,
+                reasoning_effort=reasoning_effort,
+                verbosity=verbosity,
+                max_output_tokens=max_output_tokens,
+            )
+            return response_dict["content"]
+        except Exception as e:
+            logger.exception(f"An error occurred during the Responses API request: {e}")
             # Depending on desired behavior, you might want to return None or re-raise
             return None

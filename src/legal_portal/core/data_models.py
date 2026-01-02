@@ -457,11 +457,29 @@ class ProcessingResult(BaseModel):
 class AIPreferences(BaseModel):
     """User preferences for AI model selection and document handling."""
 
-    document_analysis: str = "gpt-4o"
-    letter_generation: str = "gpt-4o"
-    case_chat: str = "gpt-4o"
-    multi_stage_analysis: str = "gpt-4o"
+    document_analysis: str = "gpt-5-mini"
+    letter_generation: str = "gpt-5.2"
+    case_chat: str = "gpt-5-mini"
+    multi_stage_analysis: str = "gpt-5.2"
     blacklisted_documents: List[str] = Field(default_factory=list)
+
+
+class ReasoningConfig(BaseModel):
+    """Reasoning effort settings for different operations (GPT-5 family)."""
+
+    document_analysis: str = "none"
+    letter_generation: str = "low"
+    case_chat: str = "none"
+    multi_stage_analysis: str = "medium"
+
+
+class VerbosityConfig(BaseModel):
+    """Verbosity settings for different operations (GPT-5 family)."""
+
+    document_analysis: str = "medium"
+    letter_generation: str = "high"
+    case_chat: str = "low"
+    multi_stage_analysis: str = "medium"
 
 
 class StageProgress(BaseModel):
@@ -490,7 +508,7 @@ class StatsProgress(BaseModel):
     elapsed_seconds: float
     estimated_remaining: Optional[float] = None
     tokens_used: int = 0
-    model: str = "gpt-4o"
+    model: str = "gpt-5.2"
 
 
 class EnhancedProgressEvent(BaseModel):

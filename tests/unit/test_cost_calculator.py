@@ -26,7 +26,7 @@ def test_calculate_document_analysis_costs_exact():
     processing_logs = {
         "test_document.pdf": {
             "token_usage": {"prompt_tokens": 1000, "completion_tokens": 2000},
-            "model": "gpt-4o",
+            "model": "gpt-5.2",
         }
     }
 
@@ -35,12 +35,12 @@ def test_calculate_document_analysis_costs_exact():
         analyzed_documents=[analyzed_doc], processing_logs=processing_logs
     )
 
-    # Expected: (1000 × $0.000005) + (2000 × $0.000015) = $0.005 + $0.03 = $0.035
-    expected_cost = Decimal("0.005") + Decimal("0.03")  # $0.035
+    # Expected: (1000 × $0.00001) + (2000 × $0.00003) = $0.01 + $0.06 = $0.07
+    expected_cost = Decimal("0.01") + Decimal("0.06")  # $0.07
 
     assert len(costs) == 1
     assert abs(costs[0].cost - float(expected_cost)) < 0.0001  # Allow small floating point differences
-    assert costs[0].service_name == "OpenAI GPT-4o"
+    assert costs[0].service_name == "OpenAI GPT-5.2"
     assert costs[0].operation_type == "document_analysis"
     assert costs[0].units_consumed == 3000  # total tokens
 
@@ -164,9 +164,9 @@ def test_total_actual_costs_aggregates_all_services():
         "documents": {
             "doc1.pdf": {
                 "token_usage": {"prompt_tokens": 1000, "completion_tokens": 2000},
-                "model": "gpt-4o",
+                "model": "gpt-5.2",
             },
-            "doc2.pdf": {"token_usage": {"prompt_tokens": 800, "completion_tokens": 1500}, "model": "gpt-4o"},
+            "doc2.pdf": {"token_usage": {"prompt_tokens": 800, "completion_tokens": 1500}, "model": "gpt-5.2"},
         }
     }
 

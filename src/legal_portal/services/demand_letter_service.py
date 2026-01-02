@@ -114,24 +114,19 @@ class DemandLetterService:
         )
 
         logger.info(f"Streaming demand letter for {target_party_name} in {jurisdiction}")
-        model = self.client.get_preferred_model("letter_generation", "gpt-4o")
+        model = self.client.get_preferred_model("letter_generation", "gpt-5.2")
         
-        async for token in self.client.create_chat_completion_stream(
+        async for token in self.client.create_response_stream(
             model=model,
-            messages=[
-                {
-                    "role": "system",
-                    "content": (
-                        f"You are a senior {jurisdiction} attorney drafting a formal demand letter. "
-                        "Be professional, assertive, and precise. "
-                        "Output clean content without markdown code fences or extra formatting. "
-                        "Use proper HTML-compatible line breaks and structure."
-                    ),
-                },
-                {"role": "user", "content": prompt},
-            ],
-            temperature=0.3,
-            max_tokens=8000,
+            instructions=(
+                f"You are a senior {jurisdiction} attorney drafting a formal demand letter. "
+                "Be professional, assertive, and precise. "
+                "Output clean content without markdown code fences or extra formatting. "
+                "Use proper HTML-compatible line breaks and structure."
+            ),
+            input=prompt,
+            reasoning_effort="low",
+            verbosity="high",
         ):
             yield token
 

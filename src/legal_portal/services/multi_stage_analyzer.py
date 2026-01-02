@@ -375,23 +375,18 @@ RULES:
 - Return ONLY valid JSON, no markdown formatting
 """
 
-        model = self.client.get_preferred_model("multi_stage_analysis", "gpt-4o")
+        model = self.client.get_preferred_model("multi_stage_analysis", "gpt-5.2")
         # Use asyncio.to_thread to avoid blocking the event loop during API call
         response_dict = await asyncio.to_thread(
-            self.client.create_chat_completion,
+            self.client.create_response,
             model=model,
-            messages=[
-                {
-                    "role": "system",
-                    "content": (
-                        f"You are a precise legal fact extractor for {jurisdiction} law. "
-                        "Return only valid JSON."
-                    ),
-                },
-                {"role": "user", "content": prompt},
-            ],
-            max_tokens=4000,
-            temperature=0.1,
+            instructions=(
+                f"You are a precise legal fact extractor for {jurisdiction} law. "
+                "Return only valid JSON."
+            ),
+            input=prompt,
+            max_output_tokens=4000,
+            reasoning_effort="medium",
         )
 
         raw_response = response_dict["content"].strip()
@@ -471,20 +466,15 @@ Return JSON:
 }}
 """
 
-        model = self.client.get_preferred_model("multi_stage_analysis", "gpt-4o")
+        model = self.client.get_preferred_model("multi_stage_analysis", "gpt-5.2")
         # Use asyncio.to_thread to avoid blocking the event loop during API call
         response_dict = await asyncio.to_thread(
-            self.client.create_chat_completion,
+            self.client.create_response,
             model=model,
-            messages=[
-                {
-                    "role": "system",
-                    "content": f"You are an expert {jurisdiction} legal analyst. Return only valid JSON.",
-                },
-                {"role": "user", "content": prompt},
-            ],
-            max_tokens=3000,
-            temperature=0.2,
+            instructions=f"You are an expert {jurisdiction} legal analyst. Return only valid JSON.",
+            input=prompt,
+            max_output_tokens=3000,
+            reasoning_effort="medium",
         )
 
         raw_response = response_dict["content"].strip()
@@ -582,23 +572,18 @@ CRITICAL INSTRUCTIONS:
 Return ONLY valid JSON.
 """
 
-        model = self.client.get_preferred_model("multi_stage_analysis", "gpt-4o")
+        model = self.client.get_preferred_model("multi_stage_analysis", "gpt-5.2")
         # Use asyncio.to_thread to avoid blocking the event loop during API call
         response_dict = await asyncio.to_thread(
-            self.client.create_chat_completion,
+            self.client.create_response,
             model=model,
-            messages=[
-                {
-                    "role": "system",
-                    "content": (
-                        f"You are a senior {jurisdiction} attorney with 20+ years experience. "
-                        "Provide comprehensive analysis."
-                    ),
-                },
-                {"role": "user", "content": prompt},
-            ],
-            max_tokens=6000,
-            temperature=0.3,
+            instructions=(
+                f"You are a senior {jurisdiction} attorney with 20+ years experience. "
+                "Provide comprehensive analysis."
+            ),
+            input=prompt,
+            max_output_tokens=6000,
+            reasoning_effort="medium",
         )
 
         raw_response = response_dict["content"].strip()

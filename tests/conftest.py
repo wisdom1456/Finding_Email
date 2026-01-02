@@ -357,11 +357,11 @@ def sample_processing_logs():
         "documents": {
             "Contract.pdf": {
                 "token_usage": {"prompt_tokens": 1000, "completion_tokens": 2000, "total_tokens": 3000},
-                "model": "gpt-4o",
+                "model": "gpt-5.2",
             },
             "Email_Correspondence.pdf": {
                 "token_usage": {"prompt_tokens": 800, "completion_tokens": 1500, "total_tokens": 2300},
-                "model": "gpt-4o",
+                "model": "gpt-5.2",
             },
         }
     }

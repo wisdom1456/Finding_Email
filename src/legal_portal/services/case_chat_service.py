@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from typing import Dict, List, Optional
+from typing import AsyncGenerator, Dict, List, Optional
 
 from legal_portal.core.data_models import ProcessingResult
 from legal_portal.services.statute_recommendation_service import (
@@ -46,12 +46,23 @@ class CaseChatService:
 
         logger.info(f"Case chat request with {len(conversation_history)} prior messages")
 
-        model = self.client.get_preferred_model("case_chat", "gpt-4o")
-        response = self.client.create_chat_completion(
+        model = self.client.get_preferred_model("case_chat", "gpt-5-mini")
+        
+        # Convert messages to Responses API format
+        # System message becomes instructions, history and user message become input
+        instructions = messages[0]["content"] if messages and messages[0]["role"] == "system" else None
+        conversation_text = "\n\n".join([
+            f"{msg['role'].upper()}: {msg['content']}" 
+            for msg in messages[1:] if msg["role"] in ["user", "assistant"]
+        ])
+        
+        response = self.client.create_response(
             model=model,
-            messages=messages,
-            temperature=0.4,
-            max_tokens=1500,
+            input=conversation_text,
+            instructions=instructions,
+            reasoning_effort="none",
+            verbosity="low",
+            max_output_tokens=1500,
         )
 
         return response["content"]
@@ -72,12 +83,21 @@ class CaseChatService:
 
         logger.info(f"Case chat stream request with {len(conversation_history)} prior messages")
 
-        model = self.client.get_preferred_model("case_chat", "gpt-4o")
-        async for token in self.client.create_chat_completion_stream(
+        model = self.client.get_preferred_model("case_chat", "gpt-5-mini")
+        
+        # Convert messages to Responses API format
+        instructions = messages[0]["content"] if messages and messages[0]["role"] == "system" else None
+        conversation_text = "\n\n".join([
+            f"{msg['role'].upper()}: {msg['content']}" 
+            for msg in messages[1:] if msg["role"] in ["user", "assistant"]
+        ])
+        
+        async for token in self.client.create_response_stream(
             model=model,
-            messages=messages,
-            temperature=0.4,
-            max_tokens=1500,
+            input=conversation_text,
+            instructions=instructions,
+            reasoning_effort="none",
+            verbosity="low",
         ):
             yield token
 

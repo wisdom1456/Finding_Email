@@ -191,12 +191,12 @@ OUTPUT AS STRICT JSON:
 """
 
     try:
-        model = openai_client_wrapper.get_preferred_model("document_analysis", "gpt-4o")
-        response = openai_client_wrapper.create_chat_completion(
+        model = openai_client_wrapper.get_preferred_model("document_analysis", "gpt-5.2")
+        response = openai_client_wrapper.create_response(
             model=model,
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.3,
-            response_format={"type": "json_object"},
+            input=prompt,
+            instructions="You are a senior legal analyst. Return only valid JSON.",
+            reasoning_effort="medium",
         )
 
         analysis_json = json.loads(response["content"])
@@ -551,13 +551,13 @@ async def process_case_documents(
             f"Successfully completed document processing in {processing_time:.2f}s (letters deferred)"
         )
 
-        # Track which models were used for each operation
+    # Track which models were used for each operation
         models_used = {
-            "document_analysis": openai_client_wrapper.get_preferred_model("document_analysis", "gpt-4o"),
-            "letter_generation": openai_client_wrapper.get_preferred_model("letter_generation", "gpt-4o"),
-            "case_chat": openai_client_wrapper.get_preferred_model("case_chat", "gpt-4o"),
+            "document_analysis": openai_client_wrapper.get_preferred_model("document_analysis", "gpt-5-mini"),
+            "letter_generation": openai_client_wrapper.get_preferred_model("letter_generation", "gpt-5.2"),
+            "case_chat": openai_client_wrapper.get_preferred_model("case_chat", "gpt-5-mini"),
             "multi_stage_analysis": openai_client_wrapper.get_preferred_model(
-                "multi_stage_analysis", "gpt-4o"
+                "multi_stage_analysis", "gpt-5.2"
             ),
         }
 
@@ -1016,19 +1016,15 @@ Return ONLY valid JSON, no markdown code blocks.
         )
 
     # Make the API call
-    model = openai_client_wrapper.get_preferred_model("document_analysis", "gpt-4o")
+    model = openai_client_wrapper.get_preferred_model("document_analysis", "gpt-5-mini")
     response_dict = await asyncio.to_thread(
-        openai_client_wrapper.create_chat_completion,
+        openai_client_wrapper.create_response,
         model=model,
-        messages=[
-            {
-                "role": "system",
-                "content": "You are a precise legal document analyst. Always return valid JSON.",
-            },
-            {"role": "user", "content": prompt},
-        ],
-        max_tokens=4000,
-        temperature=0.3,
+        instructions="You are a precise legal document analyst. Always return valid JSON.",
+        input=prompt,
+        max_output_tokens=4000,
+        reasoning_effort="none",
+        verbosity="medium",
     )
 
     # Parse JSON response

@@ -127,7 +127,11 @@ class MultiStageAnalyzer:
     ) -> MultiStageAnalysisResult:
         """Execute 4-stage analysis pipeline."""
         start_time = time.time()
-        logger.info(f"Starting multi-stage analysis pipeline for {jurisdiction}")
+        logger.info(
+            f"[PIPELINE:START] [ELAPSED:0s] Starting multi-stage analysis | "
+            f"jurisdiction={jurisdiction} docs={len(document_summaries)} "
+            f"intake_chars={len(intake_content)} case_type={case_type}"
+        )
 
         # Stage 2: Log Intake Content (if not already logged)
         if diag_logger:
@@ -148,6 +152,12 @@ class MultiStageAnalyzer:
             )
 
         stage_start = time.time()
+        elapsed = time.time() - start_time
+        logger.info(
+            f"[STAGE:1] [ELAPSED:{elapsed:.1f}s] Starting fact_matrix extraction | "
+            f"jurisdiction={jurisdiction}"
+        )
+        
         # Use heartbeat to show progress during long API call
         fact_matrix = await self._run_with_heartbeat(
             lambda: self._extract_fact_matrix(intake_content, document_summaries, jurisdiction),
@@ -157,6 +167,14 @@ class MultiStageAnalyzer:
             20,
         )
         self.stage_timings["fact_extraction"] = time.time() - stage_start
+        elapsed = time.time() - start_time
+        
+        logger.info(
+            f"[STAGE:1] [ELAPSED:{elapsed:.1f}s] fact_matrix complete | "
+            f"duration={self.stage_timings['fact_extraction']:.1f}s "
+            f"parties={len(fact_matrix.parties)} events={len(fact_matrix.timeline)} "
+            f"financial_items={len(fact_matrix.financial_data)}"
+        )
         
         if progress_callback:
             await progress_callback(
@@ -175,12 +193,6 @@ class MultiStageAnalyzer:
 
         if diag_logger:
             diag_logger.log_stage("multi_stage_1_fact_matrix", fact_matrix.model_dump(mode="json"))
-            
-        logger.info(
-            f"Stage 1 complete ({self.stage_timings['fact_extraction']:.1f}s): "
-            f"{len(fact_matrix.parties)} parties, "
-            f"{len(fact_matrix.timeline)} events"
-        )
 
         # Stage 2: Map Legal Issues
         if progress_callback:
@@ -193,6 +205,12 @@ class MultiStageAnalyzer:
             )
 
         stage_start = time.time()
+        elapsed = time.time() - start_time
+        logger.info(
+            f"[STAGE:2] [ELAPSED:{elapsed:.1f}s] Starting issue_mapping | "
+            f"parties={len(fact_matrix.parties)} case_type={case_type}"
+        )
+        
         # Use heartbeat to show progress during long API call
         issue_map = await self._run_with_heartbeat(
             lambda: self._map_legal_issues(
@@ -204,6 +222,14 @@ class MultiStageAnalyzer:
             40,
         )
         self.stage_timings["issue_mapping"] = time.time() - stage_start
+        elapsed = time.time() - start_time
+        
+        logger.info(
+            f"[STAGE:2] [ELAPSED:{elapsed:.1f}s] issue_mapping complete | "
+            f"duration={self.stage_timings['issue_mapping']:.1f}s "
+            f"primary_issues={len(issue_map.primary_issues)} "
+            f"secondary_issues={len(issue_map.secondary_issues)}"
+        )
         
         if progress_callback:
             await progress_callback(
@@ -222,11 +248,6 @@ class MultiStageAnalyzer:
 
         if diag_logger:
             diag_logger.log_stage("multi_stage_2_issue_map", issue_map.model_dump(mode="json"))
-            
-        logger.info(
-            f"Stage 2 complete ({self.stage_timings['issue_mapping']:.1f}s): "
-            f"{len(issue_map.primary_issues)} primary issues"
-        )
 
         # Stage 3: Deep Legal Analysis
         if progress_callback:
@@ -239,6 +260,12 @@ class MultiStageAnalyzer:
             )
 
         stage_start = time.time()
+        elapsed = time.time() - start_time
+        logger.info(
+            f"[STAGE:3] [ELAPSED:{elapsed:.1f}s] Starting deep_analysis | "
+            f"issues_to_analyze={len(issue_map.primary_issues)}"
+        )
+        
         # Use heartbeat to show progress during long API call
         deep_analysis = await self._run_with_heartbeat(
             lambda: self._perform_deep_legal_analysis(
@@ -250,6 +277,13 @@ class MultiStageAnalyzer:
             70,
         )
         self.stage_timings["deep_analysis"] = time.time() - stage_start
+        elapsed = time.time() - start_time
+        
+        logger.info(
+            f"[STAGE:3] [ELAPSED:{elapsed:.1f}s] deep_analysis complete | "
+            f"duration={self.stage_timings['deep_analysis']:.1f}s "
+            f"analyses_generated={len(deep_analysis.issue_analyses)}"
+        )
         
         if progress_callback:
             await progress_callback(
@@ -268,11 +302,6 @@ class MultiStageAnalyzer:
 
         if diag_logger:
             diag_logger.log_stage("multi_stage_3_deep_analysis", deep_analysis.model_dump(mode="json"))
-            
-        logger.info(
-            f"Stage 3 complete ({self.stage_timings['deep_analysis']:.1f}s): "
-            f"{len(deep_analysis.issue_analyses)} issues analyzed"
-        )
 
         # Stage 4: Letter Structure Determination
         if progress_callback:
@@ -285,8 +314,19 @@ class MultiStageAnalyzer:
             )
 
         stage_start = time.time()
+        elapsed = time.time() - start_time
+        logger.info(
+            f"[STAGE:4] [ELAPSED:{elapsed:.1f}s] Starting letter_structure determination"
+        )
+        
         letter_structure = self._determine_letter_structure(issue_map, deep_analysis)
         self.stage_timings["structure_determination"] = time.time() - stage_start
+        elapsed = time.time() - start_time
+        
+        logger.info(
+            f"[STAGE:4] [ELAPSED:{elapsed:.1f}s] letter_structure complete | "
+            f"duration={self.stage_timings['structure_determination']:.1f}s"
+        )
         
         if progress_callback:
             await progress_callback(
@@ -311,10 +351,19 @@ class MultiStageAnalyzer:
         )
 
         total_time = time.time() - start_time
-        logger.info(f"Multi-stage analysis pipeline complete in {total_time:.2f}s")
-
+        
         # Derive opposing parties
         opposing_parties = self._identify_opposing_parties(fact_matrix)
+        
+        logger.info(
+            f"[PIPELINE:COMPLETE] [ELAPSED:{total_time:.1f}s] Multi-stage analysis complete | "
+            f"fact_extraction={self.stage_timings.get('fact_extraction', 0):.1f}s "
+            f"issue_mapping={self.stage_timings.get('issue_mapping', 0):.1f}s "
+            f"deep_analysis={self.stage_timings.get('deep_analysis', 0):.1f}s "
+            f"structure_determination={self.stage_timings.get('structure_determination', 0):.1f}s | "
+            f"results: parties={len(fact_matrix.parties)} issues={len(issue_map.primary_issues)} "
+            f"analyses={len(deep_analysis.issue_analyses)} statutes={len(verified_statutes)}"
+        )
 
         return MultiStageAnalysisResult(
             fact_matrix=fact_matrix,
@@ -456,8 +505,15 @@ RULES:
 """
 
         model = self.client.get_preferred_model("multi_stage_analysis", "gpt-5.2")
+        
+        logger.info(
+            f"[STAGE:1:API] Calling OpenAI for fact_matrix | "
+            f"model={model} prompt_chars={len(prompt)} reasoning_effort=low max_tokens=4000"
+        )
+        
         # Use asyncio.to_thread to avoid blocking the event loop during API call
         # Use reasoning_effort="low" to prevent timeouts while maintaining quality
+        api_start = time.time()
         response_dict = await asyncio.to_thread(
             self.client.create_response,
             model=model,
@@ -468,6 +524,15 @@ RULES:
             input=prompt,
             max_output_tokens=4000,
             reasoning_effort="low",
+        )
+        api_duration = time.time() - api_start
+        
+        logger.info(
+            f"[STAGE:1:API] OpenAI response received | "
+            f"duration={api_duration:.1f}s "
+            f"prompt_tokens={response_dict.get('usage', {}).get('prompt_tokens', 0)} "
+            f"completion_tokens={response_dict.get('usage', {}).get('completion_tokens', 0)} "
+            f"response_chars={len(response_dict.get('content', ''))}"
         )
 
         raw_response = response_dict["content"].strip()
@@ -548,8 +613,15 @@ Return JSON:
 """
 
         model = self.client.get_preferred_model("multi_stage_analysis", "gpt-5.2")
+        
+        logger.info(
+            f"[STAGE:2:API] Calling OpenAI for issue_mapping | "
+            f"model={model} prompt_chars={len(prompt)} reasoning_effort=low max_tokens=3000"
+        )
+        
         # Use asyncio.to_thread to avoid blocking the event loop during API call
         # Use reasoning_effort="low" to prevent timeouts while maintaining quality
+        api_start = time.time()
         response_dict = await asyncio.to_thread(
             self.client.create_response,
             model=model,
@@ -557,6 +629,15 @@ Return JSON:
             input=prompt,
             max_output_tokens=3000,
             reasoning_effort="low",
+        )
+        api_duration = time.time() - api_start
+        
+        logger.info(
+            f"[STAGE:2:API] OpenAI response received | "
+            f"duration={api_duration:.1f}s "
+            f"prompt_tokens={response_dict.get('usage', {}).get('prompt_tokens', 0)} "
+            f"completion_tokens={response_dict.get('usage', {}).get('completion_tokens', 0)} "
+            f"response_chars={len(response_dict.get('content', ''))}"
         )
 
         raw_response = response_dict["content"].strip()
@@ -655,8 +736,15 @@ Return ONLY valid JSON.
 """
 
         model = self.client.get_preferred_model("multi_stage_analysis", "gpt-5.2")
+        
+        logger.info(
+            f"[STAGE:3:API] Calling OpenAI for deep_analysis | "
+            f"model={model} prompt_chars={len(prompt)} reasoning_effort=low max_tokens=6000"
+        )
+        
         # Use asyncio.to_thread to avoid blocking the event loop during API call
         # Use reasoning_effort="low" to prevent timeouts while maintaining quality
+        api_start = time.time()
         response_dict = await asyncio.to_thread(
             self.client.create_response,
             model=model,
@@ -667,6 +755,15 @@ Return ONLY valid JSON.
             input=prompt,
             max_output_tokens=6000,
             reasoning_effort="low",
+        )
+        api_duration = time.time() - api_start
+        
+        logger.info(
+            f"[STAGE:3:API] OpenAI response received | "
+            f"duration={api_duration:.1f}s "
+            f"prompt_tokens={response_dict.get('usage', {}).get('prompt_tokens', 0)} "
+            f"completion_tokens={response_dict.get('usage', {}).get('completion_tokens', 0)} "
+            f"response_chars={len(response_dict.get('content', ''))}"
         )
 
         raw_response = response_dict["content"].strip()

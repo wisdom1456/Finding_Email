@@ -633,6 +633,13 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
         provider: AI provider to use
 
     """
+    bg_start_time = time.time()
+    
+    logger.info(
+        f"[BACKGROUND:START] [CASE:{case_id}] [ANALYSIS:{analysis_id}] "
+        f"Background task started | provider={provider}"
+    )
+    
     # Initialize progress manager
     progress_manager = ProgressManager.get_instance()
     await progress_manager.create_channel(analysis_id)
@@ -659,6 +666,9 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
         await _update_analysis_progress(supabase, analysis_id, initial_payload)
 
         # Get case details
+        elapsed = time.time() - bg_start_time
+        logger.info(f"[BACKGROUND:FETCH] [CASE:{case_id}] [ELAPSED:{elapsed:.1f}s] Fetching case and documents")
+        
         case_response = supabase.table("cases").select("*").eq("id", case_id).execute()
         if not case_response.data:
             raise ValueError("Case not found")
@@ -673,15 +683,18 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
         if not documents:
             raise ValueError("No documents found for case")
 
+        elapsed = time.time() - bg_start_time
+        logger.info(
+            f"[BACKGROUND:PREP] [CASE:{case_id}] [ELAPSED:{elapsed:.1f}s] "
+            f"Preparing documents | total_docs={len(documents)} jurisdiction={jurisdiction}"
+        )
+
         # Step 1: Prepare ProcessedDocument objects directly from DB (no re-extraction)
         from legal_portal.core.data_models import FileMetadata, FileType
 
         processed_intake = []
         processed_case_docs = []
         skipped_documents = []
-
-        # Log document analysis for debugging
-        logger.info(f"Analyzing {len(documents)} documents for case {case_id}")
 
         for doc in documents:
             doc_name = doc.get("file_name", "unknown")
@@ -858,6 +871,13 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
             )
 
         # Call the actual processor (AI passes)
+        elapsed = time.time() - bg_start_time
+        logger.info(
+            f"[BACKGROUND:PROCESSOR] [CASE:{case_id}] [ELAPSED:{elapsed:.1f}s] "
+            f"Calling main processor | intake_docs={len(processed_intake)} case_docs={len(processed_case_docs)}"
+        )
+        
+        processor_start = time.time()
         result: ProcessingResult = await process_case_documents(
             processed_intake=processed_intake,
             processed_case_docs=processed_case_docs,
@@ -867,10 +887,20 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
             jurisdiction=jurisdiction,  # Pass jurisdiction to main processor
             skipped_documents=skipped_documents,
         )
+        processor_duration = time.time() - processor_start
+        elapsed = time.time() - bg_start_time
+        
+        logger.info(
+            f"[BACKGROUND:PROCESSOR] [CASE:{case_id}] [ELAPSED:{elapsed:.1f}s] "
+            f"Processor complete | duration={processor_duration:.1f}s status={result.status}"
+        )
 
         # Persist document extraction results to the database
         if result.processed_documents:
-            logger.info(f"Persisting extraction results for {len(result.processed_documents)} documents")
+            logger.info(
+                f"[BACKGROUND:PERSIST] [CASE:{case_id}] [ELAPSED:{elapsed:.1f}s] "
+                f"Persisting extraction results | docs={len(result.processed_documents)}"
+            )
             for doc in result.processed_documents:
                 if doc.document_id:
                     try:
@@ -905,7 +935,11 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
             current_artifacts["skipped_documents"] = [s.model_dump() for s in result.skipped_documents]
             result.artifacts = current_artifacts
 
-        logger.info(f"Processing completed with status: {result.status}")
+        elapsed = time.time() - bg_start_time
+        logger.info(
+            f"[BACKGROUND:ARTIFACTS] [CASE:{case_id}] [ELAPSED:{elapsed:.1f}s] "
+            f"Generating artifacts | status={result.status}"
+        )
 
         artifacts_meta = _generate_and_store_artifacts(result, case_id, analysis_id, supabase)
         if artifacts_meta:
@@ -921,6 +955,12 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
 
         # Update case status
         supabase.table("cases").update({"status": "completed"}).eq("id", case_id).execute()
+
+        elapsed = time.time() - bg_start_time
+        logger.info(
+            f"[BACKGROUND:COMPLETE] [CASE:{case_id}] [ELAPSED:{elapsed:.1f}s] "
+            f"Analysis complete | total_duration={elapsed:.1f}s"
+        )
 
         # Publish completion event
         completion_payload = {
@@ -945,9 +985,13 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
         # Log error and update status
         error_message = str(e)
         error_traceback = traceback.format_exc()
+        elapsed = time.time() - bg_start_time
 
-        logger.error(f"Error in process_case_background: {error_message}")
-        logger.error(f"Traceback: {error_traceback}")
+        logger.error(
+            f"[BACKGROUND:ERROR] [CASE:{case_id}] [ELAPSED:{elapsed:.1f}s] "
+            f"Analysis FAILED | error_type={type(e).__name__} error={error_message}"
+        )
+        logger.error(f"[BACKGROUND:ERROR] [CASE:{case_id}] Traceback:\n{error_traceback}")
 
         error_payload = {
             "message": f"Analysis failed: {error_message}",

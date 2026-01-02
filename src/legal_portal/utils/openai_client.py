@@ -548,14 +548,10 @@ class OpenAIClient:
         start_time = time.time()
         try:
             logger.info(
-                f"Making GPT-5 Chat Completions request with {model}",
-                extra={
-                    "model": model,
-                    "reasoning_effort": reasoning_effort,
-                    "verbosity": verbosity,
-                    "input_length": len(input) if input else 0,
-                    "max_output_tokens": max_output_tokens,
-                },
+                f"[OPENAI:REQUEST] Making GPT-5 Chat Completions request | "
+                f"model={model} reasoning_effort={reasoning_effort} verbosity={verbosity} "
+                f"input_chars={len(input) if input else 0} instructions_chars={len(instructions) if instructions else 0} "
+                f"max_output_tokens={max_output_tokens}"
             )
 
             # Build messages from input and instructions
@@ -596,14 +592,10 @@ class OpenAIClient:
 
             elapsed = time.time() - start_time
             logger.info(
-                f"GPT-5 Chat Completions call successful in {elapsed:.2f}s",
-                extra={
-                    "model": model,
-                    "prompt_tokens": usage.prompt_tokens,
-                    "completion_tokens": usage.completion_tokens,
-                    "total_tokens": usage.total_tokens,
-                    "elapsed_seconds": elapsed,
-                },
+                f"[OPENAI:RESPONSE] GPT-5 Chat Completions call successful | "
+                f"duration={elapsed:.1f}s model={model} "
+                f"prompt_tokens={usage.prompt_tokens} completion_tokens={usage.completion_tokens} "
+                f"total_tokens={usage.total_tokens} response_chars={len(content) if content else 0}"
             )
 
             return {
@@ -619,15 +611,15 @@ class OpenAIClient:
         except httpx.TimeoutException as e:
             elapsed = time.time() - start_time
             logger.error(
-                f"GPT-5 Chat Completions timeout after {elapsed:.2f}s: {e}",
-                extra={"model": model, "elapsed_seconds": elapsed, "error_type": "timeout"},
+                f"[OPENAI:TIMEOUT] GPT-5 Chat Completions timeout | "
+                f"duration={elapsed:.1f}s model={model} error={str(e)}"
             )
             raise
         except Exception as e:
             elapsed = time.time() - start_time
             logger.error(
-                f"Error in GPT-5 Chat Completions call after {elapsed:.2f}s: {e}",
-                extra={"model": model, "elapsed_seconds": elapsed, "error_type": type(e).__name__},
+                f"[OPENAI:ERROR] GPT-5 Chat Completions call failed | "
+                f"duration={elapsed:.1f}s model={model} error_type={type(e).__name__} error={str(e)}"
             )
             raise
 

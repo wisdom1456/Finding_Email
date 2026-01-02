@@ -235,15 +235,22 @@ async def process_case_documents(
     """Decoupled document processing workflow using already extracted text."""
     start_time = time.time()
     errors = []
+    case_id = case_info.get("case_id", "unknown")
 
     # Initialize Diagnostic Logger if enabled
     diag_logger = None
     if DiagnosticLogger.get_enabled():
-        diag_logger = DiagnosticLogger(session_id=case_info.get("case_id"))
+        diag_logger = DiagnosticLogger(session_id=case_id)
+        
+    logger.info(
+        f"[PROCESSOR:START] [CASE:{case_id}] Starting document processing | "
+        f"intake_docs={len(processed_intake)} case_docs={len(processed_case_docs)} "
+        f"jurisdiction={jurisdiction}"
+    )
         
     try:
         # 1. Initialize services
-        logger.info("Initializing processing services...")
+        logger.info(f"[PROCESSOR:INIT] [CASE:{case_id}] Initializing processing services")
         
         # Stage 1: Log Raw Extracted Text
         if diag_logger:
@@ -483,7 +490,11 @@ async def process_case_documents(
 
         # Multi-stage analysis is REQUIRED for letter generation
         # Always run it - no feature flag
-        logger.info(f"🔬 Running multi-stage analysis pipeline for {jurisdiction}")
+        elapsed = time.time() - start_time
+        logger.info(
+            f"[PROCESSOR:MULTISTAGE] [CASE:{case_id}] [ELAPSED:{elapsed:.1f}s] "
+            f"Starting multi-stage analysis | jurisdiction={jurisdiction} summaries={len(structured_summaries)}"
+        )
 
         try:
             statute_service = StatuteRecommendationService(jurisdiction=jurisdiction)
@@ -494,6 +505,7 @@ async def process_case_documents(
             if progress_callback:
                 await progress_callback("Running multi-stage legal analysis...", phase="fact_extraction")
 
+            multi_stage_start = time.time()
             multi_stage_result = await multi_stage_analyzer.analyze_case(
                 intake_content=intake_content,
                 document_summaries=structured_summaries,
@@ -502,6 +514,7 @@ async def process_case_documents(
                 jurisdiction=jurisdiction,  # Pass jurisdiction
                 diag_logger=diag_logger,  # Pass diagnostic logger
             )
+            multi_stage_duration = time.time() - multi_stage_start
 
             fact_matrix = multi_stage_result.fact_matrix
             legal_issue_map = multi_stage_result.issue_map
@@ -512,14 +525,21 @@ async def process_case_documents(
                 d.file_name: d.content for d in processed_case_docs + processed_intake
             }
 
+            elapsed = time.time() - start_time
             logger.info(
-                f"Multi-stage analysis complete: {len(fact_matrix.timeline)} timeline events, "
-                f"{len(legal_issue_map.primary_issues)} legal issues identified, "
-                f"letter structure: {letter_structure.style}"
+                f"[PROCESSOR:MULTISTAGE] [CASE:{case_id}] [ELAPSED:{elapsed:.1f}s] "
+                f"Multi-stage analysis complete | duration={multi_stage_duration:.1f}s "
+                f"timeline_events={len(fact_matrix.timeline)} primary_issues={len(legal_issue_map.primary_issues)} "
+                f"letter_style={letter_structure.style}"
             )
 
         except Exception as e:
-            logger.error(f"Multi-stage analysis failed: {e}", exc_info=True)
+            elapsed = time.time() - start_time
+            logger.error(
+                f"[PROCESSOR:MULTISTAGE] [CASE:{case_id}] [ELAPSED:{elapsed:.1f}s] "
+                f"Multi-stage analysis FAILED | error_type={type(e).__name__} error={str(e)}", 
+                exc_info=True
+            )
             multi_stage_result = None
             multi_stage_error = str(e)
             # Surface the error so it's visible in results
@@ -601,7 +621,11 @@ async def process_case_documents(
             processed_documents=processed_case_docs,  # NEW: Return processed documents for persistence
             skipped_documents=skipped_documents or [],  # NEW: Include skipped documents
         )
-        logger.info("✅ Document processing completed (letters deferred to on-demand endpoints).")
+        logger.info(
+            f"[PROCESSOR:COMPLETE] [CASE:{case_id}] [ELAPSED:{processing_time:.1f}s] "
+            f"Document processing completed | doc_count={len(processed_case_docs)} "
+            f"summaries={len(structured_summaries)} multi_stage={'SUCCESS' if multi_stage_result else 'FAILED'}"
+        )
         return result
 
     except ValueError as e:

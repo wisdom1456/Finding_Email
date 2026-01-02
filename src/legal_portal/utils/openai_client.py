@@ -30,11 +30,12 @@ class OpenAIClient:
 
         """
         # Configure HTTP client with appropriate timeouts for cloud environments
+        # GPT-5 with reasoning can take longer - allow up to 120s for read
         timeout = httpx.Timeout(
-            connect=10.0,  # Connection timeout
-            read=60.0,  # Read timeout
+            connect=15.0,  # Connection timeout
+            read=120.0,  # Read timeout - increased for GPT-5 reasoning
             write=30.0,  # Write timeout
-            pool=120.0,  # Pool timeout
+            pool=180.0,  # Pool timeout
         )
         limits = httpx.Limits(max_connections=100, max_keepalive_connections=20)
 
@@ -544,6 +545,7 @@ class OpenAIClient:
         - verbosity: Controls output length (low, medium, high)
         - max_completion_tokens: Maximum output tokens (replaces max_tokens for GPT-5)
         """
+        start_time = time.time()
         try:
             logger.info(
                 f"Making GPT-5 Chat Completions request with {model}",
@@ -551,6 +553,8 @@ class OpenAIClient:
                     "model": model,
                     "reasoning_effort": reasoning_effort,
                     "verbosity": verbosity,
+                    "input_length": len(input) if input else 0,
+                    "max_output_tokens": max_output_tokens,
                 },
             )
 
@@ -590,13 +594,15 @@ class OpenAIClient:
             content = response.choices[0].message.content
             usage = response.usage
 
+            elapsed = time.time() - start_time
             logger.info(
-                "GPT-5 Chat Completions call successful",
+                f"GPT-5 Chat Completions call successful in {elapsed:.2f}s",
                 extra={
                     "model": model,
                     "prompt_tokens": usage.prompt_tokens,
                     "completion_tokens": usage.completion_tokens,
                     "total_tokens": usage.total_tokens,
+                    "elapsed_seconds": elapsed,
                 },
             )
 
@@ -610,8 +616,19 @@ class OpenAIClient:
                 "model": model,
             }
 
+        except httpx.TimeoutException as e:
+            elapsed = time.time() - start_time
+            logger.error(
+                f"GPT-5 Chat Completions timeout after {elapsed:.2f}s: {e}",
+                extra={"model": model, "elapsed_seconds": elapsed, "error_type": "timeout"},
+            )
+            raise
         except Exception as e:
-            logger.error(f"Error in GPT-5 Chat Completions call: {e}")
+            elapsed = time.time() - start_time
+            logger.error(
+                f"Error in GPT-5 Chat Completions call after {elapsed:.2f}s: {e}",
+                extra={"model": model, "elapsed_seconds": elapsed, "error_type": type(e).__name__},
+            )
             raise
 
     async def create_response_async(

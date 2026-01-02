@@ -377,6 +377,7 @@ RULES:
 
         model = self.client.get_preferred_model("multi_stage_analysis", "gpt-5.2")
         # Use asyncio.to_thread to avoid blocking the event loop during API call
+        # Use reasoning_effort="low" to prevent timeouts while maintaining quality
         response_dict = await asyncio.to_thread(
             self.client.create_response,
             model=model,
@@ -386,7 +387,7 @@ RULES:
             ),
             input=prompt,
             max_output_tokens=4000,
-            reasoning_effort="medium",
+            reasoning_effort="low",
         )
 
         raw_response = response_dict["content"].strip()
@@ -468,13 +469,14 @@ Return JSON:
 
         model = self.client.get_preferred_model("multi_stage_analysis", "gpt-5.2")
         # Use asyncio.to_thread to avoid blocking the event loop during API call
+        # Use reasoning_effort="low" to prevent timeouts while maintaining quality
         response_dict = await asyncio.to_thread(
             self.client.create_response,
             model=model,
             instructions=f"You are an expert {jurisdiction} legal analyst. Return only valid JSON.",
             input=prompt,
             max_output_tokens=3000,
-            reasoning_effort="medium",
+            reasoning_effort="low",
         )
 
         raw_response = response_dict["content"].strip()
@@ -574,6 +576,7 @@ Return ONLY valid JSON.
 
         model = self.client.get_preferred_model("multi_stage_analysis", "gpt-5.2")
         # Use asyncio.to_thread to avoid blocking the event loop during API call
+        # Use reasoning_effort="low" to prevent timeouts while maintaining quality
         response_dict = await asyncio.to_thread(
             self.client.create_response,
             model=model,
@@ -583,7 +586,7 @@ Return ONLY valid JSON.
             ),
             input=prompt,
             max_output_tokens=6000,
-            reasoning_effort="medium",
+            reasoning_effort="low",
         )
 
         raw_response = response_dict["content"].strip()

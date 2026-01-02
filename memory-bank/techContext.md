@@ -72,7 +72,7 @@ request_params = {
 response = client.create_chat_completion(
     model="gpt-5.2",
     messages=messages,
-    max_tokens=4000,  # Automatically converted to max_completion_tokens for GPT-5
+    max_tokens=4000,  # Automatically passed via extra_body as max_completion_tokens for GPT-5
 )
 ```
 

@@ -340,12 +340,12 @@ class OpenAIClient:
                 "messages": messages,
             }
 
-            # GPT-5 models use max_completion_tokens and don't support temperature with reasoning
+            # GPT-5 models use max_completion_tokens via extra_body and don't support temperature with reasoning
             if self._is_gpt5_model(model):
                 if max_tokens is not None:
-                    request_params["max_completion_tokens"] = max_tokens
+                    # Pass max_completion_tokens via extra_body for SDK compatibility
+                    request_params["extra_body"] = {"max_completion_tokens": max_tokens}
                 # GPT-5 doesn't support temperature when using reasoning
-                # Only add temperature if explicitly set to a non-default value
             else:
                 request_params["temperature"] = temperature
                 if max_tokens is not None:
@@ -438,10 +438,11 @@ class OpenAIClient:
                 "messages": messages,
             }
 
-            # GPT-5 models use max_completion_tokens and don't support temperature with reasoning
+            # GPT-5 models use max_completion_tokens via extra_body and don't support temperature with reasoning
             if self._is_gpt5_model(model):
                 if max_tokens is not None:
-                    request_params["max_completion_tokens"] = max_tokens
+                    # Pass max_completion_tokens via extra_body for SDK compatibility
+                    request_params["extra_body"] = {"max_completion_tokens": max_tokens}
             else:
                 request_params["temperature"] = temperature
                 if max_tokens is not None:

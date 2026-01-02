@@ -286,6 +286,10 @@ class OpenAIClient:
             logger.error(f"OPENAI CLIENT: ❌ Failed to get available models: {e}")
             return [self.default_model, self.fallback_model]
 
+    def _is_gpt5_model(self, model: str) -> bool:
+        """Check if model is a GPT-5 family model."""
+        return model.startswith("gpt-5") or "gpt-5" in model
+
     def create_chat_completion(
         self,
         model: str,
@@ -301,7 +305,7 @@ class OpenAIClient:
 
         Args:
         ----
-            model: Model to use (e.g., "gpt-4o", "gpt-4o-mini")
+            model: Model to use (e.g., "gpt-5.2", "gpt-5-mini", "gpt-4o")
             messages: List of message dicts with 'role' and 'content'
             temperature: Sampling temperature (0.0-2.0)
             max_tokens: Maximum tokens to generate (None for model default)
@@ -334,11 +338,18 @@ class OpenAIClient:
             request_params = {
                 "model": model,
                 "messages": messages,
-                "temperature": temperature,
             }
 
-            if max_tokens is not None:
-                request_params["max_tokens"] = max_tokens
+            # GPT-5 models use max_completion_tokens and don't support temperature with reasoning
+            if self._is_gpt5_model(model):
+                if max_tokens is not None:
+                    request_params["max_completion_tokens"] = max_tokens
+                # GPT-5 doesn't support temperature when using reasoning
+                # Only add temperature if explicitly set to a non-default value
+            else:
+                request_params["temperature"] = temperature
+                if max_tokens is not None:
+                    request_params["max_tokens"] = max_tokens
 
             if response_format is not None:
                 request_params["response_format"] = response_format
@@ -425,11 +436,16 @@ class OpenAIClient:
             request_params = {
                 "model": model,
                 "messages": messages,
-                "temperature": temperature,
             }
 
-            if max_tokens is not None:
-                request_params["max_tokens"] = max_tokens
+            # GPT-5 models use max_completion_tokens and don't support temperature with reasoning
+            if self._is_gpt5_model(model):
+                if max_tokens is not None:
+                    request_params["max_completion_tokens"] = max_tokens
+            else:
+                request_params["temperature"] = temperature
+                if max_tokens is not None:
+                    request_params["max_tokens"] = max_tokens
 
             if response_format is not None:
                 request_params["response_format"] = response_format
@@ -525,7 +541,7 @@ class OpenAIClient:
         Uses Chat Completions API with GPT-5.2 specific parameters:
         - reasoning_effort: Controls reasoning depth (none, low, medium, high, xhigh)
         - verbosity: Controls output length (low, medium, high)
-        - max_output_tokens: Maximum output tokens (replaces max_tokens for GPT-5)
+        - max_completion_tokens: Maximum output tokens (replaces max_tokens for GPT-5)
         """
         try:
             logger.info(
@@ -560,9 +576,9 @@ class OpenAIClient:
             if verbosity:
                 extra_body["verbosity"] = verbosity
             
-            # Use max_output_tokens for GPT-5 models (not max_tokens)
+            # Use max_completion_tokens for GPT-5 models (not max_tokens)
             if max_output_tokens:
-                extra_body["max_output_tokens"] = max_output_tokens
+                extra_body["max_completion_tokens"] = max_output_tokens
             
             if extra_body:
                 request_params["extra_body"] = extra_body
@@ -631,7 +647,7 @@ class OpenAIClient:
                 extra_body["verbosity"] = verbosity
             
             if max_output_tokens:
-                extra_body["max_output_tokens"] = max_output_tokens
+                extra_body["max_completion_tokens"] = max_output_tokens
             
             if extra_body:
                 request_params["extra_body"] = extra_body

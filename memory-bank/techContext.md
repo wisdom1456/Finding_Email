@@ -43,7 +43,7 @@
     *   `low` - Concise responses
     *   `medium` - Balanced (default)
     *   `high` - Detailed, thorough explanations
-*   **`max_output_tokens`**: Replaces `max_tokens` for GPT-5 models
+*   **`max_completion_tokens`**: Replaces `max_tokens` for GPT-5 models (passed via extra_body)
 
 #### Implementation Pattern
 ```python
@@ -54,7 +54,7 @@ response = client.create_response(
     instructions="System instructions",
     reasoning_effort="medium",
     verbosity="high",
-    max_output_tokens=4000,
+    max_output_tokens=4000,  # Internally uses max_completion_tokens
 )
 
 # Parameters are passed via extra_body for SDK compatibility
@@ -64,10 +64,25 @@ request_params = {
     "extra_body": {
         "reasoning_effort": "medium",
         "verbosity": "high",
-        "max_output_tokens": 4000,
+        "max_completion_tokens": 4000,  # NOT max_tokens or max_output_tokens
     }
 }
+
+# For create_chat_completion, GPT-5 detection is automatic:
+response = client.create_chat_completion(
+    model="gpt-5.2",
+    messages=messages,
+    max_tokens=4000,  # Automatically converted to max_completion_tokens for GPT-5
+)
 ```
+
+#### Key Differences from GPT-4
+| Parameter | GPT-4 | GPT-5 |
+|-----------|-------|-------|
+| Token limit | `max_tokens` | `max_completion_tokens` |
+| Temperature | Supported | Only with `reasoning_effort="none"` |
+| Reasoning | N/A | `reasoning_effort` parameter |
+| Verbosity | N/A | `verbosity` parameter |
 
 #### Model Selection Guidelines
 | Use Case | Model | Reasoning | Verbosity |

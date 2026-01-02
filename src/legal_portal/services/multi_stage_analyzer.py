@@ -14,7 +14,7 @@ from __future__ import annotations
 import asyncio
 import json
 import time
-from typing import Callable, List, Optional
+from typing import Any, Callable, List, Optional, Tuple
 
 from legal_portal.core.data_models import (
     CriticalDeadline,
@@ -55,6 +55,66 @@ class MultiStageAnalyzer:
         self.statute_service = statute_service or StatuteRecommendationService()
         self.stage_timings = {}
 
+    async def _run_with_heartbeat(
+        self,
+        api_call: Callable,
+        progress_callback: Optional[Callable],
+        stage_id: str,
+        stage_name: str,
+        base_progress: int,
+        heartbeat_interval: float = 10.0,
+    ) -> Any:
+        """Run an API call with periodic heartbeat progress updates.
+        
+        This prevents the UI from showing stale progress during long API calls.
+        """
+        result = None
+        error = None
+        start_time = time.time()
+        
+        async def heartbeat():
+            """Send periodic progress updates while API call is running."""
+            progress = 0
+            while True:
+                await asyncio.sleep(heartbeat_interval)
+                elapsed = time.time() - start_time
+                # Progress slowly increases during wait (max 80% of stage)
+                progress = min(80, int(elapsed / 2))  # ~2s per percent, cap at 80%
+                if progress_callback:
+                    await progress_callback(
+                        f"AI analyzing ({int(elapsed)}s)...",
+                        [],
+                        stage_id,
+                        base_progress + int(progress * 0.2),  # Scale to fit stage
+                        stage={
+                            "id": stage_id,
+                            "name": stage_name,
+                            "status": "active",
+                            "progress": progress,
+                            "detail": f"GPT-5.2 reasoning... ({int(elapsed)}s)"
+                        }
+                    )
+        
+        # Start heartbeat task
+        heartbeat_task = asyncio.create_task(heartbeat())
+        
+        try:
+            # Run the actual API call
+            result = await api_call()
+        except Exception as e:
+            error = e
+        finally:
+            # Cancel heartbeat
+            heartbeat_task.cancel()
+            try:
+                await heartbeat_task
+            except asyncio.CancelledError:
+                pass
+        
+        if error:
+            raise error
+        return result
+
     async def analyze_case(
         self,
         intake_content: str,
@@ -84,12 +144,18 @@ class MultiStageAnalyzer:
                 [], 
                 "fact_extraction", 
                 20,
-                stage={"id": "fact_matrix", "name": "Extracting Facts", "status": "active", "progress": 30}
+                stage={"id": "fact_matrix", "name": "Extracting Facts", "status": "active", "progress": 5}
             )
 
         stage_start = time.time()
-        # Optimization: Pass limited context to fact matrix extraction to avoid timeouts
-        fact_matrix = await self._extract_fact_matrix(intake_content, document_summaries, jurisdiction)
+        # Use heartbeat to show progress during long API call
+        fact_matrix = await self._run_with_heartbeat(
+            lambda: self._extract_fact_matrix(intake_content, document_summaries, jurisdiction),
+            progress_callback,
+            "fact_extraction",
+            "Extracting Facts",
+            20,
+        )
         self.stage_timings["fact_extraction"] = time.time() - stage_start
         
         if progress_callback:
@@ -123,12 +189,19 @@ class MultiStageAnalyzer:
                 [], 
                 "issue_mapping", 
                 40,
-                stage={"id": "issue_mapping", "name": "Legal Issues", "status": "active", "progress": 20}
+                stage={"id": "issue_mapping", "name": "Legal Issues", "status": "active", "progress": 5}
             )
 
         stage_start = time.time()
-        issue_map = await self._map_legal_issues(
-            fact_matrix, intake_content, case_type, legal_issues, jurisdiction
+        # Use heartbeat to show progress during long API call
+        issue_map = await self._run_with_heartbeat(
+            lambda: self._map_legal_issues(
+                fact_matrix, intake_content, case_type, legal_issues, jurisdiction
+            ),
+            progress_callback,
+            "issue_mapping",
+            "Legal Issues",
+            40,
         )
         self.stage_timings["issue_mapping"] = time.time() - stage_start
         
@@ -162,12 +235,19 @@ class MultiStageAnalyzer:
                 [], 
                 "deep_analysis", 
                 70,
-                stage={"id": "deep_analysis", "name": "Deep Analysis", "status": "active", "progress": 10}
+                stage={"id": "deep_analysis", "name": "Deep Analysis", "status": "active", "progress": 5}
             )
 
         stage_start = time.time()
-        deep_analysis = await self._perform_deep_legal_analysis(
-            fact_matrix, issue_map, intake_content, jurisdiction
+        # Use heartbeat to show progress during long API call
+        deep_analysis = await self._run_with_heartbeat(
+            lambda: self._perform_deep_legal_analysis(
+                fact_matrix, issue_map, intake_content, jurisdiction
+            ),
+            progress_callback,
+            "deep_analysis",
+            "Deep Analysis",
+            70,
         )
         self.stage_timings["deep_analysis"] = time.time() - stage_start
         

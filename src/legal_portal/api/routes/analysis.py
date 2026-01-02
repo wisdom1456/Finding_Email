@@ -838,7 +838,7 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
             payload["stats"] = {
                 "elapsedSeconds": elapsed,
                 "tokens_used": total_tokens_used,
-                "model": "gpt-5.2",
+                "model": "gpt-4o",
             }
 
             # Cooperative cancellation
@@ -1077,11 +1077,12 @@ async def stream_chat_response(
         result_payload = analysis_data["result"]
         processing_result = ProcessingResult(**result_payload)
         
-        # 2. Get conversation history
+        # 2. Get conversation history (use case_id from the analysis record, not ProcessingResult)
+        case_id = analysis_data["case_id"]
         history_response = (
             supabase.table("case_chat_messages")
             .select("user_message, ai_response")
-            .eq("case_id", processing_result.case_id)
+            .eq("case_id", case_id)
             .order("created_at", desc=False)
             .limit(10)
             .execute()
@@ -1111,7 +1112,7 @@ async def stream_chat_response(
             try:
                 supabase.table("case_chat_messages").insert(
                     {
-                        "case_id": processing_result.case_id,
+                        "case_id": case_id,
                         "user_message": request.message,
                         "ai_response": full_response,
                         "context_used": processing_result.multi_stage_result or {},
@@ -1656,7 +1657,7 @@ Return a JSON object with:
 Be realistic and evidence-based. Only include amounts supported by the case data."""
 
     try:
-        model = openai_client.get_preferred_model("demand_calculation", "gpt-5-mini")
+        model = openai_client.get_preferred_model("demand_calculation", "gpt-4o-mini")
         response = await asyncio.to_thread(
             openai_client.create_response,
             model=model,

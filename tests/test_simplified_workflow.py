@@ -91,7 +91,7 @@ Keep summaries concise but thorough. Focus on legally significant information.
 """
 
     response = openai_client.chat.completions.create(
-        model="gpt-5-mini",  # Use gpt-5-mini for fast, cost-effective summarization
+        model="gpt-4o-mini",  # Use gpt-4o-mini for fast, cost-effective summarization
         messages=[
             {"role": "system", "content": "You are a precise legal document analyst."},
             {"role": "user", "content": prompt},

@@ -501,10 +501,7 @@
 			if (!session) throw new Error('Not authenticated');
 
 			const apiUrl = getApiUrl();
-			// #region agent log
 			const chatPayload = { message };
-			fetch('http://127.0.0.1:7242/ingest/4b51e513-bc36-4a25-835a-e2000a0f302b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'results/+page.svelte:sendChatMessage',message:'Chat request payload',data:{analysisId:results.analysis_id,payloadKeys:Object.keys(chatPayload),payload:chatPayload},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'D'})}).catch(()=>{});
-			// #endregion
 			const response = await fetch(`${apiUrl}/api/analysis/${results.analysis_id}/chat/stream`, {
 				method: 'POST',
 				headers: {
@@ -514,15 +511,8 @@
 				body: JSON.stringify(chatPayload)
 			});
 
-			// #region agent log
-			fetch('http://127.0.0.1:7242/ingest/4b51e513-bc36-4a25-835a-e2000a0f302b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'results/+page.svelte:sendChatMessage',message:'Chat response status',data:{ok:response.ok,status:response.status,statusText:response.statusText},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'D-E'})}).catch(()=>{});
-			// #endregion
-
 			if (!response.ok) {
 				const detail = await response.json().catch(() => ({}));
-				// #region agent log
-				fetch('http://127.0.0.1:7242/ingest/4b51e513-bc36-4a25-835a-e2000a0f302b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'results/+page.svelte:sendChatMessage:error',message:'Chat error detail',data:{detail},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'D-E'})}).catch(()=>{});
-				// #endregion
 				throw new Error(detail?.detail || 'Chat request failed');
 			}
 

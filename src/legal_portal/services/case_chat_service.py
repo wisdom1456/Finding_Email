@@ -46,7 +46,7 @@ class CaseChatService:
 
         logger.info(f"Case chat request with {len(conversation_history)} prior messages")
 
-        model = self.client.get_preferred_model("case_chat", "gpt-5-mini")
+        model = self.client.get_preferred_model("case_chat", "gpt-4o-mini")
         
         # Convert messages to Responses API format
         # System message becomes instructions, history and user message become input
@@ -83,7 +83,7 @@ class CaseChatService:
 
         logger.info(f"Case chat stream request with {len(conversation_history)} prior messages")
 
-        model = self.client.get_preferred_model("case_chat", "gpt-5-mini")
+        model = self.client.get_preferred_model("case_chat", "gpt-4o-mini")
         
         # Convert messages to Responses API format
         instructions = messages[0]["content"] if messages and messages[0]["role"] == "system" else None

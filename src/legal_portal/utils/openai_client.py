@@ -48,8 +48,8 @@ class OpenAIClient:
             api_key=os.getenv("OPENAI_API_KEY"), http_client=async_http_client, max_retries=3
         )
 
-        self.default_model = "gpt-5.2"
-        self.fallback_model = "gpt-5-mini"
+        self.default_model = "gpt-4o"
+        self.fallback_model = "gpt-4o-mini"
         self.max_retries = 3
         self.base_retry_delay = 2  # Base delay in seconds for exponential backoff
 

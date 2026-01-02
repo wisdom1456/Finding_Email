@@ -457,10 +457,10 @@ class ProcessingResult(BaseModel):
 class AIPreferences(BaseModel):
     """User preferences for AI model selection and document handling."""
 
-    document_analysis: str = "gpt-5-mini"
-    letter_generation: str = "gpt-5.2"
-    case_chat: str = "gpt-5-mini"
-    multi_stage_analysis: str = "gpt-5.2"
+    document_analysis: str = "gpt-4o-mini"
+    letter_generation: str = "gpt-4o"
+    case_chat: str = "gpt-4o-mini"
+    multi_stage_analysis: str = "gpt-4o"
     blacklisted_documents: List[str] = Field(default_factory=list)
 
 
@@ -508,7 +508,7 @@ class StatsProgress(BaseModel):
     elapsed_seconds: float
     estimated_remaining: Optional[float] = None
     tokens_used: int = 0
-    model: str = "gpt-5.2"
+    model: str = "gpt-4o"
 
 
 class EnhancedProgressEvent(BaseModel):

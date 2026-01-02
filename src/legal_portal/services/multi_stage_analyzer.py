@@ -375,7 +375,7 @@ RULES:
 - Return ONLY valid JSON, no markdown formatting
 """
 
-        model = self.client.get_preferred_model("multi_stage_analysis", "gpt-5.2")
+        model = self.client.get_preferred_model("multi_stage_analysis", "gpt-4o")
         # Use asyncio.to_thread to avoid blocking the event loop during API call
         response_dict = await asyncio.to_thread(
             self.client.create_response,
@@ -466,7 +466,7 @@ Return JSON:
 }}
 """
 
-        model = self.client.get_preferred_model("multi_stage_analysis", "gpt-5.2")
+        model = self.client.get_preferred_model("multi_stage_analysis", "gpt-4o")
         # Use asyncio.to_thread to avoid blocking the event loop during API call
         response_dict = await asyncio.to_thread(
             self.client.create_response,
@@ -572,7 +572,7 @@ CRITICAL INSTRUCTIONS:
 Return ONLY valid JSON.
 """
 
-        model = self.client.get_preferred_model("multi_stage_analysis", "gpt-5.2")
+        model = self.client.get_preferred_model("multi_stage_analysis", "gpt-4o")
         # Use asyncio.to_thread to avoid blocking the event loop during API call
         response_dict = await asyncio.to_thread(
             self.client.create_response,

@@ -191,7 +191,7 @@ OUTPUT AS STRICT JSON:
 """
 
     try:
-        model = openai_client_wrapper.get_preferred_model("document_analysis", "gpt-5.2")
+        model = openai_client_wrapper.get_preferred_model("document_analysis", "gpt-4o")
         response = openai_client_wrapper.create_response(
             model=model,
             input=prompt,
@@ -553,11 +553,11 @@ async def process_case_documents(
 
     # Track which models were used for each operation
         models_used = {
-            "document_analysis": openai_client_wrapper.get_preferred_model("document_analysis", "gpt-5-mini"),
-            "letter_generation": openai_client_wrapper.get_preferred_model("letter_generation", "gpt-5.2"),
-            "case_chat": openai_client_wrapper.get_preferred_model("case_chat", "gpt-5-mini"),
+            "document_analysis": openai_client_wrapper.get_preferred_model("document_analysis", "gpt-4o-mini"),
+            "letter_generation": openai_client_wrapper.get_preferred_model("letter_generation", "gpt-4o"),
+            "case_chat": openai_client_wrapper.get_preferred_model("case_chat", "gpt-4o-mini"),
             "multi_stage_analysis": openai_client_wrapper.get_preferred_model(
-                "multi_stage_analysis", "gpt-5.2"
+                "multi_stage_analysis", "gpt-4o"
             ),
         }
 
@@ -1016,7 +1016,7 @@ Return ONLY valid JSON, no markdown code blocks.
         )
 
     # Make the API call
-    model = openai_client_wrapper.get_preferred_model("document_analysis", "gpt-5-mini")
+    model = openai_client_wrapper.get_preferred_model("document_analysis", "gpt-4o-mini")
     response_dict = await asyncio.to_thread(
         openai_client_wrapper.create_response,
         model=model,

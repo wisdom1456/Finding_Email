@@ -26,7 +26,7 @@ def test_calculate_document_analysis_costs_exact():
     processing_logs = {
         "test_document.pdf": {
             "token_usage": {"prompt_tokens": 1000, "completion_tokens": 2000},
-            "model": "gpt-4o",
+            "model": "gpt-5.2",
         }
     }
 
@@ -164,9 +164,9 @@ def test_total_actual_costs_aggregates_all_services():
         "documents": {
             "doc1.pdf": {
                 "token_usage": {"prompt_tokens": 1000, "completion_tokens": 2000},
-                "model": "gpt-4o",
+                "model": "gpt-5.2",
             },
-            "doc2.pdf": {"token_usage": {"prompt_tokens": 800, "completion_tokens": 1500}, "model": "gpt-4o"},
+            "doc2.pdf": {"token_usage": {"prompt_tokens": 800, "completion_tokens": 1500}, "model": "gpt-5.2"},
         }
     }
 

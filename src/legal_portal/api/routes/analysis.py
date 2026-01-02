@@ -838,7 +838,7 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
             payload["stats"] = {
                 "elapsedSeconds": elapsed,
                 "tokens_used": total_tokens_used,
-                "model": "gpt-4o",
+                "model": "gpt-5.2",
             }
 
             # Cooperative cancellation
@@ -1657,7 +1657,7 @@ Return a JSON object with:
 Be realistic and evidence-based. Only include amounts supported by the case data."""
 
     try:
-        model = openai_client.get_preferred_model("demand_calculation", "gpt-4o-mini")
+        model = openai_client.get_preferred_model("demand_calculation", "gpt-5-mini")
         response = await asyncio.to_thread(
             openai_client.create_response,
             model=model,

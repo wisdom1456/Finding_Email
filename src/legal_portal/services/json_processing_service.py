@@ -181,10 +181,10 @@ class JsonProcessingService:
                 clio_matter_context="",
             )
 
-            logger.info(f"Making OpenAI request with master prompt for {jurisdiction} using gpt-4o.")
+            logger.info(f"Making OpenAI request with master prompt for {jurisdiction} using gpt-5.2.")
             markdown_response = self._make_openai_request_responses_api(
                 formatted_prompt, 
-                model="gpt-4o",
+                model="gpt-5.2",
                 reasoning_effort="low",
                 verbosity="high"
             )
@@ -314,7 +314,7 @@ class JsonProcessingService:
             None,  # Use the default thread pool executor
             self._make_openai_request_responses_api,
             prompt,
-            "gpt-4o",  # model
+            "gpt-5.2",  # model
             "low",  # reasoning_effort
             "high",  # verbosity
             12000,  # max_output_tokens
@@ -470,7 +470,7 @@ class JsonProcessingService:
             None,
             self._make_openai_request_responses_api,
             prompt,
-            "gpt-4o",
+            "gpt-5.2",
             "low",
             "high",
             12000,
@@ -600,7 +600,7 @@ class JsonProcessingService:
         logger.info(f"Streaming adaptive findings letter for {jurisdiction}")
         
         async for token in self.client.create_response_stream(
-            model="gpt-4o",
+            model="gpt-5.2",
             instructions=(
                 "You are a senior legal writing assistant. Generate an attorney-quality "
                 "findings letter following the adaptive structure guidance provided."
@@ -862,7 +862,7 @@ Thank you,
     def _make_openai_request(
         self,
         prompt: str,
-        model: Optional[str] = "gpt-4o",
+        model: Optional[str] = "gpt-5.2",
         temperature: float = 0.3,
         max_tokens: int = 12000,
         system_message: str = None,
@@ -916,7 +916,7 @@ Thank you,
     def _make_openai_request_responses_api(
         self,
         prompt: str,
-        model: Optional[str] = "gpt-4o",
+        model: Optional[str] = "gpt-5.2",
         reasoning_effort: Optional[str] = "low",
         verbosity: Optional[str] = "high",
         max_output_tokens: int = 12000,

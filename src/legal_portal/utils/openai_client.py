@@ -48,8 +48,8 @@ class OpenAIClient:
             api_key=os.getenv("OPENAI_API_KEY"), http_client=async_http_client, max_retries=3
         )
 
-        self.default_model = "gpt-4o"
-        self.fallback_model = "gpt-4o-mini"
+        self.default_model = "gpt-5.2"
+        self.fallback_model = "gpt-5-mini"
         self.max_retries = 3
         self.base_retry_delay = 2  # Base delay in seconds for exponential backoff
 
@@ -520,15 +520,16 @@ class OpenAIClient:
         verbosity: Optional[str] = None,
         max_output_tokens: Optional[int] = None,
     ) -> Dict[str, Any]:
-        """Create a response using Chat Completions API.
+        """Create a response using Chat Completions API with GPT-5.2 parameters.
         
-        Uses Chat Completions API which is compatible with all models.
-        Note: reasoning_effort and verbosity are accepted for future GPT-5 compatibility
-        but currently not passed to the API until SDK support is confirmed.
+        Uses Chat Completions API with GPT-5.2 specific parameters:
+        - reasoning_effort: Controls reasoning depth (none, low, medium, high, xhigh)
+        - verbosity: Controls output length (low, medium, high)
+        - max_output_tokens: Maximum output tokens (replaces max_tokens for GPT-5)
         """
         try:
             logger.info(
-                f"Making Chat Completions request with {model}",
+                f"Making GPT-5 Chat Completions request with {model}",
                 extra={
                     "model": model,
                     "reasoning_effort": reasoning_effort,
@@ -548,16 +549,23 @@ class OpenAIClient:
                 "messages": messages,
             }
 
-            # Set temperature based on reasoning_effort (lower = more deterministic)
-            if reasoning_effort == "none":
-                request_params["temperature"] = 0.3
-            elif reasoning_effort == "low":
-                request_params["temperature"] = 0.4
-            elif reasoning_effort in ("medium", "high", "xhigh"):
-                request_params["temperature"] = 0.2  # More focused for complex reasoning
-
+            # GPT-5.2 uses extra_body for new parameters not yet in SDK
+            extra_body = {}
+            
+            # Add reasoning_effort for GPT-5 models
+            if reasoning_effort:
+                extra_body["reasoning_effort"] = reasoning_effort
+            
+            # Add verbosity for GPT-5 models
+            if verbosity:
+                extra_body["verbosity"] = verbosity
+            
+            # Use max_output_tokens for GPT-5 models (not max_tokens)
             if max_output_tokens:
-                request_params["max_tokens"] = max_output_tokens
+                extra_body["max_output_tokens"] = max_output_tokens
+            
+            if extra_body:
+                request_params["extra_body"] = extra_body
 
             # Make the API call using Chat Completions
             response = self.client.chat.completions.create(**request_params)
@@ -566,7 +574,7 @@ class OpenAIClient:
             usage = response.usage
 
             logger.info(
-                "Chat Completions call successful",
+                "GPT-5 Chat Completions call successful",
                 extra={
                     "model": model,
                     "prompt_tokens": usage.prompt_tokens,
@@ -586,7 +594,7 @@ class OpenAIClient:
             }
 
         except Exception as e:
-            logger.error(f"Error in Chat Completions call: {e}")
+            logger.error(f"Error in GPT-5 Chat Completions call: {e}")
             raise
 
     async def create_response_async(
@@ -598,9 +606,9 @@ class OpenAIClient:
         verbosity: Optional[str] = None,
         max_output_tokens: Optional[int] = None,
     ) -> Dict[str, Any]:
-        """Async version of create_response using Chat Completions API."""
+        """Async version of create_response using Chat Completions API with GPT-5.2 parameters."""
         try:
-            logger.info(f"Making async Chat Completions request with {model}")
+            logger.info(f"Making async GPT-5 Chat Completions request with {model}")
 
             # Build messages from input and instructions
             messages = []
@@ -613,16 +621,20 @@ class OpenAIClient:
                 "messages": messages,
             }
 
-            # Set temperature based on reasoning_effort
-            if reasoning_effort == "none":
-                request_params["temperature"] = 0.3
-            elif reasoning_effort == "low":
-                request_params["temperature"] = 0.4
-            elif reasoning_effort in ("medium", "high", "xhigh"):
-                request_params["temperature"] = 0.2
-
+            # GPT-5.2 uses extra_body for new parameters
+            extra_body = {}
+            
+            if reasoning_effort:
+                extra_body["reasoning_effort"] = reasoning_effort
+            
+            if verbosity:
+                extra_body["verbosity"] = verbosity
+            
             if max_output_tokens:
-                request_params["max_tokens"] = max_output_tokens
+                extra_body["max_output_tokens"] = max_output_tokens
+            
+            if extra_body:
+                request_params["extra_body"] = extra_body
 
             response = await self.async_client.chat.completions.create(**request_params)
 
@@ -640,7 +652,7 @@ class OpenAIClient:
             }
 
         except Exception as e:
-            logger.error(f"Error in async Chat Completions call: {e}")
+            logger.error(f"Error in async GPT-5 Chat Completions call: {e}")
             raise
 
     async def create_response_stream(
@@ -651,9 +663,9 @@ class OpenAIClient:
         reasoning_effort: Optional[str] = None,
         verbosity: Optional[str] = None,
     ) -> AsyncGenerator[str, None]:
-        """Stream response tokens using Chat Completions API."""
+        """Stream response tokens using Chat Completions API with GPT-5.2 parameters."""
         try:
-            logger.info(f"Starting async Chat Completions stream with {model}")
+            logger.info(f"Starting async GPT-5 Chat Completions stream with {model}")
 
             # Build messages from input and instructions
             messages = []
@@ -667,13 +679,17 @@ class OpenAIClient:
                 "stream": True,
             }
 
-            # Set temperature based on reasoning_effort
-            if reasoning_effort == "none":
-                request_params["temperature"] = 0.3
-            elif reasoning_effort == "low":
-                request_params["temperature"] = 0.4
-            elif reasoning_effort in ("medium", "high", "xhigh"):
-                request_params["temperature"] = 0.2
+            # GPT-5.2 uses extra_body for new parameters
+            extra_body = {}
+            
+            if reasoning_effort:
+                extra_body["reasoning_effort"] = reasoning_effort
+            
+            if verbosity:
+                extra_body["verbosity"] = verbosity
+            
+            if extra_body:
+                request_params["extra_body"] = extra_body
 
             stream = await self.async_client.chat.completions.create(**request_params)
 

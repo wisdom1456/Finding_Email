@@ -520,14 +520,15 @@ class OpenAIClient:
         verbosity: Optional[str] = None,
         max_output_tokens: Optional[int] = None,
     ) -> Dict[str, Any]:
-        """Create a response using Chat Completions API with GPT-5 parameters.
+        """Create a response using Chat Completions API.
         
-        Uses Chat Completions API which is compatible with GPT-5 models.
-        Per OpenAI docs, reasoning_effort and verbosity are top-level params for Chat Completions.
+        Uses Chat Completions API which is compatible with all models.
+        Note: reasoning_effort and verbosity are accepted for future GPT-5 compatibility
+        but currently not passed to the API until SDK support is confirmed.
         """
         try:
             logger.info(
-                f"Making GPT-5 Chat Completions request with {model}",
+                f"Making Chat Completions request with {model}",
                 extra={
                     "model": model,
                     "reasoning_effort": reasoning_effort,
@@ -541,18 +542,19 @@ class OpenAIClient:
                 messages.append({"role": "system", "content": instructions})
             messages.append({"role": "user", "content": input})
 
-            # Build request parameters for Chat Completions API with GPT-5 params
+            # Build request parameters for Chat Completions API
             request_params = {
                 "model": model,
                 "messages": messages,
             }
 
-            # GPT-5 specific parameters (top-level for Chat Completions API)
-            if reasoning_effort:
-                request_params["reasoning_effort"] = reasoning_effort
-
-            if verbosity:
-                request_params["verbosity"] = verbosity
+            # Set temperature based on reasoning_effort (lower = more deterministic)
+            if reasoning_effort == "none":
+                request_params["temperature"] = 0.3
+            elif reasoning_effort == "low":
+                request_params["temperature"] = 0.4
+            elif reasoning_effort in ("medium", "high", "xhigh"):
+                request_params["temperature"] = 0.2  # More focused for complex reasoning
 
             if max_output_tokens:
                 request_params["max_tokens"] = max_output_tokens
@@ -564,7 +566,7 @@ class OpenAIClient:
             usage = response.usage
 
             logger.info(
-                "GPT-5 Chat Completions call successful",
+                "Chat Completions call successful",
                 extra={
                     "model": model,
                     "prompt_tokens": usage.prompt_tokens,
@@ -584,7 +586,7 @@ class OpenAIClient:
             }
 
         except Exception as e:
-            logger.error(f"Error in GPT-5 Chat Completions call: {e}")
+            logger.error(f"Error in Chat Completions call: {e}")
             raise
 
     async def create_response_async(
@@ -598,7 +600,7 @@ class OpenAIClient:
     ) -> Dict[str, Any]:
         """Async version of create_response using Chat Completions API."""
         try:
-            logger.info(f"Making async GPT-5 Chat Completions request with {model}")
+            logger.info(f"Making async Chat Completions request with {model}")
 
             # Build messages from input and instructions
             messages = []
@@ -611,12 +613,13 @@ class OpenAIClient:
                 "messages": messages,
             }
 
-            # GPT-5 specific parameters
-            if reasoning_effort:
-                request_params["reasoning_effort"] = reasoning_effort
-
-            if verbosity:
-                request_params["verbosity"] = verbosity
+            # Set temperature based on reasoning_effort
+            if reasoning_effort == "none":
+                request_params["temperature"] = 0.3
+            elif reasoning_effort == "low":
+                request_params["temperature"] = 0.4
+            elif reasoning_effort in ("medium", "high", "xhigh"):
+                request_params["temperature"] = 0.2
 
             if max_output_tokens:
                 request_params["max_tokens"] = max_output_tokens
@@ -637,7 +640,7 @@ class OpenAIClient:
             }
 
         except Exception as e:
-            logger.error(f"Error in async GPT-5 Chat Completions call: {e}")
+            logger.error(f"Error in async Chat Completions call: {e}")
             raise
 
     async def create_response_stream(
@@ -648,9 +651,9 @@ class OpenAIClient:
         reasoning_effort: Optional[str] = None,
         verbosity: Optional[str] = None,
     ) -> AsyncGenerator[str, None]:
-        """Stream response tokens using Chat Completions API with GPT-5 parameters."""
+        """Stream response tokens using Chat Completions API."""
         try:
-            logger.info(f"Starting async GPT-5 Chat Completions stream with {model}")
+            logger.info(f"Starting async Chat Completions stream with {model}")
 
             # Build messages from input and instructions
             messages = []
@@ -664,12 +667,13 @@ class OpenAIClient:
                 "stream": True,
             }
 
-            # GPT-5 specific parameters
-            if reasoning_effort:
-                request_params["reasoning_effort"] = reasoning_effort
-
-            if verbosity:
-                request_params["verbosity"] = verbosity
+            # Set temperature based on reasoning_effort
+            if reasoning_effort == "none":
+                request_params["temperature"] = 0.3
+            elif reasoning_effort == "low":
+                request_params["temperature"] = 0.4
+            elif reasoning_effort in ("medium", "high", "xhigh"):
+                request_params["temperature"] = 0.2
 
             stream = await self.async_client.chat.completions.create(**request_params)
 
@@ -678,7 +682,7 @@ class OpenAIClient:
                     yield chunk.choices[0].delta.content
 
         except Exception as e:
-            logger.error(f"Error in async GPT-5 Chat Completions stream: {e}")
+            logger.error(f"Error in async Chat Completions stream: {e}")
             raise
 
     def _create_error_response(self, error_type: str, exception: Optional[Exception]) -> Dict[str, Any]:

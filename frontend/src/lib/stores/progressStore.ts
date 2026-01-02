@@ -82,7 +82,7 @@ const initialState: EnhancedProgressState<unknown> = {
 	stats: {
 		elapsedSeconds: 0,
 		tokens_used: 0,
-		model: 'gpt-4o'
+		model: 'gpt-5.2'
 	},
 	streamingText: '',
 	isStreaming: false

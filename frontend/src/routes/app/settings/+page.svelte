@@ -22,17 +22,17 @@ Palm Harbor, FL 34683`);
 	let defaultJurisdiction = $state('Florida');
 
 	// AI Model Preferences
-	let documentAnalysisModel = $state('gpt-4o');
-	let letterGenerationModel = $state('gpt-4o');
-	let caseChatModel = $state('gpt-4o');
-	let multiStageAnalysisModel = $state('gpt-4o');
+	let documentAnalysisModel = $state('gpt-5-mini');
+	let letterGenerationModel = $state('gpt-5.2');
+	let caseChatModel = $state('gpt-5-mini');
+	let multiStageAnalysisModel = $state('gpt-5.2');
 	let blacklistedDocuments = $state('');
 
 	const availableModels = [
-		{ value: 'gpt-4o', label: 'GPT-4o (Recommended)', description: 'Fastest, best for most uses' },
-		{ value: 'gpt-4o-mini', label: 'GPT-4o Mini', description: 'Most cost-effective, good quality' },
-		{ value: 'gpt-4-turbo', label: 'GPT-4 Turbo', description: 'Longer context, complex cases' },
-		{ value: 'gpt-3.5-turbo', label: 'GPT-3.5 Turbo', description: 'Faster, lower cost' }
+		{ value: 'gpt-5.2', label: 'GPT-5.2 (Recommended)', description: 'Most intelligent, complex reasoning' },
+		{ value: 'gpt-5-mini', label: 'GPT-5 Mini', description: 'Cost-optimized, fast and capable' },
+		{ value: 'gpt-5-nano', label: 'GPT-5 Nano', description: 'High-throughput, simple tasks' },
+		{ value: 'gpt-4o', label: 'GPT-4o (Legacy)', description: 'Previous generation model' }
 	];
 
 	onMount(async () => {
@@ -71,10 +71,10 @@ Palm Harbor, FL 34683`);
 
 				// Load AI preferences
 				if (profile.ai_preferences) {
-					documentAnalysisModel = profile.ai_preferences.document_analysis || 'gpt-4o';
-					letterGenerationModel = profile.ai_preferences.letter_generation || 'gpt-4o';
-					caseChatModel = profile.ai_preferences.case_chat || 'gpt-4o';
-					multiStageAnalysisModel = profile.ai_preferences.multi_stage_analysis || 'gpt-4o';
+					documentAnalysisModel = profile.ai_preferences.document_analysis || 'gpt-5-mini';
+					letterGenerationModel = profile.ai_preferences.letter_generation || 'gpt-5.2';
+					caseChatModel = profile.ai_preferences.case_chat || 'gpt-5-mini';
+					multiStageAnalysisModel = profile.ai_preferences.multi_stage_analysis || 'gpt-5.2';
 					
 					if (profile.ai_preferences.blacklisted_documents) {
 						blacklistedDocuments = profile.ai_preferences.blacklisted_documents.join(', ');

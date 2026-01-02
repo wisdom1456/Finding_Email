@@ -520,10 +520,14 @@ class OpenAIClient:
         verbosity: Optional[str] = None,
         max_output_tokens: Optional[int] = None,
     ) -> Dict[str, Any]:
-        """Create a response using the new Responses API."""
+        """Create a response using Chat Completions API with GPT-5 parameters.
+        
+        Uses Chat Completions API which is compatible with GPT-5 models.
+        Per OpenAI docs, reasoning_effort and verbosity are top-level params for Chat Completions.
+        """
         try:
             logger.info(
-                f"Making Responses API request with {model}",
+                f"Making GPT-5 Chat Completions request with {model}",
                 extra={
                     "model": model,
                     "reasoning_effort": reasoning_effort,
@@ -531,32 +535,36 @@ class OpenAIClient:
                 },
             )
 
-            # Build request parameters
+            # Build messages from input and instructions
+            messages = []
+            if instructions:
+                messages.append({"role": "system", "content": instructions})
+            messages.append({"role": "user", "content": input})
+
+            # Build request parameters for Chat Completions API with GPT-5 params
             request_params = {
                 "model": model,
-                "input": input,
+                "messages": messages,
             }
 
-            if instructions:
-                request_params["instructions"] = instructions
-
+            # GPT-5 specific parameters (top-level for Chat Completions API)
             if reasoning_effort:
-                request_params["reasoning"] = {"effort": reasoning_effort}
+                request_params["reasoning_effort"] = reasoning_effort
 
             if verbosity:
-                request_params["text"] = {"verbosity": verbosity}
+                request_params["verbosity"] = verbosity
 
             if max_output_tokens:
-                request_params["max_output_tokens"] = max_output_tokens
+                request_params["max_tokens"] = max_output_tokens
 
-            # Make the API call
-            response = self.client.responses.create(**request_params)
+            # Make the API call using Chat Completions
+            response = self.client.chat.completions.create(**request_params)
 
-            content = response.output_text
+            content = response.choices[0].message.content
             usage = response.usage
 
             logger.info(
-                "Responses API call successful",
+                "GPT-5 Chat Completions call successful",
                 extra={
                     "model": model,
                     "prompt_tokens": usage.prompt_tokens,
@@ -576,7 +584,7 @@ class OpenAIClient:
             }
 
         except Exception as e:
-            logger.error(f"Error in Responses API call: {e}")
+            logger.error(f"Error in GPT-5 Chat Completions call: {e}")
             raise
 
     async def create_response_async(
@@ -588,30 +596,34 @@ class OpenAIClient:
         verbosity: Optional[str] = None,
         max_output_tokens: Optional[int] = None,
     ) -> Dict[str, Any]:
-        """Async version of create_response."""
+        """Async version of create_response using Chat Completions API."""
         try:
-            logger.info(f"Making async Responses API request with {model}")
+            logger.info(f"Making async GPT-5 Chat Completions request with {model}")
+
+            # Build messages from input and instructions
+            messages = []
+            if instructions:
+                messages.append({"role": "system", "content": instructions})
+            messages.append({"role": "user", "content": input})
 
             request_params = {
                 "model": model,
-                "input": input,
+                "messages": messages,
             }
 
-            if instructions:
-                request_params["instructions"] = instructions
-
+            # GPT-5 specific parameters
             if reasoning_effort:
-                request_params["reasoning"] = {"effort": reasoning_effort}
+                request_params["reasoning_effort"] = reasoning_effort
 
             if verbosity:
-                request_params["text"] = {"verbosity": verbosity}
+                request_params["verbosity"] = verbosity
 
             if max_output_tokens:
-                request_params["max_output_tokens"] = max_output_tokens
+                request_params["max_tokens"] = max_output_tokens
 
-            response = await self.async_client.responses.create(**request_params)
+            response = await self.async_client.chat.completions.create(**request_params)
 
-            content = response.output_text
+            content = response.choices[0].message.content
             usage = response.usage
 
             return {
@@ -625,7 +637,7 @@ class OpenAIClient:
             }
 
         except Exception as e:
-            logger.error(f"Error in async Responses API call: {e}")
+            logger.error(f"Error in async GPT-5 Chat Completions call: {e}")
             raise
 
     async def create_response_stream(
@@ -636,33 +648,37 @@ class OpenAIClient:
         reasoning_effort: Optional[str] = None,
         verbosity: Optional[str] = None,
     ) -> AsyncGenerator[str, None]:
-        """Stream response tokens using the Responses API."""
+        """Stream response tokens using Chat Completions API with GPT-5 parameters."""
         try:
-            logger.info(f"Starting async Responses API stream with {model}")
+            logger.info(f"Starting async GPT-5 Chat Completions stream with {model}")
+
+            # Build messages from input and instructions
+            messages = []
+            if instructions:
+                messages.append({"role": "system", "content": instructions})
+            messages.append({"role": "user", "content": input})
 
             request_params = {
                 "model": model,
-                "input": input,
+                "messages": messages,
                 "stream": True,
             }
 
-            if instructions:
-                request_params["instructions"] = instructions
-
+            # GPT-5 specific parameters
             if reasoning_effort:
-                request_params["reasoning"] = {"effort": reasoning_effort}
+                request_params["reasoning_effort"] = reasoning_effort
 
             if verbosity:
-                request_params["text"] = {"verbosity": verbosity}
+                request_params["verbosity"] = verbosity
 
-            stream = await self.async_client.responses.create(**request_params)
+            stream = await self.async_client.chat.completions.create(**request_params)
 
-            async for event in stream:
-                if event.type == "response.output_text.delta":
-                    yield event.delta
+            async for chunk in stream:
+                if chunk.choices and chunk.choices[0].delta.content:
+                    yield chunk.choices[0].delta.content
 
         except Exception as e:
-            logger.error(f"Error in async Responses API stream: {e}")
+            logger.error(f"Error in async GPT-5 Chat Completions stream: {e}")
             raise
 
     def _create_error_response(self, error_type: str, exception: Optional[Exception]) -> Dict[str, Any]:

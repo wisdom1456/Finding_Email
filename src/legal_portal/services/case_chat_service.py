@@ -60,7 +60,7 @@ class CaseChatService:
             model=model,
             input=conversation_text,
             instructions=instructions,
-            reasoning_effort="none",
+            reasoning_effort="low",
             verbosity="low",
             max_output_tokens=1500,
         )
@@ -96,7 +96,7 @@ class CaseChatService:
             model=model,
             input=conversation_text,
             instructions=instructions,
-            reasoning_effort="none",
+            reasoning_effort="low",
             verbosity="low",
         ):
             yield token

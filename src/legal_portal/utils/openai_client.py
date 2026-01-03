@@ -541,7 +541,7 @@ class OpenAIClient:
         """Create a response using Chat Completions API with GPT-5.2 parameters.
         
         Uses Chat Completions API with GPT-5.2 specific parameters:
-        - reasoning_effort: Controls reasoning depth (none, low, medium, high, xhigh)
+        - reasoning_effort: Controls reasoning depth (minimal, low, medium, high)
         - verbosity: Controls output length (low, medium, high)
         - max_completion_tokens: Maximum output tokens (replaces max_tokens for GPT-5)
         """

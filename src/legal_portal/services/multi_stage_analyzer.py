@@ -644,7 +644,7 @@ Return JSON:
             instructions=f"You are an expert {jurisdiction} legal analyst. Return only valid JSON.",
             input=prompt,
             max_output_tokens=3000,
-            reasoning_effort="low",
+            reasoning_effort="medium",
         )
         api_duration = time.time() - api_start
         
@@ -786,7 +786,7 @@ Return ONLY valid JSON.
             ),
             input=prompt,
             max_output_tokens=6000,
-            reasoning_effort="low",
+            reasoning_effort="medium",
         )
         api_duration = time.time() - api_start
         

@@ -315,7 +315,7 @@ class JsonProcessingService:
             self._make_openai_request_responses_api,
             prompt,
             "gpt-5.2",  # model
-            "low",  # reasoning_effort
+            "medium",  # reasoning_effort
             "high",  # verbosity
             12000,  # max_output_tokens
             (  # instructions
@@ -471,7 +471,7 @@ class JsonProcessingService:
             self._make_openai_request_responses_api,
             prompt,
             "gpt-5.2",
-            "low",
+            "medium",
             "high",
             12000,
             (

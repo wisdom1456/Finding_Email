@@ -1394,7 +1394,7 @@ Return ONLY valid JSON, no markdown code blocks.
         instructions="You are a precise legal document analyst. Always return valid JSON.",
         input=prompt,
         max_output_tokens=4000,
-        reasoning_effort="none",
+        reasoning_effort="minimal",
         verbosity="medium",
     )
 

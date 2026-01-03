@@ -537,6 +537,7 @@ class OpenAIClient:
         reasoning_effort: Optional[str] = None,
         verbosity: Optional[str] = None,
         max_output_tokens: Optional[int] = None,
+        max_retries: int = 2,
     ) -> Dict[str, Any]:
         """Create a response using Chat Completions API with GPT-5.2 parameters.
         
@@ -544,79 +545,124 @@ class OpenAIClient:
         - reasoning_effort: Controls reasoning depth (minimal, low, medium, high)
         - verbosity: Controls output length (low, medium, high)
         - max_completion_tokens: Maximum output tokens (replaces max_tokens for GPT-5)
+        
+        Includes automatic retry on empty responses.
         """
-        start_time = time.time()
-        try:
-            logger.info(
-                f"[OPENAI:REQUEST] Making GPT-5 Chat Completions request | "
-                f"model={model} reasoning_effort={reasoning_effort} verbosity={verbosity} "
-                f"input_chars={len(input) if input else 0} instructions_chars={len(instructions) if instructions else 0} "
-                f"max_output_tokens={max_output_tokens}"
-            )
-
-            # Build messages from input and instructions
-            messages = []
-            if instructions:
-                messages.append({"role": "system", "content": instructions})
-            messages.append({"role": "user", "content": input})
-
-            # Build request parameters for Chat Completions API
-            request_params = {
-                "model": model,
-                "messages": messages,
-            }
-
-            # GPT-5.2 uses extra_body for new parameters not yet in SDK
-            extra_body = {}
-            
-            # Add reasoning_effort for GPT-5 models
-            if reasoning_effort:
-                extra_body["reasoning_effort"] = reasoning_effort
-            
-            # Add verbosity for GPT-5 models
-            if verbosity:
-                extra_body["verbosity"] = verbosity
-            
-            # Use max_completion_tokens for GPT-5 models (not max_tokens)
-            if max_output_tokens:
-                extra_body["max_completion_tokens"] = max_output_tokens
-            
-            if extra_body:
-                request_params["extra_body"] = extra_body
-
-            # Make the API call using Chat Completions
-            response = self.client.chat.completions.create(**request_params)
-
-            content = response.choices[0].message.content
-            finish_reason = response.choices[0].finish_reason
-            usage = response.usage
-
-            elapsed = time.time() - start_time
-            logger.info(
-                f"[OPENAI:RESPONSE] GPT-5 Chat Completions call successful | "
-                f"duration={elapsed:.1f}s model={model} finish_reason={finish_reason} "
-                f"prompt_tokens={usage.prompt_tokens} completion_tokens={usage.completion_tokens} "
-                f"total_tokens={usage.total_tokens} response_chars={len(content) if content else 0}"
-            )
-
-            # Warn if content is empty - this helps debug issues
-            if not content:
-                logger.warning(
-                    f"[OPENAI:EMPTY] API returned empty content | "
-                    f"model={model} finish_reason={finish_reason} "
-                    f"prompt_tokens={usage.prompt_tokens} completion_tokens={usage.completion_tokens}"
+        last_error = None
+        
+        for attempt in range(max_retries + 1):
+            start_time = time.time()
+            try:
+                logger.info(
+                    f"[OPENAI:REQUEST] Making GPT-5 Chat Completions request | "
+                    f"model={model} reasoning_effort={reasoning_effort} verbosity={verbosity} "
+                    f"input_chars={len(input) if input else 0} instructions_chars={len(instructions) if instructions else 0} "
+                    f"max_output_tokens={max_output_tokens} attempt={attempt+1}/{max_retries+1}"
                 )
 
-            return {
-                "content": content,
-                "finish_reason": finish_reason,
-                "usage": {
-                    "prompt_tokens": usage.prompt_tokens,
-                    "completion_tokens": usage.completion_tokens,
-                    "total_tokens": usage.total_tokens,
-                },
-                "model": model,
-            }
+                # Build messages from input and instructions
+                messages = []
+                if instructions:
+                    messages.append({"role": "system", "content": instructions})
+                messages.append({"role": "user", "content": input})
+
+                # Build request parameters for Chat Completions API
+                request_params = {
+                    "model": model,
+                    "messages": messages,
+                }
+
+                # GPT-5.2 uses extra_body for new parameters not yet in SDK
+                extra_body = {}
+                
+                # Add reasoning_effort for GPT-5 models
+                if reasoning_effort:
+                    extra_body["reasoning_effort"] = reasoning_effort
+                
+                # Add verbosity for GPT-5 models
+                if verbosity:
+                    extra_body["verbosity"] = verbosity
+                
+                # Use max_completion_tokens for GPT-5 models (not max_tokens)
+                if max_output_tokens:
+                    extra_body["max_completion_tokens"] = max_output_tokens
+                
+                if extra_body:
+                    request_params["extra_body"] = extra_body
+
+                # Make the API call using Chat Completions
+                response = self.client.chat.completions.create(**request_params)
+
+                content = response.choices[0].message.content
+                finish_reason = response.choices[0].finish_reason
+                usage = response.usage
+
+                elapsed = time.time() - start_time
+                logger.info(
+                    f"[OPENAI:RESPONSE] GPT-5 Chat Completions call successful | "
+                    f"duration={elapsed:.1f}s model={model} finish_reason={finish_reason} "
+                    f"prompt_tokens={usage.prompt_tokens} completion_tokens={usage.completion_tokens} "
+                    f"total_tokens={usage.total_tokens} response_chars={len(content) if content else 0}"
+                )
+
+                # Retry on empty content (unless it's the last attempt)
+                if not content and attempt < max_retries:
+                    logger.warning(
+                        f"[OPENAI:EMPTY] API returned empty content, retrying | "
+                        f"model={model} finish_reason={finish_reason} attempt={attempt+1}/{max_retries+1}"
+                    )
+                    import time as time_module
+                    time_module.sleep(1)  # Brief delay before retry
+                    continue
+
+                # Final attempt - return whatever we got
+                if not content:
+                    logger.warning(
+                        f"[OPENAI:EMPTY] API returned empty content after all retries | "
+                        f"model={model} finish_reason={finish_reason} "
+                        f"prompt_tokens={usage.prompt_tokens} completion_tokens={usage.completion_tokens}"
+                    )
+
+                return {
+                    "content": content,
+                    "finish_reason": finish_reason,
+                    "usage": {
+                        "prompt_tokens": usage.prompt_tokens,
+                        "completion_tokens": usage.completion_tokens,
+                        "total_tokens": usage.total_tokens,
+                    },
+                    "model": model,
+                }
+
+            except httpx.TimeoutException as e:
+                elapsed = time.time() - start_time
+                logger.error(
+                    f"[OPENAI:TIMEOUT] GPT-5 Chat Completions timeout | "
+                    f"duration={elapsed:.1f}s model={model} error={str(e)} attempt={attempt+1}/{max_retries+1}"
+                )
+                last_error = e
+                if attempt < max_retries:
+                    import time as time_module
+                    time_module.sleep(2)  # Longer delay for timeout
+                    continue
+                raise
+            except Exception as e:
+                elapsed = time.time() - start_time
+                logger.error(
+                    f"[OPENAI:ERROR] GPT-5 Chat Completions call failed | "
+                    f"duration={elapsed:.1f}s model={model} error_type={type(e).__name__} error={str(e)} attempt={attempt+1}/{max_retries+1}"
+                )
+                last_error = e
+                if attempt < max_retries:
+                    import time as time_module
+                    time_module.sleep(1)
+                    continue
+                raise
+        
+        # Should not reach here, but just in case
+        if last_error:
+            raise last_error
+        raise RuntimeError("Unexpected error in create_response")
 
         except httpx.TimeoutException as e:
             elapsed = time.time() - start_time

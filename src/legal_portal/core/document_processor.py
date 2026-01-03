@@ -117,10 +117,12 @@ class DocumentProcessor:
         temp_files = []
 
         try:
-            # 0. Check blacklist before doing any work
+            # 0. Check blacklist before doing any work (normalized whitespace)
             if blacklist:
-                blacklisted_names = [name.lower() for name in blacklist]
-                if filename.lower() in blacklisted_names:
+                # Normalize whitespace: replace multiple spaces with single space, trim
+                normalized_filename = ' '.join(filename.lower().split())
+                normalized_blacklist = [' '.join(name.lower().split()) for name in blacklist]
+                if normalized_filename in normalized_blacklist:
                     logger.info(f"Document '{filename}' is blacklisted, marking as SKIPPED.")
                     from legal_portal.core.data_models import DocumentStatus
                     return {

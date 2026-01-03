@@ -481,11 +481,17 @@ async def import_clio_data(
         # Save communications as document entries
         for idx, comm in enumerate(communications, 1):
             try:
-                # Check blacklist
-                if any(comm.subject and comm.subject.lower() == bl.lower() for bl in blacklist):
-                    logger.info(f"Skipping blacklisted communication: {comm.subject}")
-                    items_processed += 1
-                    continue
+                # Check blacklist (normalized whitespace)
+                if comm.subject and blacklist:
+                    normalized_subject = ' '.join(comm.subject.lower().split())
+                    is_blacklisted = any(
+                        normalized_subject == ' '.join(bl.lower().split()) 
+                        for bl in blacklist
+                    )
+                    if is_blacklisted:
+                        logger.info(f"Skipping blacklisted communication: {comm.subject}")
+                        items_processed += 1
+                        continue
 
                 # Create a text document for each communication
                 content = f"Subject: {comm.subject}\n"
@@ -539,11 +545,17 @@ async def import_clio_data(
             try:
                 note_subject = note.get("subject", "No Subject")
                 
-                # Check blacklist
-                if any(note_subject.lower() == bl.lower() for bl in blacklist):
-                    logger.info(f"Skipping blacklisted note: {note_subject}")
-                    items_processed += 1
-                    continue
+                # Check blacklist (normalized whitespace)
+                if blacklist:
+                    normalized_note = ' '.join(note_subject.lower().split())
+                    is_blacklisted = any(
+                        normalized_note == ' '.join(bl.lower().split()) 
+                        for bl in blacklist
+                    )
+                    if is_blacklisted:
+                        logger.info(f"Skipping blacklisted note: {note_subject}")
+                        items_processed += 1
+                        continue
 
                 note_detail = note.get("detail", "")
                 note_date = note.get("date", "")
@@ -599,9 +611,14 @@ async def import_clio_data(
 
                 logger.debug("Processing Clio document", extra={"doc_name": doc_name, "doc_id": doc_id})
 
-                # Check blacklist BEFORE downloading (case-insensitive)
+                # Check blacklist BEFORE downloading (case-insensitive, whitespace-normalized)
                 if blacklist:
-                    is_blacklisted = any(doc_name.lower() == bl.lower() for bl in blacklist)
+                    # Normalize whitespace: replace multiple spaces with single space, trim
+                    normalized_doc_name = ' '.join(doc_name.lower().split())
+                    is_blacklisted = any(
+                        normalized_doc_name == ' '.join(bl.lower().split()) 
+                        for bl in blacklist
+                    )
                     if is_blacklisted:
                         logger.info(f"SKIPPING blacklisted document: '{doc_name}'")
                         items_processed += 1

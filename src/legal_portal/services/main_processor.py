@@ -386,16 +386,50 @@ async def process_case_documents(
         if diag_logger:
             diag_logger.log_stage("stage3_document_summaries", [s.model_dump() for s in structured_summaries])
 
+        # ========================================================================
+        # CASE SYNTHESIS STAGE (25-40%)
+        # ========================================================================
+        if progress_callback:
+            await progress_callback(
+                "Synthesizing case analysis...",
+                [],
+                "case_synthesis",
+                25,
+                stage={"id": "case_synthesis", "name": "Extracting Facts", "status": "active", "progress": 0}
+            )
+
         # 5.5. AI Call #2.5: Generate case-level analysis summary
         logger.info("AI Call #2.5: Generating case-level analysis summary...")
-        case_analysis_dict = await asyncio.to_thread(
-            _generate_case_analysis_summary,
-            intake_content,
-            structured_summaries,
-            openai_client_wrapper,
-            review_data,
-            jurisdiction=jurisdiction,
-        )
+        try:
+            case_analysis_dict = await asyncio.to_thread(
+                _generate_case_analysis_summary,
+                intake_content,
+                structured_summaries,
+                openai_client_wrapper,
+                review_data,
+                jurisdiction=jurisdiction,
+            )
+            logger.info("Case-level analysis summary generated successfully")
+        except Exception as e:
+            logger.error(f"Case synthesis failed: {e}", exc_info=True)
+            if progress_callback:
+                await progress_callback(
+                    f"Error in case synthesis: {str(e)[:100]}",
+                    [],
+                    "error",
+                    25,
+                    stage={"id": "case_synthesis", "name": "Extracting Facts", "status": "failed", "progress": 0}
+                )
+            raise  # Re-raise to fail the analysis properly
+        
+        if progress_callback:
+            await progress_callback(
+                "Case synthesis complete.",
+                [],
+                "case_synthesis",
+                35,
+                stage={"id": "case_synthesis", "name": "Extracting Facts", "status": "completed", "progress": 100}
+            )
         
         # Stage 4: Log Case Synthesis
         if diag_logger:
@@ -413,6 +447,18 @@ async def process_case_documents(
         contact_phone = case_info.get("contactPhone") if case_info else None
         contact_email = case_info.get("contactEmail") if case_info else None
         confirmed_qa_pairs = review_data.get("confirmed_qa_pairs", []) if review_data else []
+
+        # ========================================================================
+        # COVERAGE & DEADLINE EXTRACTION STAGE (40-55%)
+        # ========================================================================
+        if progress_callback:
+            await progress_callback(
+                "Checking legal coverage and extracting deadlines...",
+                [],
+                "deadline_extraction",
+                40,
+                stage={"id": "legal_issues", "name": "Legal Issues", "status": "active", "progress": 0}
+            )
 
         # Check corpus coverage for this case
         coverage_warnings = []
@@ -446,6 +492,14 @@ async def process_case_documents(
             except Exception as e:
                 logger.warning(f"Failed to analyze corpus coverage: {e}", exc_info=True)
 
+        if progress_callback:
+            await progress_callback(
+                "Extracting critical deadlines...",
+                [],
+                "deadline_extraction",
+                45,
+            )
+
         # NEW: Extract deadlines using corpus and documents
         deadline_context = ""
         try:
@@ -474,6 +528,15 @@ async def process_case_documents(
                 f"{statute_context}\n\n{deadline_context}" if statute_context else deadline_context
             )
 
+        if progress_callback:
+            await progress_callback(
+                "Deadlines and coverage analysis complete.",
+                [],
+                "deadline_extraction",
+                50,
+                stage={"id": "legal_issues", "name": "Legal Issues", "status": "completed", "progress": 100}
+            )
+
         # Check if CLIO context is available in review_data
         clio_context_str = ""
         if review_data.get("clio_matter_context"):
@@ -487,6 +550,18 @@ async def process_case_documents(
         fact_matrix = None
         legal_issue_map = None
         letter_structure = None
+
+        # ========================================================================
+        # MULTI-STAGE DEEP ANALYSIS (55-75%)
+        # ========================================================================
+        if progress_callback:
+            await progress_callback(
+                "Starting deep legal analysis...",
+                [],
+                "deep_analysis",
+                55,
+                stage={"id": "deep_analysis", "name": "Deep Analysis", "status": "active", "progress": 0}
+            )
 
         # Multi-stage analysis is REQUIRED for letter generation
         # Always run it - no feature flag
@@ -503,7 +578,12 @@ async def process_case_documents(
             )
 
             if progress_callback:
-                await progress_callback("Running multi-stage legal analysis...", phase="fact_extraction")
+                await progress_callback(
+                    "Running multi-stage legal analysis...",
+                    [],
+                    "deep_analysis",
+                    60,
+                )
 
             multi_stage_start = time.time()
             multi_stage_result = await multi_stage_analyzer.analyze_case(
@@ -532,6 +612,15 @@ async def process_case_documents(
                 f"timeline_events={len(fact_matrix.timeline)} primary_issues={len(legal_issue_map.primary_issues)} "
                 f"letter_style={letter_structure.style}"
             )
+            
+            if progress_callback:
+                await progress_callback(
+                    "Deep analysis complete.",
+                    [],
+                    "deep_analysis",
+                    75,
+                    stage={"id": "deep_analysis", "name": "Deep Analysis", "status": "completed", "progress": 100}
+                )
 
         except Exception as e:
             elapsed = time.time() - start_time
@@ -545,8 +634,11 @@ async def process_case_documents(
             # Surface the error so it's visible in results
             if progress_callback:
                 await progress_callback(
-                    f"⚠️ Advanced analysis failed: {str(e)[:100]}. Letter generation will be unavailable.",
-                    phase="multi_stage_error",
+                    f"⚠️ Advanced analysis failed: {str(e)[:100]}",
+                    [],
+                    "deep_analysis",
+                    75,
+                    stage={"id": "deep_analysis", "name": "Deep Analysis", "status": "failed", "progress": 100}
                 )
 
         # Derive opposing parties from fact matrix
@@ -564,8 +656,29 @@ async def process_case_documents(
 
         multi_stage_result_dict = multi_stage_result.model_dump(mode="json") if multi_stage_result else None
 
+        # ========================================================================
+        # LETTER STRUCTURE & FINALIZATION (80-100%)
+        # ========================================================================
+        if progress_callback:
+            await progress_callback(
+                "Preparing letter structure...",
+                [],
+                "letter_structure",
+                80,
+                stage={"id": "letter_structure", "name": "Letter Structure", "status": "active", "progress": 0}
+            )
+
         # 9. Calculate processing time
         processing_time = time.time() - start_time
+
+        if progress_callback:
+            await progress_callback(
+                "Finalizing analysis results...",
+                [],
+                "letter_structure",
+                90,
+                stage={"id": "letter_structure", "name": "Letter Structure", "status": "completed", "progress": 100}
+            )
 
         logger.info(
             f"Successfully completed document processing in {processing_time:.2f}s (letters deferred)"
@@ -621,6 +734,18 @@ async def process_case_documents(
             processed_documents=processed_case_docs,  # NEW: Return processed documents for persistence
             skipped_documents=skipped_documents or [],  # NEW: Include skipped documents
         )
+        
+        # ========================================================================
+        # ANALYSIS COMPLETE (100%)
+        # ========================================================================
+        if progress_callback:
+            await progress_callback(
+                "Analysis complete!",
+                [],
+                "completed",
+                100,
+            )
+        
         logger.info(
             f"[PROCESSOR:COMPLETE] [CASE:{case_id}] [ELAPSED:{processing_time:.1f}s] "
             f"Document processing completed | doc_count={len(processed_case_docs)} "
@@ -639,6 +764,15 @@ async def process_case_documents(
             error_message=str(e),
         )
         errors.append(error)
+        
+        # Emit error progress so frontend knows
+        if progress_callback:
+            await progress_callback(
+                f"Analysis failed: {str(e)[:100]}",
+                [],
+                "error",
+                0,
+            )
 
         return ProcessingResult(
             main_letter="<html><body><p>Processing failed due to validation error.</p></body></html>",
@@ -669,6 +803,15 @@ async def process_case_documents(
             error_message=str(e),
         )
         errors.append(error)
+        
+        # Emit error progress so frontend knows
+        if progress_callback:
+            await progress_callback(
+                f"Unexpected error: {str(e)[:100]}",
+                [],
+                "error",
+                0,
+            )
 
         return ProcessingResult(
             main_letter="<html><body><p>Processing failed due to an unexpected error.</p></body></html>",

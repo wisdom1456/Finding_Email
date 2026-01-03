@@ -1294,27 +1294,79 @@ async def start_analysis(
             _dbg_log("H6", "Starting SSE stream analysis on Vercel", {"analysis_id": analysis["id"]})
             
             async def analysis_stream():
-                """Generator that runs analysis and yields progress events."""
-                # First, yield the analysis record so frontend knows the ID
+                """Generator that runs analysis and yields progress events with heartbeats."""
+                import asyncio
+                
+                analysis_id = analysis["id"]
+                
+                # First, yield the analysis record so frontend knows the ID immediately
                 yield f"data: {json.dumps({'type': 'started', 'analysis': analysis})}\n\n"
                 
-                try:
-                    # Run the analysis (this updates progress to DB)
-                    await process_case_background(
+                # Create a task for the analysis so we can yield heartbeats while it runs
+                analysis_task = asyncio.create_task(
+                    process_case_background(
                         analysis_request.case_id,
-                        analysis["id"],
+                        analysis_id,
                         service_supabase,
                         analysis_request.provider,
                     )
+                )
+                
+                last_progress = None
+                heartbeat_count = 0
+                
+                try:
+                    while not analysis_task.done():
+                        # Check for progress updates in database
+                        try:
+                            result = service_supabase.table("analysis_results").select("status, progress").eq("id", analysis_id).single().execute()
+                            
+                            if result.data:
+                                current_status = result.data.get("status")
+                                current_progress = result.data.get("progress")
+                                
+                                # Yield progress if it changed
+                                if current_progress and current_progress != last_progress:
+                                    yield f"data: {json.dumps(current_progress)}\n\n"
+                                    last_progress = current_progress
+                                    heartbeat_count = 0  # Reset heartbeat counter on real progress
+                                
+                                # Check if analysis completed or failed
+                                if current_status in ["completed", "failed", "cancelled"]:
+                                    break
+                        except Exception as db_err:
+                            logger.warning(f"Error checking progress: {db_err}")
+                        
+                        # Send heartbeat every 10 seconds if no real progress
+                        heartbeat_count += 1
+                        if heartbeat_count >= 5:  # Every 5 * 2s = 10 seconds
+                            yield f"data: {json.dumps({'type': 'heartbeat', 'timestamp': datetime.utcnow().isoformat()})}\n\n"
+                            heartbeat_count = 0
+                        
+                        # Wait 2 seconds before checking again
+                        await asyncio.sleep(2)
+                    
+                    # Wait for the task to complete and get any exception
+                    await analysis_task
                     
                     # Fetch final status
-                    final = service_supabase.table("analysis_results").select("status").eq("id", analysis["id"]).single().execute()
+                    final = service_supabase.table("analysis_results").select("status, progress").eq("id", analysis_id).single().execute()
                     final_status = final.data.get("status", "unknown") if final.data else "unknown"
+                    final_progress = final.data.get("progress") if final.data else None
+                    
+                    # Yield final progress if different
+                    if final_progress and final_progress != last_progress:
+                        yield f"data: {json.dumps(final_progress)}\n\n"
                     
                     yield f"data: {json.dumps({'type': 'completed', 'status': final_status})}\n\n"
+                    logger.info(f"[VERCEL] Analysis stream completed for {analysis_id} with status: {final_status}")
                     
+                except asyncio.CancelledError:
+                    logger.warning(f"Analysis stream cancelled for {analysis_id}")
+                    analysis_task.cancel()
+                    yield f"data: {json.dumps({'type': 'cancelled'})}\n\n"
                 except Exception as e:
-                    logger.error(f"Analysis stream error: {e}")
+                    logger.error(f"Analysis stream error for {analysis_id}: {e}", exc_info=True)
                     yield f"data: {json.dumps({'type': 'error', 'error': str(e)})}\n\n"
             
             return StreamingResponse(

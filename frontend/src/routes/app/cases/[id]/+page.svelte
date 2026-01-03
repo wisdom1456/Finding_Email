@@ -925,21 +925,63 @@
 				currentAnalysisId = analysisId;
 				showProgressModal = true;
 				
-				// The SSE stream will continue running in the background
-				// The progress modal will poll the database for updates
-				// We don't need to read the rest of the stream here
-				
-				// Continue reading the stream in background (optional - for logging)
+				// Continue reading the SSE stream and forward events to progress store
+				// This provides real-time updates without needing to poll
 				(async () => {
 					try {
+						let buffer = '';
 						while (true) {
 							const { done, value } = await reader.read();
-							if (done) break;
-							const chunk = decoder.decode(value);
-							console.log('[Analysis SSE]', chunk);
+							if (done) {
+								console.log('[Analysis SSE] Stream ended');
+								break;
+							}
+							
+							buffer += decoder.decode(value, { stream: true });
+							const lines = buffer.split('\n');
+							
+							// Process complete lines, keep incomplete line in buffer
+							buffer = lines.pop() || '';
+							
+							for (const line of lines) {
+								if (line.startsWith('data: ')) {
+									try {
+										const data = JSON.parse(line.slice(6));
+										console.log('[Analysis SSE] Event:', data.type || data.phase, data.percent || '', data.message?.slice(0, 50) || '');
+										
+										// Forward progress events to the store
+										if (data.type === 'heartbeat') {
+											// Heartbeat - just log it
+											continue;
+										} else if (data.type === 'completed') {
+											progressStore.updateProgress({
+												status: 'completed',
+												message: 'Analysis complete',
+												percent: 100
+											});
+										} else if (data.type === 'error') {
+											progressStore.updateProgress({
+												status: 'error',
+												message: data.error || 'Analysis failed'
+											});
+										} else if (data.percent !== undefined || data.message) {
+											// Progress update
+											progressStore.updateProgress({
+												status: 'progress',
+												message: data.message,
+												percent: data.percent,
+												phase: data.phase,
+												document: data.document
+											});
+										}
+									} catch (e) {
+										// Ignore parse errors for incomplete data
+									}
+								}
+							}
 						}
 					} catch (e) {
-						console.log('[Analysis SSE] Stream ended:', e);
+						console.log('[Analysis SSE] Stream error:', e);
 					}
 				})();
 				

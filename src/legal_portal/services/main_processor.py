@@ -1140,10 +1140,10 @@ Return ONLY valid JSON, no markdown code blocks.
         all_summaries = []
         processed_count = 0
         
-        # Semaphore limits concurrent API calls to 2
-        semaphore = asyncio.Semaphore(2)
+        # Semaphore limits concurrent API calls to 4 (increased to fit under Vercel 5-min limit)
+        semaphore = asyncio.Semaphore(4)
         
-        logger.info(f"[PARALLEL-2] Starting analysis of {total_docs} documents for {jurisdiction}")
+        logger.info(f"[PARALLEL-4] Starting analysis of {total_docs} documents for {jurisdiction}")
         
         async def process_with_limit(doc, idx):
             """Process a single document with semaphore-controlled concurrency."""

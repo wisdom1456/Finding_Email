@@ -41,8 +41,13 @@
 		progressStore.stopListening();
 	});
 
-	// Calculate overall progress from stages
+	// Calculate overall progress: use state.percent directly, or calculate from stages
 	let overallProgress = $derived.by(() => {
+		// If we have a direct percent from SSE events, use it
+		if (state.percent > 0) {
+			return state.percent;
+		}
+		// Fallback: calculate from stages
 		if (state.stages.length === 0) return 0;
 		const completedStages = state.stages.filter(s => s.status === 'completed').length;
 		const activeStage = state.stages.find(s => s.status === 'active');

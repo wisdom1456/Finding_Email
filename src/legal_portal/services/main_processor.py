@@ -930,107 +930,139 @@ Return ONLY valid JSON, no markdown code blocks.
 """
     else:
         # ========================================================================
-        # SEQUENTIAL PROCESSING - Reliable, one document at a time
+        # LIMITED PARALLELISM - 2 concurrent for speed + reliability
         # ========================================================================
-        # This approach is slower but much more reliable on Vercel serverless:
-        # - No race conditions from parallel API calls
-        # - Clear progress tracking per document
-        # - Errors in one document don't affect others
-        # - Easier to debug and monitor
+        # Balances speed and reliability:
+        # - 2 concurrent: fast enough for Vercel 5-min limit
+        # - return_exceptions=True: one failure doesn't kill others
+        # - Progress tracking per document
+        # - 2-min timeout per document
         # ========================================================================
         
         total_docs = len(case_documents)
         all_summaries = []
+        processed_count = 0
         
-        logger.info(f"[SEQUENTIAL] Starting analysis of {total_docs} documents for {jurisdiction}")
+        # Semaphore limits concurrent API calls to 2
+        semaphore = asyncio.Semaphore(2)
         
-        for i, doc in enumerate(case_documents):
-            doc_num = i + 1
-            doc_name = doc.file_name
-            doc_id = getattr(doc, 'document_id', None) or getattr(doc, 'id', None) or f"doc_{i}"
+        logger.info(f"[PARALLEL-2] Starting analysis of {total_docs} documents for {jurisdiction}")
+        
+        async def process_with_limit(doc, idx):
+            """Process a single document with semaphore-controlled concurrency."""
+            nonlocal processed_count
             
-            logger.info(f"[DOC {doc_num}/{total_docs}] Starting: {doc_name}")
-            
-            # Update UI: document is now processing
-            if progress_callback:
-                await progress_callback(
-                    message=f"Analyzing {doc_name} ({doc_num}/{total_docs})...",
-                    phase="document_analysis",
-                    percent=15 + int((i / total_docs) * 60),
-                    document={"id": doc_id, "name": doc_name, "status": "processing"}
-                )
-            
-            try:
-                # Process with 2-minute timeout per document
-                doc_result, doc_errors = await asyncio.wait_for(
-                    _process_document_batch(
-                        [doc],  # Single document as a batch
-                        intake_content,
-                        doc_num,
-                        total_docs,
-                        openai_client_wrapper,
-                        json_processing_service,
-                        review_data,
-                        [],
-                        statute_context,
-                        jurisdiction=jurisdiction,
-                    ),
-                    timeout=120.0  # 2 minutes per document
-                )
+            async with semaphore:
+                doc_num = idx + 1
+                doc_name = doc.file_name
+                doc_id = getattr(doc, 'document_id', None) or getattr(doc, 'id', None) or f"doc_{idx}"
                 
-                if doc_result:
-                    all_summaries.extend(doc_result)
-                    logger.info(f"[DOC {doc_num}/{total_docs}] Completed: {doc_name} ({len(doc_result)} summaries)")
-                else:
-                    logger.warning(f"[DOC {doc_num}/{total_docs}] No results: {doc_name}")
-                    
-                if doc_errors:
-                    errors.extend(doc_errors)
-                    for err in doc_errors:
-                        logger.warning(f"[DOC {doc_num}/{total_docs}] Error in {doc_name}: {err}")
+                logger.info(f"[DOC {doc_num}/{total_docs}] Starting: {doc_name}")
                 
-                # Update UI: document completed
+                # Update UI: document is now processing
                 if progress_callback:
                     await progress_callback(
-                        message=f"Completed {doc_name}",
-                        docs_processed=[doc_name],
+                        message=f"Analyzing {doc_name} ({doc_num}/{total_docs})...",
                         phase="document_analysis",
-                        percent=15 + int((doc_num / total_docs) * 60),
-                        document={"id": doc_id, "name": doc_name, "status": "completed"}
+                        percent=15 + int((processed_count / total_docs) * 60),
+                        document={"id": doc_id, "name": doc_name, "status": "processing"}
+                    )
+                
+                try:
+                    # Process with 2-minute timeout per document
+                    doc_result, doc_errors = await asyncio.wait_for(
+                        _process_document_batch(
+                            [doc],  # Single document as a batch
+                            intake_content,
+                            doc_num,
+                            total_docs,
+                            openai_client_wrapper,
+                            json_processing_service,
+                            review_data,
+                            [],
+                            statute_context,
+                            jurisdiction=jurisdiction,
+                        ),
+                        timeout=120.0  # 2 minutes per document
                     )
                     
-            except asyncio.TimeoutError:
-                logger.error(f"[DOC {doc_num}/{total_docs}] TIMEOUT after 2 minutes: {doc_name}")
-                errors.append(ProcessingError(
-                    source=doc_name,
-                    error_type="TIMEOUT",
-                    error_message="Document analysis timed out after 2 minutes"
-                ))
-                # Mark as failed but continue with next document
-                if progress_callback:
-                    await progress_callback(
-                        message=f"Timeout analyzing {doc_name}",
-                        phase="document_analysis",
-                        document={"id": doc_id, "name": doc_name, "status": "failed"}
-                    )
+                    processed_count += 1
                     
-            except Exception as e:
-                logger.error(f"[DOC {doc_num}/{total_docs}] ERROR: {doc_name}: {e}", exc_info=True)
+                    if doc_result:
+                        logger.info(f"[DOC {doc_num}/{total_docs}] Completed: {doc_name} ({len(doc_result)} summaries)")
+                    else:
+                        logger.warning(f"[DOC {doc_num}/{total_docs}] No results: {doc_name}")
+                    
+                    # Update UI: document completed
+                    if progress_callback:
+                        await progress_callback(
+                            message=f"Completed {doc_name}",
+                            docs_processed=[doc_name],
+                            phase="document_analysis",
+                            percent=15 + int((processed_count / total_docs) * 60),
+                            document={"id": doc_id, "name": doc_name, "status": "completed"}
+                        )
+                    
+                    return doc_result or [], doc_errors or []
+                    
+                except asyncio.TimeoutError:
+                    processed_count += 1
+                    logger.error(f"[DOC {doc_num}/{total_docs}] TIMEOUT after 2 minutes: {doc_name}")
+                    
+                    if progress_callback:
+                        await progress_callback(
+                            message=f"Timeout analyzing {doc_name}",
+                            phase="document_analysis",
+                            percent=15 + int((processed_count / total_docs) * 60),
+                            document={"id": doc_id, "name": doc_name, "status": "failed"}
+                        )
+                    
+                    return [], [ProcessingError(
+                        source=doc_name,
+                        error_type="TIMEOUT",
+                        error_message="Document analysis timed out after 2 minutes"
+                    )]
+                    
+                except Exception as e:
+                    processed_count += 1
+                    logger.error(f"[DOC {doc_num}/{total_docs}] ERROR: {doc_name}: {e}", exc_info=True)
+                    
+                    if progress_callback:
+                        await progress_callback(
+                            message=f"Error analyzing {doc_name}",
+                            phase="document_analysis",
+                            percent=15 + int((processed_count / total_docs) * 60),
+                            document={"id": doc_id, "name": doc_name, "status": "failed"}
+                        )
+                    
+                    return [], [ProcessingError(
+                        source=doc_name,
+                        error_type="PROCESSING_ERROR",
+                        error_message=str(e)
+                    )]
+        
+        # Create tasks for all documents (semaphore controls concurrency)
+        tasks = [process_with_limit(doc, i) for i, doc in enumerate(case_documents)]
+        
+        # Execute all with return_exceptions=True so one failure doesn't kill others
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        
+        # Collect results
+        for i, result in enumerate(results):
+            if isinstance(result, Exception):
+                logger.error(f"[DOC {i+1}/{total_docs}] Task exception: {result}")
                 errors.append(ProcessingError(
-                    source=doc_name,
-                    error_type="PROCESSING_ERROR",
-                    error_message=str(e)
+                    source=f"doc_{i}",
+                    error_type="TASK_ERROR",
+                    error_message=str(result)
                 ))
-                # Mark as failed but continue with next document
-                if progress_callback:
-                    await progress_callback(
-                        message=f"Error analyzing {doc_name}",
-                        phase="document_analysis",
-                        document={"id": doc_id, "name": doc_name, "status": "failed"}
-                    )
+            elif result:
+                summaries, doc_errors = result
+                all_summaries.extend(summaries)
+                errors.extend(doc_errors)
         
         logger.info(
-            f"[SEQUENTIAL] Complete: {len(all_summaries)} summaries from {total_docs} documents, "
+            f"[PARALLEL-2] Complete: {len(all_summaries)} summaries from {total_docs} documents, "
             f"{len(errors)} errors"
         )
         

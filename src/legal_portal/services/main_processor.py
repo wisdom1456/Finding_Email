@@ -456,7 +456,7 @@ async def process_case_documents(
                 progress_callback,
                 "case_synthesis",
                 25,
-                heartbeat_interval=10.0,
+                10.0,
                 intake_content,
                 structured_summaries,
                 openai_client_wrapper,

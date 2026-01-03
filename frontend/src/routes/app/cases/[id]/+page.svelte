@@ -887,10 +887,69 @@
 			// Reset selection
 			selectedIntakeDocId = null;
 
-			const analysisData = await response.json();
-			const analysisId = analysisData.id;
-			currentAnalysisId = analysisId;
-			showProgressModal = true;
+			// Check if response is SSE (Vercel) or JSON (local)
+			const contentType = response.headers.get('content-type') || '';
+			
+			if (contentType.includes('text/event-stream')) {
+				// Vercel: SSE stream - read first event to get analysis ID
+				const reader = response.body?.getReader();
+				if (!reader) throw new Error('No reader available');
+				
+				const decoder = new TextDecoder();
+				let analysisId: string | null = null;
+				
+				// Read the first event to get the analysis ID
+				const { value } = await reader.read();
+				if (value) {
+					const chunk = decoder.decode(value);
+					const lines = chunk.split('\n');
+					for (const line of lines) {
+						if (line.startsWith('data: ')) {
+							try {
+								const data = JSON.parse(line.slice(6));
+								if (data.type === 'started' && data.analysis?.id) {
+									analysisId = data.analysis.id;
+									break;
+								}
+							} catch (e) {
+								console.error('Failed to parse SSE event:', e);
+							}
+						}
+					}
+				}
+				
+				if (!analysisId) {
+					throw new Error('Failed to get analysis ID from stream');
+				}
+				
+				currentAnalysisId = analysisId;
+				showProgressModal = true;
+				
+				// The SSE stream will continue running in the background
+				// The progress modal will poll the database for updates
+				// We don't need to read the rest of the stream here
+				
+				// Continue reading the stream in background (optional - for logging)
+				(async () => {
+					try {
+						while (true) {
+							const { done, value } = await reader.read();
+							if (done) break;
+							const chunk = decoder.decode(value);
+							console.log('[Analysis SSE]', chunk);
+						}
+					} catch (e) {
+						console.log('[Analysis SSE] Stream ended:', e);
+					}
+				})();
+				
+			} else {
+				// Local: JSON response
+				const analysisData = await response.json();
+				const analysisId = analysisData.id;
+				currentAnalysisId = analysisId;
+				showProgressModal = true;
+			}
 
 			// Reload analysis status
 			await loadAnalysisStatus();

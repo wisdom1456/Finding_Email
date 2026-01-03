@@ -1203,7 +1203,7 @@ async def stream_chat_response(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/start", response_model=AnalysisResponse, status_code=status.HTTP_202_ACCEPTED)
+@router.post("/start", status_code=status.HTTP_202_ACCEPTED)
 @limiter.limit("10/minute")  # Rate limit AI analysis to prevent abuse
 async def start_analysis(
     analysis_request: AnalysisRequest,
@@ -1213,22 +1213,38 @@ async def start_analysis(
     user_supabase=Depends(get_user_supabase_client),  # noqa: B008
     service_supabase=Depends(get_supabase_client),  # noqa: B008
 ):
-    """Start analysis for a case (async background task).
+    """Start analysis for a case.
+    
+    On Vercel serverless, BackgroundTasks don't work reliably because the function
+    instance is terminated after the response is sent. On Vercel, this endpoint
+    returns an SSE stream that runs the analysis inline and streams progress.
 
     Args:
     ----
         analysis_request: Analysis request data
         request: FastAPI request object
-        background_tasks: FastAPI background tasks handler
+        background_tasks: FastAPI background tasks handler (used for local dev only)
         user: Current authenticated user
         user_supabase: User-scoped Supabase client
         service_supabase: Service-role Supabase client
 
     Returns:
     -------
-        Analysis record (status: pending)
+        On local: JSON with analysis record (202)
+        On Vercel: SSE stream with progress events
 
     """
+    import os
+    is_vercel = os.getenv("VERCEL") is not None
+    
+    # #region agent log
+    _DEBUG_LOG_PATH = "/tmp/cursor_debug.log" if is_vercel else "/Users/BRFlorida/Projects/Work/Finding_Emails/.cursor/debug.log"
+    def _dbg_log(hyp: str, msg: str, data: dict = None):
+        try:
+            import json as _j, time as _t; open(_DEBUG_LOG_PATH, "a").write(_j.dumps({"hypothesisId": hyp, "location": "analysis.py:start_analysis", "message": msg, "data": data or {}, "timestamp": _t.time(), "sessionId": "debug-session"}) + "\n")
+        except: pass
+    # #endregion agent log
+    
     try:
         # Verify case ownership using user client (respects RLS)
         case_response = (
@@ -1269,28 +1285,63 @@ async def start_analysis(
             "id", analysis_request.case_id
         ).execute()
 
-        # Start background processing using SERVICE client (bypasses RLS, no token expiry)
-        background_tasks.add_task(
-            process_case_background,
-            analysis_request.case_id,
-            analysis["id"],
-            service_supabase,
-            analysis_request.provider,
-        )
+        _dbg_log("H6", "start_analysis called", {"case_id": analysis_request.case_id, "analysis_id": analysis["id"], "is_vercel": is_vercel})
 
-        # #region agent log
-        _DEBUG_LOG_PATH = "/tmp/cursor_debug.log" if __import__('os').getenv("VERCEL") else "/Users/BRFlorida/Projects/Work/Finding_Emails/.cursor/debug.log"
-        def _dbg_log(hyp: str, msg: str, data: dict = None):
-            try:
-                import json as _j, time as _t; open(_DEBUG_LOG_PATH, "a").write(_j.dumps({"hypothesisId": hyp, "location": "analysis.py:start_analysis", "message": msg, "data": data or {}, "timestamp": _t.time(), "sessionId": "debug-session"}) + "\n")
-            except: pass
-        _dbg_log("H1,H2", "start_analysis returning 202", {"case_id": analysis_request.case_id, "analysis_id": analysis["id"], "bg_task_added": True})
-        # #endregion agent log
-
-        return analysis
+        if is_vercel:
+            # On Vercel: Return SSE stream that runs analysis inline
+            # This keeps the connection alive and prevents function termination
+            logger.info(f"[VERCEL] Starting SSE stream for analysis {analysis['id']}")
+            _dbg_log("H6", "Starting SSE stream analysis on Vercel", {"analysis_id": analysis["id"]})
+            
+            async def analysis_stream():
+                """Generator that runs analysis and yields progress events."""
+                # First, yield the analysis record so frontend knows the ID
+                yield f"data: {json.dumps({'type': 'started', 'analysis': analysis})}\n\n"
+                
+                try:
+                    # Run the analysis (this updates progress to DB)
+                    await process_case_background(
+                        analysis_request.case_id,
+                        analysis["id"],
+                        service_supabase,
+                        analysis_request.provider,
+                    )
+                    
+                    # Fetch final status
+                    final = service_supabase.table("analysis_results").select("status").eq("id", analysis["id"]).single().execute()
+                    final_status = final.data.get("status", "unknown") if final.data else "unknown"
+                    
+                    yield f"data: {json.dumps({'type': 'completed', 'status': final_status})}\n\n"
+                    
+                except Exception as e:
+                    logger.error(f"Analysis stream error: {e}")
+                    yield f"data: {json.dumps({'type': 'error', 'error': str(e)})}\n\n"
+            
+            return StreamingResponse(
+                analysis_stream(),
+                media_type="text/event-stream",
+                headers={
+                    "Cache-Control": "no-cache, no-transform",
+                    "Connection": "keep-alive",
+                    "X-Accel-Buffering": "no",
+                }
+            )
+        else:
+            # Local development: Use BackgroundTasks as before (returns JSON)
+            logger.info(f"[LOCAL] Using BackgroundTasks for {analysis['id']}")
+            background_tasks.add_task(
+                process_case_background,
+                analysis_request.case_id,
+                analysis["id"],
+                service_supabase,
+                analysis_request.provider,
+            )
+            return analysis
+            
     except HTTPException:
         raise
     except Exception as e:
+        logger.error(f"Error in start_analysis: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error starting analysis: {str(e)}"
         ) from e

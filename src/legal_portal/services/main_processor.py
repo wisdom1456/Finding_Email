@@ -30,6 +30,7 @@ from legal_portal.services.statute_recommendation_service import StatuteRecommen
 from legal_portal.utils.logging_config import get_module_logger
 from legal_portal.utils.openai_client import OpenAIClient
 from legal_portal.utils.diagnostic_logger import DiagnosticLogger
+from legal_portal.services.chunk_state_manager import ChunkStateManager
 
 logger = get_module_logger(__name__)
 
@@ -280,11 +281,19 @@ async def process_case_documents(
     progress_callback: Optional[Callable] = None,
     jurisdiction: str = "Florida",
     skipped_documents: Optional[List[SkippedDocument]] = None,
+    analysis_id: Optional[str] = None,
+    supabase_client: Optional[Any] = None,
 ) -> ProcessingResult:
     """Decoupled document processing workflow using already extracted text."""
     start_time = time.time()
     errors = []
     case_id = case_info.get("case_id", "unknown")
+
+    # Initialize Chunk State Manager for per-document status tracking
+    chunk_state_mgr = None
+    if analysis_id and supabase_client:
+        chunk_state_mgr = ChunkStateManager(supabase_client, analysis_id)
+        logger.info(f"[PROCESSOR] ChunkStateManager initialized for analysis {analysis_id}")
 
     # Initialize Diagnostic Logger if enabled
     diag_logger = None
@@ -327,6 +336,16 @@ async def process_case_documents(
 
         if not all_processed_docs:
             logger.warning("No documents provided for analysis.")
+        
+        # Initialize chunk_state for per-document tracking
+        if chunk_state_mgr and all_processed_docs:
+            try:
+                # Get max_tokens setting from user profile or use default
+                max_tokens = 50000  # Default
+                await chunk_state_mgr.initialize_chunk_state(all_processed_docs, max_tokens)
+                logger.info(f"[PROCESSOR] Chunk state initialized for {len(all_processed_docs)} documents")
+            except Exception as e:
+                logger.warning(f"[PROCESSOR] Failed to initialize chunk state: {e}")
 
         if progress_callback:
             await progress_callback(
@@ -420,6 +439,7 @@ async def process_case_documents(
             progress_callback,
             statute_context,  # NEW: Pass statute context
             jurisdiction=jurisdiction,  # NEW: Pass jurisdiction
+            chunk_state_mgr=chunk_state_mgr,  # NEW: For per-doc status tracking
         )
 
         if progress_callback:
@@ -434,6 +454,48 @@ async def process_case_documents(
         # Stage 3: Log Per-Document Summaries
         if diag_logger:
             diag_logger.log_stage("stage3_document_summaries", [s.model_dump() for s in structured_summaries])
+
+        # ========================================================================
+        # SYNTHESIS GATE CHECK
+        # ========================================================================
+        # Check if we can proceed to synthesis (all docs completed or skipped)
+        if chunk_state_mgr:
+            can_proceed = await chunk_state_mgr.can_proceed_to_synthesis()
+            if not can_proceed:
+                failed_docs = await chunk_state_mgr.get_failed_documents()
+                await chunk_state_mgr.update_phase("awaiting_recovery")
+                
+                logger.warning(
+                    f"[SYNTHESIS_GATE] Cannot proceed - {len(failed_docs)} documents need attention"
+                )
+                
+                if progress_callback:
+                    await progress_callback(
+                        f"Waiting for {len(failed_docs)} failed documents to be addressed",
+                        [],
+                        "awaiting_recovery",
+                        20,
+                        chunk_status={
+                            "type": "chunk_complete_with_errors",
+                            "completed": len(structured_summaries),
+                            "failed": len(failed_docs),
+                            "failed_docs": [
+                                {"id": d.get("id"), "name": d.get("name"), "error": d.get("error"), "error_type": d.get("error_type")}
+                                for d in failed_docs
+                            ]
+                        }
+                    )
+                
+                # Return partial results - frontend will show recovery modal
+                return ProcessingResult(
+                    document_summaries=[],
+                    status="awaiting_recovery",
+                    errors=errors,
+                    processing_time=time.time() - start_time,
+                )
+            else:
+                await chunk_state_mgr.update_phase("synthesis")
+                logger.info("[SYNTHESIS_GATE] All documents addressed, proceeding to synthesis")
 
         # ========================================================================
         # CASE SYNTHESIS STAGE (25-40%)
@@ -1079,6 +1141,7 @@ async def _generate_document_summaries(
     progress_callback: Optional[Callable] = None,
     statute_context: str = "",  # NEW: Pass statute recommendations
     jurisdiction: str = "Florida",  # NEW: Pass jurisdiction
+    chunk_state_mgr: Optional[ChunkStateManager] = None,  # NEW: For per-doc status tracking
 ) -> Tuple[List[Dict[str, Any]], List[ProcessingError]]:
     """AI Call #1: Generate structured JSON summaries of case documents.
 
@@ -1156,6 +1219,10 @@ Return ONLY valid JSON, no markdown code blocks.
                 
                 logger.info(f"[DOC {doc_num}/{total_docs}] Starting: {doc_name}")
                 
+                # Update chunk_state: document is now processing
+                if chunk_state_mgr:
+                    await chunk_state_mgr.update_document_status(doc_id, "processing")
+                
                 # Update UI: document is now processing
                 if progress_callback:
                     await progress_callback(
@@ -1187,8 +1254,17 @@ Return ONLY valid JSON, no markdown code blocks.
                     
                     if doc_result:
                         logger.info(f"[DOC {doc_num}/{total_docs}] Completed: {doc_name} ({len(doc_result)} summaries)")
+                        
+                        # Save summary to chunk_state
+                        if chunk_state_mgr and len(doc_result) > 0:
+                            summary_data = doc_result[0].model_dump() if hasattr(doc_result[0], 'model_dump') else doc_result[0]
+                            await chunk_state_mgr.update_document_status(
+                                doc_id, "completed", summary=summary_data
+                            )
                     else:
                         logger.warning(f"[DOC {doc_num}/{total_docs}] No results: {doc_name}")
+                        if chunk_state_mgr:
+                            await chunk_state_mgr.update_document_status(doc_id, "completed")
                     
                     # Update UI: document completed
                     if progress_callback:
@@ -1204,38 +1280,52 @@ Return ONLY valid JSON, no markdown code blocks.
                     
                 except asyncio.TimeoutError:
                     processed_count += 1
-                    logger.error(f"[DOC {doc_num}/{total_docs}] TIMEOUT after 2 minutes: {doc_name}")
+                    error_msg = "Document analysis timed out after 2 minutes"
+                    logger.error(f"[DOC {doc_num}/{total_docs}] TIMEOUT: {doc_name}")
+                    
+                    # Update chunk_state with failure
+                    if chunk_state_mgr:
+                        await chunk_state_mgr.update_document_status(
+                            doc_id, "failed", error=error_msg, error_type="TIMEOUT"
+                        )
                     
                     if progress_callback:
                         await progress_callback(
                             message=f"Timeout analyzing {doc_name}",
                             phase="document_analysis",
                             percent=15 + int((processed_count / total_docs) * 60),
-                            document={"id": doc_id, "name": doc_name, "status": "failed"}
+                            document={"id": doc_id, "name": doc_name, "status": "failed", "error": error_msg}
                         )
                     
                     return [], [ProcessingError(
                         source=doc_name,
                         error_type="TIMEOUT",
-                        error_message="Document analysis timed out after 2 minutes"
+                        error_message=error_msg
                     )]
                     
                 except Exception as e:
                     processed_count += 1
+                    error_msg = str(e)
                     logger.error(f"[DOC {doc_num}/{total_docs}] ERROR: {doc_name}: {e}", exc_info=True)
+                    
+                    # Update chunk_state with failure
+                    if chunk_state_mgr:
+                        await chunk_state_mgr.update_document_status(
+                            doc_id, "failed", error=error_msg, error_type="PROCESSING_ERROR"
+                        )
                     
                     if progress_callback:
                         await progress_callback(
                             message=f"Error analyzing {doc_name}",
                             phase="document_analysis",
                             percent=15 + int((processed_count / total_docs) * 60),
-                            document={"id": doc_id, "name": doc_name, "status": "failed"}
+                            document={"id": doc_id, "name": doc_name, "status": "failed", "error": error_msg}
                         )
                     
                     return [], [ProcessingError(
                         source=doc_name,
                         error_type="PROCESSING_ERROR",
-                        error_message=str(e)
+                        error_message=error_msg
                     )]
         
         # Create tasks for all documents (semaphore controls concurrency)
@@ -1259,9 +1349,27 @@ Return ONLY valid JSON, no markdown code blocks.
                 errors.extend(doc_errors)
         
         logger.info(
-            f"[PARALLEL-2] Complete: {len(all_summaries)} summaries from {total_docs} documents, "
+            f"[PARALLEL-4] Complete: {len(all_summaries)} summaries from {total_docs} documents, "
             f"{len(errors)} errors"
         )
+        
+        # Emit chunk_complete event with error info if any failures
+        if errors and progress_callback:
+            failed_docs = [
+                {"name": e.source, "error": e.error_message, "error_type": e.error_type}
+                for e in errors
+            ]
+            await progress_callback(
+                message=f"Document analysis complete with {len(errors)} failures",
+                phase="document_analysis",
+                percent=75,
+                chunk_status={
+                    "type": "chunk_complete_with_errors",
+                    "completed": len(all_summaries),
+                    "failed": len(errors),
+                    "failed_docs": failed_docs
+                }
+            )
         
         return (all_summaries, errors)
         

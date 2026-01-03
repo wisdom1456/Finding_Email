@@ -33,6 +33,21 @@ export interface StatsState {
 	model: string;
 }
 
+export interface FailedDocument {
+	id: string;
+	name: string;
+	error: string;
+	error_type?: string;
+}
+
+export interface ChunkStatus {
+	type: 'chunk_complete' | 'chunk_complete_with_errors';
+	chunk?: number;
+	completed?: number;
+	failed?: number;
+	failed_docs?: FailedDocument[];
+}
+
 export interface ProgressState<T = unknown> {
 	message: string;
 	phase: string;
@@ -56,6 +71,10 @@ export interface EnhancedProgressState<T = unknown> extends ProgressState<T> {
 	stats: StatsState;
 	streamingText: string;
 	isStreaming: boolean;
+	// Chunk failure recovery
+	failedDocs: FailedDocument[];
+	hasRecoveryPending: boolean;
+	chunkStatus: ChunkStatus | null;
 }
 
 const DEFAULT_STAGES: StageState[] = [
@@ -85,7 +104,11 @@ const initialState: EnhancedProgressState<unknown> = {
 		model: 'gpt-5.2'
 	},
 	streamingText: '',
-	isStreaming: false
+	isStreaming: false,
+	// Chunk failure recovery
+	failedDocs: [],
+	hasRecoveryPending: false,
+	chunkStatus: null
 };
 
 function createProgressStore() {
@@ -141,6 +164,10 @@ function createProgressStore() {
 					lastLoggedDocStates[key] = event.document.status;
 				}
 			}
+			// Log chunk status events
+			if (event.chunk_status) {
+				console.log('[progressStore] Chunk status:', event.chunk_status.type, event.chunk_status);
+			}
 
 			if (event.data) finalData = event.data;
 			
@@ -148,6 +175,13 @@ function createProgressStore() {
 			let newStatus: ProgressState['status'] = 'active';
 			if (event.type === 'completed' || event.status === 'completed') newStatus = 'completed';
 			else if (event.type === 'error' || event.type === 'failed' || event.status === 'error') newStatus = 'error';
+			
+			// Check for chunk_complete_with_errors event
+			const chunkStatus: ChunkStatus | null = event.chunk_status || null;
+			const hasRecoveryPending = chunkStatus?.type === 'chunk_complete_with_errors';
+			const failedDocs: FailedDocument[] = hasRecoveryPending && chunkStatus?.failed_docs 
+				? chunkStatus.failed_docs 
+				: [];
 			
 			update(state => {
 				// 1. Update Stages
@@ -197,7 +231,11 @@ function createProgressStore() {
 					data: event.data || state.data,
 					stages: newStages,
 					documents: newDocs,
-					stats: newStats
+					stats: newStats,
+					// Chunk failure recovery state
+					chunkStatus: chunkStatus || state.chunkStatus,
+					hasRecoveryPending: hasRecoveryPending || state.hasRecoveryPending,
+					failedDocs: failedDocs.length > 0 ? failedDocs : state.failedDocs
 				};
 			});
 		};
@@ -372,6 +410,13 @@ function createProgressStore() {
 					}
 				}
 
+				// Chunk status handling
+				const chunkStatus: ChunkStatus | null = event.chunk_status || null;
+				const hasRecoveryPending = chunkStatus?.type === 'chunk_complete_with_errors';
+				const failedDocs: FailedDocument[] = hasRecoveryPending && chunkStatus?.failed_docs 
+					? chunkStatus.failed_docs 
+					: [];
+
 				return {
 					...state,
 					message: event.message || state.message,
@@ -387,9 +432,25 @@ function createProgressStore() {
 					data: event.data || state.data,
 					stages: newStages,
 					documents: newDocs,
-					stats: event.stats ? { ...state.stats, ...event.stats } : state.stats
+					stats: event.stats ? { ...state.stats, ...event.stats } : state.stats,
+					// Chunk failure recovery state
+					chunkStatus: chunkStatus || state.chunkStatus,
+					hasRecoveryPending: hasRecoveryPending || state.hasRecoveryPending,
+					failedDocs: failedDocs.length > 0 ? failedDocs : state.failedDocs
 				};
 			});
+		},
+
+		/**
+		 * Clear recovery state after user handles failed documents
+		 */
+		clearRecoveryState: () => {
+			update(state => ({
+				...state,
+				hasRecoveryPending: false,
+				failedDocs: [],
+				chunkStatus: null
+			}));
 		},
 
 		/**
@@ -417,4 +478,14 @@ export const isComplete = derived(
 export const hasError = derived(
 	progressStore,
 	$progress => $progress.status === 'error'
+);
+
+export const needsRecovery = derived(
+	progressStore,
+	$progress => $progress.hasRecoveryPending && $progress.failedDocs.length > 0
+);
+
+export const failedDocuments = derived(
+	progressStore,
+	$progress => $progress.failedDocs
 );

@@ -27,6 +27,11 @@ Palm Harbor, FL 34683`);
 	let caseChatModel = $state('gpt-5-mini');
 	let multiStageAnalysisModel = $state('gpt-5.2');
 	let blacklistedDocuments = $state('');
+	
+	// Document Processing Preferences
+	let autoSkipFailed = $state(false);
+	let maxRetryAttempts = $state(2);
+	let chunkMaxTokens = $state(50000);
 
 	const availableModels = [
 		{ value: 'gpt-5.2', label: 'GPT-5.2 (Recommended)', description: 'Most intelligent, complex reasoning' },
@@ -79,6 +84,11 @@ Palm Harbor, FL 34683`);
 					if (profile.ai_preferences.blacklisted_documents) {
 						blacklistedDocuments = profile.ai_preferences.blacklisted_documents.join(', ');
 					}
+					
+					// Document processing preferences
+					autoSkipFailed = profile.ai_preferences.auto_skip_failed ?? false;
+					maxRetryAttempts = profile.ai_preferences.max_retry_attempts ?? 2;
+					chunkMaxTokens = profile.ai_preferences.chunk_max_tokens ?? 50000;
 				}
 			}
 		} catch (error: any) {
@@ -115,7 +125,11 @@ Palm Harbor, FL 34683`);
 					blacklisted_documents: blacklistedDocuments
 						.split(',')
 						.map((d) => d.trim())
-						.filter((d) => d.length > 0)
+						.filter((d) => d.length > 0),
+					// Document processing preferences
+					auto_skip_failed: autoSkipFailed,
+					max_retry_attempts: maxRetryAttempts,
+					chunk_max_tokens: chunkMaxTokens
 				}
 			};
 
@@ -336,7 +350,7 @@ Palm Harbor, FL 34683`);
 
 				<div class="mt-8 info-box info-box-blue">
 					<div class="flex">
-						<Info class="h-5 w-5 text-contrast-light flex-shrink-0" />
+						<Info class="h-5 w-5 text-contrast-light shrink-0" />
 						<div class="ml-3">
 							<h3 class="text-sm font-bold text-contrast-light">Model Information</h3>
 							<div class="mt-2 text-sm text-gray-600">
@@ -376,11 +390,97 @@ Palm Harbor, FL 34683`);
 				</div>
 			</div>
 
+			<!-- Analysis Processing Preferences Section -->
+			<div class="card-standard">
+				<h2 class="text-lg font-heading font-semibold text-contrast mb-2">Analysis Processing</h2>
+				<p class="text-sm text-gray-500 mb-6">
+					Configure how document analysis handles failures and large document sets.
+				</p>
+
+				<div class="space-y-6">
+					<!-- Auto-skip failed documents -->
+					<div class="flex items-start gap-4">
+						<div class="flex items-center h-6">
+							<input
+								type="checkbox"
+								id="autoSkipFailed"
+								bind:checked={autoSkipFailed}
+								class="h-4 w-4 rounded border-gray-300 text-accent focus:ring-accent"
+							/>
+						</div>
+						<div class="flex-1">
+							<label for="autoSkipFailed" class="block text-sm font-semibold text-contrast">
+								Auto-skip failed documents
+							</label>
+							<p class="text-xs text-gray-500 mt-1">
+								When enabled, failed documents will be automatically skipped instead of showing a recovery prompt. Useful for batch processing.
+							</p>
+						</div>
+					</div>
+
+					<!-- Max retry attempts -->
+					<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+						<div>
+							<label for="maxRetryAttempts" class="block text-sm font-semibold text-contrast mb-1">
+								Max Retry Attempts
+							</label>
+							<p class="text-xs text-gray-500 mb-3 italic">
+								How many times to automatically retry a failed document before giving up (0-5).
+							</p>
+							<input
+								type="number"
+								id="maxRetryAttempts"
+								bind:value={maxRetryAttempts}
+								min="0"
+								max="5"
+								class="input-standard focus:ring-accent focus:border-transparent transition-colors w-24"
+							/>
+						</div>
+
+						<div>
+							<label for="chunkMaxTokens" class="block text-sm font-semibold text-contrast mb-1">
+								Chunk Size (Tokens)
+							</label>
+							<p class="text-xs text-gray-500 mb-3 italic">
+								Maximum tokens per processing chunk. Larger = faster but may timeout. (25,000 - 100,000)
+							</p>
+							<select
+								id="chunkMaxTokens"
+								bind:value={chunkMaxTokens}
+								class="input-standard focus:ring-accent focus:border-transparent transition-colors"
+							>
+								<option value={25000}>25,000 (Safest)</option>
+								<option value={35000}>35,000 (Conservative)</option>
+								<option value={50000}>50,000 (Default)</option>
+								<option value={75000}>75,000 (Aggressive)</option>
+								<option value={100000}>100,000 (Maximum)</option>
+							</select>
+						</div>
+					</div>
+				</div>
+
+				<div class="mt-6 info-box info-box-blue">
+					<div class="flex">
+						<Info class="h-5 w-5 text-contrast-light shrink-0" />
+						<div class="ml-3">
+							<h3 class="text-sm font-bold text-contrast-light">Processing Information</h3>
+							<div class="mt-2 text-sm text-gray-600">
+								<ul class="list-disc list-inside space-y-1">
+									<li><strong>Chunk Size:</strong> Documents are grouped into chunks based on token count for processing</li>
+									<li><strong>Smaller chunks:</strong> More reliable but slower for large document sets</li>
+									<li><strong>Larger chunks:</strong> Faster but may timeout on Vercel's 5-minute limit</li>
+								</ul>
+							</div>
+						</div>
+					</div>
+				</div>
+			</div>
+
 			<!-- Message Display -->
 			{#if message}
 				<div class="info-box {messageType === 'success' ? 'bg-accent/10 border-accent/30 text-accent' : 'bg-red-50 border-red-200 text-red-700'}">
 					<div class="flex items-start">
-						<div class="flex-shrink-0">
+						<div class="shrink-0">
 							{#if messageType === 'success'}
 								<CheckCircle class="h-5 w-5" />
 							{:else}

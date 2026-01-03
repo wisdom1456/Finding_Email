@@ -532,15 +532,31 @@ RULES:
             f"duration={api_duration:.1f}s "
             f"prompt_tokens={response_dict.get('usage', {}).get('prompt_tokens', 0)} "
             f"completion_tokens={response_dict.get('usage', {}).get('completion_tokens', 0)} "
-            f"response_chars={len(response_dict.get('content', ''))}"
+            f"response_chars={len(response_dict.get('content', '') or '')}"
         )
 
-        raw_response = response_dict["content"].strip()
+        # Check for API error response
+        if response_dict.get("success") is False:
+            error_msg = response_dict.get("error", "Unknown API error")
+            logger.error(f"[STAGE:1:ERROR] API returned error: {error_msg}")
+            raise ValueError(f"GPT API error in fact extraction: {error_msg}")
+
+        raw_response = (response_dict.get("content") or "").strip()
+        
+        # Handle empty responses
+        if not raw_response:
+            logger.error("[STAGE:1:ERROR] Empty response from GPT API")
+            raise ValueError("GPT API returned an empty response for fact extraction")
+        
         if raw_response.startswith("```"):
             lines = raw_response.split("\n")
             raw_response = "\n".join(lines[1:-1])
 
-        fact_data = json.loads(raw_response)
+        try:
+            fact_data = json.loads(raw_response)
+        except json.JSONDecodeError as e:
+            logger.error(f"[STAGE:1:ERROR] JSON parse failed: {e}. Response: {raw_response[:500]}")
+            raise ValueError(f"Failed to parse fact extraction response as JSON: {e}")
 
         return FactMatrix(
             parties=[Party(**p) for p in fact_data.get("parties", [])],
@@ -637,15 +653,31 @@ Return JSON:
             f"duration={api_duration:.1f}s "
             f"prompt_tokens={response_dict.get('usage', {}).get('prompt_tokens', 0)} "
             f"completion_tokens={response_dict.get('usage', {}).get('completion_tokens', 0)} "
-            f"response_chars={len(response_dict.get('content', ''))}"
+            f"response_chars={len(response_dict.get('content', '') or '')}"
         )
 
-        raw_response = response_dict["content"].strip()
+        # Check for API error response
+        if response_dict.get("success") is False:
+            error_msg = response_dict.get("error", "Unknown API error")
+            logger.error(f"[STAGE:2:ERROR] API returned error: {error_msg}")
+            raise ValueError(f"GPT API error in issue mapping: {error_msg}")
+
+        raw_response = (response_dict.get("content") or "").strip()
+        
+        # Handle empty responses
+        if not raw_response:
+            logger.error("[STAGE:2:ERROR] Empty response from GPT API")
+            raise ValueError("GPT API returned an empty response for issue mapping")
+        
         if raw_response.startswith("```"):
             lines = raw_response.split("\n")
             raw_response = "\n".join(lines[1:-1])
 
-        issue_data = json.loads(raw_response)
+        try:
+            issue_data = json.loads(raw_response)
+        except json.JSONDecodeError as e:
+            logger.error(f"[STAGE:2:ERROR] JSON parse failed: {e}. Response: {raw_response[:500]}")
+            raise ValueError(f"Failed to parse issue mapping response as JSON: {e}")
 
         return LegalIssueMap(
             primary_issues=[LegalIssue(**i) for i in issue_data.get("primary_issues", [])],
@@ -763,15 +795,31 @@ Return ONLY valid JSON.
             f"duration={api_duration:.1f}s "
             f"prompt_tokens={response_dict.get('usage', {}).get('prompt_tokens', 0)} "
             f"completion_tokens={response_dict.get('usage', {}).get('completion_tokens', 0)} "
-            f"response_chars={len(response_dict.get('content', ''))}"
+            f"response_chars={len(response_dict.get('content', '') or '')}"
         )
 
-        raw_response = response_dict["content"].strip()
+        # Check for API error response
+        if response_dict.get("success") is False:
+            error_msg = response_dict.get("error", "Unknown API error")
+            logger.error(f"[STAGE:3:ERROR] API returned error: {error_msg}")
+            raise ValueError(f"GPT API error in deep analysis: {error_msg}")
+
+        raw_response = (response_dict.get("content") or "").strip()
+        
+        # Handle empty responses
+        if not raw_response:
+            logger.error("[STAGE:3:ERROR] Empty response from GPT API")
+            raise ValueError("GPT API returned an empty response for deep analysis")
+        
         if raw_response.startswith("```"):
             lines = raw_response.split("\n")
             raw_response = "\n".join(lines[1:-1])
 
-        analysis_data = json.loads(raw_response)
+        try:
+            analysis_data = json.loads(raw_response)
+        except json.JSONDecodeError as e:
+            logger.error(f"[STAGE:3:ERROR] JSON parse failed: {e}. Response: {raw_response[:500]}")
+            raise ValueError(f"Failed to parse deep analysis response as JSON: {e}")
 
         return DeepAnalysis(
             issue_analyses=[IssueAnalysis(**a) for a in analysis_data.get("issue_analyses", [])],

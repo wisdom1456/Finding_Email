@@ -33,6 +33,55 @@ from legal_portal.utils.diagnostic_logger import DiagnosticLogger
 
 logger = get_module_logger(__name__)
 
+
+async def _run_with_heartbeat(
+    coro_or_callable,
+    progress_callback: Optional[Callable],
+    phase: str,
+    percent: int,
+    heartbeat_interval: float = 10.0,
+    *args,
+    **kwargs
+):
+    """Run a coroutine or callable while sending heartbeat progress updates.
+    
+    This prevents SSE connections from timing out during long-running operations
+    like case synthesis or multi-stage analysis.
+    """
+    import time as _time
+    start = _time.time()
+    
+    # Determine if we have a coroutine or a sync function
+    if asyncio.iscoroutinefunction(coro_or_callable):
+        task = asyncio.create_task(coro_or_callable(*args, **kwargs))
+    elif callable(coro_or_callable):
+        # Wrap sync function in a thread
+        task = asyncio.create_task(asyncio.to_thread(coro_or_callable, *args, **kwargs))
+    else:
+        # Already a coroutine
+        task = asyncio.create_task(coro_or_callable)
+    
+    # Send heartbeats while waiting for the task to complete
+    while not task.done():
+        try:
+            # Wait for either the task to complete or the heartbeat interval
+            await asyncio.wait_for(asyncio.shield(task), timeout=heartbeat_interval)
+            break  # Task completed
+        except asyncio.TimeoutError:
+            # Task still running, send heartbeat
+            elapsed = int(_time.time() - start)
+            if progress_callback:
+                await progress_callback(
+                    f"Processing... ({elapsed}s)",
+                    [],
+                    phase,
+                    percent,
+                )
+    
+    # Return the task result (may raise if task failed)
+    return await task
+
+
 # Shared prompt instructions for image document handling
 IMAGE_HANDLING_INSTRUCTIONS = """
 ---
@@ -398,11 +447,16 @@ async def process_case_documents(
                 stage={"id": "case_synthesis", "name": "Extracting Facts", "status": "active", "progress": 0}
             )
 
-        # 5.5. AI Call #2.5: Generate case-level analysis summary
+        # 5.5. AI Call #2.5: Generate case-level analysis summary (with heartbeats)
         logger.info("AI Call #2.5: Generating case-level analysis summary...")
         try:
-            case_analysis_dict = await asyncio.to_thread(
+            # Use heartbeat wrapper to prevent SSE timeout during long GPT call
+            case_analysis_dict = await _run_with_heartbeat(
                 _generate_case_analysis_summary,
+                progress_callback,
+                "case_synthesis",
+                25,
+                heartbeat_interval=10.0,
                 intake_content,
                 structured_summaries,
                 openai_client_wrapper,

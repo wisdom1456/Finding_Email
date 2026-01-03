@@ -572,20 +572,18 @@ class OpenAIClient:
                     "messages": messages,
                 }
 
-                # GPT-5.2 uses extra_body for new parameters not yet in SDK
-                extra_body = {}
-                
-                # Add reasoning_effort for GPT-5 models
+                # GPT-5 uses reasoning_effort as a top-level parameter (not in extra_body)
                 if reasoning_effort:
-                    extra_body["reasoning_effort"] = reasoning_effort
+                    request_params["reasoning_effort"] = reasoning_effort
                 
-                # Add verbosity for GPT-5 models
+                # GPT-5 uses max_completion_tokens (not max_tokens)
+                if max_output_tokens:
+                    request_params["max_completion_tokens"] = max_output_tokens
+                
+                # Other GPT-5 specific parameters go in extra_body
+                extra_body = {}
                 if verbosity:
                     extra_body["verbosity"] = verbosity
-                
-                # Use max_completion_tokens for GPT-5 models (not max_tokens)
-                if max_output_tokens:
-                    extra_body["max_completion_tokens"] = max_output_tokens
                 
                 if extra_body:
                     request_params["extra_body"] = extra_body

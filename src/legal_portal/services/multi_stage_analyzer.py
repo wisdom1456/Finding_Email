@@ -527,9 +527,10 @@ RULES:
         )
         api_duration = time.time() - api_start
         
+        finish_reason = response_dict.get("finish_reason", "unknown")
         logger.info(
             f"[STAGE:1:API] OpenAI response received | "
-            f"duration={api_duration:.1f}s "
+            f"duration={api_duration:.1f}s finish_reason={finish_reason} "
             f"prompt_tokens={response_dict.get('usage', {}).get('prompt_tokens', 0)} "
             f"completion_tokens={response_dict.get('usage', {}).get('completion_tokens', 0)} "
             f"response_chars={len(response_dict.get('content', '') or '')}"
@@ -543,10 +544,17 @@ RULES:
 
         raw_response = (response_dict.get("content") or "").strip()
         
-        # Handle empty responses
+        # Handle empty responses with detailed diagnostics
         if not raw_response:
-            logger.error("[STAGE:1:ERROR] Empty response from GPT API")
-            raise ValueError("GPT API returned an empty response for fact extraction")
+            logger.error(
+                f"[STAGE:1:ERROR] Empty response from GPT API | "
+                f"finish_reason={finish_reason} "
+                f"prompt_tokens={response_dict.get('usage', {}).get('prompt_tokens', 0)} "
+                f"completion_tokens={response_dict.get('usage', {}).get('completion_tokens', 0)}"
+            )
+            raise ValueError(
+                f"GPT API returned an empty response for fact extraction (finish_reason={finish_reason})"
+            )
         
         if raw_response.startswith("```"):
             lines = raw_response.split("\n")

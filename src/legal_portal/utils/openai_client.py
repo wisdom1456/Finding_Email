@@ -588,18 +588,28 @@ class OpenAIClient:
             response = self.client.chat.completions.create(**request_params)
 
             content = response.choices[0].message.content
+            finish_reason = response.choices[0].finish_reason
             usage = response.usage
 
             elapsed = time.time() - start_time
             logger.info(
                 f"[OPENAI:RESPONSE] GPT-5 Chat Completions call successful | "
-                f"duration={elapsed:.1f}s model={model} "
+                f"duration={elapsed:.1f}s model={model} finish_reason={finish_reason} "
                 f"prompt_tokens={usage.prompt_tokens} completion_tokens={usage.completion_tokens} "
                 f"total_tokens={usage.total_tokens} response_chars={len(content) if content else 0}"
             )
 
+            # Warn if content is empty - this helps debug issues
+            if not content:
+                logger.warning(
+                    f"[OPENAI:EMPTY] API returned empty content | "
+                    f"model={model} finish_reason={finish_reason} "
+                    f"prompt_tokens={usage.prompt_tokens} completion_tokens={usage.completion_tokens}"
+                )
+
             return {
                 "content": content,
+                "finish_reason": finish_reason,
                 "usage": {
                     "prompt_tokens": usage.prompt_tokens,
                     "completion_tokens": usage.completion_tokens,

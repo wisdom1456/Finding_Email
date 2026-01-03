@@ -633,6 +633,15 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
         provider: AI provider to use
 
     """
+    # #region agent log
+    _DEBUG_LOG_PATH = "/tmp/cursor_debug.log" if __import__('os').getenv("VERCEL") else "/Users/BRFlorida/Projects/Work/Finding_Emails/.cursor/debug.log"
+    def _dbg_log(hyp: str, msg: str, data: dict = None):
+        try:
+            import json as _j, time as _t; open(_DEBUG_LOG_PATH, "a").write(_j.dumps({"hypothesisId": hyp, "location": "analysis.py:process_case_background", "message": msg, "data": data or {}, "timestamp": _t.time(), "sessionId": "debug-session"}) + "\n")
+        except: pass
+    _dbg_log("H2", "BACKGROUND TASK STARTED", {"case_id": case_id, "analysis_id": analysis_id, "provider": provider})
+    # #endregion agent log
+
     bg_start_time = time.time()
     
     logger.info(
@@ -643,6 +652,10 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
     # Initialize progress manager
     progress_manager = ProgressManager.get_instance()
     await progress_manager.create_channel(analysis_id)
+    
+    # #region agent log
+    _dbg_log("H2,H4", "Channel created, publishing first progress", {"analysis_id": analysis_id})
+    # #endregion agent log
 
     # Create temp directory before try block so it's available in finally
     temp_dir = tempfile.mkdtemp(prefix=f"case_{case_id}_")
@@ -987,6 +1000,15 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
         error_traceback = traceback.format_exc()
         elapsed = time.time() - bg_start_time
 
+        # #region agent log
+        _DEBUG_LOG_PATH = "/tmp/cursor_debug.log" if __import__('os').getenv("VERCEL") else "/Users/BRFlorida/Projects/Work/Finding_Emails/.cursor/debug.log"
+        def _dbg_log(hyp: str, msg: str, data: dict = None):
+            try:
+                import json as _j, time as _t; open(_DEBUG_LOG_PATH, "a").write(_j.dumps({"hypothesisId": hyp, "location": "analysis.py:process_case_background:except", "message": msg, "data": data or {}, "timestamp": _t.time(), "sessionId": "debug-session"}) + "\n")
+            except: pass
+        _dbg_log("H3", "BACKGROUND TASK EXCEPTION", {"case_id": case_id, "analysis_id": analysis_id, "error": error_message, "error_type": type(e).__name__, "elapsed": elapsed})
+        # #endregion agent log
+
         logger.error(
             f"[BACKGROUND:ERROR] [CASE:{case_id}] [ELAPSED:{elapsed:.1f}s] "
             f"Analysis FAILED | error_type={type(e).__name__} error={error_message}"
@@ -1255,6 +1277,15 @@ async def start_analysis(
             service_supabase,
             analysis_request.provider,
         )
+
+        # #region agent log
+        _DEBUG_LOG_PATH = "/tmp/cursor_debug.log" if __import__('os').getenv("VERCEL") else "/Users/BRFlorida/Projects/Work/Finding_Emails/.cursor/debug.log"
+        def _dbg_log(hyp: str, msg: str, data: dict = None):
+            try:
+                import json as _j, time as _t; open(_DEBUG_LOG_PATH, "a").write(_j.dumps({"hypothesisId": hyp, "location": "analysis.py:start_analysis", "message": msg, "data": data or {}, "timestamp": _t.time(), "sessionId": "debug-session"}) + "\n")
+            except: pass
+        _dbg_log("H1,H2", "start_analysis returning 202", {"case_id": analysis_request.case_id, "analysis_id": analysis["id"], "bg_task_added": True})
+        # #endregion agent log
 
         return analysis
     except HTTPException:

@@ -58,6 +58,15 @@ class ProgressManager:
         **kwargs,
     ):
         """Publish a progress event to a channel."""
+        # #region agent log
+        _DEBUG_LOG_PATH = "/tmp/cursor_debug.log" if __import__('os').getenv("VERCEL") else "/Users/BRFlorida/Projects/Work/Finding_Emails/.cursor/debug.log"
+        def _dbg_log(hyp: str, msg: str, data: dict = None):
+            try:
+                import json as _j, time as _t; open(_DEBUG_LOG_PATH, "a").write(_j.dumps({"hypothesisId": hyp, "location": "progress_manager.py:publish_progress", "message": msg, "data": data or {}, "timestamp": _t.time(), "sessionId": "debug-session"}) + "\n")
+            except: pass
+        _dbg_log("H1,H4", "publish_progress called", {"channel_id": channel_id, "phase": phase, "percent": percent, "channel_exists": channel_id in self._channels})
+        # #endregion agent log
+
         if channel_id not in self._channels:
             logger.warning(f"Attempted to publish to non-existent channel: {channel_id}")
             # Create it implicitly if it doesn't exist (for race conditions where task starts before listener)
@@ -131,6 +140,15 @@ class ProgressManager:
 
     async def subscribe(self, channel_id: str) -> AsyncGenerator[str, None]:
         """Subscribe to progress updates for a channel."""
+        # #region agent log
+        _DEBUG_LOG_PATH = "/tmp/cursor_debug.log" if __import__('os').getenv("VERCEL") else "/Users/BRFlorida/Projects/Work/Finding_Emails/.cursor/debug.log"
+        def _dbg_log(hyp: str, msg: str, data: dict = None):
+            try:
+                import json as _j, time as _t; open(_DEBUG_LOG_PATH, "a").write(_j.dumps({"hypothesisId": hyp, "location": "progress_manager.py:subscribe", "message": msg, "data": data or {}, "timestamp": _t.time(), "sessionId": "debug-session"}) + "\n")
+            except: pass
+        _dbg_log("H1,H3", "subscribe called", {"channel_id": channel_id, "channel_exists": channel_id in self._channels, "all_channels": list(self._channels.keys())})
+        # #endregion agent log
+
         if channel_id not in self._channels:
             # Allow subscribing to a channel that might be created momentarily
             logger.info(f"Creating new channel for subscriber: {channel_id}")

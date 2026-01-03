@@ -98,7 +98,7 @@ export class PollingClient {
 				throw new Error(`Polling request failed: ${response.status} ${response.statusText}`);
 			}
 
-		const data: ProgressEvent = await response.json();
+			const data: ProgressEvent = await response.json();
 
 		// Check for duplicate events to prevent console spam
 		const fingerprint = this.getEventFingerprint(data);
@@ -111,20 +111,20 @@ export class PollingClient {
 		}
 		this.lastEventFingerprint = fingerprint;
 
-		// Track progress changes to detect stalls
-		const currentPercent = data.percent ?? 0;
-		if (currentPercent > this.lastProgressPercent) {
-			// Progress is moving, reset stall counter
-			this.lastProgressPercent = currentPercent;
-			this.stallCount = 0;
-		} else {
-			// No progress change, increment stall counter
-			this.stallCount++;
-		}
+			// Track progress changes to detect stalls
+			const currentPercent = data.percent ?? 0;
+			if (currentPercent > this.lastProgressPercent) {
+				// Progress is moving, reset stall counter
+				this.lastProgressPercent = currentPercent;
+				this.stallCount = 0;
+			} else {
+				// No progress change, increment stall counter
+				this.stallCount++;
+			}
 
-		if (this.onMessageHandler) {
-			this.onMessageHandler(data);
-		}
+			if (this.onMessageHandler) {
+				this.onMessageHandler(data);
+			}
 
 			// Check if terminal state
 			if (data.type === 'completed' || data.type === 'failed' || data.type === 'error') {
@@ -149,9 +149,9 @@ export class PollingClient {
 		}
 		
 		// Continue warning periodically after initial stall
-		if (this.stallCount >= this.maxStallCount && this.stallCount % 20 === 0) {
-			console.warn(`Import appears stalled at ${currentPercent}% for ${Math.round(this.stallCount * this.pollFrequency / 1000)}s`);
-		}
+			if (this.stallCount >= this.maxStallCount && this.stallCount % 20 === 0) {
+				console.warn(`Import appears stalled at ${currentPercent}% for ${Math.round(this.stallCount * this.pollFrequency / 1000)}s`);
+			}
 
 			// After 5 minutes of stall (100 polls * 3s = 300s), treat as "stalled but maybe partial success"
 			// This handles the case where Vercel kills the serverless function

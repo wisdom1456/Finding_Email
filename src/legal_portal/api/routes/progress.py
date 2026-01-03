@@ -1,5 +1,8 @@
+import asyncio
+import json
 import logging
 from datetime import datetime
+from typing import AsyncGenerator
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sse_starlette.sse import EventSourceResponse
@@ -11,31 +14,112 @@ router = APIRouter(prefix="/progress", tags=["progress"])
 logger = logging.getLogger(__name__)
 
 
+async def poll_database_for_progress(
+    analysis_id: str,
+    supabase,
+    poll_interval: float = 2.0,
+    max_duration: float = 290.0,  # Stay under Vercel's 300s limit
+) -> AsyncGenerator[str, None]:
+    """Poll database for progress updates and yield SSE events.
+    
+    This is designed for Vercel serverless where in-memory pub/sub doesn't work
+    across function instances.
+    """
+    start_time = asyncio.get_event_loop().time()
+    last_progress = None
+    last_percent = -1
+    
+    while True:
+        elapsed = asyncio.get_event_loop().time() - start_time
+        if elapsed > max_duration:
+            # Approaching Vercel timeout, send final event and close gracefully
+            yield json.dumps({
+                "type": "timeout",
+                "message": "Connection timeout - please refresh to continue monitoring",
+                "percent": last_percent if last_percent >= 0 else 0,
+                "timestamp": datetime.utcnow().isoformat(),
+            })
+            break
+        
+        try:
+            # Query both status and progress columns
+            response = (
+                supabase.table("analysis_results")
+                .select("status, progress")
+                .eq("id", analysis_id)
+                .single()
+                .execute()
+            )
+            
+            if response.data:
+                db_status = response.data.get("status")
+                progress_data = response.data.get("progress") or {}
+                
+                # Build current progress state
+                current_progress = {
+                    "type": progress_data.get("status", db_status) or "progress",
+                    "message": progress_data.get("message", f"Status: {db_status}"),
+                    "phase": progress_data.get("phase", db_status),
+                    "percent": progress_data.get("percent", 0),
+                    "timestamp": progress_data.get("timestamp", datetime.utcnow().isoformat()),
+                    **{k: v for k, v in progress_data.items() if k not in ["type", "message", "phase", "percent", "timestamp", "status"]}
+                }
+                
+                current_percent = current_progress.get("percent", 0)
+                
+                # Only yield if progress has changed
+                if current_progress != last_progress:
+                    last_progress = current_progress
+                    last_percent = current_percent
+                    yield json.dumps(current_progress)
+                
+                # Check for terminal states
+                if db_status in ["completed", "error", "cancelled", "failed"]:
+                    # Send final completion event
+                    final_event = {
+                        "type": db_status,
+                        "message": progress_data.get("message", f"Analysis {db_status}"),
+                        "phase": db_status,
+                        "percent": 100 if db_status == "completed" else current_percent,
+                        "timestamp": datetime.utcnow().isoformat(),
+                    }
+                    if db_status == "error":
+                        final_event["error"] = progress_data.get("error", "Unknown error")
+                    yield json.dumps(final_event)
+                    break
+                    
+        except Exception as e:
+            logger.warning(f"Error polling progress for {analysis_id}: {e}")
+            # Don't break on transient errors, just skip this poll
+        
+        await asyncio.sleep(poll_interval)
+
+
 @router.get("/analysis/{analysis_id}")
 async def stream_analysis_progress(
     request: Request,
     analysis_id: str,
     token: str = Query(None, description="Access token for authentication"),
-    # Note: Standard Depends(get_current_user) might fail if header is missing.
-    # We'll trust the token param or header.
+    supabase=Depends(get_supabase_client),
 ):
-    """Stream analysis progress updates via SSE."""
+    """Stream analysis progress updates via SSE.
+    
+    Uses database polling instead of in-memory pub/sub to work across
+    Vercel serverless function instances.
+    """
     # #region agent log
     _DEBUG_LOG_PATH = "/tmp/cursor_debug.log" if __import__('os').getenv("VERCEL") else "/Users/BRFlorida/Projects/Work/Finding_Emails/.cursor/debug.log"
     def _dbg_log(hyp: str, msg: str, data: dict = None):
         try:
             import json as _j, time as _t; open(_DEBUG_LOG_PATH, "a").write(_j.dumps({"hypothesisId": hyp, "location": "progress.py:stream_analysis_progress", "message": msg, "data": data or {}, "timestamp": _t.time(), "sessionId": "debug-session"}) + "\n")
         except: pass
-    _dbg_log("H1", "SSE endpoint called", {"analysis_id": analysis_id, "has_token": token is not None})
+    _dbg_log("H1", "SSE endpoint called (DB polling mode)", {"analysis_id": analysis_id, "has_token": token is not None})
     # #endregion agent log
 
-    # Basic channel validation
-    progress_manager = ProgressManager.get_instance()
-
-    # Return EventSourceResponse with the generator
+    # Use database polling for cross-instance compatibility on Vercel
     return EventSourceResponse(
-        progress_manager.subscribe(analysis_id),
-        ping=15,  # Ping interval in seconds
+        poll_database_for_progress(analysis_id, supabase),
+        ping=15,  # Keep-alive ping interval
         media_type="text/event-stream",
     )
 

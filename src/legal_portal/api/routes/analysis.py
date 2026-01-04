@@ -1633,7 +1633,8 @@ async def save_streaming_analysis(
 ):
     """Save the result of a streaming analysis.
     
-    Parses the markdown content and stores it as an analysis result.
+    Parses the markdown content and embedded JSON, then stores as an analysis result.
+    The embedded JSON (in ```json block) contains structured data for letter generation.
     """
     try:
         # Verify case ownership
@@ -1650,18 +1651,82 @@ async def save_streaming_analysis(
         
         case_data = case_response.data[0]
         
-        # Parse the markdown content to extract structured data
-        # This is a simplified extraction - the full analysis is in the markdown
+        # Parse embedded JSON from the markdown content
+        structured_data = _extract_embedded_json(request.content)
+        
+        # Build case analysis from extracted data
+        case_analysis = {
+            "case_summary": _extract_section(request.content, "Case Overview"),
+            "key_issues": _extract_list_items(request.content, "Legal Issues Identified"),
+            "practice_area": structured_data.get("practice_area", "General Legal Matter"),
+            "relevant_statutes": [],  # Extracted from structured_data if available
+        }
+        
+        # Add statutes from primary issues
+        if structured_data.get("primary_issues"):
+            for issue in structured_data["primary_issues"]:
+                if issue.get("statutes"):
+                    for statute in issue["statutes"]:
+                        case_analysis["relevant_statutes"].append({
+                            "statute": statute,
+                            "relevance": issue.get("name", ""),
+                        })
+        
+        # Build multi-stage compatible result for letter generation
+        multi_stage_result = None
+        if structured_data:
+            multi_stage_result = {
+                "fact_matrix": {
+                    "parties": [
+                        {"name": p.get("name", ""), "role": p.get("role", "")}
+                        for p in structured_data.get("parties", [])
+                    ],
+                    "timeline": [
+                        {"date": d.get("date", ""), "event": d.get("event", "")}
+                        for d in structured_data.get("key_dates", [])
+                    ],
+                    "financial_items": [],
+                },
+                "issue_map": {
+                    "primary_issues": [
+                        {
+                            "name": i.get("name", ""),
+                            "category": i.get("category", ""),
+                            "applicable_statutes": i.get("statutes", []),
+                            "strength": i.get("strength", "Moderate"),
+                        }
+                        for i in structured_data.get("primary_issues", [])
+                    ],
+                },
+                "letter_structure": {
+                    "style": structured_data.get("recommended_letter_type", "findings"),
+                    "urgency": structured_data.get("urgency", "medium"),
+                },
+            }
+            
+            # Add financial data if present
+            if structured_data.get("financial_summary"):
+                fin = structured_data["financial_summary"]
+                if fin.get("total_claimed"):
+                    multi_stage_result["fact_matrix"]["financial_items"].append({
+                        "description": "Total Claimed",
+                        "amount": fin["total_claimed"],
+                    })
+                if fin.get("documented_damages"):
+                    multi_stage_result["fact_matrix"]["financial_items"].append({
+                        "description": "Documented Damages",
+                        "amount": fin["documented_damages"],
+                    })
+        
+        # Build the complete result
         streaming_result = {
             "streaming_analysis": request.content,
-            "case_analysis": {
-                "case_summary": _extract_section(request.content, "Case Overview"),
-                "key_issues": _extract_list_items(request.content, "Legal Issues Identified"),
-                "practice_area": "Streaming Analysis",  # Could parse from content
-            },
+            "case_analysis": json.dumps(case_analysis),
+            "multi_stage_result": multi_stage_result,
             "artifacts": {
                 "analysis_type": "streaming",
                 "jurisdiction": case_data.get("jurisdiction", "Florida"),
+                "structured_data": structured_data,
             },
             "status": "completed",
         }
@@ -1683,7 +1748,7 @@ async def save_streaming_analysis(
             "updated_at": datetime.utcnow().isoformat(),
         }).eq("id", case_id).execute()
         
-        logger.info(f"[STREAM] Saved streaming analysis for case {case_id}")
+        logger.info(f"[STREAM] Saved streaming analysis for case {case_id} | structured_data={'yes' if structured_data else 'no'}")
         
         return {"success": True, "analysis_id": analysis_id}
         
@@ -1692,6 +1757,31 @@ async def save_streaming_analysis(
     except Exception as e:
         logger.error(f"Error saving streaming analysis: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+def _extract_embedded_json(content: str) -> dict:
+    """Extract the structured JSON block from streaming analysis markdown.
+    
+    The JSON is embedded in a ```json code fence at the end of the markdown.
+    """
+    import re
+    
+    # Look for JSON code block
+    json_pattern = r"```json\s*\n(.*?)\n```"
+    match = re.search(json_pattern, content, re.DOTALL)
+    
+    if not match:
+        logger.warning("[STREAM] No embedded JSON found in streaming analysis")
+        return {}
+    
+    try:
+        json_str = match.group(1).strip()
+        structured_data = json.loads(json_str)
+        logger.info(f"[STREAM] Extracted structured data: {list(structured_data.keys())}")
+        return structured_data
+    except json.JSONDecodeError as e:
+        logger.error(f"[STREAM] Failed to parse embedded JSON: {e}")
+        return {}
 
 
 def _extract_section(content: str, section_name: str) -> str:

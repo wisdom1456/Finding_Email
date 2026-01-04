@@ -32,7 +32,7 @@
   let status: StreamStatus = $state('idle');
   let errorMessage = $state('');
   let panelElement: HTMLDivElement;
-  let eventSource: EventSource | null = null;
+  let abortController: AbortController | null = null;
   let copySuccess = $state(false);
   let startTime = $state(0);
   let elapsedTime = $state(0);
@@ -48,7 +48,7 @@
     }
   });
 
-  // Start streaming analysis
+  // Start streaming analysis using fetch (supports Authorization header)
   export async function startStreaming() {
     if (status === 'streaming') return;
     
@@ -63,59 +63,111 @@
       elapsedTime = Math.floor((Date.now() - startTime) / 1000);
     }, 1000);
 
+    // Create abort controller for cancellation
+    abortController = new AbortController();
+
     try {
+      // Get auth token
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        throw new Error('Not authenticated. Please log in again.');
+      }
+
       const apiUrl = getApiUrl();
       const url = `${apiUrl}/api/analysis/stream/${caseId}`;
       
-      eventSource = new EventSource(url, { withCredentials: true });
-      
-      eventSource.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          
-          if (data.token) {
-            content += data.token;
-            // Auto-scroll to bottom
-            if (panelElement) {
-              requestAnimationFrame(() => {
-                panelElement.scrollTop = panelElement.scrollHeight;
-              });
-            }
-          }
-          
-          if (data.done) {
+      // Use fetch with Authorization header (EventSource doesn't support custom headers)
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Accept': 'text/event-stream',
+        },
+        signal: abortController.signal,
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(errorText || `HTTP ${response.status}: Failed to start analysis`);
+      }
+
+      if (!response.body) {
+        throw new Error('No response body received');
+      }
+
+      // Read the stream
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        
+        if (done) {
+          // Stream ended - check if we got completion signal
+          if (status === 'streaming') {
             status = 'complete';
             stopTimer();
-            eventSource?.close();
-            // Save the streaming analysis to the database
             saveAnalysis(content);
             onComplete?.(content);
           }
-          
-          if (data.error) {
-            status = 'error';
-            errorMessage = data.error;
-            stopTimer();
-            eventSource?.close();
-            onError?.(data.error);
+          break;
+        }
+
+        // Decode chunk and add to buffer
+        buffer += decoder.decode(value, { stream: true });
+        
+        // Process complete SSE lines from buffer
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || ''; // Keep incomplete line in buffer
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.slice(6));
+              
+              if (data.token) {
+                content += data.token;
+                // Auto-scroll to bottom
+                if (panelElement) {
+                  requestAnimationFrame(() => {
+                    panelElement.scrollTop = panelElement.scrollHeight;
+                  });
+                }
+              }
+              
+              if (data.done) {
+                status = 'complete';
+                stopTimer();
+                saveAnalysis(content);
+                onComplete?.(content);
+              }
+              
+              if (data.error) {
+                status = 'error';
+                errorMessage = data.error;
+                stopTimer();
+                onError?.(data.error);
+              }
+            } catch (e) {
+              // Skip lines that aren't valid JSON (like empty lines)
+              if (line.slice(6).trim()) {
+                console.warn('Error parsing SSE data:', e, line);
+              }
+            }
           }
-        } catch (e) {
-          console.error('Error parsing SSE data:', e);
         }
-      };
-      
-      eventSource.onerror = (e) => {
-        console.error('SSE error:', e);
-        if (status === 'streaming') {
-          status = 'error';
-          errorMessage = 'Connection lost. Please try again.';
-          stopTimer();
-          onError?.(errorMessage);
-        }
-        eventSource?.close();
-      };
+      }
       
     } catch (e) {
+      // Don't report error if aborted by user
+      if (e instanceof Error && e.name === 'AbortError') {
+        status = 'idle';
+        stopTimer();
+        return;
+      }
+      
+      console.error('Streaming error:', e);
       status = 'error';
       errorMessage = e instanceof Error ? e.message : 'Failed to start streaming';
       stopTimer();
@@ -132,9 +184,9 @@
 
   // Abort streaming
   function abortStreaming() {
-    if (eventSource) {
-      eventSource.close();
-      eventSource = null;
+    if (abortController) {
+      abortController.abort();
+      abortController = null;
     }
     status = 'idle';
     stopTimer();
@@ -198,8 +250,8 @@
   // Cleanup on destroy
   $effect(() => {
     return () => {
-      if (eventSource) {
-        eventSource.close();
+      if (abortController) {
+        abortController.abort();
       }
       stopTimer();
     };

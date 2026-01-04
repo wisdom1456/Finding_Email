@@ -1190,56 +1190,62 @@ Return ONLY valid JSON, no markdown code blocks.
 """
     else:
         # ========================================================================
-        # LIMITED PARALLELISM - 2 concurrent for speed + reliability
+        # PARALLEL BATCH PROCESSING - batch 5 docs per API call, 3 concurrent batches
         # ========================================================================
-        # Balances speed and reliability:
-        # - 2 concurrent: fast enough for Vercel 5-min limit
+        # Optimized for speed under Vercel 5-min limit:
+        # - Batch 5 documents per API call (reduces API overhead)
+        # - 3 concurrent batches (15 docs processing simultaneously)
         # - return_exceptions=True: one failure doesn't kill others
-        # - Progress tracking per document
-        # - 2-min timeout per document
+        # - 3-min timeout per batch
         # ========================================================================
         
         total_docs = len(case_documents)
         all_summaries = []
         processed_count = 0
         
-        # Semaphore limits concurrent API calls to 4 (increased to fit under Vercel 5-min limit)
-        semaphore = asyncio.Semaphore(4)
+        # Create batches of 5 documents each
+        BATCH_SIZE = 5
+        batches = [case_documents[i:i + BATCH_SIZE] for i in range(0, len(case_documents), BATCH_SIZE)]
+        total_batches = len(batches)
         
-        logger.info(f"[PARALLEL-4] Starting analysis of {total_docs} documents for {jurisdiction}")
+        # Semaphore limits concurrent API calls to 3 batches (15 docs max concurrently)
+        semaphore = asyncio.Semaphore(3)
         
-        async def process_with_limit(doc, idx):
-            """Process a single document with semaphore-controlled concurrency."""
+        logger.info(f"[BATCH-PARALLEL] Starting analysis of {total_docs} documents in {total_batches} batches for {jurisdiction}")
+        
+        async def process_batch_with_limit(batch: List[Any], batch_idx: int):
+            """Process a batch of documents with semaphore-controlled concurrency."""
             nonlocal processed_count
             
             async with semaphore:
-                doc_num = idx + 1
-                doc_name = doc.file_name
-                doc_id = getattr(doc, 'document_id', None) or getattr(doc, 'id', None) or f"doc_{idx}"
+                batch_num = batch_idx + 1
+                batch_doc_names = [d.file_name for d in batch]
+                batch_doc_count = len(batch)
                 
-                logger.info(f"[DOC {doc_num}/{total_docs}] Starting: {doc_name}")
+                logger.info(f"[BATCH {batch_num}/{total_batches}] Starting: {batch_doc_count} docs - {', '.join(batch_doc_names[:3])}...")
                 
-                # Update chunk_state: document is now processing
-                if chunk_state_mgr:
-                    await chunk_state_mgr.update_document_status(doc_id, "processing")
+                # Update chunk_state: all documents in batch are now processing
+                for doc in batch:
+                    doc_id = getattr(doc, 'document_id', None) or getattr(doc, 'id', None) or f"doc_{doc.file_name}"
+                    if chunk_state_mgr:
+                        await chunk_state_mgr.update_document_status(doc_id, "processing")
                 
-                # Update UI: document is now processing
+                # Update UI: batch is now processing
                 if progress_callback:
                     await progress_callback(
-                        message=f"Analyzing {doc_name} ({doc_num}/{total_docs})...",
+                        message=f"Analyzing batch {batch_num}/{total_batches} ({batch_doc_count} documents)...",
                         phase="document_analysis",
                         percent=15 + int((processed_count / total_docs) * 60),
-                        document={"id": doc_id, "name": doc_name, "status": "processing"}
                     )
                 
                 try:
-                    # Process with 2-minute timeout per document
-                    doc_result, doc_errors = await asyncio.wait_for(
+                    # Process batch with 3-minute timeout (more time for multiple docs)
+                    batch_result, batch_errors = await asyncio.wait_for(
                         _process_document_batch(
-                            [doc],  # Single document as a batch
+                            batch,  # Full batch of documents
                             intake_content,
-                            doc_num,
-                            total_docs,
+                            batch_num,
+                            total_batches,
                             openai_client_wrapper,
                             json_processing_service,
                             review_data,
@@ -1247,89 +1253,100 @@ Return ONLY valid JSON, no markdown code blocks.
                             statute_context,
                             jurisdiction=jurisdiction,
                         ),
-                        timeout=120.0  # 2 minutes per document
+                        timeout=180.0  # 3 minutes per batch
                     )
                     
-                    processed_count += 1
+                    processed_count += batch_doc_count
                     
-                    if doc_result:
-                        logger.info(f"[DOC {doc_num}/{total_docs}] Completed: {doc_name} ({len(doc_result)} summaries)")
+                    if batch_result:
+                        logger.info(f"[BATCH {batch_num}/{total_batches}] Completed: {len(batch_result)} summaries from {batch_doc_count} docs")
                         
-                        # Save summary to chunk_state
-                        if chunk_state_mgr and len(doc_result) > 0:
-                            summary_data = doc_result[0].model_dump() if hasattr(doc_result[0], 'model_dump') else doc_result[0]
-                            await chunk_state_mgr.update_document_status(
-                                doc_id, "completed", summary=summary_data
+                        # Update chunk_state for each document in batch
+                        for doc in batch:
+                            doc_id = getattr(doc, 'document_id', None) or getattr(doc, 'id', None) or f"doc_{doc.file_name}"
+                            # Find matching summary by document name
+                            matching_summary = next(
+                                (s for s in batch_result if s.document_name == doc.file_name),
+                                None
                             )
+                            if chunk_state_mgr:
+                                if matching_summary:
+                                    summary_data = matching_summary.model_dump() if hasattr(matching_summary, 'model_dump') else matching_summary
+                                    await chunk_state_mgr.update_document_status(doc_id, "completed", summary=summary_data)
+                                else:
+                                    await chunk_state_mgr.update_document_status(doc_id, "completed")
                     else:
-                        logger.warning(f"[DOC {doc_num}/{total_docs}] No results: {doc_name}")
-                        if chunk_state_mgr:
-                            await chunk_state_mgr.update_document_status(doc_id, "completed")
+                        logger.warning(f"[BATCH {batch_num}/{total_batches}] No results from batch")
+                        for doc in batch:
+                            doc_id = getattr(doc, 'document_id', None) or getattr(doc, 'id', None) or f"doc_{doc.file_name}"
+                            if chunk_state_mgr:
+                                await chunk_state_mgr.update_document_status(doc_id, "completed")
                     
-                    # Update UI: document completed
+                    # Update UI: batch completed
                     if progress_callback:
                         await progress_callback(
-                            message=f"Completed {doc_name}",
-                            docs_processed=[doc_name],
+                            message=f"Batch {batch_num} complete ({batch_doc_count} docs)",
+                            docs_processed=batch_doc_names,
                             phase="document_analysis",
                             percent=15 + int((processed_count / total_docs) * 60),
-                            document={"id": doc_id, "name": doc_name, "status": "completed"}
                         )
                     
-                    return doc_result or [], doc_errors or []
+                    return batch_result or [], batch_errors or []
                     
                 except asyncio.TimeoutError:
-                    processed_count += 1
-                    error_msg = "Document analysis timed out after 2 minutes"
-                    logger.error(f"[DOC {doc_num}/{total_docs}] TIMEOUT: {doc_name}")
+                    processed_count += batch_doc_count
+                    error_msg = f"Batch {batch_num} timed out after 3 minutes ({batch_doc_count} docs)"
+                    logger.error(f"[BATCH {batch_num}/{total_batches}] TIMEOUT: {', '.join(batch_doc_names)}")
                     
-                    # Update chunk_state with failure
-                    if chunk_state_mgr:
-                        await chunk_state_mgr.update_document_status(
-                            doc_id, "failed", error=error_msg, error_type="TIMEOUT"
-                        )
+                    # Update chunk_state with failure for all docs in batch
+                    for doc in batch:
+                        doc_id = getattr(doc, 'document_id', None) or getattr(doc, 'id', None) or f"doc_{doc.file_name}"
+                        if chunk_state_mgr:
+                            await chunk_state_mgr.update_document_status(
+                                doc_id, "failed", error=error_msg, error_type="TIMEOUT"
+                            )
                     
                     if progress_callback:
                         await progress_callback(
-                            message=f"Timeout analyzing {doc_name}",
+                            message=f"Timeout on batch {batch_num}",
                             phase="document_analysis",
                             percent=15 + int((processed_count / total_docs) * 60),
-                            document={"id": doc_id, "name": doc_name, "status": "failed", "error": error_msg}
                         )
                     
                     return [], [ProcessingError(
-                        source=doc_name,
+                        source=f"batch_{batch_num}",
                         error_type="TIMEOUT",
                         error_message=error_msg
                     )]
                     
                 except Exception as e:
-                    processed_count += 1
+                    processed_count += batch_doc_count
                     error_msg = str(e)
-                    logger.error(f"[DOC {doc_num}/{total_docs}] ERROR: {doc_name}: {e}", exc_info=True)
+                    logger.error(f"[BATCH {batch_num}/{total_batches}] ERROR: {e}", exc_info=True)
                     
-                    # Update chunk_state with failure
-                    if chunk_state_mgr:
-                        await chunk_state_mgr.update_document_status(
-                            doc_id, "failed", error=error_msg, error_type="PROCESSING_ERROR"
-                        )
+                    # Update chunk_state with failure for all docs in batch
+                    for doc in batch:
+                        doc_id = getattr(doc, 'document_id', None) or getattr(doc, 'id', None) or f"doc_{doc.file_name}"
+                        if chunk_state_mgr:
+                            await chunk_state_mgr.update_document_status(
+                                doc_id, "failed", error=error_msg, error_type="PROCESSING_ERROR"
+                            )
                     
                     if progress_callback:
                         await progress_callback(
-                            message=f"Error analyzing {doc_name}",
+                            message=f"Error in batch {batch_num}",
                             phase="document_analysis",
                             percent=15 + int((processed_count / total_docs) * 60),
-                            document={"id": doc_id, "name": doc_name, "status": "failed", "error": error_msg}
                         )
                     
                     return [], [ProcessingError(
-                        source=doc_name,
+                        source=f"batch_{batch_num}",
                         error_type="PROCESSING_ERROR",
                         error_message=error_msg
                     )]
         
-        # Create tasks for all documents (semaphore controls concurrency)
-        tasks = [process_with_limit(doc, i) for i, doc in enumerate(case_documents)]
+        # Create tasks for all batches (semaphore controls concurrency)
+        tasks = [process_batch_with_limit(batch, i) for i, batch in enumerate(batches)]
         
         # Execute all with return_exceptions=True so one failure doesn't kill others
         results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -1337,19 +1354,19 @@ Return ONLY valid JSON, no markdown code blocks.
         # Collect results
         for i, result in enumerate(results):
             if isinstance(result, Exception):
-                logger.error(f"[DOC {i+1}/{total_docs}] Task exception: {result}")
+                logger.error(f"[BATCH {i+1}/{total_batches}] Task exception: {result}")
                 errors.append(ProcessingError(
-                    source=f"doc_{i}",
+                    source=f"batch_{i}",
                     error_type="TASK_ERROR",
                     error_message=str(result)
                 ))
             elif result:
-                summaries, doc_errors = result
+                summaries, batch_errors = result
                 all_summaries.extend(summaries)
-                errors.extend(doc_errors)
+                errors.extend(batch_errors)
         
         logger.info(
-            f"[PARALLEL-4] Complete: {len(all_summaries)} summaries from {total_docs} documents, "
+            f"[BATCH-PARALLEL] Complete: {len(all_summaries)} summaries from {total_docs} documents in {total_batches} batches, "
             f"{len(errors)} errors"
         )
         

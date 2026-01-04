@@ -259,7 +259,8 @@
 				.order('created_at', { ascending: true });
 
 			if (error) throw error;
-			documents = data || [];
+			// Create new object references to ensure Svelte 5 reactivity propagates to child components
+			documents = (data || []).map(doc => ({ ...doc }));
 		} catch (error: any) {
 			console.error('Failed to load documents:', error);
 		}
@@ -398,7 +399,7 @@
 			showIntakeDocumentSelector = false;
 
 			// Now start analysis
-			await startAnalysis();
+			await startStreamingAnalysis();
 		} catch (error: any) {
 			alert('Failed to mark intake document: ' + error.message);
 		}
@@ -1033,7 +1034,7 @@
 			
 			// If all docs now have text, proceed with analysis
 			if (docsWithoutText.length === 0) {
-				await startAnalysis(true);
+				await startStreamingAnalysis();
 			}
 		} catch (error: any) {
 			toastStore.error(`OCR failed: ${error.message}`);
@@ -1044,7 +1045,7 @@
 
 	async function proceedWithoutMissingDocs() {
 		showMissingTextWarning = false;
-		await startAnalysis(true); // Skip the missing text check
+		await startStreamingAnalysis(); // Skip the missing text check and use streaming
 	}
 
 	async function cancelAnalysis() {
@@ -1104,20 +1105,54 @@
 	}
 
 	// Start streaming analysis (fast single-pass)
-	async function startStreamingAnalysis() {
+	async function startStreamingAnalysis(skipMissingTextCheck = false) {
+		// Refresh documents from database first to get latest state
+		await loadDocuments();
+
+		// Pre-flight check: Warn if any documents are missing text
+		if (!skipMissingTextCheck && docsWithoutText.length > 0) {
+			showMissingTextWarning = true;
+			return;
+		}
+
+		// Check for multiple intake candidates before starting
+		if (intakeCandidates.length > 1) {
+			// Find if one is already marked
+			const markedIntake = intakeCandidates.find(doc => doc.metadata?.is_intake_form);
+			if (!markedIntake) {
+				// No document is marked, user must choose
+				showIntakeDocumentSelector = true;
+				return;
+			}
+			// If one is already marked, proceed with that one
+		}
+
 		showStreamingPanel = true;
 		// Wait for component to mount, then start streaming
 		await new Promise(resolve => setTimeout(resolve, 100));
 		streamingAnalysisRef?.startStreaming();
 	}
 
-	function handleStreamingComplete(content: string) {
+	async function handleStreamingComplete(content: string) {
 		streamedContent = content;
-		toastStore.success('Streaming analysis complete!');
+		toastStore.success('Analysis complete! Redirecting to results...');
+		
+		// Wait a moment for the save to complete, then redirect to results
+		await new Promise(resolve => setTimeout(resolve, 1500));
+		
+		// Reload analysis status to get the new result
+		await loadAnalysisStatus();
+		
+		// Navigate to results page
+		navigatingToResults = true;
+		showStreamingPanel = false;
+		await goto(`/app/cases/${caseId}/results`);
+		navigatingToResults = false;
 	}
 
 	function handleStreamingError(error: string) {
 		toastStore.error(`Streaming analysis failed: ${error}`);
+		showStreamingPanel = false;
 	}
 
 	function getStatusColor(status: string) {
@@ -1817,22 +1852,9 @@
 											</AsyncButton>
 										{/if}
 
-										<!-- Quick Analysis (Streaming) Button -->
-										<button
-											onclick={startStreamingAnalysis}
-											disabled={showStreamingPanel}
-											class="inline-flex items-center px-3 py-2 border border-blue-300 shadow-sm text-sm leading-4 font-medium rounded-md text-blue-700 bg-blue-50 hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors disabled:opacity-50"
-											title="Fast streaming analysis (30-45 seconds)"
-										>
-											<svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-												<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
-											</svg>
-											Quick Analysis
-										</button>
-
 										<AsyncButton
-											onclick={() => startAnalysis()}
-											loading={analyzing || (analysisStatus && analysisStatus.status === 'processing')}
+											onclick={() => startStreamingAnalysis()}
+											loading={showStreamingPanel || analyzing || (analysisStatus && analysisStatus.status === 'processing')}
 											variant="primary"
 											loadingText="Analyzing..."
 										>
@@ -1878,8 +1900,8 @@
 							View Results
 						</AsyncButton>
 					<AsyncButton
-						onclick={startAnalysis}
-						loading={analyzing}
+						onclick={() => startStreamingAnalysis()}
+						loading={showStreamingPanel || analyzing}
 						variant="secondary"
 						loadingText="Re-running..."
 						title="Re-run analysis with current documents"
@@ -1895,8 +1917,8 @@
 					{#if analysisStatus.status === 'error'}
 					<div>
 						<AsyncButton
-							onclick={startAnalysis}
-							loading={analyzing}
+							onclick={() => startStreamingAnalysis()}
+							loading={showStreamingPanel || analyzing}
 							variant="primary"
 							loadingText="Retrying..."
 						>

@@ -155,6 +155,47 @@ Brief explanation of viability determination.
 ## Recommended Actions
 Numbered list of specific next steps with deadlines if applicable.
 Prioritize the most urgent items first.
+
+---
+
+## Structured Data
+
+At the end of your analysis, include a JSON block with structured data for the system.
+This block MUST be valid JSON wrapped in a code fence:
+
+```json
+{{
+  "client_name": "Full name of the client",
+  "practice_area": "Primary practice area (e.g., Real Estate, Contract, Personal Injury)",
+  "case_strength": "Strong" | "Moderate" | "Weak",
+  "primary_issues": [
+    {{
+      "name": "Issue name",
+      "category": "contract | tort | property | statutory",
+      "statutes": ["Statute 1", "Statute 2"],
+      "strength": "Strong | Moderate | Weak"
+    }}
+  ],
+  "key_dates": [
+    {{
+      "date": "YYYY-MM-DD or Month YYYY",
+      "event": "What happened"
+    }}
+  ],
+  "financial_summary": {{
+    "total_claimed": "$X,XXX.XX or null if not applicable",
+    "documented_damages": "$X,XXX.XX or null"
+  }},
+  "parties": [
+    {{
+      "name": "Party name",
+      "role": "client | opposing | third_party"
+    }}
+  ],
+  "recommended_letter_type": "findings | demand | demand_with_findings",
+  "urgency": "high | medium | low"
+}}
+```
 """
 
     async def analyze_streaming(

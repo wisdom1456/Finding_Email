@@ -14,6 +14,7 @@
 	import Tabs from '$lib/components/ui/Tabs.svelte';
 	import AsyncButton from '$lib/components/ui/AsyncButton.svelte';
 	import InlineAnalysisProgress from '$lib/components/InlineAnalysisProgress.svelte';
+	import AnalysisStreamPanel from '$lib/components/AnalysisStreamPanel.svelte';
 	import { clioStore } from '$lib/stores/clioStore';
 	import { progressStore } from '$lib/stores/progressStore';
 	import { toastStore } from '$lib/stores/toastStore';
@@ -29,6 +30,11 @@
 	let showProgressModal = $state(false);
 	let currentAnalysisId = $state<string | null>(null);
 	let navigatingToResults = $state(false);
+	
+	// Streaming analysis state
+	let showStreamingPanel = $state(false);
+	let streamingAnalysisRef: AnalysisStreamPanel | null = $state(null);
+	let streamedContent = $state('');
 	let errorMessage = $state('');
 	let uploadProgress = $state(0);
 	let currentUploadFile = $state<string>('');
@@ -1097,6 +1103,23 @@
 		return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
 	}
 
+	// Start streaming analysis (fast single-pass)
+	async function startStreamingAnalysis() {
+		showStreamingPanel = true;
+		// Wait for component to mount, then start streaming
+		await new Promise(resolve => setTimeout(resolve, 100));
+		streamingAnalysisRef?.startStreaming();
+	}
+
+	function handleStreamingComplete(content: string) {
+		streamedContent = content;
+		toastStore.success('Streaming analysis complete!');
+	}
+
+	function handleStreamingError(error: string) {
+		toastStore.error(`Streaming analysis failed: ${error}`);
+	}
+
 	function getStatusColor(status: string) {
 		switch (status) {
 			case 'completed':
@@ -1744,6 +1767,18 @@
 				<!-- Analysis Tab -->
 				{#if activeTab === 'analysis'}
 					<div class="page-spacing">
+						<!-- Streaming Analysis Panel -->
+						{#if showStreamingPanel}
+							<div class="mb-6">
+								<AnalysisStreamPanel
+									caseId={caseId}
+									bind:this={streamingAnalysisRef}
+									onComplete={handleStreamingComplete}
+									onError={handleStreamingError}
+								/>
+							</div>
+						{/if}
+
 						<!-- Inline Progress (when analysis is running) -->
 						{#if showProgressModal && currentAnalysisId}
 							<InlineAnalysisProgress 
@@ -1781,6 +1816,19 @@
 												Cancel
 											</AsyncButton>
 										{/if}
+
+										<!-- Quick Analysis (Streaming) Button -->
+										<button
+											onclick={startStreamingAnalysis}
+											disabled={showStreamingPanel}
+											class="inline-flex items-center px-3 py-2 border border-blue-300 shadow-sm text-sm leading-4 font-medium rounded-md text-blue-700 bg-blue-50 hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors disabled:opacity-50"
+											title="Fast streaming analysis (30-45 seconds)"
+										>
+											<svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+												<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+											</svg>
+											Quick Analysis
+										</button>
 
 										<AsyncButton
 											onclick={() => startAnalysis()}

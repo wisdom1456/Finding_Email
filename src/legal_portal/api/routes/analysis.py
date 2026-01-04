@@ -1618,6 +1618,214 @@ async def get_analysis_results(
         ) from e
 
 
+class StreamingAnalysisSaveRequest(BaseModel):
+    """Request to save streaming analysis result."""
+    content: str = Field(..., description="The markdown content from streaming analysis")
+
+
+@router.post("/stream/{case_id}/save")
+async def save_streaming_analysis(
+    case_id: str,
+    request: StreamingAnalysisSaveRequest,
+    user=Depends(get_current_user),
+    supabase=Depends(get_user_supabase_client),
+    service_supabase=Depends(get_supabase_client),
+):
+    """Save the result of a streaming analysis.
+    
+    Parses the markdown content and stores it as an analysis result.
+    """
+    try:
+        # Verify case ownership
+        case_response = (
+            supabase.table("cases")
+            .select("id, client_name, jurisdiction")
+            .eq("id", case_id)
+            .eq("user_id", user["id"])
+            .execute()
+        )
+        
+        if not case_response.data:
+            raise HTTPException(status_code=404, detail="Case not found")
+        
+        case_data = case_response.data[0]
+        
+        # Parse the markdown content to extract structured data
+        # This is a simplified extraction - the full analysis is in the markdown
+        streaming_result = {
+            "streaming_analysis": request.content,
+            "case_analysis": {
+                "case_summary": _extract_section(request.content, "Case Overview"),
+                "key_issues": _extract_list_items(request.content, "Legal Issues Identified"),
+                "practice_area": "Streaming Analysis",  # Could parse from content
+            },
+            "artifacts": {
+                "analysis_type": "streaming",
+                "jurisdiction": case_data.get("jurisdiction", "Florida"),
+            },
+            "status": "completed",
+        }
+        
+        # Create or update analysis result
+        analysis_id = str(time.time()).replace(".", "")  # Simple unique ID
+        
+        service_supabase.table("analysis_results").upsert({
+            "id": analysis_id,
+            "case_id": case_id,
+            "status": "completed",
+            "result": streaming_result,
+            "created_at": datetime.utcnow().isoformat(),
+        }).execute()
+        
+        # Update case status
+        supabase.table("cases").update({
+            "status": "analyzed",
+            "updated_at": datetime.utcnow().isoformat(),
+        }).eq("id", case_id).execute()
+        
+        logger.info(f"[STREAM] Saved streaming analysis for case {case_id}")
+        
+        return {"success": True, "analysis_id": analysis_id}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error saving streaming analysis: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+def _extract_section(content: str, section_name: str) -> str:
+    """Extract a section from markdown content."""
+    import re
+    pattern = rf"## {section_name}\n(.*?)(?=\n## |$)"
+    match = re.search(pattern, content, re.DOTALL)
+    if match:
+        return match.group(1).strip()
+    return ""
+
+
+def _extract_list_items(content: str, section_name: str) -> List[str]:
+    """Extract list items from a section."""
+    import re
+    section = _extract_section(content, section_name)
+    if not section:
+        return []
+    # Find bullet points or numbered items
+    items = re.findall(r"[-*•]\s*(.+?)(?=\n[-*•]|\n\n|$)", section, re.MULTILINE)
+    return [item.strip() for item in items if item.strip()]
+
+
+@router.get("/stream/{case_id}")
+async def stream_case_analysis(
+    case_id: str,
+    user=Depends(get_current_user),
+    supabase=Depends(get_user_supabase_client),
+):
+    """Stream comprehensive case analysis in real-time.
+    
+    Uses GPT-4.1 to generate a complete analysis in a single streaming call.
+    Output is markdown format that renders progressively in the frontend.
+    
+    This replaces the multi-stage analysis for faster, more reliable results.
+    """
+    from legal_portal.services.multi_stage_analyzer import MultiStageAnalyzer
+    from legal_portal.core.data_models import DocumentSummaryStructured
+    
+    try:
+        # 1. Verify case ownership
+        case_response = (
+            supabase.table("cases")
+            .select("*, documents(*)")
+            .eq("id", case_id)
+            .eq("user_id", user["id"])
+            .execute()
+        )
+        
+        if not case_response.data:
+            raise HTTPException(status_code=404, detail="Case not found")
+        
+        case_data = case_response.data[0]
+        documents = case_data.get("documents", [])
+        
+        if not documents:
+            raise HTTPException(status_code=400, detail="No documents found for this case")
+        
+        # 2. Build document summaries from extracted text
+        doc_summaries = []
+        intake_content = ""
+        
+        for doc in documents:
+            extracted_text = doc.get("extracted_text", "") or ""
+            file_name = doc.get("file_name", "unknown")
+            doc_type = doc.get("doc_type", "document")
+            
+            if extracted_text:
+                # Find intake form
+                if "intake" in file_name.lower():
+                    intake_content = extracted_text
+                
+                doc_summaries.append(DocumentSummaryStructured(
+                    document_name=file_name,
+                    document_type=doc_type,
+                    executive_summary=extracted_text[:500],
+                    key_content=extracted_text[:3000],
+                ))
+        
+        if not intake_content and doc_summaries:
+            # Use first document if no intake found
+            intake_content = doc_summaries[0].key_content or ""
+        
+        # 3. Determine jurisdiction
+        jurisdiction = case_data.get("jurisdiction", "Florida")
+        
+        logger.info(
+            f"[STREAM] Starting streaming analysis for case {case_id} | "
+            f"docs={len(doc_summaries)} jurisdiction={jurisdiction}"
+        )
+        
+        # 4. Stream the analysis
+        async def generate():
+            try:
+                openai_client = OpenAIClient()
+                analyzer = MultiStageAnalyzer(openai_client=openai_client)
+                
+                full_content = ""
+                
+                async for token in analyzer.analyze_streaming(
+                    intake_content=intake_content,
+                    document_summaries=doc_summaries,
+                    jurisdiction=jurisdiction,
+                ):
+                    full_content += token
+                    # Send each token as SSE event
+                    yield f"data: {json.dumps({'token': token})}\n\n"
+                
+                # Signal completion with full content
+                yield f"data: {json.dumps({'done': True, 'content': full_content})}\n\n"
+                
+                logger.info(f"[STREAM] Completed streaming for case {case_id}")
+                
+            except Exception as e:
+                logger.error(f"[STREAM] Error during streaming: {e}")
+                yield f"data: {json.dumps({'error': str(e)})}\n\n"
+        
+        return StreamingResponse(
+            generate(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache, no-transform",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",  # Disable Vercel/nginx buffering
+            }
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in stream_case_analysis: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("/generate-letter", response_model=LetterGenerationResponse)
 @limiter.limit("10/minute")  # Rate limit letter generation
 async def generate_letter(

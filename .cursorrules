@@ -138,6 +138,74 @@ else:
 4. Run `make verify` to check package versions
 
 
+## CRITICAL: Data Model Compatibility
+
+### ProcessingResult Model (src/legal_portal/core/data_models.py)
+
+When saving analysis results, the `result` JSON **MUST** contain these required fields:
+
+```python
+# Required fields - NO defaults, will cause Pydantic validation errors if missing
+{
+    "main_letter": str,           # HTML content, can be empty string ""
+    "document_summaries": str,    # Text summaries, can be placeholder
+    "case_analysis": str,         # JSON string of case analysis
+    "status": str,                # "completed", "partial", or "failed"
+}
+```
+
+**Why This Matters:**
+- Chat endpoint uses `ProcessingResult(**result_payload)` to validate
+- Letter generation uses `ProcessingResult(**result_payload)` to validate
+- Demand calculation uses `ProcessingResult(**result_payload)` to validate
+- Missing fields → `Field required [type=missing]` Pydantic error
+
+### Optional but Commonly Used Fields
+
+```python
+{
+    "multi_stage_result": {...},  # Required for chat, letters, demand calc
+    "artifacts": {...},           # Analysis metadata
+    "quality_report": [...],      # Document quality data
+    "processed_documents": [...], # Document extraction results
+}
+```
+
+### Database Constraints
+
+**Case Status Values** (cases table `status` column):
+```
+VALID: 'pending', 'processing', 'completed', 'error', 'cancelled'
+INVALID: 'analyzed', 'done', 'finished', etc.
+```
+Using invalid values → `cases_status_check` constraint violation
+
+**Analysis Status Values** (analysis_results table):
+```
+VALID: 'pending', 'processing', 'completed', 'error', 'cancelled'
+```
+
+### Common Patterns
+
+**When Saving Streaming/New Analysis Results:**
+```python
+result = {
+    # Always include these 4 required fields
+    "main_letter": "",  # Empty if letters generated separately
+    "document_summaries": "...",  # Generate from documents
+    "case_analysis": json.dumps({...}),
+    "status": "completed",
+    
+    # Include for full functionality
+    "multi_stage_result": {...},
+    "artifacts": {...},
+}
+
+# Use valid status
+supabase.table("cases").update({"status": "completed"})  # NOT "analyzed"
+```
+
+
 ## File Locations
 
 - Backend API: `src/legal_portal/`

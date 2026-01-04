@@ -1719,10 +1719,23 @@ async def save_streaming_analysis(
                         "amount": fin["documented_damages"],
                     })
         
-        # Build the complete result
+        # Build document summaries from case documents
+        documents = case_data.get("documents", [])
+        doc_summaries_list = []
+        for doc in documents:
+            if doc.get("extracted_text"):
+                doc_summaries_list.append(f"**{doc.get('file_name', 'Document')}**\n{doc.get('extracted_text', '')[:500]}...")
+        document_summaries_text = "\n\n---\n\n".join(doc_summaries_list) if doc_summaries_list else "Document summaries generated from streaming analysis."
+        
+        # Build the complete result - must match ProcessingResult structure
         streaming_result = {
-            "streaming_analysis": request.content,
+            # Required fields for ProcessingResult compatibility
+            "main_letter": "",  # Letters are generated separately via letter generation endpoint
+            "document_summaries": document_summaries_text,
             "case_analysis": json.dumps(case_analysis),
+            
+            # Streaming-specific fields
+            "streaming_analysis": request.content,
             "multi_stage_result": multi_stage_result,
             "artifacts": {
                 "analysis_type": "streaming",
@@ -1743,9 +1756,9 @@ async def save_streaming_analysis(
             "created_at": datetime.utcnow().isoformat(),
         }).execute()
         
-        # Update case status
+        # Update case status - must use valid status from constraint: pending, processing, completed, error, cancelled
         supabase.table("cases").update({
-            "status": "analyzed",
+            "status": "completed",
             "updated_at": datetime.utcnow().isoformat(),
         }).eq("id", case_id).execute()
         

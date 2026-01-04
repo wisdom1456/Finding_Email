@@ -249,13 +249,16 @@ Output in clean markdown format."""
         token_count = 0
         
         try:
+            # Use GPT-5.2 medium for high-quality analysis
+            # 24K tokens allows for ~10-12K visible output after reasoning overhead
             async for token in self.client.create_chat_completion_stream(
-                model="gpt-4.1",
+                model="gpt-5.2",
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": prompt}
                 ],
-                max_tokens=6000,
+                max_tokens=24000,
+                reasoning_effort="medium",
             ):
                 token_count += 1
                 yield token

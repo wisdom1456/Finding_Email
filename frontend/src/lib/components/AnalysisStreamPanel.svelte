@@ -2,7 +2,8 @@
   AnalysisStreamPanel - Live streaming case analysis display
   
   Features:
-  - Streams markdown content from GPT-4.1 in real-time
+  - Streams markdown content from GPT-5.2 medium in real-time
+  - Two-phase UX: "thinking" (AI reasoning) then "streaming" (tokens flowing)
   - Renders markdown as it arrives (like ChatGPT)
   - Auto-scrolls to show new content
   - Copy to clipboard functionality
@@ -11,12 +12,12 @@
 -->
 <script lang="ts">
   import { marked } from 'marked';
-  import { Copy, X, RotateCcw, Loader2, CheckCircle2, AlertCircle } from 'lucide-svelte';
+  import { Copy, X, RotateCcw, Loader2, CheckCircle2, AlertCircle, Brain } from 'lucide-svelte';
   import { slide } from 'svelte/transition';
   import { getApiUrl } from '$lib/config';
   import { supabase } from '$lib/supabase';
 
-  type StreamStatus = 'idle' | 'streaming' | 'complete' | 'error';
+  type StreamStatus = 'idle' | 'thinking' | 'streaming' | 'complete' | 'error';
 
   let {
     caseId,
@@ -36,6 +37,7 @@
   let copySuccess = $state(false);
   let startTime = $state(0);
   let elapsedTime = $state(0);
+  let thinkingTime = $state(0);  // Time spent in thinking phase
   let timerInterval: ReturnType<typeof setInterval> | null = null;
 
   // Rendered HTML from markdown
@@ -50,13 +52,14 @@
 
   // Start streaming analysis using fetch (supports Authorization header)
   export async function startStreaming() {
-    if (status === 'streaming') return;
+    if (status === 'streaming' || status === 'thinking') return;
     
     content = '';
-    status = 'streaming';
+    status = 'thinking';  // Start in thinking phase
     errorMessage = '';
     startTime = Date.now();
     elapsedTime = 0;
+    thinkingTime = 0;
     
     // Start elapsed time counter
     timerInterval = setInterval(() => {
@@ -126,7 +129,28 @@
             try {
               const data = JSON.parse(line.slice(6));
               
+              // Handle phase transitions
+              if (data.phase === 'thinking') {
+                status = 'thinking';
+                // Update thinking elapsed time from server
+                if (data.elapsed !== undefined) {
+                  // Server sends elapsed time during thinking
+                }
+              }
+              
+              if (data.phase === 'streaming') {
+                // Transition from thinking to streaming
+                status = 'streaming';
+                thinkingTime = data.thinking_time || elapsedTime;
+                console.log(`AI thinking completed in ${thinkingTime}s, now streaming...`);
+              }
+              
               if (data.token) {
+                // Ensure we're in streaming status when tokens arrive
+                if (status === 'thinking') {
+                  status = 'streaming';
+                  thinkingTime = elapsedTime;
+                }
                 content += data.token;
                 // Auto-scroll to bottom
                 if (panelElement) {
@@ -134,6 +158,11 @@
                     panelElement.scrollTop = panelElement.scrollHeight;
                   });
                 }
+              }
+              
+              // Heartbeat - just keep connection alive, no action needed
+              if (data.heartbeat !== undefined) {
+                // Connection is alive
               }
               
               if (data.done) {
@@ -263,7 +292,9 @@
   <div class="panel-header">
     <div class="header-left">
       <h3 class="panel-title">
-        {#if status === 'streaming'}
+        {#if status === 'thinking'}
+          <Brain class="h-5 w-5 text-purple-500 animate-pulse" />
+        {:else if status === 'streaming'}
           <Loader2 class="h-5 w-5 animate-spin text-blue-500" />
         {:else if status === 'complete'}
           <CheckCircle2 class="h-5 w-5 text-green-500" />
@@ -273,7 +304,7 @@
         <span>Case Analysis</span>
       </h3>
       
-      {#if status === 'streaming' || status === 'complete'}
+      {#if status === 'thinking' || status === 'streaming' || status === 'complete'}
         <span class="elapsed-time">
           {formatTime(elapsedTime)}
         </span>
@@ -305,7 +336,7 @@
         </button>
       {/if}
       
-      {#if status === 'streaming'}
+      {#if status === 'thinking' || status === 'streaming'}
         <button
           class="action-btn text-red-500 hover:text-red-700"
           onclick={abortStreaming}
@@ -335,6 +366,19 @@
           Retry Analysis
         </button>
       </div>
+    {:else if status === 'thinking'}
+      <div class="thinking-state">
+        <div class="thinking-icon-container">
+          <Brain class="h-12 w-12 text-purple-500" />
+          <div class="thinking-pulse"></div>
+        </div>
+        <h4 class="thinking-title">AI is reasoning...</h4>
+        <p class="thinking-description">
+          GPT-5.2 is analyzing your documents and building a comprehensive legal analysis.
+        </p>
+        <p class="thinking-time">Usually takes 30-60 seconds</p>
+        <div class="thinking-elapsed">{formatTime(elapsedTime)}</div>
+      </div>
     {:else if content}
       <article class="prose prose-slate max-w-none">
         {@html renderedHtml}
@@ -345,21 +389,26 @@
     {:else if status === 'streaming'}
       <div class="loading-state">
         <Loader2 class="h-6 w-6 animate-spin text-blue-500" />
-        <p>Starting analysis...</p>
+        <p>Starting analysis stream...</p>
       </div>
     {/if}
   </div>
 
   <!-- Status bar -->
-  {#if status === 'streaming'}
+  {#if status === 'thinking'}
+    <div class="status-bar thinking">
+      <div class="status-indicator thinking"></div>
+      <span>GPT-5.2 is reasoning about your case...</span>
+    </div>
+  {:else if status === 'streaming'}
     <div class="status-bar">
       <div class="status-indicator streaming"></div>
-      <span>Analyzing case with GPT-4.1...</span>
+      <span>Streaming analysis{thinkingTime > 0 ? ` (thought for ${formatTime(thinkingTime)})` : ''}...</span>
     </div>
   {:else if status === 'complete'}
     <div class="status-bar complete">
       <div class="status-indicator complete"></div>
-      <span>Analysis complete in {formatTime(elapsedTime)}</span>
+      <span>Analysis complete in {formatTime(elapsedTime)}{thinkingTime > 0 ? ` (${formatTime(thinkingTime)} thinking)` : ''}</span>
     </div>
   {/if}
 </div>
@@ -438,7 +487,8 @@
 
   .empty-state,
   .loading-state,
-  .error-state {
+  .error-state,
+  .thinking-state {
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -451,6 +501,67 @@
 
   .error-state {
     color: #dc2626;
+  }
+
+  /* Thinking phase styles */
+  .thinking-state {
+    gap: 16px;
+    padding: 60px 40px;
+  }
+
+  .thinking-icon-container {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .thinking-pulse {
+    position: absolute;
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    background: rgba(168, 85, 247, 0.15);
+    animation: thinking-pulse-anim 2s ease-in-out infinite;
+  }
+
+  @keyframes thinking-pulse-anim {
+    0%, 100% {
+      transform: scale(0.9);
+      opacity: 0.5;
+    }
+    50% {
+      transform: scale(1.2);
+      opacity: 0.2;
+    }
+  }
+
+  .thinking-title {
+    font-size: 18px;
+    font-weight: 600;
+    color: #7c3aed;
+    margin: 8px 0 0 0;
+  }
+
+  .thinking-description {
+    font-size: 14px;
+    color: #6b7280;
+    max-width: 300px;
+    line-height: 1.5;
+  }
+
+  .thinking-time {
+    font-size: 13px;
+    color: #9ca3af;
+    font-style: italic;
+  }
+
+  .thinking-elapsed {
+    font-size: 32px;
+    font-weight: 700;
+    color: #7c3aed;
+    font-variant-numeric: tabular-nums;
+    margin-top: 8px;
   }
 
   .retry-btn {
@@ -551,10 +662,26 @@
     color: #15803d;
   }
 
+  .status-bar.thinking {
+    background: #faf5ff;
+    border-top-color: #f3e8ff;
+    color: #7c3aed;
+  }
+
   .status-indicator {
     width: 8px;
     height: 8px;
     border-radius: 50%;
+  }
+
+  .status-indicator.thinking {
+    background: #a855f7;
+    animation: thinking-indicator 1s ease-in-out infinite;
+  }
+
+  @keyframes thinking-indicator {
+    0%, 100% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.3); opacity: 0.6; }
   }
 
   .status-indicator.streaming {

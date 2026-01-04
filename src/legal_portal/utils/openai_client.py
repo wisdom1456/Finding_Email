@@ -502,15 +502,17 @@ class OpenAIClient:
         messages: List[Dict[str, str]],
         temperature: float = 0.3,
         max_tokens: Optional[int] = None,
+        reasoning_effort: Optional[str] = None,
     ) -> AsyncGenerator[str, None]:
         """Stream chat completion tokens.
 
         Args:
         ----
-            model: Model to use (e.g., "gpt-4o", "gpt-4o-mini")
+            model: Model to use (e.g., "gpt-4.1", "gpt-5.2")
             messages: List of message dicts with 'role' and 'content'
             temperature: Sampling temperature (0.0-2.0)
             max_tokens: Maximum tokens to generate (None for model default)
+            reasoning_effort: For GPT-5.x models: "none", "minimal", "low", "medium", "high"
 
         Yields:
         ------
@@ -518,15 +520,36 @@ class OpenAIClient:
 
         """
         try:
-            logger.info(f"Starting async chat stream with {model}")
-
-            stream = await self.async_client.chat.completions.create(
-                model=model,
-                messages=messages,
-                temperature=temperature,
-                max_tokens=max_tokens,
-                stream=True,
+            # Detect model type for parameter handling
+            is_gpt4 = model.startswith("gpt-4")
+            
+            logger.info(
+                f"Starting async chat stream | model={model} is_gpt4={is_gpt4} "
+                f"reasoning_effort={reasoning_effort if not is_gpt4 else 'N/A'} "
+                f"max_tokens={max_tokens}"
             )
+
+            # Build request parameters based on model type
+            request_params = {
+                "model": model,
+                "messages": messages,
+                "stream": True,
+            }
+            
+            if is_gpt4:
+                # GPT-4.x: Use max_tokens, temperature, no reasoning_effort
+                if max_tokens:
+                    request_params["max_tokens"] = max_tokens
+                request_params["temperature"] = temperature
+            else:
+                # GPT-5.x: Use max_completion_tokens, reasoning_effort
+                if max_tokens:
+                    request_params["max_completion_tokens"] = max_tokens
+                if reasoning_effort:
+                    request_params["reasoning_effort"] = reasoning_effort
+                # Note: GPT-5.x with reasoning doesn't support temperature parameter
+
+            stream = await self.async_client.chat.completions.create(**request_params)
 
             async for chunk in stream:
                 if chunk.choices and chunk.choices[0].delta.content:

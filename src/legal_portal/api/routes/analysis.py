@@ -1874,27 +1874,93 @@ async def stream_case_analysis(
             f"docs={len(doc_summaries)} jurisdiction={jurisdiction}"
         )
         
-        # 4. Stream the analysis
+        # 4. Stream the analysis with thinking heartbeats
         async def generate():
             try:
                 openai_client = OpenAIClient()
                 analyzer = MultiStageAnalyzer(openai_client=openai_client)
                 
                 full_content = ""
+                first_token_received = False
+                start_time = time.time()
+                last_heartbeat = start_time
                 
-                async for token in analyzer.analyze_streaming(
+                # Signal that we're starting (thinking phase begins)
+                yield f"data: {json.dumps({'phase': 'thinking', 'elapsed': 0})}\n\n"
+                
+                # Create the token generator
+                token_generator = analyzer.analyze_streaming(
                     intake_content=intake_content,
                     document_summaries=doc_summaries,
                     jurisdiction=jurisdiction,
-                ):
-                    full_content += token
-                    # Send each token as SSE event
-                    yield f"data: {json.dumps({'token': token})}\n\n"
+                )
                 
-                # Signal completion with full content
-                yield f"data: {json.dumps({'done': True, 'content': full_content})}\n\n"
+                # Use asyncio.Queue to handle tokens with heartbeat timeout
+                token_queue: asyncio.Queue = asyncio.Queue()
+                done_event = asyncio.Event()
                 
-                logger.info(f"[STREAM] Completed streaming for case {case_id}")
+                async def collect_tokens():
+                    """Collect tokens and put them in queue."""
+                    try:
+                        async for token in token_generator:
+                            await token_queue.put(('token', token))
+                        await token_queue.put(('done', None))
+                    except Exception as e:
+                        await token_queue.put(('error', str(e)))
+                
+                # Start token collection in background
+                collector_task = asyncio.create_task(collect_tokens())
+                
+                try:
+                    while True:
+                        try:
+                            # Wait for token with 5-second timeout for heartbeat
+                            msg_type, msg_data = await asyncio.wait_for(
+                                token_queue.get(), 
+                                timeout=5.0
+                            )
+                            
+                            if msg_type == 'token':
+                                if not first_token_received:
+                                    first_token_received = True
+                                    elapsed = int(time.time() - start_time)
+                                    logger.info(f"[STREAM] First token received after {elapsed}s thinking")
+                                    # Signal transition from thinking to streaming
+                                    yield f"data: {json.dumps({'phase': 'streaming', 'thinking_time': elapsed})}\n\n"
+                                
+                                full_content += msg_data
+                                yield f"data: {json.dumps({'token': msg_data})}\n\n"
+                                
+                            elif msg_type == 'done':
+                                # Signal completion
+                                yield f"data: {json.dumps({'done': True, 'content': full_content})}\n\n"
+                                logger.info(f"[STREAM] Completed streaming for case {case_id}")
+                                break
+                                
+                            elif msg_type == 'error':
+                                yield f"data: {json.dumps({'error': msg_data})}\n\n"
+                                break
+                                
+                        except asyncio.TimeoutError:
+                            # No token received in 5 seconds - send heartbeat
+                            elapsed = int(time.time() - start_time)
+                            
+                            if not first_token_received:
+                                # Still in thinking phase - send thinking heartbeat
+                                yield f"data: {json.dumps({'phase': 'thinking', 'elapsed': elapsed})}\n\n"
+                                logger.debug(f"[STREAM] Thinking heartbeat: {elapsed}s")
+                            else:
+                                # In streaming phase but slow - send streaming heartbeat
+                                yield f"data: {json.dumps({'heartbeat': elapsed})}\n\n"
+                                
+                finally:
+                    # Ensure collector task is cleaned up
+                    if not collector_task.done():
+                        collector_task.cancel()
+                        try:
+                            await collector_task
+                        except asyncio.CancelledError:
+                            pass
                 
             except Exception as e:
                 logger.error(f"[STREAM] Error during streaming: {e}")

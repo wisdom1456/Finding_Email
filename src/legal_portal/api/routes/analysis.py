@@ -9,6 +9,7 @@ import shutil
 import tempfile
 import time
 import traceback
+import uuid
 from datetime import datetime
 from email.message import EmailMessage
 from email.utils import formatdate, make_msgid
@@ -1732,7 +1733,7 @@ async def save_streaming_analysis(
         }
         
         # Create or update analysis result
-        analysis_id = str(time.time()).replace(".", "")  # Simple unique ID
+        analysis_id = str(uuid.uuid4())  # Generate proper UUID for database
         
         service_supabase.table("analysis_results").upsert({
             "id": analysis_id,

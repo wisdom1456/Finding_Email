@@ -1835,7 +1835,8 @@
 							/>
 						{/if}
 
-						<!-- Analysis Section -->
+						<!-- Analysis Section - hidden when streaming panel is active -->
+						{#if !showStreamingPanel}
 						<div class="card-standard">
 							<div class="flex justify-between items-center mb-6">
 								<h3 class="text-lg font-heading font-semibold text-contrast">Analysis</h3>
@@ -1854,7 +1855,7 @@
 
 										<AsyncButton
 											onclick={() => startStreamingAnalysis()}
-											loading={showStreamingPanel || analyzing || (analysisStatus && analysisStatus.status === 'processing')}
+											loading={analyzing || (analysisStatus && analysisStatus.status === 'processing')}
 											variant="primary"
 											loadingText="Analyzing..."
 										>
@@ -1939,6 +1940,7 @@
 					{/if}
 				</div>
 					</div>
+						{/if}
 				{/if}
 			{/snippet}
 		</Tabs>

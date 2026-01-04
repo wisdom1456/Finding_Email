@@ -215,6 +215,9 @@ session_audit.log
 debug_output/
 validation_output/
 
+# Local testing snapshots (contain real case data)
+scripts/snapshots/
+
 # Generated outputs
 output/letters/
 output/summaries/

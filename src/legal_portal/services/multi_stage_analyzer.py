@@ -508,7 +508,7 @@ RULES:
         
         logger.info(
             f"[STAGE:1:API] Calling OpenAI for fact_matrix | "
-            f"model={model} prompt_chars={len(prompt)} reasoning_effort=low max_tokens=4000"
+            f"model={model} prompt_chars={len(prompt)} reasoning_effort=low max_tokens=12000"
         )
         
         # Use asyncio.to_thread to avoid blocking the event loop during API call
@@ -522,7 +522,7 @@ RULES:
                 "Return only valid JSON."
             ),
             input=prompt,
-            max_output_tokens=4000,
+            max_output_tokens=12000,  # Increased for GPT-5.2 reasoning tokens
             reasoning_effort="low",
         )
         api_duration = time.time() - api_start
@@ -640,7 +640,7 @@ Return JSON:
         
         logger.info(
             f"[STAGE:2:API] Calling OpenAI for issue_mapping | "
-            f"model={model} prompt_chars={len(prompt)} reasoning_effort=low max_tokens=3000"
+            f"model={model} prompt_chars={len(prompt)} reasoning_effort=medium max_tokens=8000"
         )
         
         # Use asyncio.to_thread to avoid blocking the event loop during API call
@@ -651,7 +651,7 @@ Return JSON:
             model=model,
             instructions=f"You are an expert {jurisdiction} legal analyst. Return only valid JSON.",
             input=prompt,
-            max_output_tokens=3000,
+            max_output_tokens=8000,  # Increased for GPT-5.2 reasoning tokens
             reasoning_effort="medium",
         )
         api_duration = time.time() - api_start
@@ -779,7 +779,7 @@ Return ONLY valid JSON.
         
         logger.info(
             f"[STAGE:3:API] Calling OpenAI for deep_analysis | "
-            f"model={model} prompt_chars={len(prompt)} reasoning_effort=low max_tokens=6000"
+            f"model={model} prompt_chars={len(prompt)} reasoning_effort=medium max_tokens=12000"
         )
         
         # Use asyncio.to_thread to avoid blocking the event loop during API call
@@ -793,7 +793,7 @@ Return ONLY valid JSON.
                 "Provide comprehensive analysis."
             ),
             input=prompt,
-            max_output_tokens=6000,
+            max_output_tokens=12000,  # Increased for GPT-5.2 reasoning tokens
             reasoning_effort="medium",
         )
         api_duration = time.time() - api_start

@@ -662,21 +662,6 @@ class OpenAIClient:
             raise last_error
         raise RuntimeError("Unexpected error in create_response")
 
-        except httpx.TimeoutException as e:
-            elapsed = time.time() - start_time
-            logger.error(
-                f"[OPENAI:TIMEOUT] GPT-5 Chat Completions timeout | "
-                f"duration={elapsed:.1f}s model={model} error={str(e)}"
-            )
-            raise
-        except Exception as e:
-            elapsed = time.time() - start_time
-            logger.error(
-                f"[OPENAI:ERROR] GPT-5 Chat Completions call failed | "
-                f"duration={elapsed:.1f}s model={model} error_type={type(e).__name__} error={str(e)}"
-            )
-            raise
-
     async def create_response_async(
         self,
         model: str,

@@ -1,0 +1,118 @@
+# Cursor Rules for Finding Emails Project
+
+## CRITICAL: Vercel Deployment Verification
+
+**BEFORE ANY GIT PUSH**, you MUST verify the deployment will work:
+
+```bash
+make verify      # Check requirements consistency
+make pre-push    # Full verification + API test
+```
+
+### Why This Matters
+
+This project has TWO requirements files:
+- `requirements.txt` - Used for LOCAL development
+- `api/requirements.txt` - Used by VERCEL deployment
+
+If versions differ, code will work locally but FAIL in production!
+
+### Common Failure Pattern (DO NOT REPEAT)
+
+1. Developer tests locally with newer package version
+2. Code works locally
+3. Pushes to Vercel
+4. Vercel uses older version from api/requirements.txt
+5. Production fails with "unexpected keyword argument" or similar
+
+### Required Package Versions (Vercel)
+
+These MUST be in api/requirements.txt at these minimum versions:
+
+| Package | Minimum Version | Why |
+|---------|-----------------|-----|
+| openai | >=1.70.0 | GPT-5 parameters: reasoning_effort, max_completion_tokens |
+| fastapi | >=0.100.0 | Modern async support |
+| supabase | >=2.0.0 | Updated client API |
+| pydantic | >=2.0.0 | Model validation |
+
+
+## Testing Workflow
+
+### For Any OpenAI API Changes:
+
+1. **Test locally first**:
+   ```bash
+   make test-api    # Direct API test
+   make step-test   # Full analysis step test
+   ```
+
+2. **Verify deployment compatibility**:
+   ```bash
+   make verify
+   ```
+
+3. **Only then push**:
+   ```bash
+   git push origin main
+   ```
+
+### For Full E2E Testing:
+
+```bash
+make pull-case NAME="Mary Ann Rivera"  # Get real data
+make debug        # Terminal 1: Backend in Vercel mode
+make frontend     # Terminal 2: Frontend
+# Then test in browser at http://localhost:5173
+```
+
+
+## Code Patterns
+
+### OpenAI GPT-5 Calls
+
+GPT-5.2 uses reasoning tokens that count against max_completion_tokens:
+
+```python
+# CORRECT - enough tokens for reasoning + output
+client.create_response(
+    model="gpt-5.2",
+    input=prompt,
+    reasoning_effort="low",       # low/medium/high
+    max_output_tokens=12000,      # Must be high enough for reasoning
+)
+
+# WRONG - will return empty content
+max_output_tokens=4000,  # Too low - all tokens used by reasoning
+```
+
+### Environment Detection
+
+```python
+is_vercel = os.getenv("VERCEL") is not None
+if is_vercel:
+    # SSE streaming mode
+else:
+    # BackgroundTasks mode
+```
+
+
+## Debugging
+
+### If Analysis Fails in Production:
+
+1. Check Vercel logs for the exact error message
+2. Look for "unexpected keyword argument" → package version mismatch
+3. Look for "empty response" → max_output_tokens too low
+4. Run `make verify` to check package versions
+
+
+## File Locations
+
+- Backend API: `src/legal_portal/`
+- OpenAI Client: `src/legal_portal/utils/openai_client.py`
+- Multi-stage Analyzer: `src/legal_portal/services/multi_stage_analyzer.py`
+- Test Scripts: `scripts/testing/`
+- Vercel Requirements: `api/requirements.txt`
+- Local Requirements: `requirements.txt`
+

@@ -15,7 +15,8 @@ supabase>=2.0.0
 # httpx version is managed by supabase dependency
 
 # OpenAI (Essential for AI features)
-openai==1.10.0
+# v1.70.0+ required for GPT-5 parameters (reasoning_effort, max_completion_tokens)
+openai>=1.70.0
 
 # Google Cloud Vision (Essential for OCR - faster and cheaper than GPT-4o Vision)
 google-cloud-vision>=3.0.0

@@ -96,3 +96,11 @@ clean-test:
 	@rm -rf debug_output/sessions/*
 	@rm -f .cursor/debug.log
 	@echo "Test data and debug output cleaned"
+
+# Pre-deployment verification (run BEFORE git push)
+verify:
+	@source venv/bin/activate && python scripts/testing/verify_deployment.py
+
+# Full pre-push check: verify + test API
+pre-push: verify test-api
+	@echo "\n✓ All checks passed - safe to push"

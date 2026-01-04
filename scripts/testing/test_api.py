@@ -9,6 +9,19 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'src'))
 from dotenv import load_dotenv
 load_dotenv()
 
+# CRITICAL: Verify OpenAI SDK version matches Vercel deployment
+import openai
+REQUIRED_OPENAI_VERSION = "1.70.0"
+current_version = openai.__version__
+print(f"OpenAI SDK Version: {current_version}")
+
+from packaging import version
+if version.parse(current_version) < version.parse(REQUIRED_OPENAI_VERSION):
+    print(f"\n*** ERROR: OpenAI SDK {current_version} is too old! ***")
+    print(f"*** Vercel requires >= {REQUIRED_OPENAI_VERSION} for GPT-5 parameters ***")
+    print(f"*** Run: pip install 'openai>={REQUIRED_OPENAI_VERSION}' ***")
+    sys.exit(1)
+
 from legal_portal.utils.openai_client import OpenAIClient
 
 

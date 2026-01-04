@@ -67,24 +67,55 @@ make frontend     # Terminal 2: Frontend
 ```
 
 
+## Context7 MCP Usage
+
+**ALWAYS use Context7 MCP** when dealing with:
+- API implementation issues or bugs
+- New API features or parameters
+- SDK version compatibility questions
+- Unclear documentation or behavior
+
+Example workflow:
+```
+1. resolve-library-id for the library (e.g., "openai python")
+2. query-docs with specific question about parameters/behavior
+```
+
+
 ## Code Patterns
 
-### OpenAI GPT-5 Calls
+### OpenAI Model Selection
 
-GPT-5.2 uses reasoning tokens that count against max_completion_tokens:
-
+**GPT-4.x models** (fast, no reasoning overhead):
 ```python
-# CORRECT - enough tokens for reasoning + output
-client.create_response(
-    model="gpt-5.2",
-    input=prompt,
-    reasoning_effort="low",       # low/medium/high
-    max_output_tokens=12000,      # Must be high enough for reasoning
+# For extraction tasks - use max_tokens (NOT max_output_tokens)
+client.chat.completions.create(
+    model="gpt-4.1-mini",  # or gpt-4.1, gpt-4o
+    messages=[...],
+    max_tokens=4000,
+    # NO reasoning_effort - not supported
 )
-
-# WRONG - will return empty content
-max_output_tokens=4000,  # Too low - all tokens used by reasoning
 ```
+
+**GPT-5.x models** (slower, has reasoning):
+```python
+# For complex synthesis - use max_output_tokens + reasoning_effort
+client.chat.completions.create(
+    model="gpt-5.2",
+    messages=[...],
+    max_output_tokens=12000,  # Includes reasoning tokens
+    reasoning_effort="low",   # none/minimal/low/medium/high
+)
+```
+
+### Model Performance Reference
+
+| Model | Latency | Cost | Use For |
+|-------|---------|------|---------|
+| gpt-4.1-mini | 0.5s | $0.70 | Fast extraction, simple tasks |
+| gpt-4.1 | 0.5s | $3.50 | Quality synthesis, no reasoning needed |
+| gpt-5.2 (none) | 0.6s | $4.81 | When you need 400k context |
+| gpt-5.2 (medium) | 40s | $4.81 | Complex reasoning tasks |
 
 ### Environment Detection
 

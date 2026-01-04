@@ -124,7 +124,7 @@ async def test_step_by_step(snapshot_path: str):
                 case_type = "employment"
         print(f"  Case type: {case_type}")
         
-        issue_map = await analyzer._map_issues(
+        issue_map = await analyzer._map_legal_issues(
             fact_matrix=fact_matrix,
             intake_content=intake_content,
             case_type=case_type,
@@ -135,7 +135,7 @@ async def test_step_by_step(snapshot_path: str):
         print(f"\n  SUCCESS: Issues mapped!")
         print(f"  - Primary issues: {len(issue_map.primary_issues)}")
         for issue in issue_map.primary_issues[:3]:
-            print(f"    - {issue.issue_type}: {issue.description[:50]}...")
+            print(f"    - {issue.issue_name}: {issue.category}")
             
     except Exception as e:
         print(f"\n  ERROR in step 2: {type(e).__name__}: {e}")

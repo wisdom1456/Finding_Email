@@ -239,6 +239,9 @@ class OpenAIClient:
             "gpt-5.2": {"input": 0.01, "output": 0.03},
             "gpt-5.2-pro": {"input": 0.015, "output": 0.045},
             "gpt-5-mini": {"input": 0.0001, "output": 0.0004},
+            "gpt-4.1": {"input": 0.002, "output": 0.008},
+            "gpt-4.1-mini": {"input": 0.0004, "output": 0.0016},
+            "gpt-4.1-nano": {"input": 0.0001, "output": 0.0004},
             "gpt-4o": {"input": 0.005, "output": 0.015},
             "gpt-4o-mini": {"input": 0.00015, "output": 0.0006},
             "gpt-4": {"input": 0.03, "output": 0.06},
@@ -288,8 +291,12 @@ class OpenAIClient:
             return [self.default_model, self.fallback_model]
 
     def _is_gpt5_model(self, model: str) -> bool:
-        """Check if model is a GPT-5 family model."""
+        """Check if model is a GPT-5 family model (supports reasoning_effort)."""
         return model.startswith("gpt-5") or "gpt-5" in model
+
+    def _is_gpt4_model(self, model: str) -> bool:
+        """Check if model is a GPT-4.x family model (uses max_tokens, no reasoning)."""
+        return model.startswith("gpt-4") and not self._is_gpt5_model(model)
 
     def create_chat_completion(
         self,
@@ -539,25 +546,25 @@ class OpenAIClient:
         max_output_tokens: Optional[int] = None,
         max_retries: int = 2,
     ) -> Dict[str, Any]:
-        """Create a response using Chat Completions API with GPT-5.2 parameters.
+        """Create a response using Chat Completions API.
         
-        Uses Chat Completions API with GPT-5.2 specific parameters:
-        - reasoning_effort: Controls reasoning depth (minimal, low, medium, high)
-        - verbosity: Controls output length (low, medium, high)
-        - max_completion_tokens: Maximum output tokens (replaces max_tokens for GPT-5)
+        Automatically routes parameters based on model family:
+        - GPT-4.x: Uses max_tokens, no reasoning_effort (fast, sub-second latency)
+        - GPT-5.x: Uses max_completion_tokens + reasoning_effort (slower, has reasoning)
         
         Includes automatic retry on empty responses.
         """
         last_error = None
+        is_gpt4 = self._is_gpt4_model(model)
         
         for attempt in range(max_retries + 1):
             start_time = time.time()
             try:
                 logger.info(
-                    f"[OPENAI:REQUEST] Making GPT-5 Chat Completions request | "
-                    f"model={model} reasoning_effort={reasoning_effort} verbosity={verbosity} "
+                    f"[OPENAI:REQUEST] Making Chat Completions request | "
+                    f"model={model} is_gpt4={is_gpt4} reasoning_effort={reasoning_effort if not is_gpt4 else 'N/A'} "
                     f"input_chars={len(input) if input else 0} instructions_chars={len(instructions) if instructions else 0} "
-                    f"max_output_tokens={max_output_tokens} attempt={attempt+1}/{max_retries+1}"
+                    f"max_tokens={max_output_tokens} attempt={attempt+1}/{max_retries+1}"
                 )
 
                 # Build messages from input and instructions
@@ -572,21 +579,24 @@ class OpenAIClient:
                     "messages": messages,
                 }
 
-                # GPT-5 uses reasoning_effort as a top-level parameter (not in extra_body)
-                if reasoning_effort:
-                    request_params["reasoning_effort"] = reasoning_effort
-                
-                # GPT-5 uses max_completion_tokens (not max_tokens)
-                if max_output_tokens:
-                    request_params["max_completion_tokens"] = max_output_tokens
-                
-                # Other GPT-5 specific parameters go in extra_body
-                extra_body = {}
-                if verbosity:
-                    extra_body["verbosity"] = verbosity
-                
-                if extra_body:
-                    request_params["extra_body"] = extra_body
+                if is_gpt4:
+                    # GPT-4.x models: Use standard max_tokens, no reasoning_effort
+                    if max_output_tokens:
+                        request_params["max_tokens"] = max_output_tokens
+                    # Skip reasoning_effort - not supported by GPT-4.x
+                else:
+                    # GPT-5.x models: Use reasoning_effort and max_completion_tokens
+                    if reasoning_effort:
+                        request_params["reasoning_effort"] = reasoning_effort
+                    if max_output_tokens:
+                        request_params["max_completion_tokens"] = max_output_tokens
+                    
+                    # Other GPT-5 specific parameters go in extra_body
+                    extra_body = {}
+                    if verbosity:
+                        extra_body["verbosity"] = verbosity
+                    if extra_body:
+                        request_params["extra_body"] = extra_body
 
                 # Make the API call using Chat Completions
                 response = self.client.chat.completions.create(**request_params)

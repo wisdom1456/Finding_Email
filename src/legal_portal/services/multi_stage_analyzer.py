@@ -91,7 +91,7 @@ class MultiStageAnalyzer:
                             "name": stage_name,
                             "status": "active",
                             "progress": progress,
-                            "detail": f"GPT-5.2 reasoning... ({int(elapsed)}s)"
+                            "detail": f"AI analyzing ({int(elapsed)}s)..."
                         }
                     )
         
@@ -504,15 +504,16 @@ RULES:
 - Return ONLY valid JSON, no markdown formatting
 """
 
-        model = self.client.get_preferred_model("multi_stage_analysis", "gpt-5.2")
+        # Use GPT-4.1-mini for fast extraction (0.5s latency vs 40s+ for GPT-5.2)
+        model = self.client.get_preferred_model("multi_stage_analysis", "gpt-4.1-mini")
         
         logger.info(
             f"[STAGE:1:API] Calling OpenAI for fact_matrix | "
-            f"model={model} prompt_chars={len(prompt)} reasoning_effort=low max_tokens=12000"
+            f"model={model} prompt_chars={len(prompt)} max_tokens=4000"
         )
         
         # Use asyncio.to_thread to avoid blocking the event loop during API call
-        # Use reasoning_effort="low" to prevent timeouts while maintaining quality
+        # GPT-4.1-mini: Fast extraction without reasoning overhead
         api_start = time.time()
         response_dict = await asyncio.to_thread(
             self.client.create_response,
@@ -522,8 +523,7 @@ RULES:
                 "Return only valid JSON."
             ),
             input=prompt,
-            max_output_tokens=12000,  # Increased for GPT-5.2 reasoning tokens
-            reasoning_effort="low",
+            max_output_tokens=4000,  # GPT-4.1-mini doesn't need reasoning token overhead
         )
         api_duration = time.time() - api_start
         
@@ -636,23 +636,23 @@ Return JSON:
 }}
 """
 
-        model = self.client.get_preferred_model("multi_stage_analysis", "gpt-5.2")
+        # Use GPT-4.1-mini for fast issue mapping (0.5s latency vs 60s+ for GPT-5.2)
+        model = self.client.get_preferred_model("multi_stage_analysis", "gpt-4.1-mini")
         
         logger.info(
             f"[STAGE:2:API] Calling OpenAI for issue_mapping | "
-            f"model={model} prompt_chars={len(prompt)} reasoning_effort=medium max_tokens=8000"
+            f"model={model} prompt_chars={len(prompt)} max_tokens=3000"
         )
         
         # Use asyncio.to_thread to avoid blocking the event loop during API call
-        # Use reasoning_effort="low" to prevent timeouts while maintaining quality
+        # GPT-4.1-mini: Fast pattern matching without reasoning overhead
         api_start = time.time()
         response_dict = await asyncio.to_thread(
             self.client.create_response,
             model=model,
             instructions=f"You are an expert {jurisdiction} legal analyst. Return only valid JSON.",
             input=prompt,
-            max_output_tokens=8000,  # Increased for GPT-5.2 reasoning tokens
-            reasoning_effort="medium",
+            max_output_tokens=3000,  # GPT-4.1-mini doesn't need reasoning token overhead
         )
         api_duration = time.time() - api_start
         
@@ -775,15 +775,16 @@ CRITICAL INSTRUCTIONS:
 Return ONLY valid JSON.
 """
 
-        model = self.client.get_preferred_model("multi_stage_analysis", "gpt-5.2")
+        # Use GPT-4.1 (full model) for quality synthesis (0.5s latency vs 60s+ for GPT-5.2)
+        model = self.client.get_preferred_model("multi_stage_analysis", "gpt-4.1")
         
         logger.info(
             f"[STAGE:3:API] Calling OpenAI for deep_analysis | "
-            f"model={model} prompt_chars={len(prompt)} reasoning_effort=medium max_tokens=12000"
+            f"model={model} prompt_chars={len(prompt)} max_tokens=6000"
         )
         
         # Use asyncio.to_thread to avoid blocking the event loop during API call
-        # Use reasoning_effort="low" to prevent timeouts while maintaining quality
+        # GPT-4.1: Higher quality synthesis without reasoning overhead
         api_start = time.time()
         response_dict = await asyncio.to_thread(
             self.client.create_response,
@@ -793,8 +794,7 @@ Return ONLY valid JSON.
                 "Provide comprehensive analysis."
             ),
             input=prompt,
-            max_output_tokens=12000,  # Increased for GPT-5.2 reasoning tokens
-            reasoning_effort="medium",
+            max_output_tokens=6000,  # GPT-4.1 doesn't need reasoning token overhead
         )
         api_duration = time.time() - api_start
         

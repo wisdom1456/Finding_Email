@@ -117,13 +117,18 @@ class DocumentProcessor:
         temp_files = []
 
         try:
-            # 0. Check blacklist before doing any work (normalized whitespace)
+            # 0. Check blacklist before doing any work (prefix matching, normalized whitespace)
             if blacklist:
                 # Normalize whitespace: replace multiple spaces with single space, trim
                 normalized_filename = ' '.join(filename.lower().split())
                 normalized_blacklist = [' '.join(name.lower().split()) for name in blacklist]
-                if normalized_filename in normalized_blacklist:
-                    logger.info(f"Document '{filename}' is blacklisted, marking as SKIPPED.")
+                # Use prefix matching: "Attorney Representation Agreement" matches
+                # "Attorney Representation Agreement (Client Name).pdf"
+                is_blacklisted = any(
+                    normalized_filename.startswith(bl) for bl in normalized_blacklist
+                )
+                if is_blacklisted:
+                    logger.info(f"Document '{filename}' matches blacklist prefix, marking as SKIPPED.")
                     from legal_portal.core.data_models import DocumentStatus
                     return {
                         "case_id": case_id,

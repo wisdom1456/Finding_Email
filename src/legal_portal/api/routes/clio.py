@@ -481,15 +481,15 @@ async def import_clio_data(
         # Save communications as document entries
         for idx, comm in enumerate(communications, 1):
             try:
-                # Check blacklist (normalized whitespace)
+                # Check blacklist (prefix matching, normalized whitespace)
                 if comm.subject and blacklist:
                     normalized_subject = ' '.join(comm.subject.lower().split())
                     is_blacklisted = any(
-                        normalized_subject == ' '.join(bl.lower().split()) 
+                        normalized_subject.startswith(' '.join(bl.lower().split())) 
                         for bl in blacklist
                     )
                     if is_blacklisted:
-                        logger.info(f"Skipping blacklisted communication: {comm.subject}")
+                        logger.info(f"Skipping blacklisted communication (prefix match): {comm.subject}")
                         items_processed += 1
                         continue
 
@@ -545,15 +545,15 @@ async def import_clio_data(
             try:
                 note_subject = note.get("subject", "No Subject")
                 
-                # Check blacklist (normalized whitespace)
+                # Check blacklist (prefix matching, normalized whitespace)
                 if blacklist:
                     normalized_note = ' '.join(note_subject.lower().split())
                     is_blacklisted = any(
-                        normalized_note == ' '.join(bl.lower().split()) 
+                        normalized_note.startswith(' '.join(bl.lower().split())) 
                         for bl in blacklist
                     )
                     if is_blacklisted:
-                        logger.info(f"Skipping blacklisted note: {note_subject}")
+                        logger.info(f"Skipping blacklisted note (prefix match): {note_subject}")
                         items_processed += 1
                         continue
 
@@ -611,16 +611,16 @@ async def import_clio_data(
 
                 logger.debug("Processing Clio document", extra={"doc_name": doc_name, "doc_id": doc_id})
 
-                # Check blacklist BEFORE downloading (case-insensitive, whitespace-normalized)
+                # Check blacklist BEFORE downloading (prefix matching, case-insensitive, whitespace-normalized)
                 if blacklist:
                     # Normalize whitespace: replace multiple spaces with single space, trim
                     normalized_doc_name = ' '.join(doc_name.lower().split())
                     is_blacklisted = any(
-                        normalized_doc_name == ' '.join(bl.lower().split()) 
+                        normalized_doc_name.startswith(' '.join(bl.lower().split())) 
                         for bl in blacklist
                     )
                     if is_blacklisted:
-                        logger.info(f"SKIPPING blacklisted document: '{doc_name}'")
+                        logger.info(f"SKIPPING blacklisted document (prefix match): '{doc_name}'")
                         items_processed += 1
                         continue
 

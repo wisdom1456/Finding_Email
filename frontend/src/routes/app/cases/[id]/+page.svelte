@@ -1933,14 +1933,14 @@
 
 							{#if analysisStatus.error}
 								<div class="rounded-md bg-red-50 p-4">
-									<p class="text-sm text-red-800">{analysisStatus.error}</p>
+									<p class="text-sm text-gray-800">{analysisStatus.error}</p>
 								</div>
 							{/if}
 						</div>
 					{/if}
 				</div>
+				{/if}
 					</div>
-					{/if}
 				{/if}
 			{/snippet}
 		</Tabs>

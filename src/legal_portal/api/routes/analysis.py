@@ -1656,11 +1656,29 @@ async def save_streaming_analysis(
         structured_data = _extract_embedded_json(request.content)
         
         # Build case analysis from extracted data
+        # Use clean issue names from structured JSON, not raw markdown
+        key_issues_list = []
+        if structured_data.get("primary_issues"):
+            for issue in structured_data["primary_issues"]:
+                issue_name = issue.get("name", "")
+                if issue_name:
+                    # Include strength and statutes for context
+                    strength = issue.get("strength", "")
+                    statutes = issue.get("statutes", [])
+                    if statutes:
+                        key_issues_list.append(f"{issue_name} ({strength}) - {', '.join(statutes)}")
+                    else:
+                        key_issues_list.append(f"{issue_name} ({strength})")
+        
+        # Fallback to markdown extraction if no structured data
+        if not key_issues_list:
+            key_issues_list = _extract_list_items(request.content, "Legal Issues Identified")
+        
         case_analysis = {
             "case_summary": _extract_section(request.content, "Case Overview"),
-            "key_issues": _extract_list_items(request.content, "Legal Issues Identified"),
+            "key_issues": key_issues_list,
             "practice_area": structured_data.get("practice_area", "General Legal Matter"),
-            "relevant_statutes": [],  # Extracted from structured_data if available
+            "relevant_statutes": [],  # Extracted from structured_data below
         }
         
         # Add statutes from primary issues

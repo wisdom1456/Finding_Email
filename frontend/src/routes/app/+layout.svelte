@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { supabase } from '$lib/supabase';
+	import { supabase, getSecureSession } from '$lib/supabase';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 	import { getApiUrl } from '$lib/config';
@@ -34,12 +34,8 @@
 
 	async function checkClioStatus() {
 		try {
-			const { data: { session } } = await supabase.auth.getSession();
-			if (!session) return;
-
-			// Validate the session by getting the user
-			const { data: { user }, error } = await supabase.auth.getUser();
-			if (error || !user) return;
+			const { session, user } = await getSecureSession();
+			if (!session || !user) return;
 
 			// Use getApiUrl() to ensure we get the correct runtime value (relative path in Vercel)
 			const apiUrl = getApiUrl();

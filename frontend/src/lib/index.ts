@@ -17,5 +17,5 @@ export { loadingStore } from './stores/loadingStore';
 export { progressStore } from './stores/progressStore';
 
 // Utils
-export { supabase } from './supabase';
+export { supabase, getSecureSession, getSecureAccessToken } from './supabase';
 export { getApiUrl } from './config';

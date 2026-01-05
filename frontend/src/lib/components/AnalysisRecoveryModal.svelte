@@ -11,7 +11,7 @@
 	} from 'lucide-svelte';
 	import { slide, fade } from 'svelte/transition';
 	import { getApiUrl } from '$lib/config';
-	import { supabase } from '$lib/supabase';
+	import { getSecureSession } from '$lib/supabase';
 	import Modal from './ui/Modal.svelte';
 	import Badge from './ui/Badge.svelte';
 
@@ -79,8 +79,8 @@
 		successMessage = null;
 
 		try {
-			const { data: { session } } = await supabase.auth.getSession();
-			if (!session) throw new Error('Not authenticated');
+			const { session, user } = await getSecureSession();
+			if (!session || !user) throw new Error('Not authenticated');
 
 			const apiUrl = getApiUrl();
 			const response = await fetch(`${apiUrl}/api/analysis/${analysisId}/retry`, {
@@ -127,8 +127,8 @@
 		successMessage = null;
 
 		try {
-			const { data: { session } } = await supabase.auth.getSession();
-			if (!session) throw new Error('Not authenticated');
+			const { session, user } = await getSecureSession();
+			if (!session || !user) throw new Error('Not authenticated');
 
 			const apiUrl = getApiUrl();
 			const response = await fetch(`${apiUrl}/api/analysis/${analysisId}/skip`, {

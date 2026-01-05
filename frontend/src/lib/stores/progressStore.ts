@@ -8,7 +8,7 @@ import { writable, derived } from 'svelte/store';
 import { SSEClient, type ProgressEvent } from '$lib/utils/sseClient';
 import { PollingClient } from '$lib/utils/pollingClient';
 import { getApiUrl } from '$lib/config';
-import { supabase } from '$lib/supabase';
+import { getSecureSession } from '$lib/supabase';
 
 export interface StageState {
 	id: string;
@@ -348,8 +348,8 @@ function createProgressStore() {
 		 */
 		startListening: async (analysisId: string) => {
 			console.log('[progressStore] startListening called:', analysisId);
-			const { data: { session } } = await supabase.auth.getSession();
-			if (!session) return;
+			const { session, user } = await getSecureSession();
+			if (!session || !user) return;
 
 			const apiUrl = getApiUrl();
 			// FIX: Corrected URL paths - backend has /progress/analysis/{id} not /analysis/progress/{id}

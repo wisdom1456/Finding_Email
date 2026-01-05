@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { getApiUrl } from '$lib/config';
-	import { supabase } from '$lib/supabase';
+	import { getSecureSession } from '$lib/supabase';
 	import { toastStore } from '$lib/stores/toastStore';
 	import AsyncButton from './ui/AsyncButton.svelte';
 	import Modal from './ui/Modal.svelte';
@@ -122,8 +122,8 @@
 		saving = true;
 
 		try {
-			const { data: { session } } = await supabase.auth.getSession();
-			if (!session) throw new Error('Not authenticated');
+const { session, user } = await getSecureSession();
+		if (!session || !user) throw new Error('Not authenticated');
 
 			const response = await fetch(`${getApiUrl()}/api/documents/${document.id}/verify`, {
 				method: 'PATCH',
@@ -157,8 +157,8 @@
 		triggeringExtraction = true;
 
 		try {
-			const { data: { session } } = await supabase.auth.getSession();
-			if (!session) throw new Error('Not authenticated');
+const { session, user } = await getSecureSession();
+		if (!session || !user) throw new Error('Not authenticated');
 
 			const response = await fetch(`${getApiUrl()}/api/documents/${document.id}/extract`, {
 				method: 'POST',

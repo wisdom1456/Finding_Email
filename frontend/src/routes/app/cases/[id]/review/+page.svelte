@@ -3,7 +3,7 @@
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { getApiUrl } from '$lib/config';
-	import { supabase } from '$lib/supabase';
+	import { supabase, getSecureSession } from '$lib/supabase';
 
 	const caseId = $derived($page.params.id as string);
 
@@ -55,11 +55,9 @@
 		errorMessage = '';
 
 		try {
-			const {
-				data: { session }
-			} = await supabase.auth.getSession();
+			const { session, user } = await getSecureSession();
 
-			if (!session) {
+			if (!session || !user) {
 				throw new Error('Not authenticated');
 			}
 
@@ -109,11 +107,9 @@
 		errorMessage = '';
 
 		try {
-			const {
-				data: { session }
-			} = await supabase.auth.getSession();
+			const { session, user } = await getSecureSession();
 
-			if (!session) {
+			if (!session || !user) {
 				throw new Error('Not authenticated');
 			}
 
@@ -183,11 +179,9 @@
 		errorMessage = '';
 
 		try {
-			const {
-				data: { session }
-			} = await supabase.auth.getSession();
+			const { session, user } = await getSecureSession();
 
-			if (!session) {
+			if (!session || !user) {
 				throw new Error('Not authenticated');
 			}
 

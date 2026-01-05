@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { supabase } from '$lib/supabase';
+	import { getSecureSession } from '$lib/supabase';
 	import { getApiUrl } from '$lib/config';
 	import PageHeader from '$lib/components/ui/PageHeader.svelte';
 	import AsyncButton from '$lib/components/ui/AsyncButton.svelte';
@@ -46,16 +46,16 @@ Palm Harbor, FL 34683`);
 
 	async function loadProfile() {
 		try {
-			const { data: { session } } = await supabase.auth.getSession();
-			if (!session) {
+			const { session, user } = await getSecureSession();
+			if (!session || !user) {
 				message = 'Please sign in to access settings';
 				messageType = 'error';
 				loading = false;
 				return;
 			}
 
-			// Get email from session
-			email = session.user.email || '';
+			// Get email from validated user
+			email = user.email || '';
 
 			// Fetch profile data
 			const apiUrl = getApiUrl();
@@ -104,8 +104,8 @@ Palm Harbor, FL 34683`);
 		message = '';
 
 		try {
-			const { data: { session } } = await supabase.auth.getSession();
-			if (!session) {
+			const { session, user } = await getSecureSession();
+			if (!session || !user) {
 				message = 'Session expired. Please sign in again.';
 				messageType = 'error';
 				return;

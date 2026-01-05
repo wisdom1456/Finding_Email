@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { getApiUrl } from '$lib/config';
-	import { supabase } from '$lib/supabase';
+	import { getSecureSession } from '$lib/supabase';
 	import { clioStore } from '$lib/stores/clioStore';
 	import ConfirmDialog from './ui/ConfirmDialog.svelte';
 	import Badge from './ui/Badge.svelte';
@@ -25,11 +25,9 @@
 		errorMessage = '';
 
 		try {
-			const {
-				data: { session }
-			} = await supabase.auth.getSession();
+			const { session, user } = await getSecureSession();
 
-			if (!session) {
+			if (!session || !user) {
 				errorMessage = 'Not authenticated - please log in';
 				loading = false;
 				return;
@@ -61,11 +59,9 @@
 
 	async function connectClio() {
 		try {
-			const {
-				data: { session }
-			} = await supabase.auth.getSession();
+			const { session, user } = await getSecureSession();
 
-			if (!session) {
+			if (!session || !user) {
 				errorMessage = 'Not authenticated';
 				return;
 			}
@@ -82,11 +78,9 @@
 
 	async function disconnectClio() {
 		try {
-			const {
-				data: { session }
-			} = await supabase.auth.getSession();
+			const { session, user } = await getSecureSession();
 
-			if (!session) {
+			if (!session || !user) {
 				errorMessage = 'Not authenticated';
 				return;
 			}

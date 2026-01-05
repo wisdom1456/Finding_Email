@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onDestroy } from 'svelte';
 	import { getApiUrl } from '$lib/config';
-	import { supabase } from '$lib/supabase';
+	import { getSecureSession } from '$lib/supabase';
 	import { progressStore } from '$lib/stores/progressStore';
 	import ClioImportProgressModal from './ClioImportProgressModal.svelte';
 	
@@ -50,11 +50,9 @@
 		matters = [];
 
 		try {
-			const {
-				data: { session }
-			} = await supabase.auth.getSession();
+			const { session, user } = await getSecureSession();
 
-			if (!session) {
+			if (!session || !user) {
 				throw new Error('Not authenticated');
 			}
 
@@ -110,11 +108,9 @@
 		importSuccess = false;
 
 		try {
-			const {
-				data: { session }
-			} = await supabase.auth.getSession();
+			const { session, user } = await getSecureSession();
 
-			if (!session) {
+			if (!session || !user) {
 				throw new Error('Not authenticated');
 			}
 
@@ -229,11 +225,9 @@
 		importSuccess = false;
 
 		try {
-			const {
-				data: { session }
-			} = await supabase.auth.getSession();
+			const { session, user } = await getSecureSession();
 
-			if (!session) {
+			if (!session || !user) {
 				throw new Error('Not authenticated');
 			}
 

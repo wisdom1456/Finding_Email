@@ -2,7 +2,7 @@
 	import { onMount, onDestroy } from 'svelte';
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
-	import { supabase } from '$lib/supabase';
+	import { getSecureSession } from '$lib/supabase';
 	import { getApiUrl } from '$lib/config';
 	import ClioMatterSearch from '$lib/components/ClioMatterSearch.svelte';
 	import ClioLinkedMatter from '$lib/components/ClioLinkedMatter.svelte';
@@ -284,14 +284,12 @@
 
 			if (isPdf || isImage) {
 				// Download from storage
-				const {
-					data: { session }
-				} = await supabase.auth.getSession();
+		const { session, user } = await getSecureSession();
 
-				if (!session) {
-					documentViewerContent = 'Error: Not authenticated';
-					return;
-				}
+		if (!session || !user) {
+			documentViewerContent = 'Error: Not authenticated';
+			return;
+		}
 
 				const { data, error } = await supabase.storage
 					.from('documents')
@@ -311,11 +309,9 @@
 			}
 
 			// Otherwise, try to download and display as text
-			const {
-				data: { session }
-			} = await supabase.auth.getSession();
+			const { session, user } = await getSecureSession();
 
-			if (!session) {
+			if (!session || !user) {
 				documentViewerContent = 'Error: Not authenticated';
 				return;
 			}
@@ -340,13 +336,11 @@
 		loadingExtractedText = true;
 		extractedTextData = null;
 		try {
-			const {
-				data: { session }
-			} = await supabase.auth.getSession();
+		const { session, user } = await getSecureSession();
 
-			if (!session) throw new Error('Not authenticated');
+		if (!session || !user) throw new Error('Not authenticated');
 
-			const response = await fetch(`${getApiUrl()}/api/documents/${docId}/extracted-text`, {
+		const response = await fetch(`${getApiUrl()}/api/documents/${docId}/extracted-text`, {
 				headers: {
 					Authorization: `Bearer ${session.access_token}`
 				}
@@ -567,13 +561,11 @@
 		let successCount = 0;
 
 		try {
-			const {
-				data: { session }
-			} = await supabase.auth.getSession();
+		const { session, user } = await getSecureSession();
 
-			if (!session) throw new Error('Not authenticated');
+		if (!session || !user) throw new Error('Not authenticated');
 
-			// Upload each non-duplicate file
+		// Upload each non-duplicate file
 			for (let i = 0; i < filesToUpload.length; i++) {
 				const file = filesToUpload[i];
 				currentUploadFile = file.name;
@@ -687,11 +679,9 @@
 
 	async function promoteToIntakeForm(docId: string) {
 		try {
-			const {
-				data: { session }
-			} = await supabase.auth.getSession();
+			const { session, user } = await getSecureSession();
 
-			if (!session) {
+			if (!session || !user) {
 				throw new Error('Not authenticated');
 			}
 
@@ -723,11 +713,9 @@
 
 	async function deleteDocument(docId: string) {
 		try {
-			const {
-				data: { session }
-			} = await supabase.auth.getSession();
+			const { session, user } = await getSecureSession();
 
-		if (!session) throw new Error('Not authenticated');
+		if (!session || !user) throw new Error('Not authenticated');
 
 		const response = await fetch(`${getApiUrl()}/api/documents/${docId}`, {
 				method: 'DELETE',
@@ -752,11 +740,9 @@
 		if (deleteCaseText !== 'DELETE') return;
 
 		try {
-			const {
-				data: { session }
-			} = await supabase.auth.getSession();
+			const { session, user } = await getSecureSession();
 
-			if (!session) {
+			if (!session || !user) {
 				throw new Error('Not authenticated');
 			}
 
@@ -808,11 +794,9 @@
 		errorMessage = '';
 
 		try {
-			const {
-				data: { session }
-			} = await supabase.auth.getSession();
+			const { session, user } = await getSecureSession();
 
-		if (!session) throw new Error('Not authenticated');
+		if (!session || !user) throw new Error('Not authenticated');
 
 		const response = await fetch(`${getApiUrl()}/api/cases/${caseId}`, {
 				method: 'PATCH',
@@ -868,11 +852,9 @@
 		errorMessage = '';
 
 		try {
-			const {
-				data: { session }
-			} = await supabase.auth.getSession();
+			const { session, user } = await getSecureSession();
 
-		if (!session) throw new Error('Not authenticated');
+		if (!session || !user) throw new Error('Not authenticated');
 
 		const response = await fetch(`${getApiUrl()}/api/analysis/start`, {
 				method: 'POST',
@@ -1011,8 +993,8 @@
 	async function runOcrOnMissingDocs() {
 		runningBulkOcr = true;
 		try {
-			const { data: { session } } = await supabase.auth.getSession();
-			if (!session) throw new Error('Not authenticated');
+			const { session, user } = await getSecureSession();
+			if (!session || !user) throw new Error('Not authenticated');
 
 			const response = await fetch(`${getApiUrl()}/api/documents/bulk-extract`, {
 				method: 'POST',
@@ -1050,11 +1032,9 @@
 
 	async function cancelAnalysis() {
 		try {
-			const {
-				data: { session }
-			} = await supabase.auth.getSession();
+			const { session, user } = await getSecureSession();
 
-			if (!session) throw new Error('Not authenticated');
+			if (!session || !user) throw new Error('Not authenticated');
 			if (!analysisStatus?.id) throw new Error('No analysis to cancel');
 
 			const ok = confirm('Cancel the current analysis? This will stop processing and allow you to run a new analysis.');

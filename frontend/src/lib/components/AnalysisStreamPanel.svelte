@@ -15,7 +15,7 @@
   import { Copy, X, RotateCcw, Loader2, CheckCircle2, AlertCircle, Brain } from 'lucide-svelte';
   import { slide } from 'svelte/transition';
   import { getApiUrl } from '$lib/config';
-  import { supabase } from '$lib/supabase';
+  import { getSecureSession } from '$lib/supabase';
 
   type StreamStatus = 'idle' | 'thinking' | 'streaming' | 'complete' | 'error';
 
@@ -70,9 +70,9 @@
     abortController = new AbortController();
 
     try {
-      // Get auth token
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
+      // Get auth token (securely validated)
+      const { session, user } = await getSecureSession();
+      if (!session || !user) {
         throw new Error('Not authenticated. Please log in again.');
       }
 
@@ -235,8 +235,8 @@
   // Save the analysis result to the database
   async function saveAnalysis(analysisContent: string) {
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
+      const { session, user } = await getSecureSession();
+      if (!session || !user) {
         console.error('No session for saving analysis');
         return;
       }

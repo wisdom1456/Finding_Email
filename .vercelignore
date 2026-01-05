@@ -17,6 +17,7 @@ pytest.ini
 docs/
 *.md
 !README.md
+!src/legal_portal/prompts/jurisdiction_guidance/*.md
 LICENSE
 CHANGELOG*
 
@@ -52,8 +53,10 @@ scripts/*
 !scripts/vercel_build.sh
 Makefile
 
-# Large corpus files (should be in database)
-florida_legal_corpus/
+# Legal corpus files - both jurisdictions needed for statute validation
+# Note: Keep these deployed until migrated to database
+# florida_legal_corpus/ - DEPLOYED
+# new_mexico_legal_corpus/ - DEPLOYED
 
 # Test data (not needed)
 test_data/

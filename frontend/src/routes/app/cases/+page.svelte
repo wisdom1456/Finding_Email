@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { supabase } from '$lib/supabase';
+	import { supabase, getSecureSession } from '$lib/supabase';
 	import PageHeader from '$lib/components/ui/PageHeader.svelte';
 	import Badge from '$lib/components/ui/Badge.svelte';
 	import ConfirmDialog from '$lib/components/ui/ConfirmDialog.svelte';
@@ -84,8 +84,8 @@
 		errorMessage = '';
 
 		try {
-			const { data: { session } } = await supabase.auth.getSession();
-			if (!session) throw new Error('Not authenticated');
+			const { session, user } = await getSecureSession();
+			if (!session || !user) throw new Error('Not authenticated');
 
 			const response = await fetch(`${getApiUrl()}/api/analysis/cancel-case/${caseId}`, {
 				method: 'POST',
@@ -113,8 +113,8 @@
 		errorMessage = '';
 
 		try {
-			const { data: { session } } = await supabase.auth.getSession();
-			if (!session) throw new Error('Not authenticated');
+			const { session, user } = await getSecureSession();
+			if (!session || !user) throw new Error('Not authenticated');
 
 			const response = await fetch(`${getApiUrl()}/api/cases/${caseId}`, {
 				method: 'DELETE',

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { getApiUrl } from '$lib/config';
-	import { supabase } from '$lib/supabase';
+	import { supabase, getSecureSession } from '$lib/supabase';
 	import { toastStore } from '$lib/stores/toastStore';
 	import { slide, fade } from 'svelte/transition';
 	import { 
@@ -142,8 +142,8 @@
 	// Document Actions
 	async function handleVerify(docId: string) {
 		try {
-			const { data: { session } } = await supabase.auth.getSession();
-			if (!session) throw new Error('Not authenticated');
+const { session, user } = await getSecureSession();
+		if (!session || !user) throw new Error('Not authenticated');
 
 			const response = await fetch(`${getApiUrl()}/api/documents/${docId}/verify`, {
 				method: 'PATCH',
@@ -168,8 +168,8 @@
 
 	async function performDelete(docId: string) {
 		try {
-			const { data: { session } } = await supabase.auth.getSession();
-			if (!session) throw new Error('Not authenticated');
+const { session, user } = await getSecureSession();
+		if (!session || !user) throw new Error('Not authenticated');
 
 			const response = await fetch(`${getApiUrl()}/api/documents/bulk-delete`, {
 				method: 'POST',
@@ -190,8 +190,8 @@
 
 	async function handleAlwaysDelete(docName: string, docId?: string) {
 		try {
-			const { data: { session } } = await supabase.auth.getSession();
-			if (!session) throw new Error('Not authenticated');
+const { session, user } = await getSecureSession();
+		if (!session || !user) throw new Error('Not authenticated');
 
 			const apiUrl = getApiUrl();
 
@@ -263,8 +263,8 @@
 	async function handleReExtract(docId: string) {
 		toastStore.info('Re-extracting with Vision OCR...');
 		try {
-			const { data: { session } } = await supabase.auth.getSession();
-			if (!session) throw new Error('Not authenticated');
+const { session, user } = await getSecureSession();
+		if (!session || !user) throw new Error('Not authenticated');
 
 			const response = await fetch(`${getApiUrl()}/api/documents/${docId}/extract`, {
 				method: 'POST',
@@ -283,8 +283,8 @@
 
 	async function handleSkip(docId: string) {
 		try {
-			const { data: { session } } = await supabase.auth.getSession();
-			if (!session) throw new Error('Not authenticated');
+const { session, user } = await getSecureSession();
+		if (!session || !user) throw new Error('Not authenticated');
 
 			const response = await fetch(`${getApiUrl()}/api/documents/${docId}/verify`, {
 				method: 'PATCH',
@@ -305,8 +305,8 @@
 
 	async function handleToggleExclusion(docId: string, excluded: boolean) {
 		try {
-			const { data: { session } } = await supabase.auth.getSession();
-			if (!session) throw new Error('Not authenticated');
+const { session, user } = await getSecureSession();
+		if (!session || !user) throw new Error('Not authenticated');
 
 			const response = await fetch(`${getApiUrl()}/api/documents/${docId}/exclusion`, {
 				method: 'PATCH',
@@ -334,8 +334,8 @@
 		remainingOcrCount = docsToProcess.length;
 		
 		try {
-			const { data: { session } } = await supabase.auth.getSession();
-			if (!session) throw new Error('Not authenticated');
+const { session, user } = await getSecureSession();
+		if (!session || !user) throw new Error('Not authenticated');
 
 			let extractedCount = 0;
 			let failedCount = 0;
@@ -393,8 +393,8 @@
 			const isImage = doc.file_type?.startsWith('image/');
 
 			if ((isPdf || isImage) && doc.storage_path) {
-				const { data: { session } } = await supabase.auth.getSession();
-				if (!session) throw new Error('Not authenticated');
+const { session, user } = await getSecureSession();
+		if (!session || !user) throw new Error('Not authenticated');
 
 				const { data, error } = await supabase.storage
 					.from('documents')
@@ -424,8 +424,8 @@
 		if (selectedDocIds.size === 0) return;
 		bulkActionLoading = true;
 		try {
-			const { data: { session } } = await supabase.auth.getSession();
-			if (!session) throw new Error('Not authenticated');
+const { session, user } = await getSecureSession();
+		if (!session || !user) throw new Error('Not authenticated');
 
 			for (const id of selectedDocIds) {
 				await fetch(`${getApiUrl()}/api/documents/${id}/verify`, {
@@ -453,8 +453,8 @@
 	async function performBulkDelete() {
 		bulkActionLoading = true;
 		try {
-			const { data: { session } } = await supabase.auth.getSession();
-			if (!session) throw new Error('Not authenticated');
+const { session, user } = await getSecureSession();
+		if (!session || !user) throw new Error('Not authenticated');
 
 			await fetch(`${getApiUrl()}/api/documents/bulk-delete`, {
 				method: 'POST',

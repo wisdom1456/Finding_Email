@@ -2,7 +2,7 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 	import { getApiUrl } from '$lib/config';
-	import { supabase } from '$lib/supabase';
+	import { supabase, getSecureSession } from '$lib/supabase';
 	import { toastStore } from '$lib/stores/toastStore';
 	import { slide } from 'svelte/transition';
 	import PageHeader from '$lib/components/ui/PageHeader.svelte';
@@ -279,16 +279,14 @@
 			const isPdf = doc.file_type === 'application/pdf' || doc.file_name.toLowerCase().endswith('.pdf');
 			const isImage = doc.file_type?.startsWith('image/');
 
-			if ((isPdf || isImage) && doc.storage_path) {
-				// Download from storage
-				const {
-					data: { session }
-				} = await supabase.auth.getSession();
+		if ((isPdf || isImage) && doc.storage_path) {
+			// Download from storage (validate session first)
+			const { session, user } = await getSecureSession();
 
-				if (!session) {
-					console.error('Not authenticated');
-					return;
-				}
+			if (!session || !user) {
+				console.error('Not authenticated');
+				return;
+			}
 
 				const { data, error } = await supabase.storage
 					.from('documents')
@@ -316,13 +314,11 @@
 
 	async function generateFindingsLetter() {
 		generatingFindings = true;
-		findingsLetter = ''; // Clear existing
+	findingsLetter = ''; // Clear existing
 
-		try {
-			const {
-				data: { session }
-			} = await supabase.auth.getSession();
-			if (!session) throw new Error('Not authenticated');
+	try {
+		const { session, user } = await getSecureSession();
+		if (!session || !user) throw new Error('Not authenticated');
 
 			const apiUrl = getApiUrl();
 			const response = await fetch(`${apiUrl}/api/analysis/${results.analysis_id}/letter/stream`, {
@@ -377,14 +373,12 @@
 
 		calculatingAmount = true;
 		calculationReasoning = '';
-		calculationBreakdown = [];
+	calculationBreakdown = [];
 
-		try {
-			const {
-				data: { session }
-			} = await supabase.auth.getSession();
+	try {
+		const { session, user } = await getSecureSession();
 
-			if (!session) throw new Error('Not authenticated');
+		if (!session || !user) throw new Error('Not authenticated');
 
 			const apiUrl = getApiUrl();
 			const response = await fetch(`${apiUrl}/api/analysis/calculate-demand-amount`, {
@@ -442,14 +436,11 @@
 		generatingDemand = false;
 	}
 
-	async function generateLetterRequest(body: Record<string, any>) {
-		try {
-			const {
-				data: { session }
-			} = await supabase.auth.getSession();
-			// ... (rest of function)
+async function generateLetterRequest(body: Record<string, any>) {
+	try {
+		const { session, user } = await getSecureSession();
 
-			if (!session) throw new Error('Not authenticated');
+		if (!session || !user) throw new Error('Not authenticated');
 
 			const apiUrl = getApiUrl();
 			const response = await fetch(`${apiUrl}/api/analysis/generate-letter`, {
@@ -492,13 +483,11 @@
 
 		// Add user message and placeholder for assistant
 		const currentMessageIndex = chatMessages.length;
-		chatMessages = [...chatMessages, { user: message, assistant: '' }];
+	chatMessages = [...chatMessages, { user: message, assistant: '' }];
 
-		try {
-			const {
-				data: { session }
-			} = await supabase.auth.getSession();
-			if (!session) throw new Error('Not authenticated');
+	try {
+		const { session, user } = await getSecureSession();
+		if (!session || !user) throw new Error('Not authenticated');
 
 			const apiUrl = getApiUrl();
 			const chatPayload = { message };

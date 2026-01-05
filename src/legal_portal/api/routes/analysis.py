@@ -1793,19 +1793,21 @@ async def save_streaming_analysis(
                 logger.warning(f"[STREAM] Failed to get verified statutes from corpus: {e}")
                 multi_stage_result["verified_statutes"] = []
         
-        # Build document summaries from case documents
+        # Build document summaries from case documents as JSON array (frontend expects this format)
         documents = case_data.get("documents", [])
-        doc_summaries_list = []
+        doc_summaries_array = []
         for doc in documents:
             if doc.get("extracted_text"):
-                doc_summaries_list.append(f"**{doc.get('file_name', 'Document')}**\n{doc.get('extracted_text', '')[:500]}...")
-        document_summaries_text = "\n\n---\n\n".join(doc_summaries_list) if doc_summaries_list else "Document summaries generated from streaming analysis."
+                doc_summaries_array.append({
+                    "document_name": doc.get("file_name", "Document"),
+                    "key_amounts": [],  # Can be populated from structured_data if available
+                })
         
         # Build the complete result - must match ProcessingResult structure
         streaming_result = {
             # Required fields for ProcessingResult compatibility
             "main_letter": "",  # Letters are generated separately via letter generation endpoint
-            "document_summaries": document_summaries_text,
+            "document_summaries": json.dumps(doc_summaries_array),  # Frontend expects JSON array
             "case_analysis": json.dumps(case_analysis),
             
             # Streaming-specific fields

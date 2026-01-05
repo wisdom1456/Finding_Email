@@ -1822,8 +1822,11 @@ async def save_streaming_analysis(
         quality_report = []
         
         for doc in documents:
-            extracted_text = doc.get("extracted_text", "")
-            doc_quality = doc.get("quality_score", 0) or 0
+            # Handle None values explicitly - dict.get() only uses default if key is missing, not if value is None
+            extracted_text = doc.get("extracted_text") or ""
+            doc_quality = doc.get("quality_score") or 0
+            file_type = doc.get("file_type") or ""
+            file_name = doc.get("file_name") or "Document"
             
             # Determine extraction quality based on text length and quality score
             if doc_quality >= 8 or len(extracted_text) > 500:
@@ -1833,13 +1836,19 @@ async def save_streaming_analysis(
             else:
                 extraction_quality = "low"
             
+            # Determine document type
+            doc_type = doc.get("document_type")
+            if not doc_type and file_type:
+                doc_type = file_type.split("/")[-1].upper()
+            doc_type = doc_type or "Unknown"
+            
             # Build document summary for Document Review tab
             doc_summary = {
-                "document_name": doc.get("file_name", "Document"),
-                "document_type": doc.get("document_type", doc.get("file_type", "").split("/")[-1].upper() if doc.get("file_type") else "Unknown"),
+                "document_name": file_name,
+                "document_type": doc_type,
                 "extraction_quality": extraction_quality,
-                "relevance_to_case": True if extracted_text else False,
-                "executive_summary": extracted_text[:300] + "..." if len(extracted_text) > 300 else extracted_text,
+                "relevance_to_case": bool(extracted_text),
+                "executive_summary": (extracted_text[:300] + "...") if len(extracted_text) > 300 else (extracted_text or "No summary available"),
                 "key_content": extracted_text[:1000] if extracted_text else "No text extracted",
                 "key_amounts": [],
             }
@@ -1851,12 +1860,12 @@ async def save_streaming_analysis(
                 quality_issues.append("No text could be extracted from this document")
             elif len(extracted_text) < 100:
                 quality_issues.append("Very little text extracted - document may be an image or scan")
-            if doc.get("file_type", "").startswith("image/"):
+            if file_type.startswith("image/"):
                 quality_issues.append("Image file - text extraction may be limited")
             
             quality_report.append({
-                "document": doc.get("file_name", "Document"),
-                "document_id": doc.get("id", ""),
+                "document": file_name,
+                "document_id": doc.get("id") or "",
                 "score": doc_quality if doc_quality > 0 else (8 if extraction_quality == "high" else 6 if extraction_quality == "medium" else 3),
                 "confidence_level": extraction_quality,
                 "issues": quality_issues,

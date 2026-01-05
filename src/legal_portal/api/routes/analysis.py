@@ -1806,12 +1806,48 @@ async def save_streaming_analysis(
         # Build document summaries from case documents as JSON array (frontend expects this format)
         documents = case_data.get("documents", [])
         doc_summaries_array = []
+        quality_report = []
+        
         for doc in documents:
-            if doc.get("extracted_text"):
-                doc_summaries_array.append({
-                    "document_name": doc.get("file_name", "Document"),
-                    "key_amounts": [],  # Can be populated from structured_data if available
-                })
+            extracted_text = doc.get("extracted_text", "")
+            doc_quality = doc.get("quality_score", 0) or 0
+            
+            # Determine extraction quality based on text length and quality score
+            if doc_quality >= 8 or len(extracted_text) > 500:
+                extraction_quality = "high"
+            elif doc_quality >= 5 or len(extracted_text) > 100:
+                extraction_quality = "medium"
+            else:
+                extraction_quality = "low"
+            
+            # Build document summary for Document Review tab
+            doc_summary = {
+                "document_name": doc.get("file_name", "Document"),
+                "document_type": doc.get("document_type", doc.get("file_type", "").split("/")[-1].upper() if doc.get("file_type") else "Unknown"),
+                "extraction_quality": extraction_quality,
+                "relevance_to_case": True if extracted_text else False,
+                "executive_summary": extracted_text[:300] + "..." if len(extracted_text) > 300 else extracted_text,
+                "key_content": extracted_text[:1000] if extracted_text else "No text extracted",
+                "key_amounts": [],
+            }
+            doc_summaries_array.append(doc_summary)
+            
+            # Build quality report entry for Quality Report tab
+            quality_issues = []
+            if not extracted_text:
+                quality_issues.append("No text could be extracted from this document")
+            elif len(extracted_text) < 100:
+                quality_issues.append("Very little text extracted - document may be an image or scan")
+            if doc.get("file_type", "").startswith("image/"):
+                quality_issues.append("Image file - text extraction may be limited")
+            
+            quality_report.append({
+                "document": doc.get("file_name", "Document"),
+                "document_id": doc.get("id", ""),
+                "score": doc_quality if doc_quality > 0 else (8 if extraction_quality == "high" else 6 if extraction_quality == "medium" else 3),
+                "confidence_level": extraction_quality,
+                "issues": quality_issues,
+            })
         
         # Build the complete result - must match ProcessingResult structure
         streaming_result = {
@@ -1819,6 +1855,7 @@ async def save_streaming_analysis(
             "main_letter": "",  # Letters are generated separately via letter generation endpoint
             "document_summaries": json.dumps(doc_summaries_array),  # Frontend expects JSON array
             "case_analysis": json.dumps(case_analysis),
+            "quality_report": quality_report,  # For Quality Report tab
             
             # Streaming-specific fields
             "streaming_analysis": request.content,

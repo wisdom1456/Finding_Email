@@ -24,7 +24,7 @@
 	let profile = $state<any>(null);
 	let loading = $state(true);
 	
-	let activeTab = $state<'analysis' | 'documents' | 'letters' | 'chat' | 'quality'>('analysis');
+	let activeTab = $state<'analysis' | 'fullAnalysis' | 'documents' | 'letters' | 'chat' | 'quality'>('analysis');
 	let findingsLetter = $state<string | null>(null);
 	let demandLetters = $state<Record<string, string>>({});
 	let generatingFindings = $state(false);
@@ -688,6 +688,18 @@
 				>
 					Case Analysis
 				</button>
+				{#if results.streaming_analysis}
+				<button
+					class={`py-4 px-1 border-b-2 text-sm font-medium ${
+						activeTab === 'fullAnalysis'
+							? 'border-accent text-accent'
+							: 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+					}`}
+					onclick={() => (activeTab = 'fullAnalysis')}
+				>
+					Full Analysis
+				</button>
+				{/if}
 				<button
 					class={`py-4 px-1 border-b-2 text-sm font-medium ${
 						activeTab === 'documents'
@@ -739,7 +751,9 @@
 						{#if results.case_analysis.case_summary}
 							<section>
 								<h3 class="text-lg font-heading font-semibold text-contrast mb-3">Case Summary</h3>
-								<p class="text-gray-700 whitespace-pre-wrap leading-relaxed">{results.case_analysis.case_summary}</p>
+								<div class="text-gray-700 leading-relaxed prose prose-sm max-w-none">
+									{@html parseMarkdown(results.case_analysis.case_summary)}
+								</div>
 							</section>
 						{/if}
 						{#if results.case_analysis.practice_area}
@@ -785,6 +799,17 @@
 					</div>
 				{:else}
 					<p class="text-gray-500">No case analysis available.</p>
+				{/if}
+			</div>
+		{:else if activeTab === 'fullAnalysis'}
+			<div class="card-standard">
+				<h2 class="text-2xl font-heading font-bold text-contrast mb-8 border-b border-gray-100 pb-4">Full Analysis</h2>
+				{#if results.streaming_analysis}
+					<div class="prose prose-slate max-w-none prose-headings:font-heading prose-h2:text-xl prose-h3:text-lg prose-p:text-gray-700 prose-li:text-gray-700 prose-strong:text-contrast">
+						{@html parseMarkdown(results.streaming_analysis)}
+					</div>
+				{:else}
+					<p class="text-gray-500">Full analysis content is not available for this case. This feature is available for new streaming analyses.</p>
 				{/if}
 			</div>
 		{:else if activeTab === 'documents'}

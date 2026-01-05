@@ -1729,28 +1729,32 @@ async def save_streaming_analysis(
                     ],
                 },
                 "letter_structure": {
-                    "style": structured_data.get("recommended_letter_type", "findings"),
-                    "urgency": structured_data.get("urgency", "medium"),
+                    "style": structured_data.get("recommended_letter_type", "numbered_findings"),
+                    "intro": "Key Findings",
+                    "issue_format": "numbered_sections_with_headers",
+                    "reasoning": "Default structure for comprehensive legal analysis",
                 },
                 # Deep analysis structure needed for letter generation
                 "deep_analysis": {
                     "issue_analyses": [
                         {
                             "issue_name": i.get("name", ""),
-                            "issue_category": i.get("category", ""),
-                            "legal_basis": ", ".join(i.get("statutes", [])),
-                            "analysis_detail": f"Analysis of {i.get('name', '')} issue",
-                            "strength_assessment": i.get("strength", "Moderate"),
-                            "recommended_approach": "Detailed in streaming analysis",
-                            "supporting_facts": [],
-                            "opposing_considerations": [],
+                            "legal_standard": f"Legal standard for {i.get('name', '')} - see full analysis for details",
+                            "fact_application": f"Fact application for {i.get('name', '')} - see full analysis for details",
+                            "statute_analysis": ", ".join(i.get("statutes", [])) if i.get("statutes") else None,
+                            "case_law_support": None,
+                            "remedies_available": ["See full analysis for detailed remedies"],
+                            "procedural_requirements": None,
+                            "confidence_level": i.get("strength", "moderate").lower(),
+                            "supporting_evidence": [],
                         }
                         for i in structured_data.get("primary_issues", [])
                     ],
                     "risk_assessment": {
-                        "overall_risk": "Moderate",
-                        "key_risks": [],
-                        "mitigation_strategies": [],
+                        "major_risks": [],
+                        "risk_mitigation_steps": [],
+                        "statute_of_limitations_concerns": None,
+                        "evidence_gaps": [],
                     },
                     "deadline_tracking": [],
                     "evidence_strength": {
@@ -1803,8 +1807,17 @@ async def save_streaming_analysis(
                 logger.warning(f"[STREAM] Failed to get verified statutes from corpus: {e}")
                 multi_stage_result["verified_statutes"] = []
         
+        # Fetch documents for this case (they're in a separate table, not embedded in case_data)
+        docs_response = (
+            service_supabase.table("documents")
+            .select("*")
+            .eq("case_id", case_id)
+            .execute()
+        )
+        documents = docs_response.data if docs_response.data else []
+        logger.info(f"[STREAM] Building summaries for {len(documents)} documents")
+        
         # Build document summaries from case documents as JSON array (frontend expects this format)
-        documents = case_data.get("documents", [])
         doc_summaries_array = []
         quality_report = []
         

@@ -43,7 +43,21 @@ interface KeyAmount {
 
 interface DocumentSummary {
 	document_name: string;
+	document_type?: string;
+	extraction_quality?: 'high' | 'medium' | 'low';
+	relevance_to_case?: boolean;
+	executive_summary?: string;
+	key_content?: string;
 	key_amounts?: KeyAmount[];
+	key_quotes?: string[];
+}
+
+interface QualityReportItem {
+	document: string;
+	document_id?: string;
+	score: number;
+	confidence_level?: 'high' | 'medium' | 'low';
+	issues?: string[];
 }
 
 interface OpposingParty {
@@ -69,6 +83,9 @@ interface AnalysisResults {
 		multi_stage_error?: string;
 		[key: string]: any;
 	};
+	// Streaming analysis fields
+	quality_report?: QualityReportItem[];
+	streaming_analysis?: string;  // Full markdown analysis content
 }
 
 interface ProfileResponse {

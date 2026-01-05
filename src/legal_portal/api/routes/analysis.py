@@ -1694,17 +1694,28 @@ async def save_streaming_analysis(
         # Build multi-stage compatible result for letter generation
         multi_stage_result = None
         if structured_data:
+            # Build timeline with correct field names for FactMatrix model
+            timeline_events = []
+            for d in structured_data.get("key_dates", []):
+                timeline_events.append({
+                    "date": d.get("date", ""),
+                    "description": d.get("event", ""),  # FactMatrix uses 'description' not 'event'
+                    "source_document": "Streaming Analysis",  # Required field
+                    "significance": None,
+                    "supporting_evidence": [],
+                })
+            
             multi_stage_result = {
                 "fact_matrix": {
                     "parties": [
                         {"name": p.get("name", ""), "role": p.get("role", "")}
                         for p in structured_data.get("parties", [])
                     ],
-                    "timeline": [
-                        {"date": d.get("date", ""), "event": d.get("event", "")}
-                        for d in structured_data.get("key_dates", [])
-                    ],
-                    "financial_items": [],
+                    "timeline": timeline_events,
+                    "financial_data": [],  # Required field for FactMatrix
+                    "key_documents": [],   # Required field for FactMatrix
+                    "preliminary_issues": [i.get("name", "") for i in structured_data.get("primary_issues", [])],  # Required
+                    "financial_items": [],  # Keep for backward compatibility
                 },
                 "issue_map": {
                     "primary_issues": [
@@ -1780,11 +1791,10 @@ async def save_streaming_analysis(
                 # Get legal issues from structured data
                 legal_issues = [i.get("name", "") for i in structured_data.get("primary_issues", [])]
                 
-                # Get verified statutes from corpus
+                # Get verified statutes from corpus (jurisdiction already set in constructor)
                 verified_statutes = statute_service.recommend_statutes(
                     case_facts=request.content[:2000],  # First 2000 chars of analysis
                     legal_issues=legal_issues,
-                    jurisdiction=jurisdiction,
                 )
                 
                 multi_stage_result["verified_statutes"] = verified_statutes

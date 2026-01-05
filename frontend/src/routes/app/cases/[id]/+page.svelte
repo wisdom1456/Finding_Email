@@ -1940,7 +1940,7 @@
 					{/if}
 				</div>
 					</div>
-						{/if}
+					{/if}
 				{/if}
 			{/snippet}
 		</Tabs>

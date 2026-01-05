@@ -749,51 +749,89 @@
 				{#if results.case_analysis}
 					<div class="space-y-10">
 						{#if results.case_analysis.case_summary}
-							<section>
-								<h3 class="text-lg font-heading font-semibold text-contrast mb-3">Case Summary</h3>
-								<div class="text-gray-700 leading-relaxed prose prose-sm max-w-none">
+							<section class="bg-gradient-to-br from-gray-50 to-white rounded-xl p-6 border border-gray-100">
+								<h3 class="text-lg font-heading font-semibold text-contrast mb-4 flex items-center gap-2">
+									<svg class="w-5 h-5 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+									</svg>
+									Case Summary
+								</h3>
+								<div class="text-gray-700 leading-relaxed prose prose-slate prose-sm max-w-none prose-p:mb-4 prose-p:leading-7 prose-strong:text-contrast prose-strong:font-semibold">
 									{@html parseMarkdown(results.case_analysis.case_summary)}
 								</div>
 							</section>
 						{/if}
 						{#if results.case_analysis.practice_area}
 							<section>
-								<h3 class="text-lg font-heading font-semibold text-contrast mb-3">Practice Area</h3>
-								<span class="inline-flex items-center px-4 py-1.5 rounded-full text-sm font-bold bg-accent/10 text-accent border border-accent/20">
+								<h3 class="text-lg font-heading font-semibold text-contrast mb-3 flex items-center gap-2">
+									<svg class="w-5 h-5 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+									</svg>
+									Practice Area
+								</h3>
+								<span class="inline-flex items-center px-5 py-2 rounded-lg text-sm font-bold bg-accent/10 text-accent border border-accent/20 shadow-sm">
 									{results.case_analysis.practice_area}
 								</span>
 							</section>
 						{/if}
 						{#if results.case_analysis.key_issues && results.case_analysis.key_issues.length > 0}
 							<section>
-								<h3 class="text-lg font-heading font-semibold text-contrast mb-3">Key Issues</h3>
-								<ul class="space-y-2 text-gray-700">
-									{#each results.case_analysis.key_issues as issue}
-										<li class="flex items-start">
-											<span class="text-accent mr-2 font-bold">•</span>
-											<span>{issue}</span>
-										</li>
+								<h3 class="text-lg font-heading font-semibold text-contrast mb-4 flex items-center gap-2">
+									<svg class="w-5 h-5 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+									</svg>
+									Key Issues
+								</h3>
+								<div class="grid gap-3">
+									{#each results.case_analysis.key_issues as issue, index}
+										<div class="flex items-start gap-4 p-4 bg-white rounded-lg border border-gray-200 hover:border-accent/30 hover:shadow-sm transition-all">
+											<div class="flex-shrink-0 w-8 h-8 rounded-full bg-accent/10 text-accent font-bold text-sm flex items-center justify-center">
+												{index + 1}
+											</div>
+											<p class="text-gray-700 leading-relaxed flex-1 pt-1">{issue}</p>
+										</div>
 									{/each}
-								</ul>
+								</div>
 							</section>
 						{/if}
 						{#if results.case_analysis.relevant_statutes && results.case_analysis.relevant_statutes.length > 0}
 							<section>
-								<h3 class="text-lg font-heading font-semibold text-contrast mb-4">Relevant Statutes</h3>
+								<h3 class="text-lg font-heading font-semibold text-contrast mb-4 flex items-center gap-2">
+									<svg class="w-5 h-5 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3" />
+									</svg>
+									Relevant Statutes
+								</h3>
 								<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
 									{#each results.case_analysis.relevant_statutes as statute}
-										<div class="bg-gray-50 rounded-lg p-5 border border-gray-200 hover:border-accent/30 transition-colors">
-											<p class="font-bold text-contrast text-base">{statute.statute}</p>
-											<p class="text-sm text-gray-600 mt-2 leading-snug">{statute.relevance}</p>
+										<div class="bg-gradient-to-br from-white to-gray-50 rounded-xl p-5 border border-gray-200 hover:border-accent/40 hover:shadow-md transition-all group">
+											<div class="flex items-start gap-3">
+												<div class="flex-shrink-0 w-10 h-10 rounded-lg bg-accent/10 text-accent flex items-center justify-center group-hover:bg-accent/20 transition-colors">
+													<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+														<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+													</svg>
+												</div>
+												<div class="flex-1 min-w-0">
+													<p class="font-bold text-contrast text-base">{statute.statute}</p>
+													<p class="text-sm text-gray-600 mt-2 leading-relaxed">{statute.relevance}</p>
+												</div>
+											</div>
 										</div>
 									{/each}
 								</div>
 							</section>
 						{/if}
 						{#if results.case_analysis.additional_details}
-							<section>
-								<h3 class="text-lg font-heading font-semibold text-contrast mb-3">Additional Details</h3>
-								<p class="text-gray-700 whitespace-pre-wrap leading-relaxed">{results.case_analysis.additional_details}</p>
+							<section class="bg-amber-50/50 rounded-xl p-6 border border-amber-200/50">
+								<h3 class="text-lg font-heading font-semibold text-contrast mb-3 flex items-center gap-2">
+									<svg class="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+									</svg>
+									Additional Details
+								</h3>
+								<div class="text-gray-700 leading-relaxed prose prose-sm max-w-none">
+									{@html parseMarkdown(results.case_analysis.additional_details)}
+								</div>
 							</section>
 						{/if}
 					</div>

@@ -1721,6 +1721,40 @@ async def save_streaming_analysis(
                     "style": structured_data.get("recommended_letter_type", "findings"),
                     "urgency": structured_data.get("urgency", "medium"),
                 },
+                # Deep analysis structure needed for letter generation
+                "deep_analysis": {
+                    "issue_analyses": [
+                        {
+                            "issue_name": i.get("name", ""),
+                            "issue_category": i.get("category", ""),
+                            "legal_basis": ", ".join(i.get("statutes", [])),
+                            "analysis_detail": f"Analysis of {i.get('name', '')} issue",
+                            "strength_assessment": i.get("strength", "Moderate"),
+                            "recommended_approach": "Detailed in streaming analysis",
+                            "supporting_facts": [],
+                            "opposing_considerations": [],
+                        }
+                        for i in structured_data.get("primary_issues", [])
+                    ],
+                    "risk_assessment": {
+                        "overall_risk": "Moderate",
+                        "key_risks": [],
+                        "mitigation_strategies": [],
+                    },
+                    "deadline_tracking": [],
+                    "evidence_strength": {
+                        "strong_evidence": [],
+                        "weak_evidence": [],
+                        "missing_evidence": [],
+                        "overall_strength": "moderate",
+                    },
+                    "overall_case_strength": structured_data.get("case_strength", "Moderate"),
+                    "key_strengths": [],
+                    "key_challenges": [],
+                    "is_viable": True,
+                    "viability_reasoning": "Based on streaming analysis",
+                    "recommend_demand_letter": structured_data.get("recommended_letter_type") in ["demand", "demand_with_findings"],
+                },
             }
             
             # Add financial data if present
@@ -1736,6 +1770,28 @@ async def save_streaming_analysis(
                         "description": "Documented Damages",
                         "amount": fin["documented_damages"],
                     })
+            
+            # Verify statutes against legal corpus for letter generation
+            try:
+                from legal_portal.services.statute_recommendation_service import StatuteRecommendationService
+                jurisdiction = case_data.get("jurisdiction", "Florida")
+                statute_service = StatuteRecommendationService(jurisdiction=jurisdiction)
+                
+                # Get legal issues from structured data
+                legal_issues = [i.get("name", "") for i in structured_data.get("primary_issues", [])]
+                
+                # Get verified statutes from corpus
+                verified_statutes = statute_service.recommend_statutes(
+                    case_facts=request.content[:2000],  # First 2000 chars of analysis
+                    legal_issues=legal_issues,
+                    jurisdiction=jurisdiction,
+                )
+                
+                multi_stage_result["verified_statutes"] = verified_statutes
+                logger.info(f"[STREAM] Added {len(verified_statutes)} verified statutes from {jurisdiction} corpus")
+            except Exception as e:
+                logger.warning(f"[STREAM] Failed to get verified statutes from corpus: {e}")
+                multi_stage_result["verified_statutes"] = []
         
         # Build document summaries from case documents
         documents = case_data.get("documents", [])

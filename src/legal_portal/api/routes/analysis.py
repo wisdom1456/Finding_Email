@@ -1817,6 +1817,23 @@ async def save_streaming_analysis(
         documents = docs_response.data if docs_response.data else []
         logger.info(f"[STREAM] Building summaries for {len(documents)} documents")
         
+        # #region agent log - H1-H5: Log all document fields to identify filtering criteria
+        import json as _json_debug
+        _log_path = "/Users/BRFlorida/Projects/Work/Finding_Emails/.cursor/debug.log"
+        for _idx, _doc in enumerate(documents):
+            _doc_info = {
+                "file_name": _doc.get("file_name"),
+                "status": _doc.get("status"),
+                "is_duplicate": _doc.get("is_duplicate"),
+                "skip_analysis": _doc.get("skip_analysis"),
+                "excluded": _doc.get("excluded"),
+                "document_type": _doc.get("document_type"),
+                "all_keys": list(_doc.keys()),
+            }
+            with open(_log_path, "a") as _f:
+                _f.write(_json_debug.dumps({"location": "analysis.py:save_streaming", "hypothesisId": "H1-H5", "message": f"Document {_idx+1}/{len(documents)}", "data": _doc_info, "timestamp": int(__import__('time').time()*1000)}) + "\n")
+        # #endregion
+        
         # Build document summaries from case documents as JSON array (frontend expects this format)
         doc_summaries_array = []
         quality_report = []

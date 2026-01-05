@@ -1720,7 +1720,7 @@ async def save_streaming_analysis(
                 "issue_map": {
                     "primary_issues": [
                         {
-                            "name": i.get("name", ""),
+                            "issue_name": i.get("name", ""),  # Frontend expects issue_name for demand letters
                             "category": i.get("category", ""),
                             "applicable_statutes": i.get("statutes", []),
                             "strength": i.get("strength", "Moderate"),

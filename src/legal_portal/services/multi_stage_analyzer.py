@@ -564,13 +564,16 @@ Output in clean markdown format."""
 
         # Collect verified statutes from the service for inclusion in result
         # Run in thread to avoid potential blocking
-        verified_statutes = await asyncio.to_thread(
+        verified_statutes_raw = await asyncio.to_thread(
             self.statute_service.recommend_statutes,
             case_facts=intake_content[:2000],
             legal_issues=[i.issue_name for i in issue_map.primary_issues],
             case_type=case_type,
             limit=10,
         )
+        # Convert StatuteRecommendation dataclass objects to dicts for JSON serialization
+        from dataclasses import asdict
+        verified_statutes = [asdict(s) for s in verified_statutes_raw] if verified_statutes_raw else []
 
         total_time = time.time() - start_time
         

@@ -1801,7 +1801,17 @@ async def save_streaming_analysis(
                     legal_issues=legal_issues,
                 )
                 
-                multi_stage_result["verified_statutes"] = verified_statutes
+                # #region agent log
+                import json as _json
+                try:
+                    with open("/Users/BRFlorida/Projects/Work/Finding_Emails/.cursor/debug.log", "a") as _f:
+                        _f.write(_json.dumps({"hypothesisId":"H1","location":"analysis.py:save_streaming","message":"verified_statutes type","data":{"type":str(type(verified_statutes)),"count":len(verified_statutes) if verified_statutes else 0,"first_item_type":str(type(verified_statutes[0])) if verified_statutes else "N/A"},"timestamp":__import__('time').time(),"sessionId":"debug-session"}) + "\n")
+                except: pass
+                # #endregion agent log
+                
+                # Convert StatuteRecommendation dataclass objects to dicts for JSON serialization
+                from dataclasses import asdict
+                multi_stage_result["verified_statutes"] = [asdict(s) for s in verified_statutes] if verified_statutes else []
                 logger.info(f"[STREAM] Added {len(verified_statutes)} verified statutes from {jurisdiction} corpus")
             except Exception as e:
                 logger.warning(f"[STREAM] Failed to get verified statutes from corpus: {e}")
@@ -1910,6 +1920,18 @@ async def save_streaming_analysis(
         
         # Create or update analysis result
         analysis_id = str(uuid.uuid4())  # Generate proper UUID for database
+        
+        # #region agent log
+        import json as _json2
+        try:
+            # Test JSON serialization before saving
+            _test_json = _json2.dumps(streaming_result)
+            with open("/Users/BRFlorida/Projects/Work/Finding_Emails/.cursor/debug.log", "a") as _f:
+                _f.write(_json2.dumps({"hypothesisId":"H1","location":"analysis.py:save_streaming_pre_save","message":"JSON serialization test passed","data":{"result_keys":list(streaming_result.keys()),"verified_statutes_count":len(streaming_result.get("multi_stage_result",{}).get("verified_statutes",[]))},"timestamp":__import__('time').time(),"sessionId":"debug-session"}) + "\n")
+        except Exception as _e:
+            with open("/Users/BRFlorida/Projects/Work/Finding_Emails/.cursor/debug.log", "a") as _f:
+                _f.write(_json2.dumps({"hypothesisId":"H1","location":"analysis.py:save_streaming_pre_save","message":"JSON serialization FAILED","data":{"error":str(_e)},"timestamp":__import__('time').time(),"sessionId":"debug-session"}) + "\n")
+        # #endregion agent log
         
         service_supabase.table("analysis_results").upsert({
             "id": analysis_id,

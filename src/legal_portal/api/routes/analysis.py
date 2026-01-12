@@ -1802,9 +1802,10 @@ async def save_streaming_analysis(
                 )
                 
                 # Convert StatuteRecommendation dataclass objects to dicts for JSON serialization
+                # FIX: asdict() converts dataclass to dict for JSON serialization (deployed 2026-01-12)
                 from dataclasses import asdict
                 multi_stage_result["verified_statutes"] = [asdict(s) for s in verified_statutes] if verified_statutes else []
-                logger.info(f"[STREAM] Added {len(verified_statutes)} verified statutes from {jurisdiction} corpus")
+                logger.info(f"[STREAM] Converted {len(verified_statutes)} StatuteRecommendation objects to dicts for {jurisdiction}")
             except Exception as e:
                 logger.warning(f"[STREAM] Failed to get verified statutes from corpus: {e}")
                 multi_stage_result["verified_statutes"] = []

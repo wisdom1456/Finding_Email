@@ -1787,6 +1787,11 @@ async def save_streaming_analysis(
                     })
             
             # Verify statutes against legal corpus for letter generation
+            # Defensive check: ensure multi_stage_result exists before modifying it
+            if multi_stage_result is None:
+                logger.warning("[STREAM] multi_stage_result is None, skipping verified_statutes conversion")
+                multi_stage_result = {}
+            
             try:
                 from legal_portal.services.statute_recommendation_service import StatuteRecommendationService
                 jurisdiction = case_data.get("jurisdiction", "Florida")
@@ -1801,14 +1806,59 @@ async def save_streaming_analysis(
                     legal_issues=legal_issues,
                 )
                 
+                # Validate verified_statutes is a list
+                if not isinstance(verified_statutes, list):
+                    logger.warning(f"[STREAM] verified_statutes is not a list (type: {type(verified_statutes)}), converting to empty list")
+                    verified_statutes = []
+                
                 # Convert StatuteRecommendation dataclass objects to dicts for JSON serialization
-                # FIX: asdict() converts dataclass to dict for JSON serialization (deployed 2026-01-12)
                 from dataclasses import asdict
-                multi_stage_result["verified_statutes"] = [asdict(s) for s in verified_statutes] if verified_statutes else []
-                logger.info(f"[STREAM] Converted {len(verified_statutes)} StatuteRecommendation objects to dicts for {jurisdiction}")
+                converted_statutes = []
+                conversion_errors = []
+                
+                for idx, statute in enumerate(verified_statutes):
+                    try:
+                        # Check if it's a StatuteRecommendation instance
+                        from legal_portal.services.statute_recommendation_service import StatuteRecommendation
+                        if isinstance(statute, StatuteRecommendation):
+                            converted = asdict(statute)
+                            # Validate conversion produced a dict
+                            if not isinstance(converted, dict):
+                                raise TypeError(f"asdict() returned {type(converted)}, expected dict")
+                            converted_statutes.append(converted)
+                        else:
+                            # If it's already a dict, validate and use it
+                            if isinstance(statute, dict):
+                                converted_statutes.append(statute)
+                            else:
+                                logger.warning(f"[STREAM] Item {idx} in verified_statutes is unexpected type: {type(statute)}")
+                                conversion_errors.append(f"Item {idx}: {type(statute)}")
+                    except (TypeError, AttributeError) as conv_err:
+                        logger.error(f"[STREAM] Failed to convert StatuteRecommendation at index {idx}: {conv_err}")
+                        conversion_errors.append(f"Item {idx}: {str(conv_err)}")
+                    except Exception as conv_err:
+                        logger.error(f"[STREAM] Unexpected error converting item {idx}: {conv_err}")
+                        conversion_errors.append(f"Item {idx}: {str(conv_err)}")
+                
+                multi_stage_result["verified_statutes"] = converted_statutes
+                
+                if conversion_errors:
+                    logger.warning(f"[STREAM] Had {len(conversion_errors)} conversion errors: {conversion_errors}")
+                
+                logger.info(f"[STREAM] Converted {len(converted_statutes)} StatuteRecommendation objects to dicts for {jurisdiction}")
+                
+            except (ImportError, ModuleNotFoundError) as import_err:
+                logger.info(f"[STREAM] StatuteRecommendationService not available: {import_err}")
+                if multi_stage_result is not None:
+                    multi_stage_result["verified_statutes"] = []
+            except (TypeError, AttributeError) as conv_err:
+                logger.warning(f"[STREAM] Conversion error getting verified statutes: {conv_err}", exc_info=True)
+                if multi_stage_result is not None:
+                    multi_stage_result["verified_statutes"] = []
             except Exception as e:
-                logger.warning(f"[STREAM] Failed to get verified statutes from corpus: {e}")
-                multi_stage_result["verified_statutes"] = []
+                logger.warning(f"[STREAM] Failed to get verified statutes from corpus: {e}", exc_info=True)
+                if multi_stage_result is not None:
+                    multi_stage_result["verified_statutes"] = []
         
         # Fetch documents for this case (they're in a separate table, not embedded in case_data)
         docs_response = (
@@ -1911,16 +1961,75 @@ async def save_streaming_analysis(
             "status": "completed",
         }
         
+        # Apply recursive conversion to catch any nested StatuteRecommendation objects
+        logger.debug("[STREAM] Applying recursive conversion to streaming_result")
+        streaming_result = _convert_statute_recommendations_recursive(streaming_result)
+        
+        # Explicit JSON serialization test before database save
+        # This catches any serialization errors early with detailed error messages
+        try:
+            test_json = json.dumps(streaming_result)
+            logger.debug(f"[STREAM] JSON serialization test passed ({len(test_json)} bytes)")
+        except TypeError as json_err:
+            # Find the problematic field
+            error_msg = str(json_err)
+            logger.error(f"[STREAM] JSON serialization test FAILED: {error_msg}")
+            
+            # Try to identify the problematic field by testing each top-level key
+            problematic_fields = []
+            for key, value in streaming_result.items():
+                try:
+                    json.dumps(value)
+                except TypeError as field_err:
+                    problematic_fields.append(f"{key}: {field_err}")
+                    logger.error(f"[STREAM] Field '{key}' is not JSON serializable: {field_err}")
+            
+            # Apply recursive conversion one more time as a last resort
+            logger.warning("[STREAM] Applying recursive conversion again to fix serialization issues")
+            streaming_result = _convert_statute_recommendations_recursive(streaming_result)
+            
+            # Test again
+            try:
+                test_json = json.dumps(streaming_result)
+                logger.info("[STREAM] JSON serialization test passed after recursive conversion")
+            except TypeError as retry_err:
+                # Log structure keys for debugging (not full content)
+                result_keys = list(streaming_result.keys())
+                logger.error(
+                    f"[STREAM] JSON serialization still failing after recursive conversion. "
+                    f"Error: {retry_err}. Result keys: {result_keys}. "
+                    f"Problematic fields: {problematic_fields}"
+                )
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Failed to serialize analysis result: {retry_err}. Problematic fields: {problematic_fields}"
+                )
+        
         # Create or update analysis result
         analysis_id = str(uuid.uuid4())  # Generate proper UUID for database
         
-        service_supabase.table("analysis_results").upsert({
-            "id": analysis_id,
-            "case_id": case_id,
-            "status": "completed",
-            "result": streaming_result,
-            "created_at": datetime.utcnow().isoformat(),
-        }).execute()
+        try:
+            service_supabase.table("analysis_results").upsert({
+                "id": analysis_id,
+                "case_id": case_id,
+                "status": "completed",
+                "result": streaming_result,
+                "created_at": datetime.utcnow().isoformat(),
+            }).execute()
+        except Exception as db_err:
+            # If database save fails, log detailed error
+            error_detail = str(db_err)
+            logger.error(
+                f"[STREAM] Database save failed for case {case_id}: {error_detail}. "
+                f"Result keys: {list(streaming_result.keys())}"
+            )
+            # Check if it's a serialization error
+            if "not JSON serializable" in error_detail or "TypeError" in error_detail:
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Failed to save analysis result due to serialization error: {error_detail}"
+                )
+            raise
         
         # Update case status - must use valid status from constraint: pending, processing, completed, error, cancelled
         supabase.table("cases").update({
@@ -1937,6 +2046,41 @@ async def save_streaming_analysis(
     except Exception as e:
         logger.error(f"Error saving streaming analysis: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+def _convert_statute_recommendations_recursive(obj: Any) -> Any:
+    """Recursively convert any StatuteRecommendation dataclass objects to dicts.
+    
+    This function walks through the entire data structure (dicts, lists, nested structures)
+    and converts any StatuteRecommendation instances to dictionaries for JSON serialization.
+    
+    Args:
+        obj: The object to scan and convert (can be dict, list, or any other type)
+    
+    Returns:
+        The same structure with all StatuteRecommendation objects converted to dicts
+    """
+    from legal_portal.services.statute_recommendation_service import StatuteRecommendation
+    from dataclasses import asdict
+    
+    # If it's a StatuteRecommendation instance, convert it
+    if isinstance(obj, StatuteRecommendation):
+        return asdict(obj)
+    
+    # If it's a dict, recursively process values
+    if isinstance(obj, dict):
+        return {key: _convert_statute_recommendations_recursive(value) for key, value in obj.items()}
+    
+    # If it's a list, recursively process items
+    if isinstance(obj, list):
+        return [_convert_statute_recommendations_recursive(item) for item in obj]
+    
+    # If it's a tuple, convert to list, process, and convert back (or keep as list)
+    if isinstance(obj, tuple):
+        return tuple(_convert_statute_recommendations_recursive(item) for item in obj)
+    
+    # For any other type, return as-is
+    return obj
 
 
 def _extract_embedded_json(content: str) -> dict:

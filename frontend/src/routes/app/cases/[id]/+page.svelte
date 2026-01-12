@@ -2,7 +2,7 @@
 	import { onMount, onDestroy } from 'svelte';
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
-	import { getSecureSession } from '$lib/supabase';
+	import { supabase, getSecureSession } from '$lib/supabase';
 	import { getApiUrl } from '$lib/config';
 	import ClioMatterSearch from '$lib/components/ClioMatterSearch.svelte';
 	import ClioLinkedMatter from '$lib/components/ClioLinkedMatter.svelte';
@@ -221,6 +221,9 @@
 	}
 
 	async function loadCase() {
+		// #region agent log
+		fetch('http://127.0.0.1:7242/ingest/4b51e513-bc36-4a25-835a-e2000a0f302b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'+page.svelte:loadCase',message:'loadCase entry',data:{supabaseDefined:typeof supabase!=='undefined'},timestamp:Date.now(),sessionId:'debug-session',runId:'pre-fix',hypothesisId:'A'})}).catch(()=>{});
+		// #endregion agent log
 		try {
 			const { data, error } = await supabase
 				.from('cases')
@@ -251,12 +254,16 @@
 	}
 
 	async function loadDocuments() {
+		// #region agent log
+		fetch('http://127.0.0.1:7242/ingest/4b51e513-bc36-4a25-835a-e2000a0f302b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'+page.svelte:loadDocuments',message:'loadDocuments entry',data:{supabaseDefined:typeof supabase!=='undefined'},timestamp:Date.now(),sessionId:'debug-session',runId:'pre-fix',hypothesisId:'A'})}).catch(()=>{});
+		// #endregion agent log
 		try {
 			const { data, error } = await supabase
 				.from('documents')
 				.select('*')
 				.eq('case_id', caseId as string)
-				.order('created_at', { ascending: true });
+				.order('created_at', { ascending: true })
+				.limit(10000); // Explicit limit to handle cases with many documents (Supabase default is 1000)
 
 			if (error) throw error;
 			// Create new object references to ensure Svelte 5 reactivity propagates to child components
@@ -400,6 +407,9 @@
 	}
 
 	async function loadAnalysisStatus() {
+		// #region agent log
+		fetch('http://127.0.0.1:7242/ingest/4b51e513-bc36-4a25-835a-e2000a0f302b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'+page.svelte:loadAnalysisStatus',message:'loadAnalysisStatus entry',data:{supabaseDefined:typeof supabase!=='undefined'},timestamp:Date.now(),sessionId:'debug-session',runId:'pre-fix',hypothesisId:'A'})}).catch(()=>{});
+		// #endregion agent log
 		try {
 			const { data, error } = await supabase
 				.from('analysis_results')

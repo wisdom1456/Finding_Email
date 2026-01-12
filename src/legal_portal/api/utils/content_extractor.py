@@ -2,6 +2,7 @@
 
 import io
 import re
+import time
 from typing import Optional, Tuple
 
 import requests
@@ -11,6 +12,11 @@ from legal_portal.utils.compression_utils import format_file_size
 from legal_portal.utils.logging_config import get_module_logger
 
 logger = get_module_logger(__name__)
+
+# Rate limiting for Clio API: 30 requests per 10 seconds = ~3 requests/second
+# Use 0.4s delay to stay safely under the limit
+CLIO_RATE_LIMIT_DELAY = 0.4
+_last_clio_request_time = 0
 
 # Conditional imports for PDF extraction
 # Try pypdf first (lightweight, works on Vercel), then fitz (PyMuPDF, better quality)
@@ -48,13 +54,16 @@ class DocumentProcessor:
     """Handles document download and text extraction."""
 
     @staticmethod
-    def download_file(url: str, access_token: str) -> Tuple[bytes, str]:
+    def download_file(url: str, access_token: str, max_retries: int = 5) -> Tuple[bytes, str]:
         """Download a file from a URL with authentication.
+        
+        Includes rate limiting and retry logic with exponential backoff for 429 errors.
 
         Args:
         ----
             url: URL to download from
             access_token: OAuth access token for authentication
+            max_retries: Maximum number of retry attempts (default: 5)
 
         Returns:
         -------
@@ -62,18 +71,71 @@ class DocumentProcessor:
 
         Raises:
         ------
-            Exception: If download fails
+            Exception: If download fails after all retries
 
         """
+        global _last_clio_request_time
+        
         headers = {
             "Authorization": f"Bearer {access_token}",
         }
-
-        response = requests.get(url, headers=headers, timeout=60)
-        response.raise_for_status()
-
-        content_type = response.headers.get("content-type", "application/octet-stream")
-        return response.content, content_type
+        
+        # Check if this is a Clio API request
+        is_clio_request = "app.clio.com" in url
+        
+        for attempt in range(max_retries):
+            try:
+                # Rate limiting for Clio API
+                if is_clio_request:
+                    elapsed = time.time() - _last_clio_request_time
+                    if elapsed < CLIO_RATE_LIMIT_DELAY:
+                        sleep_time = CLIO_RATE_LIMIT_DELAY - elapsed
+                        logger.debug(f"Rate limiting: sleeping {sleep_time:.2f}s before Clio request")
+                        time.sleep(sleep_time)
+                    _last_clio_request_time = time.time()
+                
+                response = requests.get(url, headers=headers, timeout=60)
+                
+                # Handle 429 Too Many Requests with exponential backoff
+                if response.status_code == 429:
+                    if attempt < max_retries - 1:
+                        # Exponential backoff: 2^attempt seconds (1s, 2s, 4s, 8s, 16s)
+                        wait_time = 2 ** attempt
+                        # Also check Retry-After header if present
+                        retry_after = response.headers.get("Retry-After")
+                        if retry_after:
+                            try:
+                                wait_time = max(wait_time, int(retry_after))
+                            except ValueError:
+                                pass
+                        logger.warning(
+                            f"Rate limited (429) on attempt {attempt + 1}/{max_retries}. "
+                            f"Waiting {wait_time}s before retry..."
+                        )
+                        time.sleep(wait_time)
+                        continue
+                    else:
+                        raise Exception(f"Rate limit exceeded after {max_retries} attempts")
+                
+                response.raise_for_status()
+                
+                content_type = response.headers.get("content-type", "application/octet-stream")
+                return response.content, content_type
+                
+            except requests.exceptions.RequestException as e:
+                if attempt < max_retries - 1:
+                    # For other errors, use shorter backoff
+                    wait_time = min(2 ** attempt, 5)  # Cap at 5 seconds
+                    logger.warning(
+                        f"Request failed on attempt {attempt + 1}/{max_retries}: {e}. "
+                        f"Retrying in {wait_time}s..."
+                    )
+                    time.sleep(wait_time)
+                    continue
+                else:
+                    raise Exception(f"Download failed after {max_retries} attempts: {e}") from e
+        
+        raise Exception(f"Download failed after {max_retries} attempts")
 
     @staticmethod
     def extract_text_from_pdf(file_content: bytes) -> str:

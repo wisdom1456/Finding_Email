@@ -432,9 +432,16 @@ class JsonProcessingService:
             statute_prefix = "FLORIDA" if jurisdiction == "Florida" else "NEW MEXICO"
             statute_context = f"\n\nVERIFIED {statute_prefix} STATUTES:\n\n"
             for statute in verified_statutes:
-                statute_context += f"{statute['citation']}: {statute['title']}\n"
-                statute_context += f"Summary: {statute['summary']}\n"
-                statute_context += f"Relevance: {statute['relevance']}\n\n"
+                citation = statute.get('citation', 'Unknown Citation')
+                title = statute.get('title', '')
+                summary = statute.get('summary', '')
+                relevance = statute.get('relevance_reason', statute.get('relevance', ''))
+
+                statute_context += f"{citation}: {title}\n"
+                statute_context += f"Summary: {summary}\n"
+                if relevance:  # Only include relevance line if present
+                    statute_context += f"Relevance: {relevance}\n"
+                statute_context += "\n"
 
         # Combine contexts
         full_quality_context = quality_context
@@ -561,9 +568,16 @@ class JsonProcessingService:
             statute_prefix = "FLORIDA" if jurisdiction == "Florida" else "NEW MEXICO"
             statute_context = f"\n\nVERIFIED {statute_prefix} STATUTES:\n\n"
             for statute in verified_statutes:
-                statute_context += f"{statute['citation']}: {statute['title']}\n"
-                statute_context += f"Summary: {statute['summary']}\n"
-                statute_context += f"Relevance: {statute['relevance']}\n\n"
+                citation = statute.get('citation', 'Unknown Citation')
+                title = statute.get('title', '')
+                summary = statute.get('summary', '')
+                relevance = statute.get('relevance_reason', statute.get('relevance', ''))
+
+                statute_context += f"{citation}: {title}\n"
+                statute_context += f"Summary: {summary}\n"
+                if relevance:  # Only include relevance line if present
+                    statute_context += f"Relevance: {relevance}\n"
+                statute_context += "\n"
 
         # Combine contexts
         full_quality_context = quality_context

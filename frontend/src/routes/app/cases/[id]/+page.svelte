@@ -221,9 +221,6 @@
 	}
 
 	async function loadCase() {
-		// #region agent log
-		fetch('http://127.0.0.1:7242/ingest/4b51e513-bc36-4a25-835a-e2000a0f302b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'+page.svelte:loadCase',message:'loadCase entry',data:{supabaseDefined:typeof supabase!=='undefined'},timestamp:Date.now(),sessionId:'debug-session',runId:'pre-fix',hypothesisId:'A'})}).catch(()=>{});
-		// #endregion agent log
 		try {
 			const { data, error } = await supabase
 				.from('cases')
@@ -254,9 +251,6 @@
 	}
 
 	async function loadDocuments() {
-		// #region agent log
-		fetch('http://127.0.0.1:7242/ingest/4b51e513-bc36-4a25-835a-e2000a0f302b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'+page.svelte:loadDocuments',message:'loadDocuments entry',data:{supabaseDefined:typeof supabase!=='undefined'},timestamp:Date.now(),sessionId:'debug-session',runId:'pre-fix',hypothesisId:'A'})}).catch(()=>{});
-		// #endregion agent log
 		try {
 			const { data, error } = await supabase
 				.from('documents')
@@ -407,9 +401,6 @@
 	}
 
 	async function loadAnalysisStatus() {
-		// #region agent log
-		fetch('http://127.0.0.1:7242/ingest/4b51e513-bc36-4a25-835a-e2000a0f302b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'+page.svelte:loadAnalysisStatus',message:'loadAnalysisStatus entry',data:{supabaseDefined:typeof supabase!=='undefined'},timestamp:Date.now(),sessionId:'debug-session',runId:'pre-fix',hypothesisId:'A'})}).catch(()=>{});
-		// #endregion agent log
 		try {
 			const { data, error } = await supabase
 				.from('analysis_results')

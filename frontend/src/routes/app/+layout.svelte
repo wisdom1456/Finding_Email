@@ -6,7 +6,7 @@
 	import { getApiUrl } from '$lib/config';
 	import ClioConnect from '$lib/components/ClioConnect.svelte';
 	import { clioStore } from '$lib/stores/clioStore';
-	import { Menu, X, User, Settings, LogOut, Link2 } from 'lucide-svelte';
+	import { Menu, X, User, Settings, LogOut, Link2, HelpCircle } from 'lucide-svelte';
 	import type { LayoutData } from './$types';
 	import logoImg from '$lib/assets/logo-br.png';
 
@@ -123,6 +123,15 @@
 						>
 							Settings
 						</a>
+						<a
+							href="/app/help"
+							class="inline-flex items-center px-4 py-2 text-sm font-semibold transition-colors rounded-md {isActive('/app/help')
+								? 'bg-white/20 text-white border-b-2 border-accent'
+								: 'text-white/90 hover:bg-white/10 hover:text-white'}"
+						>
+							<HelpCircle class="h-4 w-4 mr-1.5" />
+							Help
+						</a>
 					</div>
 				</div>
 				
@@ -230,6 +239,16 @@
 							: 'text-white/90 hover:bg-white/10 hover:text-white'}"
 					>
 						Settings
+					</a>
+					<a
+						href="/app/help"
+						onclick={closeMobileMenu}
+						class="flex items-center px-3 py-2 rounded-md text-base font-semibold transition-colors {isActive('/app/help')
+							? 'bg-white/20 text-white border-l-4 border-accent'
+							: 'text-white/90 hover:bg-white/10 hover:text-white'}"
+					>
+						<HelpCircle class="h-5 w-5 mr-3" />
+						Help
 					</a>
 				</div>
 				<div class="pt-4 pb-3 border-t border-white/10">

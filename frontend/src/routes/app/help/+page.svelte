@@ -274,7 +274,7 @@
 								<h4 class="font-semibold text-contrast mb-2">Multi-Format Support</h4>
 								<p class="text-gray-600 text-sm">
 									Upload PDFs, Word documents, images, emails, and more. The system automatically
-									extracts text from each format, including OCR for scanned documents and images.
+									extracts text from each format, including OCR for scanned documents and images using GPT-4o Vision.
 								</p>
 							</div>
 							<div>
@@ -285,10 +285,20 @@
 								</p>
 							</div>
 							<div>
-								<h4 class="font-semibold text-contrast mb-2">Document Quality</h4>
+								<h4 class="font-semibold text-contrast mb-2">Document Quality & Verification Hub</h4>
 								<p class="text-gray-600 text-sm">
-									The system indicates document quality after processing. Low-quality scans or
-									corrupted files will be flagged so you can provide better source documents.
+									The system indicates document quality after processing. Use the <strong>Verification Hub</strong> 
+									to manage document issues: view documents by status (Critical, Needs Attention, Ready), 
+									run bulk OCR on failed extractions, verify document quality, and exclude duplicates. 
+									The Verification Hub provides triage mode to quickly identify and fix document problems before analysis.
+								</p>
+							</div>
+							<div>
+								<h4 class="font-semibold text-contrast mb-2">OCR & Text Extraction</h4>
+								<p class="text-gray-600 text-sm">
+									Scanned PDFs and images are automatically processed using GPT-4o Vision for text extraction. 
+									If extraction fails or quality is low, you can retry OCR individually or in bulk through 
+									the Verification Hub. Clear, high-resolution scans (300+ DPI) produce the best OCR results.
 								</p>
 							</div>
 						</div>
@@ -361,11 +371,19 @@
 								</p>
 							</div>
 							<div>
-								<h4 class="font-semibold text-contrast mb-2">Florida Legal Corpus</h4>
+								<h4 class="font-semibold text-contrast mb-2">Verified Legal Corpus (Florida & New Mexico)</h4>
 								<p class="text-gray-600 text-sm">
-									The system validates statute citations against 51+ verified Florida statutes. This
-									prevents AI hallucination and ensures accurate legal references in your findings
-									letters.
+									The system validates statute citations against verified legal corpus: 51 Florida statutes 
+									and 42 New Mexico statutes. This prevents AI hallucination and ensures accurate legal 
+									references in your findings letters.
+								</p>
+							</div>
+							<div>
+								<h4 class="font-semibold text-contrast mb-2">Multi-Model AI Architecture</h4>
+								<p class="text-gray-600 text-sm">
+									Uses specialized AI models for different tasks: GPT-4o for fast document extraction, 
+									GPT-4o-mini for legal issue identification, GPT-4.1 for comprehensive analysis, and 
+									GPT-5.2 for professional letter generation.
 								</p>
 							</div>
 						</div>
@@ -428,7 +446,7 @@
 								The portal supports a wide range of document formats including:
 							</p>
 							<ul class="list-disc list-inside mt-2 space-y-1">
-								<li><strong>PDF</strong> - Standard and scanned (with OCR)</li>
+								<li><strong>PDF</strong> - Standard and scanned (with OCR via GPT-4o Vision)</li>
 								<li><strong>DOCX/DOC</strong> - Microsoft Word documents</li>
 								<li><strong>TXT</strong> - Plain text files</li>
 								<li><strong>CSV</strong> - Spreadsheet data</li>
@@ -437,7 +455,22 @@
 								<li><strong>HTML</strong> - Web page content</li>
 							</ul>
 							<p class="mt-2">
-								Maximum file size is 50MB per file. For best results, use clear, high-quality scans.
+								Maximum file size is 50MB per file. For best results, use clear, high-quality scans for OCR processing.
+							</p>
+						</AccordionItem>
+
+						<AccordionItem title="What jurisdictions are supported?">
+							<p>
+								The portal is optimized for <strong>Florida and New Mexico</strong> civil litigation:
+							</p>
+							<ul class="list-disc list-inside mt-2 space-y-1">
+								<li><strong>Florida</strong> - 51 verified statutes covering consumer protection, landlord-tenant, 
+								construction defects, mechanic's liens, foreclosure, and personal injury</li>
+								<li><strong>New Mexico</strong> - 42 verified statutes covering consumer protection (UPA), 
+								landlord-tenant (UORRA), construction & liens, foreclosure, insurance & torts</li>
+							</ul>
+							<p class="mt-2">
+								<strong>Not supported:</strong> Federal claims, criminal law, immigration, bankruptcy, or patent/trademark matters.
 							</p>
 						</AccordionItem>
 
@@ -451,9 +484,68 @@
 								<li><strong>Large cases (15+ documents)</strong> - 4-8 minutes</li>
 							</ul>
 							<p class="mt-2">
-								You'll see real-time progress updates during analysis. The system processes documents
-								in parallel to minimize wait time.
+								You'll see real-time progress updates during analysis via Server-Sent Events (SSE) streaming. 
+								The system processes documents in parallel to minimize wait time.
 							</p>
+							<div class="mt-2 p-3 bg-amber-50 rounded-lg">
+								<p class="text-sm text-amber-800">
+									<strong>Note:</strong> If documents need OCR (scanned PDFs or images), add 30-60 seconds per document 
+									for text extraction using GPT-4o Vision.
+								</p>
+							</div>
+						</AccordionItem>
+
+						<AccordionItem title="What if my documents fail to process or don't have text?">
+							<p class="mb-3">
+								The system provides several ways to handle documents that fail to process or don't have extracted text:
+							</p>
+							
+							<div class="space-y-3">
+								<div>
+									<h5 class="font-semibold text-contrast text-sm mb-1">Before Analysis</h5>
+									<p class="text-sm text-gray-600">
+										If you try to start analysis and some documents are missing text, you'll see a warning modal showing which 
+										documents will be skipped. You have three options:
+									</p>
+									<ul class="list-disc list-inside mt-1 text-sm text-gray-600 ml-4">
+										<li><strong>Run OCR on All</strong> - Automatically extracts text from all documents using GPT-4o Vision (recommended)</li>
+										<li><strong>Skip These Documents</strong> - Proceed with analysis excluding those documents</li>
+										<li><strong>Cancel</strong> - Go back and fix documents manually</li>
+									</ul>
+								</div>
+
+								<div>
+									<h5 class="font-semibold text-contrast text-sm mb-1">Verification Hub (Document Management)</h5>
+									<p class="text-sm text-gray-600">
+										Click the <strong>"Verification Hub"</strong> button on your case page to access advanced document management:
+									</p>
+									<ul class="list-disc list-inside mt-1 text-sm text-gray-600 ml-4">
+										<li><strong>Triage Mode</strong> - Documents grouped by status: Critical (failed downloads/corrupted), 
+										Needs Attention (extraction failed/needs review), Ready, Duplicates, Excluded</li>
+										<li><strong>Bulk OCR</strong> - Select multiple documents and run OCR on all at once</li>
+										<li><strong>Individual Retry</strong> - Click "Retry" on any failed document to re-run OCR</li>
+										<li><strong>Document Preview</strong> - View document content and verify extraction quality</li>
+									</ul>
+								</div>
+
+								<div>
+									<h5 class="font-semibold text-contrast text-sm mb-1">Common Document Issues</h5>
+									<div class="text-sm text-gray-600 space-y-1">
+										<p><strong>extraction_failed:</strong> Text extraction failed - run OCR to retry</p>
+										<p><strong>needs_review:</strong> Low quality extraction - verify or run OCR again</p>
+										<p><strong>corrupted:</strong> File is corrupted - re-upload a clean copy</p>
+										<p><strong>download_failed:</strong> Upload failed - retry upload</p>
+										<p><strong>duplicate:</strong> Same file uploaded twice - can exclude from analysis</p>
+									</div>
+								</div>
+							</div>
+
+							<div class="mt-3 p-3 bg-blue-50 rounded-lg">
+								<p class="text-sm text-blue-800">
+									<strong>Pro Tip:</strong> OCR works best on clear, high-resolution scans. For poor quality documents, 
+									consider re-scanning at higher DPI (300+ recommended) before uploading.
+								</p>
+							</div>
 						</AccordionItem>
 
 						<AccordionItem title="Can I edit the generated letter?">

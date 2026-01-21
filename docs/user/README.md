@@ -1,214 +1,259 @@
-# Legal Document Analysis Portal
+# Legal Document Analysis Portal - User Guide
 
-A sophisticated **Streamlit-based monolithic application**, containerized and deployed on **Google Cloud Run**, that automates the processing of legal case documents through advanced AI integration and professional output generation. The portal features a service-oriented internal architecture achieving **14.3x performance improvement** over baseline.
+A modern **SvelteKit and FastAPI application** deployed on **Vercel** that automates the processing of legal case documents through advanced AI integration and professional output generation. The portal uses a multi-model AI architecture for optimal speed and quality.
 
 ## 🚀 Key Features
 
 ### Core Capabilities
 - **Automated Document Analysis**: AI-powered extraction of key legal information from intake forms and case documents
-- **Professional Output Generation**: Client-ready findings letters and case summaries in multiple formats (.eml, .txt, .html)
-- **Multi-Format Support**: Process PDF, DOCX, TXT, RTF, images, audio, and video files
-- **Advanced Media Processing**: Google Cloud integration for video analysis (Vertex AI) and audio transcription
+- **Professional Output Generation**: Client-ready findings letters with verified statute citations
+- **Multi-Format Support**: Process PDF, DOCX, images (with OCR), CSV, TXT, EML, and HTML files
+- **Clio Integration**: Direct import of matters, documents, and communications from Clio
+- **Verified Legal Corpus**: 51 Florida statutes + 42 New Mexico statutes prevent AI hallucination
 
-### Performance Excellence
-- **14.3x Performance Improvement**: 857.1 documents/minute throughput
-- **Intelligent Caching**: 486.7x speedup for cached operations with 30%+ hit rate
-- **Concurrent Processing**: 10x API concurrency with rate limiting compliance
-- **Non-blocking UI**: Responsive interface with real-time progress tracking
+### AI Architecture
+- **GPT-4o**: Fast document extraction and OCR (0.5s latency)
+- **GPT-4o-mini**: Quick legal issue identification
+- **GPT-4.1**: High-quality multi-stage case analysis
+- **GPT-5.2**: Professional letter generation with reasoning
+- **Multi-model optimization**: Each task uses the best model for speed and quality
 
-### Security Implementation
-- **Comprehensive PII Protection**: 40+ legal-specific patterns with forced sanitization
-- **File Upload Security**: Path traversal prevention, 100MB limits, content validation
-- **Secure Logging**: PII sanitization in all log outputs
-- **Session Isolation**: Streamlit native session state management
+### User Experience
+- **Real-time Progress**: Server-Sent Events (SSE) streaming for live updates
+- **Intuitive Interface**: Modern SvelteKit 2 frontend with Svelte 5 Runes
+- **Case Management**: Organize and track unlimited cases
+- **Statute Validation**: Every citation verified against legal corpus
 
 ## 🏗️ Architecture
 
-**Streamlit Monolithic Application with Service-Oriented Internal Design**
+**Modern Full-Stack Application with Serverless Deployment**
 
 ```
 ┌─────────────────────────────────────────┐
-│         Streamlit Web Application        │
-│              (app.py)                    │
+│      SvelteKit Frontend (Vercel)        │
+│   • Modern Svelte 5 + TypeScript        │
+│   • Real-time SSE progress updates      │
+│   • Tailwind CSS styling                │
+└─────────────────────────────────────────┘
+                    │
+                    ↓ (REST API + SSE)
+┌─────────────────────────────────────────┐
+│   FastAPI Backend (Vercel Serverless)   │
+│   • api/index.py (Vercel entry point)   │
+│   • SSE streaming for progress          │
+│   • JWT authentication via Supabase     │
 └─────────────────────────────────────────┘
                     │
     ┌───────────────┴───────────────┐
-    │      Core Business Logic      │
+    │      Service Layer            │
     ├────────────────────────────────┤
-    │ • main_processor.py           │
-    │ • email_generator.py          │
-    │ • document_processor.py       │
-    │ • ai_analyzer.py              │
+    │ • multi_stage_analyzer.py     │
+    │ • json_processing_service.py  │
+    │ • statute_services/           │
+    │ • file_processors/            │
     └────────────────────────────────┘
                     │
     ┌───────────────┴───────────────┐
-    │      Service Layer (18)       │
+    │    External Services          │
     ├────────────────────────────────┤
-    │ • async_processor.py          │
-    │ • audio/video_processor.py    │
-    │ • content_generation.py       │
-    │ • openai_integration.py       │
-    └────────────────────────────────┘
-                    │
-    ┌───────────────┴───────────────┐
-    │       Utility Layer           │
-    ├────────────────────────────────┤
-    │ • api_optimizer.py (10x)      │
-    │ • cache_manager.py (486x)     │
-    │ • security.py                 │
-    │ • pii_sanitizer.py            │
+    │ • OpenAI (GPT-4.1, 4o, 5.2)   │
+    │ • Supabase (PostgreSQL + Auth)│
+    │ • Clio API (OAuth integration)│
     └────────────────────────────────┘
 ```
 
 ## 📁 Project Structure
 
 ```
-/
-├── app.py                    # Main Streamlit application entry point
-├── core/                     # Core business logic
-│   ├── email_generator.py   # Email generation orchestrator (335 lines, reduced from 5,466)
-│   ├── document_processor.py # Document processing pipeline
-│   ├── ai_analyzer.py       # AI analysis coordination
-│   └── main_processor.py    # Main processing entry point
-├── services/                 # Modular service components (18 services)
-│   ├── async_processor.py   # Asynchronous processing
-│   ├── audio_processor.py   # Audio file processing
-│   ├── video_processor.py   # Video analysis
-│   └── [15 other services]
-├── utils/                    # Utility modules
-│   ├── api_optimizer.py     # OpenAI API optimization
-│   ├── cache_manager.py     # Intelligent caching layer
-│   ├── security.py          # File upload security
-│   ├── pii_sanitizer.py     # PII protection
-│   └── file_processors/     # Multi-format processors
-├── components/               # UI components
-│   └── ui_components.py     # Streamlit UI elements
-├── docs/                     # Technical documentation
-│   ├── ARCHITECTURE.md      # Architecture details
-│   ├── SECURITY.md          # Security implementation
-│   └── PERFORMANCE.md       # Performance optimizations
-└── memory-bank/             # Project knowledge base
+Finding_Emails/
+├── frontend/                    # SvelteKit frontend
+│   ├── src/
+│   │   ├── lib/                # Shared components & utilities
+│   │   │   ├── components/     # Svelte UI components
+│   │   │   ├── stores/         # State management
+│   │   │   └── utils/          # Frontend utilities
+│   │   └── routes/             # SvelteKit routes
+│   │       ├── app/            # Main application routes
+│   │       │   ├── cases/      # Case management
+│   │       │   ├── help/       # Help documentation
+│   │       │   └── settings/   # User settings
+│   │       ├── login/          # Authentication
+│   │       └── register/       # User registration
+│   └── package.json
+├── src/legal_portal/           # Python backend
+│   ├── api/                    # FastAPI routes
+│   │   ├── main.py            # FastAPI app entry
+│   │   └── routes/            # API endpoints
+│   ├── services/              # Service layer
+│   │   ├── multi_stage_analyzer.py
+│   │   ├── json_processing_service.py
+│   │   ├── statute_services/
+│   │   └── file_processors/
+│   ├── core/                  # Business logic & data models
+│   └── utils/                 # Utilities
+│       ├── openai_client.py
+│       └── token_manager.py
+├── api/                       # Vercel serverless entry
+│   └── index.py              # Vercel backend entry point
+├── florida_legal_corpus/     # Florida statute corpus (51 statutes)
+├── new_mexico_legal_corpus/  # New Mexico statute corpus (42 statutes)
+├── docs/                     # Documentation
+│   ├── user/                 # User guides
+│   └── developer/            # Developer docs
+├── requirements.txt          # Python dependencies (local)
+├── api/requirements.txt      # Python dependencies (Vercel)
+└── vercel.json              # Vercel configuration
 ```
 
-## 🚀 Getting Started (Local Development)
+## 🚀 Getting Started
 
-### Prerequisites
-- Python 3.11+ (as per Dockerfile)
-- Docker
-- Google Cloud account (for video/audio processing)
+### For Users
+This application is deployed and accessible at your organization's URL. Simply:
+
+1. **Create an account** or log in with your credentials
+2. **Create a new case** from the Dashboard
+3. **Upload documents** - drag and drop your case files
+4. **Start analysis** and watch real-time progress
+5. **Review and generate** your findings letter
+
+See the [Help & Documentation](#-help--documentation) section below for detailed guides.
+
+### For Developers
+
+**Prerequisites:**
+- Python 3.11+ (backend)
+- Node.js 20+ (frontend)
+- Supabase account
 - OpenAI API key
+- Optional: Clio API credentials
 
-### Installation
+**Quick Start:**
+```bash
+# Backend
+pip install -r requirements.txt
+cd src && uvicorn legal_portal.api.main:app --reload --port 8000
 
-1.  Clone the repository:
-    ```bash
-    git clone https://github.com/yourusername/legal-document-portal.git
-    cd legal-document-portal
-    ```
+# Frontend (separate terminal)
+cd frontend
+npm install
+npm run dev
+```
 
-2.  Install dependencies:
-    ```bash
-    pip install -r requirements.txt
-    ```
+The frontend will be at `http://localhost:5173`, backend at `http://localhost:8000`.
 
-3.  Configure environment variables for local use:
-    ```bash
-    cp .env.example .env
-    # Edit .env with your API keys and configuration
-    ```
-
-4.  Run the application locally:
-    ```bash
-    streamlit run app.py
-    ```
-    The application will be available at `http://localhost:8501`.
-
-For production deployment, see the [Deployment](#-deployment) section below.
+For production deployment instructions, see [DEPLOYMENT_GUIDE.md](../DEPLOYMENT_GUIDE.md).
 
 ## ⚙️ Configuration
 
-### Local Environment Variables
-For local development, create a `.env` file with:
-```env
-# OpenAI Configuration
-OPENAI_API_KEY=your_api_key_here
+### Required Environment Variables
 
-# Google Cloud Configuration
-GOOGLE_APPLICATION_CREDENTIALS=path/to/service-account.json
-GCP_PROJECT_ID=your-project-id
-GCS_BUCKET_NAME=your-bucket-name
+**Backend (.env in project root):**
+```env
+# OpenAI Configuration (Required)
+OPENAI_API_KEY=sk-proj-xxxxx
+
+# Supabase Configuration (Required)
+SUPABASE_URL=https://xxxxx.supabase.co
+SUPABASE_SERVICE_KEY=xxxxx
+SUPABASE_ANON_KEY=xxxxx
+
+# Clio Integration (Optional)
+CLIO_CLIENT_ID=xxxxx
+CLIO_CLIENT_SECRET=xxxxx
 
 # Application Settings
-ENVIRONMENT=development  # or production
-PERFORMANCE_MODE=optimized  # or standard
-ENABLE_CACHING=true
-MAX_CONCURRENT_REQUESTS=10
+LOG_LEVEL=INFO
+ENVIRONMENT=development
 ```
 
-### Performance Settings
-Configure performance in the Streamlit sidebar:
-- **Processing Mode**: Optimized (14.3x) or Standard
-- **Caching**: Enable/disable with statistics
-- **Concurrent Requests**: 1-20 workers
-- **Cache Management**: Clear cache option
+**Frontend (frontend/.env):**
+```env
+PUBLIC_SUPABASE_URL=https://xxxxx.supabase.co
+PUBLIC_SUPABASE_ANON_KEY=xxxxx
+PUBLIC_API_URL=http://localhost:8000  # For local development
+```
 
 ## 🚀 Deployment
 
-This project is configured for automated deployment to **Google Cloud Run** via GitHub Actions.
+This project is deployed on **Vercel**:
 
-### CI/CD Pipeline
-- **Continuous Integration**: On every push, the pipeline runs security scans (`Trivy`) and unit/integration tests (`pytest`).
-- **Continuous Deployment**:
-    - Pushes to `develop` branch automatically deploy to the **staging** environment.
-    - Pushes to `main` branch automatically deploy to the **production** environment.
+- **Frontend**: SvelteKit with Vercel adapter
+- **Backend**: FastAPI as Vercel serverless function (`api/index.py`)
 
-### Production Secrets
-Production and staging secrets (e.g., `GCP_SA_KEY`) are managed in GitHub repository secrets and are not stored in `.env` files.
+### Deployment Process
+```bash
+# Install Vercel CLI
+npm i -g vercel
 
-For detailed setup instructions, see the **[Google Cloud Deployment Guide](docs/GOOGLE_CLOUD_DEPLOYMENT.md)**.
+# Deploy to production
+vercel --prod
+```
 
-## 📊 Performance Metrics
+### Environment Variables in Vercel
+Configure these in the Vercel dashboard (Settings → Environment Variables):
+- `OPENAI_API_KEY`
+- `SUPABASE_URL`
+- `SUPABASE_SERVICE_KEY`
+- `SUPABASE_ANON_KEY`
+- `CLIO_CLIENT_ID` (optional)
+- `CLIO_CLIENT_SECRET` (optional)
 
-| Metric | Achievement | Impact |
-|--------|-------------|---------|
-| **Throughput** | 857.1 docs/min | 14.3x improvement |
-| **API Latency** | < 2 seconds | 15x faster |
-| **Cache Performance** | 486.7x speedup | 30%+ hit rate |
-| **Parallel Processing** | 5x speedup | Concurrent operations |
-| **Memory Usage** | 800MB average | 60% reduction |
+For detailed deployment instructions, see [VERCEL_DEPLOYMENT_INSTRUCTIONS.md](../VERCEL_DEPLOYMENT_INSTRUCTIONS.md).
+
+## 📊 Performance Characteristics
+
+| Operation | Model | Typical Speed | Notes |
+|-----------|-------|---------------|-------|
+| **Document Extraction** | GPT-4o | 0.5s per document | Fast extraction, supports OCR |
+| **Legal Issue ID** | GPT-4o-mini | 0.5s | Quick classification |
+| **Multi-Stage Analysis** | GPT-4.1 | 0.5s | Quality synthesis without reasoning overhead |
+| **Letter Generation** | GPT-5.2 | 30-60s | Professional output with reasoning |
+| **Total Case Analysis** | Multi-model | 2-5 minutes | Depends on document count |
 
 ## 🔒 Security Features
 
-- **File Upload Security**: Path traversal prevention, size limits, content validation
-- **PII Protection**: 40+ legal-specific patterns with automatic sanitization
-- **Secure Logging**: All PII removed from logs
-- **Input Validation**: SQL injection and XSS prevention
+- **Supabase Authentication**: JWT-based secure user authentication
+- **Row Level Security**: Database-level access control ensures users only see their data
+- **File Upload Security**: Size limits (50MB), format validation, secure storage
+- **Input Validation**: Comprehensive validation on all user inputs
 - **API Security**: Rate limiting and token management
-- **Session Isolation**: User data separation
+- **Environment-based Secrets**: No hardcoded credentials in code
 
-## 🧪 Testing
+## 🧪 Testing (For Developers)
 
-Run the test suite:
+**Backend Tests:**
 ```bash
-# Run all tests
-pytest
-
-# Run specific test categories
-pytest backend/tests/unit/
-pytest backend/tests/e2e/
-pytest backend/tests/test_security.py
-
-# Run with coverage
-pytest --cov=. --cov-report=html
+pytest tests/
+pytest tests/ --cov=src/legal_portal  # With coverage
 ```
 
-## 📚 Documentation
+**Frontend Tests:**
+```bash
+cd frontend
+npm run test        # Unit tests
+npm run test:e2e    # E2E with Playwright
+```
 
-- [Google Cloud Deployment Guide](docs/GOOGLE_CLOUD_DEPLOYMENT.md) - **New**: Deployment to GCR and Cloud Run
-- [Architecture Documentation](docs/ARCHITECTURE.md) - System design and components
-- [Security Implementation](docs/SECURITY.md) - Security measures and compliance
-- [Performance Optimizations](docs/PERFORMANCE.md) - Performance improvements and benchmarks
-- [Memory Bank](memory-bank/) - Project knowledge base and context
+**Corpus Validation:**
+```bash
+cd florida_legal_corpus && python validate_corpus.py
+cd new_mexico_legal_corpus && python validate_corpus.py
+```
+
+## 📚 Help & Documentation
+
+### In-App Help
+Access comprehensive help documentation within the application:
+- Click **"Help"** in the navigation menu
+- Browse Getting Started, Features & Guides, and FAQ sections
+- Step-by-step tutorials for all features
+
+### Additional Documentation
+- [FUNCTIONALITY.md](../../FUNCTIONALITY.md) - Complete feature overview and value proposition
+- [Auto-Fill Legal Issue Guide](AUTO_FILL_LEGAL_ISSUE_USER_GUIDE.md) - How AI identifies legal issues
+- [Vercel Deployment Guide](../VERCEL_DEPLOYMENT_INSTRUCTIONS.md) - Production deployment
+- [Florida Legal Corpus](../../florida_legal_corpus/README.md) - 51 verified statutes
+- [New Mexico Legal Corpus](../../new_mexico_legal_corpus/README.md) - 42 verified statutes
 
 ## 🤝 Contributing
 
@@ -253,211 +298,122 @@ This project is proprietary software. All rights reserved.
 
 ## 🆘 Support
 
-For support, please contact:
-- Email: support@legalportal.com
-- Documentation: [docs/](docs/)
-- Issues: GitHub Issues
+### Getting Help
+1. **In-App Help**: Click "Help" in the navigation menu for comprehensive guides
+2. **System Administrator**: Contact your organization's admin for account or access issues
+3. **IT Support**: Report technical issues to your IT support team
 
-## 🎯 Status
-
-- **Architecture**: ✅ Containerized Streamlit application
-- **Performance**: ✅ 14.3x improvement achieved
-- **Security**: ✅ Comprehensive measures implemented
-- **Deployment**: ✅ Automated CI/CD to Google Cloud Run
-- **Production**: ✅ Ready for production deployment on GCP
+### Feedback & Feature Requests
+Contact your administrator who can relay feedback to the development team.
 
 ---
 
-**Last Updated**: 2025-08-10  
-**Version**: 2.0.0  
-**Status**: Production Ready
-<!-- Triggering CI/CD for staging deployment validation. -->
-# Product Context
+## 🎯 Current Status
 
-## Why This Project Exists
+- **Architecture**: ✅ Modern SvelteKit + FastAPI on Vercel
+- **AI Models**: ✅ Multi-model architecture (GPT-4.1, 4o, 5.2)
+- **Legal Corpus**: ✅ 51 Florida + 42 New Mexico statutes verified
+- **Clio Integration**: ✅ OAuth-based matter import
+- **Production**: ✅ Deployed and operational
 
-The **Legal Document Analysis Portal** was created to address critical challenges faced by law firms in processing and analyzing legal case documents efficiently. Legal professionals often spend countless hours manually reviewing intake forms, case documents, correspondence, and evidence to extract key information and prepare comprehensive case analyses.
+---
 
-### Problems Solved
+**Last Updated**: January 21, 2026  
+**Version**: 3.0.0  
+**Status**: ✅ Production Ready
+# Product Overview
 
-#### Manual Document Processing Bottlenecks
-- **Time-Intensive Review**: Attorneys and paralegals spending hours manually extracting key information from legal documents
-- **Inconsistent Analysis**: Varying quality and completeness of document analysis depending on individual reviewer
-- **Delayed Client Response**: Slow turnaround times for providing initial case assessments and findings to clients
-- **Human Error Risk**: Potential for missing critical details when processing large volumes of documents manually
+## Why This Application Exists
 
-#### Document Organization Challenges
-- **Scattered Information**: Key case details spread across multiple documents without centralized extraction
-- **Intake Form Processing**: Manual transcription and analysis of client intake forms
-- **Evidence Cataloging**: Time-consuming process of identifying and categorizing case evidence and supporting documents
+The **Legal Document Analysis Portal** addresses the time-consuming challenges law firms face in case intake and document analysis. Legal professionals traditionally spend hours manually reviewing documents, extracting facts, researching statutes, and drafting findings letters.
 
-#### Client Communication Inefficiency
-- **Findings Compilation**: Manual preparation of comprehensive findings letters and case summaries
-- **Professional Presentation**: Ensuring consistent, professional formatting for client communications
-- **Timely Updates**: Providing clients with prompt, detailed analysis of their legal matters
+### Key Problems Solved
 
-## How It Should Work
+#### Time Efficiency
+- **Automated Analysis**: What takes 3-5 hours manually now takes 5-10 minutes with AI assistance
+- **Quick Turnaround**: Clients receive professional findings letters in minutes, not days
+- **Batch Processing**: Handle multiple documents simultaneously
 
-### Streamlined Document Upload Process
-The portal provides an intuitive interface where legal professionals can:
+#### Quality & Consistency
+- **Verified Citations**: 51 Florida + 42 New Mexico statutes prevent AI hallucination
+- **Professional Output**: Attorney-quality letters with proper structure and citations
+- **Standardized Analysis**: Consistent quality across all cases and staff
 
-1. **Upload Client Intake Forms**: Single-file upload for standardized intake documentation
-2. **Submit Case Documents**: Bulk upload of related legal documents, correspondence, and evidence
-3. **Automatic Validation**: Real-time file type checking and size limit enforcement
-4. **Progress Tracking**: Clear visual feedback on upload status and processing progress
+#### Workflow Integration
+- **Clio Integration**: Import matters and documents directly from your practice management system
+- **Real-time Updates**: Watch analysis progress in real-time via SSE streaming
+- **Case Management**: Organize and access all case analyses in one place
 
-### Intelligent Document Processing Pipeline
-The Streamlit application maintains a sophisticated analysis workflow with enhanced performance:
+## How It Works
 
-1. **Document Categorization**: Automatic separation of intake forms from case documents through internal service modules
-2. **AI-Powered Extraction**: Advanced natural language processing through dedicated service components to extract key legal information
-3. **Structured Analysis**: Systematic identification of parties, facts, timeline events, and legal claims using specialized AI analyzer service
-4. **Quality Validation**: Multi-stage validation through the processing pipeline to ensure accuracy and completeness
-5. **Streamlit Interface**: Modern, responsive interface with real-time progress tracking and performance monitoring
+### Simple 5-Step Process
 
-### Professional Output Generation
-The application maintains all output capabilities with enhanced reliability:
+1. **Create Case**: Enter client name and optional reference number
+2. **Upload Documents**: Drag and drop intake forms and supporting documents (PDF, DOCX, images, etc.)
+3. **AI Analysis**: Multi-stage AI processing extracts facts, identifies issues, validates statutes
+4. **Review Results**: Verify AI findings, check citations, make any needed adjustments
+5. **Generate Letter**: Professional findings letter ready for client delivery
 
-1. **Comprehensive Findings Letters**: Professional email communications generated by dedicated email generation service, suitable for direct client delivery
-2. **Structured Case Summaries**: Organized extraction of key case elements and timeline through document processor service
-3. **Multiple Format Options**: Email-ready (.eml), text (.txt), and HTML formats for flexibility
-4. **Enhanced Download System**: Streamlit-integrated download functionality with improved performance and reliability
+### Multi-Stage AI Analysis Pipeline
 
-## User Experience Goals
+The system uses specialized AI models for different tasks:
 
-### Primary User: Legal Professionals
-**Target Users**: Attorneys, paralegals, and legal assistants handling case intake and document analysis
+1. **Document Extraction** (GPT-4o): Fast text extraction including OCR for scanned documents
+2. **Legal Issue Identification** (GPT-4o-mini): Auto-selects most likely practice area from 30+ options
+3. **Fact Matrix** (GPT-4.1): Structured extraction of parties, timeline, financial items, key documents
+4. **Legal Analysis** (GPT-4.1): Comprehensive analysis applying relevant statutes to case facts
+5. **Letter Generation** (GPT-5.2): Professional findings letter with proper citations and structure
 
-#### Efficiency-Focused Experience
-- **Minimal Learning Curve**: Intuitive drag-and-drop interface requiring no technical training
-- **Rapid Processing**: Complete analysis workflow in minutes rather than hours
-- **Bulk Document Handling**: Ability to process multiple documents simultaneously
-- **Clear Progress Indicators**: Real-time feedback on processing status and completion
+## Target Users & Benefits
 
-#### Professional Quality Assurance
-- **Consistent Output**: Standardized, professional formatting for all generated communications
-- **Accuracy Validation**: Multi-stage quality checks to ensure reliable results
-- **Customizable Content**: Generated findings letters that can be reviewed and modified before sending
-- **Brand Consistency**: Professional presentation reflecting law firm standards
+### Primary Users
+**Attorneys, Paralegals, and Legal Assistants** handling case intake and initial document analysis
 
-#### Seamless Integration
-- **Email Client Compatibility**: Direct .eml file generation for easy email client import
-- **Document Management**: Organized file handling with clear categorization and metadata through dedicated file processing services
-- **Secure Processing**: Enhanced confidential document handling with comprehensive security measures and proper validation
-- **Modern Deployment**: Containerized application deployed to Google Cloud Run for scalability and reliability
-- **UI Preservation**: Interface design patterns maintained for seamless user experience
+### Key Benefits
 
-### Secondary Benefits
+#### Time Savings
+- **80% reduction** in initial case assessment time (3-5 hours → 5-10 minutes)
+- **Instant legal issue identification** from intake forms
+- **Parallel document processing** for faster results
 
-#### Client Experience Enhancement
-- **Faster Response Times**: Quicker turnaround for initial case assessments
-- **Professional Communications**: Polished, comprehensive findings letters
-- **Consistent Service Quality**: Standardized analysis depth and presentation
+#### Quality & Accuracy
+- **Verified statute citations** from legal corpus (51 FL + 42 NM statutes)
+- **Professional formatting** ready for client delivery
+- **Consistent analysis** across all cases
 
-#### Firm Operational Benefits
-- **Resource Optimization**: Reduced manual processing time for legal staff
-- **Scalability**: Ability to handle increased case volume without proportional staff increases
-- **Quality Standardization**: Consistent analysis quality across all cases and staff members
-- **Cost Efficiency**: Reduced time investment in routine document processing tasks
+#### Easy to Use
+- **No training required** - intuitive drag-and-drop interface
+- **Real-time progress** - watch analysis happen via SSE streaming
+- **In-app help** - comprehensive documentation built-in
 
-## Success Metrics
+#### Workflow Integration
+- **Clio integration** - import matters with one click
+- **Case management** - organize and track all analyses
+- **Flexible exports** - HTML letters for further editing## Supported Practice Areas
 
-### Operational Efficiency
-- **Processing Time Reduction**: Target 80% reduction in manual document analysis time
-- **Accuracy Improvement**: Consistent extraction of key legal elements across all cases
-- **Volume Capacity**: Ability to process multiple cases simultaneously without quality degradation
+This application is optimized for **Florida and New Mexico civil litigation** matters.
 
-### User Satisfaction
-- **Ease of Use**: Intuitive interface requiring minimal training
-- **Output Quality**: Professional-grade findings letters ready for client delivery
-- **Reliability**: Consistent system performance and accurate results
+### Florida Coverage (51 statutes)
+- **Consumer Protection** (FDUTPA, UCC) - 6 statutes at 100% coverage
+- **Landlord-Tenant** (Ch. 83) - 12 statutes at 100% coverage
+- **Construction Defects** (Ch. 558) - 6 statutes at 100% coverage
+- **Mechanic's Liens** (Ch. 713) - 7 statutes at 100% coverage
+- **Foreclosure Defense** (Ch. 702)
+- **Property Insurance Claims** (Ch. 627)
+- **Personal Injury & Damages** (Ch. 768)
+- **Civil Litigation** (Statutes of Limitation, Attorney Fees)
 
-### Business Impact
-- **Client Response Time**: Faster initial case assessments and client communications
-- **Staff Productivity**: Legal professionals able to focus on higher-value legal analysis
-- **Service Quality**: Enhanced consistency and comprehensiveness of case analysis# Project Brief
+### New Mexico Coverage (42 statutes + 8 rules)
+- **Consumer Protection** (Unfair Practices Act - Ch. 57-12)
+- **Landlord-Tenant** (UORRA - Ch. 47-8)
+- **Construction & Liens** (Ch. 56-7, Ch. 48-2)
+- **Foreclosure** (Ch. 48-7, Ch. 39-5)
+- **Insurance & Torts** (Ch. 59A-16, Ch. 41-3A)
+- **Civil Procedure Rules** (NMRA)
 
-## Objective
-
-The primary objective of this project is to develop and maintain a **Legal Document Analysis Portal** that automates the processing of legal case documents through advanced AI integration and professional output generation.
-
-## Scope
-
-- **Legal Document Processing**: Automated analysis of client intake forms and case documents using AI-powered extraction
-- **Professional Output Generation**: Creation of business-ready findings letters and case summaries for law firm client communications
-- **Modern Application Architecture**: Streamlit-based monolithic application with service-oriented internal architecture
-- **User Experience Optimization**: Intuitive interface design focused on legal professional workflows with comprehensive UI patterns
-
-## Key Goals
-
-### Primary Deliverables
-- **Automated Document Analysis**: AI-powered extraction of key legal information from intake forms and case documents
-- **Professional Communication**: Generation of client-ready findings letters in multiple formats (.eml, .txt)
-- **Efficient Workflow**: Streamlined process from document upload to professional output delivery
-- **Production-Ready System**: Robust, scalable platform suitable for law firm operations
-
-### Technical Excellence
-- **Modern Architecture**: Streamlit-based application with service-oriented internal design
-- **Advanced AI Integration**: Direct OpenAI integration with structured document processing pipeline
-- **Performance Optimization**: 14.3x performance improvement through API optimization and caching
-- **Quality Assurance**: Multi-stage validation ensuring accuracy and professional output quality
-- **Security Implementation**: Comprehensive security measures including PII sanitization and file validation
-
-### Business Impact
-- **Operational Efficiency**: Significant reduction in manual document processing time for legal professionals
-- **Consistent Quality**: Standardized analysis depth and professional presentation across all cases
-- **Client Service Enhancement**: Faster turnaround times for initial case assessments and communications
-- **Scalable Foundation**: Architecture capable of handling increased case volume and future enhancements
-
-## Success Criteria
-
-### Functional Requirements ✅ ACHIEVED
-- **Multi-Document Processing**: Simultaneous handling of intake forms and multiple case documents
-- **AI-Powered Analysis**: Intelligent extraction of legal entities, facts, timeline events, and claims
-- **Professional Output**: Business-appropriate findings letters suitable for direct client delivery
-- **Download System**: Multiple format options with immediate browser download capability
-
-### Technical Requirements ✅ FULLY ACHIEVED
-- **Modern Architecture**: Streamlit-based monolithic application successfully implemented
-- **Service-Oriented Design**: Modular internal architecture with specialized services:
-  - [`core/email_generator.py`](core/email_generator.py): Main email generation orchestrator
-  - [`core/document_processor.py`](core/document_processor.py): Document processing pipeline
-  - [`core/ai_analyzer.py`](core/ai_analyzer.py): AI analysis coordination
-  - [`core/main_processor.py`](core/main_processor.py): Main processing entry point
-- **Performance Modules**: Advanced optimization components:
-  - [`utils/api_optimizer.py`](utils/api_optimizer.py): OpenAI API optimization with 10x concurrency
-  - [`utils/cache_manager.py`](utils/cache_manager.py): Intelligent caching layer
-  - [`utils/security.py`](utils/security.py): File upload security
-  - [`utils/pii_sanitizer.py`](utils/pii_sanitizer.py): PII protection system
-- **Security Compliance**: Robust document handling with validation, size limits, and secure processing
-- **API Integration**: OpenAI integration with rate limiting, token management, and error handling
-- **Production Deployment**: Fully functional system containerized for Google Cloud Run deployment
-
-### Performance Requirements ✅ EXCEEDED
-- **Processing Efficiency**: 857.1 documents/minute (14.3x improvement from baseline)
-- **API Optimization**: 10 concurrent workers with intelligent rate limiting
-- **Cache Performance**: 486.7x speedup for cached operations, 30%+ cache hit rate
-- **User Experience**: Comprehensive progress feedback and real-time status updates
-- **Reliability**: 100% success rate across diverse test cases with robust error handling
-- **Scalability**: Proven capability to handle complex document sets and large payloads
-
-### Production Testing Results ✅ CERTIFIED READY
-- **Comprehensive Testing**: Three diverse client test cases successfully completed
-  - **Velasco (Personal Injury)**: Medical records and correspondence processing
-  - **Badam (Contract Dispute)**: Business documentation and contract analysis
-  - **Price (Property Damage)**: 40 documents, 57.8 MB, complex case processing
-- **Quality Validation**: All generated emails meet professional legal standards
-- **System Stability**: 0% error rate, no crashes or failures during extensive testing
-- **Performance Benchmarks**: Efficient processing within acceptable timeframes for all case complexities
-- **Critical Optimizations Implemented**:
-  - OpenAI API rate limit compliance (30,000 TPM)
-  - Large document processing with content truncation
-  - Timeout handling for unlimited processing time
-  - Progress visibility for long-running operations
-
-### Business Impact ✅ PRODUCTION-READY
-- **Operational Efficiency**: Automated processing reduces manual analysis time from hours to minutes
-- **Quality Assurance**: Consistent professional output with programmatic quality validation
-- **Client Service**: Fast turnaround for complex cases with comprehensive document analysis
-- **Scalability**: Proven capability to handle real-world legal case complexities
-- **Cost Optimization**: Dynamic model selection balances performance and operational costs
+### Not Supported
+❌ Federal claims or federal court matters  
+❌ Criminal law  
+❌ Immigration law  
+❌ Bankruptcy (federal jurisdiction)  
+❌ Patent/trademark law (federal jurisdiction)

@@ -463,6 +463,11 @@ class AIPreferences(BaseModel):
     multi_stage_analysis: str = "gpt-5.2"
     blacklisted_documents: List[str] = Field(default_factory=list)
 
+    # Document processing preferences
+    auto_skip_failed: bool = False
+    max_retry_attempts: int = 2
+    chunk_max_tokens: int = 50000
+
 
 class ReasoningConfig(BaseModel):
     """Reasoning effort settings for different operations (GPT-5 family)."""

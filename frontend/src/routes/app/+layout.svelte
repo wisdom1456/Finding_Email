@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { supabase, getSecureSession } from '$lib/supabase';
-	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 	import { getApiUrl } from '$lib/config';
 	import ClioConnect from '$lib/components/ClioConnect.svelte';
@@ -59,7 +58,8 @@
 
 	async function handleLogout() {
 		await supabase.auth.signOut();
-		goto('/login');
+		// Use full page reload to ensure layout data is cleared
+		window.location.href = '/login';
 	}
 	
 	function closeMobileMenu() {

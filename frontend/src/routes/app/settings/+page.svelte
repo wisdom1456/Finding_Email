@@ -4,10 +4,11 @@
 	import { getApiUrl } from '$lib/config';
 	import PageHeader from '$lib/components/ui/PageHeader.svelte';
 	import AsyncButton from '$lib/components/ui/AsyncButton.svelte';
-	import { Info, CheckCircle, XCircle } from 'lucide-svelte';
+	import { Info, CheckCircle, XCircle, RotateCcw } from 'lucide-svelte';
 
 	let loading = $state(true);
 	let saving = $state(false);
+	let resettingAI = $state(false);
 	let message = $state('');
 	let messageType = $state<'success' | 'error'>('success');
 
@@ -97,6 +98,37 @@ Palm Harbor, FL 34683`);
 		} finally {
 			loading = false;
 		}
+	}
+
+	// Default values for AI preferences
+	const defaultAIPreferences = {
+		documentAnalysis: 'gpt-5-mini',
+		letterGeneration: 'gpt-5.2',
+		caseChat: 'gpt-5-mini',
+		multiStageAnalysis: 'gpt-5.2',
+		autoSkipFailed: false,
+		maxRetryAttempts: 2,
+		chunkMaxTokens: 50000
+	};
+
+	function resetAIPreferencesToDefaults() {
+		resettingAI = true;
+		
+		// Reset all AI model preferences to defaults
+		documentAnalysisModel = defaultAIPreferences.documentAnalysis;
+		letterGenerationModel = defaultAIPreferences.letterGeneration;
+		caseChatModel = defaultAIPreferences.caseChat;
+		multiStageAnalysisModel = defaultAIPreferences.multiStageAnalysis;
+		
+		// Reset document processing preferences to defaults
+		autoSkipFailed = defaultAIPreferences.autoSkipFailed;
+		maxRetryAttempts = defaultAIPreferences.maxRetryAttempts;
+		chunkMaxTokens = defaultAIPreferences.chunkMaxTokens;
+		
+		message = 'AI preferences reset to defaults. Click "Save Changes" to apply.';
+		messageType = 'success';
+		
+		resettingAI = false;
 	}
 
 	async function saveProfile() {
@@ -281,7 +313,19 @@ Palm Harbor, FL 34683`);
 
 			<!-- AI Model Preferences Section -->
 			<div class="card-standard">
-				<h2 class="text-lg font-heading font-semibold text-contrast mb-2">AI Model Preferences</h2>
+				<div class="flex items-start justify-between mb-2">
+					<h2 class="text-lg font-heading font-semibold text-contrast">AI Model Preferences</h2>
+					<button
+						type="button"
+						onclick={resetAIPreferencesToDefaults}
+						disabled={resettingAI}
+						class="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-md text-gray-600 bg-gray-100 hover:bg-gray-200 hover:text-gray-800 transition-colors disabled:opacity-50"
+						title="Reset AI preferences to recommended defaults"
+					>
+						<RotateCcw class="h-3.5 w-3.5 mr-1.5" />
+						Reset to Defaults
+					</button>
+				</div>
 				<p class="text-sm text-gray-500 mb-6">
 					Choose which AI models to use for different operations. These preferences will be applied to all your cases.
 				</p>

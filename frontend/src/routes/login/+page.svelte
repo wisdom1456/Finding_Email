@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { supabase } from '$lib/supabase';
-	import { goto } from '$app/navigation';
 	import AsyncButton from '$lib/components/ui/AsyncButton.svelte';
 	import logoImg from '$lib/assets/logo-br.png';
 
@@ -21,7 +20,8 @@
 
 			if (error) throw error;
 
-			goto('/app');
+			// Use full page reload to ensure layout data is refreshed with new user
+			window.location.href = '/app';
 		} catch (error: any) {
 			errorMessage = error.message || 'An error occurred during login';
 		} finally {

@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { supabase } from '$lib/supabase';
-	import { goto } from '$app/navigation';
 
 	let isLoggingOut = $state(false);
 
@@ -8,7 +7,8 @@
 		isLoggingOut = true;
 		try {
 			await supabase.auth.signOut();
-			goto('/login');
+			// Use full page reload to ensure layout data is cleared
+			window.location.href = '/login';
 		} catch (error) {
 			console.error('Error logging out:', error);
 			isLoggingOut = false;

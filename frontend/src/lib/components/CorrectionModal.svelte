@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { getApiUrl } from '$lib/config';
-	import { getSecureSession } from '$lib/supabase';
+	import { supabase, getSecureSession } from '$lib/supabase';
 	import { toastStore } from '$lib/stores/toastStore';
 	import AsyncButton from './ui/AsyncButton.svelte';
 	import Modal from './ui/Modal.svelte';

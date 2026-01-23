@@ -27,6 +27,7 @@
 	import RecoveryModal from './RecoveryModal.svelte';
 	import DocumentCard from './DocumentCard.svelte';
 	import DocumentStatusBanner from './DocumentStatusBanner.svelte';
+	import DocumentSummaryCard from './DocumentSummaryCard.svelte';
 
 	// Props
 	let {
@@ -49,6 +50,10 @@
 	let viewingDocument = $state<any>(null);
 	let pdfBlobUrl = $state<string | null>(null);
 	let loadingPreview = $state(false);
+	let documentViewerTab = $state<'preview' | 'summary' | 'text'>('preview');
+	let documentSummary = $state<any>(null);
+	let documentSummaries = $state<any[]>([]);
+	let loadingDocumentSummary = $state(false);
 	let viewMode = $state<'triage' | 'all'>('triage');
 	let showInstructions = $state(false);
 	let processingDocIds = $state<Set<string>>(new Set());
@@ -381,12 +386,17 @@ const { session, user } = await getSecureSession();
 	async function handleView(doc: any) {
 		viewingDocument = doc;
 		loadingPreview = true;
+		documentSummary = null;
+		documentViewerTab = 'preview';
 
 		// Clean up previous blob URL if it exists
 		if (pdfBlobUrl) {
 			URL.revokeObjectURL(pdfBlobUrl);
 			pdfBlobUrl = null;
 		}
+		
+		// Load document summary in the background
+		loadDocumentSummary(doc.file_name);
 
 		try {
 			const isPdf = doc.file_type === 'application/pdf' || doc.file_name.toLowerCase().endsWith('.pdf');
@@ -413,10 +423,64 @@ const { session, user } = await getSecureSession();
 
 	function closeDocumentViewer() {
 		viewingDocument = null;
+		documentSummary = null;
+		documentViewerTab = 'preview';
 		if (pdfBlobUrl) {
 			URL.revokeObjectURL(pdfBlobUrl);
 			pdfBlobUrl = null;
 		}
+	}
+
+	async function loadDocumentSummariesFromAnalysis() {
+		// Load document summaries from the latest analysis results if available
+		if (!caseId) return;
+		
+		try {
+			const { session } = await getSecureSession();
+			if (!session) return;
+			
+			const response = await fetch(`${getApiUrl()}/api/analysis/results/${caseId}`, {
+				headers: {
+					Authorization: `Bearer ${session.access_token}`
+				}
+			});
+			
+			if (!response.ok) return;
+			
+			const results = await response.json();
+			
+			// Parse document_summaries if it's a JSON string
+			if (results.document_summaries) {
+				if (typeof results.document_summaries === 'string') {
+					try {
+						documentSummaries = JSON.parse(results.document_summaries);
+					} catch {
+						documentSummaries = [];
+					}
+				} else if (Array.isArray(results.document_summaries)) {
+					documentSummaries = results.document_summaries;
+				}
+			}
+		} catch (error) {
+			console.error('Failed to load document summaries:', error);
+		}
+	}
+
+	async function loadDocumentSummary(fileName: string) {
+		// First ensure we have document summaries loaded
+		if (documentSummaries.length === 0) {
+			loadingDocumentSummary = true;
+			await loadDocumentSummariesFromAnalysis();
+			loadingDocumentSummary = false;
+		}
+		
+		// Find the summary for this document by matching filename
+		const summary = documentSummaries.find(
+			(s: any) => s.document_name === fileName || 
+						s.document_name?.toLowerCase() === fileName?.toLowerCase()
+		);
+		
+		documentSummary = summary || null;
 	}
 
 	// Bulk Actions
@@ -863,34 +927,109 @@ const { session, user } = await getSecureSession();
 		title={viewingDocument.file_name}
 		size="full"
 	>
+		<!-- Tabs -->
+		<div class="border-b border-gray-200 mb-4">
+			<nav class="-mb-px flex space-x-6" aria-label="Tabs">
+				<button
+					onclick={() => (documentViewerTab = 'preview')}
+					class="whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm {documentViewerTab === 'preview' ? 'border-accent text-accent' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}"
+				>
+					Preview
+				</button>
+				<button
+					onclick={() => (documentViewerTab = 'summary')}
+					class="whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm flex items-center gap-2 {documentViewerTab === 'summary' ? 'border-accent text-accent' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}"
+				>
+					Summary
+					{#if documentSummary}
+						<span class="w-2 h-2 rounded-full bg-green-500"></span>
+					{/if}
+				</button>
+				<button
+					onclick={() => (documentViewerTab = 'text')}
+					class="whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm {documentViewerTab === 'text' ? 'border-accent text-accent' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}"
+				>
+					Raw Text
+				</button>
+			</nav>
+		</div>
+
 		<div class="bg-gray-50 min-h-[400px] rounded-lg overflow-hidden">
-			{#if loadingPreview}
-				<div class="flex flex-col items-center justify-center h-full py-12">
-					<RefreshCw class="w-8 h-8 text-accent animate-spin mb-4" />
-					<p class="text-gray-500 font-medium">Loading preview...</p>
-				</div>
-			{:else if pdfBlobUrl}
-				<iframe
-					src={pdfBlobUrl}
-					class="w-full h-full min-h-[600px] border-0 bg-white"
-					title="Document Preview"
-				></iframe>
-			{:else if viewingDocument.extracted_text}
-				<div class="bg-white p-8 border border-gray-200 max-w-none prose prose-sm prose-slate h-full overflow-auto">
-					<pre class="whitespace-pre-wrap font-mono text-xs text-gray-800 leading-relaxed">
-						{viewingDocument.extracted_text}
-					</pre>
-				</div>
-			{:else}
-				<div class="flex flex-col items-center justify-center h-full py-20 text-center">
-					<div class="p-4 rounded-full bg-amber-50 text-amber-500 mb-4">
-						<AlertTriangle class="w-12 w-12" />
+			{#if documentViewerTab === 'preview'}
+				{#if loadingPreview}
+					<div class="flex flex-col items-center justify-center h-full py-12">
+						<RefreshCw class="w-8 h-8 text-accent animate-spin mb-4" />
+						<p class="text-gray-500 font-medium">Loading preview...</p>
 					</div>
-					<h3 class="text-lg font-bold text-gray-900">Preview Unavailable</h3>
-					<p class="text-gray-500 text-sm mt-1 max-w-xs mx-auto">
-						This document doesn't have a preview available. You can view the extracted text in the correction modal.
-					</p>
-				</div>
+				{:else if pdfBlobUrl}
+					<iframe
+						src={pdfBlobUrl}
+						class="w-full h-full min-h-[600px] border-0 bg-white"
+						title="Document Preview"
+					></iframe>
+				{:else if viewingDocument.extracted_text}
+					<div class="flex flex-col items-center justify-center h-full py-20 text-center">
+						<div class="p-4 rounded-full bg-blue-50 text-blue-500 mb-4">
+							<Info class="w-12 h-12" />
+						</div>
+						<h3 class="text-lg font-bold text-gray-900">No File Preview</h3>
+						<p class="text-gray-500 text-sm mt-1 max-w-xs mx-auto">
+							Use the Summary or Raw Text tabs to view the extracted content.
+						</p>
+					</div>
+				{:else}
+					<div class="flex flex-col items-center justify-center h-full py-20 text-center">
+						<div class="p-4 rounded-full bg-amber-50 text-amber-500 mb-4">
+							<AlertTriangle class="w-12 h-12" />
+						</div>
+						<h3 class="text-lg font-bold text-gray-900">Preview Unavailable</h3>
+						<p class="text-gray-500 text-sm mt-1 max-w-xs mx-auto">
+							This document doesn't have a preview available. You can view the extracted text in the correction modal.
+						</p>
+					</div>
+				{/if}
+			{:else if documentViewerTab === 'summary'}
+				{#if loadingDocumentSummary}
+					<div class="flex flex-col items-center justify-center h-full py-12">
+						<RefreshCw class="w-8 h-8 text-accent animate-spin mb-4" />
+						<p class="text-gray-500 font-medium">Loading document analysis...</p>
+					</div>
+				{:else if documentSummary}
+					<div class="p-4">
+						<DocumentSummaryCard 
+							summary={documentSummary}
+							rawText={viewingDocument?.extracted_text || ''}
+							collapsible={false}
+							showHeader={false}
+						/>
+					</div>
+				{:else}
+					<div class="flex flex-col items-center justify-center h-full py-20 text-center">
+						<div class="p-4 rounded-full bg-gray-100 text-gray-400 mb-4">
+							<Info class="w-12 h-12" />
+						</div>
+						<h3 class="text-lg font-bold text-gray-900">No Analysis Available</h3>
+						<p class="text-gray-500 text-sm mt-2 max-w-sm mx-auto">
+							Run case analysis to generate a structured summary of this document with key facts, legal significance, and evidence quotes.
+						</p>
+					</div>
+				{/if}
+			{:else if documentViewerTab === 'text'}
+				{#if viewingDocument.extracted_text}
+					<div class="bg-white p-8 border border-gray-200 max-w-none prose prose-sm prose-slate h-full overflow-auto max-h-[600px]">
+						<pre class="whitespace-pre-wrap font-mono text-xs text-gray-800 leading-relaxed">{viewingDocument.extracted_text}</pre>
+					</div>
+				{:else}
+					<div class="flex flex-col items-center justify-center h-full py-20 text-center">
+						<div class="p-4 rounded-full bg-amber-50 text-amber-500 mb-4">
+							<AlertTriangle class="w-12 h-12" />
+						</div>
+						<h3 class="text-lg font-bold text-gray-900">No Extracted Text</h3>
+						<p class="text-gray-500 text-sm mt-1 max-w-xs mx-auto">
+							Run OCR or text extraction to view the document content.
+						</p>
+					</div>
+				{/if}
 			{/if}
 		</div>
 

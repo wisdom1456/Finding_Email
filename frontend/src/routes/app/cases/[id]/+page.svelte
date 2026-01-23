@@ -20,6 +20,7 @@
 	import { toastStore } from '$lib/stores/toastStore';
 	import { Trash2, Edit, ArrowLeft } from 'lucide-svelte';
 	import type { CaseData } from '$lib/types';
+	import DocumentSummaryCard from '$lib/components/DocumentSummaryCard.svelte';
 
 	let caseData = $state<CaseData | null>(null);
 	let documents = $state<any[]>([]);
@@ -87,7 +88,10 @@
 	// Document viewer modal state
 	let viewingDocument = $state<any>(null);
 	let documentViewerContent = $state('');
-	let documentViewerTab = $state<'preview' | 'text'>('preview');
+	let documentViewerTab = $state<'preview' | 'summary' | 'text'>('preview');
+	let documentSummary = $state<any>(null);
+	let loadingDocumentSummary = $state(false);
+	let documentSummaries = $state<any[]>([]);
 	let loadingExtractedText = $state(false);
 	let extractedTextData = $state<any>(null);
 	let pdfBlobUrl = $state<string | null>(null);
@@ -261,7 +265,7 @@
 
 			if (error) throw error;
 			// Create new object references to ensure Svelte 5 reactivity propagates to child components
-			documents = (data || []).map(doc => ({ ...doc }));
+			documents = (data || []).map((doc: Record<string, unknown>) => ({ ...doc }));
 		} catch (error: any) {
 			console.error('Failed to load documents:', error);
 		}
@@ -271,12 +275,16 @@
 		viewingDocument = doc;
 		documentViewerContent = '';
 		documentViewerTab = 'preview';
+		documentSummary = null;
 		
 		// Clean up previous blob URL if it exists
 		if (pdfBlobUrl) {
 			URL.revokeObjectURL(pdfBlobUrl);
 			pdfBlobUrl = null;
 		}
+		
+		// Try to find document summary if we have analysis results
+		await loadDocumentSummary(doc.file_name);
 
 		try {
 			// Check if it's a PDF or image - need to download as blob
@@ -368,6 +376,59 @@
 		documentViewerTab = 'preview';
 		extractedTextData = null;
 		loadingExtractedText = false;
+		documentSummary = null;
+	}
+
+	async function loadDocumentSummariesFromAnalysis() {
+		// Load document summaries from the latest analysis results if available
+		if (!caseId) return;
+		
+		try {
+			const { session } = await getSecureSession();
+			if (!session) return;
+			
+			const response = await fetch(`${getApiUrl()}/api/analysis/results/${caseId}`, {
+				headers: {
+					Authorization: `Bearer ${session.access_token}`
+				}
+			});
+			
+			if (!response.ok) return;
+			
+			const results = await response.json();
+			
+			// Parse document_summaries if it's a JSON string
+			if (results.document_summaries) {
+				if (typeof results.document_summaries === 'string') {
+					try {
+						documentSummaries = JSON.parse(results.document_summaries);
+					} catch {
+						documentSummaries = [];
+					}
+				} else if (Array.isArray(results.document_summaries)) {
+					documentSummaries = results.document_summaries;
+				}
+			}
+		} catch (error) {
+			console.error('Failed to load document summaries:', error);
+		}
+	}
+
+	async function loadDocumentSummary(fileName: string) {
+		// First ensure we have document summaries loaded
+		if (documentSummaries.length === 0) {
+			loadingDocumentSummary = true;
+			await loadDocumentSummariesFromAnalysis();
+			loadingDocumentSummary = false;
+		}
+		
+		// Find the summary for this document by matching filename
+		const summary = documentSummaries.find(
+			(s: any) => s.document_name === fileName || 
+						s.document_name?.toLowerCase() === fileName?.toLowerCase()
+		);
+		
+		documentSummary = summary || null;
 	}
 
 	async function confirmIntakeSelection() {
@@ -2134,10 +2195,19 @@
 						Preview
 					</button>
 					<button
+						onclick={() => (documentViewerTab = 'summary')}
+						class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center gap-2 {documentViewerTab === 'summary' ? 'border-accent text-accent' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}"
+					>
+						Summary
+						{#if documentSummary}
+							<span class="w-2 h-2 rounded-full bg-green-500"></span>
+						{/if}
+					</button>
+					<button
 						onclick={() => (documentViewerTab = 'text')}
 						class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm {documentViewerTab === 'text' ? 'border-accent text-accent' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}"
 					>
-						Extracted Text
+						Raw Text
 					</button>
 				</nav>
 			</div>
@@ -2174,6 +2244,35 @@
 								</svg>
 								<p class="mt-2 text-sm text-gray-500">Loading document preview...</p>
 							</div>
+						</div>
+					{/if}
+				{:else if documentViewerTab === 'summary'}
+					{#if loadingDocumentSummary}
+						<div class="flex items-center justify-center h-64">
+							<div class="text-center">
+								<svg class="mx-auto h-12 w-12 text-gray-400 animate-spin" fill="none" viewBox="0 0 24 24">
+									<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+									<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+								</svg>
+								<p class="mt-2 text-sm text-gray-500">Loading document analysis...</p>
+							</div>
+						</div>
+					{:else if documentSummary}
+						<DocumentSummaryCard 
+							summary={documentSummary}
+							rawText={viewingDocument?.extracted_text || extractedTextData?.extracted_text || ''}
+							collapsible={false}
+							showHeader={false}
+						/>
+					{:else}
+						<div class="flex flex-col items-center justify-center h-64 text-gray-400">
+							<svg class="h-12 w-12 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+							</svg>
+							<p class="font-medium text-gray-600">No analysis available</p>
+							<p class="text-sm mt-2 text-center max-w-sm">
+								Run case analysis to generate a structured summary of this document with key facts, legal significance, and evidence quotes.
+							</p>
 						</div>
 					{/if}
 				{:else if documentViewerTab === 'text'}

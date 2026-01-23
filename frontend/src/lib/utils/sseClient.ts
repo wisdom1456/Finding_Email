@@ -6,7 +6,7 @@
  */
 
 export interface ProgressEvent<T = unknown> {
-	type: 'progress' | 'completed' | 'error' | 'failed';
+	type: 'progress' | 'completed' | 'error' | 'failed' | 'stalled';
 	message: string;
 	phase: string;
 	percent: number;
@@ -20,6 +20,10 @@ export interface ProgressEvent<T = unknown> {
 	error?: string;
 	timestamp?: string;
 	data?: T; // Generic payload for results
+	document?: {
+		status?: string;
+		[key: string]: unknown;
+	};
 }
 
 export type SSEMessageHandler<T = unknown> = (event: ProgressEvent<T>) => void;

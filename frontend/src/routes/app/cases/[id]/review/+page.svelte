@@ -4,6 +4,7 @@
 	import { goto } from '$app/navigation';
 	import { getApiUrl } from '$lib/config';
 	import { supabase, getSecureSession } from '$lib/supabase';
+	import { Plus } from 'lucide-svelte';
 
 	const caseId = $derived($page.params.id as string);
 

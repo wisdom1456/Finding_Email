@@ -1705,12 +1705,23 @@ async def save_streaming_analysis(
                     "supporting_evidence": [],
                 })
             
+            # Build properly structured parties list for FactMatrix/Party model compatibility
+            structured_parties = []
+            for p in structured_data.get("parties", []):
+                party_role = (p.get("role") or "").lower()
+                is_opposing = party_role not in ["client", "plaintiff", "claimant", "attorney", "counsel"]
+                structured_parties.append({
+                    "name": p.get("name", ""),
+                    "role": p.get("role", ""),
+                    "contact_info": None,
+                    "first_mentioned_in": "Streaming Analysis",
+                    "is_opposing_party": is_opposing,
+                    "entity_type": p.get("entity_type", "unknown"),
+                })
+            
             multi_stage_result = {
                 "fact_matrix": {
-                    "parties": [
-                        {"name": p.get("name", ""), "role": p.get("role", "")}
-                        for p in structured_data.get("parties", [])
-                    ],
+                    "parties": structured_parties,
                     "timeline": timeline_events,
                     "financial_data": [],  # Required field for FactMatrix
                     "key_documents": [],   # Required field for FactMatrix
@@ -1772,18 +1783,40 @@ async def save_streaming_analysis(
                 },
             }
             
-            # Add financial data if present
+            # Add financial data if present (parse currency strings to floats)
             if structured_data.get("financial_summary"):
                 fin = structured_data["financial_summary"]
-                if fin.get("total_claimed"):
+                total_claimed = _parse_currency(fin.get("total_claimed"))
+                documented_damages = _parse_currency(fin.get("documented_damages"))
+                
+                if total_claimed > 0:
+                    # Add to financial_items (legacy field for backward compatibility)
                     multi_stage_result["fact_matrix"]["financial_items"].append({
                         "description": "Total Claimed",
-                        "amount": fin["total_claimed"],
+                        "amount": total_claimed,
                     })
-                if fin.get("documented_damages"):
+                    # Add to financial_data (correct field for FactMatrix model)
+                    multi_stage_result["fact_matrix"]["financial_data"].append({
+                        "amount": total_claimed,
+                        "description": "Total Claimed",
+                        "source_document": "Streaming Analysis",
+                        "payment_type": "claimed",
+                        "category": "damages_claimed",
+                        "date": None,
+                    })
+                
+                if documented_damages > 0:
                     multi_stage_result["fact_matrix"]["financial_items"].append({
                         "description": "Documented Damages",
-                        "amount": fin["documented_damages"],
+                        "amount": documented_damages,
+                    })
+                    multi_stage_result["fact_matrix"]["financial_data"].append({
+                        "amount": documented_damages,
+                        "description": "Documented Damages",
+                        "source_document": "Streaming Analysis",
+                        "payment_type": "claimed",
+                        "category": "damages_claimed",
+                        "date": None,
                     })
             
             # Verify statutes against legal corpus for letter generation
@@ -1942,6 +1975,40 @@ async def save_streaming_analysis(
                 "issues": quality_issues,
             })
         
+        # Extract opposing parties from structured data for demand letter dropdown
+        opposing_parties = []
+        if structured_data and structured_data.get("parties"):
+            for party_data in structured_data["parties"]:
+                role = (party_data.get("role") or "").lower()
+                name = party_data.get("name") or ""
+                
+                # Identify opposing parties (not client or attorney)
+                # Common opposing party roles include: landlord, contractor, seller, defendant, respondent
+                is_opposing = (
+                    "opposing" in role or
+                    "defendant" in role or
+                    "respondent" in role or
+                    "landlord" in role or
+                    "contractor" in role or
+                    "seller" in role or
+                    "hoa" in role or
+                    "association" in role or
+                    "company" in role or
+                    "employer" in role or
+                    (role and "client" not in role and "plaintiff" not in role and 
+                     "claimant" not in role and "attorney" not in role and "counsel" not in role)
+                )
+                
+                if is_opposing and name:
+                    opposing_parties.append({
+                        "name": name,
+                        "role": party_data.get("role", "Party"),
+                        "entity_type": party_data.get("entity_type", "unknown"),
+                        "is_opposing_party": True,
+                    })
+        
+        logger.info(f"[STREAM] Identified {len(opposing_parties)} opposing parties for demand letter dropdown")
+        
         # Build the complete result - must match ProcessingResult structure
         streaming_result = {
             # Required fields for ProcessingResult compatibility
@@ -1953,6 +2020,7 @@ async def save_streaming_analysis(
             # Streaming-specific fields
             "streaming_analysis": request.content,
             "multi_stage_result": multi_stage_result,
+            "opposing_parties": opposing_parties,  # For demand letter party dropdown
             "artifacts": {
                 "analysis_type": "streaming",
                 "jurisdiction": case_data.get("jurisdiction", "Florida"),
@@ -2081,6 +2149,29 @@ def _convert_statute_recommendations_recursive(obj: Any) -> Any:
     
     # For any other type, return as-is
     return obj
+
+
+def _parse_currency(value) -> float:
+    """Parse currency string like '$1,234.56' to float.
+    
+    Handles various formats:
+    - "$1,234.56" -> 1234.56
+    - "1234.56" -> 1234.56
+    - 1234.56 -> 1234.56
+    - None -> 0.0
+    """
+    if value is None:
+        return 0.0
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str):
+        # Remove $, commas, and whitespace
+        cleaned = value.replace("$", "").replace(",", "").strip()
+        try:
+            return float(cleaned) if cleaned else 0.0
+        except ValueError:
+            return 0.0
+    return 0.0
 
 
 def _extract_embedded_json(content: str) -> dict:

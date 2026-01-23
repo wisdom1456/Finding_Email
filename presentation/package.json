@@ -1,0 +1,20 @@
+{
+  "name": "harvey-ai-presentation",
+  "version": "1.0.0",
+  "description": "Harvey AI Attorney Adoption Presentation Generator",
+  "main": "harvey_ai_attorney_adoption_source.js",
+  "scripts": {
+    "generate": "node harvey_ai_attorney_adoption_source.js"
+  },
+  "keywords": [
+    "presentation",
+    "powerpoint",
+    "pptx"
+  ],
+  "author": "Bernhardt Riley",
+  "license": "UNLICENSED",
+  "private": true,
+  "dependencies": {
+    "pptxgenjs": "^3.12.0"
+  }
+}

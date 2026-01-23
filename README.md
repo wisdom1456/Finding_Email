@@ -90,11 +90,12 @@ vercel --prod
 
 ### AI-Powered Analysis
 
-- **Document Analysis**: Comprehensive legal document analysis using OpenAI GPT-4o
+- **Document Analysis**: Comprehensive legal document analysis using OpenAI GPT-5.2, GPT-5-mini, and GPT-4.1
 - **Quality Validation**: Built-in QA service for data quality checks
 - **Structured Output**: JSON-based structured data extraction
 - **Token Management**: Cost tracking and optimization
 - **AI Auto-Fill**: Automatic pre-selection of most likely legal issue
+- **Multi-Model Architecture**: Optimized model selection for different tasks (GPT-5.2 for complex reasoning, GPT-5-mini for fast extraction)
 
 ### Clio Integration
 
@@ -109,18 +110,18 @@ vercel --prod
 - **Client-Friendly Output**: Review and edit letters before finalization
 - **Multiple Export Formats**: HTML output
 
-### Florida Legal Corpus Integration
+### Multi-State Legal Corpus Integration
 
-- **Citation Validation**: Verify statute citations against 51+ verified Florida statutes
+- **Citation Validation**: Verify statute citations against verified Florida (51 statutes) and New Mexico (42 statutes) legal corpus
 - **Anti-Hallucination**: Prevent AI from generating false or incorrect statute references
-- **Statute Recommendations**: AI-powered suggestions for relevant Florida statutes
-- **100% Coverage**: Complete coverage in 4 primary practice areas
+- **Statute Recommendations**: AI-powered suggestions for relevant state-specific statutes
+- **Comprehensive Coverage**: Complete coverage in primary practice areas for both jurisdictions
 
 ## ⚖️ Supported Practice Areas
 
-**This application is optimized for Florida civil litigation matters only.**
+**This application is optimized for Florida and New Mexico civil litigation matters.**
 
-### Covered Practice Areas
+### Florida Practice Areas
 
 1. **Consumer Protection & Business Misconduct**
    - Contract disputes (UCC Ch. 671-672)
@@ -142,6 +143,29 @@ vercel --prod
 4. **Selective Personal Injury**
    - Motorcycle accidents (Ch. 316 traffic law)
    - Limited medical malpractice matters (Ch. 766)
+
+### New Mexico Practice Areas
+
+1. **Consumer Protection**
+   - Unfair Practices Act (Ch. 57, Art. 12)
+
+2. **Landlord-Tenant**
+   - Uniform Owner-Resident Relations Act (Ch. 47, Art. 8)
+
+3. **Construction & Liens**
+   - Construction indemnification (Ch. 56, Art. 7)
+   - Mechanic's liens (Ch. 48, Art. 2)
+
+4. **Real Estate & Foreclosure**
+   - Mortgages and redemption (Ch. 48, Art. 7)
+
+5. **Insurance & Torts**
+   - Unfair claims practices (Ch. 59A, Art. 16)
+   - Several liability (Ch. 41, Art. 3A)
+
+6. **Civil Procedure**
+   - Statutes of limitation (Ch. 37, Art. 1)
+   - Civil procedure rules (NMRA)
 
 ### Important Limitations
 
@@ -177,7 +201,8 @@ Finding_Emails/
 │       └── config/           # Configuration
 ├── api/                      # Vercel serverless entry
 │   └── index.py
-├── florida_legal_corpus/     # Florida statute corpus
+├── florida_legal_corpus/     # Florida statute corpus (51 statutes)
+├── new_mexico_legal_corpus/  # New Mexico statute corpus (42 statutes + 8 rules)
 ├── tests/                    # Test suites
 ├── scripts/                  # Utility scripts
 ├── docs/                     # Documentation
@@ -239,7 +264,12 @@ npm run test:e2e
 ### Corpus Validation
 
 ```bash
+# Validate Florida corpus
 cd florida_legal_corpus
+python validate_corpus.py
+
+# Validate New Mexico corpus
+cd ../new_mexico_legal_corpus
 python validate_corpus.py
 ```
 
@@ -251,7 +281,7 @@ python validate_corpus.py
 - **Backend**: FastAPI, Python 3.11+, Pydantic
 - **Database**: Supabase (PostgreSQL)
 - **Authentication**: Supabase Auth
-- **AI/ML**: OpenAI GPT-4o, GPT-4o Vision
+- **AI/ML**: OpenAI GPT-5.2, GPT-5-mini, GPT-4.1, GPT-4o Vision
 - **Document Processing**: PyMuPDF, python-docx, Pillow
 - **Deployment**: Vercel (frontend + serverless backend)
 
@@ -278,7 +308,8 @@ python validate_corpus.py
 - Clio integration with OAuth
 - Document processing pipeline
 - GPT-4o Vision integration
-- Florida Legal Corpus (51 statutes)
+- Multi-state legal corpus (Florida: 51 statutes, New Mexico: 42 statutes + 8 rules)
+- GPT-5.2 and GPT-5-mini integration for advanced reasoning
 - Real-time progress with SSE
 - Vercel deployment
 
@@ -319,6 +350,13 @@ cd frontend && npm run test
 
 ## 📝 Recent Changes
 
+### January 2026
+
+- ✅ Migrated to GPT-5.2 and GPT-5-mini for advanced reasoning capabilities
+- ✅ Added New Mexico legal corpus support (42 statutes + 8 rules)
+- ✅ Multi-state jurisdiction support (Florida and New Mexico)
+- ✅ Updated AI model preferences with user-configurable defaults
+
 ### November 2025
 
 - ✅ Migrated to SvelteKit + FastAPI architecture
@@ -343,8 +381,8 @@ For issues, questions, or contributions:
 
 ---
 
-**Last Updated**: November 25, 2025
+**Last Updated**: January 23, 2026
 
-**Version**: 3.0.0
+**Version**: 3.1.0
 
 **Status**: ✅ Production Ready

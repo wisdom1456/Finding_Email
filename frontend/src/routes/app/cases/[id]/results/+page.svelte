@@ -12,6 +12,7 @@
 	import type { PageData } from './$types';
 	import { onMount } from 'svelte';
 	import SkippedDocumentsAlert from '$lib/components/SkippedDocumentsAlert.svelte';
+	import DocumentSummaryCard from '$lib/components/DocumentSummaryCard.svelte';
 
 	// Get SSR data from load function
 	let { data }: { data: PageData } = $props();
@@ -58,6 +59,8 @@
 	let viewingDocument = $state<any>(null);
 	let pdfBlobUrl = $state<string | null>(null);
 	let loadingPdf = $state(false);
+	let documentViewerTab = $state<'preview' | 'summary' | 'text'>('preview');
+	let documentSummary = $state<any>(null);
 
 	// Collapsible document analysis state
 	let collapsedDocs = $state<Set<string>>(new Set());
@@ -266,6 +269,8 @@
 		}
 		
 		viewingDocument = doc;
+		documentViewerTab = 'preview';
+		documentSummary = findDocumentSummary(documentName);
 		loadingPdf = true;
 
 		// Clean up previous blob URL if it exists
@@ -306,10 +311,52 @@
 
 	function closeDocumentViewer() {
 		viewingDocument = null;
+		documentSummary = null;
+		documentViewerTab = 'preview';
 		if (pdfBlobUrl) {
 			URL.revokeObjectURL(pdfBlobUrl);
 			pdfBlobUrl = null;
 		}
+	}
+
+	/**
+	 * Find the structured summary for a document by name
+	 */
+	function findDocumentSummary(documentName: string): any {
+		if (!results?.document_summaries || !Array.isArray(results.document_summaries)) {
+			return null;
+		}
+		
+		// Try exact match first
+		let summary = results.document_summaries.find(
+			(s: any) => s.document_name === documentName
+		);
+		
+		// Try case-insensitive match
+		if (!summary) {
+			const lowerName = documentName.toLowerCase();
+			summary = results.document_summaries.find(
+				(s: any) => s.document_name?.toLowerCase() === lowerName
+			);
+		}
+		
+		return summary || null;
+	}
+
+	/**
+	 * Get the raw extracted text for a document by name
+	 */
+	function getDocumentRawText(documentName: string): string {
+		// Try to find the document in the documents array
+		let doc = documents.find((d) => d.file_name === documentName);
+		
+		// Case-insensitive fallback
+		if (!doc) {
+			const lowerName = documentName.toLowerCase();
+			doc = documents.find((d) => d.file_name?.toLowerCase() === lowerName);
+		}
+		
+		return doc?.extracted_text || doc?.manual_text || '';
 	}
 
 	async function generateFindingsLetter() {
@@ -842,166 +889,15 @@ async function generateLetterRequest(body: Record<string, any>) {
 		{:else if activeTab === 'documents'}
 			{#if results.document_summaries && results.document_summaries.length > 0}
 				<div class="card-standard">
-					<h2 class="text-2xl font-heading font-bold text-contrast mb-8 border-b border-gray-100 pb-4">📄 Document Analysis</h2>
+					<h2 class="text-2xl font-heading font-bold text-contrast mb-8 border-b border-gray-100 pb-4">Document Analysis</h2>
 					<div class="space-y-6">
 						{#each results.document_summaries as doc}
-							<div class="border border-gray-200 rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow">
-								<!-- Clickable Header -->
-								<button
-									onclick={() => toggleDoc(doc.document_name)}
-									class="w-full bg-gray-50/80 p-5 border-b border-gray-200 hover:bg-gray-100 transition-colors text-left"
-								>
-									<div class="flex items-center justify-between">
-										<div class="flex-1">
-											<div class="flex items-center gap-3 mb-2">
-												<!-- Expand/Collapse Icon -->
-												<svg 
-													class="w-5 h-5 text-gray-400 transition-transform {collapsedDocs.has(doc.document_name) ? '' : 'rotate-90'}"
-													fill="none" 
-													viewBox="0 0 24 24" 
-													stroke="currentColor"
-												>
-													<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7" />
-												</svg>
-												<h3 class="text-lg font-bold text-contrast">{doc.document_name}</h3>
-											</div>
-											<div class="flex flex-wrap gap-2 ml-8">
-												{#if doc.document_type}
-													<span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold tracking-wider bg-contrast/5 text-contrast uppercase border border-contrast/10">
-														{doc.document_type}
-													</span>
-												{/if}
-												{#if doc.extraction_quality}
-													<span class={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold tracking-wider uppercase border ${
-														doc.extraction_quality === 'high' ? 'bg-green-50 text-green-700 border-green-200' : 
-														doc.extraction_quality === 'medium' ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-red-50 text-red-700 border-red-200'
-													}`}>
-														Quality: {doc.extraction_quality}
-													</span>
-												{/if}
-												{#if doc.relevance_to_case}
-													<span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold tracking-wider uppercase bg-accent/10 text-accent border border-accent/20">
-														Relevant
-													</span>
-												{/if}
-											</div>
-										</div>
-									</div>
-								</button>
-
-								<!-- Collapsible Content -->
-								{#if !collapsedDocs.has(doc.document_name)}
-									<div transition:slide class="p-6 space-y-6 border-t border-gray-200">
-									<!-- Executive Summary -->
-									{#if doc.executive_summary}
-										<div>
-											<p class="text-sm text-gray-700 leading-relaxed font-medium italic border-l-2 border-accent/30 pl-4">{doc.executive_summary}</p>
-										</div>
-									{/if}
-
-									<!-- Key Content -->
-									{#if doc.key_content}
-										<div class="bg-gray-50 rounded-lg p-5 border border-gray-200 shadow-inner">
-											<p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">Key Content</p>
-											<p class="text-sm text-contrast leading-relaxed whitespace-pre-wrap">{doc.key_content}</p>
-										</div>
-									{/if}
-
-									<!-- Key Quotes (Evidence) -->
-									{#if doc.key_quotes && doc.key_quotes.length > 0}
-										<div>
-											<p class="text-[10px] font-bold text-accent uppercase tracking-widest mb-3">Evidence Quotes</p>
-											<div class="space-y-3">
-												{#each doc.key_quotes as quote}
-													<blockquote class="border-l-4 border-accent pl-5 py-3 bg-accent/5 rounded-r italic text-sm text-contrast leading-relaxed">
-														"{quote}"
-													</blockquote>
-												{/each}
-											</div>
-										</div>
-									{/if}
-
-									<!-- Statute Citations -->
-									{#if doc.statute_citations && doc.statute_citations.length > 0}
-										<div>
-											<p class="text-[10px] font-bold text-contrast-light uppercase tracking-widest mb-3">Relevant Statutes</p>
-											<div class="flex flex-wrap gap-2">
-												{#each doc.statute_citations as statute}
-													<span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-contrast/5 text-contrast border border-contrast/10">
-														⚖️ {statute}
-													</span>
-												{/each}
-											</div>
-										</div>
-									{/if}
-
-									<!-- Important Details -->
-									{#if doc.important_details && doc.important_details.length > 0}
-										<div>
-											<p class="text-[10px] font-bold text-orange-800 uppercase tracking-widest mb-3">Important Details</p>
-											<ul class="space-y-2">
-												{#each doc.important_details as detail}
-													<li class="text-sm text-gray-700 flex items-start">
-														<span class="text-orange-400 mr-2 font-bold">•</span>
-														<span>{detail}</span>
-													</li>
-												{/each}
-											</ul>
-										</div>
-									{/if}
-
-									<!-- Legal Significance -->
-									{#if doc.legal_significance}
-										<div class="bg-amber-50/50 border border-amber-200 rounded-lg p-5">
-											<p class="text-[10px] font-bold text-amber-800 uppercase tracking-widest mb-2">Legal Significance</p>
-											<p class="text-sm text-contrast font-medium leading-relaxed">{doc.legal_significance}</p>
-										</div>
-									{/if}
-
-									<!-- Structured Data (Dates, Amounts, Parties) -->
-									<div class="grid grid-cols-1 md:grid-cols-3 gap-6 pt-6 border-t border-gray-100">
-										{#if doc.key_dates && doc.key_dates.length > 0}
-											<div>
-												<p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">Key Dates</p>
-												<ul class="space-y-3">
-													{#each doc.key_dates as date}
-														<li class="text-xs text-contrast">
-															<span class="font-bold block mb-0.5">{date.date}</span>
-															<span class="text-gray-500 font-medium">{date.event}</span>
-														</li>
-													{/each}
-												</ul>
-											</div>
-										{/if}
-
-										{#if doc.key_amounts && doc.key_amounts.length > 0}
-											<div>
-												<p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">Key Amounts</p>
-												<ul class="space-y-3">
-													{#each doc.key_amounts as amount}
-														<li class="text-xs text-contrast">
-															<span class="font-bold block mb-0.5 text-accent">{amount.amount}</span>
-															<span class="text-gray-500 font-medium">{amount.description}</span>
-														</li>
-													{/each}
-												</ul>
-											</div>
-										{/if}
-
-										{#if doc.parties && doc.parties.length > 0}
-											<div>
-												<p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">Parties</p>
-												<div class="flex flex-wrap gap-2">
-													{#each doc.parties as party}
-														<span class="inline-flex items-center px-2 py-1 rounded text-[10px] font-bold bg-gray-100 text-gray-600 border border-gray-200 uppercase tracking-wider">{party}</span>
-													{/each}
-												</div>
-											</div>
-										{/if}
-									</div>
-								</div>
-								{/if}
-							</div>
+							<DocumentSummaryCard 
+								summary={doc}
+								rawText={getDocumentRawText(doc.document_name)}
+								collapsible={true}
+								defaultCollapsed={collapsedDocs.has(doc.document_name)}
+							/>
 						{/each}
 					</div>
 				</div>
@@ -1439,57 +1335,123 @@ async function generateLetterRequest(body: Record<string, any>) {
 				</button>
 			</div>
 
+			<!-- Tabs -->
+			<div class="px-6 border-b border-gray-200">
+				<nav class="-mb-px flex space-x-6" aria-label="Tabs">
+					<button
+						onclick={() => (documentViewerTab = 'preview')}
+						class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm {documentViewerTab === 'preview' ? 'border-accent text-accent' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}"
+					>
+						Preview
+					</button>
+					<button
+						onclick={() => (documentViewerTab = 'summary')}
+						class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center gap-2 {documentViewerTab === 'summary' ? 'border-accent text-accent' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}"
+					>
+						Summary
+						{#if documentSummary}
+							<span class="w-2 h-2 rounded-full bg-green-500"></span>
+						{/if}
+					</button>
+					<button
+						onclick={() => (documentViewerTab = 'text')}
+						class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm {documentViewerTab === 'text' ? 'border-accent text-accent' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}"
+					>
+						Raw Text
+					</button>
+				</nav>
+			</div>
+
 			<!-- Content -->
 			<div class="flex-1 overflow-y-auto p-6">
-				{#if viewingDocument.file_type === 'application/pdf' || viewingDocument.file_name.toLowerCase().endsWith('.pdf')}
-					{#if loadingPdf}
-						<div class="flex items-center justify-center h-64">
-							<div class="text-center">
-								<svg class="mx-auto h-12 w-12 text-gray-400 animate-spin" fill="none" viewBox="0 0 24 24">
-									<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-									<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-								</svg>
-								<p class="mt-2 text-sm text-gray-500">Loading PDF preview...</p>
+				{#if documentViewerTab === 'preview'}
+					{#if viewingDocument.file_type === 'application/pdf' || viewingDocument.file_name.toLowerCase().endsWith('.pdf')}
+						{#if loadingPdf}
+							<div class="flex items-center justify-center h-64">
+								<div class="text-center">
+									<svg class="mx-auto h-12 w-12 text-gray-400 animate-spin" fill="none" viewBox="0 0 24 24">
+										<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+										<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+									</svg>
+									<p class="mt-2 text-sm text-gray-500">Loading PDF preview...</p>
+								</div>
 							</div>
-						</div>
-					{:else if pdfBlobUrl}
-						<iframe 
-							src={pdfBlobUrl} 
-							title="PDF Viewer" 
-							class="w-full h-[600px] border border-gray-300 rounded-lg"
-						></iframe>
+						{:else if pdfBlobUrl}
+							<iframe 
+								src={pdfBlobUrl} 
+								title="PDF Viewer" 
+								class="w-full h-[600px] border border-gray-300 rounded-lg"
+							></iframe>
+						{:else}
+							<div class="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-4">
+								<p class="text-amber-800 text-sm">
+									<strong>Preview unavailable:</strong> The original file could not be retrieved from storage. 
+									This usually happens if the file failed to download from Clio.
+								</p>
+							</div>
+							<p class="text-gray-500 text-sm mb-4">You can still try to download the file directly if it exists:</p>
+							<a 
+								href={`/api/documents/${viewingDocument.id}/download`}
+								class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-accent hover:bg-accent-hover"
+								download
+							>
+								Download PDF
+							</a>
+						{/if}
+					{:else if viewingDocument.file_type?.startsWith('image/')}
+						{#if loadingPdf}
+							<div class="flex items-center justify-center h-64">
+								<div class="animate-spin rounded-full h-8 w-8 border-b-2 border-accent"></div>
+							</div>
+						{:else if pdfBlobUrl}
+							<div class="flex items-center justify-center">
+								<img src={pdfBlobUrl} alt={viewingDocument.file_name} class="max-w-full h-auto rounded-lg shadow-lg" />
+							</div>
+						{:else}
+							<p class="text-red-500">Failed to load image preview.</p>
+						{/if}
 					{:else}
-						<div class="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-4">
-							<p class="text-amber-800 text-sm">
-								<strong>Preview unavailable:</strong> The original file could not be retrieved from storage. 
-								This usually happens if the file failed to download from Clio.
+						<div class="flex flex-col items-center justify-center h-64 text-gray-400">
+							<svg class="h-12 w-12 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+							</svg>
+							<p class="font-medium text-gray-600">No file preview available</p>
+							<p class="text-sm mt-2">Use the Summary or Raw Text tabs to view the content.</p>
+						</div>
+					{/if}
+				{:else if documentViewerTab === 'summary'}
+					{#if documentSummary}
+						<DocumentSummaryCard 
+							summary={documentSummary}
+							rawText={viewingDocument?.extracted_text || ''}
+							collapsible={false}
+							showHeader={false}
+						/>
+					{:else}
+						<div class="flex flex-col items-center justify-center h-64 text-gray-400">
+							<svg class="h-12 w-12 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+							</svg>
+							<p class="font-medium text-gray-600">No analysis available</p>
+							<p class="text-sm mt-2 text-center max-w-sm">
+								Run case analysis to generate a structured summary of this document with key facts, legal significance, and evidence quotes.
 							</p>
 						</div>
-						<p class="text-gray-500 text-sm mb-4">You can still try to download the file directly if it exists:</p>
-						<a 
-							href={`/api/documents/${viewingDocument.id}/download`}
-							class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-accent hover:bg-accent-hover"
-							download
-						>
-							Download PDF
-						</a>
 					{/if}
-				{:else if viewingDocument.file_type?.startsWith('image/')}
-					{#if loadingPdf}
-						<div class="flex items-center justify-center h-64">
-							<div class="animate-spin rounded-full h-8 w-8 border-b-2 border-accent"></div>
-						</div>
-					{:else if pdfBlobUrl}
-						<div class="flex items-center justify-center">
-							<img src={pdfBlobUrl} alt={viewingDocument.file_name} class="max-w-full h-auto rounded-lg shadow-lg" />
+				{:else if documentViewerTab === 'text'}
+					{#if viewingDocument.extracted_text}
+						<div class="bg-gray-900 rounded-lg p-4 max-h-[600px] overflow-auto">
+							<pre class="whitespace-pre-wrap font-mono text-xs text-gray-300 leading-relaxed">{viewingDocument.extracted_text}</pre>
 						</div>
 					{:else}
-						<p class="text-red-500">Failed to load image preview.</p>
+						<div class="flex flex-col items-center justify-center h-64 text-gray-400">
+							<svg class="h-12 w-12 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+							</svg>
+							<p class="font-medium text-gray-600">No extracted text available</p>
+							<p class="text-sm mt-2">This document hasn't been processed for text extraction.</p>
+						</div>
 					{/if}
-				{:else if viewingDocument.extracted_text}
-					<pre class="whitespace-pre-wrap font-mono text-sm text-gray-800 bg-gray-50 p-4 rounded-lg">{viewingDocument.extracted_text}</pre>
-				{:else}
-					<p class="text-gray-500 text-sm">No preview available for this document type.</p>
 				{/if}
 			</div>
 

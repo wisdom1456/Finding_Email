@@ -19,17 +19,33 @@ export const load: PageServerLoad = async ({ params, fetch }) => {
 		API_URL = PUBLIC_API_URL;
 	}
 
-	const res = await fetch(`${API_URL}/api/corpus/${jurisdiction}`);
-	if (!res.ok) {
-		const text = await res.text();
-		throw error(res.status, res.status === 404 ? 'Corpus not available' : 'Failed to load corpus');
+	const [docRes, entriesRes] = await Promise.all([
+		fetch(`${API_URL}/api/corpus/${jurisdiction}`),
+		fetch(`${API_URL}/api/corpus/${jurisdiction}/entries`)
+	]);
+
+	if (!entriesRes.ok) {
+		const text = await entriesRes.text();
+		throw error(
+			entriesRes.status,
+			entriesRes.status === 404 ? 'Corpus not available' : 'Failed to load corpus entries'
+		);
 	}
 
-	const data = (await res.json()) as { markdown?: string };
-	const markdown = typeof data?.markdown === 'string' ? data.markdown : '';
+	const entriesData = (await entriesRes.json()) as { statutes?: unknown[]; rules?: unknown[] };
+	const statutes = Array.isArray(entriesData?.statutes) ? entriesData.statutes : [];
+	const rules = Array.isArray(entriesData?.rules) ? entriesData.rules : [];
+
+	let markdown = '';
+	if (docRes.ok) {
+		const docData = (await docRes.json()) as { markdown?: string };
+		markdown = typeof docData?.markdown === 'string' ? docData.markdown : '';
+	}
 
 	return {
 		markdown,
+		statutes,
+		rules,
 		jurisdiction
 	};
 };

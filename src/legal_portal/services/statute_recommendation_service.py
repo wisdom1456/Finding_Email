@@ -1,7 +1,7 @@
 """Statute Recommendation Service - Multi-State AI-Powered Statute Suggestions.
 
 This service analyzes case facts and issues to recommend relevant statutes
-from jurisdiction-specific corpora that should be cited in the findings letter.
+from jurisdiction-specific corpora that should be cited in the findings email.
 """
 
 from __future__ import annotations

@@ -77,7 +77,7 @@
 								</h2>
 								<p class="mt-1 text-gray-600">
 									This portal helps you analyze legal documents and generate professional findings
-									letters using AI-powered analysis.
+									emails using AI-powered analysis.
 								</p>
 							</div>
 						</div>
@@ -150,7 +150,7 @@
 									<p class="text-gray-600 text-sm">
 										Once your documents are uploaded, click <strong>"Start Analysis"</strong>. The AI
 										will process your documents in multiple stages: extracting text, identifying key
-										facts, analyzing legal issues, and generating a comprehensive findings letter.
+										facts, analyzing legal issues, and generating a comprehensive findings email.
 									</p>
 									<div class="mt-2 p-3 bg-amber-50 rounded-lg">
 										<p class="text-sm text-amber-800">
@@ -174,7 +174,7 @@
 										<h4 class="font-semibold text-contrast">Review Results</h4>
 									</div>
 									<p class="text-gray-600 text-sm">
-										When analysis is complete, review the generated findings letter, document
+										When analysis is complete, review the generated findings email, document
 										summaries, and case analysis. You can verify extracted facts, check citations,
 										and make edits before finalizing.
 									</p>
@@ -191,10 +191,10 @@
 								<div class="flex-1">
 									<div class="flex items-center gap-2 mb-2">
 										<Mail class="h-5 w-5 text-contrast-light" />
-										<h4 class="font-semibold text-contrast">Generate & Export Letter</h4>
+										<h4 class="font-semibold text-contrast">Generate & Export Email</h4>
 									</div>
 									<p class="text-gray-600 text-sm">
-										Generate your final findings letter with professional formatting. The letter
+										Generate your final findings email with professional formatting. The email
 										includes proper citations to source documents and is ready for client delivery or
 										further editing.
 									</p>
@@ -357,7 +357,7 @@
 								<h4 class="font-semibold text-contrast mb-2">Multi-Stage Processing</h4>
 								<p class="text-gray-600 text-sm">
 									Analysis happens in multiple stages: document extraction, fact identification,
-									timeline construction, legal issue analysis, and findings letter generation. Each
+									timeline construction, legal issue analysis, and findings email generation. Each
 									stage builds on the previous one for comprehensive results.
 								</p>
 							</div>
@@ -375,7 +375,7 @@
 								<p class="text-gray-600 text-sm">
 									The system validates statute citations against verified legal corpus: 51 Florida statutes 
 									and 42 New Mexico statutes. This prevents AI hallucination and ensures accurate legal 
-									references in your findings letters.
+									references in your findings emails.
 								</p>
 							</div>
 							<div>
@@ -383,43 +383,43 @@
 								<p class="text-gray-600 text-sm">
 									Uses specialized AI models for different tasks: GPT-4o for fast document extraction, 
 									GPT-4o-mini for legal issue identification, GPT-4.1 for comprehensive analysis, and 
-									GPT-5.2 for professional letter generation.
+									GPT-5.2 for professional findings email generation.
 								</p>
 							</div>
 						</div>
 					</section>
 
-					<!-- Letter Generation -->
+					<!-- Email Generation (Findings Email) -->
 					<section class="border-t border-gray-200 pt-6">
 						<div class="flex items-start gap-4 mb-4">
 							<div class="p-3 bg-contrast/10 rounded-lg">
 								<Mail class="h-6 w-6 text-contrast" />
 							</div>
 							<div>
-								<h2 class="text-xl font-heading font-semibold text-contrast">Letter Generation</h2>
-								<p class="mt-1 text-gray-600">Create professional findings letters.</p>
+								<h2 class="text-xl font-heading font-semibold text-contrast">Email Generation</h2>
+								<p class="mt-1 text-gray-600">Create professional findings emails.</p>
 							</div>
 						</div>
 						<div class="ml-16 space-y-4">
 							<div>
 								<h4 class="font-semibold text-contrast mb-2">Professional Formatting</h4>
 								<p class="text-gray-600 text-sm">
-									Generated letters follow attorney-style formatting with proper structure,
-									professional language, and clear organization. Letters are suitable for client
+									Findings emails follow attorney-style formatting with proper structure,
+									professional language, and clear organization. Emails are suitable for client
 									delivery or internal review.
 								</p>
 							</div>
 							<div>
 								<h4 class="font-semibold text-contrast mb-2">Citation Management</h4>
 								<p class="text-gray-600 text-sm">
-									All facts in the letter are cited to source documents. Citations use clean filename
+									All facts in the findings email are cited to source documents. Citations use clean filename
 									references so you can verify any statement against the original document.
 								</p>
 							</div>
 							<div>
 								<h4 class="font-semibold text-contrast mb-2">Review & Edit</h4>
 								<p class="text-gray-600 text-sm">
-									Review the generated letter before finalizing. You can edit content, verify facts,
+									Review the findings email before finalizing. You can edit content, verify facts,
 									and adjust language as needed. Export as HTML for further formatting.
 								</p>
 							</div>
@@ -548,9 +548,9 @@
 							</div>
 						</AccordionItem>
 
-						<AccordionItem title="Can I edit the generated letter?">
+						<AccordionItem title="Can I edit the generated findings email?">
 							<p>
-								Yes! The findings letter is fully editable. After analysis completes, you can:
+								Yes! The findings email is fully editable. After analysis completes, you can:
 							</p>
 							<ul class="list-disc list-inside mt-2 space-y-1">
 								<li>Review and modify the content</li>
@@ -560,7 +560,7 @@
 								<li>Export for further editing in Word or other applications</li>
 							</ul>
 							<p class="mt-2">
-								The generated letter is a starting point - always review before sending to clients.
+								The findings email is a starting point—always review before sending to clients.
 							</p>
 						</AccordionItem>
 
@@ -636,7 +636,7 @@
 									prevent hallucination
 								</li>
 								<li>
-									<strong>Findings letter</strong> - Professional quality, but always review before
+									<strong>Findings email</strong> - Professional quality, but always review before
 									sending
 								</li>
 							</ul>

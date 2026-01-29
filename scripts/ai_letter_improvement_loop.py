@@ -77,7 +77,7 @@ REQUIRED: In opening paragraph, list the specific documents: "the construction c
 FORBIDDEN: Do NOT say "the documents you submitted" or "the documents" generically
 """
 
-        generation_prompt = f"""Using the FINDINGS LETTER PROMPT below, generate a client-ready findings letter for this case.
+        generation_prompt = f"""Using the FINDINGS EMAIL PROMPT below, generate a client-ready findings email for this case.
 
 CASE CONTEXT:
 {test_context}
@@ -144,7 +144,7 @@ Generate ONLY the letter content (no meta-commentary).
             messages=[
                 {
                     "role": "system",
-                    "content": "You are a senior legal writing assistant generating attorney-quality findings letters.",
+                    "content": "You are a senior legal writing assistant generating attorney-quality findings emails.",
                 },
                 {"role": "user", "content": generation_prompt},
             ],

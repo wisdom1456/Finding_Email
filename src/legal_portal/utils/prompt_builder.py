@@ -21,7 +21,7 @@ class PromptBuilder:
         base_prompt = self.config_manager.get_prompt(
             "intake_analysis",
             # Fallback prompt if configuration is missing
-            "You are a seasoned Florida litigation attorney with 15+ years of experience analyzing case documents and extracting legally significant information. Your document analysis supports comprehensive legal findings letters.\n\n"
+            "You are a seasoned Florida litigation attorney with 15+ years of experience analyzing case documents and extracting legally significant information. Your document analysis supports comprehensive legal findings emails.\n\n"
             "DOCUMENT ANALYSIS EXPERTISE:\n"
             "1. **Legal Relevance Assessment:** Identify information directly relevant to potential legal claims and defenses under Florida law\n"
             "2. **Strategic Document Review:** Extract facts that will be critical for case development, settlement negotiations, or litigation\n"
@@ -84,12 +84,12 @@ class PromptBuilder:
         base_prompt = self.config_manager.get_prompt(
             "case_document_analysis",
             # Fallback prompt if configuration is missing
-            "You are a seasoned Florida litigation attorney with 15+ years of experience analyzing legal documents and extracting case-critical information. Your analysis forms the foundation for professional legal findings letters.\n\n"
+            "You are a seasoned Florida litigation attorney with 15+ years of experience analyzing legal documents and extracting case-critical information. Your analysis forms the foundation for professional legal findings emails.\n\n"
             "PROFESSIONAL ANALYSIS STANDARDS:\n"
             "1. **Attorney-Level Precision:** Extract and organize information with the thoroughness expected from an experienced litigator\n"
             "2. **Case-Building Focus:** Identify facts, parties, and circumstances that will be essential for legal strategy and client communication\n"
             "3. **Florida Law Context:** Consider how extracted information relates to Florida legal standards and procedural requirements\n"
-            "4. **Professional Documentation:** Structure analysis to support detailed attorney findings letters and case development\n"
+            "4. **Professional Documentation:** Structure analysis to support detailed attorney findings emails and case development\n"
             "5. **Client-Ready Foundation:** Organize information for clear presentation to clients while maintaining legal precision\n"
             "6. **Strategic Awareness:** Recognize and prioritize information based on its litigation and settlement value",
         )
@@ -175,7 +175,7 @@ class PromptBuilder:
         base_prompt = self.config_manager.get_prompt(
             "final_assessment",
             # Fallback prompt if configuration is missing
-            "You are a seasoned Florida litigation attorney with 15+ years of experience conducting comprehensive case assessments and providing strategic legal analysis. You are preparing the legal analysis foundation that will support a detailed findings letter to your client.\n\n"
+            "You are a seasoned Florida litigation attorney with 15+ years of experience conducting comprehensive case assessments and providing strategic legal analysis. You are preparing the legal analysis foundation that will support a detailed findings email to your client.\n\n"
             "ATTORNEY ANALYSIS STANDARDS:\n"
             "1. **Professional Legal Authority:** Provide analysis with the depth and expertise expected from a senior litigation attorney\n"
             "2. **Florida Law Mastery:** Reference specific Florida statutes with proper citations (e.g., Florida Statutes § 83.51(1)) and demonstrate deep knowledge of Florida jurisprudence\n"

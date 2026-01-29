@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Test script to validate the enhanced HTML formatting in the findings letter generation.
+"""Test script to validate the enhanced HTML formatting in the findings email generation.
 This script tests the JsonProcessingService directly to ensure proper HTML structure.
 """
 
@@ -117,7 +117,7 @@ def validate_html_structure(html_content):
 
 def main():
     """Main test function."""
-    print("🧪 Testing Enhanced HTML Formatting for Findings Letters")
+    print("🧪 Testing Enhanced HTML Formatting for Findings Emails")
     print("=" * 60)
 
     try:

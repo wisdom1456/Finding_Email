@@ -116,7 +116,7 @@ The presentation MUST include these sections in this order:
 - Multi-format document support
 - OCR for scanned documents
 - Verified statute citations (FL + NM legal corpus)
-- Professional findings letters with citations
+- Professional findings emails with citations
 - Clio integration
 
 ### 6. Quality and Control
@@ -214,9 +214,9 @@ If the answer to any question is "no," remove the statement.
 ### Language Style
 
 **Use:**
-- Active voice ("The system generates findings letters")
+- Active voice ("The system generates findings emails")
 - Imperative mood for actions ("Upload documents," "Review results")
-- Concrete nouns ("attorneys," "findings letters," "citations")
+- Concrete nouns ("attorneys," "findings emails," "citations")
 - Specific numbers ("51 Florida statutes," "2-5 minutes")
 
 **Avoid:**
@@ -284,7 +284,7 @@ Keep explanations simple and direct. Attorneys do not need to understand how the
 - "Supabase provides PostgreSQL with row-level security"
 
 **Example of What TO Do:**
-- "AI analyzes your documents and generates a findings letter"
+- "AI analyzes your documents and generates a findings email"
 - "System processes multiple documents simultaneously"
 - "All case data is secure and access-controlled"
 

@@ -65,7 +65,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
 # Initialize FastAPI application
 app = FastAPI(
     title="Legal Document Analysis API",
-    description="Backend API for analyzing legal documents and generating findings letters",
+    description="Backend API for analyzing legal documents and generating findings emails",
     version="1.0.0",
     lifespan=lifespan,
 )

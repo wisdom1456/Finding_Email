@@ -47,7 +47,7 @@ This is not a pilot, beta test, or proof of concept. This is production software
 - Multi-model AI architecture: GPT-4o Vision, GPT-4o-mini, GPT-4.1, GPT-5.2
 - Real-time progress updates via Server-Sent Events (SSE)
 
-**Findings Letter Generation**
+**Findings Email Generation**
 - Attorney-style professional formatting
 - Document-cited facts with clean filename references
 - Editable output with HTML export
@@ -275,7 +275,7 @@ Attorneys suggest improvements or new features through the same feedback channel
 **Recommended Usage:**
 - Use Harvey AI for all new Florida and New Mexico civil litigation intake cases
 - Upload documents within 24 hours of client consultation
-- Run analysis and review findings letters within 48 hours of upload
+- Run analysis and review findings emails within 48 hours of upload
 - Report any issues or inaccuracies through feedback loop
 
 **Professional Responsibility:**

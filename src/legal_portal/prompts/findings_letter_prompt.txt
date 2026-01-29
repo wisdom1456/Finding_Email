@@ -203,7 +203,7 @@ This analysis is based on the documents provided and represents a preliminary as
 
 ### IF `IS_VIABLE` is TRUE but `RECOMMEND_DEMAND_LETTER` is FALSE:
 
-Draft the standard findings letter but:
+Draft the standard findings email but:
 1. **Do NOT recommend sending a demand letter** in the recommendations section
 2. **Explain why a demand letter is not the right approach** (e.g., "Given the circumstances, we recommend proceeding directly to [alternative action] rather than sending a demand letter because [reason].")
 3. Suggest alternative approaches based on the case

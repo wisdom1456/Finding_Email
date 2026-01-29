@@ -15,7 +15,7 @@ This is not a prototype or a beta test. This is production-ready software (Versi
 ### Slide 2: The Problem: Inefficient Intake
 *   **Time Drain:** Manual document review requires hours of reading to extract basic facts, dates, and parties.
 *   **Low-Value Work:** This initial review does not require senior attorney judgment but consumes valuable time.
-*   **Consistency Risks:** Creating findings letters from scratch is time-consuming and leads to structural inconsistencies.
+*   **Consistency Risks:** Creating findings emails from scratch is time-consuming and leads to structural inconsistencies.
 *   **Citation Errors:** Manual citation across multiple documents is error-prone and creates liability risk.
 
 **Speaker Notes:**
@@ -24,7 +24,7 @@ We are solving for the bottleneck in case intake. The goal is to remove the "bus
 ***
 
 ### Slide 3: The Solution: Harvey AI
-*   **Production Software:** A live system that analyzes legal documents and generates findings letters.
+*   **Production Software:** A live system that analyzes legal documents and generates findings emails.
 *   **Automated Extraction:** Extracts text, identifies key facts, and constructs timelines from PDF, Word, and image files.
 *   **Hallucination Prevention:** Validates all statute citations against a verified legal corpus for Florida and New Mexico.
 *   **Verifiable Output:** Every fact in the generated letter is cited directly to its source document.
@@ -38,7 +38,7 @@ Think of this tool as a tireless junior associate. It handles the initial review
 *   **Step 1: Create Case:** Initialize a case record with client name and reference number.
 *   **Step 2: Upload Documents:** Drag-and-drop files or import directly from Clio,.
 *   **Step 3: Run Analysis:** AI identifies legal issues and processes documents (1–8 minutes),.
-*   **Step 4: Review Results:** Verify the generated findings letter, timeline, and document summaries.
+*   **Step 4: Review Results:** Verify the generated findings email, timeline, and document summaries.
 *   **Step 5: Export:** Edit the letter in-browser and export to HTML/Word for final polish.
 
 **Speaker Notes:**
@@ -57,7 +57,7 @@ For best results, upload core documents first: intake forms, police reports, con
 
 ***
 
-### Slide 6: Findings Letters & Citations
+### Slide 6: Findings Emails & Citations
 *   **Professional Format:** Generates structured, attorney-style letters (Introduction, Findings, Analysis, Conclusion).
 *   **Source Linking:** Every fact includes an inline citation (e.g., `[Client_Intake.pdf]`).
 *   **Instant Verification:** Click any citation to view the original source document and verify the fact in context.

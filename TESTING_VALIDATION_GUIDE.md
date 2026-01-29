@@ -29,7 +29,7 @@ streamlit run src/legal_portal/ui/main.py
 1. Upload an intake form
 2. Upload case documents
 3. Select key documents and legal issues
-4. Click "Generate Findings Letter"
+4. Click "Generate Findings Email"
 
 The app will automatically use the multi-stage analysis pipeline.
 
@@ -55,7 +55,7 @@ You should see new progress stages:
    - Deciding on formatting patterns
 
 5. **Generating Letter** (80-100%)
-   - Creating adaptive findings letter
+   - Creating adaptive findings email
 
 ### Letter Quality Indicators
 
@@ -341,7 +341,7 @@ If you encounter issues during testing:
 
 ## Conclusion
 
-The multi-stage analysis pipeline is a significant enhancement that should produce substantially better findings letters. Take time to thoroughly test with diverse cases and compare results to attorney examples.
+The multi-stage analysis pipeline is a significant enhancement that should produce substantially better findings emails. Take time to thoroughly test with diverse cases and compare results to attorney examples.
 
 **Remember:** The system will automatically fall back to the standard workflow if any issues occur, so production operation is safe even during testing phase.
 

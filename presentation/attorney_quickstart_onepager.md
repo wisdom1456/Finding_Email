@@ -7,7 +7,7 @@ _Faster intake. Cleaner analysis. Verified citations._
 
 ## What This Is
 
-Harvey AI is Bernhardt Riley's internal legal document analysis portal. It analyzes case documents using AI and generates professional findings letters with verified citations. You remain in control—this accelerates the first pass, not replaces your judgment.
+Harvey AI is Bernhardt Riley's internal legal document analysis portal. It analyzes case documents using AI and generates professional findings emails with verified citations. You remain in control—this accelerates the first pass, not replaces your judgment.
 
 ---
 
@@ -36,14 +36,14 @@ Harvey AI is Bernhardt Riley's internal legal document analysis portal. It analy
 
 ### 4. Review Results
 
-- Review **Findings Letter** (professional format, document-cited facts)
+- Review **Findings Email** (professional format, document-cited facts)
 - Check **Document Summaries** (extracted key facts from each document)
 - Verify **Case Analysis** (timeline, legal issues, statute recommendations)
 - Click any citation to verify against source document
 
-### 5. Generate & Export Letter
+### 5. Generate & Export Email
 
-- Review and edit the findings letter as needed
+- Review and edit the findings email as needed
 - Export as **HTML** for further editing in Word or other tools
 - **Critical:** Always review before sending to clients—this is a draft, not final output
 
@@ -75,7 +75,7 @@ Manage document quality, run bulk OCR, exclude duplicates, verify extraction suc
 Import matters directly from Clio (click "Clio" in navigation to connect)
 
 ### ✓ Professional Formatting
-Findings letters follow attorney-style structure with clean filename citations
+Findings emails follow attorney-style structure with clean filename citations
 
 ### ✓ Real-Time Progress
 Server-Sent Events (SSE) provide live updates during analysis

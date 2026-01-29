@@ -1,6 +1,6 @@
 # Attorney Letter Reference Examples
 
-This directory contains three actual attorney-written findings letters that serve as the **gold standard** for our AI-generated letter tool.
+This directory contains three actual attorney-written findings emails that serve as the **gold standard** for our AI-generated letter tool.
 
 ## Purpose
 
@@ -8,7 +8,7 @@ These examples demonstrate the **actual structure, tone, and content** that atto
 
 1. **Training and refinement** of the AI prompt template
 2. **Quality comparison** - measuring how closely AI-generated letters match attorney style
-3. **Pattern identification** - understanding what makes an effective client findings letter
+3. **Pattern identification** - understanding what makes an effective client findings email
 
 ## The Three Examples
 
@@ -113,7 +113,7 @@ These are **legal memo sections**, not client communication.
 
 ## Key Differences: Client Letter vs. Legal Memo
 
-| Element | Client Findings Letter | Legal Memo |
+| Element | Client Findings Email | Legal Memo |
 |---------|----------------------|------------|
 | Length | 600-1,200 words | 2,000-2,500 words |
 | Sections | 3-4 sections | 8+ sections |

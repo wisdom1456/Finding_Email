@@ -77,7 +77,7 @@ The system processes documents through multiple stages:
 
 4. **Legal Issue Analysis:** AI analyzes extracted facts against the selected legal issue category, identifies relevant statutes, and constructs legal arguments.
 
-5. **Findings Letter Generation:** AI produces a professional findings letter with all facts cited to source documents.
+5. **Findings Email Generation:** AI produces a professional findings email with all facts cited to source documents.
 
 **Progress Monitoring:**
 Real-time progress updates appear during analysis via Server-Sent Events (SSE). Attorneys see which stage is currently processing and estimated time remaining.
@@ -101,7 +101,7 @@ When analysis completes, attorneys review the generated outputs.
 
 **What to Review:**
 
-**Findings Letter**
+**Findings Email**
 - Professional attorney-style formatting
 - Structured sections: introduction, findings, legal analysis, conclusion
 - Every fact cited to source document using clean filename references
@@ -119,10 +119,10 @@ When analysis completes, attorneys review the generated outputs.
 - Analysis of strengths and potential challenges
 
 **Citation Verification**
-Click any citation in the findings letter to view the source document and verify the extracted fact matches the original context.
+Click any citation in the findings email to view the source document and verify the extracted fact matches the original context.
 
 **Best Practice:**
-Review findings letter paragraph by paragraph. Verify that:
+Review findings email paragraph by paragraph. Verify that:
 - Facts are accurately extracted
 - Citations link to correct source documents
 - Legal analysis matches case specifics
@@ -130,7 +130,7 @@ Review findings letter paragraph by paragraph. Verify that:
 
 ### Step 5: Generate and Export Letter
 
-After reviewing and editing the findings letter, attorneys finalize the output.
+After reviewing and editing the findings email, attorneys finalize the output.
 
 **Action:**
 - Edit letter content directly in the interface as needed
@@ -255,7 +255,7 @@ If preserving previous analysis results is important, create a duplicate case be
 1. Create case immediately after client consultation
 2. Upload intake form, contracts, and correspondence
 3. Run analysis within 24 hours of intake
-4. Review findings letter and verify facts
+4. Review findings email and verify facts
 5. Edit and send letter to client within 48 hours of intake
 
 **Time Savings:**
@@ -268,7 +268,7 @@ Reduces intake processing from 3-4 hours to 30-60 minutes of attorney time.
 3. Click Clio button and search for matter
 4. Import matter directly (documents auto-upload)
 5. Run analysis immediately
-6. Review and finalize findings letter
+6. Review and finalize findings email
 
 **Time Savings:**
 Eliminates manual document download and upload. Reduces intake processing to 20-40 minutes of attorney time.
@@ -302,7 +302,7 @@ Reduces complex case review from 8-12 hours to 2-3 hours of attorney time.
 
 ### After Analysis
 
-- Review findings letter completely before any client communication
+- Review findings email completely before any client communication
 - Verify all facts against source documents using citation links
 - Check that statute citations are appropriate and accurate
 - Edit language, tone, and structure as needed for client delivery

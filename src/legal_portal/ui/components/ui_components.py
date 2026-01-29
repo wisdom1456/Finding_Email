@@ -643,7 +643,7 @@ def results_display_section():
             else:
                 st.success(f"✅ Clean letter has no citations (length: {len(main_letter_content)} chars)")
 
-            # Display the main findings letter
+            # Display the main findings email
             if st.session_state.get("main_letter"):
                 # Wrap the letter content with explicit styling to force white background and black text
                 # This ensures the content is readable in both light and dark modes
@@ -674,7 +674,7 @@ def results_display_section():
                 # Display the letter directly without cleaning citations
                 components.html(wrapped_html, height=800, scrolling=True, width=None)
             else:
-                st.info("The findings letter is being generated.")
+                st.info("The findings email is being generated.")
 
         # Attorney Review Letter Tab (With Citations)
         with tabs[1]:
@@ -706,7 +706,7 @@ def results_display_section():
                 st.error("🐛 DEBUG: Cited letter has NO citations - something went wrong!")
                 st.warning(f"Letter length: {len(cited_letter_content)} chars")
 
-            # Display the findings letter with citations
+            # Display the findings email with citations
             if st.session_state.get("main_letter_with_citations"):
                 # Wrap the cited letter content with explicit styling
                 wrapped_cited_html = f"""
@@ -839,7 +839,7 @@ def results_display_section():
 
 
 def _display_download_buttons(col1, col2, col3, col4):
-    """Display download buttons for the findings letters (clean and cited), document review, and case analysis."""  # noqa: E501
+    """Display download buttons for the findings emails (clean and cited), document review, and case analysis."""  # noqa: E501
     # Get client name for filename
     client_name = "Client"
     if st.session_state.get("case_info"):
@@ -852,22 +852,22 @@ def _display_download_buttons(col1, col2, col3, col4):
     formatter = DocumentFormatterService()
 
     with col1:
-        # Download button for clean findings letter (no citations)
+        # Download button for clean findings email (no citations)
         try:
             if st.session_state.get("main_letter"):
                 main_letter_bytes = st.session_state.main_letter.encode("utf-8")
                 st.download_button(
-                    label="📧 Findings Letter",
+                    label="📧 Findings Email",
                     data=main_letter_bytes,
                     file_name=f"Findings_Letter_{client_name}.html",
                     mime="text/html",
-                    help="Download findings letter (clean version)",
+                    help="Download findings email (clean version)",
                 )
         except Exception as e:
             st.error(f"Error: {e}")
 
     with col2:
-        # Download button for cited findings letter (NEW)
+        # Download button for cited findings email (NEW)
         try:
             if st.session_state.get("main_letter_with_citations"):
                 cited_letter_bytes = st.session_state.main_letter_with_citations.encode("utf-8")

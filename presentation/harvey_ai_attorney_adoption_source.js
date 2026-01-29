@@ -112,7 +112,7 @@ slide.addText('The Problem: Inefficient Intake', {
 slide.addText([
   { text: 'Manual document review requires hours to extract basic facts', options: { bullet: true, breakLine: false } },
   { text: 'Initial review consumes attorney time without requiring senior judgment', options: { bullet: true, breakLine: false } },
-  { text: 'Creating findings letters from scratch leads to inconsistencies', options: { bullet: true, breakLine: false } },
+  { text: 'Creating findings emails from scratch leads to inconsistencies', options: { bullet: true, breakLine: false } },
   { text: 'Manual citation is error-prone and creates liability risk', options: { bullet: true, breakLine: false } }
 ], {
   x: 1.5,
@@ -173,7 +173,7 @@ slide.addText('The Solution: Harvey AI', {
 });
 
 slide.addText([
-  { text: 'Production software that analyzes documents and generates findings letters', options: { bullet: true, breakLine: false } },
+  { text: 'Production software that analyzes documents and generates findings emails', options: { bullet: true, breakLine: false } },
   { text: 'Extracts text, identifies facts, and constructs timelines automatically', options: { bullet: true, breakLine: false } },
   { text: 'Validates statute citations against verified legal corpus', options: { bullet: true, breakLine: false } },
   { text: 'Every fact cited directly to its source document', options: { bullet: true, breakLine: false } }
@@ -240,7 +240,7 @@ const steps = [
   'Create Case: Initialize case record with client name and reference number',
   'Upload Documents: Drag-and-drop files or import directly from Clio',
   'Run Analysis: AI processes documents (1–8 minutes)',
-  'Review Results: Verify findings letter, timeline, and document summaries',
+  'Review Results: Verify findings email, timeline, and document summaries',
   'Export: Edit letter in-browser and export to HTML/Word'
 ];
 
@@ -357,7 +357,7 @@ slide.addNotes(
 slide = pres.addSlide();
 slide.background = { color: BRAND.base };
 
-slide.addText('Findings Letters & Citations', {
+slide.addText('Findings Emails & Citations', {
   x: 1.0,
   y: 0.8,
   w: 11.33,

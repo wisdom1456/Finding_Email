@@ -82,7 +82,7 @@ const DEFAULT_STAGES: StageState[] = [
 	{ id: 'fact_matrix', name: 'Extracting Facts', status: 'pending', progress: 0 },
 	{ id: 'issue_mapping', name: 'Legal Issues', status: 'pending', progress: 0 },
 	{ id: 'deep_analysis', name: 'Deep Analysis', status: 'pending', progress: 0 },
-	{ id: 'letter_structure', name: 'Letter Structure', status: 'pending', progress: 0 },
+	{ id: 'letter_structure', name: 'Findings Email Structure', status: 'pending', progress: 0 },
 ];
 
 const initialState: EnhancedProgressState<unknown> = {

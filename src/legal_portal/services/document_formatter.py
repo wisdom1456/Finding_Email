@@ -998,7 +998,7 @@ class DocumentFormatterService:
 
     @staticmethod
     def format_findings_letter(letter_html: str, client_name: str = "Client") -> str:
-        """Format findings letter HTML with professional legal document styling.
+        """Format findings email HTML with professional legal document styling.
 
         Args:
         ----
@@ -1010,7 +1010,7 @@ class DocumentFormatterService:
             Fully-formatted HTML with professional styling
 
         """
-        logger.info(f"Formatting findings letter for client: '{client_name}'")
+        logger.info(f"Formatting findings email for client: '{client_name}'")
         try:
             # Clean the input HTML - remove any existing html/body tags
             cleaned_content = letter_html
@@ -1029,7 +1029,7 @@ class DocumentFormatterService:
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Findings Letter - {client_name}</title>
+    <title>Findings Email - {client_name}</title>
     <style>
         html, body {{
             background-color: #ffffff !important;
@@ -1284,11 +1284,11 @@ class DocumentFormatterService:
 </html>
 """
 
-            logger.info("Successfully formatted findings letter with professional styling")
+            logger.info("Successfully formatted findings email with professional styling")
             return formatted_html
 
         except Exception as e:
-            logger.error(f"Error formatting findings letter: {e}")
+            logger.error(f"Error formatting findings email: {e}")
             return DocumentFormatterService._format_error(str(e))
 
     @staticmethod

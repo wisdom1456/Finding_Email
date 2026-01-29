@@ -52,7 +52,7 @@ After restarting the app, also clear your browser cache:
 
 After restarting:
 
-1. **Generate a new findings letter** with the same test case
+1. **Generate a new findings email** with the same test case
 2. **Download the HTML file**
 3. **Open it in a text editor** and check line ~257 in the `<body>` section
 4. **Verify**:

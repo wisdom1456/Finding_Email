@@ -1,6 +1,6 @@
 # Legal Document Analysis Portal
 
-A modern full-stack application for analyzing legal documents and generating professional findings letters, built with SvelteKit and FastAPI.
+A modern full-stack application for analyzing legal documents and generating professional findings emails, built with SvelteKit and FastAPI.
 
 ## 📚 Documentation
 
@@ -105,7 +105,7 @@ vercel --prod
 
 ### Letter Generation
 
-- **Professional Formatting**: Generate attorney-style findings letters
+- **Professional Formatting**: Generate attorney-style findings emails
 - **Citation Management**: Clean filename citations with document tracking
 - **Client-Friendly Output**: Review and edit letters before finalization
 - **Multiple Export Formats**: HTML output

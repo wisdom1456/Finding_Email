@@ -20,7 +20,7 @@ The system does not:
 
 The system does:
 - Provide a first draft of document analysis
-- Generate professionally formatted findings letters
+- Generate professionally formatted findings emails
 - Cite all facts to source documents for verification
 - Accelerate the initial document review process
 
@@ -38,7 +38,7 @@ But like any junior associate, the work product requires senior attorney review,
 
 ### How Citations Work
 
-Every fact stated in the findings letter is linked to its source document.
+Every fact stated in the findings email is linked to its source document.
 
 **Citation Format:**
 Facts appear with inline citations using clean filename references:
@@ -86,7 +86,7 @@ Harvey AI validates all statute citations against a verified legal corpus:
 
 ### How Validation Works
 
-When generating findings letters and legal analysis, the AI system:
+When generating findings emails and legal analysis, the AI system:
 1. Identifies potentially relevant statutes based on case facts
 2. Validates each statute citation against the legal corpus
 3. Rejects citations to statutes not in the verified corpus
@@ -153,14 +153,14 @@ Using specialized models for specific tasks improves accuracy and reduces errors
 ### Output Stage
 
 **Professional Formatting Validation:**
-Generated findings letters follow attorney-style formatting standards:
+Generated findings emails follow attorney-style formatting standards:
 - Clear section structure
 - Professional tone and language
 - Proper citation formatting
 - Client-appropriate complexity level
 
 **Consistency:**
-All findings letters follow the same structural template, ensuring consistent quality across cases and attorneys.
+All findings emails follow the same structural template, ensuring consistent quality across cases and attorneys.
 
 ## Accuracy Positioning
 
@@ -187,7 +187,7 @@ The AI auto-selects the most likely legal issue based on intake form content. At
 While statute citations are validated against the legal corpus (preventing hallucination), attorneys must verify that cited statutes apply to the specific case facts and procedural posture.
 
 **Fact Context:**
-Extracted facts may be accurate but taken out of context. Attorneys must verify that facts are presented with appropriate context in the findings letter.
+Extracted facts may be accurate but taken out of context. Attorneys must verify that facts are presented with appropriate context in the findings email.
 
 **Legal Conclusions:**
 The AI generates legal analysis and conclusions based on extracted facts. Attorneys must verify that conclusions are legally sound and strategically appropriate.
@@ -224,7 +224,7 @@ The system excels at:
 
 5. **Edit for Tone:** Adjust language and tone to match client sophistication and case sensitivity.
 
-6. **Proofread Output:** Review the complete findings letter for grammatical errors, formatting issues, and logical flow.
+6. **Proofread Output:** Review the complete findings email for grammatical errors, formatting issues, and logical flow.
 
 ### For High-Stakes Cases
 

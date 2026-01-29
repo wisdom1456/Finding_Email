@@ -6,7 +6,7 @@ A modern **SvelteKit and FastAPI application** deployed on **Vercel** that autom
 
 ### Core Capabilities
 - **Automated Document Analysis**: AI-powered extraction of key legal information from intake forms and case documents
-- **Professional Output Generation**: Client-ready findings letters with verified statute citations
+- **Professional Output Generation**: Client-ready findings emails with verified statute citations
 - **Multi-Format Support**: Process PDF, DOCX, images (with OCR), CSV, TXT, EML, and HTML files
 - **Clio Integration**: Direct import of matters, documents, and communications from Clio
 - **Verified Legal Corpus**: 51 Florida statutes + 42 New Mexico statutes prevent AI hallucination
@@ -114,7 +114,7 @@ This application is deployed and accessible at your organization's URL. Simply:
 2. **Create a new case** from the Dashboard
 3. **Upload documents** - drag and drop your case files
 4. **Start analysis** and watch real-time progress
-5. **Review and generate** your findings letter
+5. **Review and generate** your findings email
 
 See the [Help & Documentation](#-help--documentation) section below for detailed guides.
 
@@ -325,13 +325,13 @@ Contact your administrator who can relay feedback to the development team.
 
 ## Why This Application Exists
 
-The **Legal Document Analysis Portal** addresses the time-consuming challenges law firms face in case intake and document analysis. Legal professionals traditionally spend hours manually reviewing documents, extracting facts, researching statutes, and drafting findings letters.
+The **Legal Document Analysis Portal** addresses the time-consuming challenges law firms face in case intake and document analysis. Legal professionals traditionally spend hours manually reviewing documents, extracting facts, researching statutes, and drafting findings emails.
 
 ### Key Problems Solved
 
 #### Time Efficiency
 - **Automated Analysis**: What takes 3-5 hours manually now takes 5-10 minutes with AI assistance
-- **Quick Turnaround**: Clients receive professional findings letters in minutes, not days
+- **Quick Turnaround**: Clients receive professional findings emails in minutes, not days
 - **Batch Processing**: Handle multiple documents simultaneously
 
 #### Quality & Consistency
@@ -352,7 +352,7 @@ The **Legal Document Analysis Portal** addresses the time-consuming challenges l
 2. **Upload Documents**: Drag and drop intake forms and supporting documents (PDF, DOCX, images, etc.)
 3. **AI Analysis**: Multi-stage AI processing extracts facts, identifies issues, validates statutes
 4. **Review Results**: Verify AI findings, check citations, make any needed adjustments
-5. **Generate Letter**: Professional findings letter ready for client delivery
+5. **Generate Email**: Professional findings email ready for client delivery
 
 ### Multi-Stage AI Analysis Pipeline
 
@@ -362,7 +362,7 @@ The system uses specialized AI models for different tasks:
 2. **Legal Issue Identification** (GPT-4o-mini): Auto-selects most likely practice area from 30+ options
 3. **Fact Matrix** (GPT-4.1): Structured extraction of parties, timeline, financial items, key documents
 4. **Legal Analysis** (GPT-4.1): Comprehensive analysis applying relevant statutes to case facts
-5. **Letter Generation** (GPT-5.2): Professional findings letter with proper citations and structure
+5. **Email Generation** (GPT-5.2): Professional findings email with proper citations and structure
 
 ## Target Users & Benefits
 

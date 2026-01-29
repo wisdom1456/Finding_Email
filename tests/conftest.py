@@ -113,7 +113,7 @@ def mock_openai_client(monkeypatch):
             # Letter generation response
             response_json = {
                 "letter_content": """<html><body>
-                    <h1>Findings Letter</h1>
+                    <h1>Findings Email</h1>
                     <p>Dear John Doe,</p>
                     <p>This letter summarizes our analysis of your case.</p>
                     <h2>Legal Analysis</h2>

@@ -374,7 +374,7 @@
 
 			if (!response.ok) {
 				const detail = await response.json().catch(() => ({}));
-				throw new Error(detail?.detail || 'Failed to stream letter');
+				throw new Error(detail?.detail || 'Failed to stream findings email');
 			}
 
 			const reader = response.body?.getReader();
@@ -406,7 +406,7 @@
 				}
 			}
 		} catch (err: any) {
-			toastStore.error(err.message || 'Letter generation failed');
+			toastStore.error(err.message || 'Findings email generation failed');
 		} finally {
 			generatingFindings = false;
 		}
@@ -504,7 +504,7 @@ async function generateLetterRequest(body: Record<string, any>) {
 
 			if (!response.ok) {
 				const detail = await response.json().catch(() => ({}));
-				throw new Error(detail?.detail || 'Failed to generate letter');
+				throw new Error(detail?.detail || 'Failed to generate findings email');
 			}
 
 			const data = await response.json();
@@ -517,7 +517,7 @@ async function generateLetterRequest(body: Record<string, any>) {
 				};
 			}
 		} catch (err: any) {
-			alert(err.message || 'Letter generation failed');
+			alert(err.message || 'Findings email generation failed');
 		}
 	}
 
@@ -645,7 +645,7 @@ async function generateLetterRequest(body: Record<string, any>) {
 							</span>
 						{/if}
 						{#if modelsUsed.letter_generation}
-							<span class="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-green-50 text-green-700 border border-green-200" title="Letter Generation">
+							<span class="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-green-50 text-green-700 border border-green-200" title="Findings Email & Demand Letter">
 								<svg class="h-3 w-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
 								</svg>
@@ -754,7 +754,7 @@ async function generateLetterRequest(body: Record<string, any>) {
 					}`}
 					onclick={() => (activeTab = 'letters')}
 				>
-					Generate Letters
+					Findings & Demand
 				</button>
 				<button
 					class={`py-4 px-1 border-b-2 text-sm font-medium ${
@@ -913,9 +913,9 @@ async function generateLetterRequest(body: Record<string, any>) {
 						<p class="text-amber-900 font-medium">
 							{#if multiStageError}
 								<strong class="font-bold">⚠️ Advanced analysis failed:</strong> {multiStageError}.
-								Letter generation is unavailable for this specific analysis run.
+								Findings email generation is unavailable for this specific analysis run.
 							{:else}
-								On-demand letters are unavailable because this case was processed with an older workflow.
+								On-demand findings emails are unavailable because this case was processed with an older workflow.
 							{/if}
 							Please re-run analysis to enable this feature.
 						</p>
@@ -924,8 +924,8 @@ async function generateLetterRequest(body: Record<string, any>) {
 					<section class="card-standard">
 						<div class="flex items-center justify-between mb-6">
 							<div>
-								<h3 class="text-xl font-heading font-bold text-contrast">Findings Letter</h3>
-								<p class="text-sm text-gray-500 mt-1">Generate a client-ready findings letter on demand.</p>
+								<h3 class="text-xl font-heading font-bold text-contrast">Findings Email</h3>
+								<p class="text-sm text-gray-500 mt-1">Generate a client-ready findings email on demand.</p>
 							</div>
 							<AsyncButton
 								variant="primary"
@@ -933,7 +933,7 @@ async function generateLetterRequest(body: Record<string, any>) {
 								loading={generatingFindings}
 								loadingText="Generating..."
 							>
-								Generate Letter
+								Generate Email
 							</AsyncButton>
 						</div>
 						{#if generatingFindings && findingsLetter}
@@ -941,30 +941,30 @@ async function generateLetterRequest(body: Record<string, any>) {
 							<div class="space-y-4 animate-fade-in-up">
 								<div class="flex items-center gap-2 text-sm text-accent font-medium">
 									<div class="animate-spin rounded-full h-4 w-4 border-2 border-accent border-t-transparent"></div>
-									Generating letter...
+									Generating email...
 								</div>
 								<div class="border border-gray-200 rounded-lg overflow-hidden bg-white shadow-inner p-6 h-[600px] overflow-y-auto prose prose-sm max-w-none">
 									{@html findingsLetter}
 								</div>
 							</div>
 						{:else if findingsLetter}
-							<!-- Completed letter - show in iframe -->
+							<!-- Completed findings email - show in iframe -->
 							<div class="space-y-4 animate-fade-in-up">
 								<div class="flex justify-end">
 									<button
 										class="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-bold rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent transition-all shadow-sm"
-										onclick={() => downloadLetter(findingsLetter!, `findings-letter-${caseId}.html`)}
+										onclick={() => downloadLetter(findingsLetter!, `findings-email-${caseId}.html`)}
 									>
 										Download HTML
 									</button>
 								</div>
 								<div class="border border-gray-200 rounded-lg overflow-hidden bg-white shadow-inner">
-									<iframe srcdoc={findingsLetter.replace(/\\n/g, '\n')} title="Findings Letter" class="w-full h-[600px] border-0" sandbox="allow-same-origin allow-scripts"></iframe>
+									<iframe srcdoc={findingsLetter.replace(/\\n/g, '\n')} title="Findings Email" class="w-full h-[600px] border-0" sandbox="allow-same-origin allow-scripts"></iframe>
 								</div>
 							</div>
 						{:else}
 							<div class="bg-gray-50 rounded-lg p-12 text-center border-2 border-dashed border-gray-200">
-								<p class="text-gray-400 text-sm font-medium">No findings letter generated yet. Click "Generate Letter" to start.</p>
+								<p class="text-gray-400 text-sm font-medium">No findings email generated yet. Click "Generate Email" to start.</p>
 							</div>
 						{/if}
 					</section>

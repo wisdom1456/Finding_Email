@@ -2,11 +2,11 @@
 
 ## What Is This Tool?
 
-The Legal Document Analysis Portal, referred to internally as Harvey AI, is a production-ready legal technology system deployed at Bernhardt Riley. It analyzes legal documents using artificial intelligence and generates professional findings letters with verified citations.
+The Legal Document Analysis Portal, referred to internally as Harvey AI, is a production-ready legal technology system deployed at Bernhardt Riley. It analyzes legal documents using artificial intelligence and generates professional findings emails with verified citations.
 
 ## Plain-English Description
 
-This system processes case documents uploaded by attorneys and produces structured legal analysis. It extracts text from multiple document formats, identifies relevant facts and timelines, analyzes potential legal issues, and generates attorney-style findings letters. Each fact in the generated output is cited to its source document, enabling attorneys to verify any statement against the original material.
+This system processes case documents uploaded by attorneys and produces structured legal analysis. It extracts text from multiple document formats, identifies relevant facts and timelines, analyzes potential legal issues, and generates attorney-style findings emails. Each fact in the generated output is cited to its source document, enabling attorneys to verify any statement against the original material.
 
 ## Problems It Solves for Attorneys
 
@@ -44,7 +44,7 @@ The portal performs these specific functions:
 - Generates comprehensive case analysis with structured data
 
 **Letter Generation**
-- Produces attorney-style findings letters
+- Produces attorney-style findings emails
 - Cites every fact to its source document using clean filename references
 - Formats output for professional client delivery
 - Provides editable HTML output for further revision

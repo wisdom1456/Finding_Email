@@ -139,7 +139,7 @@ Successfully implemented Phase 1 of the New Mexico multi-state support plan:
     *   **Recommendations Section**: Added Final Analysis with recommendations and next steps when available
     *   **Document Reference**: Documents now shown as brief count with reference to separate Document Appendix, eliminating document-by-document summaries from case analysis
     *   **Professional Styling**: Added colored boxes (green for assessments, red for warnings), list items with border accents, party boxes for clear information hierarchy
-*   **Full-Width Display Fix**: Updated `app/components/ui_components.py` to use `width=None` parameter and CSS `max-width: 100%; width: 100%` for proper rendering of findings letter in results tab
+*   **Full-Width Display Fix**: Updated `app/components/ui_components.py` to use `width=None` parameter and CSS `max-width: 100%; width: 100%` for proper rendering of findings email in results tab
 *   **Intake Document Inclusion**: Modified `src/legal_portal/services/main_processor.py` to include intake form as first document in appendix with special "Primary Document" designation and blue border styling
 *   **Document Appendix Template Created**: Built comprehensive `document_appendix.jinja2` template with professional styling, timeline support, and proper document categorization (intake vs case documents)
 *   **Visual Hierarchy**: Implemented badge system (intake form, case document, video) and color coding to improve document navigation

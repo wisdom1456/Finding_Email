@@ -2,14 +2,14 @@
 
 **Transform hours of manual document review into minutes of AI-powered analysis.**
 
-This portal automates the most time-consuming parts of case intake and analysis, giving you professional findings letters in minutes instead of hours. Here's how it works and why it matters for your practice.
+This portal automates the most time-consuming parts of case intake and analysis, giving you professional findings emails in minutes instead of hours. Here's how it works and why it matters for your practice.
 
 ---
 
 ## 🎯 The Bottom Line: What You Get
 
 - **Save 80% of your time** on initial case assessments
-- **Professional findings letters** ready for client delivery in 2-5 minutes
+- **Professional findings emails** ready for client delivery in 2-5 minutes
 - **AI-powered legal analysis** using GPT-5.2, the most advanced reasoning model available
 - **Accurate statute citations** validated against verified Florida and New Mexico legal corpus
 - **Seamless Clio integration** - import matters and documents with one click
@@ -23,7 +23,7 @@ This portal automates the most time-consuming parts of case intake and analysis,
 2. **Upload documents** - Drag and drop multiple files at once (1 minute)
 3. **AI analyzes everything** - GPT-5.2 processes documents, extracts facts, identifies legal issues (2-5 minutes)
 4. **Review and verify** - Check the AI's work, make any adjustments (2-3 minutes)
-5. **Generate letter** - Professional findings letter ready for client delivery (instant)
+5. **Generate letter** - Professional findings email ready for client delivery (instant)
 
 **Total time: 5-10 minutes** vs. 2-4 hours of manual work.
 
@@ -59,7 +59,7 @@ This system uses multiple specialized AI models optimized for different tasks:
 - **GPT-4o** - Fast document extraction and OCR from scanned documents/images
 - **GPT-4o-mini** - Quick legal issue identification from intake forms
 - **GPT-4.1** - High-quality multi-stage case analysis and synthesis
-- **GPT-5.2** - Professional findings letter generation with reasoning capabilities
+- **GPT-5.2** - Professional findings email generation with reasoning capabilities
 
 Each model is selected for optimal performance, cost-efficiency, and quality for its specific task. This multi-model approach delivers:
 
@@ -78,7 +78,7 @@ Each model is selected for optimal performance, cost-efficiency, and quality for
 4. **Legal Issue Detection** (GPT-4o-mini) - Automatically identifies the most relevant practice area
 5. **Statute Mapping** - Matches facts to applicable Florida or New Mexico statutes
 6. **Deep Legal Analysis** (GPT-4.1) - Applies legal standards to your specific facts
-7. **Letter Generation** (GPT-5.2) - Creates professional findings letter with proper structure and reasoning
+7. **Letter Generation** (GPT-5.2) - Creates professional findings email with proper structure and reasoning
 
 **Legal Issue Auto-Fill:**
 - AI reads your intake form and automatically selects the most likely legal issue (GPT-4o-mini)
@@ -144,7 +144,7 @@ If you use Clio, this integration eliminates double data entry and manual docume
 - **Tone adjustment** - Make it more formal or conversational as needed
 - **Export options** - HTML format ready for further editing in Word
 
-**Result:** A professional findings letter in minutes that would take hours to draft manually.
+**Result:** A professional findings email in minutes that would take hours to draft manually.
 
 ---
 
@@ -245,7 +245,7 @@ The biggest problem with AI legal tools? They make up statutes. Our system solve
 - **Manual document review:** 1-2 hours per case
 - **Fact extraction:** 30-60 minutes
 - **Legal research:** 30-60 minutes
-- **Drafting findings letter:** 1-2 hours
+- **Drafting findings email:** 1-2 hours
 - **Total:** 3-5 hours per case
 
 ### With This Tool
@@ -306,7 +306,7 @@ The biggest problem with AI legal tools? They make up statutes. Our system solve
 
 ## 🎯 Bottom Line
 
-This tool transforms the most time-consuming part of your practice - initial case assessment and findings letter generation - from hours of manual work into minutes of AI-powered analysis.
+This tool transforms the most time-consuming part of your practice - initial case assessment and findings email generation - from hours of manual work into minutes of AI-powered analysis.
 
 **You focus on high-value legal work. The tool handles the routine analysis.**
 

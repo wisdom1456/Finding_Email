@@ -20,7 +20,7 @@ async def test_full_document_processing_workflow(
     sample_review_data,
     tmp_path,
 ):
-    """Test the complete document processing workflow from intake to findings letter."""
+    """Test the complete document processing workflow from intake to findings email."""
     # Create temporary intake file
     intake_file = tmp_path / "intake_form.txt"
     intake_file.write_text(sample_intake_content)
@@ -87,7 +87,7 @@ async def test_full_document_processing_workflow(
                 # Letter generation response
                 return {
                     "content": """<html><body>
-                        <h1>Findings Letter</h1>
+                        <h1>Findings Email</h1>
                         <p>Dear John Doe,</p>
                         <p>This letter summarizes our analysis. We have identified potential
                         claims under Fla. Stat. § 501.204.</p>
@@ -101,7 +101,7 @@ async def test_full_document_processing_workflow(
         with patch("legal_portal.services.main_processor.LetterReviewService") as mock_review_service:
             mock_review_instance = MagicMock()
             mock_review_instance.review_and_improve_letter.return_value = (
-                "<html><body><h1>Findings Letter</h1><p>Dear John Doe,</p>"
+                "<html><body><h1>Findings Email</h1><p>Dear John Doe,</p>"
                 "<p>Analysis under Fla. Stat. § 501.204.</p></body></html>",
                 None,
             )
@@ -280,7 +280,7 @@ async def test_letter_generation_contains_required_elements(
     def mock_create_chat_completion(model, messages, temperature=0.3, max_tokens=12000):
         # Return markdown content (the service converts it to HTML)
         return {
-            "content": """# Findings Letter
+            "content": """# Findings Email
 
 Dear John Doe,
 

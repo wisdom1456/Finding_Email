@@ -140,7 +140,7 @@ async def test_multi_stage_pipeline():
         print()
 
     # Generate adaptive letter
-    print("\n9️⃣  Generating adaptive findings letter...")
+    print("\n9️⃣  Generating adaptive findings email...")
 
     verified_statutes = [
         {"citation": s["citation"], "title": s.get("title", ""), "summary": s.get("description", "")}

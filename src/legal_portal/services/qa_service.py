@@ -1,4 +1,4 @@
-"""This module provides lightweight quality assurance checks for generated findings letters."""
+"""This module provides lightweight quality assurance checks for generated findings emails."""
 
 from typing import Any, Dict, List
 
@@ -8,7 +8,7 @@ def run_qa_heuristics(letter_content: str, analysis_json: Dict[str, Any]) -> Lis
 
     Args:
     ----
-        letter_content: The HTML content of the generated findings letter.
+        letter_content: The HTML content of the generated findings email.
         analysis_json: The structured JSON data used to generate the letter.
 
     Returns:

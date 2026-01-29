@@ -1104,7 +1104,7 @@ def check_processing_status():
                 else:
                     st.session_state.document_review = result.document_summaries
                     st.session_state.case_analysis = result.case_analysis
-                    st.session_state.main_letter = result.main_letter  # Store findings letter
+                    st.session_state.main_letter = result.main_letter  # Store findings email
                     st.session_state.main_letter_with_citations = (
                         result.main_letter_with_citations
                     )  # Store cited letter
@@ -1177,7 +1177,7 @@ def check_processing_status():
             ("Fact Extraction", "fact_extraction", "🔍"),
             ("Issue Mapping", "issue_mapping", "⚖️"),
             ("Legal Analysis", "deep_analysis", "📊"),
-            ("Letter Generation", "letter_generation", "✍️"),
+            ("Findings Email & Demand Letter", "letter_generation", "✍️"),
             ("Final Review", "final_review", "✅"),
         ]
 

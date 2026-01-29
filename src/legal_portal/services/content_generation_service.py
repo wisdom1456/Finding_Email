@@ -184,7 +184,7 @@ class ContentGenerationService:
 <body>
 <p>We have completed our initial review of your {case_type.lower()} matter. Due to a technical issue during document generation, we are providing this preliminary communication.</p>
 
-<p>Our analysis is currently being finalized and we will provide a comprehensive findings letter within 24 hours. Based on our initial review, your matter requires immediate attention and strategic consideration.</p>
+<p>Our analysis is currently being finalized and we will provide a comprehensive findings email within 24 hours. Based on our initial review, your matter requires immediate attention and strategic consideration.</p>
 
 <p><strong>Immediate Next Steps:</strong></p>
 <ul>

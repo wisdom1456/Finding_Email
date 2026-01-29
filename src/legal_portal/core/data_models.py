@@ -392,9 +392,9 @@ class ProcessingResult(BaseModel):
     """
 
     # Core outputs
-    main_letter: str = Field(description="HTML content of the generated findings letter")
+    main_letter: str = Field(description="HTML content of the generated findings email")
     main_letter_with_citations: Optional[str] = Field(
-        default=None, description="HTML content of the findings letter with citations"
+        default=None, description="HTML content of the findings email with citations"
     )
     document_summaries: str = Field(description="Text summaries of all analyzed documents")
     case_analysis: str = Field(description="Detailed case analysis content")
@@ -910,7 +910,7 @@ class DeepAnalysis(BaseModel):
 
 
 class LetterStructure(BaseModel):
-    """Guidance for how to structure the findings letter."""
+    """Guidance for how to structure the findings email."""
 
     style: str  # "simple_bullets" | "numbered_findings" | "hybrid"
     intro: str  # "Here are the key points of our analysis:" OR "Key Findings"

@@ -70,7 +70,7 @@ All external dependencies are mocked to ensure:
 ### Integration Tests (`tests/integration/test_workflows.py`)
 
 1. **`test_full_document_processing_workflow`**
-   - Tests complete workflow from intake to findings letter
+   - Tests complete workflow from intake to findings email
    - Validates `ProcessingResult` structure and key fields
    - Asserts presence of client name and statute citations
 

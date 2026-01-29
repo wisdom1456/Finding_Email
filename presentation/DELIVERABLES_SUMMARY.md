@@ -46,13 +46,13 @@
 
 ### Structure (12 Slides)
 
-1. **Title** — Harvey AI: Legal Document Analysis & Findings Letters
+1. **Title** — Harvey AI: Legal Document Analysis & Findings Emails
 2. **Why This Exists** — Attorney pain points (slow review, repetitive letters, citation errors)
 3. **What It Does** — Plain English capabilities (case creation, multi-format upload, AI analysis, verified citations)
 4. **Workflow** — How it fits attorney workflow (Intake → Review → Drafting → Final)
 5. **Quick Start** — 5-step process (Create Case → Upload → Analyze → Review → Generate)
 6. **Supported Documents** — PDF, DOCX, DOC, TXT, CSV, JPG/PNG, EML, HTML
-7. **Findings Letters** — Professional formatting, citations, review-before-send emphasis
+7. **Findings Emails** — Professional formatting, citations, review-before-send emphasis
 8. **Interface Screenshots** — 2x2 grid (Dashboard, Upload, Results, Letter)
 9. **Quality & Control** — Verified citations, attorney responsibility, junior associate metaphor
 10. **What's Live Now** — Production features list (case mgmt, upload, analysis, Clio, Verification Hub)
@@ -70,7 +70,7 @@ Calm, confident, operational. No hype, no speculation.
 1. **Control:** "You remain responsible. This accelerates, not replaces."
 2. **Trust:** "Verified citations. Document-linked facts. Review required."
 3. **Simplicity:** "Five steps. No training manual."
-4. **Time Savings:** "Findings letter starts 80% done. 2-5 minute analysis."
+4. **Time Savings:** "Findings email starts 80% done. 2-5 minute analysis."
 
 ### Critical Statements
 - "This tool removes the busywork, not your judgment."
@@ -89,7 +89,7 @@ All capabilities listed are verified from:
 - Multi-format document support (PDF, DOCX, DOC, TXT, CSV, JPG, PNG, EML, HTML)
 - AI analysis using GPT-4.1, GPT-5.2, GPT-5-mini, GPT-4o Vision
 - Verified legal corpus (Florida: 51 statutes, New Mexico: 42 statutes)
-- Professional findings letters with document-linked citations
+- Professional findings emails with document-linked citations
 - Clio integration (OAuth, matter import, document sync)
 - Verification Hub (document quality management, bulk OCR)
 - Real-time progress via SSE

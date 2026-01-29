@@ -60,7 +60,7 @@ Once both are running:
 ### 4. View Results
 - Once status shows "completed"
 - Click "View Results" button
-- See the AI-generated findings letter
+- See the AI-generated findings email
 - Download PDF/DOCX (if implemented)
 
 ## Monitoring

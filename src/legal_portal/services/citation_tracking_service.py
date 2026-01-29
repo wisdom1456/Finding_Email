@@ -96,7 +96,7 @@ class Citation:
 
 @dataclass
 class CitationMap:
-    """Complete citation mapping for a findings letter."""
+    """Complete citation mapping for a findings email."""
 
     letter_id: str
     client_name: str
@@ -111,7 +111,7 @@ class CitationMap:
 class CitationTrackingService:
     """Service for tracking citations and mapping factual statements to source documents.
 
-    Provides comprehensive citation tracking for legal findings letters to ensure
+    Provides comprehensive citation tracking for legal findings emails to ensure
     all factual statements are properly attributed to their source documents.
     """
 
@@ -242,13 +242,13 @@ class CitationTrackingService:
         is_corpus_covered: bool = True,
         average_doc_quality: float = 7.0,
     ) -> CitationMap:
-        """Create a comprehensive citation map for a findings letter.
+        """Create a comprehensive citation map for a findings email.
 
         Args:
         ----
             letter_id: Unique identifier for the letter
             client_name: Name of the client
-            letter_content: Generated findings letter content
+            letter_content: Generated findings email content
             case_analysis: Complete case analysis with source documents
             case_type: Type of legal case
             is_corpus_covered: Whether case falls within corpus coverage
@@ -261,7 +261,7 @@ class CitationTrackingService:
         """
         import datetime
 
-        logger.info("Creating citation map for findings letter")
+        logger.info("Creating citation map for findings email")
 
         # Extract basic case information
         case_type_str = case_type or (
@@ -313,19 +313,19 @@ class CitationTrackingService:
     def create_citation_map_legacy(
         self, case_analysis: CaseAnalysisResult, letter_content: str
     ) -> CitationMap:
-        """Create a comprehensive citation map for a findings letter.
+        """Create a comprehensive citation map for a findings email.
 
         Args:
         ----
             case_analysis: Complete case analysis with source documents
-            letter_content: Generated findings letter content
+            letter_content: Generated findings email content
 
         Returns:
         -------
             CitationMap with all detected citations and mappings
 
         """
-        logger.info("Creating legacy citation map for findings letter")
+        logger.info("Creating legacy citation map for findings email")
 
         # Generate unique ID for this letter
         letter_id = str(uuid4())
@@ -428,7 +428,7 @@ class CitationTrackingService:
 
         Args:
         ----
-            letter_content: The generated findings letter content
+            letter_content: The generated findings email content
             source_documents: Available source documents
             adaptive_threshold: Adaptive threshold configuration
 
@@ -714,7 +714,7 @@ class CitationTrackingService:
         citation_instructions = """
 
 CRITICAL CITATION REQUIREMENTS:
-When generating the findings letter, you must ensure all factual statements are traceable to source documents. Follow these guidelines:
+When generating the findings email, you must ensure all factual statements are traceable to source documents. Follow these guidelines:
 
 1. **Document References**: When stating facts, include subtle document references in the format "[Source: Document Name]" or "according to [Document Name]"
 
@@ -734,19 +734,19 @@ This is essential for legal accuracy and attorney review. Every factual claim in
     def generate_findings_letter_with_citations(
         self, letter_content: str, case_analysis: CaseAnalysisResult
     ) -> str:
-        """Generate a findings letter with embedded citations.
+        """Generate a findings email with embedded citations.
 
         Args:
         ----
-            letter_content: Original findings letter content (without citations)
+            letter_content: Original findings email content (without citations)
             case_analysis: Complete case analysis for citation generation
 
         Returns:
         -------
-            Enhanced findings letter with citations embedded
+            Enhanced findings email with citations embedded
 
         """
-        logger.info("Generating findings letter with citations")
+        logger.info("Generating findings email with citations")
 
         # Create citation map
         citation_map = self.create_citation_map(case_analysis, letter_content)
@@ -767,7 +767,7 @@ This is essential for legal accuracy and attorney review. Every factual claim in
         """
 
         logger.info(
-            f"Generated findings letter with {len(citation_map.citations)} citations",
+            f"Generated findings email with {len(citation_map.citations)} citations",
             extra={"citation_count": len(citation_map.citations), "client_name": citation_map.client_name},
         )
 

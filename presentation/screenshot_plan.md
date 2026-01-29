@@ -78,35 +78,35 @@ This document specifies the exact screenshots required for the attorney adoption
 
 **UI Location:**
 - Route: `/app/cases/[case_id]` (Case detail page after analysis completion)
-- Element: Analysis results section showing findings letter preview, document summaries, or case analysis tabs
+- Element: Analysis results section showing findings email preview, document summaries, or case analysis tabs
 
 **What to Capture:**
 - Analysis results view
-- Findings letter preview (first few paragraphs visible)
-- Navigation tabs or sections (e.g., "Findings Letter", "Document Summaries", "Case Analysis")
+- Findings email preview (first few paragraphs visible)
+- Navigation tabs or sections (e.g., "Findings Email", "Document Summaries", "Case Analysis")
 - Status indicator showing "Completed" or similar success state
 
 **Notes:**
 - Use a completed analysis (status: "completed")
-- Ensure findings letter content is visible but redact any sensitive client information
+- Ensure findings email content is visible but redact any sensitive client information
 - Show enough content to demonstrate structure and citations
 
 **Filename:** `harvey_ai_analysis_results.png`
 
 ---
 
-### Screenshot 4: Findings Letter with Citations
+### Screenshot 4: Findings Email with Citations
 
 **Slide:** Interface overview (if added as separate slide)
 
 **Purpose:** Demonstrate professional letter formatting and document-linked citations.
 
 **UI Location:**
-- Route: `/app/cases/[case_id]` (Case detail page — findings letter tab/section)
-- Element: Full findings letter view with citations visible
+- Route: `/app/cases/[case_id]` (Case detail page — findings email tab/section)
+- Element: Full findings email view with citations visible
 
 **What to Capture:**
-- Complete findings letter section
+- Complete findings email section
 - Professional formatting (headers, paragraphs, structure)
 - **Critical:** Visible citation references (e.g., "[Client_Intake_Form.pdf]", "[Police_Report.pdf]")
 - Letter structure: introduction, findings, legal analysis, conclusion sections

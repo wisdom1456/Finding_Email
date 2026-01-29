@@ -1,6 +1,6 @@
 """Letter Review Service - AI-Powered Final Review.
 
-This service performs a final review and cleanup of generated findings letters
+This service performs a final review and cleanup of generated findings emails
 to ensure quality, consistency, and professional tone.
 """
 
@@ -27,7 +27,7 @@ ENCODING_ARTIFACTS = {
 
 
 class LetterReviewService:
-    """Provides AI-powered final review and cleanup of findings letters."""
+    """Provides AI-powered final review and cleanup of findings emails."""
 
     def __init__(self, client: OpenAIClient, statute_validator: Optional[StatuteValidationService] = None):
         """Initialize with OpenAI client.
@@ -651,7 +651,7 @@ minimal changes are fine.
 
         Args:
         ----
-            letter: The generated findings letter
+            letter: The generated findings email
             issue_map: LegalIssueMap with identified issues
             analysis: DeepAnalysis with comprehensive analysis
 

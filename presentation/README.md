@@ -69,7 +69,7 @@ This will generate `presentation/harvey_ai_attorney_adoption.pptx`.
 4. How It Fits Into Your Workflow
 5. Quick Start (5 Steps)
 6. Supported Document Formats
-7. Findings Letters (Trust Builder)
+7. Findings Emails (Trust Builder)
 8. Harvey AI Interface (Screenshots)
 9. Quality, Accuracy, and Control
 10. What's Rolling Out Now

@@ -134,7 +134,7 @@ async def test_get_citation_tracking(app_client: AsyncClient):
 
 @pytest.mark.asyncio
 async def test_generate_findings_letter(app_client: AsyncClient):
-    """Test generating findings letter from analysis."""
+    """Test generating findings email from analysis."""
     # Arrange
     case_id = "case-001"
     letter_config = {

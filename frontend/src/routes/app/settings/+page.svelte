@@ -348,7 +348,7 @@ Palm Harbor, FL 34683`);
 
 					<div>
 						<label for="letterGenerationModel" class="block text-sm font-semibold text-contrast mb-1">
-							Letter Generation
+							Findings Email & Demand Letter
 						</label>
 						<select
 							id="letterGenerationModel"
@@ -399,7 +399,7 @@ Palm Harbor, FL 34683`);
 							<h3 class="text-sm font-bold text-contrast-light">Model Information</h3>
 							<div class="mt-2 text-sm text-gray-600">
 								<ul class="list-disc list-inside space-y-1">
-									<li><strong>GPT-5.2:</strong> Most intelligent model with complex reasoning - recommended for legal analysis and letters</li>
+									<li><strong>GPT-5.2:</strong> Most intelligent model with complex reasoning - recommended for legal analysis and demand letters</li>
 									<li><strong>GPT-5 Mini:</strong> Cost-optimized, fast and capable for routine document analysis and chat</li>
 									<li><strong>GPT-5 Nano:</strong> High-throughput for simple extraction and classification tasks</li>
 									<li><strong>GPT-4o (Legacy):</strong> Previous generation model, maintained for compatibility</li>

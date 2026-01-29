@@ -70,7 +70,7 @@ def create_sample_letter_content() -> str:
     return """
     <html>
     <body>
-    <h1>Legal Findings Letter</h1>
+    <h1>Legal Findings Email</h1>
 
     <p>Dear John Smith,</p>
 
@@ -172,7 +172,7 @@ def test_prompt_enhancement():
     citation_service = CitationTrackingService()
 
     base_prompt = """
-    Generate a legal findings letter based on the following analysis:
+    Generate a legal findings email based on the following analysis:
     Client: {client_name}
     Case Type: {case_type}
     Analysis: {analysis}

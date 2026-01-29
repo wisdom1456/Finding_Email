@@ -240,9 +240,9 @@ async def run_test():
     print("   " + "─" * 76)
     print()
 
-    # STEP 4: AI Call #2 - Generate findings letter
+    # STEP 4: AI Call #2 - Generate findings email
     print("=" * 80)
-    print("STEP 4: AI Call #2 - Generating Findings Letter")
+    print("STEP 4: AI Call #2 - Generating Findings Email")
     print("=" * 80)
     start_time = datetime.now()
 
@@ -270,7 +270,7 @@ async def run_test():
     summaries_file.write_text(document_summaries, encoding="utf-8")
     print(f"✅ Document summaries saved: {summaries_file}")
 
-    # Save findings letter
+    # Save findings email
     letter_file = output_dir / "findings_letter.html"
     letter_file.write_text(findings_letter_html, encoding="utf-8")
     print(f"✅ Findings letter saved: {letter_file}")
@@ -284,7 +284,7 @@ async def run_test():
     print(f"   - {summaries_file.name}")
     print(f"   - {letter_file.name}")
     print()
-    print("💡 Open the HTML file in your browser to view the findings letter")
+    print("💡 Open the HTML file in your browser to view the findings email")
 
     return True
 

@@ -156,7 +156,7 @@ class JsonProcessingService:
             )
         except FileNotFoundError as e:
             logger.error(f"Prompt template file not found at: {prompt_path}")
-            raise ValueError(f"Findings letter prompt template not found at {prompt_path}") from e
+            raise ValueError(f"Findings email prompt template not found at {prompt_path}") from e
 
     def generate_html_letter(
         self, intake_data: str, document_summaries: str, jurisdiction: str = "Florida"
@@ -221,7 +221,7 @@ class JsonProcessingService:
         clio_matter_context: str = "",
         jurisdiction: str = "Florida",  # Added jurisdiction parameter
     ) -> str:
-        """Generate findings letter from structured JSON summaries.
+        """Generate findings email from structured JSON summaries.
 
         Args:
         ----
@@ -320,7 +320,7 @@ class JsonProcessingService:
             12000,  # max_output_tokens
             (  # instructions
                 "You are a senior legal writing assistant helping to draft professional "
-                "client findings letters. Follow the template structure exactly and "
+                "client findings emails. Follow the template structure exactly and "
                 "provide comprehensive, well-reasoned legal analysis."
             ),
         )
@@ -353,7 +353,7 @@ class JsonProcessingService:
         diag_logger: Optional[DiagnosticLogger] = None,
         original_documents: Optional[Dict[str, str]] = None, # NEW: Explicit raw content
     ) -> str:
-        """Generate findings letter using multi-stage analysis results.
+        """Generate findings email using multi-stage analysis results.
 
         This method uses structured analysis from MultiStageAnalyzer to generate
         an attorney-quality letter with adaptive structure based on case complexity.
@@ -483,7 +483,7 @@ class JsonProcessingService:
             12000,
             (
                 "You are a senior legal writing assistant. Generate an attorney-quality "
-                "findings letter following the adaptive structure guidance provided."
+                "findings email following the adaptive structure guidance provided."
             ),
         )
 
@@ -552,7 +552,7 @@ class JsonProcessingService:
         jurisdiction: str = "Florida",
         original_documents: Optional[Dict[str, str]] = None,
     ) -> AsyncGenerator[str, None]:
-        """Stream adaptive findings letter generation.
+        """Stream adaptive findings email generation.
 
         Note: This bypasses the formatting polish pass for real-time delivery.
         """
@@ -611,13 +611,13 @@ class JsonProcessingService:
         structure_instruction = self._create_structure_instruction(structure_guidance)
         prompt = f"{prompt}\n\n{structure_instruction}"
 
-        logger.info(f"Streaming adaptive findings letter for {jurisdiction}")
+        logger.info(f"Streaming adaptive findings email for {jurisdiction}")
         
         async for token in self.client.create_response_stream(
             model="gpt-5.2",
             instructions=(
                 "You are a senior legal writing assistant. Generate an attorney-quality "
-                "findings letter following the adaptive structure guidance provided."
+                "findings email following the adaptive structure guidance provided."
             ),
             input=prompt,
             reasoning_effort="low",

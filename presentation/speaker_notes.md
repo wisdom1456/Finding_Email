@@ -34,7 +34,7 @@ We're solving for the bottleneck in case intake. The goal is to remove the busyw
 
 Manual document review requires hours. Reading through 20 PDFs to extract basic facts, dates, and parties is not attorney work—it's data entry.
 
-Creating findings letters from scratch is time-consuming and leads to structural inconsistencies. Manual citation across multiple documents is error-prone and creates liability risk.
+Creating findings emails from scratch is time-consuming and leads to structural inconsistencies. Manual citation across multiple documents is error-prone and creates liability risk.
 
 This tool removes that busywork, but you remain in control of every decision. It removes low-value work, not your judgment.
 
@@ -50,7 +50,7 @@ Frames the problem in terms attorneys recognize. Establishes trust by emphasizin
 
 Think of this tool as a tireless junior associate. It handles the initial review and drafting, giving you an 80% complete draft. You remain responsible for the final review and approval.
 
-Harvey AI is a live system that analyzes legal documents and generates findings letters.
+Harvey AI is a live system that analyzes legal documents and generates findings emails.
 
 It extracts text from PDFs, Word files, and images. It identifies key facts and constructs timelines automatically.
 
@@ -78,7 +78,7 @@ Here's the five-step process:
 
 **Step 3: Run Analysis** — AI identifies legal issues and processes documents. This takes 1 to 8 minutes depending on document count.
 
-**Step 4: Review Results** — Verify the generated findings letter, timeline, and document summaries.
+**Step 4: Review Results** — Verify the generated findings email, timeline, and document summaries.
 
 **Step 5: Export** — Edit the letter in-browser and export to HTML or Word for final polish.
 
@@ -110,7 +110,7 @@ Reduces "will it work with my documents?" concerns. Covers common formats attorn
 
 ---
 
-## Slide 6: Findings Letters & Citations
+## Slide 6: Findings Emails & Citations
 
 **What to Say:**
 
@@ -233,7 +233,7 @@ Clear call to action. Creates expectation that attorneys will actually use the t
 ### 3. Time Savings
 
 - "Removes low-value work"
-- "Findings letter starts 80% done"
+- "Findings email starts 80% done"
 - "1-8 minutes for typical analysis"
 
 ### 4. Simplicity

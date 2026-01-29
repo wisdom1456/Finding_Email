@@ -52,7 +52,7 @@ class ProgressTracker:
             "fact_extraction": (15, 30),  # 15% - Extract structured facts
             "issue_mapping": (30, 42),  # 12% - Map legal issues
             "deep_analysis": (42, 75),  # 33% - Deep legal analysis (most time)
-            "letter_generation": (75, 92),  # 17% - Generate letter
+            "letter_generation": (75, 92),  # 17% - Generate findings email
             "final_review": (92, 100),  # 8% - Final quality review
         }
 
@@ -79,8 +79,8 @@ class ProgressTracker:
                 "estimated_duration": 60,
             },
             "email_generation": {
-                "title": "📧 Generating Findings Letter",
-                "description": "Creating professional findings letter",
+                "title": "📧 Generating Findings Email",
+                "description": "Creating professional findings email",
                 "estimated_duration": 45,
             },
             # NEW: Multi-stage analysis phase descriptions
@@ -103,8 +103,8 @@ class ProgressTracker:
                 "tips": "This is the most detailed stage - analyzing each legal issue thoroughly",
             },
             "letter_generation": {
-                "title": "✍️ Stage 4/4: Letter Generation",
-                "description": "Generating attorney-quality findings letter",
+                "title": "✍️ Stage 4/4: Findings Email & Demand Letter",
+                "description": "Generating attorney-quality findings email",
                 "estimated_duration": 50,
                 "tips": "Adapting structure to case complexity",
             },

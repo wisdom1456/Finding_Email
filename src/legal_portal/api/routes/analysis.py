@@ -184,7 +184,7 @@ def _generate_eml_bytes(html: Optional[str], subject: str) -> Optional[bytes]:
         msg["Date"] = formatdate(localtime=True)
         msg["Message-ID"] = make_msgid()
         plain_text = _html_to_plain_text(html)
-        msg.set_content(plain_text or "Please see the attached findings letter.")
+        msg.set_content(plain_text or "Please see the attached findings email.")
         msg.add_alternative(html, subtype="html")
         return msg.as_bytes()
     except Exception as exc:
@@ -227,13 +227,13 @@ def _generate_and_store_artifacts(
 
     pdf_bytes = _html_to_pdf_bytes(result.main_letter)
     if pdf_bytes:
-        metadata = _store_artifact(storage, f"{prefix}/findings-letter.pdf", pdf_bytes, "application/pdf")
+        metadata = _store_artifact(storage, f"{prefix}/findings-email.pdf", pdf_bytes, "application/pdf")
         if metadata:
             artifacts["letter_pdf"] = metadata
 
-    eml_bytes = _generate_eml_bytes(result.main_letter, f"Findings Letter - Case {case_id}")
+    eml_bytes = _generate_eml_bytes(result.main_letter, f"Findings Email - Case {case_id}")
     if eml_bytes:
-        metadata = _store_artifact(storage, f"{prefix}/findings-letter.eml", eml_bytes, "message/rfc822")
+        metadata = _store_artifact(storage, f"{prefix}/findings-email.eml", eml_bytes, "message/rfc822")
         if metadata:
             artifacts["letter_eml"] = metadata
 
@@ -241,7 +241,7 @@ def _generate_and_store_artifacts(
         html_bytes = result.main_letter_with_citations.encode("utf-8")
         metadata = _store_artifact(
             storage,
-            f"{prefix}/findings-letter-cited.html",
+            f"{prefix}/findings-email-cited.html",
             html_bytes,
             "text/html",
         )
@@ -1066,7 +1066,7 @@ async def stream_findings_letter(
     user=Depends(get_current_user),
     supabase=Depends(get_user_supabase_client),
 ):
-    """Stream findings letter generation token by token."""
+    """Stream findings email generation token by token."""
     # Verify ownership and get analysis results
     try:
         response = supabase.table("analysis_results").select("*").eq("id", analysis_id).execute()

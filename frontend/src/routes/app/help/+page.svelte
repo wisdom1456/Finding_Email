@@ -20,7 +20,9 @@
 		Clock,
 		AlertCircle,
 		RefreshCw,
-		Scale
+		Scale,
+		ChevronRight,
+		Library
 	} from 'lucide-svelte';
 
 	const tabs = [
@@ -373,9 +375,9 @@
 							<div>
 								<h4 class="font-semibold text-contrast mb-2">Verified Legal Corpus (Florida & New Mexico)</h4>
 								<p class="text-gray-600 text-sm">
-									The system validates statute citations against verified legal corpus: 51 Florida statutes 
-									and 42 New Mexico statutes. This prevents AI hallucination and ensures accurate legal 
-									references in your findings emails.
+									The system validates statute citations against our verified legal corpus. This prevents 
+									AI hallucination and ensures accurate legal references in your findings emails. 
+									View the full corpus documentation in the <strong>Legal Knowledge Library</strong> below.
 								</p>
 							</div>
 							<div>
@@ -386,6 +388,74 @@
 									GPT-5.2 for professional findings email generation.
 								</p>
 							</div>
+						</div>
+					</section>
+
+					<!-- Legal Knowledge Library -->
+					<section class="border-t border-gray-200 pt-8">
+						<div class="flex items-start gap-4 mb-6">
+							<div class="p-3 rounded-xl bg-[#1B365D]/10 border border-[#1B365D]/20">
+								<Library class="h-6 w-6 text-[#1B365D]" />
+							</div>
+							<div>
+								<h2 class="text-xl font-heading font-semibold text-contrast">Legal Knowledge Library</h2>
+								<p class="mt-1 text-gray-600">
+									Browse the verified legal corpus for Florida and New Mexico. Full documentation, coverage, 
+									and citation formats are available for each jurisdiction.
+								</p>
+							</div>
+						</div>
+						<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+							<a
+								href="/app/help/corpus/florida"
+								class="group block rounded-xl border-2 border-[#1B365D]/20 bg-linear-to-br from-white to-[#1B365D]/5 p-6 shadow-sm transition-all hover:border-accent/40 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2"
+							>
+								<div class="flex items-center gap-3 mb-3">
+									<div class="flex h-10 w-10 items-center justify-center rounded-lg bg-[#1B365D] text-white">
+										<Scale class="h-5 w-5" />
+									</div>
+									<h3 class="text-lg font-heading font-semibold text-contrast">Florida Legal Corpus</h3>
+								</div>
+								<p class="text-sm text-gray-600 mb-4">
+									51 statutes, 3 rules. Consumer protection, landlord-tenant, construction defects, 
+									mechanic's liens, foreclosure, insurance, and more.
+								</p>
+								<div class="flex flex-wrap gap-2 mb-4">
+									<span class="inline-flex items-center rounded-md bg-[#1B365D]/10 px-2.5 py-0.5 text-xs font-medium text-[#1B365D]">FDUTPA</span>
+									<span class="inline-flex items-center rounded-md bg-[#1B365D]/10 px-2.5 py-0.5 text-xs font-medium text-[#1B365D]">Ch. 83</span>
+									<span class="inline-flex items-center rounded-md bg-[#1B365D]/10 px-2.5 py-0.5 text-xs font-medium text-[#1B365D]">Ch. 558</span>
+									<span class="inline-flex items-center rounded-md bg-[#1B365D]/10 px-2.5 py-0.5 text-xs font-medium text-[#1B365D]">Ch. 713</span>
+								</div>
+								<span class="inline-flex items-center gap-1 text-sm font-semibold text-accent group-hover:gap-2 transition-all">
+									Explore Florida statutes
+									<ChevronRight class="h-4 w-4" />
+								</span>
+							</a>
+							<a
+								href="/app/help/corpus/new-mexico"
+								class="group block rounded-xl border-2 border-[#2D7D7D]/25 bg-linear-to-br from-white to-[#2D7D7D]/5 p-6 shadow-sm transition-all hover:border-accent/40 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2"
+							>
+								<div class="flex items-center gap-3 mb-3">
+									<div class="flex h-10 w-10 items-center justify-center rounded-lg bg-[#2D7D7D] text-white">
+										<Scale class="h-5 w-5" />
+									</div>
+									<h3 class="text-lg font-heading font-semibold text-contrast">New Mexico Legal Corpus</h3>
+								</div>
+								<p class="text-sm text-gray-600 mb-4">
+									42 statutes, 8 rules. UPA, UORRA, construction & liens, foreclosure, 
+									insurance & torts, statutes of limitation.
+								</p>
+								<div class="flex flex-wrap gap-2 mb-4">
+									<span class="inline-flex items-center rounded-md bg-[#2D7D7D]/15 px-2.5 py-0.5 text-xs font-medium text-[#2D7D7D]">UPA</span>
+									<span class="inline-flex items-center rounded-md bg-[#2D7D7D]/15 px-2.5 py-0.5 text-xs font-medium text-[#2D7D7D]">UORRA</span>
+									<span class="inline-flex items-center rounded-md bg-[#2D7D7D]/15 px-2.5 py-0.5 text-xs font-medium text-[#2D7D7D]">Civil Proc.</span>
+									<span class="inline-flex items-center rounded-md bg-[#2D7D7D]/15 px-2.5 py-0.5 text-xs font-medium text-[#2D7D7D]">Liens</span>
+								</div>
+								<span class="inline-flex items-center gap-1 text-sm font-semibold text-accent group-hover:gap-2 transition-all">
+									Explore New Mexico statutes
+									<ChevronRight class="h-4 w-4" />
+								</span>
+							</a>
 						</div>
 					</section>
 
@@ -469,6 +539,11 @@
 								<li><strong>New Mexico</strong> - 42 verified statutes covering consumer protection (UPA), 
 								landlord-tenant (UORRA), construction & liens, foreclosure, insurance & torts</li>
 							</ul>
+							<p class="mt-2">
+								You can view the full legal corpus for each jurisdiction from Help: 
+								<a href="/app/help/corpus/florida" class="text-accent hover:text-accent-hover font-medium">Florida Legal Corpus</a> and 
+								<a href="/app/help/corpus/new-mexico" class="text-accent hover:text-accent-hover font-medium">New Mexico Legal Corpus</a>.
+							</p>
 							<p class="mt-2">
 								<strong>Not supported:</strong> Federal claims, criminal law, immigration, bankruptcy, or patent/trademark matters.
 							</p>
@@ -736,7 +811,10 @@
 				<h3 class="text-lg font-heading font-semibold text-contrast">Still need help?</h3>
 				<p class="mt-1 text-gray-600">
 					If you couldn't find the answer you're looking for, contact your system administrator or
-					IT support team for assistance.
+					IT support team for assistance. You can also browse the
+					<a href="/app/help/corpus/florida" class="text-accent hover:text-accent-hover font-medium">Florida</a> and
+					<a href="/app/help/corpus/new-mexico" class="text-accent hover:text-accent-hover font-medium">New Mexico</a>
+					legal corpus for statute documentation.
 				</p>
 			</div>
 		</div>

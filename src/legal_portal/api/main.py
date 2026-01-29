@@ -21,6 +21,7 @@ from legal_portal.api.routes import (
     analysis,
     cases,
     clio,
+    corpus,
     documents,
     health,
     intake,
@@ -131,6 +132,7 @@ app.include_router(clio.router, prefix="/api", tags=["clio"])
 app.include_router(intake.router, prefix="/api", tags=["intake"])
 app.include_router(profile.router, prefix="/api", tags=["profile"])
 app.include_router(settings.router, prefix="/api/settings", tags=["settings"])
+app.include_router(corpus.router, prefix="/api/corpus", tags=["corpus"])
 
 
 @app.get("/")

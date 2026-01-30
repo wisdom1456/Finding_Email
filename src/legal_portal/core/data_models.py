@@ -925,6 +925,9 @@ class MultiStageAnalysisResult(BaseModel):
     issue_map: LegalIssueMap
     deep_analysis: DeepAnalysis
     letter_structure: LetterStructure
+    gap_analysis: Optional["GapAnalysisResult"] = Field(
+        default=None, description="Gap and inconsistency analysis"
+    )
     verified_statutes: List[Dict[str, Any]] = Field(default_factory=list)  # From statute service
     processing_time_seconds: float
     stage_timings: Dict[str, float] = Field(default_factory=dict)  # Time per stage
@@ -942,3 +945,64 @@ class CompletenessReport(BaseModel):
     completeness_score: float  # 0-1
     recommendation: str  # "complete" | "needs_revision"
     warnings: List[str] = Field(default_factory=list)
+
+
+# ============================================================================
+# Gap Analysis Models (NEW - 2025-01-30)
+# ============================================================================
+
+
+class GapSeverity(str, Enum):
+    """Severity levels for identified gaps."""
+
+    CRITICAL = "critical"  # Case-breaking gaps
+    HIGH = "high"  # Significant impact
+    MEDIUM = "medium"  # Notable concern
+    LOW = "low"  # Minor issue
+
+
+class GapCategory(str, Enum):
+    """Categories of gaps that can be identified."""
+
+    MISSING_DOCUMENT = "missing_document"
+    FACTUAL_CONTRADICTION = "factual_contradiction"
+    TIMELINE_GAP = "timeline_gap"
+    UNVERIFIABLE_CLAIM = "unverifiable_claim"
+    INCOMPLETE_INFO = "incomplete_info"
+
+
+class GapItem(BaseModel):
+    """A specific gap or issue identified in the case."""
+
+    gap_id: str = Field(description="Unique identifier for this gap")
+    category: GapCategory = Field(description="Type of gap")
+    severity: GapSeverity = Field(description="Severity level")
+    title: str = Field(description="Brief description of the gap")
+    description: str = Field(description="Detailed explanation of the gap")
+    affected_issue: Optional[str] = Field(default=None, description="Which legal issue is affected")
+    related_documents: List[str] = Field(
+        default_factory=list, description="Documents related to this gap"
+    )
+    recommendations: List[str] = Field(
+        default_factory=list, description="Steps to address this gap"
+    )
+    impact_on_case: str = Field(description="How this gap affects case viability or strategy")
+
+
+class GapAnalysisResult(BaseModel):
+    """Complete gap analysis result."""
+
+    total_gaps: int = Field(description="Total number of gaps identified")
+    critical_count: int = Field(default=0, description="Number of critical gaps")
+    high_count: int = Field(default=0, description="Number of high severity gaps")
+    medium_count: int = Field(default=0, description="Number of medium severity gaps")
+    low_count: int = Field(default=0, description="Number of low severity gaps")
+    gaps_by_category: Dict[str, List[GapItem]] = Field(
+        default_factory=dict, description="Gaps organized by category"
+    )
+    overall_completeness_score: float = Field(
+        ge=0.0, le=100.0, description="Overall completeness score (0-100)"
+    )
+    attorney_summary: str = Field(
+        description="Executive summary for attorney about case completeness"
+    )

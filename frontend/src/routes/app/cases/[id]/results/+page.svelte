@@ -13,6 +13,7 @@
 	import { onMount } from 'svelte';
 	import SkippedDocumentsAlert from '$lib/components/SkippedDocumentsAlert.svelte';
 	import DocumentSummaryCard from '$lib/components/DocumentSummaryCard.svelte';
+	import GapAnalysisPanel from '$lib/components/GapAnalysisPanel.svelte';
 
 	// Get SSR data from load function
 	let { data }: { data: PageData } = $props();
@@ -25,7 +26,7 @@
 	let profile = $state<any>(null);
 	let loading = $state(true);
 	
-	let activeTab = $state<'analysis' | 'fullAnalysis' | 'documents' | 'letters' | 'chat' | 'quality'>('analysis');
+	let activeTab = $state<'analysis' | 'gaps' | 'fullAnalysis' | 'documents' | 'letters' | 'chat' | 'quality'>('analysis');
 	let findingsLetter = $state<string | null>(null);
 	let demandLetters = $state<Record<string, string>>({});
 	let generatingFindings = $state(false);
@@ -47,6 +48,12 @@
 	let isStale = $derived(analysisStatus !== 'completed' || (new Date().getTime() - analysisCreatedAt.getTime() > 1000 * 60 * 60 * 24 * 7));
 	let modelsUsed = $derived(results?.artifacts?.models_used ?? null);
 	let skippedDocs = $derived(results?.artifacts?.skipped_documents ?? []);
+
+	// Gap analysis data
+	let multiStageResult = $derived(results?.multi_stage_result);
+	let gapAnalysis = $derived(multiStageResult?.gap_analysis);
+	let hasCriticalGaps = $derived(gapAnalysis && (gapAnalysis.critical_count > 0 || gapAnalysis.high_count > 0));
+	let criticalGapCount = $derived(gapAnalysis ? gapAnalysis.critical_count + gapAnalysis.high_count : 0);
 
 	// Attorney information for letters
 	let attorneyName = $state('');
@@ -724,6 +731,23 @@ async function generateLetterRequest(body: Record<string, any>) {
 				>
 					Case Analysis
 				</button>
+				{#if gapAnalysis}
+				<button
+					class={`py-4 px-1 border-b-2 text-sm font-medium relative ${
+						activeTab === 'gaps'
+							? 'border-accent text-accent'
+							: 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+					}`}
+					onclick={() => (activeTab = 'gaps')}
+				>
+					Gaps
+					{#if hasCriticalGaps}
+						<span class="ml-2 inline-flex items-center justify-center px-2 py-0.5 text-xs font-bold leading-none text-white bg-red-500 rounded">
+							{criticalGapCount}
+						</span>
+					{/if}
+				</button>
+				{/if}
 				{#if results.streaming_analysis}
 				<button
 					class={`py-4 px-1 border-b-2 text-sm font-medium ${
@@ -875,6 +899,15 @@ async function generateLetterRequest(body: Record<string, any>) {
 					<p class="text-gray-500">No case analysis available.</p>
 				{/if}
 			</div>
+		{:else if activeTab === 'gaps'}
+			{#if gapAnalysis}
+				<GapAnalysisPanel gapAnalysis={gapAnalysis} caseId={caseId} />
+			{:else}
+				<div class="card-standard">
+					<h2 class="text-2xl font-heading font-bold text-contrast mb-8 border-b border-gray-100 pb-4">Gap Analysis</h2>
+					<p class="text-gray-500">Gap analysis is not available for this case. This feature is included in new multi-stage analyses.</p>
+				</div>
+			{/if}
 		{:else if activeTab === 'fullAnalysis'}
 			<div class="card-standard">
 				<h2 class="text-2xl font-heading font-bold text-contrast mb-8 border-b border-gray-100 pb-4">Full Analysis</h2>

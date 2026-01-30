@@ -24,6 +24,7 @@ from legal_portal.core.data_models import (
     EvidenceAssessment,
     FactMatrix,
     FinancialItem,
+    GapAnalysisResult,
     IssueAnalysis,
     KeyDocument,
     LegalIssue,
@@ -34,6 +35,7 @@ from legal_portal.core.data_models import (
     PropertyInfo,
     RiskAssessment,
 )
+from legal_portal.services.gap_analysis_service import GapAnalysisService
 from legal_portal.services.statute_recommendation_service import StatuteRecommendationService
 from legal_portal.utils.logging_config import get_module_logger
 from legal_portal.utils.openai_client import OpenAIClient
@@ -49,11 +51,18 @@ class MultiStageAnalyzer:
         self,
         openai_client: OpenAIClient,
         statute_service: Optional[StatuteRecommendationService] = None,
+        gap_analysis_service: Optional[GapAnalysisService] = None,
     ):
         """Initialize the multi-stage analyzer."""
         self.client = openai_client
         self.statute_service = statute_service or StatuteRecommendationService()
         self.stage_timings = {}
+
+        # Initialize gap analysis service if not provided
+        if gap_analysis_service:
+            self.gap_service = gap_analysis_service
+        else:
+            self.gap_service = GapAnalysisService(openai_client=openai_client)
 
     # =========================================================================
     # STREAMING SINGLE-PASS ANALYSIS (New - replaces multi-stage for speed)
@@ -525,6 +534,65 @@ Output in clean markdown format."""
         if diag_logger:
             diag_logger.log_stage("multi_stage_3_deep_analysis", deep_analysis.model_dump(mode="json"))
 
+        # Stage 3.5: Gap Analysis (NEW)
+        gap_analysis: Optional[GapAnalysisResult] = None
+        if self.gap_service:
+            if progress_callback:
+                await progress_callback(
+                    "Analyzing case completeness and gaps...",
+                    [],
+                    "gap_analysis",
+                    92,
+                    stage={"id": "gap_analysis", "name": "Gap Analysis", "status": "active", "progress": 10}
+                )
+
+            stage_start = time.time()
+            elapsed = time.time() - start_time
+            logger.info(
+                f"[STAGE:3.5] [ELAPSED:{elapsed:.1f}s] Starting gap_analysis"
+            )
+
+            try:
+                gap_analysis = await self.gap_service.analyze_gaps(
+                    fact_matrix=fact_matrix,
+                    issue_map=issue_map,
+                    deep_analysis=deep_analysis,
+                    document_summaries=document_summaries,
+                    intake_content=intake_content,
+                )
+                self.stage_timings["gap_analysis"] = time.time() - stage_start
+                elapsed = time.time() - start_time
+
+                logger.info(
+                    f"[STAGE:3.5] [ELAPSED:{elapsed:.1f}s] gap_analysis complete | "
+                    f"duration={self.stage_timings['gap_analysis']:.1f}s "
+                    f"total_gaps={gap_analysis.total_gaps} "
+                    f"critical={gap_analysis.critical_count} high={gap_analysis.high_count}"
+                )
+
+                if progress_callback:
+                    await progress_callback(
+                        "Gap analysis complete.",
+                        [],
+                        "gap_analysis",
+                        94,
+                        stage={
+                            "id": "gap_analysis",
+                            "name": "Gap Analysis",
+                            "status": "completed",
+                            "progress": 100,
+                            "extracted": {"type": "gaps", "count": gap_analysis.total_gaps}
+                        }
+                    )
+
+                if diag_logger:
+                    diag_logger.log_stage("multi_stage_3.5_gap_analysis", gap_analysis.model_dump(mode="json"))
+
+            except Exception as e:
+                logger.error(f"Gap analysis failed: {e}", exc_info=True)
+                # Continue without gap analysis
+                gap_analysis = None
+
         # Stage 4: Letter Structure Determination
         if progress_callback:
             await progress_callback(
@@ -595,6 +663,7 @@ Output in clean markdown format."""
             issue_map=issue_map,
             deep_analysis=deep_analysis,
             letter_structure=letter_structure,
+            gap_analysis=gap_analysis,
             verified_statutes=verified_statutes,
             processing_time_seconds=total_time,
             stage_timings=self.stage_timings,

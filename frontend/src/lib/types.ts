@@ -74,3 +74,52 @@ export interface DocumentData {
 	updated_at: string;
 }
 
+/**
+ * Gap Analysis Types (NEW - 2025-01-30)
+ * Used to identify missing documents, contradictions, and weaknesses in case materials.
+ */
+
+/**
+ * Severity levels for identified gaps.
+ */
+export type GapSeverity = 'critical' | 'high' | 'medium' | 'low';
+
+/**
+ * Categories of gaps that can be identified.
+ */
+export type GapCategory =
+	| 'missing_document'
+	| 'factual_contradiction'
+	| 'timeline_gap'
+	| 'unverifiable_claim'
+	| 'incomplete_info';
+
+/**
+ * A specific gap or issue identified in the case.
+ */
+export interface GapItem {
+	gap_id: string;
+	category: GapCategory;
+	severity: GapSeverity;
+	title: string;
+	description: string;
+	affected_issue?: string;
+	related_documents: string[];
+	recommendations: string[];
+	impact_on_case: string;
+}
+
+/**
+ * Complete gap analysis result.
+ */
+export interface GapAnalysisResult {
+	total_gaps: number;
+	critical_count: number;
+	high_count: number;
+	medium_count: number;
+	low_count: number;
+	gaps_by_category: Record<GapCategory, GapItem[]>;
+	overall_completeness_score: number;
+	attorney_summary: string;
+}
+

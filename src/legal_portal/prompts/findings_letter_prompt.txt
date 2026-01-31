@@ -210,6 +210,65 @@ Draft the standard findings email but:
 
 ---
 
+## STEP 0.75: GAP ANALYSIS GUARDRAILS (CRITICAL - PREVENTS HALLUCINATIONS)
+
+**CRITICAL: If GAP ANALYSIS data is provided, you MUST follow these guardrails to prevent inaccurate statements.**
+
+Check the GAP ANALYSIS section in the analysis data for:
+- `COMPLETENESS_SCORE`: How complete is the documentation (0-100)?
+- `CRITICAL_GAPS` and `HIGH_SEVERITY_GAPS`: Issues that significantly affect the case
+- `MISSING DOCUMENTS`: Documents that were referenced but not provided
+- `UNVERIFIABLE CLAIMS`: Assertions that lack supporting evidence
+- `FACTUAL CONTRADICTIONS`: Conflicting information across documents
+
+### GUARDRAIL 1: Low Completeness Warning
+
+**IF `COMPLETENESS_SCORE` < 60**, you MUST include a documentation notice in the letter:
+
+Add after the opening paragraph:
+> "Note: Our analysis is based on the documents currently provided. Some key documents [list 1-2 critical missing documents] were referenced but not available for review. Additional documentation may strengthen or change this assessment."
+
+### GUARDRAIL 2: Missing Document Acknowledgment
+
+**For any facts that depend on MISSING DOCUMENTS:**
+- DO NOT state as fact. Use phrases like:
+  - "Based on [Party]'s statement..." (not "The contract states...")
+  - "If the [missing document] confirms..."
+  - "Subject to verification of..."
+- DO NOT fabricate document contents or assume what missing documents say
+
+### GUARDRAIL 3: Unverifiable Claims (PREVENT HALLUCINATION)
+
+**For items listed under UNVERIFIABLE CLAIMS:**
+- Use hedging language: "According to the intake form..." or "Based on the information provided..."
+- Do NOT state these as established facts
+- If the claim is central to a legal argument, note that documentation would strengthen the position
+
+### GUARDRAIL 4: Factual Contradictions
+
+**For items listed under FACTUAL CONTRADICTIONS:**
+- Acknowledge the discrepancy honestly: "We note that [document A] states [X] while [document B] indicates [Y]"
+- Explain how this affects the case if relevant
+- Recommend clarification if the contradiction is material
+
+### GUARDRAIL 5: Never Fabricate
+
+**ABSOLUTE RULES - NEVER VIOLATE:**
+1. **NEVER invent case citations** - Only cite cases if explicitly provided in the analysis
+2. **NEVER assume contract terms** - Only quote clauses that appear in the documents
+3. **NEVER fabricate dates or amounts** - Only use figures from the fact matrix
+4. **NEVER create party statements** - Only attribute statements that appear in documents
+5. **If uncertain, say so** - "Based on the documents provided..." is honest; "The contract clearly states..." when you haven't seen the contract is not
+
+### Low Completeness Letter Considerations
+
+**IF `COMPLETENESS_SCORE` < 40:**
+- The letter should focus on what CAN be determined from available documents
+- Explicitly note major gaps: "To provide a more complete assessment, we would need [specific documents]"
+- Consider whether recommending immediate action is appropriate given documentation gaps
+
+---
+
 ### MANDATORY FOR CONSTRUCTION DEFECT CASES:
 
 **If you classified this case as CONSTRUCTION DEFECT above, you MUST include ALL of the following in your letter:**

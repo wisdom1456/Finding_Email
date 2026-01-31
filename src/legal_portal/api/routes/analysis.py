@@ -2468,12 +2468,22 @@ async def generate_letter(
         diag_logger = DiagnosticLogger(session_id=letter_request.case_id)
 
     if letter_request.letter_type == LetterType.FINDINGS:
-        from legal_portal.core.data_models import DeepAnalysis, FactMatrix, LetterStructure
+        from legal_portal.core.data_models import DeepAnalysis, FactMatrix, LetterStructure, GapAnalysisResult
 
         fact_matrix = FactMatrix(**msr["fact_matrix"])
         deep_analysis = DeepAnalysis(**msr["deep_analysis"])
         letter_structure = LetterStructure(**msr["letter_structure"])
         verified_statutes = msr.get("verified_statutes", [])
+
+        # Load gap analysis for guardrails (if available)
+        gap_analysis = None
+        gap_analysis_data = msr.get("gap_analysis")
+        if gap_analysis_data:
+            try:
+                gap_analysis = GapAnalysisResult(**gap_analysis_data)
+                logger.info(f"Gap analysis loaded: completeness={gap_analysis.overall_completeness_score}, critical_gaps={gap_analysis.critical_count}")
+            except Exception as gap_err:
+                logger.warning(f"Could not load gap analysis for guardrails: {gap_err}")
 
         json_service = JsonProcessingService(client=openai_client, config={})
         letter_html = await json_service.generate_findings_letter_adaptive(
@@ -2491,7 +2501,8 @@ async def generate_letter(
             clio_matter_context=artifacts.get("clio_matter_context", ""),
             jurisdiction=jurisdiction,  # Pass jurisdiction
             diag_logger=diag_logger,  # Pass diagnostic logger
-            original_documents=msr.get("original_documents"), # NEW: Pass raw content
+            original_documents=msr.get("original_documents"),  # Pass raw content
+            gap_analysis=gap_analysis,  # Pass gap analysis for guardrails
         )
         letter_key = "findings"
     else:

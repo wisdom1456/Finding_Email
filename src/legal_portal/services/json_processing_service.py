@@ -351,7 +351,8 @@ class JsonProcessingService:
         clio_matter_context: str = "",
         jurisdiction: str = "Florida",  # Added jurisdiction parameter
         diag_logger: Optional[DiagnosticLogger] = None,
-        original_documents: Optional[Dict[str, str]] = None, # NEW: Explicit raw content
+        original_documents: Optional[Dict[str, str]] = None,  # Explicit raw content
+        gap_analysis=None,  # GapAnalysisResult for guardrails
     ) -> str:
         """Generate findings email using multi-stage analysis results.
 
@@ -423,7 +424,8 @@ class JsonProcessingService:
         # Format structured analysis for prompt
         structured_context = self._format_multi_stage_context(
             fact_matrix, legal_analysis, structure_guidance, verified_statutes,
-            original_documents=original_documents
+            original_documents=original_documents,
+            gap_analysis=gap_analysis,
         )
 
         # Build statute context
@@ -551,6 +553,7 @@ class JsonProcessingService:
         clio_matter_context: str = "",
         jurisdiction: str = "Florida",
         original_documents: Optional[Dict[str, str]] = None,
+        gap_analysis=None,  # GapAnalysisResult for guardrails
     ) -> AsyncGenerator[str, None]:
         """Stream adaptive findings email generation.
 
@@ -559,7 +562,8 @@ class JsonProcessingService:
         # Format structured analysis for prompt
         structured_context = self._format_multi_stage_context(
             fact_matrix, legal_analysis, structure_guidance, verified_statutes,
-            original_documents=original_documents
+            original_documents=original_documents,
+            gap_analysis=gap_analysis,
         )
 
         # Build statute context
@@ -626,7 +630,9 @@ class JsonProcessingService:
             yield token
 
     def _format_multi_stage_context(
-        self, fact_matrix, legal_analysis, structure_guidance, verified_statutes, original_documents: Optional[Dict[str, str]] = None
+        self, fact_matrix, legal_analysis, structure_guidance, verified_statutes,
+        original_documents: Optional[Dict[str, str]] = None,
+        gap_analysis=None,  # GapAnalysisResult for guardrails
     ) -> str:
         """Format multi-stage analysis results for letter generation prompt."""
         import json
@@ -680,6 +686,45 @@ class JsonProcessingService:
         context += f"RECOMMEND_DEMAND_LETTER: {legal_analysis.recommend_demand_letter}\n"
         if legal_analysis.viability_reasoning:
             context += f"VIABILITY_REASONING: {legal_analysis.viability_reasoning}\n"
+
+        # Gap Analysis for Guardrails (if available)
+        if gap_analysis:
+            context += "\n--- GAP ANALYSIS (CRITICAL - READ BEFORE DRAFTING) ---\n"
+            context += f"COMPLETENESS_SCORE: {gap_analysis.overall_completeness_score}/100\n"
+            context += f"TOTAL_GAPS: {gap_analysis.total_gaps}\n"
+            context += f"CRITICAL_GAPS: {gap_analysis.critical_count}\n"
+            context += f"HIGH_SEVERITY_GAPS: {gap_analysis.high_count}\n"
+            context += f"ATTORNEY_SUMMARY: {gap_analysis.attorney_summary}\n"
+
+            # List critical and high gaps explicitly
+            if gap_analysis.critical_count > 0 or gap_analysis.high_count > 0:
+                context += "\n**CRITICAL/HIGH SEVERITY GAPS (MUST ADDRESS IN LETTER):**\n"
+                for category, gaps in gap_analysis.gaps_by_category.items():
+                    for gap in gaps:
+                        if hasattr(gap, 'severity') and gap.severity in ['critical', 'high']:
+                            context += f"- [{gap.severity.upper()}] {gap.title}: {gap.description}\n"
+                            context += f"  Impact: {gap.impact_on_case}\n"
+
+            # Missing documents that affect credibility
+            missing_docs = gap_analysis.gaps_by_category.get('missing_document', [])
+            if missing_docs:
+                context += "\n**MISSING DOCUMENTS (do not assume contents):**\n"
+                for gap in missing_docs:
+                    context += f"- {gap.title}\n"
+
+            # Unverifiable claims (prevent hallucination)
+            unverifiable = gap_analysis.gaps_by_category.get('unverifiable_claim', [])
+            if unverifiable:
+                context += "\n**UNVERIFIABLE CLAIMS (use hedging language):**\n"
+                for gap in unverifiable:
+                    context += f"- {gap.title}: {gap.description}\n"
+
+            # Factual contradictions
+            contradictions = gap_analysis.gaps_by_category.get('factual_contradiction', [])
+            if contradictions:
+                context += "\n**FACTUAL CONTRADICTIONS (acknowledge uncertainty):**\n"
+                for gap in contradictions:
+                    context += f"- {gap.title}: {gap.description}\n"
 
         return context
 

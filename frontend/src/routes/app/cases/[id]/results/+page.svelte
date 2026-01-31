@@ -55,6 +55,7 @@
 	let hasCriticalGaps = $derived(gapAnalysis && (gapAnalysis.critical_count > 0 || gapAnalysis.high_count > 0));
 	let criticalGapCount = $derived(gapAnalysis ? gapAnalysis.critical_count + gapAnalysis.high_count : 0);
 	let analyzingGaps = $state(false);
+	let gapAnalysisProgress = $state('');
 
 	// Attorney information for letters
 	let attorneyName = $state('');
@@ -369,12 +370,14 @@
 
 	async function analyzeGaps() {
 		analyzingGaps = true;
+		gapAnalysisProgress = 'Starting gap analysis...';
+
 		try {
 			const { session, user } = await getSecureSession();
 			if (!session || !user) throw new Error('Not authenticated');
 
 			const apiUrl = getApiUrl();
-			const response = await fetch(`${apiUrl}/api/analysis/analyze-gaps`, {
+			const response = await fetch(`${apiUrl}/api/analysis/analyze-gaps/stream`, {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json',
@@ -388,19 +391,52 @@
 				throw new Error(detail?.detail || 'Gap analysis failed');
 			}
 
-			const gapResult = await response.json();
+			// Handle streaming response
+			const reader = response.body?.getReader();
+			if (!reader) throw new Error('No response body');
 
-			// Update results with new gap analysis
-			if (results?.multi_stage_result) {
-				results.multi_stage_result.gap_analysis = gapResult;
-				results = results; // Trigger reactivity
+			const decoder = new TextDecoder();
+			let buffer = '';
+
+			while (true) {
+				const { done, value } = await reader.read();
+				if (done) break;
+
+				buffer += decoder.decode(value, { stream: true });
+				const lines = buffer.split('\n');
+				buffer = lines.pop() || '';
+
+				for (const line of lines) {
+					if (line.startsWith('data: ')) {
+						try {
+							const data = JSON.parse(line.slice(6));
+
+							if (data.type === 'phase') {
+								gapAnalysisProgress = data.message;
+								if (data.gaps_found !== undefined) {
+									gapAnalysisProgress = `Found ${data.gaps_found} gaps. Saving...`;
+								}
+							} else if (data.type === 'result') {
+								// Update results with gap analysis
+								if (results?.multi_stage_result) {
+									results.multi_stage_result.gap_analysis = data.data;
+									results = results; // Trigger reactivity
+								}
+								toastStore.success(`Gap analysis complete! Found ${data.data.total_gaps} gaps.`);
+							} else if (data.type === 'error') {
+								throw new Error(data.error);
+							}
+						} catch (parseErr) {
+							// Ignore JSON parse errors for partial data
+						}
+					}
+				}
 			}
-
-			toastStore.success(`Gap analysis complete! Found ${gapResult.total_gaps} gaps.`);
 		} catch (err: any) {
 			toastStore.error(err.message || 'Gap analysis failed');
 		} finally {
 			analyzingGaps = false;
+			gapAnalysisProgress = '';
 		}
 	}
 
@@ -954,12 +990,16 @@ async function generateLetterRequest(body: Record<string, any>) {
 							variant="primary"
 							onclick={analyzeGaps}
 							loading={analyzingGaps}
-							loadingText="Analyzing gaps..."
+							loadingText={gapAnalysisProgress || "Analyzing gaps..."}
 							class="px-8"
 						>
 							Analyze Case Gaps
 						</AsyncButton>
-						<p class="text-xs text-gray-400 mt-4">Analysis typically takes 30-60 seconds</p>
+						{#if analyzingGaps && gapAnalysisProgress}
+							<p class="text-sm text-blue-600 mt-4 animate-pulse">{gapAnalysisProgress}</p>
+						{:else}
+							<p class="text-xs text-gray-400 mt-4">Analysis typically takes 30-60 seconds</p>
+						{/if}
 					</div>
 				</div>
 			{/if}

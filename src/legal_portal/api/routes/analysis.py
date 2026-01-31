@@ -2747,12 +2747,30 @@ async def analyze_gaps_on_demand(
                 detail="Gap analysis requires deep analysis data. Please re-run case analysis.",
             )
 
-        # Convert document summaries
-        doc_summaries_array = result_payload.get("document_summaries", [])
+        # Convert document summaries (stored as JSON string)
+        doc_summaries_raw = result_payload.get("document_summaries", [])
+        doc_summaries_array = []
+
+        # Parse JSON string if needed
+        if isinstance(doc_summaries_raw, str):
+            try:
+                doc_summaries_array = json.loads(doc_summaries_raw)
+                logger.info(f"[GAP_ENDPOINT] Parsed {len(doc_summaries_array)} document summaries from JSON string")
+            except json.JSONDecodeError as json_err:
+                logger.warning(f"[GAP_ENDPOINT] Could not parse document_summaries JSON: {json_err}")
+        elif isinstance(doc_summaries_raw, list):
+            doc_summaries_array = doc_summaries_raw
+
         doc_summaries_list = []
         for doc_sum in doc_summaries_array:
             try:
-                doc_summaries_list.append(DocumentSummaryStructured(**doc_sum))
+                # Handle both dict and already-parsed objects
+                if isinstance(doc_sum, dict):
+                    doc_summaries_list.append(DocumentSummaryStructured(**doc_sum))
+                elif hasattr(doc_sum, 'model_dump'):
+                    doc_summaries_list.append(doc_sum)
+                else:
+                    logger.warning(f"[GAP_ENDPOINT] Unexpected doc summary type: {type(doc_sum)}")
             except Exception as doc_err:
                 logger.warning(f"[GAP_ENDPOINT] Could not convert doc summary: {doc_err}")
 
@@ -2800,6 +2818,161 @@ async def analyze_gaps_on_demand(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Gap analysis failed: {str(e)}",
         ) from e
+
+
+@router.post("/analyze-gaps/stream")
+@limiter.limit("5/minute")
+async def analyze_gaps_streaming(
+    gap_request: GapAnalysisRequest,
+    request: Request,
+    user=Depends(get_current_user),
+    supabase=Depends(get_user_supabase_client),
+    service_supabase=Depends(get_supabase_client),
+):
+    """
+    Run gap analysis on-demand with streaming progress updates.
+
+    Returns a streaming response with progress events and final result.
+    Event types:
+    - phase: Progress update (preparing, analyzing, saving)
+    - result: Final gap analysis result
+    - error: Error occurred
+    """
+    case_id = gap_request.case_id
+    logger.info(f"[GAP_STREAM] Starting streaming gap analysis for case {case_id}")
+
+    # Verify access first (non-streaming to fail fast)
+    _ensure_case_access(supabase, case_id, user["id"])
+
+    async def generate():
+        import time
+        start_time = time.time()
+
+        try:
+            # Phase 1: Preparing
+            yield f"data: {json.dumps({'type': 'phase', 'phase': 'preparing', 'message': 'Loading case data...', 'elapsed': 0})}\n\n"
+
+            # Fetch existing analysis
+            analysis_record = _fetch_latest_analysis_result(supabase, case_id)
+            result_payload = analysis_record["result"]
+            analysis_id = analysis_record["id"]
+
+            # Check for multi_stage_result
+            multi_stage_result = result_payload.get("multi_stage_result")
+            if not multi_stage_result:
+                yield f"data: {json.dumps({'type': 'error', 'error': 'Gap analysis requires a completed multi-stage analysis. Please run case analysis first.'})}\n\n"
+                return
+
+            # Check if gap analysis already exists
+            existing_gap = multi_stage_result.get("gap_analysis")
+            if existing_gap:
+                logger.info(f"[GAP_STREAM] Returning cached gap analysis for case {case_id}")
+                yield f"data: {json.dumps({'type': 'phase', 'phase': 'cached', 'message': 'Using cached analysis', 'elapsed': time.time() - start_time})}\n\n"
+                yield f"data: {json.dumps({'type': 'result', 'data': existing_gap})}\n\n"
+                return
+
+            yield f"data: {json.dumps({'type': 'phase', 'phase': 'preparing', 'message': 'Converting documents...', 'elapsed': time.time() - start_time})}\n\n"
+
+            # Import gap analysis dependencies
+            from legal_portal.services.gap_analysis_service import GapAnalysisService
+            from legal_portal.core.data_models import (
+                FactMatrix,
+                LegalIssueMap,
+                DeepAnalysis,
+                DocumentSummaryStructured,
+            )
+
+            # Fetch user's AI preferences
+            ai_preferences = await _get_user_ai_preferences(user["id"], supabase)
+            openai_client = OpenAIClient(user_preferences=ai_preferences)
+            gap_service = GapAnalysisService(openai_client=openai_client)
+
+            # Convert multi_stage_result dicts to Pydantic models
+            fact_matrix = FactMatrix(**multi_stage_result.get("fact_matrix", {}))
+            issue_map = LegalIssueMap(**multi_stage_result.get("issue_map", {}))
+            deep_analysis_data = multi_stage_result.get("deep_analysis", {})
+            deep_analysis = DeepAnalysis(**deep_analysis_data) if deep_analysis_data else None
+
+            if not deep_analysis:
+                yield f"data: {json.dumps({'type': 'error', 'error': 'Gap analysis requires deep analysis data. Please re-run case analysis.'})}\n\n"
+                return
+
+            # Convert document summaries (stored as JSON string)
+            doc_summaries_raw = result_payload.get("document_summaries", [])
+            doc_summaries_array = []
+
+            if isinstance(doc_summaries_raw, str):
+                try:
+                    doc_summaries_array = json.loads(doc_summaries_raw)
+                except json.JSONDecodeError:
+                    pass
+            elif isinstance(doc_summaries_raw, list):
+                doc_summaries_array = doc_summaries_raw
+
+            doc_summaries_list = []
+            for doc_sum in doc_summaries_array:
+                try:
+                    if isinstance(doc_sum, dict):
+                        doc_summaries_list.append(DocumentSummaryStructured(**doc_sum))
+                    elif hasattr(doc_sum, 'model_dump'):
+                        doc_summaries_list.append(doc_sum)
+                except Exception:
+                    pass
+
+            # Fetch intake content
+            intake_content = None
+            try:
+                intake_response = supabase.table("intakes").select("content").eq("case_id", case_id).limit(1).execute()
+                intake_content = intake_response.data[0]["content"] if intake_response.data else None
+            except Exception:
+                intake_content = result_payload.get("streaming_analysis", "")[:5000]
+
+            # Phase 2: Analyzing
+            yield f"data: {json.dumps({'type': 'phase', 'phase': 'analyzing', 'message': 'AI is analyzing case for gaps...', 'elapsed': time.time() - start_time, 'doc_count': len(doc_summaries_list)})}\n\n"
+
+            logger.info(f"[GAP_STREAM] Running gap analysis with {len(doc_summaries_list)} documents")
+
+            # Run gap analysis
+            gap_result = await gap_service.analyze_gaps(
+                fact_matrix=fact_matrix,
+                issue_map=issue_map,
+                deep_analysis=deep_analysis,
+                document_summaries=doc_summaries_list,
+                intake_content=intake_content,
+            )
+
+            logger.info(f"[GAP_STREAM] Gap analysis complete: {gap_result.total_gaps} gaps found")
+
+            # Phase 3: Saving
+            yield f"data: {json.dumps({'type': 'phase', 'phase': 'saving', 'message': 'Saving results...', 'elapsed': time.time() - start_time, 'gaps_found': gap_result.total_gaps})}\n\n"
+
+            # Save gap analysis to database
+            gap_dict = gap_result.model_dump(mode="json")
+            multi_stage_result["gap_analysis"] = gap_dict
+            result_payload["multi_stage_result"] = multi_stage_result
+
+            service_supabase.table("analysis_results").update({
+                "result": result_payload,
+            }).eq("id", analysis_id).execute()
+
+            logger.info(f"[GAP_STREAM] Gap analysis saved for case {case_id}")
+
+            # Final result
+            yield f"data: {json.dumps({'type': 'result', 'data': gap_dict, 'elapsed': time.time() - start_time})}\n\n"
+
+        except Exception as e:
+            logger.error(f"[GAP_STREAM] Gap analysis failed: {e}", exc_info=True)
+            yield f"data: {json.dumps({'type': 'error', 'error': str(e)})}\n\n"
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @router.post("/chat", response_model=ChatMessageResponse)

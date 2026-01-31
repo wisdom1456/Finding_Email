@@ -1,7 +1,7 @@
 """Temporary debug endpoint for gap analysis."""
 
 from fastapi import APIRouter, Depends
-from legal_portal.api.dependencies import get_user_supabase_client
+from legal_portal.api.dependencies import get_supabase_client
 
 router = APIRouter(prefix="/debug", tags=["debug"])
 
@@ -9,7 +9,7 @@ router = APIRouter(prefix="/debug", tags=["debug"])
 @router.get("/gap-analysis/{case_id}")
 async def debug_gap_analysis(
     case_id: str,
-    supabase=Depends(get_user_supabase_client),
+    supabase=Depends(get_supabase_client),  # Use service role client (no auth required)
 ):
     """Debug endpoint to check gap analysis data for a case."""
 

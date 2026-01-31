@@ -59,13 +59,17 @@ class MultiStageAnalyzer:
         self.stage_timings = {}
 
         # Initialize gap analysis service if not provided
-        if gap_analysis_service:
-            self.gap_service = gap_analysis_service
-            logger.info("[INIT] Using provided GapAnalysisService")
-        else:
-            logger.info("[INIT] Creating new GapAnalysisService")
-            self.gap_service = GapAnalysisService(openai_client=openai_client)
-            logger.info(f"[INIT] GapAnalysisService created: {self.gap_service is not None}")
+        try:
+            if gap_analysis_service:
+                self.gap_service = gap_analysis_service
+                logger.info("[INIT] Using provided GapAnalysisService")
+            else:
+                logger.info("[INIT] Creating new GapAnalysisService")
+                self.gap_service = GapAnalysisService(openai_client=openai_client)
+                logger.info(f"[INIT] GapAnalysisService created successfully: {self.gap_service is not None}")
+        except Exception as e:
+            logger.error(f"[INIT] FAILED to create GapAnalysisService: {e}", exc_info=True)
+            self.gap_service = None  # Explicitly set to None on failure
 
     # =========================================================================
     # STREAMING SINGLE-PASS ANALYSIS (New - replaces multi-stage for speed)

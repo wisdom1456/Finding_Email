@@ -2147,8 +2147,30 @@ async def save_streaming_analysis(
 
         # Create or update analysis result
         analysis_id = str(uuid.uuid4())  # Generate proper UUID for database
-        
+
         try:
+            # Check if case exists before saving (prevents race condition in Clio import)
+            # Retry up to 3 times with 2 second delays to allow case creation to complete
+            import time
+            case_exists = False
+            for retry in range(3):
+                case_check = service_supabase.table("cases").select("id").eq("id", case_id).limit(1).execute()
+                if case_check.data:
+                    case_exists = True
+                    break
+
+                if retry < 2:  # Don't wait on last attempt
+                    logger.warning(f"[STREAM] Case {case_id} not found, retry {retry + 1}/3 in 2s...")
+                    time.sleep(2)
+
+            if not case_exists:
+                logger.error(f"[STREAM] Case {case_id} still not found after 3 retries")
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"Case {case_id} not found in database. Please ensure the case was created before starting analysis."
+                )
+
+            logger.info(f"[STREAM] Case {case_id} confirmed, saving analysis results...")
             service_supabase.table("analysis_results").upsert({
                 "id": analysis_id,
                 "case_id": case_id,
@@ -2156,6 +2178,8 @@ async def save_streaming_analysis(
                 "result": streaming_result,
                 "created_at": datetime.utcnow().isoformat(),
             }).execute()
+        except HTTPException:
+            raise
         except Exception as db_err:
             # If database save fails, log detailed error
             error_detail = str(db_err)

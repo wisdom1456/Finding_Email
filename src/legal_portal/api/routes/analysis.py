@@ -2904,8 +2904,9 @@ async def analyze_gaps_streaming(
             if isinstance(doc_summaries_raw, str):
                 try:
                     doc_summaries_array = json.loads(doc_summaries_raw)
-                except json.JSONDecodeError:
-                    pass
+                    logger.info(f"[GAP_STREAM] Parsed {len(doc_summaries_array)} document summaries from JSON string")
+                except json.JSONDecodeError as json_err:
+                    logger.warning(f"[GAP_STREAM] Failed to parse document_summaries JSON: {json_err}")
             elif isinstance(doc_summaries_raw, list):
                 doc_summaries_array = doc_summaries_raw
 
@@ -2916,15 +2917,16 @@ async def analyze_gaps_streaming(
                         doc_summaries_list.append(DocumentSummaryStructured(**doc_sum))
                     elif hasattr(doc_sum, 'model_dump'):
                         doc_summaries_list.append(doc_sum)
-                except Exception:
-                    pass
+                except Exception as doc_err:
+                    logger.warning(f"[GAP_STREAM] Failed to convert doc summary: {doc_err}")
 
             # Fetch intake content
             intake_content = None
             try:
                 intake_response = supabase.table("intakes").select("content").eq("case_id", case_id).limit(1).execute()
                 intake_content = intake_response.data[0]["content"] if intake_response.data else None
-            except Exception:
+            except Exception as intake_err:
+                logger.warning(f"[GAP_STREAM] Failed to fetch intake, using fallback: {intake_err}")
                 intake_content = result_payload.get("streaming_analysis", "")[:5000]
 
             # Phase 2: Analyzing

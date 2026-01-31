@@ -6,8 +6,10 @@ providing attorneys with critical feedback about case completeness.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
+import time
 from typing import Any, Dict, List, Optional
 
 from legal_portal.core.data_models import (
@@ -80,11 +82,8 @@ class GapAnalysisService:
                 f"model={model} prompt_chars={len(prompt)} max_tokens=4000"
             )
 
-            # Import asyncio for thread execution
-            import asyncio
-
             # Call OpenAI API
-            api_start = __import__('time').time()
+            api_start = time.time()
             response_dict = await asyncio.to_thread(
                 self.client.create_response,
                 model=model,
@@ -96,7 +95,7 @@ class GapAnalysisService:
                 max_output_tokens=4000,
                 # No reasoning_effort for GPT-4.x - it outputs content directly
             )
-            api_duration = __import__('time').time() - api_start
+            api_duration = time.time() - api_start
 
             finish_reason = response_dict.get("finish_reason", "unknown")
             logger.info(

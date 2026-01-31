@@ -93,7 +93,7 @@ class GapAnalysisService:
                 ),
                 input=prompt,
                 max_output_tokens=3000,
-                reasoning_effort="medium",
+                reasoning_effort="low",  # Reduced from "medium" to prevent timeout
             )
             api_duration = __import__('time').time() - api_start
 

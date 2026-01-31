@@ -2128,14 +2128,14 @@ async def save_streaming_analysis(
                                 document_summaries=doc_summaries_list,
                                 intake_content=intake_content,
                             ),
-                            timeout=30.0  # 30 second timeout
+                            timeout=60.0  # 60 second timeout for GPT-5.2 processing
                         )
 
                         # Add to multi_stage_result
                         multi_stage_result["gap_analysis"] = gap_result.model_dump(mode="json")
                         logger.info(f"[STREAM] Gap analysis complete: {gap_result.total_gaps} gaps found")
                     except asyncio.TimeoutError:
-                        logger.error("[STREAM] Gap analysis timed out after 30 seconds")
+                        logger.error("[STREAM] Gap analysis timed out after 60 seconds")
                         multi_stage_result["gap_analysis"] = None
                 else:
                     logger.warning("[STREAM] No deep_analysis found, skipping gap analysis")

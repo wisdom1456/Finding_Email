@@ -2108,19 +2108,35 @@ async def save_streaming_analysis(
                 # Run gap analysis
                 if deep_analysis:
                     import asyncio
-                    gap_result = await asyncio.to_thread(
-                        lambda: asyncio.run(gap_service.analyze_gaps(
-                            fact_matrix=fact_matrix,
-                            issue_map=issue_map,
-                            deep_analysis=deep_analysis,
-                            document_summaries=doc_summaries_list,
-                            intake_content=request.content[:5000],  # Use analysis content as proxy for intake
-                        ))
-                    )
 
-                    # Add to multi_stage_result
-                    multi_stage_result["gap_analysis"] = gap_result.model_dump(mode="json")
-                    logger.info(f"[STREAM] Gap analysis complete: {gap_result.total_gaps} gaps found")
+                    # Fetch actual intake content for gap analysis
+                    intake_content = None
+                    try:
+                        intake_response = supabase.table("intakes").select("content").eq("case_id", case_id).limit(1).execute()
+                        intake_content = intake_response.data[0]["content"] if intake_response.data else None
+                    except Exception as intake_err:
+                        logger.warning(f"[STREAM] Could not fetch intake content: {intake_err}")
+                        intake_content = request.content[:5000]  # Fallback to analysis content
+
+                    # Run gap analysis with timeout
+                    try:
+                        gap_result = await asyncio.wait_for(
+                            gap_service.analyze_gaps(
+                                fact_matrix=fact_matrix,
+                                issue_map=issue_map,
+                                deep_analysis=deep_analysis,
+                                document_summaries=doc_summaries_list,
+                                intake_content=intake_content,
+                            ),
+                            timeout=30.0  # 30 second timeout
+                        )
+
+                        # Add to multi_stage_result
+                        multi_stage_result["gap_analysis"] = gap_result.model_dump(mode="json")
+                        logger.info(f"[STREAM] Gap analysis complete: {gap_result.total_gaps} gaps found")
+                    except asyncio.TimeoutError:
+                        logger.error("[STREAM] Gap analysis timed out after 30 seconds")
+                        multi_stage_result["gap_analysis"] = None
                 else:
                     logger.warning("[STREAM] No deep_analysis found, skipping gap analysis")
 

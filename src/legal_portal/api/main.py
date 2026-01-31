@@ -22,6 +22,7 @@ from legal_portal.api.routes import (
     cases,
     clio,
     corpus,
+    debug_gap,
     documents,
     health,
     intake,
@@ -127,6 +128,7 @@ app.include_router(health.router, tags=["health"])
 app.include_router(cases.router, prefix="/api/cases", tags=["cases"])
 app.include_router(documents.router, prefix="/api/documents", tags=["documents"])
 app.include_router(analysis.router, prefix="/api/analysis", tags=["analysis"])
+app.include_router(debug_gap.router, prefix="/api", tags=["debug"])  # Temporary debug endpoint
 app.include_router(progress.router, prefix="/api", tags=["progress"])
 app.include_router(clio.router, prefix="/api", tags=["clio"])
 app.include_router(intake.router, prefix="/api", tags=["intake"])

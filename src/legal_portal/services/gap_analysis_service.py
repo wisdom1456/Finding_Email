@@ -58,7 +58,8 @@ class GapAnalysisService:
         Returns:
             GapAnalysisResult with identified gaps and completeness assessment
         """
-        logger.info("Starting gap analysis (Stage 3.5)")
+        logger.info("[GAP_SERVICE] Starting gap analysis (Stage 3.5)")
+        logger.info(f"[GAP_SERVICE] Inputs - fact_matrix parties: {len(fact_matrix.parties)}, issues: {len(issue_map.primary_issues)}, docs: {len(document_summaries)}")
 
         try:
             # Build the analysis prompt

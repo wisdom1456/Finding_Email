@@ -61,8 +61,11 @@ class MultiStageAnalyzer:
         # Initialize gap analysis service if not provided
         if gap_analysis_service:
             self.gap_service = gap_analysis_service
+            logger.info("[INIT] Using provided GapAnalysisService")
         else:
+            logger.info("[INIT] Creating new GapAnalysisService")
             self.gap_service = GapAnalysisService(openai_client=openai_client)
+            logger.info(f"[INIT] GapAnalysisService created: {self.gap_service is not None}")
 
     # =========================================================================
     # STREAMING SINGLE-PASS ANALYSIS (New - replaces multi-stage for speed)
@@ -536,6 +539,7 @@ Output in clean markdown format."""
 
         # Stage 3.5: Gap Analysis (NEW)
         gap_analysis: Optional[GapAnalysisResult] = None
+        logger.info(f"[STAGE:3.5] Gap service exists: {self.gap_service is not None}, Type: {type(self.gap_service)}")
         if self.gap_service:
             if progress_callback:
                 await progress_callback(
@@ -553,6 +557,7 @@ Output in clean markdown format."""
             )
 
             try:
+                logger.info(f"[STAGE:3.5] Calling gap_service.analyze_gaps...")
                 gap_analysis = await self.gap_service.analyze_gaps(
                     fact_matrix=fact_matrix,
                     issue_map=issue_map,
@@ -560,6 +565,7 @@ Output in clean markdown format."""
                     document_summaries=document_summaries,
                     intake_content=intake_content,
                 )
+                logger.info(f"[STAGE:3.5] Gap analysis returned: {gap_analysis is not None}")
                 self.stage_timings["gap_analysis"] = time.time() - stage_start
                 elapsed = time.time() - start_time
 
@@ -589,9 +595,12 @@ Output in clean markdown format."""
                     diag_logger.log_stage("multi_stage_3.5_gap_analysis", gap_analysis.model_dump(mode="json"))
 
             except Exception as e:
-                logger.error(f"Gap analysis failed: {e}", exc_info=True)
+                logger.error(f"[STAGE:3.5] Gap analysis failed: {e}", exc_info=True)
+                logger.error(f"[STAGE:3.5] Error type: {type(e).__name__}, Details: {str(e)}")
                 # Continue without gap analysis
                 gap_analysis = None
+        else:
+            logger.warning(f"[STAGE:3.5] Gap service is None or False, skipping gap analysis")
 
         # Stage 4: Letter Structure Determination
         if progress_callback:

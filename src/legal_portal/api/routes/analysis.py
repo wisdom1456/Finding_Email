@@ -2073,79 +2073,8 @@ async def save_streaming_analysis(
                     detail=f"Failed to serialize analysis result: {retry_err}. Problematic fields: {problematic_fields}"
                 )
 
-        # ============================================================================
-        # ADD GAP ANALYSIS TO MULTI_STAGE_RESULT (NEW - 2026-01-31)
-        # ============================================================================
-        if multi_stage_result:
-            try:
-                logger.info("[STREAM] Running gap analysis on streaming result...")
-
-                # Import gap analysis service
-                from legal_portal.services.gap_analysis_service import GapAnalysisService
-                from legal_portal.utils.openai_client import OpenAIClient
-                from legal_portal.core.data_models import FactMatrix, LegalIssueMap, DeepAnalysis, DocumentSummaryStructured
-
-                # Create OpenAI client and gap service
-                openai_client = OpenAIClient()
-                gap_service = GapAnalysisService(openai_client=openai_client)
-
-                # Convert multi_stage_result dicts to Pydantic models for gap analysis
-                fact_matrix = FactMatrix(**multi_stage_result.get("fact_matrix", {}))
-                issue_map = LegalIssueMap(**multi_stage_result.get("issue_map", {}))
-                deep_analysis_data = multi_stage_result.get("deep_analysis", {})
-
-                # Deep analysis needs special handling for nested models
-                deep_analysis = DeepAnalysis(**deep_analysis_data) if deep_analysis_data else None
-
-                # Convert document summaries
-                doc_summaries_list = []
-                for doc_sum in doc_summaries_array:
-                    try:
-                        doc_summaries_list.append(DocumentSummaryStructured(**doc_sum))
-                    except Exception as doc_err:
-                        logger.warning(f"[STREAM] Could not convert doc summary: {doc_err}")
-
-                # Run gap analysis
-                if deep_analysis:
-                    import asyncio
-
-                    # Fetch actual intake content for gap analysis
-                    intake_content = None
-                    try:
-                        intake_response = supabase.table("intakes").select("content").eq("case_id", case_id).limit(1).execute()
-                        intake_content = intake_response.data[0]["content"] if intake_response.data else None
-                    except Exception as intake_err:
-                        logger.warning(f"[STREAM] Could not fetch intake content: {intake_err}")
-                        intake_content = request.content[:5000]  # Fallback to analysis content
-
-                    # Run gap analysis with timeout
-                    try:
-                        gap_result = await asyncio.wait_for(
-                            gap_service.analyze_gaps(
-                                fact_matrix=fact_matrix,
-                                issue_map=issue_map,
-                                deep_analysis=deep_analysis,
-                                document_summaries=doc_summaries_list,
-                                intake_content=intake_content,
-                            ),
-                            timeout=60.0  # 60 second timeout for GPT-5.2 processing
-                        )
-
-                        # Add to multi_stage_result
-                        multi_stage_result["gap_analysis"] = gap_result.model_dump(mode="json")
-                        logger.info(f"[STREAM] Gap analysis complete: {gap_result.total_gaps} gaps found")
-                    except asyncio.TimeoutError:
-                        logger.error("[STREAM] Gap analysis timed out after 60 seconds")
-                        multi_stage_result["gap_analysis"] = None
-                else:
-                    logger.warning("[STREAM] No deep_analysis found, skipping gap analysis")
-
-            except Exception as gap_err:
-                logger.error(f"[STREAM] Gap analysis failed: {gap_err}", exc_info=True)
-                # Continue without gap analysis - don't fail the whole save
-                multi_stage_result["gap_analysis"] = None
-
         # Create or update analysis result
+        # Note: Gap analysis is now handled on-demand via POST /analyze-gaps endpoint
         analysis_id = str(uuid.uuid4())  # Generate proper UUID for database
 
         try:
@@ -2733,6 +2662,143 @@ Be realistic and evidence-based. Only include amounts supported by the case data
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to calculate demand amount: {str(e)}",
+        ) from e
+
+
+# =============================================================================
+# ON-DEMAND GAP ANALYSIS ENDPOINT
+# =============================================================================
+
+
+class GapAnalysisRequest(BaseModel):
+    """Request model for on-demand gap analysis."""
+    case_id: str = Field(..., description="The case ID to analyze for gaps")
+
+
+@router.post("/analyze-gaps")
+@limiter.limit("5/minute")  # Rate limit gap analysis
+async def analyze_gaps_on_demand(
+    gap_request: GapAnalysisRequest,
+    request: Request,  # Required for rate limiter
+    user=Depends(get_current_user),  # noqa: B008
+    supabase=Depends(get_user_supabase_client),  # noqa: B008
+    service_supabase=Depends(get_supabase_client),  # noqa: B008
+):
+    """
+    Run gap analysis on-demand for a completed case analysis.
+
+    This endpoint analyzes the case for:
+    - Missing documents
+    - Factual contradictions
+    - Timeline gaps
+    - Unverifiable claims
+
+    Returns GapAnalysisResult and saves to database for future retrieval.
+    """
+    case_id = gap_request.case_id
+    logger.info(f"[GAP_ENDPOINT] Starting on-demand gap analysis for case {case_id}")
+
+    # Verify access
+    _ensure_case_access(supabase, case_id, user["id"])
+
+    # Fetch existing analysis
+    analysis_record = _fetch_latest_analysis_result(supabase, case_id)
+    result_payload = analysis_record["result"]
+    analysis_id = analysis_record["id"]
+
+    # Check for multi_stage_result
+    multi_stage_result = result_payload.get("multi_stage_result")
+    if not multi_stage_result:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Gap analysis requires a completed multi-stage analysis. Please run case analysis first.",
+        )
+
+    # Check if gap analysis already exists
+    existing_gap = multi_stage_result.get("gap_analysis")
+    if existing_gap:
+        logger.info(f"[GAP_ENDPOINT] Returning cached gap analysis for case {case_id}")
+        return existing_gap
+
+    try:
+        # Import gap analysis dependencies
+        from legal_portal.services.gap_analysis_service import GapAnalysisService
+        from legal_portal.core.data_models import (
+            FactMatrix,
+            LegalIssueMap,
+            DeepAnalysis,
+            DocumentSummaryStructured,
+        )
+
+        # Fetch user's AI preferences
+        ai_preferences = await _get_user_ai_preferences(user["id"], supabase)
+        openai_client = OpenAIClient(user_preferences=ai_preferences)
+        gap_service = GapAnalysisService(openai_client=openai_client)
+
+        # Convert multi_stage_result dicts to Pydantic models
+        fact_matrix = FactMatrix(**multi_stage_result.get("fact_matrix", {}))
+        issue_map = LegalIssueMap(**multi_stage_result.get("issue_map", {}))
+        deep_analysis_data = multi_stage_result.get("deep_analysis", {})
+        deep_analysis = DeepAnalysis(**deep_analysis_data) if deep_analysis_data else None
+
+        if not deep_analysis:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Gap analysis requires deep analysis data. Please re-run case analysis.",
+            )
+
+        # Convert document summaries
+        doc_summaries_array = result_payload.get("document_summaries", [])
+        doc_summaries_list = []
+        for doc_sum in doc_summaries_array:
+            try:
+                doc_summaries_list.append(DocumentSummaryStructured(**doc_sum))
+            except Exception as doc_err:
+                logger.warning(f"[GAP_ENDPOINT] Could not convert doc summary: {doc_err}")
+
+        # Fetch intake content
+        intake_content = None
+        try:
+            intake_response = supabase.table("intakes").select("content").eq("case_id", case_id).limit(1).execute()
+            intake_content = intake_response.data[0]["content"] if intake_response.data else None
+        except Exception as intake_err:
+            logger.warning(f"[GAP_ENDPOINT] Could not fetch intake content: {intake_err}")
+            # Use streaming_analysis as fallback
+            intake_content = result_payload.get("streaming_analysis", "")[:5000]
+
+        logger.info(f"[GAP_ENDPOINT] Running gap analysis with {len(doc_summaries_list)} documents")
+
+        # Run gap analysis (no timeout - let it complete)
+        gap_result = await gap_service.analyze_gaps(
+            fact_matrix=fact_matrix,
+            issue_map=issue_map,
+            deep_analysis=deep_analysis,
+            document_summaries=doc_summaries_list,
+            intake_content=intake_content,
+        )
+
+        logger.info(f"[GAP_ENDPOINT] Gap analysis complete: {gap_result.total_gaps} gaps found")
+
+        # Save gap analysis to database
+        gap_dict = gap_result.model_dump(mode="json")
+        multi_stage_result["gap_analysis"] = gap_dict
+        result_payload["multi_stage_result"] = multi_stage_result
+
+        service_supabase.table("analysis_results").update({
+            "result": result_payload,
+        }).eq("id", analysis_id).execute()
+
+        logger.info(f"[GAP_ENDPOINT] Gap analysis saved for case {case_id}")
+
+        return gap_dict
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"[GAP_ENDPOINT] Gap analysis failed: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Gap analysis failed: {str(e)}",
         ) from e
 
 

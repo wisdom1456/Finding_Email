@@ -54,6 +54,7 @@
 	let gapAnalysis = $derived(multiStageResult?.gap_analysis);
 	let hasCriticalGaps = $derived(gapAnalysis && (gapAnalysis.critical_count > 0 || gapAnalysis.high_count > 0));
 	let criticalGapCount = $derived(gapAnalysis ? gapAnalysis.critical_count + gapAnalysis.high_count : 0);
+	let analyzingGaps = $state(false);
 
 	// Attorney information for letters
 	let attorneyName = $state('');
@@ -364,6 +365,43 @@
 		}
 		
 		return doc?.extracted_text || doc?.manual_text || '';
+	}
+
+	async function analyzeGaps() {
+		analyzingGaps = true;
+		try {
+			const { session, user } = await getSecureSession();
+			if (!session || !user) throw new Error('Not authenticated');
+
+			const apiUrl = getApiUrl();
+			const response = await fetch(`${apiUrl}/api/analysis/analyze-gaps`, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					Authorization: `Bearer ${session.access_token}`
+				},
+				body: JSON.stringify({ case_id: caseId })
+			});
+
+			if (!response.ok) {
+				const detail = await response.json().catch(() => ({}));
+				throw new Error(detail?.detail || 'Gap analysis failed');
+			}
+
+			const gapResult = await response.json();
+
+			// Update results with new gap analysis
+			if (results?.multi_stage_result) {
+				results.multi_stage_result.gap_analysis = gapResult;
+				results = results; // Trigger reactivity
+			}
+
+			toastStore.success(`Gap analysis complete! Found ${gapResult.total_gaps} gaps.`);
+		} catch (err: any) {
+			toastStore.error(err.message || 'Gap analysis failed');
+		} finally {
+			analyzingGaps = false;
+		}
 	}
 
 	async function generateFindingsLetter() {
@@ -731,7 +769,7 @@ async function generateLetterRequest(body: Record<string, any>) {
 				>
 					Case Analysis
 				</button>
-				{#if gapAnalysis}
+				{#if hasMultiStageSupport}
 				<button
 					class={`py-4 px-1 border-b-2 text-sm font-medium relative ${
 						activeTab === 'gaps'
@@ -904,8 +942,25 @@ async function generateLetterRequest(body: Record<string, any>) {
 				<GapAnalysisPanel gapAnalysis={gapAnalysis} caseId={caseId} />
 			{:else}
 				<div class="card-standard">
-					<h2 class="text-2xl font-heading font-bold text-contrast mb-8 border-b border-gray-100 pb-4">Gap Analysis</h2>
-					<p class="text-gray-500">Gap analysis is not available for this case. This feature is included in new multi-stage analyses.</p>
+					<div class="text-center py-12">
+						<svg class="mx-auto h-16 w-16 text-gray-300 mb-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+						</svg>
+						<h2 class="text-2xl font-heading font-bold text-contrast mb-4">Case Gap Analysis</h2>
+						<p class="text-gray-500 max-w-md mx-auto mb-8">
+							Identify missing documents, factual contradictions, timeline gaps, and unverifiable claims in your case materials.
+						</p>
+						<AsyncButton
+							variant="primary"
+							onclick={analyzeGaps}
+							loading={analyzingGaps}
+							loadingText="Analyzing gaps..."
+							class="px-8"
+						>
+							Analyze Case Gaps
+						</AsyncButton>
+						<p class="text-xs text-gray-400 mt-4">Analysis typically takes 30-60 seconds</p>
+					</div>
 				</div>
 			{/if}
 		{:else if activeTab === 'fullAnalysis'}

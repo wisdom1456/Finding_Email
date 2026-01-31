@@ -71,12 +71,13 @@ class GapAnalysisService:
                 intake_content=intake_content,
             )
 
-            # Use GPT-5.2 for comprehensive gap detection
-            model = self.client.get_preferred_model("multi_stage_analysis", "gpt-5.2")
+            # Use GPT-4.1 for gap detection - faster and more reliable for structured JSON
+            # GPT-5.2 with reasoning_effort spends tokens on internal reasoning, not output
+            model = self.client.get_preferred_model("gap_analysis", "gpt-4.1")
 
             logger.info(
                 f"[STAGE:3.5:API] Calling OpenAI for gap_analysis | "
-                f"model={model} prompt_chars={len(prompt)} max_tokens=3000"
+                f"model={model} prompt_chars={len(prompt)} max_tokens=4000"
             )
 
             # Import asyncio for thread execution
@@ -89,11 +90,11 @@ class GapAnalysisService:
                 model=model,
                 instructions=(
                     "You are a critical legal analyst identifying gaps and inconsistencies in case materials. "
-                    "Return only valid JSON matching the GapAnalysisResult schema."
+                    "Return only valid JSON matching the GapAnalysisResult schema. Do not include any text before or after the JSON."
                 ),
                 input=prompt,
-                max_output_tokens=3000,
-                reasoning_effort="low",  # Reduced from "medium" to prevent timeout
+                max_output_tokens=4000,
+                # No reasoning_effort for GPT-4.x - it outputs content directly
             )
             api_duration = __import__('time').time() - api_start
 

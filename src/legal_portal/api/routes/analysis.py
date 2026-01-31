@@ -2072,7 +2072,63 @@ async def save_streaming_analysis(
                     status_code=500,
                     detail=f"Failed to serialize analysis result: {retry_err}. Problematic fields: {problematic_fields}"
                 )
-        
+
+        # ============================================================================
+        # ADD GAP ANALYSIS TO MULTI_STAGE_RESULT (NEW - 2026-01-31)
+        # ============================================================================
+        if multi_stage_result:
+            try:
+                logger.info("[STREAM] Running gap analysis on streaming result...")
+
+                # Import gap analysis service
+                from legal_portal.services.gap_analysis_service import GapAnalysisService
+                from legal_portal.utils.openai_client import OpenAIClient
+                from legal_portal.core.data_models import FactMatrix, LegalIssueMap, DeepAnalysis, DocumentSummaryStructured
+
+                # Create OpenAI client and gap service
+                openai_client = OpenAIClient()
+                gap_service = GapAnalysisService(openai_client=openai_client)
+
+                # Convert multi_stage_result dicts to Pydantic models for gap analysis
+                fact_matrix = FactMatrix(**multi_stage_result.get("fact_matrix", {}))
+                issue_map = LegalIssueMap(**multi_stage_result.get("issue_map", {}))
+                deep_analysis_data = multi_stage_result.get("deep_analysis", {})
+
+                # Deep analysis needs special handling for nested models
+                deep_analysis = DeepAnalysis(**deep_analysis_data) if deep_analysis_data else None
+
+                # Convert document summaries
+                doc_summaries_list = []
+                for doc_sum in doc_summaries_array:
+                    try:
+                        doc_summaries_list.append(DocumentSummaryStructured(**doc_sum))
+                    except Exception as doc_err:
+                        logger.warning(f"[STREAM] Could not convert doc summary: {doc_err}")
+
+                # Run gap analysis
+                if deep_analysis:
+                    import asyncio
+                    gap_result = await asyncio.to_thread(
+                        lambda: asyncio.run(gap_service.analyze_gaps(
+                            fact_matrix=fact_matrix,
+                            issue_map=issue_map,
+                            deep_analysis=deep_analysis,
+                            document_summaries=doc_summaries_list,
+                            intake_content=request.content[:5000],  # Use analysis content as proxy for intake
+                        ))
+                    )
+
+                    # Add to multi_stage_result
+                    multi_stage_result["gap_analysis"] = gap_result.model_dump(mode="json")
+                    logger.info(f"[STREAM] Gap analysis complete: {gap_result.total_gaps} gaps found")
+                else:
+                    logger.warning("[STREAM] No deep_analysis found, skipping gap analysis")
+
+            except Exception as gap_err:
+                logger.error(f"[STREAM] Gap analysis failed: {gap_err}", exc_info=True)
+                # Continue without gap analysis - don't fail the whole save
+                multi_stage_result["gap_analysis"] = None
+
         # Create or update analysis result
         analysis_id = str(uuid.uuid4())  # Generate proper UUID for database
         

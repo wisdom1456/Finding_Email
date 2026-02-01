@@ -1067,11 +1067,26 @@ Return JSON:
 
 CASE VIABILITY CRITERIA:
 Set "is_viable" to FALSE if ANY of the following apply:
+
+LEGAL VIABILITY:
 - The facts do not support any recognized legal claim under {jurisdiction} law
 - The statute of limitations has clearly expired
-- The client's own conduct bars recovery
+- The client's own conduct bars recovery (e.g., comparative fault > 50% in applicable states)
 - There is insufficient evidence to prove essential elements
-- The opposing party has clear, unassailable defenses
+- The opposing party has clear, unassailable defenses (e.g., valid contract disclaimer, proper notice)
+
+PRACTICAL VIABILITY:
+- The defendant cannot be identified or located for service
+- The potential recovery is significantly less than the cost to pursue ($5,000+ case costs vs. $2,000 recovery)
+- Essential procedural requirements cannot be met (e.g., required statutory notice not sent, deadline passed)
+- The client lacks standing to bring the claim (e.g., not party to contract, no injury)
+- The claim is barred by res judicata or collateral estoppel (previously litigated)
+- The defendant appears judgment-proof (no assets, bankrupt)
+
+DOCUMENT COMPLETENESS:
+- Critical documents referenced in the case are missing (e.g., the contract itself, the lease, the notice)
+- The client's version of events is contradicted by their own documents
+- Key evidence has been lost, destroyed, or is unavailable
 
 CRITICAL INSTRUCTIONS:
 - Use VERIFIED STATUTES PREFERENTIALLY

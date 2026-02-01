@@ -14,6 +14,7 @@
 	import SkippedDocumentsAlert from '$lib/components/SkippedDocumentsAlert.svelte';
 	import DocumentSummaryCard from '$lib/components/DocumentSummaryCard.svelte';
 	import GapAnalysisPanel from '$lib/components/GapAnalysisPanel.svelte';
+	import { AlertTriangle } from 'lucide-svelte';
 
 	// Get SSR data from load function
 	let { data }: { data: PageData } = $props();
@@ -56,6 +57,11 @@
 	let criticalGapCount = $derived(gapAnalysis ? gapAnalysis.critical_count + gapAnalysis.high_count : 0);
 	let analyzingGaps = $state(false);
 	let gapAnalysisProgress = $state('');
+	
+	// Viability data
+	let deepAnalysis = $derived(multiStageResult?.deep_analysis);
+	let isViable = $derived(deepAnalysis?.is_viable ?? true);
+	let viabilityReasoning = $derived(deepAnalysis?.viability_reasoning ?? '');
 
 	// Attorney information for letters
 	let attorneyName = $state('');
@@ -790,6 +796,21 @@ async function generateLetterRequest(body: Record<string, any>) {
 
 	{#if !loading && skippedDocs.length > 0}
 		<SkippedDocumentsAlert {skippedDocs} />
+	{/if}
+
+	{#if !loading && !isViable && viabilityReasoning}
+		<div class="bg-red-50 border-l-4 border-red-500 p-4 mb-6 rounded-r-lg shadow-sm" transition:slide>
+			<div class="flex items-start">
+				<AlertTriangle class="h-6 w-6 text-red-500 mr-3 flex-shrink-0 mt-0.5" />
+				<div class="flex-1">
+					<h3 class="text-red-800 font-bold text-lg">Case Viability Concern</h3>
+					<p class="text-red-700 mt-2 leading-relaxed">{viabilityReasoning}</p>
+					<p class="text-red-600 text-sm mt-3 font-medium">
+						The analysis indicates this case may not be viable for litigation. Review the full analysis and consider whether a "No Viable Case" letter would be more appropriate than a standard findings letter.
+					</p>
+				</div>
+			</div>
+		</div>
 	{/if}
 
 	{#if results}

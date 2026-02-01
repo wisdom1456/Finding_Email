@@ -968,6 +968,7 @@ class GapCategory(str, Enum):
     FACTUAL_CONTRADICTION = "factual_contradiction"
     TIMELINE_GAP = "timeline_gap"
     UNVERIFIABLE_CLAIM = "unverifiable_claim"
+    HALLUCINATION_RISK = "hallucination_risk"
     INCOMPLETE_INFO = "incomplete_info"
 
 
@@ -1006,3 +1007,25 @@ class GapAnalysisResult(BaseModel):
     attorney_summary: str = Field(
         description="Executive summary for attorney about case completeness"
     )
+
+
+class LetterValidationWarning(BaseModel):
+    """A single validation warning for letter content."""
+
+    warning_type: str = Field(description="Type of warning: amount_mismatch, date_mismatch, unhedged_claim, etc.")
+    message: str = Field(description="Human-readable warning message")
+    severity: str = Field(default="warning", description="Severity: warning, error, info")
+    source_context: Optional[str] = Field(default=None, description="Context from source data if available")
+
+
+class LetterValidationResult(BaseModel):
+    """Result of validating a generated letter against source data."""
+
+    is_valid: bool = Field(description="Whether the letter passed all validation checks")
+    warnings: List[LetterValidationWarning] = Field(
+        default_factory=list, description="List of validation warnings"
+    )
+    validation_timestamp: datetime = Field(description="When validation was performed")
+    amounts_checked: int = Field(default=0, description="Number of amounts validated")
+    dates_checked: int = Field(default=0, description="Number of dates validated")
+    claims_checked: int = Field(default=0, description="Number of unverifiable claims checked")

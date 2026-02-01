@@ -204,7 +204,7 @@ CONTEXT:
 
 ---
 
-TASK: Identify gaps and inconsistencies in 4 categories:
+TASK: Identify gaps and inconsistencies in 5 categories:
 
 1. **MISSING DOCUMENTS**
    - Documents referenced in other documents but not provided
@@ -225,6 +225,15 @@ TASK: Identify gaps and inconsistencies in 4 categories:
    - Assertions made in intake or analysis without supporting evidence
    - Claims that appear in one document but aren't corroborated by others
    - Assumptions that need verification
+
+5. **HALLUCINATION RISKS** (CRITICAL FOR LETTER QUALITY)
+   - Facts stated in the analysis that lack document support
+   - Legal conclusions drawn without explicit statutory basis
+   - Implied information that should be stated explicitly
+   - Calculations or derived dates/amounts that could be wrong
+   - Assumptions about opposing party's position or knowledge
+   - Contract terms or clauses referenced but not quoted from documents
+   - Any statement that would require "making something up" to include in a letter
 
 ---
 
@@ -265,6 +274,7 @@ Return your analysis as structured JSON matching the GapAnalysisResult schema:
         "factual_contradiction": [<GapItem objects>],
         "timeline_gap": [<GapItem objects>],
         "unverifiable_claim": [<GapItem objects>],
+        "hallucination_risk": [<GapItem objects>],
         "incomplete_info": [<GapItem objects>]
     }},
     "overall_completeness_score": <float 0-100>,

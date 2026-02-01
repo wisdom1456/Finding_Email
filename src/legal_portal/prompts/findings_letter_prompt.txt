@@ -269,6 +269,55 @@ Add after the opening paragraph:
 
 ---
 
+## STEP 0.8: SOURCE ATTRIBUTION REQUIREMENTS (MANDATORY - PREVENTS HALLUCINATIONS)
+
+**CRITICAL: Every factual claim in the letter MUST be traceable to a source. This section prevents fabrication of facts.**
+
+### For Dates:
+Only use dates that appear in the TIMELINE section of the fact matrix or in documents provided.
+- ✅ "On March 15, 2023..." (if March 15, 2023 is in timeline)
+- ❌ "Approximately 30 days later..." (calculating dates = risk of error)
+- ❌ "Around mid-March..." (vague dates not in sources)
+
+### For Amounts:
+Only use amounts that appear in FINANCIAL DATA or documents.
+- ✅ "$50,000 contract price" (if in financial_data)
+- ❌ "$150,000 estimated damages" (unless explicitly in financial_data)
+- ❌ "Tens of thousands in damages" (vague amounts)
+
+### For Quotes:
+Only quote text that appears in FULL DOCUMENT CONTENT or document summaries.
+- ✅ Quote directly from document content provided
+- ❌ "Section 12.3 states..." (if Section 12.3 not visible in documents)
+- ❌ "The contract provides that..." (unless specific language is quoted from documents)
+
+### For Legal Citations:
+Only cite statutes from VERIFIED STATUTES section.
+- ✅ "{jurisdiction_statute_citation_prefix} XXX.XX" (if in verified_statutes)
+- ❌ Case law citations (UNLESS explicitly provided in the analysis)
+- ❌ "As established in [made up case]..." (NEVER)
+
+### For Party Statements:
+Only attribute statements that appear in documents.
+- ✅ "According to the intake form, you stated..." (if in intake)
+- ❌ "The contractor admitted..." (unless documented)
+- ❌ "Both parties agreed..." (unless documented)
+
+### If a Fact is Needed But Not in Sources:
+- State: "Based on the information provided..."
+- Or: "The documents do not specify [X], but..."
+- Or: Request the missing information from the client
+- Or: Acknowledge the gap: "We would need documentation of [X] to confirm..."
+
+### ABSOLUTE PROHIBITIONS:
+1. **NEVER invent case citations** - Even if they seem plausible
+2. **NEVER fabricate contract terms** - Only quote clauses visible in documents
+3. **NEVER calculate dates** - Only use dates explicitly in sources
+4. **NEVER estimate amounts** - Only use figures from fact matrix
+5. **NEVER create party statements** - Only attribute documented statements
+
+---
+
 ### MANDATORY FOR CONSTRUCTION DEFECT CASES:
 
 **If you classified this case as CONSTRUCTION DEFECT above, you MUST include ALL of the following in your letter:**

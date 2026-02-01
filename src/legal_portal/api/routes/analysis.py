@@ -2485,6 +2485,25 @@ async def generate_letter(
             except Exception as gap_err:
                 logger.warning(f"Could not load gap analysis for guardrails: {gap_err}")
 
+        # COMPLETENESS GATE: Block letter generation if documentation is critically insufficient
+        if gap_analysis:
+            if gap_analysis.overall_completeness_score < 40:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail={
+                        "error": "documentation_insufficient",
+                        "message": "Case documentation is insufficient for letter generation. Please provide the missing documents identified in Gap Analysis before generating a letter.",
+                        "completeness_score": gap_analysis.overall_completeness_score,
+                        "critical_gaps": gap_analysis.critical_count,
+                        "recommendation": "Review the Gap Analysis tab to identify which documents are needed."
+                    }
+                )
+            elif gap_analysis.overall_completeness_score < 60:
+                logger.warning(
+                    f"Generating letter with low completeness score: {gap_analysis.overall_completeness_score}% "
+                    f"(critical_gaps={gap_analysis.critical_count}, high_gaps={gap_analysis.high_count})"
+                )
+
         json_service = JsonProcessingService(client=openai_client, config={})
         letter_html = await json_service.generate_findings_letter_adaptive(
             intake_content=processing_result.intake_content or "",
@@ -2552,6 +2571,29 @@ async def generate_letter(
         )
         target_party_name = letter_request.target_party_name
         letter_key = f"demand_{letter_request.target_party_name.replace(' ', '_')}".lower()
+
+    # POST-GENERATION VALIDATION: Check letter content against source data
+    if gap_analysis and letter_request.letter_type == LetterType.FINDINGS:
+        try:
+            from legal_portal.services.letter_validation_service import LetterValidationService
+
+            validator = LetterValidationService()
+            validation_result = validator.validate_letter(
+                letter_html=letter_html,
+                fact_matrix=fact_matrix,
+                gap_analysis=gap_analysis,
+                verified_statutes=verified_statutes,
+            )
+
+            if validation_result.warnings:
+                warning_summary = "; ".join([w.message for w in validation_result.warnings[:5]])
+                logger.warning(
+                    f"Letter validation warnings ({len(validation_result.warnings)} total): {warning_summary}"
+                )
+            else:
+                logger.info("Letter passed validation with no warnings")
+        except Exception as validation_err:
+            logger.warning(f"Letter validation skipped due to error: {validation_err}")
 
     result_payload.setdefault("generated_letters", {})[letter_key] = letter_html
     supabase.table("analysis_results").update({"result": result_payload}).eq(

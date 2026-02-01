@@ -131,6 +131,8 @@ If you use Clio, this integration eliminates double data entry and manual docume
 - **Professional tone** - Appropriate legal formality, thoughtful transitions
 - **Complete citations** - Every fact cited to its source document for easy verification
 - **Client-ready** - Review, edit if needed, then send - no reformatting required
+- **Quality guardrails** - Completeness gate blocks letters when documentation is insufficient
+- **Viability assessment** - Non-viable cases get honest "No Viable Case" letters instead of false hope
 
 ### Citation Management
 - **Source tracking** - Every statement links back to the original document
@@ -145,6 +147,39 @@ If you use Clio, this integration eliminates double data entry and manual docume
 - **Export options** - HTML format ready for further editing in Word
 
 **Result:** A professional findings email in minutes that would take hours to draft manually.
+
+---
+
+## 🛡️ Hallucination Prevention & Quality Guardrails
+
+### Multi-Layered Protection Against AI Fabrication
+Letters go to real clients - accuracy is non-negotiable. Our system implements four layers of protection:
+
+**1. Gap Analysis with Hallucination Risk Detection**
+- Identifies missing documents, factual contradictions, timeline gaps
+- NEW: Flags "hallucination risks" - facts without document support, unquoted contract terms
+
+**2. Completeness Gate**
+- Cases with < 40% documentation completeness **cannot generate letters**
+- Cases with 40-60% completeness show warnings to attorneys
+- Ensures sufficient documentation before any client communication
+
+**3. Source Attribution Requirements**
+- Dates must come from the timeline, not calculated
+- Amounts must come from financial data, not estimated
+- Quotes must come from actual documents, not assumed
+- Citations must come from verified statutes, not fabricated
+
+**4. Post-Generation Validation**
+- Validates amounts against case financial data
+- Verifies dates appear in the timeline
+- Checks that unverifiable claims use hedging language
+- Flags potential fabricated case citations
+
+**5. Viability Assessment**
+- Evaluates legal viability (statute of limitations, evidence, defenses)
+- NEW: Evaluates practical viability (cost-benefit, standing, judgment-proof defendants)
+- Non-viable cases receive "No Viable Case" letter template
 
 ---
 

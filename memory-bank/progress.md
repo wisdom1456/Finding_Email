@@ -74,6 +74,20 @@
     *   **Frontend UI Updates**: Enhanced the "New Case", "User Settings", and "Case Details" views to allow seamless state selection and display jurisdiction-specific guidance.
     *   **Streamlit Dashboard Support**: Updated the internal `corpus_loader` to support browsing and searching both Florida and New Mexico legal databases.
 
+### Hallucination Prevention & Letter Quality Guardrails (January 2026)
+
+*   **Objective**: Implement multi-layered safeguards to prevent AI hallucinations and ensure letter quality for client communications.
+*   **Status**: **Completed**
+*   **Key Outcomes**:
+    *   **Completeness Gate**: Letters cannot be generated when case documentation completeness score is below 40%. Scores between 40-60% trigger warnings.
+    *   **Source Attribution Requirements**: New prompt section (Step 0.8) enforces strict rules - dates must come from timeline, amounts from financial_data, quotes from documents, citations from verified statutes.
+    *   **Expanded Viability Criteria**: Deep analysis now evaluates legal viability, practical viability (cost-benefit, standing, judgment-proof defendants), and document completeness.
+    *   **Post-Generation Validation**: New `LetterValidationService` validates letter content against source data, checking amounts, dates, hedging language, and case citations.
+    *   **Hallucination Risk Detection**: Gap analysis now identifies a fifth category - facts without document support, unsupported legal conclusions, and unquoted contract terms.
+    *   **Frontend Viability Warning**: Prominent red warning banner displays when case is not viable, guiding attorneys toward "No Viable Case" letters.
+    *   **New Data Models**: Added `LetterValidationResult`, `LetterValidationWarning`, and `GapCategory.HALLUCINATION_RISK`.
+    *   **Documentation**: Comprehensive documentation in `docs/HALLUCINATION_PREVENTION.md`.
+
 ## 2. Next Steps & Future Work
 
 ### Foundational Improvements

@@ -10,6 +10,7 @@ A modern **SvelteKit and FastAPI application** deployed on **Vercel** that autom
 - **Multi-Format Support**: Process PDF, DOCX, images (with OCR), CSV, TXT, EML, and HTML files
 - **Clio Integration**: Direct import of matters, documents, and communications from Clio
 - **Verified Legal Corpus**: 51 Florida statutes + 42 New Mexico statutes prevent AI hallucination
+- **Hallucination Prevention**: Multi-layer guardrails ensure letter accuracy (completeness gate, source attribution, post-generation validation)
 
 ### AI Architecture
 - **GPT-4o**: Fast document extraction and OCR (0.5s latency)
@@ -49,6 +50,8 @@ A modern **SvelteKit and FastAPI application** deployed on **Vercel** that autom
     ├────────────────────────────────┤
     │ • multi_stage_analyzer.py     │
     │ • json_processing_service.py  │
+    │ • letter_validation_service.py│
+    │ • gap_analysis_service.py     │
     │ • statute_services/           │
     │ • file_processors/            │
     └────────────────────────────────┘

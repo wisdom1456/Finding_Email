@@ -25,6 +25,7 @@ Welcome to the comprehensive documentation for the Legal Document Analysis Porta
 - [Authentication](AUTHENTICATION.md) - Authentication and authorization
 - [Citation Enhancement](CITATION_ENHANCEMENT_IMPLEMENTATION.md) - Legal citation tracking
 - [Full Document Content Architecture](FULL_DOCUMENT_CONTENT_ARCHITECTURE.md) - Document processing
+- [Hallucination Prevention](HALLUCINATION_PREVENTION.md) - Letter quality guardrails and AI hallucination prevention
 
 ### Testing
 - [Playwright Testing](PLAYWRIGHT_TESTING.md) - E2E testing with Playwright

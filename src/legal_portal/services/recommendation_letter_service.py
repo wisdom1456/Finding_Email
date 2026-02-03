@@ -349,7 +349,7 @@ class RecommendationLetterService:
         # Apply professional formatting
         formatted_html = DocumentFormatterService.format_findings_letter(
             letter_html=html,
-            title=f"{letter_display} Letter",
+            client_name=client_name or "Client",
         )
 
         logger.info(f"[REC_LETTER] {letter_display} letter generated successfully")

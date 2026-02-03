@@ -2561,7 +2561,7 @@ async def generate_letter(
                     )
                 else:
                     logger.warning(
-                        f"OVERRIDE: force_generation used for case {case_id} with low completeness score "
+                        f"OVERRIDE: force_generation used for case {letter_request.case_id} with low completeness score "
                         f"({gap_analysis.overall_completeness_score}%) - critical_gaps={gap_analysis.critical_count}"
                     )
             elif gap_analysis.overall_completeness_score < 60:

@@ -153,7 +153,7 @@ class RecommendationLetterService:
         # Build case summary from deep analysis or gap analysis
         if deep_analysis and deep_analysis.issue_analyses:
             issues_summary = "; ".join(
-                ia.issue for ia in deep_analysis.issue_analyses[:3]
+                ia.issue_name for ia in deep_analysis.issue_analyses[:3]
             )
             context["case_summary"] = (
                 f"Legal Issues: {issues_summary}\n"

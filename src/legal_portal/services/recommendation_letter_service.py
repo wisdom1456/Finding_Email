@@ -425,7 +425,7 @@ class RecommendationLetterService:
 
         # Stream the response
         try:
-            async for token in self.client.stream_response(
+            async for token in self.client.create_response_stream(
                 model=model,
                 instructions=(
                     f"You are drafting a professional {letter_display.lower()} letter for a law firm. "
@@ -433,7 +433,6 @@ class RecommendationLetterService:
                     f"Output only the letter content in markdown format."
                 ),
                 input=filled_prompt,
-                max_output_tokens=4000,
             ):
                 yield token
 

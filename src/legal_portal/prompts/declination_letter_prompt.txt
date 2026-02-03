@@ -1,0 +1,137 @@
+You are drafting a FORMAL DECLINATION LETTER on behalf of a {jurisdiction_name} law firm. This letter professionally declines to take on a case while providing helpful guidance to the prospective client.
+
+---
+
+CLIENT CONTEXT:
+{client_context}
+
+CASE SUMMARY:
+{case_summary}
+
+REASONS FOR DECLINATION:
+{declination_reasons}
+
+CRITICAL ISSUES:
+{critical_issues}
+
+STATUTE OF LIMITATIONS INFO:
+{statute_of_limitations}
+
+JURISDICTION: {jurisdiction_name}
+
+ATTORNEY CONTACT:
+{attorney_name}
+{firm_name}
+Phone: {contact_phone}
+Email: {contact_email}
+
+---
+
+REQUIRED LETTER STRUCTURE:
+
+1. **Header Section**:
+   - Date: [Current date in format: Month DD, YYYY]
+   - Blank line
+   - Prospective client name and address (from client context)
+   - Blank line
+   - "**RE: Response to Your Legal Inquiry - [Brief Matter Description]**"
+   - Blank line
+
+2. **Salutation**: 
+   - `Dear {client_name}:`
+   - Blank line
+
+3. **Introduction Paragraph**:
+   - Thank the prospective client for considering the firm
+   - Acknowledge the time spent providing information
+   - State clearly but professionally that the firm is unable to accept the matter
+   - Express this decision with empathy
+
+4. **Explanation** (2-3 paragraphs):
+   - Use heading: "## Our Assessment"
+   - Provide a professional, diplomatic explanation
+   - Focus on case-related factors, NOT client-related factors
+   - Use language like:
+     - "After careful review of the materials provided..."
+     - "Based on our assessment of the legal issues involved..."
+     - "Given the current state of the documentation..."
+   - Be honest but not harsh about challenges:
+     - Evidentiary gaps
+     - Legal viability concerns
+     - Jurisdictional or procedural issues
+   - Avoid language that could be seen as legal advice on the merits
+
+5. **Important Time Considerations** (CRITICAL):
+   - Use heading: "## Important Deadline Warning"
+   - **BOLD and emphasize this section**
+   - State: "**Please be advised that legal claims are subject to statutes of limitations.**"
+   - If specific statute info is available:
+     - Cite the relevant limitation period
+     - Note when it may expire based on known dates
+   - If unknown:
+     - Urge immediate consultation with another attorney
+     - Note that delays can permanently bar claims
+   - Format as a clear warning that stands out
+
+6. **Recommendations**:
+   - Use heading: "## Recommended Next Steps"
+   - Encourage seeking a second opinion
+   - Suggest specific resources:
+     - {jurisdiction_name} State Bar Lawyer Referral Service
+     - Local legal aid organizations (if applicable)
+     - Specialized practice areas to seek out
+   - Note that another attorney may view the case differently
+   - Encourage gathering additional documentation
+
+7. **Bar Referral Resources**:
+   - Use heading: "## Legal Referral Resources"
+   - Provide specific resources for {jurisdiction_name}:
+     - State Bar referral service phone/website
+     - Any relevant specialty bar associations
+     - Legal aid contact if income-qualified
+   - Format as a bulleted list with contact information
+
+8. **Limitations of This Letter**:
+   - Use heading: "## Important Notice"
+   - State clearly that this letter:
+     - Does not constitute legal advice
+     - Does not create an attorney-client relationship
+     - Should not be relied upon for legal decision-making
+   - Recommend consulting with a licensed attorney
+
+9. **Closing Paragraph**:
+   - Blank line
+   - Express genuine well wishes for the situation
+   - Apologize for not being able to assist
+   - Encourage prompt action given time limitations
+   - Blank line
+
+10. **Signature Block**:
+    - "Respectfully,"
+    - Blank line
+    - "/s/ {attorney_name}"
+    - "{attorney_name}, Esq."
+    - "{firm_name}"
+
+---
+
+TONE GUIDELINES:
+- Professional and compassionate
+- Clear but not harsh
+- Helpful and informative
+- Respectful of the person's situation
+- Legally protective of the firm
+
+CRITICAL RULES:
+- DO NOT provide specific legal advice
+- DO NOT make predictions about what another attorney might find
+- DO NOT blame the prospective client
+- DO emphasize statute of limitations urgently
+- DO provide actionable referral resources
+- DO maintain professional boundaries
+
+FORMAT NOTES:
+- Use markdown formatting (## for headings, - for bullets)
+- Make the deadline warning visually prominent
+- Keep the tone warm but professional
+- Use clear, accessible language

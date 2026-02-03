@@ -121,5 +121,49 @@ export interface GapAnalysisResult {
 	gaps_by_category: Record<GapCategory, GapItem[]>;
 	overall_completeness_score: number;
 	attorney_summary: string;
+	recommendation?: CaseRecommendation;
+}
+
+/**
+ * Case Recommendation Types (NEW - 2025-02-03)
+ * Categories for case recommendations based on gap analysis.
+ */
+
+/**
+ * Categories for case recommendations based on gap analysis.
+ */
+export type CaseRecommendationCategory =
+	| 'strong_case'
+	| 'needs_documentation'
+	| 'settlement_recommended'
+	| 'not_viable';
+
+/**
+ * Confidence levels for recommendations.
+ */
+export type ConfidenceLevel = 'high' | 'medium' | 'low';
+
+/**
+ * Types of letters that can be recommended based on case analysis.
+ */
+export type RecommendedLetterType =
+	| 'proceed'
+	| 'request_documents'
+	| 'settlement_advisory'
+	| 'declination'
+	| 'findings'
+	| 'demand';
+
+/**
+ * Recommendation generated from gap analysis results.
+ */
+export interface CaseRecommendation {
+	category: CaseRecommendationCategory;
+	confidence: ConfidenceLevel;
+	reasoning: string;
+	next_steps: string[];
+	suggested_letter_type: RecommendedLetterType;
+	category_display_name: string;
+	category_color: 'green' | 'yellow' | 'orange' | 'red';
 }
 

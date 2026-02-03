@@ -93,9 +93,68 @@ if gap_analysis.overall_completeness_score < 40:
 
 | Score | Behavior |
 |-------|----------|
-| < 40% | **BLOCKED** - Letter generation prevented |
+| < 40% | **BLOCKED** - Letter generation prevented (unless overridden) |
 | 40-60% | **WARNING** - Logged, letter generated with caution |
 | > 60% | Normal generation |
+
+### 2.1 Force Generation Override (NEW)
+
+In cases where an attorney decides to proceed despite insufficient documentation, the system allows an override:
+
+**API Parameters:**
+- `force_generation: bool = False` in `LetterGenerationRequest`
+- `?force_generation=true` query parameter for streaming endpoint
+
+**Behavior:**
+- When `force_generation=true` is provided with completeness < 40%, the system:
+  1. Logs a warning: `"OVERRIDE: force_generation used for case {case_id}"`
+  2. Proceeds with letter generation
+  3. Letter may contain gaps or require significant manual review
+
+**Frontend UI:**
+- Warning banner displays when letter generation is blocked
+- Checkbox: "Force generation despite insufficient documentation"
+- Additional warning text when checkbox is enabled
+
+```python
+if gap_analysis.overall_completeness_score < 40:
+    if not letter_request.force_generation:
+        raise HTTPException(status_code=409, ...)  # Blocked
+    else:
+        logger.warning(f"OVERRIDE: force_generation used for case {case_id}")
+        # Proceed with generation
+```
+
+### 2.2 Case Recommendation System (NEW)
+
+The gap analysis now generates a case recommendation based on viability, completeness, and gap severity:
+
+| Condition | Recommendation | Color | Suggested Letter |
+|-----------|----------------|-------|------------------|
+| `!is_viable` OR `score < 30` OR `critical >= 3` | NOT_VIABLE | red | Declination |
+| `score < 60` OR (`critical >= 1` AND `high >= 2`) | NEEDS_DOCUMENTATION | yellow | Document Request |
+| `case_strength == "weak"` OR (`high >= 3` AND `score < 75`) | SETTLEMENT_RECOMMENDED | orange | Settlement Advisory |
+| Otherwise | STRONG_CASE | green | Proceed (Engagement) |
+
+**Implementation:** `src/legal_portal/services/gap_analysis_service.py` (`_generate_recommendation`)
+
+**Data Model:** `src/legal_portal/core/data_models.py`
+```python
+class CaseRecommendation(BaseModel):
+    category: CaseRecommendationCategory  # strong_case, needs_documentation, etc.
+    confidence: ConfidenceLevel  # high, medium, low
+    reasoning: str  # 2-3 sentences explaining the recommendation
+    next_steps: List[str]  # Action items for attorney
+    suggested_letter_type: RecommendedLetterType
+    category_display_name: str  # UI-friendly label
+    category_color: str  # green/yellow/orange/red
+```
+
+**Advisory Letter Types:**
+- **Proceed (Engagement):** Confirms firm will take the case
+- **Request Documents:** Lists specific missing documents needed
+- **Settlement Advisory:** Recommends considering settlement
+- **Declination:** Professionally declines representation
 
 ### 3. Source Attribution Requirements (Prompt)
 
@@ -297,13 +356,21 @@ Each component can be disabled independently:
 
 | File | Changes |
 |------|---------|
-| `src/legal_portal/api/routes/analysis.py` | Completeness gate, validation integration |
+| `src/legal_portal/api/routes/analysis.py` | Completeness gate, validation integration, force override, recommendation letters |
 | `src/legal_portal/prompts/findings_letter_prompt.txt` | Source attribution requirements |
+| `src/legal_portal/prompts/proceed_letter_prompt.txt` | **NEW** - Engagement letter template |
+| `src/legal_portal/prompts/request_documents_letter_prompt.txt` | **NEW** - Document request template |
+| `src/legal_portal/prompts/settlement_advisory_letter_prompt.txt` | **NEW** - Settlement advisory template |
+| `src/legal_portal/prompts/declination_letter_prompt.txt` | **NEW** - Declination letter template |
 | `src/legal_portal/services/multi_stage_analyzer.py` | Expanded viability criteria |
-| `src/legal_portal/services/gap_analysis_service.py` | Hallucination risk detection |
-| `src/legal_portal/core/data_models.py` | New models and enum values |
-| `frontend/src/routes/app/cases/[id]/results/+page.svelte` | Viability warning UI |
-| `src/legal_portal/services/letter_validation_service.py` | **NEW** - Validation service |
+| `src/legal_portal/services/gap_analysis_service.py` | Hallucination risk detection, case recommendations |
+| `src/legal_portal/services/recommendation_letter_service.py` | **NEW** - Advisory letter generation |
+| `src/legal_portal/core/data_models.py` | New models and enum values, CaseRecommendation |
+| `frontend/src/routes/app/cases/[id]/results/+page.svelte` | Viability warning UI, force override checkbox |
+| `frontend/src/lib/types.ts` | TypeScript types for recommendations |
+| `frontend/src/lib/components/CaseRecommendationCard.svelte` | **NEW** - Recommendation display component |
+| `frontend/src/lib/components/GapAnalysisPanel.svelte` | Recommendation card integration |
+| `src/legal_portal/services/letter_validation_service.py` | Validation service |
 
 ## Success Criteria
 
@@ -314,6 +381,9 @@ Each component can be disabled independently:
 - [x] Validation service logs warnings for unverifiable content
 - [x] Expanded viability criteria include practical considerations
 - [x] Gap analysis identifies hallucination risks
+- [x] Force generation override available for attorneys
+- [x] Case recommendation system generates category-based advice
+- [x] Four advisory letter types available (proceed, request_documents, settlement_advisory, declination)
 
 ## Related Documentation
 

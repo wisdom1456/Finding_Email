@@ -1,0 +1,137 @@
+You are drafting a FORMAL SETTLEMENT ADVISORY LETTER on behalf of a {jurisdiction_name} law firm. This letter advises the client that settlement may be a more favorable approach than full litigation, while presenting options clearly.
+
+---
+
+CLIENT CONTEXT:
+{client_context}
+
+CASE SUMMARY:
+{case_summary}
+
+CASE STRENGTH ASSESSMENT:
+Overall Strength: {case_strength}
+Completeness Score: {completeness_score}%
+
+KEY STRENGTHS:
+{key_strengths}
+
+KEY CHALLENGES:
+{key_challenges}
+
+IDENTIFIED GAPS:
+Critical: {critical_count}
+High: {high_count}
+Medium: {medium_count}
+
+ATTORNEY CONTACT:
+{attorney_name}
+{firm_name}
+Phone: {contact_phone}
+Email: {contact_email}
+
+---
+
+REQUIRED LETTER STRUCTURE:
+
+1. **Header Section**:
+   - Date: [Current date in format: Month DD, YYYY]
+   - Blank line
+   - Client name and address (from client context)
+   - Blank line
+   - "**RE: Case Assessment and Settlement Recommendation - [Brief Case Description]**"
+   - "**PRIVILEGED AND CONFIDENTIAL - ATTORNEY-CLIENT COMMUNICATION**"
+   - Blank line
+
+2. **Salutation**: 
+   - `Dear {client_name}:`
+   - Blank line
+
+3. **Introduction Paragraph**:
+   - Thank the client for their patience during the review process
+   - State that after thorough analysis, the firm wishes to share its assessment
+   - Note that this letter presents options for the client's consideration
+   - Emphasize that the final decision rests with the client
+
+4. **Case Assessment** (2-3 paragraphs):
+   - Use heading: "## Case Assessment"
+   - Provide honest assessment of case strength
+   - Summarize key strengths that support the client's position
+   - Acknowledge challenges or weaknesses that may affect outcomes
+   - Note any evidentiary gaps that could impact litigation success
+
+5. **Litigation Path Analysis**:
+   - Use heading: "## Litigation Considerations"
+   - Discuss what full litigation would involve:
+     - Estimated timeline (months/years)
+     - General cost considerations (without specific numbers)
+     - Discovery process and its demands on client
+     - Trial risks and uncertainties
+   - Note potential outcomes (both positive and negative scenarios)
+   - Mention that even strong cases carry inherent risks
+
+6. **Settlement Recommendation**:
+   - Use heading: "## Settlement Recommendation"
+   - Opening: "Based on our analysis, we recommend exploring settlement negotiations for the following reasons:"
+   - Numbered list of 3-5 specific reasons:
+     1. [Reason related to case-specific factors]
+     2. [Reason related to cost/benefit analysis]
+     3. [Reason related to time and certainty]
+     4. [Reason related to preserving relationships if applicable]
+     5. [Reason related to achieving core client objectives]
+   - Note that settlement allows control over the outcome
+   - Emphasize that settlement is not "giving up" but strategic decision-making
+
+7. **Settlement Approach**:
+   - Use heading: "## Proposed Approach"
+   - Outline potential settlement strategy:
+     - Initial demand positioning
+     - Negotiation timeline
+     - Key terms to prioritize
+   - Note: "Settlement range and specific terms to be discussed in our consultation"
+   - Mention willingness to pursue litigation if settlement fails
+
+8. **Client Options**:
+   - Use heading: "## Your Options"
+   - Present three clear paths:
+     1. **Pursue Settlement**: Authorize firm to initiate negotiations
+     2. **Proceed with Litigation**: Move forward with formal legal action
+     3. **Hybrid Approach**: Prepare for litigation while exploring settlement
+   - Briefly note pros and cons of each
+   - Request a consultation to discuss preferences
+
+9. **Next Steps**:
+   - Use heading: "## Recommended Next Steps"
+   - Request a phone or in-person meeting to discuss options
+   - Note any time-sensitive considerations (statutes of limitations, etc.)
+   - Provide available times or ask client to schedule
+
+10. **Closing Paragraph**:
+    - Blank line
+    - Reaffirm commitment to client's best interests
+    - Note that the firm will support whichever path client chooses
+    - Encourage questions and open discussion
+    - Blank line
+
+11. **Signature Block**:
+    - "Respectfully,"
+    - Blank line
+    - "/s/ {attorney_name}"
+    - "{attorney_name}, Esq."
+    - "{firm_name}"
+    - "Attorney for {client_name}"
+
+---
+
+TONE GUIDELINES:
+- Professional and thoughtful
+- Honest but not discouraging
+- Strategic and solution-oriented
+- Respectful of client's ultimate decision authority
+- Balanced presentation of options
+
+FORMAT NOTES:
+- Use markdown formatting (## for headings, - for bullets, numbered lists)
+- Keep paragraphs focused and readable
+- Present information objectively
+- Avoid definitive predictions about case outcomes
+- Use hedging language appropriately ("may," "could," "potentially")

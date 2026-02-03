@@ -13,10 +13,10 @@ import uuid
 from datetime import datetime
 from email.message import EmailMessage
 from email.utils import formatdate, make_msgid
-from typing import Any, Dict, List, Optional, Callable, AsyncGenerator
+from typing import Any, Dict, List, Optional
 
 import html2text
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
@@ -37,8 +37,8 @@ from legal_portal.services.demand_letter_service import DemandLetterService
 from legal_portal.services.json_processing_service import JsonProcessingService
 from legal_portal.services.main_processor import process_case_documents
 from legal_portal.services.progress_manager import ProgressManager
-from legal_portal.utils.openai_client import OpenAIClient
 from legal_portal.utils.diagnostic_logger import DiagnosticLogger
+from legal_portal.utils.openai_client import OpenAIClient
 from legal_portal.utils.security import sanitize_text_for_db
 
 router = APIRouter()
@@ -320,6 +320,9 @@ class LetterGenerationRequest(BaseModel):
     contact_phone: Optional[str] = None
     contact_email: Optional[str] = None
     client_name: Optional[str] = None
+    force_generation: bool = Field(
+        default=False, description="Override completeness gate for weak cases"
+    )
 
 
 class LetterGenerationResponse(BaseModel):
@@ -638,22 +641,22 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
     _DEBUG_LOG_PATH = "/tmp/cursor_debug.log" if __import__('os').getenv("VERCEL") else "/Users/BRFlorida/Projects/Work/Finding_Emails/.cursor/debug.log"
     def _dbg_log(hyp: str, msg: str, data: dict = None):
         try:
-            import json as _j, time as _t; open(_DEBUG_LOG_PATH, "a").write(_j.dumps({"hypothesisId": hyp, "location": "analysis.py:process_case_background", "message": msg, "data": data or {}, "timestamp": _t.time(), "sessionId": "debug-session"}) + "\n")
+            import json as _j; import time as _t; open(_DEBUG_LOG_PATH, "a").write(_j.dumps({"hypothesisId": hyp, "location": "analysis.py:process_case_background", "message": msg, "data": data or {}, "timestamp": _t.time(), "sessionId": "debug-session"}) + "\n")
         except: pass
     _dbg_log("H2", "BACKGROUND TASK STARTED", {"case_id": case_id, "analysis_id": analysis_id, "provider": provider})
     # #endregion agent log
 
     bg_start_time = time.time()
-    
+
     logger.info(
         f"[BACKGROUND:START] [CASE:{case_id}] [ANALYSIS:{analysis_id}] "
         f"Background task started | provider={provider}"
     )
-    
+
     # Initialize progress manager
     progress_manager = ProgressManager.get_instance()
     await progress_manager.create_channel(analysis_id)
-    
+
     # #region agent log
     _dbg_log("H2,H4", "Channel created, publishing first progress", {"analysis_id": analysis_id})
     # #endregion agent log
@@ -682,7 +685,7 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
         # Get case details
         elapsed = time.time() - bg_start_time
         logger.info(f"[BACKGROUND:FETCH] [CASE:{case_id}] [ELAPSED:{elapsed:.1f}s] Fetching case and documents")
-        
+
         case_response = supabase.table("cases").select("*").eq("id", case_id).execute()
         if not case_response.data:
             raise ValueError("Case not found")
@@ -717,7 +720,7 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
             extracted_len = len(doc.get("extracted_text") or "")
             has_manual = bool(doc.get("manual_text"))
             manual_len = len(doc.get("manual_text") or "")
-            
+
             logger.info(
                 f"Document '{doc_name}': status={doc_status}, "
                 f"has_extracted_text={has_extracted} (len={extracted_len}), "
@@ -766,7 +769,7 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
                     )
                 )
                 continue
-            
+
             logger.info(f"PROCESSING '{doc_name}': has {len(text)} chars of text")
 
             # Construct ProcessedDocument
@@ -859,7 +862,7 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
                 payload["stage"] = stage
             if document:
                 payload["document"] = document
-            
+
             # Add stats periodically
             elapsed = time.time() - analysis_start_time
             payload["stats"] = {
@@ -890,7 +893,7 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
             f"[BACKGROUND:PROCESSOR] [CASE:{case_id}] [ELAPSED:{elapsed:.1f}s] "
             f"Calling main processor | intake_docs={len(processed_intake)} case_docs={len(processed_case_docs)}"
         )
-        
+
         processor_start = time.time()
         result: ProcessingResult = await process_case_documents(
             processed_intake=processed_intake,
@@ -903,7 +906,7 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
         )
         processor_duration = time.time() - processor_start
         elapsed = time.time() - bg_start_time
-        
+
         logger.info(
             f"[BACKGROUND:PROCESSOR] [CASE:{case_id}] [ELAPSED:{elapsed:.1f}s] "
             f"Processor complete | duration={processor_duration:.1f}s status={result.status}"
@@ -920,7 +923,7 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
                     try:
                         # Sanitize content to remove NULL characters that PostgreSQL can't store
                         sanitized_content = sanitize_text_for_db(doc.content)
-                        
+
                         # Prepare update data mapping model fields to database columns
                         update_data = {
                             "extracted_text": sanitized_content,
@@ -1005,7 +1008,7 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
         _DEBUG_LOG_PATH = "/tmp/cursor_debug.log" if __import__('os').getenv("VERCEL") else "/Users/BRFlorida/Projects/Work/Finding_Emails/.cursor/debug.log"
         def _dbg_log(hyp: str, msg: str, data: dict = None):
             try:
-                import json as _j, time as _t; open(_DEBUG_LOG_PATH, "a").write(_j.dumps({"hypothesisId": hyp, "location": "analysis.py:process_case_background:except", "message": msg, "data": data or {}, "timestamp": _t.time(), "sessionId": "debug-session"}) + "\n")
+                import json as _j; import time as _t; open(_DEBUG_LOG_PATH, "a").write(_j.dumps({"hypothesisId": hyp, "location": "analysis.py:process_case_background:except", "message": msg, "data": data or {}, "timestamp": _t.time(), "sessionId": "debug-session"}) + "\n")
             except: pass
         _dbg_log("H3", "BACKGROUND TASK EXCEPTION", {"case_id": case_id, "analysis_id": analysis_id, "error": error_message, "error_type": type(e).__name__, "elapsed": elapsed})
         # #endregion agent log
@@ -1063,39 +1066,89 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
 @router.get("/{analysis_id}/letter/stream")
 async def stream_findings_letter(
     analysis_id: str,
+    force_generation: bool = Query(default=False, description="Override completeness gate for weak cases"),
     user=Depends(get_current_user),
     supabase=Depends(get_user_supabase_client),
 ):
-    """Stream findings email generation token by token."""
+    """Stream findings email generation token by token.
+
+    Includes gap analysis guardrails:
+    - Completeness < 40%: Blocked unless force_generation=true
+    - Completeness 40-60%: Warning logged, proceeds
+    - Completeness >= 60%: Normal generation
+    """
     # Verify ownership and get analysis results
     try:
         response = supabase.table("analysis_results").select("*").eq("id", analysis_id).execute()
         if not response.data:
             raise HTTPException(status_code=404, detail="Analysis not found")
-        
+
         analysis_data = response.data[0]
         result_payload = analysis_data.get("result")
         if not result_payload:
             raise HTTPException(status_code=400, detail="Analysis result not yet available")
-            
+
         processing_result = ProcessingResult(**result_payload)
         if not processing_result.multi_stage_result:
             raise HTTPException(status_code=400, detail="Multi-stage analysis results missing")
 
+        msr = processing_result.multi_stage_result
+
+        # Gap Analysis Guardrails - Check completeness before streaming
+        gap_analysis_data = msr.get("gap_analysis")
+        if gap_analysis_data:
+            from legal_portal.core.data_models import GapAnalysisResult
+            gap_analysis = GapAnalysisResult(**gap_analysis_data)
+
+            if gap_analysis.overall_completeness_score < 40:
+                if not force_generation:
+                    raise HTTPException(
+                        status_code=status.HTTP_409_CONFLICT,
+                        detail={
+                            "error": "documentation_insufficient",
+                            "message": "Case documentation is insufficient for letter generation. Please provide the missing documents identified in Gap Analysis before generating a letter.",
+                            "completeness_score": gap_analysis.overall_completeness_score,
+                            "critical_gaps": gap_analysis.critical_count,
+                            "recommendation": "Review the Gap Analysis tab to identify which documents are needed.",
+                            "allow_override": True,
+                        }
+                    )
+                else:
+                    logger.warning(
+                        f"OVERRIDE: force_generation used for streaming letter with low completeness score "
+                        f"({gap_analysis.overall_completeness_score}%) - analysis_id={analysis_id}, "
+                        f"critical_gaps={gap_analysis.critical_count}"
+                    )
+            elif gap_analysis.overall_completeness_score < 60:
+                logger.warning(
+                    f"Streaming letter with moderate completeness score: {gap_analysis.overall_completeness_score}% "
+                    f"(critical_gaps={gap_analysis.critical_count}, high_gaps={gap_analysis.high_count}) - "
+                    f"analysis_id={analysis_id}"
+                )
+
         async def generate():
             openai_client = OpenAIClient()
             json_service = JsonProcessingService(client=openai_client, config={})
-            
-            msr = processing_result.multi_stage_result
-            from legal_portal.core.data_models import DeepAnalysis, FactMatrix, LetterStructure
-            
+
+            from legal_portal.core.data_models import (
+                DeepAnalysis,
+                FactMatrix,
+                GapAnalysisResult,
+                LetterStructure,
+            )
+
             fact_matrix = FactMatrix(**msr["fact_matrix"])
             deep_analysis = DeepAnalysis(**msr["deep_analysis"])
             letter_structure = LetterStructure(**msr["letter_structure"])
-            
+
+            # Load gap analysis for guardrails in generation
+            gap_analysis = None
+            if msr.get("gap_analysis"):
+                gap_analysis = GapAnalysisResult(**msr["gap_analysis"])
+
             artifacts = processing_result.artifacts or {}
             jurisdiction = artifacts.get("jurisdiction", "Florida")
-            
+
             async for token in json_service.stream_findings_letter_adaptive(
                 intake_content=processing_result.intake_content or "",
                 fact_matrix=fact_matrix,
@@ -1107,11 +1160,12 @@ async def stream_findings_letter(
                 contact_phone=artifacts.get("contact_phone"),
                 contact_email=artifacts.get("contact_email"),
                 jurisdiction=jurisdiction,
+                gap_analysis=gap_analysis,  # Pass gap analysis for content guardrails
             ):
                 yield f"data: {json.dumps({'token': token})}\n\n"
-            
+
             yield f"data: {json.dumps({'done': True})}\n\n"
-        
+
         return StreamingResponse(
             generate(),
             media_type="text/event-stream",
@@ -1121,6 +1175,8 @@ async def stream_findings_letter(
                 "X-Accel-Buffering": "no",
             }
         )
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error in stream_findings_letter: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -1139,11 +1195,11 @@ async def stream_chat_response(
         response = supabase.table("analysis_results").select("*").eq("id", analysis_id).execute()
         if not response.data:
             raise HTTPException(status_code=404, detail="Analysis result not found")
-        
+
         analysis_data = response.data[0]
         result_payload = analysis_data["result"]
         processing_result = ProcessingResult(**result_payload)
-        
+
         # 2. Get conversation history (use case_id from the analysis record, not ProcessingResult)
         case_id = analysis_data["case_id"]
         history_response = (
@@ -1165,7 +1221,7 @@ async def stream_chat_response(
             artifacts = processing_result.artifacts or {}
             jurisdiction = artifacts.get("jurisdiction", "Florida")
             chat_service = CaseChatService(openai_client, jurisdiction=jurisdiction)
-            
+
             full_response = ""
             async for token in chat_service.stream_message(
                 user_message=request.message,
@@ -1174,7 +1230,7 @@ async def stream_chat_response(
             ):
                 full_response += token
                 yield f"data: {json.dumps({'token': token})}\n\n"
-            
+
             # 3. Save to database after streaming completes
             try:
                 supabase.table("case_chat_messages").insert(
@@ -1187,9 +1243,9 @@ async def stream_chat_response(
                 ).execute()
             except Exception as db_err:
                 logger.error(f"Failed to save chat message to DB: {db_err}")
-                
+
             yield f"data: {json.dumps({'done': True})}\n\n"
-            
+
         return StreamingResponse(
             generate(),
             media_type="text/event-stream",
@@ -1237,15 +1293,15 @@ async def start_analysis(
     """
     import os
     is_vercel = os.getenv("VERCEL") is not None
-    
+
     # #region agent log
     _DEBUG_LOG_PATH = "/tmp/cursor_debug.log" if is_vercel else "/Users/BRFlorida/Projects/Work/Finding_Emails/.cursor/debug.log"
     def _dbg_log(hyp: str, msg: str, data: dict = None):
         try:
-            import json as _j, time as _t; open(_DEBUG_LOG_PATH, "a").write(_j.dumps({"hypothesisId": hyp, "location": "analysis.py:start_analysis", "message": msg, "data": data or {}, "timestamp": _t.time(), "sessionId": "debug-session"}) + "\n")
+            import json as _j; import time as _t; open(_DEBUG_LOG_PATH, "a").write(_j.dumps({"hypothesisId": hyp, "location": "analysis.py:start_analysis", "message": msg, "data": data or {}, "timestamp": _t.time(), "sessionId": "debug-session"}) + "\n")
         except: pass
     # #endregion agent log
-    
+
     try:
         # Verify case ownership using user client (respects RLS)
         case_response = (
@@ -1293,16 +1349,16 @@ async def start_analysis(
             # This keeps the connection alive and prevents function termination
             logger.info(f"[VERCEL] Starting SSE stream for analysis {analysis['id']}")
             _dbg_log("H6", "Starting SSE stream analysis on Vercel", {"analysis_id": analysis["id"]})
-            
+
             async def analysis_stream():
                 """Generator that runs analysis and yields progress events with heartbeats."""
                 import asyncio
-                
+
                 analysis_id = analysis["id"]
-                
+
                 # First, yield the analysis record so frontend knows the ID immediately
                 yield f"data: {json.dumps({'type': 'started', 'analysis': analysis})}\n\n"
-                
+
                 # Create a task for the analysis so we can yield heartbeats while it runs
                 analysis_task = asyncio.create_task(
                     process_case_background(
@@ -1312,56 +1368,56 @@ async def start_analysis(
                         analysis_request.provider,
                     )
                 )
-                
+
                 last_progress = None
                 heartbeat_count = 0
-                
+
                 try:
                     while not analysis_task.done():
                         # Check for progress updates in database
                         try:
                             result = service_supabase.table("analysis_results").select("status, progress").eq("id", analysis_id).single().execute()
-                            
+
                             if result.data:
                                 current_status = result.data.get("status")
                                 current_progress = result.data.get("progress")
-                                
+
                                 # Yield progress if it changed
                                 if current_progress and current_progress != last_progress:
                                     yield f"data: {json.dumps(current_progress)}\n\n"
                                     last_progress = current_progress
                                     heartbeat_count = 0  # Reset heartbeat counter on real progress
-                                
+
                                 # Check if analysis completed or failed
                                 if current_status in ["completed", "failed", "cancelled"]:
                                     break
                         except Exception as db_err:
                             logger.warning(f"Error checking progress: {db_err}")
-                        
+
                         # Send heartbeat every 10 seconds if no real progress
                         heartbeat_count += 1
                         if heartbeat_count >= 5:  # Every 5 * 2s = 10 seconds
                             yield f"data: {json.dumps({'type': 'heartbeat', 'timestamp': datetime.utcnow().isoformat()})}\n\n"
                             heartbeat_count = 0
-                        
+
                         # Wait 2 seconds before checking again
                         await asyncio.sleep(2)
-                    
+
                     # Wait for the task to complete and get any exception
                     await analysis_task
-                    
+
                     # Fetch final status
                     final = service_supabase.table("analysis_results").select("status, progress").eq("id", analysis_id).single().execute()
                     final_status = final.data.get("status", "unknown") if final.data else "unknown"
                     final_progress = final.data.get("progress") if final.data else None
-                    
+
                     # Yield final progress if different
                     if final_progress and final_progress != last_progress:
                         yield f"data: {json.dumps(final_progress)}\n\n"
-                    
+
                     yield f"data: {json.dumps({'type': 'completed', 'status': final_status})}\n\n"
                     logger.info(f"[VERCEL] Analysis stream completed for {analysis_id} with status: {final_status}")
-                    
+
                 except asyncio.CancelledError:
                     logger.warning(f"Analysis stream cancelled for {analysis_id}")
                     analysis_task.cancel()
@@ -1369,7 +1425,7 @@ async def start_analysis(
                 except Exception as e:
                     logger.error(f"Analysis stream error for {analysis_id}: {e}", exc_info=True)
                     yield f"data: {json.dumps({'type': 'error', 'error': str(e)})}\n\n"
-            
+
             return StreamingResponse(
                 analysis_stream(),
                 media_type="text/event-stream",
@@ -1390,7 +1446,7 @@ async def start_analysis(
                 analysis_request.provider,
             )
             return analysis
-            
+
     except HTTPException:
         raise
     except Exception as e:
@@ -1621,6 +1677,7 @@ async def get_analysis_results(
 
 class StreamingAnalysisSaveRequest(BaseModel):
     """Request to save streaming analysis result."""
+
     content: str = Field(..., description="The markdown content from streaming analysis")
 
 
@@ -1646,15 +1703,15 @@ async def save_streaming_analysis(
             .eq("user_id", user["id"])
             .execute()
         )
-        
+
         if not case_response.data:
             raise HTTPException(status_code=404, detail="Case not found")
-        
+
         case_data = case_response.data[0]
-        
+
         # Parse embedded JSON from the markdown content
         structured_data = _extract_embedded_json(request.content)
-        
+
         # Build case analysis from extracted data
         # Use clean issue names from structured JSON, not raw markdown
         key_issues_list = []
@@ -1669,18 +1726,18 @@ async def save_streaming_analysis(
                         key_issues_list.append(f"{issue_name} ({strength}) - {', '.join(statutes)}")
                     else:
                         key_issues_list.append(f"{issue_name} ({strength})")
-        
+
         # Fallback to markdown extraction if no structured data
         if not key_issues_list:
             key_issues_list = _extract_list_items(request.content, "Legal Issues Identified")
-        
+
         case_analysis = {
             "case_summary": _extract_section(request.content, "Case Overview"),
             "key_issues": key_issues_list,
             "practice_area": structured_data.get("practice_area", "General Legal Matter"),
             "relevant_statutes": [],  # Extracted from structured_data below
         }
-        
+
         # Add statutes from primary issues
         if structured_data.get("primary_issues"):
             for issue in structured_data["primary_issues"]:
@@ -1690,7 +1747,7 @@ async def save_streaming_analysis(
                             "statute": statute,
                             "relevance": issue.get("name", ""),
                         })
-        
+
         # Build multi-stage compatible result for letter generation
         multi_stage_result = None
         if structured_data:
@@ -1704,7 +1761,7 @@ async def save_streaming_analysis(
                     "significance": None,
                     "supporting_evidence": [],
                 })
-            
+
             # Build properly structured parties list for FactMatrix/Party model compatibility
             structured_parties = []
             for p in structured_data.get("parties", []):
@@ -1718,7 +1775,7 @@ async def save_streaming_analysis(
                     "is_opposing_party": is_opposing,
                     "entity_type": p.get("entity_type", "unknown"),
                 })
-            
+
             multi_stage_result = {
                 "fact_matrix": {
                     "parties": structured_parties,
@@ -1782,13 +1839,13 @@ async def save_streaming_analysis(
                     "recommend_demand_letter": structured_data.get("recommended_letter_type") in ["demand", "demand_with_findings"],
                 },
             }
-            
+
             # Add financial data if present (parse currency strings to floats)
             if structured_data.get("financial_summary"):
                 fin = structured_data["financial_summary"]
                 total_claimed = _parse_currency(fin.get("total_claimed"))
                 documented_damages = _parse_currency(fin.get("documented_damages"))
-                
+
                 if total_claimed > 0:
                     # Add to financial_items (legacy field for backward compatibility)
                     multi_stage_result["fact_matrix"]["financial_items"].append({
@@ -1804,7 +1861,7 @@ async def save_streaming_analysis(
                         "category": "damages_claimed",
                         "date": None,
                     })
-                
+
                 if documented_damages > 0:
                     multi_stage_result["fact_matrix"]["financial_items"].append({
                         "description": "Documented Damages",
@@ -1818,37 +1875,37 @@ async def save_streaming_analysis(
                         "category": "damages_claimed",
                         "date": None,
                     })
-            
+
             # Verify statutes against legal corpus for letter generation
             # Defensive check: ensure multi_stage_result exists before modifying it
             if multi_stage_result is None:
                 logger.warning("[STREAM] multi_stage_result is None, skipping verified_statutes conversion")
                 multi_stage_result = {}
-            
+
             try:
                 from legal_portal.services.statute_recommendation_service import StatuteRecommendationService
                 jurisdiction = case_data.get("jurisdiction", "Florida")
                 statute_service = StatuteRecommendationService(jurisdiction=jurisdiction)
-                
+
                 # Get legal issues from structured data
                 legal_issues = [i.get("name", "") for i in structured_data.get("primary_issues", [])]
-                
+
                 # Get verified statutes from corpus (jurisdiction already set in constructor)
                 verified_statutes = statute_service.recommend_statutes(
                     case_facts=request.content[:2000],  # First 2000 chars of analysis
                     legal_issues=legal_issues,
                 )
-                
+
                 # Validate verified_statutes is a list
                 if not isinstance(verified_statutes, list):
                     logger.warning(f"[STREAM] verified_statutes is not a list (type: {type(verified_statutes)}), converting to empty list")
                     verified_statutes = []
-                
+
                 # Convert StatuteRecommendation dataclass objects to dicts for JSON serialization
                 from dataclasses import asdict
                 converted_statutes = []
                 conversion_errors = []
-                
+
                 for idx, statute in enumerate(verified_statutes):
                     try:
                         # Check if it's a StatuteRecommendation instance
@@ -1872,14 +1929,14 @@ async def save_streaming_analysis(
                     except Exception as conv_err:
                         logger.error(f"[STREAM] Unexpected error converting item {idx}: {conv_err}")
                         conversion_errors.append(f"Item {idx}: {str(conv_err)}")
-                
+
                 multi_stage_result["verified_statutes"] = converted_statutes
-                
+
                 if conversion_errors:
                     logger.warning(f"[STREAM] Had {len(conversion_errors)} conversion errors: {conversion_errors}")
-                
+
                 logger.info(f"[STREAM] Converted {len(converted_statutes)} StatuteRecommendation objects to dicts for {jurisdiction}")
-                
+
             except (ImportError, ModuleNotFoundError) as import_err:
                 logger.info(f"[STREAM] StatuteRecommendationService not available: {import_err}")
                 if multi_stage_result is not None:
@@ -1892,7 +1949,7 @@ async def save_streaming_analysis(
                 logger.warning(f"[STREAM] Failed to get verified statutes from corpus: {e}", exc_info=True)
                 if multi_stage_result is not None:
                     multi_stage_result["verified_statutes"] = []
-        
+
         # Fetch documents for this case (they're in a separate table, not embedded in case_data)
         docs_response = (
             service_supabase.table("documents")
@@ -1902,7 +1959,7 @@ async def save_streaming_analysis(
         )
         documents = docs_response.data if docs_response.data else []
         logger.info(f"[STREAM] Building summaries for {len(documents)} documents")
-        
+
         # Filter out duplicate/excluded documents from summaries and quality report
         # These documents should not appear in Document Review or Quality Report tabs
         filtered_documents = []
@@ -1912,26 +1969,26 @@ async def save_streaming_analysis(
             metadata = doc.get("metadata") or {}
             is_excluded = metadata.get("excluded", False)
             is_duplicate = doc_status == "duplicate" or metadata.get("is_duplicate", False)
-            
+
             if is_excluded or is_duplicate:
                 excluded_count += 1
                 continue
             filtered_documents.append(doc)
-        
+
         if excluded_count > 0:
             logger.info(f"[STREAM] Filtered out {excluded_count} duplicate/excluded documents")
-        
+
         # Build document summaries from filtered documents as JSON array (frontend expects this format)
         doc_summaries_array = []
         quality_report = []
-        
+
         for doc in filtered_documents:
             # Handle None values explicitly - dict.get() only uses default if key is missing, not if value is None
             extracted_text = doc.get("extracted_text") or ""
             doc_quality = doc.get("quality_score") or 0
             file_type = doc.get("file_type") or ""
             file_name = doc.get("file_name") or "Document"
-            
+
             # Determine extraction quality based on text length and quality score
             if doc_quality >= 8 or len(extracted_text) > 500:
                 extraction_quality = "high"
@@ -1939,13 +1996,13 @@ async def save_streaming_analysis(
                 extraction_quality = "medium"
             else:
                 extraction_quality = "low"
-            
+
             # Determine document type
             doc_type = doc.get("document_type")
             if not doc_type and file_type:
                 doc_type = file_type.split("/")[-1].upper()
             doc_type = doc_type or "Unknown"
-            
+
             # Build document summary for Document Review tab
             doc_summary = {
                 "document_name": file_name,
@@ -1957,7 +2014,7 @@ async def save_streaming_analysis(
                 "key_amounts": [],
             }
             doc_summaries_array.append(doc_summary)
-            
+
             # Build quality report entry for Quality Report tab
             quality_issues = []
             if not extracted_text:
@@ -1966,7 +2023,7 @@ async def save_streaming_analysis(
                 quality_issues.append("Very little text extracted - document may be an image or scan")
             if file_type.startswith("image/"):
                 quality_issues.append("Image file - text extraction may be limited")
-            
+
             quality_report.append({
                 "document": file_name,
                 "document_id": doc.get("id") or "",
@@ -1974,14 +2031,14 @@ async def save_streaming_analysis(
                 "confidence_level": extraction_quality,
                 "issues": quality_issues,
             })
-        
+
         # Extract opposing parties from structured data for demand letter dropdown
         opposing_parties = []
         if structured_data and structured_data.get("parties"):
             for party_data in structured_data["parties"]:
                 role = (party_data.get("role") or "").lower()
                 name = party_data.get("name") or ""
-                
+
                 # Identify opposing parties (not client or attorney)
                 # Common opposing party roles include: landlord, contractor, seller, defendant, respondent
                 is_opposing = (
@@ -1995,10 +2052,10 @@ async def save_streaming_analysis(
                     "association" in role or
                     "company" in role or
                     "employer" in role or
-                    (role and "client" not in role and "plaintiff" not in role and 
+                    (role and "client" not in role and "plaintiff" not in role and
                      "claimant" not in role and "attorney" not in role and "counsel" not in role)
                 )
-                
+
                 if is_opposing and name:
                     opposing_parties.append({
                         "name": name,
@@ -2006,9 +2063,9 @@ async def save_streaming_analysis(
                         "entity_type": party_data.get("entity_type", "unknown"),
                         "is_opposing_party": True,
                     })
-        
+
         logger.info(f"[STREAM] Identified {len(opposing_parties)} opposing parties for demand letter dropdown")
-        
+
         # Build the complete result - must match ProcessingResult structure
         streaming_result = {
             # Required fields for ProcessingResult compatibility
@@ -2016,7 +2073,7 @@ async def save_streaming_analysis(
             "document_summaries": json.dumps(doc_summaries_array),  # Frontend expects JSON array
             "case_analysis": json.dumps(case_analysis),
             "quality_report": quality_report,  # For Quality Report tab
-            
+
             # Streaming-specific fields
             "streaming_analysis": request.content,
             "multi_stage_result": multi_stage_result,
@@ -2028,11 +2085,11 @@ async def save_streaming_analysis(
             },
             "status": "completed",
         }
-        
+
         # Apply recursive conversion to catch any nested StatuteRecommendation objects
         logger.debug("[STREAM] Applying recursive conversion to streaming_result")
         streaming_result = _convert_statute_recommendations_recursive(streaming_result)
-        
+
         # Explicit JSON serialization test before database save
         # This catches any serialization errors early with detailed error messages
         try:
@@ -2042,7 +2099,7 @@ async def save_streaming_analysis(
             # Find the problematic field
             error_msg = str(json_err)
             logger.error(f"[STREAM] JSON serialization test FAILED: {error_msg}")
-            
+
             # Try to identify the problematic field by testing each top-level key
             problematic_fields = []
             for key, value in streaming_result.items():
@@ -2051,11 +2108,11 @@ async def save_streaming_analysis(
                 except TypeError as field_err:
                     problematic_fields.append(f"{key}: {field_err}")
                     logger.error(f"[STREAM] Field '{key}' is not JSON serializable: {field_err}")
-            
+
             # Apply recursive conversion one more time as a last resort
             logger.warning("[STREAM] Applying recursive conversion again to fix serialization issues")
             streaming_result = _convert_statute_recommendations_recursive(streaming_result)
-            
+
             # Test again
             try:
                 test_json = json.dumps(streaming_result)
@@ -2123,17 +2180,17 @@ async def save_streaming_analysis(
                     detail=f"Failed to save analysis result due to serialization error: {error_detail}"
                 )
             raise
-        
+
         # Update case status - must use valid status from constraint: pending, processing, completed, error, cancelled
         supabase.table("cases").update({
             "status": "completed",
             "updated_at": datetime.utcnow().isoformat(),
         }).eq("id", case_id).execute()
-        
+
         logger.info(f"[STREAM] Saved streaming analysis for case {case_id} | structured_data={'yes' if structured_data else 'no'}")
-        
+
         return {"success": True, "analysis_id": analysis_id}
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -2152,26 +2209,28 @@ def _convert_statute_recommendations_recursive(obj: Any) -> Any:
     
     Returns:
         The same structure with all StatuteRecommendation objects converted to dicts
+
     """
-    from legal_portal.services.statute_recommendation_service import StatuteRecommendation
     from dataclasses import asdict
-    
+
+    from legal_portal.services.statute_recommendation_service import StatuteRecommendation
+
     # If it's a StatuteRecommendation instance, convert it
     if isinstance(obj, StatuteRecommendation):
         return asdict(obj)
-    
+
     # If it's a dict, recursively process values
     if isinstance(obj, dict):
         return {key: _convert_statute_recommendations_recursive(value) for key, value in obj.items()}
-    
+
     # If it's a list, recursively process items
     if isinstance(obj, list):
         return [_convert_statute_recommendations_recursive(item) for item in obj]
-    
+
     # If it's a tuple, convert to list, process, and convert back (or keep as list)
     if isinstance(obj, tuple):
         return tuple(_convert_statute_recommendations_recursive(item) for item in obj)
-    
+
     # For any other type, return as-is
     return obj
 
@@ -2205,15 +2264,15 @@ def _extract_embedded_json(content: str) -> dict:
     The JSON is embedded in a ```json code fence at the end of the markdown.
     """
     import re
-    
+
     # Look for JSON code block
     json_pattern = r"```json\s*\n(.*?)\n```"
     match = re.search(json_pattern, content, re.DOTALL)
-    
+
     if not match:
         logger.warning("[STREAM] No embedded JSON found in streaming analysis")
         return {}
-    
+
     try:
         json_str = match.group(1).strip()
         structured_data = json.loads(json_str)
@@ -2258,9 +2317,9 @@ async def stream_case_analysis(
     
     This replaces the multi-stage analysis for faster, more reliable results.
     """
-    from legal_portal.services.multi_stage_analyzer import MultiStageAnalyzer
     from legal_portal.core.data_models import DocumentSummaryStructured
-    
+    from legal_portal.services.multi_stage_analyzer import MultiStageAnalyzer
+
     try:
         # 1. Verify case ownership
         case_response = (
@@ -2270,74 +2329,74 @@ async def stream_case_analysis(
             .eq("user_id", user["id"])
             .execute()
         )
-        
+
         if not case_response.data:
             raise HTTPException(status_code=404, detail="Case not found")
-        
+
         case_data = case_response.data[0]
         documents = case_data.get("documents", [])
-        
+
         if not documents:
             raise HTTPException(status_code=400, detail="No documents found for this case")
-        
+
         # 2. Build document summaries from extracted text
         doc_summaries = []
         intake_content = ""
-        
+
         for doc in documents:
             extracted_text = doc.get("extracted_text", "") or ""
             file_name = doc.get("file_name", "unknown")
             doc_type = doc.get("doc_type", "document")
-            
+
             if extracted_text:
                 # Find intake form
                 if "intake" in file_name.lower():
                     intake_content = extracted_text
-                
+
                 doc_summaries.append(DocumentSummaryStructured(
                     document_name=file_name,
                     document_type=doc_type,
                     executive_summary=extracted_text[:500],
                     key_content=extracted_text[:3000],
                 ))
-        
+
         if not intake_content and doc_summaries:
             # Use first document if no intake found
             intake_content = doc_summaries[0].key_content or ""
-        
+
         # 3. Determine jurisdiction
         jurisdiction = case_data.get("jurisdiction", "Florida")
-        
+
         logger.info(
             f"[STREAM] Starting streaming analysis for case {case_id} | "
             f"docs={len(doc_summaries)} jurisdiction={jurisdiction}"
         )
-        
+
         # 4. Stream the analysis with thinking heartbeats
         async def generate():
             try:
                 openai_client = OpenAIClient()
                 analyzer = MultiStageAnalyzer(openai_client=openai_client)
-                
+
                 full_content = ""
                 first_token_received = False
                 start_time = time.time()
                 last_heartbeat = start_time
-                
+
                 # Signal that we're starting (thinking phase begins)
                 yield f"data: {json.dumps({'phase': 'thinking', 'elapsed': 0})}\n\n"
-                
+
                 # Create the token generator
                 token_generator = analyzer.analyze_streaming(
                     intake_content=intake_content,
                     document_summaries=doc_summaries,
                     jurisdiction=jurisdiction,
                 )
-                
+
                 # Use asyncio.Queue to handle tokens with heartbeat timeout
                 token_queue: asyncio.Queue = asyncio.Queue()
                 done_event = asyncio.Event()
-                
+
                 async def collect_tokens():
                     """Collect tokens and put them in queue."""
                     try:
@@ -2346,19 +2405,19 @@ async def stream_case_analysis(
                         await token_queue.put(('done', None))
                     except Exception as e:
                         await token_queue.put(('error', str(e)))
-                
+
                 # Start token collection in background
                 collector_task = asyncio.create_task(collect_tokens())
-                
+
                 try:
                     while True:
                         try:
                             # Wait for token with 5-second timeout for heartbeat
                             msg_type, msg_data = await asyncio.wait_for(
-                                token_queue.get(), 
+                                token_queue.get(),
                                 timeout=5.0
                             )
-                            
+
                             if msg_type == 'token':
                                 if not first_token_received:
                                     first_token_received = True
@@ -2366,24 +2425,24 @@ async def stream_case_analysis(
                                     logger.info(f"[STREAM] First token received after {elapsed}s thinking")
                                     # Signal transition from thinking to streaming
                                     yield f"data: {json.dumps({'phase': 'streaming', 'thinking_time': elapsed})}\n\n"
-                                
+
                                 full_content += msg_data
                                 yield f"data: {json.dumps({'token': msg_data})}\n\n"
-                                
+
                             elif msg_type == 'done':
                                 # Signal completion
                                 yield f"data: {json.dumps({'done': True, 'content': full_content})}\n\n"
                                 logger.info(f"[STREAM] Completed streaming for case {case_id}")
                                 break
-                                
+
                             elif msg_type == 'error':
                                 yield f"data: {json.dumps({'error': msg_data})}\n\n"
                                 break
-                                
+
                         except asyncio.TimeoutError:
                             # No token received in 5 seconds - send heartbeat
                             elapsed = int(time.time() - start_time)
-                            
+
                             if not first_token_received:
                                 # Still in thinking phase - send thinking heartbeat
                                 yield f"data: {json.dumps({'phase': 'thinking', 'elapsed': elapsed})}\n\n"
@@ -2391,7 +2450,7 @@ async def stream_case_analysis(
                             else:
                                 # In streaming phase but slow - send streaming heartbeat
                                 yield f"data: {json.dumps({'heartbeat': elapsed})}\n\n"
-                                
+
                 finally:
                     # Ensure collector task is cleaned up
                     if not collector_task.done():
@@ -2400,11 +2459,11 @@ async def stream_case_analysis(
                             await collector_task
                         except asyncio.CancelledError:
                             pass
-                
+
             except Exception as e:
                 logger.error(f"[STREAM] Error during streaming: {e}")
                 yield f"data: {json.dumps({'error': str(e)})}\n\n"
-        
+
         return StreamingResponse(
             generate(),
             media_type="text/event-stream",
@@ -2414,7 +2473,7 @@ async def stream_case_analysis(
                 "X-Accel-Buffering": "no",  # Disable Vercel/nginx buffering
             }
         )
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -2468,7 +2527,7 @@ async def generate_letter(
         diag_logger = DiagnosticLogger(session_id=letter_request.case_id)
 
     if letter_request.letter_type == LetterType.FINDINGS:
-        from legal_portal.core.data_models import DeepAnalysis, FactMatrix, LetterStructure, GapAnalysisResult
+        from legal_portal.core.data_models import DeepAnalysis, FactMatrix, GapAnalysisResult, LetterStructure
 
         fact_matrix = FactMatrix(**msr["fact_matrix"])
         deep_analysis = DeepAnalysis(**msr["deep_analysis"])
@@ -2488,16 +2547,23 @@ async def generate_letter(
         # COMPLETENESS GATE: Block letter generation if documentation is critically insufficient
         if gap_analysis:
             if gap_analysis.overall_completeness_score < 40:
-                raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT,
-                    detail={
-                        "error": "documentation_insufficient",
-                        "message": "Case documentation is insufficient for letter generation. Please provide the missing documents identified in Gap Analysis before generating a letter.",
-                        "completeness_score": gap_analysis.overall_completeness_score,
-                        "critical_gaps": gap_analysis.critical_count,
-                        "recommendation": "Review the Gap Analysis tab to identify which documents are needed."
-                    }
-                )
+                if not letter_request.force_generation:
+                    raise HTTPException(
+                        status_code=status.HTTP_409_CONFLICT,
+                        detail={
+                            "error": "documentation_insufficient",
+                            "message": "Case documentation is insufficient for letter generation. Please provide the missing documents identified in Gap Analysis before generating a letter.",
+                            "completeness_score": gap_analysis.overall_completeness_score,
+                            "critical_gaps": gap_analysis.critical_count,
+                            "recommendation": "Review the Gap Analysis tab to identify which documents are needed.",
+                            "allow_override": True,
+                        }
+                    )
+                else:
+                    logger.warning(
+                        f"OVERRIDE: force_generation used for case {case_id} with low completeness score "
+                        f"({gap_analysis.overall_completeness_score}%) - critical_gaps={gap_analysis.critical_count}"
+                    )
             elif gap_analysis.overall_completeness_score < 60:
                 logger.warning(
                     f"Generating letter with low completeness score: {gap_analysis.overall_completeness_score}% "
@@ -2604,6 +2670,177 @@ async def generate_letter(
         letter_html=letter_html,
         letter_type=letter_request.letter_type,
         target_party_name=target_party_name,
+    )
+
+
+# =============================================================================
+# RECOMMENDATION LETTER GENERATION ENDPOINT
+# =============================================================================
+
+
+class RecommendationLetterRequest(BaseModel):
+    """Request payload for generating recommendation-based letters."""
+
+    case_id: str
+    letter_type: str = Field(
+        description="Type of recommendation letter: proceed, request_documents, settlement_advisory, declination"
+    )
+    attorney_name: Optional[str] = None
+    firm_name: Optional[str] = None
+    contact_phone: Optional[str] = None
+    contact_email: Optional[str] = None
+    client_name: Optional[str] = None
+
+
+class RecommendationLetterResponse(BaseModel):
+    """Response payload for generated recommendation letters."""
+
+    letter_html: str
+    letter_type: str
+    recommendation_category: Optional[str] = None
+
+
+@router.post("/generate-recommendation-letter", response_model=RecommendationLetterResponse)
+async def generate_recommendation_letter(
+    letter_request: RecommendationLetterRequest,
+    user=Depends(get_current_user),  # noqa: B008
+    supabase=Depends(get_user_supabase_client),  # noqa: B008
+    service_supabase=Depends(get_supabase_client),  # noqa: B008
+):
+    """Generate a recommendation-based letter (proceed, request_documents, settlement_advisory, declination).
+
+    This endpoint generates letters based on the case recommendation category from gap analysis.
+    Unlike findings/demand letters, these are advisory letters about case status.
+    """
+    case_id = letter_request.case_id
+    logger.info(f"[REC_LETTER_ENDPOINT] Generating {letter_request.letter_type} letter for case {case_id}")
+
+    # Verify case access
+    _ensure_case_access(supabase, case_id, user["id"])
+
+    # Fetch latest analysis result
+    analysis_record = _fetch_latest_analysis_result(supabase, case_id)
+    result_payload = analysis_record["result"]
+    processing_result = ProcessingResult(**result_payload)
+
+    if not processing_result.multi_stage_result:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Recommendation letter requires a completed multi-stage analysis. Please run case analysis first.",
+        )
+
+    msr = processing_result.multi_stage_result
+
+    # Import required models and service
+    from legal_portal.core.data_models import (
+        DeepAnalysis,
+        DocumentSummaryStructured,
+        FactMatrix,
+        GapAnalysisResult,
+        RecommendedLetterType,
+    )
+    from legal_portal.services.recommendation_letter_service import RecommendationLetterService
+
+    # Validate letter type
+    try:
+        letter_type_enum = RecommendedLetterType(letter_request.letter_type)
+    except ValueError:
+        valid_types = [t.value for t in RecommendedLetterType if t.value not in ["findings", "demand"]]
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Invalid letter_type '{letter_request.letter_type}'. Valid types: {valid_types}",
+        )
+
+    # Check that we have gap analysis
+    gap_analysis_data = msr.get("gap_analysis")
+    if not gap_analysis_data:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Recommendation letter requires gap analysis. Please run gap analysis first.",
+        )
+
+    gap_analysis = GapAnalysisResult(**gap_analysis_data)
+
+    # Load other analysis data
+    fact_matrix = FactMatrix(**msr.get("fact_matrix", {})) if msr.get("fact_matrix") else None
+    deep_analysis = DeepAnalysis(**msr.get("deep_analysis", {})) if msr.get("deep_analysis") else None
+
+    # Parse document summaries
+    document_summaries = None
+    if processing_result.document_summaries:
+        try:
+            doc_summaries_raw = json.loads(processing_result.document_summaries)
+            document_summaries = [DocumentSummaryStructured(**ds) for ds in doc_summaries_raw]
+        except Exception as e:
+            logger.warning(f"Failed to parse document_summaries: {e}")
+
+    # Get jurisdiction
+    artifacts = processing_result.artifacts or {}
+    jurisdiction = artifacts.get("jurisdiction", "Florida")
+
+    # Build attorney info
+    attorney_info = {
+        "attorney_name": letter_request.attorney_name or artifacts.get("attorney_name"),
+        "firm_name": letter_request.firm_name or artifacts.get("firm_name"),
+        "contact_phone": letter_request.contact_phone or artifacts.get("contact_phone"),
+        "contact_email": letter_request.contact_email or artifacts.get("contact_email"),
+    }
+
+    # Get client name
+    client_name = letter_request.client_name
+    if not client_name:
+        # Try to extract from fact_matrix
+        if fact_matrix:
+            for party in fact_matrix.parties:
+                if party.role.lower() in ["client", "plaintiff", "claimant"]:
+                    client_name = party.name
+                    break
+        if not client_name:
+            client_name = artifacts.get("client_name") or "Client"
+
+    # Fetch user's AI preferences
+    ai_preferences = await _get_user_ai_preferences(user["id"], supabase)
+    openai_client = OpenAIClient(user_preferences=ai_preferences)
+
+    # Generate the letter
+    rec_letter_service = RecommendationLetterService(openai_client)
+
+    try:
+        letter_html = await rec_letter_service.generate_recommendation_letter(
+            letter_type=letter_type_enum,
+            gap_analysis=gap_analysis,
+            deep_analysis=deep_analysis,
+            fact_matrix=fact_matrix,
+            document_summaries=document_summaries,
+            attorney_info=attorney_info,
+            client_name=client_name,
+            jurisdiction=jurisdiction,
+        )
+    except Exception as e:
+        logger.error(f"[REC_LETTER_ENDPOINT] Error generating letter: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to generate recommendation letter: {str(e)}",
+        )
+
+    # Save to generated_letters
+    letter_key = f"recommendation_{letter_request.letter_type}"
+    result_payload.setdefault("generated_letters", {})[letter_key] = letter_html
+    service_supabase.table("analysis_results").update({"result": result_payload}).eq(
+        "id", analysis_record["id"]
+    ).execute()
+
+    logger.info(f"[REC_LETTER_ENDPOINT] {letter_request.letter_type} letter generated and saved for case {case_id}")
+
+    # Get recommendation category if available
+    recommendation_category = None
+    if gap_analysis.recommendation:
+        recommendation_category = gap_analysis.recommendation.category.value
+
+    return RecommendationLetterResponse(
+        letter_html=letter_html,
+        letter_type=letter_request.letter_type,
+        recommendation_category=recommendation_category,
     )
 
 
@@ -2725,6 +2962,7 @@ Be realistic and evidence-based. Only include amounts supported by the case data
 
 class GapAnalysisRequest(BaseModel):
     """Request model for on-demand gap analysis."""
+
     case_id: str = Field(..., description="The case ID to analyze for gaps")
 
 
@@ -2737,8 +2975,7 @@ async def analyze_gaps_on_demand(
     supabase=Depends(get_user_supabase_client),  # noqa: B008
     service_supabase=Depends(get_supabase_client),  # noqa: B008
 ):
-    """
-    Run gap analysis on-demand for a completed case analysis.
+    """Run gap analysis on-demand for a completed case analysis.
 
     This endpoint analyzes the case for:
     - Missing documents
@@ -2775,13 +3012,13 @@ async def analyze_gaps_on_demand(
 
     try:
         # Import gap analysis dependencies
-        from legal_portal.services.gap_analysis_service import GapAnalysisService
         from legal_portal.core.data_models import (
-            FactMatrix,
-            LegalIssueMap,
             DeepAnalysis,
             DocumentSummaryStructured,
+            FactMatrix,
+            LegalIssueMap,
         )
+        from legal_portal.services.gap_analysis_service import GapAnalysisService
 
         # Fetch user's AI preferences
         ai_preferences = await _get_user_ai_preferences(user["id"], supabase)
@@ -2882,8 +3119,7 @@ async def analyze_gaps_streaming(
     supabase=Depends(get_user_supabase_client),
     service_supabase=Depends(get_supabase_client),
 ):
-    """
-    Run gap analysis on-demand with streaming progress updates.
+    """Run gap analysis on-demand with streaming progress updates.
 
     Returns a streaming response with progress events and final result.
     Event types:
@@ -2927,13 +3163,13 @@ async def analyze_gaps_streaming(
             yield f"data: {json.dumps({'type': 'phase', 'phase': 'preparing', 'message': 'Converting documents...', 'elapsed': time.time() - start_time})}\n\n"
 
             # Import gap analysis dependencies
-            from legal_portal.services.gap_analysis_service import GapAnalysisService
             from legal_portal.core.data_models import (
-                FactMatrix,
-                LegalIssueMap,
                 DeepAnalysis,
                 DocumentSummaryStructured,
+                FactMatrix,
+                LegalIssueMap,
             )
+            from legal_portal.services.gap_analysis_service import GapAnalysisService
 
             # Fetch user's AI preferences
             ai_preferences = await _get_user_ai_preferences(user["id"], supabase)
@@ -3100,6 +3336,7 @@ async def case_chat(
 
 class RetryDocumentsRequest(BaseModel):
     """Request to retry failed documents."""
+
     document_ids: List[str] = Field(
         default=[],
         description="List of document IDs to retry, or empty to retry all failed"
@@ -3108,6 +3345,7 @@ class RetryDocumentsRequest(BaseModel):
 
 class SkipDocumentsRequest(BaseModel):
     """Request to skip failed documents and continue."""
+
     document_ids: List[str] = Field(
         default=[],
         description="List of document IDs to skip, or empty to skip all failed"
@@ -3116,6 +3354,7 @@ class SkipDocumentsRequest(BaseModel):
 
 class DocumentStatusResponse(BaseModel):
     """Response with document processing status."""
+
     total: int
     pending: int
     processing: int
@@ -3128,6 +3367,7 @@ class DocumentStatusResponse(BaseModel):
 
 class RecoveryActionResponse(BaseModel):
     """Response after retry/skip action."""
+
     success: bool
     action: str
     affected_count: int
@@ -3141,28 +3381,26 @@ async def get_document_status(
     supabase=Depends(get_user_supabase_client),  # noqa: B008
 ):
     """Get detailed status of all documents in an analysis."""
-    from legal_portal.services.chunk_state_manager import ChunkStateManager
-    
     # Verify analysis exists and user has access
     response = supabase.table("analysis_results").select(
         "id, case_id, chunk_state"
     ).eq("id", analysis_id).single().execute()
-    
+
     if not response.data:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Analysis not found")
-    
+
     analysis = response.data
     case_id = analysis.get("case_id")
-    
+
     # Verify case access
     _ensure_case_access(supabase, case_id, user["id"])
-    
+
     chunk_state = analysis.get("chunk_state") or {}
     documents = chunk_state.get("documents", {})
-    
+
     # Calculate summary
     statuses = [info.get("status", "pending") for info in documents.values()]
-    
+
     summary = {
         "total": len(documents),
         "pending": statuses.count("pending"),
@@ -3171,9 +3409,9 @@ async def get_document_status(
         "failed": statuses.count("failed"),
         "skipped": statuses.count("skipped"),
     }
-    
+
     can_proceed = summary["pending"] == 0 and summary["processing"] == 0 and summary["failed"] == 0
-    
+
     return DocumentStatusResponse(
         **summary,
         documents=documents,
@@ -3188,32 +3426,31 @@ async def retry_failed_documents(
     user=Depends(get_current_user),  # noqa: B008
     supabase=Depends(get_user_supabase_client),  # noqa: B008
 ):
-    """
-    Retry processing of failed documents.
+    """Retry processing of failed documents.
     
     If document_ids is empty, all failed documents will be retried.
     """
     from legal_portal.services.chunk_state_manager import ChunkStateManager
-    
+
     # Verify analysis exists and user has access
     response = supabase.table("analysis_results").select(
         "id, case_id, chunk_state"
     ).eq("id", analysis_id).single().execute()
-    
+
     if not response.data:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Analysis not found")
-    
+
     analysis = response.data
     case_id = analysis.get("case_id")
-    
+
     # Verify case access
     _ensure_case_access(supabase, case_id, user["id"])
-    
+
     chunk_state_mgr = ChunkStateManager(supabase, analysis_id)
-    
+
     # Get failed documents
     failed_docs = await chunk_state_mgr.get_failed_documents()
-    
+
     if not failed_docs:
         return RecoveryActionResponse(
             success=True,
@@ -3221,13 +3458,13 @@ async def retry_failed_documents(
             affected_count=0,
             message="No failed documents to retry"
         )
-    
+
     # Determine which docs to retry
     if request.document_ids:
         doc_ids_to_retry = [d for d in request.document_ids if d in [f["id"] for f in failed_docs]]
     else:
         doc_ids_to_retry = [f["id"] for f in failed_docs]
-    
+
     if not doc_ids_to_retry:
         return RecoveryActionResponse(
             success=False,
@@ -3235,17 +3472,17 @@ async def retry_failed_documents(
             affected_count=0,
             message="No matching failed documents found"
         )
-    
+
     # Reset documents to pending
     count = await chunk_state_mgr.reset_documents_for_retry(doc_ids_to_retry)
-    
+
     # Update analysis status to allow re-processing
     supabase.table("analysis_results").update({
         "status": "pending"
     }).eq("id", analysis_id).execute()
-    
+
     logger.info(f"[RETRY] Reset {count} documents for retry in analysis {analysis_id}")
-    
+
     return RecoveryActionResponse(
         success=True,
         action="retry",
@@ -3261,32 +3498,31 @@ async def skip_failed_documents(
     user=Depends(get_current_user),  # noqa: B008
     supabase=Depends(get_user_supabase_client),  # noqa: B008
 ):
-    """
-    Skip failed documents and continue with synthesis.
+    """Skip failed documents and continue with synthesis.
     
     If document_ids is empty, all failed documents will be skipped.
     """
     from legal_portal.services.chunk_state_manager import ChunkStateManager
-    
+
     # Verify analysis exists and user has access
     response = supabase.table("analysis_results").select(
         "id, case_id, chunk_state"
     ).eq("id", analysis_id).single().execute()
-    
+
     if not response.data:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Analysis not found")
-    
+
     analysis = response.data
     case_id = analysis.get("case_id")
-    
+
     # Verify case access
     _ensure_case_access(supabase, case_id, user["id"])
-    
+
     chunk_state_mgr = ChunkStateManager(supabase, analysis_id)
-    
+
     # Get failed documents
     failed_docs = await chunk_state_mgr.get_failed_documents()
-    
+
     if not failed_docs:
         return RecoveryActionResponse(
             success=True,
@@ -3294,13 +3530,13 @@ async def skip_failed_documents(
             affected_count=0,
             message="No failed documents to skip"
         )
-    
+
     # Determine which docs to skip
     if request.document_ids:
         doc_ids_to_skip = [d for d in request.document_ids if d in [f["id"] for f in failed_docs]]
     else:
         doc_ids_to_skip = [f["id"] for f in failed_docs]
-    
+
     if not doc_ids_to_skip:
         return RecoveryActionResponse(
             success=False,
@@ -3308,19 +3544,19 @@ async def skip_failed_documents(
             affected_count=0,
             message="No matching failed documents found"
         )
-    
+
     # Mark documents as skipped
     count = await chunk_state_mgr.mark_documents_skipped(doc_ids_to_skip)
-    
+
     logger.info(f"[SKIP] Skipped {count} documents in analysis {analysis_id}")
-    
+
     # Check if we can now proceed to synthesis
     can_proceed = await chunk_state_mgr.can_proceed_to_synthesis()
-    
+
     message = f"Skipped {count} documents."
     if can_proceed:
         message += " Analysis can now proceed to synthesis."
-    
+
     return RecoveryActionResponse(
         success=True,
         action="skip",
@@ -3335,8 +3571,7 @@ async def get_analysis_state(
     user=Depends(get_current_user),  # noqa: B008
     supabase=Depends(get_user_supabase_client),  # noqa: B008
 ):
-    """
-    Get full analysis state for recovery/resume.
+    """Get full analysis state for recovery/resume.
     
     Returns chunk_state with all document statuses, chunk plan, and summaries.
     """
@@ -3344,22 +3579,22 @@ async def get_analysis_state(
     response = supabase.table("analysis_results").select(
         "id, case_id, status, chunk_state, created_at, updated_at"
     ).eq("id", analysis_id).single().execute()
-    
+
     if not response.data:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Analysis not found")
-    
+
     analysis = response.data
     case_id = analysis.get("case_id")
-    
+
     # Verify case access
     _ensure_case_access(supabase, case_id, user["id"])
-    
+
     chunk_state = analysis.get("chunk_state") or {}
-    
+
     # Add computed fields
     documents = chunk_state.get("documents", {})
     statuses = [info.get("status", "pending") for info in documents.values()]
-    
+
     return {
         "analysis_id": analysis_id,
         "status": analysis.get("status"),
@@ -3375,8 +3610,8 @@ async def get_analysis_state(
             "skipped": statuses.count("skipped"),
         },
         "can_proceed": (
-            statuses.count("pending") == 0 and 
-            statuses.count("processing") == 0 and 
+            statuses.count("pending") == 0 and
+            statuses.count("processing") == 0 and
             statuses.count("failed") == 0
         ),
         "chunk_state": chunk_state,

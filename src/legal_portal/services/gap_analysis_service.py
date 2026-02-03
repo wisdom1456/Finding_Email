@@ -13,6 +13,9 @@ import time
 from typing import Any, Dict, List, Optional
 
 from legal_portal.core.data_models import (
+    CaseRecommendation,
+    CaseRecommendationCategory,
+    ConfidenceLevel,
     DeepAnalysis,
     DocumentSummaryStructured,
     FactMatrix,
@@ -21,6 +24,7 @@ from legal_portal.core.data_models import (
     GapItem,
     GapSeverity,
     LegalIssueMap,
+    RecommendedLetterType,
 )
 from legal_portal.utils.openai_client import OpenAIClient
 
@@ -109,28 +113,51 @@ class GapAnalysisService:
             if response_dict.get("success") is False:
                 error_msg = response_dict.get("error", "Unknown API error")
                 logger.error(f"[STAGE:3.5:ERROR] API returned error: {error_msg}")
-                return self._create_fallback_result(error=error_msg)
+                fallback = self._create_fallback_result(error=error_msg)
+                fallback.recommendation = self._generate_recommendation(
+                    gap_analysis=fallback,
+                    deep_analysis=deep_analysis,
+                )
+                return fallback
 
             raw_response = (response_dict.get("content") or "").strip()
 
             if not raw_response:
                 logger.warning("Gap analysis returned empty response")
-                return self._create_fallback_result()
+                fallback = self._create_fallback_result()
+                fallback.recommendation = self._generate_recommendation(
+                    gap_analysis=fallback,
+                    deep_analysis=deep_analysis,
+                )
+                return fallback
 
             # Parse JSON response
             response_json = json.loads(raw_response)
             result = GapAnalysisResult(**response_json)
 
+            # Generate case recommendation based on gap analysis and deep analysis
+            recommendation = self._generate_recommendation(
+                gap_analysis=result,
+                deep_analysis=deep_analysis,
+            )
+            result.recommendation = recommendation
+
             logger.info(
                 f"Gap analysis completed: {result.total_gaps} gaps found "
-                f"({result.critical_count} critical, {result.high_count} high)"
+                f"({result.critical_count} critical, {result.high_count} high), "
+                f"recommendation: {recommendation.category.value}"
             )
 
             return result
 
         except Exception as e:
             logger.error(f"Gap analysis failed: {e}", exc_info=True)
-            return self._create_fallback_result(error=str(e))
+            fallback = self._create_fallback_result(error=str(e))
+            fallback.recommendation = self._generate_recommendation(
+                gap_analysis=fallback,
+                deep_analysis=deep_analysis,
+            )
+            return fallback
 
     def _build_gap_analysis_prompt(
         self,
@@ -345,4 +372,147 @@ Begin your analysis now.
                 if error
                 else "No automated gap analysis was performed."
             ),
+        )
+
+    def _generate_recommendation(
+        self,
+        gap_analysis: GapAnalysisResult,
+        deep_analysis: Optional[DeepAnalysis] = None,
+    ) -> CaseRecommendation:
+        """Generate a case recommendation based on gap analysis and deep analysis results.
+
+        Decision logic:
+        | Condition | Category | Color | Letter Type |
+        |-----------|----------|-------|-------------|
+        | !is_viable OR score < 30 OR critical >= 3 | NOT_VIABLE | red | DECLINATION |
+        | score < 60 OR (critical >= 1 AND high >= 2) | NEEDS_DOCUMENTATION | yellow | REQUEST_DOCUMENTS |
+        | case_strength == "weak" OR (high >= 3 AND score < 75) | SETTLEMENT_RECOMMENDED | orange | SETTLEMENT_ADVISORY |
+        | Otherwise | STRONG_CASE | green | PROCEED |
+
+        Args:
+            gap_analysis: The completed gap analysis result
+            deep_analysis: Optional deep analysis for viability and strength info
+
+        Returns:
+            CaseRecommendation with category, reasoning, and suggested next steps
+        """
+        score = gap_analysis.overall_completeness_score
+        critical = gap_analysis.critical_count
+        high = gap_analysis.high_count
+
+        # Extract viability and strength from deep analysis if available
+        is_viable = deep_analysis.is_viable if deep_analysis else True
+        case_strength = deep_analysis.overall_case_strength if deep_analysis else "moderate"
+        viability_reasoning = deep_analysis.viability_reasoning if deep_analysis else None
+
+        # Decision logic
+        if not is_viable or score < 30 or critical >= 3:
+            category = CaseRecommendationCategory.NOT_VIABLE
+            confidence = ConfidenceLevel.HIGH if not is_viable else ConfidenceLevel.MEDIUM
+            color = "red"
+            letter_type = RecommendedLetterType.DECLINATION
+            display_name = "Not Viable"
+
+            if not is_viable:
+                reasoning = viability_reasoning or (
+                    "The case does not appear to have sufficient legal merit to pursue. "
+                    "Critical deficiencies in the evidence or legal basis make success unlikely."
+                )
+            elif critical >= 3:
+                reasoning = (
+                    f"The case has {critical} critical gaps that must be resolved before proceeding. "
+                    "These deficiencies represent fundamental weaknesses that could undermine any legal action."
+                )
+            else:
+                reasoning = (
+                    f"The documentation completeness score ({score:.0f}%) is too low to proceed. "
+                    "Essential information is missing that would be required to build a viable case."
+                )
+
+            next_steps = [
+                "Send a declination letter explaining why the case cannot be pursued",
+                "Provide statute of limitations warning if applicable",
+                "Offer referral resources if appropriate",
+            ]
+
+        elif score < 60 or (critical >= 1 and high >= 2):
+            category = CaseRecommendationCategory.NEEDS_DOCUMENTATION
+            confidence = ConfidenceLevel.HIGH if score < 45 else ConfidenceLevel.MEDIUM
+            color = "yellow"
+            letter_type = RecommendedLetterType.REQUEST_DOCUMENTS
+            display_name = "Needs Documentation"
+
+            gap_summary = []
+            if critical >= 1:
+                gap_summary.append(f"{critical} critical")
+            if high >= 1:
+                gap_summary.append(f"{high} high-priority")
+            gap_text = " and ".join(gap_summary) + " gap(s)" if gap_summary else "gaps"
+
+            reasoning = (
+                f"The case has {gap_text} that need to be addressed before proceeding. "
+                f"Current documentation completeness is {score:.0f}%. "
+                "Request the missing documents from the client to strengthen the case."
+            )
+
+            next_steps = [
+                "Send a document request letter listing specific needed items",
+                "Set a 14 business day deadline for client response",
+                "Schedule follow-up review once documents are received",
+            ]
+
+        elif case_strength == "weak" or (high >= 3 and score < 75):
+            category = CaseRecommendationCategory.SETTLEMENT_RECOMMENDED
+            confidence = ConfidenceLevel.MEDIUM
+            color = "orange"
+            letter_type = RecommendedLetterType.SETTLEMENT_ADVISORY
+            display_name = "Settlement Recommended"
+
+            if case_strength == "weak":
+                reasoning = (
+                    "While the case can proceed, the overall strength assessment is weak. "
+                    "Settlement negotiations may be more cost-effective than litigation. "
+                    "Consider the client's risk tolerance and financial situation."
+                )
+            else:
+                reasoning = (
+                    f"The case has {high} high-priority gaps and a completeness score of {score:.0f}%. "
+                    "This may make full litigation risky. "
+                    "Settlement could achieve client goals while managing downside exposure."
+                )
+
+            next_steps = [
+                "Send a settlement advisory letter outlining options",
+                "Discuss litigation vs. settlement trade-offs with client",
+                "Prepare initial settlement demand range if client agrees",
+            ]
+
+        else:
+            category = CaseRecommendationCategory.STRONG_CASE
+            confidence = ConfidenceLevel.HIGH if score >= 80 else ConfidenceLevel.MEDIUM
+            color = "green"
+            letter_type = RecommendedLetterType.PROCEED
+            display_name = "Strong Case"
+
+            strength_desc = "strong" if case_strength == "strong" else "well-supported"
+            reasoning = (
+                f"This appears to be a {strength_desc} case with {score:.0f}% documentation completeness. "
+                "The evidence supports proceeding with a demand letter or other legal action. "
+                "Minor gaps identified should be addressed but do not prevent moving forward."
+            )
+
+            next_steps = [
+                "Send an engagement letter confirming representation",
+                "Proceed with drafting a demand letter",
+                "Establish case timeline and next milestones",
+            ]
+
+        return CaseRecommendation(
+            category=category,
+            confidence=confidence,
+            reasoning=reasoning,
+            next_steps=next_steps,
+            suggested_letter_type=letter_type,
+            category_display_name=display_name,
+            category_color=color,
         )

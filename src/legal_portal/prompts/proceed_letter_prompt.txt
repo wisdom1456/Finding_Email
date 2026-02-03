@@ -1,0 +1,97 @@
+You are drafting a FORMAL ENGAGEMENT CONFIRMATION LETTER on behalf of a {jurisdiction_name} law firm. This letter confirms the firm's decision to proceed with the case and outlines next steps.
+
+---
+
+CLIENT CONTEXT:
+{client_context}
+
+CASE SUMMARY:
+{case_summary}
+
+CASE STRENGTH ASSESSMENT:
+{case_strength}
+
+COMPLETENESS SCORE: {completeness_score}%
+
+ATTORNEY CONTACT:
+{attorney_name}
+{firm_name}
+Phone: {contact_phone}
+Email: {contact_email}
+
+---
+
+REQUIRED LETTER STRUCTURE:
+
+1. **Header Section**:
+   - Date: [Current date in format: Month DD, YYYY]
+   - Blank line
+   - Client name and address (from client context)
+   - Blank line
+   - "**RE: Engagement Confirmation - [Brief Case Description]**"
+   - Blank line
+
+2. **Salutation**: 
+   - `Dear {client_name}:`
+   - Blank line
+
+3. **Introduction Paragraph**:
+   - Thank the client for choosing the firm
+   - Confirm the firm's decision to proceed with representation
+   - Express confidence in the case based on the analysis
+
+4. **Case Assessment Summary** (2-3 paragraphs):
+   - Use heading: "## Case Assessment"
+   - Summarize key strengths of the case
+   - Note the overall documentation completeness
+   - Highlight the primary legal claims to be pursued
+   - Mention any minor gaps that will be addressed during representation
+
+5. **Next Steps** (numbered list):
+   - Use heading: "## Next Steps"
+   - Opening: "To move forward efficiently, we will proceed with the following:"
+   - Numbered list of 4-6 specific action items:
+     1. Prepare and send demand letter to opposing party
+     2. Continue gathering any supplemental documentation
+     3. Begin detailed case timeline construction
+     4. Research applicable case law and precedents
+     5. Establish communication schedule with client
+   - Include estimated timeline for demand letter (e.g., "within 5-7 business days")
+
+6. **Client Responsibilities**:
+   - Use heading: "## What We Need From You"
+   - Brief paragraph about client's role
+   - List any documents or information still needed
+   - Request prompt notification of any new developments
+
+7. **Fee Arrangement Reference**:
+   - Brief paragraph referencing the fee agreement
+   - Note: "[Fee arrangement details to be confirmed separately]"
+
+8. **Closing Paragraph**:
+   - Blank line
+   - Reaffirm commitment to the client's interests
+   - Encourage questions and open communication
+   - Provide direct contact information
+   - Blank line
+
+9. **Signature Block**:
+   - "Sincerely,"
+   - Blank line
+   - "/s/ {attorney_name}"
+   - "{attorney_name}, Esq."
+   - "{firm_name}"
+   - "Attorney for {client_name}"
+
+---
+
+TONE GUIDELINES:
+- Professional and confident
+- Reassuring but not overpromising
+- Clear and actionable
+- Build client trust and rapport
+
+FORMAT NOTES:
+- Use markdown formatting (## for headings, - for bullets, numbered lists)
+- Keep paragraphs focused and readable
+- Avoid legal jargon where plain language works

@@ -10,6 +10,7 @@
 	import { ArrowLeft } from 'lucide-svelte';
 	import { parseMarkdown } from '$lib/utils/markdown';
 	import type { PageData } from './$types';
+	import type { RecommendedLetterType } from '$lib/types';
 	import { onMount } from 'svelte';
 	import SkippedDocumentsAlert from '$lib/components/SkippedDocumentsAlert.svelte';
 	import DocumentSummaryCard from '$lib/components/DocumentSummaryCard.svelte';
@@ -57,6 +58,12 @@
 	let criticalGapCount = $derived(gapAnalysis ? gapAnalysis.critical_count + gapAnalysis.high_count : 0);
 	let analyzingGaps = $state(false);
 	let gapAnalysisProgress = $state('');
+
+	// Recommendation letter state
+	let forceGeneration = $state(false);
+	let generatingRecommendationLetter = $state(false);
+	let recommendationLetters = $state<Record<string, string>>({});
+	let insufficientDocError = $state<{ completeness_score: number; critical_gaps: number } | null>(null);
 	
 	// Viability data
 	let deepAnalysis = $derived(multiStageResult?.deep_analysis);
@@ -134,6 +141,17 @@
 					demandLetters = demandEntries.reduce<Record<string, string>>((acc, [key, value]) => {
 						const partyName = key.replace('demand_', '').replace(/_/g, ' ');
 						acc[partyName] = value as string;
+						return acc;
+					}, {});
+				}
+				// Load recommendation letters
+				const recommendationEntries = Object.entries(res.generated_letters).filter(([key]) =>
+					key.startsWith('recommendation_')
+				);
+				if (recommendationEntries.length) {
+					recommendationLetters = recommendationEntries.reduce<Record<string, string>>((acc, [key, value]) => {
+						const letterType = key.replace('recommendation_', '');
+						acc[letterType] = value as string;
 						return acc;
 					}, {});
 				}
@@ -449,19 +467,30 @@
 	async function generateFindingsLetter() {
 		generatingFindings = true;
 	findingsLetter = ''; // Clear existing
+	insufficientDocError = null; // Clear previous error
 
 	try {
 		const { session, user } = await getSecureSession();
 		if (!session || !user) throw new Error('Not authenticated');
 
 			const apiUrl = getApiUrl();
-			const response = await fetch(`${apiUrl}/api/analysis/${results.analysis_id}/letter/stream`, {
+			const queryParam = forceGeneration ? '?force_generation=true' : '';
+			const response = await fetch(`${apiUrl}/api/analysis/${results.analysis_id}/letter/stream${queryParam}`, {
 				headers: { Authorization: `Bearer ${session.access_token}` }
 			});
 
 			if (!response.ok) {
 				const detail = await response.json().catch(() => ({}));
-				throw new Error(detail?.detail || 'Failed to stream findings email');
+				// Handle documentation insufficient error specially
+				if (detail?.detail?.error === 'documentation_insufficient') {
+					insufficientDocError = {
+						completeness_score: detail.detail.completeness_score,
+						critical_gaps: detail.detail.critical_gaps
+					};
+					toastStore.warning('Case documentation is insufficient. Review gaps or enable force override.');
+					return;
+				}
+				throw new Error(detail?.detail?.message || detail?.detail || 'Failed to stream findings email');
 			}
 
 			const reader = response.body?.getReader();
@@ -496,6 +525,48 @@
 			toastStore.error(err.message || 'Findings email generation failed');
 		} finally {
 			generatingFindings = false;
+		}
+	}
+
+	async function generateRecommendationLetter(letterType: string) {
+		generatingRecommendationLetter = true;
+
+		try {
+			const { session, user } = await getSecureSession();
+			if (!session || !user) throw new Error('Not authenticated');
+
+			const apiUrl = getApiUrl();
+			const response = await fetch(`${apiUrl}/api/analysis/generate-recommendation-letter`, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					Authorization: `Bearer ${session.access_token}`
+				},
+				body: JSON.stringify({
+					case_id: caseId,
+					letter_type: letterType,
+					attorney_name: attorneyName,
+					firm_name: firmName,
+					contact_phone: contactPhone,
+					contact_email: contactEmail
+				})
+			});
+
+			if (!response.ok) {
+				const detail = await response.json().catch(() => ({}));
+				throw new Error(detail?.detail || 'Failed to generate recommendation letter');
+			}
+
+			const result = await response.json();
+			recommendationLetters[letterType] = result.letter_html;
+			
+			// Switch to letters tab to show the result
+			activeTab = 'letters';
+			toastStore.success(`${letterType.replace('_', ' ')} letter generated successfully`);
+		} catch (err: any) {
+			toastStore.error(err.message || 'Recommendation letter generation failed');
+		} finally {
+			generatingRecommendationLetter = false;
 		}
 	}
 
@@ -996,7 +1067,12 @@ async function generateLetterRequest(body: Record<string, any>) {
 			</div>
 		{:else if activeTab === 'gaps'}
 			{#if gapAnalysis}
-				<GapAnalysisPanel gapAnalysis={gapAnalysis} caseId={caseId} />
+				<GapAnalysisPanel 
+					gapAnalysis={gapAnalysis} 
+					caseId={caseId}
+					onGenerateRecommendationLetter={(letterType: RecommendedLetterType) => generateRecommendationLetter(letterType)}
+					{generatingRecommendationLetter}
+				/>
 			{:else}
 				<div class="card-standard">
 					<div class="text-center py-12">
@@ -1085,6 +1161,51 @@ async function generateLetterRequest(body: Record<string, any>) {
 								Generate Email
 							</AsyncButton>
 						</div>
+
+						<!-- Insufficient Documentation Warning -->
+						{#if insufficientDocError}
+							<div class="mb-6 p-4 bg-amber-50 border border-amber-300 rounded-lg">
+								<div class="flex items-start gap-3">
+									<AlertTriangle class="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />
+									<div class="flex-1">
+										<h4 class="font-semibold text-amber-900 mb-1">Insufficient Documentation</h4>
+										<p class="text-sm text-amber-800 mb-3">
+											Case completeness is {insufficientDocError.completeness_score.toFixed(0)}% with {insufficientDocError.critical_gaps} critical gap(s).
+											Review the Gap Analysis tab to identify missing documents, or enable force generation to proceed anyway.
+										</p>
+										<label class="flex items-center gap-2 cursor-pointer">
+											<input
+												type="checkbox"
+												bind:checked={forceGeneration}
+												class="w-4 h-4 rounded border-amber-400 text-amber-600 focus:ring-amber-500"
+											/>
+											<span class="text-sm font-medium text-amber-900">
+												Force generation despite insufficient documentation
+											</span>
+										</label>
+										{#if forceGeneration}
+											<p class="text-xs text-amber-700 mt-2 italic">
+												Warning: Generated letter may contain gaps or require significant manual review.
+											</p>
+										{/if}
+									</div>
+								</div>
+							</div>
+						{:else if gapAnalysis && gapAnalysis.overall_completeness_score < 60}
+							<div class="mb-6 p-4 bg-yellow-50 border border-yellow-300 rounded-lg">
+								<div class="flex items-start gap-3">
+									<AlertTriangle class="h-5 w-5 text-yellow-600 flex-shrink-0 mt-0.5" />
+									<div>
+										<h4 class="font-semibold text-yellow-900 mb-1">Low Completeness Warning</h4>
+										<p class="text-sm text-yellow-800">
+											Case completeness is {gapAnalysis.overall_completeness_score.toFixed(0)}%. 
+											Consider reviewing the Gap Analysis tab before generating letters.
+										</p>
+									</div>
+								</div>
+							</div>
+						{/if}
+
 						{#if generatingFindings && findingsLetter}
 							<!-- Streaming preview - shows text to avoid iframe blinking -->
 							<div class="space-y-4 animate-fade-in-up">
@@ -1269,6 +1390,33 @@ async function generateLetterRequest(body: Record<string, any>) {
 							</div>
 						{/if}
 					</section>
+
+					<!-- Recommendation Letters Section -->
+					{#if Object.keys(recommendationLetters).length > 0}
+						<section class="card-standard">
+							<h3 class="text-xl font-heading font-bold text-contrast mb-6">Advisory Letters</h3>
+							<div class="space-y-6">
+								{#each Object.entries(recommendationLetters) as [letterType, letterHtml]}
+									<div class="border border-gray-200 rounded-xl overflow-hidden bg-gray-50 shadow-sm animate-fade-in-up">
+										<div class="flex items-center justify-between p-4 bg-white border-b border-gray-200">
+											<h4 class="font-bold text-contrast capitalize">{letterType.replace(/_/g, ' ')} Letter</h4>
+											<button
+												class="inline-flex items-center px-3 py-1.5 border border-gray-300 text-xs font-bold rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent transition-all"
+												onclick={() => downloadLetter(letterHtml, `${letterType}-letter-${caseId}.html`)}
+											>
+												Download
+											</button>
+										</div>
+										<div class="p-4">
+											<div class="border border-gray-200 rounded-lg bg-white overflow-hidden shadow-inner">
+												<iframe srcdoc={letterHtml.replace(/\\n/g, '\n')} title={`${letterType} Letter`} class="w-full h-[400px] border-0" sandbox="allow-same-origin allow-scripts"></iframe>
+											</div>
+										</div>
+									</div>
+								{/each}
+							</div>
+						</section>
+					{/if}
 				{/if}
 			</div>
 		{:else if activeTab === 'chat'}

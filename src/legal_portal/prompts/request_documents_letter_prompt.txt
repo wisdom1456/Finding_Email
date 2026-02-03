@@ -1,0 +1,120 @@
+You are drafting a FORMAL DOCUMENT REQUEST LETTER on behalf of a {jurisdiction_name} law firm. This letter requests specific missing documents from the client to strengthen their case.
+
+---
+
+CLIENT CONTEXT:
+{client_context}
+
+CASE SUMMARY:
+{case_summary}
+
+MISSING DOCUMENTS AND GAPS:
+{missing_documents}
+
+CURRENT COMPLETENESS SCORE: {completeness_score}%
+
+CRITICAL GAPS: {critical_count}
+HIGH-PRIORITY GAPS: {high_count}
+
+ATTORNEY CONTACT:
+{attorney_name}
+{firm_name}
+Phone: {contact_phone}
+Email: {contact_email}
+
+---
+
+REQUIRED LETTER STRUCTURE:
+
+1. **Header Section**:
+   - Date: [Current date in format: Month DD, YYYY]
+   - Blank line
+   - Client name and address (from client context)
+   - Blank line
+   - "**RE: Document Request - [Brief Case Description]**"
+   - "**Response Required By: [Date 14 business days from today]**"
+   - Blank line
+
+2. **Salutation**: 
+   - `Dear {client_name}:`
+   - Blank line
+
+3. **Introduction Paragraph**:
+   - Thank the client for engaging the firm
+   - Explain that after initial review, additional documentation is needed
+   - Emphasize the importance of these documents to case success
+   - Note that gathering these materials is a normal part of the process
+
+4. **Documents Needed** (detailed list):
+   - Use heading: "## Documents Requested"
+   - Opening: "To build the strongest possible case, we need the following:"
+   - Blank line
+   - For EACH missing document or gap, create a numbered entry with:
+     - **Document Name/Type**: Clear description
+     - **Why It Matters**: 1-2 sentences on legal importance
+     - **What to Provide**: Specific format or details needed
+   - Example format:
+     ```
+     1. **Contract or Agreement Documents**
+        - *Why It Matters*: The original contract establishes the terms that may have been breached and defines the parties' obligations.
+        - *What to Provide*: Original signed contract, any amendments, and related correspondence about contract terms.
+     ```
+   - Group similar documents together
+   - Prioritize critical gaps first, then high-priority
+
+5. **How to Provide Documents**:
+   - Use heading: "## How to Submit"
+   - List multiple options:
+     - Email: {contact_email} (preferred for electronic copies)
+     - Mail: [Firm address]
+     - Client Portal: [If applicable]
+   - Note acceptable formats (PDF preferred, original documents for key items)
+   - Mention that the firm can arrange pickup for physical documents if needed
+
+6. **Timeline and Importance**:
+   - Use heading: "## Timeline"
+   - Emphasize the 14 business day deadline
+   - Explain why timing matters:
+     - Statute of limitations considerations
+     - Building case momentum
+     - Preparing demand letter or legal action
+   - Offer to discuss extensions if circumstances require
+
+7. **What Happens Next**:
+   - Brief paragraph on next steps once documents received
+   - Note that the firm will review and may request clarification
+   - Mention that this moves the case toward action (demand letter, filing, etc.)
+
+8. **Questions or Difficulties**:
+   - Acknowledge client may have trouble locating some items
+   - Encourage reaching out if any document is unavailable
+   - Offer to discuss alternatives or workarounds
+
+9. **Closing Paragraph**:
+   - Blank line
+   - Reiterate importance of prompt response
+   - Express commitment to the client's case
+   - Provide direct contact information
+   - Blank line
+
+10. **Signature Block**:
+    - "Sincerely,"
+    - Blank line
+    - "/s/ {attorney_name}"
+    - "{attorney_name}, Esq."
+    - "{firm_name}"
+    - "Attorney for {client_name}"
+
+---
+
+TONE GUIDELINES:
+- Professional but approachable
+- Urgent but not alarming
+- Helpful and solution-oriented
+- Clear about what's needed and why
+
+FORMAT NOTES:
+- Use markdown formatting (## for headings, - for bullets, numbered lists)
+- Make document list scannable with bold headings
+- Keep explanations concise but informative
+- Use formatting to highlight the deadline

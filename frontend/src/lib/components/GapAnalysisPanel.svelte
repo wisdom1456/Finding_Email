@@ -13,12 +13,15 @@
 		Check,
 		ChevronDown
 	} from 'lucide-svelte';
-	import type { GapAnalysisResult, GapCategory, GapItem, GapSeverity } from '$lib/types';
+	import type { GapAnalysisResult, GapCategory, GapItem, GapSeverity, RecommendedLetterType } from '$lib/types';
 	import Badge from '$lib/components/ui/Badge.svelte';
+	import CaseRecommendationCard from '$lib/components/CaseRecommendationCard.svelte';
 
 	// Props
 	export let gapAnalysis: GapAnalysisResult;
 	export let caseId: string;
+	export let onGenerateRecommendationLetter: ((letterType: RecommendedLetterType) => void) | undefined = undefined;
+	export let generatingRecommendationLetter: boolean = false;
 
 	// State
 	let selectedSeverity: GapSeverity | 'all' = 'all';
@@ -147,6 +150,19 @@
 </script>
 
 <div class="space-y-6">
+	<!-- Case Recommendation Card (if available) -->
+	{#if gapAnalysis.recommendation}
+		<CaseRecommendationCard
+			recommendation={gapAnalysis.recommendation}
+			onGenerateLetter={() => {
+				if (onGenerateRecommendationLetter && gapAnalysis.recommendation) {
+					onGenerateRecommendationLetter(gapAnalysis.recommendation.suggested_letter_type);
+				}
+			}}
+			generatingLetter={generatingRecommendationLetter}
+		/>
+	{/if}
+
 	<!-- Header Card -->
 	<div class="card-standard">
 		<h2 class="text-2xl font-heading font-bold text-contrast mb-6 flex items-center gap-2">

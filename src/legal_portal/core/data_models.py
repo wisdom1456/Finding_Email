@@ -972,6 +972,46 @@ class GapCategory(str, Enum):
     INCOMPLETE_INFO = "incomplete_info"
 
 
+class CaseRecommendationCategory(str, Enum):
+    """Categories for case recommendations based on gap analysis."""
+
+    STRONG_CASE = "strong_case"  # Proceed with demand letter
+    NEEDS_DOCUMENTATION = "needs_documentation"  # Pause, request docs
+    SETTLEMENT_RECOMMENDED = "settlement_recommended"  # Negotiate
+    NOT_VIABLE = "not_viable"  # Decline
+
+
+class ConfidenceLevel(str, Enum):
+    """Confidence levels for recommendations."""
+
+    HIGH = "high"
+    MEDIUM = "medium"
+    LOW = "low"
+
+
+class RecommendedLetterType(str, Enum):
+    """Types of letters that can be recommended based on case analysis."""
+
+    PROCEED = "proceed"  # Engagement letter
+    REQUEST_DOCUMENTS = "request_documents"
+    SETTLEMENT_ADVISORY = "settlement_advisory"
+    DECLINATION = "declination"
+    FINDINGS = "findings"  # Standard findings
+    DEMAND = "demand"  # Standard demand
+
+
+class CaseRecommendation(BaseModel):
+    """Recommendation generated from gap analysis results."""
+
+    category: CaseRecommendationCategory
+    confidence: ConfidenceLevel
+    reasoning: str = Field(description="2-3 sentences explaining the recommendation")
+    next_steps: List[str] = Field(description="Action items for the attorney")
+    suggested_letter_type: RecommendedLetterType
+    category_display_name: str = Field(description="UI-friendly label for the category")
+    category_color: str = Field(description="Color code: green/yellow/orange/red")
+
+
 class GapItem(BaseModel):
     """A specific gap or issue identified in the case."""
 
@@ -1006,6 +1046,9 @@ class GapAnalysisResult(BaseModel):
     )
     attorney_summary: str = Field(
         description="Executive summary for attorney about case completeness"
+    )
+    recommendation: Optional[CaseRecommendation] = Field(
+        default=None, description="Case recommendation based on gap analysis"
     )
 
 

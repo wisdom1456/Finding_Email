@@ -2446,8 +2446,20 @@
 
 <!-- Missing Text Warning Modal -->
 {#if showMissingTextWarning}
-	<div class="modal-overlay" onclick={() => showMissingTextWarning = false}>
-		<div class="card-standard max-w-lg w-full mx-4" onclick={(e) => e.stopPropagation()}>
+	<div
+		class="modal-overlay"
+		role="dialog"
+		aria-modal="true"
+		tabindex="-1"
+		onclick={() => showMissingTextWarning = false}
+		onkeydown={(e) => { if (e.key === 'Escape') showMissingTextWarning = false; }}
+	>
+		<div
+			class="card-standard max-w-lg w-full mx-4"
+			role="presentation"
+			onclick={(e) => e.stopPropagation()}
+			onkeydown={(e) => e.stopPropagation()}
+		>
 			<h3 class="text-lg font-heading font-semibold text-contrast mb-2">Documents Missing Text</h3>
 			<p class="text-sm text-gray-600 mb-4">
 				{docsWithoutText.length} document{docsWithoutText.length === 1 ? '' : 's'} {docsWithoutText.length === 1 ? "doesn't" : "don't"} have extracted text and will be <strong>skipped</strong> during analysis.

@@ -300,18 +300,18 @@
 
 <!-- Clio Integration Modal -->
 {#if showClioModal}
-	<div 
-		class="modal-overlay p-4" 
-		role="button"
-		tabindex="0"
+	<div
+		class="modal-overlay p-4"
+		role="dialog"
+		aria-modal="true"
+		tabindex="-1"
 		onclick={() => showClioModal = false}
 		onkeydown={(e) => { if (e.key === 'Escape') showClioModal = false; }}
 		aria-label="Close modal"
 	>
-		<div 
-			class="card-standard max-w-md w-full" 
-			role="dialog"
-			aria-modal="true"
+		<div
+			class="card-standard max-w-md w-full"
+			role="presentation"
 			onclick={(e) => e.stopPropagation()}
 			onkeydown={(e) => e.stopPropagation()}
 		>

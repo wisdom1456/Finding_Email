@@ -350,8 +350,9 @@
 							</div>
 							<div class="space-y-4">
 								<div>
-									<label class="block text-[10px] font-bold text-gray-500 uppercase mb-1.5 tracking-wider">Question</label>
+									<label for="question-{index}" class="block text-[10px] font-bold text-gray-500 uppercase mb-1.5 tracking-wider">Question</label>
 									<input
+										id="question-{index}"
 										type="text"
 										bind:value={pair.question}
 										class="input-standard focus:ring-accent bg-white"
@@ -359,8 +360,9 @@
 									/>
 								</div>
 								<div>
-									<label class="block text-[10px] font-bold text-gray-500 uppercase mb-1.5 tracking-wider">Extracted Answer</label>
+									<label for="answer-{index}" class="block text-[10px] font-bold text-gray-500 uppercase mb-1.5 tracking-wider">Extracted Answer</label>
 									<textarea
+										id="answer-{index}"
 										bind:value={pair.answer}
 										rows="3"
 										class="input-standard focus:ring-accent bg-white min-h-[80px]"

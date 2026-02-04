@@ -371,11 +371,17 @@
 {#if showChangeMatterModal}
 	<div
 		class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50 flex items-center justify-center p-4"
+		role="dialog"
+		aria-modal="true"
+		tabindex="-1"
 		onclick={() => !changingMatter && (showChangeMatterModal = false)}
+		onkeydown={(e) => { if (e.key === 'Escape' && !changingMatter) showChangeMatterModal = false; }}
 	>
 		<div
 			class="relative bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] flex flex-col"
+			role="presentation"
 			onclick={(e) => e.stopPropagation()}
+			onkeydown={(e) => e.stopPropagation()}
 		>
 			<div class="flex items-start justify-between p-6 border-b border-gray-200">
 				<h3 class="text-lg font-medium text-gray-900">Change Clio Matter</h3>

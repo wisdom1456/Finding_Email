@@ -19,7 +19,6 @@
 
 	// Props
 	export let gapAnalysis: GapAnalysisResult;
-	export let caseId: string;
 	export let onGenerateRecommendationLetter: ((letterType: RecommendedLetterType) => void) | undefined = undefined;
 	export let generatingRecommendationLetter: boolean = false;
 
@@ -308,7 +307,15 @@
 						gap.severity === 'critical' ? 'border-l-4 border-l-red-500' :
 						gap.severity === 'high' ? 'border-l-4 border-l-orange-500' : ''
 					}"
+					role="button"
+					tabindex="0"
 					onclick={() => toggleGap(gap.gap_id)}
+					onkeydown={(e) => {
+						if (e.key === 'Enter' || e.key === ' ') {
+							e.preventDefault();
+							toggleGap(gap.gap_id);
+						}
+					}}
 				>
 					<div class="flex items-start justify-between gap-4">
 						<div class="flex-1">

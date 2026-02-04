@@ -1244,8 +1244,9 @@ async function generateLetterRequest(body: Record<string, any>) {
 						<div class="grid gap-6 md:grid-cols-2">
 							<div class="space-y-4">
 								<div>
-									<label class="block text-sm font-bold text-contrast mb-1.5">Opposing Party</label>
+									<label for="opposing-party" class="block text-sm font-bold text-contrast mb-1.5">Opposing Party</label>
 									<select
+										id="opposing-party"
 										bind:value={selectedParty}
 										class="input-standard focus:ring-accent"
 									>
@@ -1256,9 +1257,10 @@ async function generateLetterRequest(body: Record<string, any>) {
 									</select>
 								</div>
 								<div>
-									<label class="block text-sm font-bold text-contrast mb-1.5">Demand Amount ($)</label>
+									<label for="demand-amount" class="block text-sm font-bold text-contrast mb-1.5">Demand Amount ($)</label>
 									<div class="flex gap-2">
 										<input
+											id="demand-amount"
 											type="number"
 											class="input-standard focus:ring-accent"
 											min="0"
@@ -1299,8 +1301,9 @@ async function generateLetterRequest(body: Record<string, any>) {
 									{/if}
 								</div>
 								<div>
-									<label class="block text-sm font-bold text-contrast mb-1.5">Response Deadline</label>
+									<label for="response-deadline" class="block text-sm font-bold text-contrast mb-1.5">Response Deadline</label>
 									<select
+										id="response-deadline"
 										class="input-standard focus:ring-accent"
 										bind:value={demandDeadline}
 									>
@@ -1313,8 +1316,9 @@ async function generateLetterRequest(body: Record<string, any>) {
 
 							<div class="space-y-4">
 								<div>
-									<label class="block text-sm font-bold text-contrast mb-1.5">Specific Demands (one per line)</label>
+									<label for="specific-demands" class="block text-sm font-bold text-contrast mb-1.5">Specific Demands (one per line)</label>
 									<textarea
+										id="specific-demands"
 										class="input-standard focus:ring-accent min-h-[120px]"
 										rows="6"
 										bind:value={specificDemands}
@@ -1605,11 +1609,17 @@ async function generateLetterRequest(body: Record<string, any>) {
 {#if viewingDocument}
 	<div
 		class="modal-overlay"
+		role="dialog"
+		aria-modal="true"
+		tabindex="-1"
 		onclick={closeDocumentViewer}
+		onkeydown={(e) => { if (e.key === 'Escape') closeDocumentViewer(); }}
 	>
 		<div
 			class="relative bg-white rounded-lg shadow-2xl max-w-5xl w-full max-h-[90vh] flex flex-col"
+			role="presentation"
 			onclick={(e) => e.stopPropagation()}
+			onkeydown={(e) => e.stopPropagation()}
 		>
 			<!-- Header -->
 			<div class="flex items-start justify-between p-6 border-b border-gray-100">

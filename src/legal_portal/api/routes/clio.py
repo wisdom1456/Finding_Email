@@ -1123,6 +1123,9 @@ async def sync_clio_matter(
         # Filter by date client-side
         if cutoff_time:
             cutoff_dt = datetime.fromisoformat(cutoff_time.replace("Z", "+00:00"))
+            # Ensure cutoff_dt is timezone-aware
+            if cutoff_dt.tzinfo is None:
+                cutoff_dt = cutoff_dt.replace(tzinfo=timezone.utc)
 
             # Filter documents
             filtered_documents = []
@@ -1131,6 +1134,8 @@ async def sync_clio_matter(
                 if updated_at:
                     try:
                         doc_dt = datetime.fromisoformat(updated_at.replace("Z", "+00:00"))
+                        if doc_dt.tzinfo is None:
+                            doc_dt = doc_dt.replace(tzinfo=timezone.utc)
                         if doc_dt > cutoff_dt:
                             filtered_documents.append(d)
                     except (ValueError, AttributeError):
@@ -1138,10 +1143,15 @@ async def sync_clio_matter(
             documents = filtered_documents
 
             # Filter communications
-            communications = [
-                c for c in communications
-                if c.date and c.date > cutoff_dt
-            ]
+            filtered_comms = []
+            for c in communications:
+                if c.date:
+                    comm_dt = c.date
+                    if comm_dt.tzinfo is None:
+                        comm_dt = comm_dt.replace(tzinfo=timezone.utc)
+                    if comm_dt > cutoff_dt:
+                        filtered_comms.append(c)
+            communications = filtered_comms
 
             # Filter notes
             filtered_notes = []
@@ -1153,6 +1163,9 @@ async def sync_clio_matter(
                             note_dt = datetime.fromisoformat(updated_at.replace("Z", "+00:00"))
                         else:
                             note_dt = updated_at
+                        # Ensure timezone-aware
+                        if note_dt.tzinfo is None:
+                            note_dt = note_dt.replace(tzinfo=timezone.utc)
                         if note_dt > cutoff_dt:
                             filtered_notes.append(n)
                     except (ValueError, AttributeError):

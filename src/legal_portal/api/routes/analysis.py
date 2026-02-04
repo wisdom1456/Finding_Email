@@ -2526,6 +2526,9 @@ async def generate_letter(
     if DiagnosticLogger.get_enabled():
         diag_logger = DiagnosticLogger(session_id=letter_request.case_id)
 
+    # Initialize gap_analysis to None (only populated for FINDINGS letters)
+    gap_analysis = None
+
     if letter_request.letter_type == LetterType.FINDINGS:
         from legal_portal.core.data_models import DeepAnalysis, FactMatrix, GapAnalysisResult, LetterStructure
 
@@ -2535,7 +2538,6 @@ async def generate_letter(
         verified_statutes = msr.get("verified_statutes", [])
 
         # Load gap analysis for guardrails (if available)
-        gap_analysis = None
         gap_analysis_data = msr.get("gap_analysis")
         if gap_analysis_data:
             try:

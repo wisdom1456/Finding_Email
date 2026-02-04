@@ -1975,6 +1975,38 @@
 				<!-- Analysis Tab -->
 				{#if activeTab === 'analysis'}
 					<div class="page-spacing">
+					<!-- Outdated Analysis Banner -->
+					{#if caseData?.needs_reanalysis}
+						<div class="rounded-lg bg-amber-50 border border-amber-300 p-4 mb-6">
+							<div class="flex items-center justify-between">
+								<div class="flex items-center gap-3">
+									<span class="text-2xl">⚠️</span>
+									<div>
+										<p class="text-sm font-semibold text-amber-900">
+											Analysis outdated
+											{#if caseData.clio_last_synced_at}
+												- new items added on {new Date(caseData.clio_last_synced_at).toLocaleDateString()}
+											{:else}
+												- new items available
+											{/if}
+										</p>
+										<p class="text-xs text-amber-700 mt-1">
+											Re-run analysis to include the latest documents and information.
+										</p>
+									</div>
+								</div>
+								<AsyncButton
+									onclick={() => startStreamingAnalysis()}
+									loading={showStreamingPanel || analyzing}
+									variant="primary"
+									loadingText="Starting..."
+								>
+									Re-run Analysis
+								</AsyncButton>
+							</div>
+						</div>
+					{/if}
+
 						<!-- Streaming Analysis Panel -->
 						{#if showStreamingPanel}
 							<div class="mb-6">

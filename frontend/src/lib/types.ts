@@ -48,6 +48,8 @@ export interface CaseData {
 	updated_at: string;
 	clio_matter_id: string | null;
 	clio_matter_data: ClioMatterData | null;
+	clio_last_synced_at: string | null;
+	needs_reanalysis: boolean;
 }
 
 /**

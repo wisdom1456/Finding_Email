@@ -10,7 +10,7 @@ import asyncio
 import json
 import logging
 import time
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 
 from legal_portal.core.data_models import (
     CaseRecommendation,
@@ -39,6 +39,7 @@ class GapAnalysisService:
 
         Args:
             openai_client: OpenAI client for GPT model calls
+
         """
         self.client = openai_client
 
@@ -63,6 +64,7 @@ class GapAnalysisService:
 
         Returns:
             GapAnalysisResult with identified gaps and completeness assessment
+
         """
         logger.info("[GAP_SERVICE] Starting gap analysis (Stage 3.5)")
         logger.info(f"[GAP_SERVICE] Inputs - fact_matrix parties: {len(fact_matrix.parties)}, issues: {len(issue_map.primary_issues)}, docs: {len(document_summaries)}")
@@ -178,6 +180,7 @@ class GapAnalysisService:
 
         Returns:
             Formatted prompt for GPT-5.2
+
         """
         # Prepare document list
         doc_list = "\n".join([f"- {doc.document_name}" for doc in document_summaries])
@@ -334,6 +337,7 @@ Begin your analysis now.
 
         Returns:
             Basic GapAnalysisResult indicating analysis could not be performed
+
         """
         fallback_gaps: Dict[str, List[GapItem]] = {
             category.value: [] for category in GapCategory
@@ -395,6 +399,7 @@ Begin your analysis now.
 
         Returns:
             CaseRecommendation with category, reasoning, and suggested next steps
+
         """
         score = gap_analysis.overall_completeness_score
         critical = gap_analysis.critical_count

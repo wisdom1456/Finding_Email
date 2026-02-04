@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import os
-from typing import Dict, List, Optional, AsyncGenerator
+from typing import AsyncGenerator, Dict, List, Optional
 
 import markdown2
 
@@ -115,7 +115,7 @@ class DemandLetterService:
 
         logger.info(f"Streaming demand letter for {target_party_name} in {jurisdiction}")
         model = self.client.get_preferred_model("letter_generation", "gpt-5.2")
-        
+
         async for token in self.client.create_response_stream(
             model=model,
             instructions=(

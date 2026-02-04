@@ -52,8 +52,7 @@ class LetterValidationService:
         gap_analysis: Optional[GapAnalysisResult],
         verified_statutes: List[Dict],
     ) -> LetterValidationResult:
-        """
-        Validate letter content against source data.
+        """Validate letter content against source data.
 
         Checks:
         1. Amounts mentioned match financial_data
@@ -69,6 +68,7 @@ class LetterValidationService:
 
         Returns:
             LetterValidationResult with warnings/errors
+
         """
         warnings: List[LetterValidationWarning] = []
         amounts_checked = 0

@@ -1,7 +1,8 @@
-import os
 import json
+import os
 import time
 from typing import Any, Dict
+
 from legal_portal.utils.logging_config import get_module_logger
 
 logger = get_module_logger(__name__)
@@ -27,7 +28,7 @@ def _get_writable_base_dir() -> str:
 
 class DiagnosticLogger:
     """Utility to capture intermediate pipeline outputs for debugging and quality analysis."""
-    
+
     def __init__(self, session_id: str = None):
         self.session_id = session_id or f"diag_{int(time.time())}"
         self._enabled = True  # Track if file logging is working
@@ -36,7 +37,7 @@ class DiagnosticLogger:
         _dbg_log("H2", "Checking DIAGNOSTIC_MODE env", {"DIAGNOSTIC_MODE": os.getenv("DIAGNOSTIC_MODE"), "enabled": self.get_enabled()})
         _dbg_log("H3", "Checking serverless env vars", {"VERCEL": os.getenv("VERCEL"), "AWS_LAMBDA_FUNCTION_NAME": os.getenv("AWS_LAMBDA_FUNCTION_NAME"), "is_serverless": _is_serverless_environment()})
         # #endregion agent log
-        
+
         base_dir = _get_writable_base_dir()
         self.base_path = os.path.join(base_dir, "sessions", self.session_id)
         # #region agent log
@@ -62,10 +63,10 @@ class DiagnosticLogger:
             # File logging disabled (e.g., in serverless environment with read-only filesystem)
             logger.debug(f"DIAGNOSTIC LOGGER: Skipping stage '{stage_name}' (file logging disabled)")
             return
-            
+
         file_ext = "json" if isinstance(data, (dict, list)) else "txt"
         file_path = os.path.join(self.base_path, f"{stage_name}.{file_ext}")
-        
+
         try:
             if file_ext == "json":
                 with open(file_path, "w", encoding="utf-8") as f:
@@ -73,7 +74,7 @@ class DiagnosticLogger:
             else:
                 with open(file_path, "w", encoding="utf-8") as f:
                     f.write(str(data))
-            
+
             logger.info(f"DIAGNOSTIC LOGGER: Saved stage '{stage_name}' to {file_path}")
         except Exception as e:
             logger.error(f"DIAGNOSTIC LOGGER: Failed to save stage '{stage_name}': {e}")

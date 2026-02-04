@@ -569,7 +569,7 @@ async def import_clio_documents_helper(
         # Download and process document files
         logger.info("Processing Clio documents", extra={"count": len(documents)})
         total_docs = len(documents)
-        
+
         # Build duplicate detection set from existing documents in this case
         # This handles re-imports and duplicate files from Clio
         existing_docs = supabase.table("documents").select("file_name, file_size, metadata").eq("case_id", case_id).execute()
@@ -581,11 +581,11 @@ async def import_clio_documents_helper(
             if existing.get("metadata", {}).get("original_filename"):
                 key2 = (existing["metadata"]["original_filename"], existing.get("file_size", 0))
                 existing_file_keys.add(key2)
-        
+
         # Track duplicates seen in THIS import batch
         import_batch_keys = set()
         duplicates_count = 0
-        
+
         for idx, doc in enumerate(documents):
             try:
                 doc_name = doc.get("name", "Untitled Document")
@@ -663,7 +663,7 @@ async def import_clio_documents_helper(
                 file_key = (doc_name, original_size)
                 is_duplicate = False
                 duplicate_reason = None
-                
+
                 if file_key in existing_file_keys:
                     is_duplicate = True
                     duplicate_reason = "exists_in_case"
@@ -672,10 +672,10 @@ async def import_clio_documents_helper(
                     is_duplicate = True
                     duplicate_reason = "duplicate_in_import"
                     logger.info(f"Duplicate detected (in import batch): {doc_name} ({original_size} bytes)")
-                
+
                 # Track this file in the import batch
                 import_batch_keys.add(file_key)
-                
+
                 if is_duplicate:
                     duplicates_count += 1
 
@@ -727,7 +727,7 @@ async def import_clio_documents_helper(
                             "is_intake_candidate": is_intake_candidate,
                         }
                     )
-                    
+
                     # Add duplicate info to metadata if detected
                     if is_duplicate:
                         doc_record["metadata"]["is_duplicate"] = True

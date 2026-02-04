@@ -11,9 +11,9 @@ from pydantic import BaseModel
 from legal_portal.api.dependencies import get_current_user, get_supabase_client, get_user_supabase_client
 from legal_portal.core.data_models import DocumentStatus, DocumentType
 from legal_portal.core.document_processor import DocumentProcessor, ValidationError
-from legal_portal.utils.security import sanitize_text_for_db
-from legal_portal.utils.google_vision_client import GoogleVisionClient
 from legal_portal.services.file_processors.eml_processor import process_eml
+from legal_portal.utils.google_vision_client import GoogleVisionClient
+from legal_portal.utils.security import sanitize_text_for_db
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -230,17 +230,18 @@ async def upload_document(
                         google_client = GoogleVisionClient.get_instance()
                         if google_client.is_available:
                             try:
-                                from starlette.concurrency import run_in_threadpool
                                 import asyncio
-                                
+
+                                from starlette.concurrency import run_in_threadpool
+
                                 def do_google_ocr():
                                     return google_client.extract_text_from_image(file_content)
-                                
+
                                 vision_text = await asyncio.wait_for(
                                     run_in_threadpool(do_google_ocr),
                                     timeout=30.0,
                                 )
-                                
+
                                 if vision_text and vision_text.strip():
                                     extracted_text = vision_text
                                     extraction_method = "Google Cloud Vision"
@@ -257,21 +258,23 @@ async def upload_document(
                     except Exception:
                         # Fallback to GPT-4o Vision
                         try:
-                            import base64
-                            from starlette.concurrency import run_in_threadpool
                             import asyncio
+                            import base64
+
+                            from starlette.concurrency import run_in_threadpool
+
                             from legal_portal.utils.openai_client import OpenAIClient
-                            
+
                             logger.info(f"Using GPT-4o Vision for {file_name}")
                             openai_client = OpenAIClient()
                             client = openai_client.client
-                            
+
                             # Determine MIME type
                             if file_type in ["image/jpeg", "image/jpg"] or file_name.lower().endswith((".jpg", ".jpeg")):
                                 mime_type = "image/jpeg"
                             else:
                                 mime_type = "image/png"
-                            
+
                             base64_image = base64.b64encode(file_content).decode("utf-8")
                             prompt = (
                                 f"Extract ALL text from this legal document image. "
@@ -281,7 +284,7 @@ async def upload_document(
                                 "If there are tables, preserve the row/column relationship. "
                                 "Provide the text verbatim including all numbers, dates, and names. Do not summarize."
                             )
-                            
+
                             def gpt4o_ocr():
                                 return client.chat.completions.create(
                                     model="gpt-4o",
@@ -301,12 +304,12 @@ async def upload_document(
                                     max_tokens=4000,
                                     temperature=0.0,
                                 )
-                            
+
                             response = await asyncio.wait_for(
                                 run_in_threadpool(gpt4o_ocr),
                                 timeout=60.0,
                             )
-                            
+
                             extracted_text = response.choices[0].message.content
                             extraction_method = "GPT-4o Vision"
                             extraction_quality = "high"
@@ -321,9 +324,10 @@ async def upload_document(
                 elif file_type in ["message/rfc822", "eml"] or file_name.lower().endswith(".eml"):
                     # Email file (.eml)
                     try:
-                        import tempfile
-                        from starlette.concurrency import run_in_threadpool
                         import asyncio
+                        import tempfile
+
+                        from starlette.concurrency import run_in_threadpool
 
                         # Write to temp file for eml processing
                         with tempfile.NamedTemporaryFile(suffix=".eml", delete=False) as tmp:
@@ -700,12 +704,12 @@ async def bulk_extract_documents(
 ):
     """Extract text from all documents in a case that don't have text yet."""
     import asyncio
-    
+
     # Timeout per document to prevent Vercel 300s timeout
     DOC_TIMEOUT = 45  # seconds per document
     # Skip PDFs larger than this (likely to timeout on OCR)
     MAX_PDF_SIZE_FOR_BULK = 10 * 1024 * 1024  # 10MB
-    
+
     try:
         logger.info(f"Bulk extraction requested for case {request.case_id} by user {user['id']}")
 
@@ -732,7 +736,7 @@ async def bulk_extract_documents(
             file_name = doc.get("file_name", "unknown")
             file_type = doc.get("file_type", "")
             file_size = doc.get("file_size", 0) or 0
-            
+
             # Skip large PDFs in bulk mode - they need individual processing
             is_pdf = file_type in ["application/pdf", "pdf"] or file_name.lower().endswith(".pdf")
             if is_pdf and file_size > MAX_PDF_SIZE_FOR_BULK:
@@ -741,7 +745,7 @@ async def bulk_extract_documents(
                 logger.warning(skip_msg)
                 errors.append(skip_msg)
                 continue
-            
+
             try:
                 # Call trigger_extraction with timeout
                 result = await asyncio.wait_for(
@@ -753,7 +757,7 @@ async def bulk_extract_documents(
                     ),
                     timeout=DOC_TIMEOUT,
                 )
-                
+
                 if result.get("content_length", 0) > 0:
                     extracted_count += 1
                     logger.info(f"Extracted {file_name}: {result['content_length']} chars")
@@ -870,6 +874,7 @@ async def verify_document(
 
 class ToggleExclusionRequest(BaseModel):
     """Request model for toggling document exclusion."""
+
     excluded: bool
 
 
@@ -1054,10 +1059,10 @@ async def trigger_extraction(
             try:
                 import docx
                 document = docx.Document(io.BytesIO(file_bytes))
-                
+
                 # Extract text from paragraphs
                 paragraphs = [para.text for para in document.paragraphs if para.text.strip()]
-                
+
                 # Also extract text from tables
                 table_text = []
                 for table in document.tables:
@@ -1065,15 +1070,15 @@ async def trigger_extraction(
                         row_text = [cell.text.strip() for cell in row.cells if cell.text.strip()]
                         if row_text:
                             table_text.append(" | ".join(row_text))
-                
+
                 # Combine paragraphs and table content
                 all_text = paragraphs + table_text
                 extracted_text = "\n".join(all_text)
-                
+
                 extraction_method = "docx_direct"
                 extraction_quality = "high" if len(extracted_text) > 50 else "medium"
                 logger.info(f"DOCX extraction: {len(paragraphs)} paragraphs, {len(table_text)} table rows")
-                
+
             except ImportError:
                 extraction_error = "python-docx library not available for DOCX extraction"
                 extraction_method = "none"
@@ -1090,17 +1095,18 @@ async def trigger_extraction(
                 google_client = GoogleVisionClient.get_instance()
                 if google_client.is_available:
                     try:
-                        from starlette.concurrency import run_in_threadpool
                         import asyncio
-                        
+
+                        from starlette.concurrency import run_in_threadpool
+
                         def do_google_ocr():
                             return google_client.extract_text_from_image(file_bytes)
-                        
+
                         vision_text = await asyncio.wait_for(
                             run_in_threadpool(do_google_ocr),
                             timeout=30.0,
                         )
-                        
+
                         if vision_text and vision_text.strip():
                             extracted_text = vision_text
                             extraction_method = "Google Cloud Vision"
@@ -1117,21 +1123,23 @@ async def trigger_extraction(
             except Exception:
                 # Fallback to GPT-4o Vision
                 try:
-                    import base64
-                    from starlette.concurrency import run_in_threadpool
                     import asyncio
+                    import base64
+
+                    from starlette.concurrency import run_in_threadpool
+
                     from legal_portal.utils.openai_client import OpenAIClient
-                    
+
                     logger.info(f"Using GPT-4o Vision for {file_name}")
                     openai_client = OpenAIClient()
                     client = openai_client.client
-                    
+
                     # Determine MIME type
                     if file_type in ["image/jpeg", "image/jpg"] or file_name.lower().endswith((".jpg", ".jpeg")):
                         mime_type = "image/jpeg"
                     else:
                         mime_type = "image/png"
-                    
+
                     base64_image = base64.b64encode(file_bytes).decode("utf-8")
                     prompt = (
                         f"Extract ALL text from this legal document image. "
@@ -1141,7 +1149,7 @@ async def trigger_extraction(
                         "If there are tables, preserve the row/column relationship. "
                         "Provide the text verbatim including all numbers, dates, and names. Do not summarize."
                     )
-                    
+
                     def gpt4o_ocr():
                         return client.chat.completions.create(
                             model="gpt-4o",
@@ -1161,12 +1169,12 @@ async def trigger_extraction(
                             max_tokens=4000,
                             temperature=0.0,
                         )
-                    
+
                     response = await asyncio.wait_for(
                         run_in_threadpool(gpt4o_ocr),
                         timeout=60.0,
                     )
-                    
+
                     extracted_text = response.choices[0].message.content
                     extraction_method = "GPT-4o Vision"
                     extraction_quality = "high"

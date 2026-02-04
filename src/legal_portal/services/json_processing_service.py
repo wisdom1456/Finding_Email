@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import os
 import re
-from typing import List, Optional, Tuple, AsyncGenerator, Dict
+from typing import AsyncGenerator, Dict, List, Optional, Tuple
 
 import markdown2
 from openai import (
@@ -16,9 +16,9 @@ from openai import (
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_fixed
 
 from legal_portal.core.data_models import ProcessingError
+from legal_portal.utils.diagnostic_logger import DiagnosticLogger
 from legal_portal.utils.logging_config import get_module_logger
 from legal_portal.utils.openai_client import OpenAIClient
-from legal_portal.utils.diagnostic_logger import DiagnosticLogger
 
 logger = get_module_logger(__name__)
 
@@ -183,7 +183,7 @@ class JsonProcessingService:
 
             logger.info(f"Making OpenAI request with master prompt for {jurisdiction} using gpt-5.2.")
             markdown_response = self._make_openai_request_responses_api(
-                formatted_prompt, 
+                formatted_prompt,
                 model="gpt-5.2",
                 reasoning_effort="low",
                 verbosity="high"
@@ -616,7 +616,7 @@ class JsonProcessingService:
         prompt = f"{prompt}\n\n{structure_instruction}"
 
         logger.info(f"Streaming adaptive findings email for {jurisdiction}")
-        
+
         async for token in self.client.create_response_stream(
             model="gpt-5.2",
             instructions=(

@@ -474,17 +474,18 @@ def sanitize_text_for_db(text: Optional[str]) -> Optional[str]:
         
     Returns:
         Sanitized text safe for PostgreSQL, or None if input was None
+
     """
     if text is None:
         return None
-    
+
     # Remove NULL characters (\\u0000) - PostgreSQL cannot store these
     sanitized = text.replace('\x00', '')
-    
+
     # Optionally remove other problematic control characters (except newline, tab, carriage return)
     # This regex removes control chars U+0001-U+0008, U+000B-U+000C, U+000E-U+001F
     sanitized = re.sub(r'[\x01-\x08\x0b\x0c\x0e-\x1f]', '', sanitized)
-    
+
     return sanitized
 
 

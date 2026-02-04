@@ -6,11 +6,11 @@ import json
 import os
 import re
 import time
-from typing import Any, Dict, List, Optional, AsyncGenerator
+from typing import Any, AsyncGenerator, Dict, List, Optional
 
 import httpx
 import openai
-from openai import OpenAI, AsyncOpenAI
+from openai import AsyncOpenAI, OpenAI
 
 from legal_portal.utils.logging_config import get_module_logger
 
@@ -522,7 +522,7 @@ class OpenAIClient:
         try:
             # Detect model type for parameter handling
             is_gpt4 = model.startswith("gpt-4")
-            
+
             logger.info(
                 f"Starting async chat stream | model={model} is_gpt4={is_gpt4} "
                 f"reasoning_effort={reasoning_effort if not is_gpt4 else 'N/A'} "
@@ -535,7 +535,7 @@ class OpenAIClient:
                 "messages": messages,
                 "stream": True,
             }
-            
+
             if is_gpt4:
                 # GPT-4.x: Use max_tokens, temperature, no reasoning_effort
                 if max_tokens:
@@ -579,7 +579,7 @@ class OpenAIClient:
         """
         last_error = None
         is_gpt4 = self._is_gpt4_model(model)
-        
+
         for attempt in range(max_retries + 1):
             start_time = time.time()
             try:
@@ -613,7 +613,7 @@ class OpenAIClient:
                         request_params["reasoning_effort"] = reasoning_effort
                     if max_output_tokens:
                         request_params["max_completion_tokens"] = max_output_tokens
-                    
+
                     # Other GPT-5 specific parameters go in extra_body
                     extra_body = {}
                     if verbosity:
@@ -689,7 +689,7 @@ class OpenAIClient:
                     time_module.sleep(1)
                     continue
                 raise
-        
+
         # Should not reach here, but just in case
         if last_error:
             raise last_error
@@ -721,16 +721,16 @@ class OpenAIClient:
 
             # GPT-5.2 uses extra_body for new parameters
             extra_body = {}
-            
+
             if reasoning_effort:
                 extra_body["reasoning_effort"] = reasoning_effort
-            
+
             if verbosity:
                 extra_body["verbosity"] = verbosity
-            
+
             if max_output_tokens:
                 extra_body["max_completion_tokens"] = max_output_tokens
-            
+
             if extra_body:
                 request_params["extra_body"] = extra_body
 
@@ -779,13 +779,13 @@ class OpenAIClient:
 
             # GPT-5.2 uses extra_body for new parameters
             extra_body = {}
-            
+
             if reasoning_effort:
                 extra_body["reasoning_effort"] = reasoning_effort
-            
+
             if verbosity:
                 extra_body["verbosity"] = verbosity
-            
+
             if extra_body:
                 request_params["extra_body"] = extra_body
 

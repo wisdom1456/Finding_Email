@@ -79,6 +79,7 @@ class ClioImportResponse(BaseModel):
 
 class ClioSyncItemDetail(BaseModel):
     """Details about a single synced item."""
+
     name: str
     type: Literal["document", "communication", "note"]
     date: Optional[datetime] = None
@@ -87,6 +88,7 @@ class ClioSyncItemDetail(BaseModel):
 
 class ClioSyncSummary(BaseModel):
     """Summary of sync operation."""
+
     new_items: int
     updated_items: int
     total_processed: int
@@ -94,12 +96,14 @@ class ClioSyncSummary(BaseModel):
 
 class ClioSyncDetails(BaseModel):
     """Detailed breakdown of synced items."""
+
     new: List[ClioSyncItemDetail]
     updated: List[ClioSyncItemDetail]
 
 
 class ClioSyncResponse(BaseModel):
     """Response from Clio sync operation."""
+
     success: bool
     case_id: str
     synced_at: datetime
@@ -430,8 +434,7 @@ def categorize_clio_sync_items(
     notes: List[dict],
     existing_docs: List[dict],
 ) -> Tuple[List[dict], List[dict]]:
-    """
-    Categorize Clio items as new or updated based on existing documents.
+    """Categorize Clio items as new or updated based on existing documents.
 
     Args:
         documents: List of documents from Clio API
@@ -442,6 +445,7 @@ def categorize_clio_sync_items(
     Returns:
         Tuple of (new_items, updated_items) where each is a list of dicts
         with keys: id, name, type, date
+
     """
     # Extract existing Clio IDs from metadata
     existing_clio_ids = set()
@@ -568,7 +572,7 @@ async def import_clio_data(
         blacklist = []
         if profile_response.data and profile_response.data[0].get("ai_preferences"):
             blacklist = profile_response.data[0]["ai_preferences"].get("blacklisted_documents", [])
-        
+
         logger.info(f"Blacklist loaded for user {user['id']}: {blacklist} ({len(blacklist)} items)")
 
         # Verify case belongs to user
@@ -620,7 +624,7 @@ async def import_clio_data(
                 if comm.subject and blacklist:
                     normalized_subject = ' '.join(comm.subject.lower().split())
                     is_blacklisted = any(
-                        normalized_subject.startswith(' '.join(bl.lower().split())) 
+                        normalized_subject.startswith(' '.join(bl.lower().split()))
                         for bl in blacklist
                     )
                     if is_blacklisted:
@@ -679,12 +683,12 @@ async def import_clio_data(
         for idx, note in enumerate(notes, 1):
             try:
                 note_subject = note.get("subject", "No Subject")
-                
+
                 # Check blacklist (prefix matching, normalized whitespace)
                 if blacklist:
                     normalized_note = ' '.join(note_subject.lower().split())
                     is_blacklisted = any(
-                        normalized_note.startswith(' '.join(bl.lower().split())) 
+                        normalized_note.startswith(' '.join(bl.lower().split()))
                         for bl in blacklist
                     )
                     if is_blacklisted:
@@ -751,7 +755,7 @@ async def import_clio_data(
                     # Normalize whitespace: replace multiple spaces with single space, trim
                     normalized_doc_name = ' '.join(doc_name.lower().split())
                     is_blacklisted = any(
-                        normalized_doc_name.startswith(' '.join(bl.lower().split())) 
+                        normalized_doc_name.startswith(' '.join(bl.lower().split()))
                         for bl in blacklist
                     )
                     if is_blacklisted:
@@ -1063,8 +1067,7 @@ async def sync_clio_matter(
     clio_client: ClioClient = Depends(get_clio_client),
     supabase: Client = Depends(get_supabase_client),
 ) -> ClioSyncResponse:
-    """
-    Sync new and updated documents from Clio for an existing case.
+    """Sync new and updated documents from Clio for an existing case.
 
     Only fetches items created/modified since last sync (or case creation).
     Replaces updated documents and imports new ones.
@@ -1080,6 +1083,7 @@ async def sync_clio_matter(
 
     Raises:
         HTTPException: If case not found, not linked to Clio, or sync fails
+
     """
     from starlette.concurrency import run_in_threadpool
 

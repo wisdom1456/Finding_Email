@@ -62,7 +62,7 @@ class ProgressManager:
         _DEBUG_LOG_PATH = "/tmp/cursor_debug.log" if __import__('os').getenv("VERCEL") else "/Users/BRFlorida/Projects/Work/Finding_Emails/.cursor/debug.log"
         def _dbg_log(hyp: str, msg: str, data: dict = None):
             try:
-                import json as _j, time as _t; open(_DEBUG_LOG_PATH, "a").write(_j.dumps({"hypothesisId": hyp, "location": "progress_manager.py:publish_progress", "message": msg, "data": data or {}, "timestamp": _t.time(), "sessionId": "debug-session"}) + "\n")
+                import json as _j; import time as _t; open(_DEBUG_LOG_PATH, "a").write(_j.dumps({"hypothesisId": hyp, "location": "progress_manager.py:publish_progress", "message": msg, "data": data or {}, "timestamp": _t.time(), "sessionId": "debug-session"}) + "\n")
             except: pass
         _dbg_log("H1,H4", "publish_progress called", {"channel_id": channel_id, "phase": phase, "percent": percent, "channel_exists": channel_id in self._channels})
         # #endregion agent log
@@ -144,7 +144,7 @@ class ProgressManager:
         _DEBUG_LOG_PATH = "/tmp/cursor_debug.log" if __import__('os').getenv("VERCEL") else "/Users/BRFlorida/Projects/Work/Finding_Emails/.cursor/debug.log"
         def _dbg_log(hyp: str, msg: str, data: dict = None):
             try:
-                import json as _j, time as _t; open(_DEBUG_LOG_PATH, "a").write(_j.dumps({"hypothesisId": hyp, "location": "progress_manager.py:subscribe", "message": msg, "data": data or {}, "timestamp": _t.time(), "sessionId": "debug-session"}) + "\n")
+                import json as _j; import time as _t; open(_DEBUG_LOG_PATH, "a").write(_j.dumps({"hypothesisId": hyp, "location": "progress_manager.py:subscribe", "message": msg, "data": data or {}, "timestamp": _t.time(), "sessionId": "debug-session"}) + "\n")
             except: pass
         _dbg_log("H1,H3", "subscribe called", {"channel_id": channel_id, "channel_exists": channel_id in self._channels, "all_channels": list(self._channels.keys())})
         # #endregion agent log

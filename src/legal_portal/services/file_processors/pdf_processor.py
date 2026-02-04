@@ -494,9 +494,9 @@ async def _extract_text_via_google_ocr(
                         # Google Vision has 40MB limit
                         rect = page.rect
                         width, height = rect.width, rect.height
-                        
+
                         MAX_DIMENSION = 4000  # Cap at 4000px to prevent huge images
-                        
+
                         # Adjust zoom based on page size
                         if width > 2000 or height > 2000:
                             zoom = 1.0  # Very large pages (plats, surveys)
@@ -505,7 +505,7 @@ async def _extract_text_via_google_ocr(
                             zoom = 1.5  # Large pages
                         else:
                             zoom = 2.0  # Normal pages
-                        
+
                         # Further cap if still too large
                         estimated_dim = max(width * zoom, height * zoom)
                         if estimated_dim > MAX_DIMENSION:
@@ -713,9 +713,9 @@ async def _extract_text_via_google_ocr_bytes(
                         # Google Vision has 40MB limit
                         rect = page.rect
                         width, height = rect.width, rect.height
-                        
+
                         MAX_DIMENSION = 4000  # Cap at 4000px to prevent huge images
-                        
+
                         # Adjust zoom based on page size
                         if width > 2000 or height > 2000:
                             zoom = 1.0  # Very large pages (plats, surveys)
@@ -724,7 +724,7 @@ async def _extract_text_via_google_ocr_bytes(
                             zoom = 1.5  # Large pages
                         else:
                             zoom = 2.0  # Normal pages
-                        
+
                         # Further cap if still too large
                         estimated_dim = max(width * zoom, height * zoom)
                         if estimated_dim > MAX_DIMENSION:
@@ -876,11 +876,11 @@ async def _extract_text_via_vision(
                 # Render page to image in thread pool
                 def render_page():
                     page = doc[page_index]
-                    
+
                     # Optimization: check page size and cap zoom for large pages
                     rect = page.rect
                     width, height = rect.width, rect.height
-                    
+
                     zoom = 2.0  # Default zoom for good text legibility
                     if width > 3000 or height > 3000:
                         zoom = 1.0
@@ -888,13 +888,13 @@ async def _extract_text_via_vision(
                     elif width > 1500 or height > 1500:
                         zoom = 1.5
                         logger.info(f"GPT-4o Vision (file): Large page ({width:.0f}x{height:.0f}), using 1.5x zoom")
-                    
+
                     pix = page.get_pixmap(matrix=fitz.Matrix(zoom, zoom))
                     return pix.tobytes("png")
 
                 img_data = await run_in_threadpool(render_page)
                 logger.info(f"GPT-4o Vision (file): Page {page_index + 1} image size: {len(img_data)} bytes")
-                
+
                 base64_image = base64.b64encode(img_data).decode("utf-8")
 
                 prompt = (
@@ -1075,12 +1075,12 @@ async def _extract_text_via_vision_bytes(
                 # Render page to image in thread pool
                 def render_page():
                     page = doc[page_index]
-                    
+
                     # Optimization: check page size and cap zoom for large pages
                     # to avoid memory issues and excessively large images
                     rect = page.rect
                     width, height = rect.width, rect.height
-                    
+
                     zoom = 2.0  # Default zoom for good text legibility
                     if width > 3000 or height > 3000:
                         zoom = 1.0
@@ -1088,19 +1088,19 @@ async def _extract_text_via_vision_bytes(
                     elif width > 1500 or height > 1500:
                         zoom = 1.5
                         logger.info(f"GPT-4o Vision (bytes): Large page ({width:.0f}x{height:.0f}), using 1.5x zoom")
-                    
+
                     pix = page.get_pixmap(matrix=fitz.Matrix(zoom, zoom))
                     img_bytes = pix.tobytes("png")
                     logger.debug(f"GPT-4o Vision (bytes): Rendered page {page_index + 1}: {len(img_bytes)} bytes, {pix.width}x{pix.height}px")
                     return img_bytes
 
                 img_data = await run_in_threadpool(render_page)
-                
+
                 # Log image size for debugging Vision API issues
                 logger.info(f"GPT-4o Vision (bytes): Page {page_index + 1} image size: {len(img_data)} bytes")
-                
+
                 base64_image = base64.b64encode(img_data).decode("utf-8")
-                
+
                 # Log base64 size (should be ~1.37x raw size)
                 logger.debug(f"GPT-4o Vision (bytes): Page {page_index + 1} base64 size: {len(base64_image)} chars")
 

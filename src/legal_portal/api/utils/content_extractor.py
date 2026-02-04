@@ -75,14 +75,14 @@ class DocumentProcessor:
 
         """
         global _last_clio_request_time
-        
+
         headers = {
             "Authorization": f"Bearer {access_token}",
         }
-        
+
         # Check if this is a Clio API request
         is_clio_request = "app.clio.com" in url
-        
+
         for attempt in range(max_retries):
             try:
                 # Rate limiting for Clio API
@@ -93,9 +93,9 @@ class DocumentProcessor:
                         logger.debug(f"Rate limiting: sleeping {sleep_time:.2f}s before Clio request")
                         time.sleep(sleep_time)
                     _last_clio_request_time = time.time()
-                
+
                 response = requests.get(url, headers=headers, timeout=60)
-                
+
                 # Handle 429 Too Many Requests with exponential backoff
                 if response.status_code == 429:
                     if attempt < max_retries - 1:
@@ -116,12 +116,12 @@ class DocumentProcessor:
                         continue
                     else:
                         raise Exception(f"Rate limit exceeded after {max_retries} attempts")
-                
+
                 response.raise_for_status()
-                
+
                 content_type = response.headers.get("content-type", "application/octet-stream")
                 return response.content, content_type
-                
+
             except requests.exceptions.RequestException as e:
                 if attempt < max_retries - 1:
                     # For other errors, use shorter backoff
@@ -134,7 +134,7 @@ class DocumentProcessor:
                     continue
                 else:
                     raise Exception(f"Download failed after {max_retries} attempts: {e}") from e
-        
+
         raise Exception(f"Download failed after {max_retries} attempts")
 
     @staticmethod
@@ -250,7 +250,7 @@ class DocumentProcessor:
             extension = filename.split(".")[-1].lower()
 
         extracted = None
-        
+
         # PDF
         if content_type == "application/pdf" or extension == "pdf":
             if not PYPDF_AVAILABLE and not FITZ_AVAILABLE:
@@ -281,7 +281,7 @@ class DocumentProcessor:
             extracted = extracted.replace('\x00', '')
             # Remove other problematic control characters (except newline, tab, carriage return)
             extracted = re.sub(r'[\x01-\x08\x0b\x0c\x0e-\x1f]', '', extracted)
-        
+
         return extracted
 
     @classmethod

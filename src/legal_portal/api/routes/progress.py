@@ -28,7 +28,7 @@ async def poll_database_for_progress(
     start_time = asyncio.get_event_loop().time()
     last_progress = None
     last_percent = -1
-    
+
     while True:
         elapsed = asyncio.get_event_loop().time() - start_time
         if elapsed > max_duration:
@@ -40,7 +40,7 @@ async def poll_database_for_progress(
                 "timestamp": datetime.utcnow().isoformat(),
             })
             break
-        
+
         try:
             # Query both status and progress columns
             response = (
@@ -50,11 +50,11 @@ async def poll_database_for_progress(
                 .single()
                 .execute()
             )
-            
+
             if response.data:
                 db_status = response.data.get("status")
                 progress_data = response.data.get("progress") or {}
-                
+
                 # Build current progress state
                 current_progress = {
                     "type": progress_data.get("status", db_status) or "progress",
@@ -64,15 +64,15 @@ async def poll_database_for_progress(
                     "timestamp": progress_data.get("timestamp", datetime.utcnow().isoformat()),
                     **{k: v for k, v in progress_data.items() if k not in ["type", "message", "phase", "percent", "timestamp", "status"]}
                 }
-                
+
                 current_percent = current_progress.get("percent", 0)
-                
+
                 # Only yield if progress has changed
                 if current_progress != last_progress:
                     last_progress = current_progress
                     last_percent = current_percent
                     yield json.dumps(current_progress)
-                
+
                 # Check for terminal states
                 if db_status in ["completed", "error", "cancelled", "failed"]:
                     # Send final completion event
@@ -87,11 +87,11 @@ async def poll_database_for_progress(
                         final_event["error"] = progress_data.get("error", "Unknown error")
                     yield json.dumps(final_event)
                     break
-                    
+
         except Exception as e:
             logger.warning(f"Error polling progress for {analysis_id}: {e}")
             # Don't break on transient errors, just skip this poll
-        
+
         await asyncio.sleep(poll_interval)
 
 
@@ -111,7 +111,7 @@ async def stream_analysis_progress(
     _DEBUG_LOG_PATH = "/tmp/cursor_debug.log" if __import__('os').getenv("VERCEL") else "/Users/BRFlorida/Projects/Work/Finding_Emails/.cursor/debug.log"
     def _dbg_log(hyp: str, msg: str, data: dict = None):
         try:
-            import json as _j, time as _t; open(_DEBUG_LOG_PATH, "a").write(_j.dumps({"hypothesisId": hyp, "location": "progress.py:stream_analysis_progress", "message": msg, "data": data or {}, "timestamp": _t.time(), "sessionId": "debug-session"}) + "\n")
+            import json as _j; import time as _t; open(_DEBUG_LOG_PATH, "a").write(_j.dumps({"hypothesisId": hyp, "location": "progress.py:stream_analysis_progress", "message": msg, "data": data or {}, "timestamp": _t.time(), "sessionId": "debug-session"}) + "\n")
         except: pass
     _dbg_log("H1", "SSE endpoint called (DB polling mode)", {"analysis_id": analysis_id, "has_token": token is not None})
     # #endregion agent log
@@ -148,7 +148,7 @@ async def get_analysis_status(
     _DEBUG_LOG_PATH = "/tmp/cursor_debug.log" if __import__('os').getenv("VERCEL") else "/Users/BRFlorida/Projects/Work/Finding_Emails/.cursor/debug.log"
     def _dbg_log(hyp: str, msg: str, data: dict = None):
         try:
-            import json as _j, time as _t; open(_DEBUG_LOG_PATH, "a").write(_j.dumps({"hypothesisId": hyp, "location": "progress.py:get_analysis_status", "message": msg, "data": data or {}, "timestamp": _t.time(), "sessionId": "debug-session"}) + "\n")
+            import json as _j; import time as _t; open(_DEBUG_LOG_PATH, "a").write(_j.dumps({"hypothesisId": hyp, "location": "progress.py:get_analysis_status", "message": msg, "data": data or {}, "timestamp": _t.time(), "sessionId": "debug-session"}) + "\n")
         except: pass
     _dbg_log("H4", "Status endpoint called", {"analysis_id": analysis_id})
     # #endregion agent log
@@ -196,7 +196,7 @@ async def get_analysis_status(
 
     # Add server timestamp for client-side staleness detection
     status["server_time"] = datetime.utcnow().isoformat()
-    
+
     return status
 
 
@@ -276,5 +276,5 @@ async def get_clio_import_status(
 
     # Add server timestamp for client-side staleness detection
     status["server_time"] = datetime.utcnow().isoformat()
-    
+
     return status

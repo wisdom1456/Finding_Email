@@ -193,13 +193,13 @@ class FileCompressionService:
         """
         target_size_bytes = int(target_size_mb * 1024 * 1024)
         original_size = len(pdf_data)
-        
+
         # First pass: standard compression
         if self.has_ghostscript:
             compressed_data, method = self._compress_pdf_ghostscript(pdf_data)
         else:
             compressed_data, method = self._compress_pdf_pypdf2(pdf_data)
-        
+
         # Check if we need aggressive compression
         if len(compressed_data) > target_size_bytes:
             logger.warning(
@@ -207,12 +207,12 @@ class FileCompressionService:
                 f"attempting aggressive compression to get under {target_size_mb}MB"
             )
             aggressive_data, aggressive_method = self._compress_pdf_aggressive(compressed_data)
-            
+
             if len(aggressive_data) < len(compressed_data):
                 return aggressive_data, f"{method}+{aggressive_method}"
             else:
                 logger.warning("Aggressive compression did not reduce size further")
-        
+
         return compressed_data, method
 
     def _compress_pdf_ghostscript(self, pdf_data: bytes) -> Tuple[bytes, str]:
@@ -333,30 +333,31 @@ class FileCompressionService:
         Returns:
         -------
             Tuple of (compressed_data, method_name)
+
         """
         try:
             import fitz  # PyMuPDF
             from PIL import Image
-            
+
             # Open PDF
             doc = fitz.open(stream=pdf_data, filetype="pdf")
-            
+
             # Convert pages to images at reduced resolution
             images = []
             dpi = 100  # Lower DPI for aggressive compression
-            
+
             for page_num in range(len(doc)):
                 page = doc[page_num]
                 # Render page to pixmap
                 mat = fitz.Matrix(dpi / 72, dpi / 72)
                 pix = page.get_pixmap(matrix=mat)
-                
+
                 # Convert to PIL Image
                 img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
                 images.append(img)
-            
+
             doc.close()
-            
+
             # Create new PDF from images
             if images:
                 output = io.BytesIO()
@@ -369,12 +370,12 @@ class FileCompressionService:
                     optimize=True
                 )
                 compressed_data = output.getvalue()
-                
+
                 if len(compressed_data) < len(pdf_data):
                     return compressed_data, "pymupdf-aggressive"
-            
+
             return pdf_data, "pymupdf-skipped"
-            
+
         except ImportError:
             logger.warning("PyMuPDF (fitz) not available for aggressive compression")
             return pdf_data, "pymupdf-unavailable"

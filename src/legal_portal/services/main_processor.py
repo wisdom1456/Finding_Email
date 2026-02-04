@@ -22,15 +22,15 @@ from legal_portal.core.data_models import (
     QualityScore,
     SkippedDocument,
 )
+from legal_portal.services.chunk_state_manager import ChunkStateManager
 from legal_portal.services.corpus_coverage_service import CorpusCoverageService
 from legal_portal.services.document_quality_validator import DocumentQualityValidator
 from legal_portal.services.json_processing_service import JsonProcessingService
 from legal_portal.services.multi_stage_analyzer import MultiStageAnalyzer
 from legal_portal.services.statute_recommendation_service import StatuteRecommendationService
+from legal_portal.utils.diagnostic_logger import DiagnosticLogger
 from legal_portal.utils.logging_config import get_module_logger
 from legal_portal.utils.openai_client import OpenAIClient
-from legal_portal.utils.diagnostic_logger import DiagnosticLogger
-from legal_portal.services.chunk_state_manager import ChunkStateManager
 
 logger = get_module_logger(__name__)
 
@@ -51,7 +51,7 @@ async def _run_with_heartbeat(
     """
     import time as _time
     start = _time.time()
-    
+
     # Determine if we have a coroutine or a sync function
     if asyncio.iscoroutinefunction(coro_or_callable):
         task = asyncio.create_task(coro_or_callable(*args, **kwargs))
@@ -61,7 +61,7 @@ async def _run_with_heartbeat(
     else:
         # Already a coroutine
         task = asyncio.create_task(coro_or_callable)
-    
+
     # Send heartbeats while waiting for the task to complete
     while not task.done():
         try:
@@ -78,7 +78,7 @@ async def _run_with_heartbeat(
                     phase,
                     percent,
                 )
-    
+
     # Return the task result (may raise if task failed)
     return await task
 
@@ -299,17 +299,17 @@ async def process_case_documents(
     diag_logger = None
     if DiagnosticLogger.get_enabled():
         diag_logger = DiagnosticLogger(session_id=case_id)
-        
+
     logger.info(
         f"[PROCESSOR:START] [CASE:{case_id}] Starting document processing | "
         f"intake_docs={len(processed_intake)} case_docs={len(processed_case_docs)} "
         f"jurisdiction={jurisdiction}"
     )
-        
+
     try:
         # 1. Initialize services
         logger.info(f"[PROCESSOR:INIT] [CASE:{case_id}] Initializing processing services")
-        
+
         # Stage 1: Log Raw Extracted Text
         if diag_logger:
             raw_docs = {d.file_name: d.content for d in processed_case_docs}
@@ -336,7 +336,7 @@ async def process_case_documents(
 
         if not all_processed_docs:
             logger.warning("No documents provided for analysis.")
-        
+
         # Initialize chunk_state for per-document tracking
         if chunk_state_mgr and all_processed_docs:
             try:
@@ -464,11 +464,11 @@ async def process_case_documents(
             if not can_proceed:
                 failed_docs = await chunk_state_mgr.get_failed_documents()
                 await chunk_state_mgr.update_phase("awaiting_recovery")
-                
+
                 logger.warning(
                     f"[SYNTHESIS_GATE] Cannot proceed - {len(failed_docs)} documents need attention"
                 )
-                
+
                 if progress_callback:
                     await progress_callback(
                         f"Waiting for {len(failed_docs)} failed documents to be addressed",
@@ -485,7 +485,7 @@ async def process_case_documents(
                             ]
                         }
                     )
-                
+
                 # Return partial results - frontend will show recovery modal
                 return ProcessingResult(
                     document_summaries=[],
@@ -537,7 +537,7 @@ async def process_case_documents(
                     stage={"id": "case_synthesis", "name": "Extracting Facts", "status": "failed", "progress": 0}
                 )
             raise  # Re-raise to fail the analysis properly
-        
+
         if progress_callback:
             await progress_callback(
                 "Case synthesis complete.",
@@ -546,7 +546,7 @@ async def process_case_documents(
                 35,
                 stage={"id": "case_synthesis", "name": "Extracting Facts", "status": "completed", "progress": 100}
             )
-        
+
         # Stage 4: Log Case Synthesis
         if diag_logger:
             diag_logger.log_stage("stage4_case_synthesis", case_analysis_dict)
@@ -728,7 +728,7 @@ async def process_case_documents(
                 f"timeline_events={len(fact_matrix.timeline)} primary_issues={len(legal_issue_map.primary_issues)} "
                 f"letter_style={letter_structure.style}"
             )
-            
+
             if progress_callback:
                 await progress_callback(
                     "Deep analysis complete.",
@@ -742,7 +742,7 @@ async def process_case_documents(
             elapsed = time.time() - start_time
             logger.error(
                 f"[PROCESSOR:MULTISTAGE] [CASE:{case_id}] [ELAPSED:{elapsed:.1f}s] "
-                f"Multi-stage analysis FAILED | error_type={type(e).__name__} error={str(e)}", 
+                f"Multi-stage analysis FAILED | error_type={type(e).__name__} error={str(e)}",
                 exc_info=True
             )
             multi_stage_result = None
@@ -850,7 +850,7 @@ async def process_case_documents(
             processed_documents=processed_case_docs,  # NEW: Return processed documents for persistence
             skipped_documents=skipped_documents or [],  # NEW: Include skipped documents
         )
-        
+
         # ========================================================================
         # ANALYSIS COMPLETE (100%)
         # ========================================================================
@@ -861,7 +861,7 @@ async def process_case_documents(
                 "completed",
                 100,
             )
-        
+
         logger.info(
             f"[PROCESSOR:COMPLETE] [CASE:{case_id}] [ELAPSED:{processing_time:.1f}s] "
             f"Document processing completed | doc_count={len(processed_case_docs)} "
@@ -880,7 +880,7 @@ async def process_case_documents(
             error_message=str(e),
         )
         errors.append(error)
-        
+
         # Emit error progress so frontend knows
         if progress_callback:
             await progress_callback(
@@ -919,7 +919,7 @@ async def process_case_documents(
             error_message=str(e),
         )
         errors.append(error)
-        
+
         # Emit error progress so frontend knows
         if progress_callback:
             await progress_callback(
@@ -1198,38 +1198,38 @@ Return ONLY valid JSON, no markdown code blocks.
         # - return_exceptions=True: one failure doesn't kill others
         # - 3-min timeout per batch
         # ========================================================================
-        
+
         total_docs = len(case_documents)
         all_summaries = []
         processed_count = 0
-        
+
         # Create batches of 5 documents each
         BATCH_SIZE = 5
         batches = [case_documents[i:i + BATCH_SIZE] for i in range(0, len(case_documents), BATCH_SIZE)]
         total_batches = len(batches)
-        
+
         # Semaphore limits concurrent API calls to 3 batches (15 docs max concurrently)
         semaphore = asyncio.Semaphore(3)
-        
+
         logger.info(f"[BATCH-PARALLEL] Starting analysis of {total_docs} documents in {total_batches} batches for {jurisdiction}")
-        
+
         async def process_batch_with_limit(batch: List[Any], batch_idx: int):
             """Process a batch of documents with semaphore-controlled concurrency."""
             nonlocal processed_count
-            
+
             async with semaphore:
                 batch_num = batch_idx + 1
                 batch_doc_names = [d.file_name for d in batch]
                 batch_doc_count = len(batch)
-                
+
                 logger.info(f"[BATCH {batch_num}/{total_batches}] Starting: {batch_doc_count} docs - {', '.join(batch_doc_names[:3])}...")
-                
+
                 # Update chunk_state: all documents in batch are now processing
                 for doc in batch:
                     doc_id = getattr(doc, 'document_id', None) or getattr(doc, 'id', None) or f"doc_{doc.file_name}"
                     if chunk_state_mgr:
                         await chunk_state_mgr.update_document_status(doc_id, "processing")
-                
+
                 # Update UI: batch is now processing
                 if progress_callback:
                     await progress_callback(
@@ -1237,7 +1237,7 @@ Return ONLY valid JSON, no markdown code blocks.
                         phase="document_analysis",
                         percent=15 + int((processed_count / total_docs) * 60),
                     )
-                
+
                 try:
                     # Process batch with 3-minute timeout (more time for multiple docs)
                     batch_result, batch_errors = await asyncio.wait_for(
@@ -1255,12 +1255,12 @@ Return ONLY valid JSON, no markdown code blocks.
                         ),
                         timeout=180.0  # 3 minutes per batch
                     )
-                    
+
                     processed_count += batch_doc_count
-                    
+
                     if batch_result:
                         logger.info(f"[BATCH {batch_num}/{total_batches}] Completed: {len(batch_result)} summaries from {batch_doc_count} docs")
-                        
+
                         # Update chunk_state for each document in batch
                         for doc in batch:
                             doc_id = getattr(doc, 'document_id', None) or getattr(doc, 'id', None) or f"doc_{doc.file_name}"
@@ -1281,7 +1281,7 @@ Return ONLY valid JSON, no markdown code blocks.
                             doc_id = getattr(doc, 'document_id', None) or getattr(doc, 'id', None) or f"doc_{doc.file_name}"
                             if chunk_state_mgr:
                                 await chunk_state_mgr.update_document_status(doc_id, "completed")
-                    
+
                     # Update UI: batch completed
                     if progress_callback:
                         await progress_callback(
@@ -1290,14 +1290,14 @@ Return ONLY valid JSON, no markdown code blocks.
                             phase="document_analysis",
                             percent=15 + int((processed_count / total_docs) * 60),
                         )
-                    
+
                     return batch_result or [], batch_errors or []
-                    
+
                 except asyncio.TimeoutError:
                     processed_count += batch_doc_count
                     error_msg = f"Batch {batch_num} timed out after 3 minutes ({batch_doc_count} docs)"
                     logger.error(f"[BATCH {batch_num}/{total_batches}] TIMEOUT: {', '.join(batch_doc_names)}")
-                    
+
                     # Update chunk_state with failure for all docs in batch
                     for doc in batch:
                         doc_id = getattr(doc, 'document_id', None) or getattr(doc, 'id', None) or f"doc_{doc.file_name}"
@@ -1305,25 +1305,25 @@ Return ONLY valid JSON, no markdown code blocks.
                             await chunk_state_mgr.update_document_status(
                                 doc_id, "failed", error=error_msg, error_type="TIMEOUT"
                             )
-                    
+
                     if progress_callback:
                         await progress_callback(
                             message=f"Timeout on batch {batch_num}",
                             phase="document_analysis",
                             percent=15 + int((processed_count / total_docs) * 60),
                         )
-                    
+
                     return [], [ProcessingError(
                         source=f"batch_{batch_num}",
                         error_type="TIMEOUT",
                         error_message=error_msg
                     )]
-                    
+
                 except Exception as e:
                     processed_count += batch_doc_count
                     error_msg = str(e)
                     logger.error(f"[BATCH {batch_num}/{total_batches}] ERROR: {e}", exc_info=True)
-                    
+
                     # Update chunk_state with failure for all docs in batch
                     for doc in batch:
                         doc_id = getattr(doc, 'document_id', None) or getattr(doc, 'id', None) or f"doc_{doc.file_name}"
@@ -1331,26 +1331,26 @@ Return ONLY valid JSON, no markdown code blocks.
                             await chunk_state_mgr.update_document_status(
                                 doc_id, "failed", error=error_msg, error_type="PROCESSING_ERROR"
                             )
-                    
+
                     if progress_callback:
                         await progress_callback(
                             message=f"Error in batch {batch_num}",
                             phase="document_analysis",
                             percent=15 + int((processed_count / total_docs) * 60),
                         )
-                    
+
                     return [], [ProcessingError(
                         source=f"batch_{batch_num}",
                         error_type="PROCESSING_ERROR",
                         error_message=error_msg
                     )]
-        
+
         # Create tasks for all batches (semaphore controls concurrency)
         tasks = [process_batch_with_limit(batch, i) for i, batch in enumerate(batches)]
-        
+
         # Execute all with return_exceptions=True so one failure doesn't kill others
         results = await asyncio.gather(*tasks, return_exceptions=True)
-        
+
         # Collect results
         for i, result in enumerate(results):
             if isinstance(result, Exception):
@@ -1364,12 +1364,12 @@ Return ONLY valid JSON, no markdown code blocks.
                 summaries, batch_errors = result
                 all_summaries.extend(summaries)
                 errors.extend(batch_errors)
-        
+
         logger.info(
             f"[BATCH-PARALLEL] Complete: {len(all_summaries)} summaries from {total_docs} documents in {total_batches} batches, "
             f"{len(errors)} errors"
         )
-        
+
         # Emit chunk_complete event with error info if any failures
         if errors and progress_callback:
             failed_docs = [
@@ -1387,9 +1387,9 @@ Return ONLY valid JSON, no markdown code blocks.
                     "failed_docs": failed_docs
                 }
             )
-        
+
         return (all_summaries, errors)
-        
+
         # Note: The code below (single-call path) is now unreachable but kept for reference
         logger.info(f"Processing {len(case_documents)} documents in single call for {jurisdiction}...")
 

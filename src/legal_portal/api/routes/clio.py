@@ -455,60 +455,75 @@ def categorize_clio_sync_items(
 
     # Process documents
     for doc in documents:
-        doc_id = str(doc["id"])
-        doc_name = doc.get("name", "Untitled Document")
-        doc_date = doc.get("created_at")
+        try:
+            doc_id = str(doc.get("id"))
+            if not doc_id or doc_id == "None":
+                continue
+            doc_name = doc.get("name") or "Untitled Document"
+            doc_date = doc.get("created_at")
 
-        item = {
-            "id": doc_id,
-            "name": doc_name,
-            "type": "document",
-            "date": doc_date,
-            "raw_data": doc,
-        }
+            item = {
+                "id": doc_id,
+                "name": doc_name,
+                "type": "document",
+                "date": doc_date,
+            }
 
-        if doc_id in existing_clio_ids:
-            updated_items.append(item)
-        else:
-            new_items.append(item)
+            if doc_id in existing_clio_ids:
+                updated_items.append(item)
+            else:
+                new_items.append(item)
+        except Exception as e:
+            logger.warning(f"Failed to process document: {e}")
+            continue
 
     # Process communications
     for comm in communications:
-        comm_id = str(comm.id)
-        comm_name = comm.subject or "Untitled Communication"
-        comm_date = comm.date
+        try:
+            comm_id = str(comm.get("id"))
+            if not comm_id or comm_id == "None":
+                continue
+            comm_name = comm.get("subject") or "Untitled Communication"
+            comm_date = comm.get("date")
 
-        item = {
-            "id": comm_id,
-            "name": comm_name,
-            "type": "communication",
-            "date": comm_date,
-            "raw_data": comm,
-        }
+            item = {
+                "id": comm_id,
+                "name": comm_name,
+                "type": "communication",
+                "date": comm_date,
+            }
 
-        if comm_id in existing_clio_ids:
-            updated_items.append(item)
-        else:
-            new_items.append(item)
+            if comm_id in existing_clio_ids:
+                updated_items.append(item)
+            else:
+                new_items.append(item)
+        except Exception as e:
+            logger.warning(f"Failed to process communication: {e}")
+            continue
 
     # Process notes
     for note in notes:
-        note_id = str(note["id"])
-        note_subject = note.get("subject", "Untitled Note")
-        note_date = note.get("created_at")
+        try:
+            note_id = str(note.get("id"))
+            if not note_id or note_id == "None":
+                continue
+            note_subject = note.get("subject") or "Untitled Note"
+            note_date = note.get("created_at")
 
-        item = {
-            "id": note_id,
-            "name": note_subject,
-            "type": "note",
-            "date": note_date,
-            "raw_data": note,
-        }
+            item = {
+                "id": note_id,
+                "name": note_subject,
+                "type": "note",
+                "date": note_date,
+            }
 
-        if note_id in existing_clio_ids:
-            updated_items.append(item)
-        else:
-            new_items.append(item)
+            if note_id in existing_clio_ids:
+                updated_items.append(item)
+            else:
+                new_items.append(item)
+        except Exception as e:
+            logger.warning(f"Failed to process note: {e}")
+            continue
 
     return new_items, updated_items
 

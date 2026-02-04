@@ -6,7 +6,7 @@ Handles OAuth flow, matter search, and data import from Clio.
 import logging
 import uuid
 from datetime import datetime, timezone
-from typing import List, Literal, Optional
+from typing import List, Literal, Optional, Tuple
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import RedirectResponse
@@ -422,6 +422,95 @@ async def save_import_progress_to_db(
     except Exception as e:
         # Don't fail the import if progress persistence fails
         logger.warning(f"Failed to persist import progress to DB: {e}")
+
+
+def categorize_clio_sync_items(
+    documents: List[dict],
+    communications: List[dict],
+    notes: List[dict],
+    existing_docs: List[dict],
+) -> Tuple[List[dict], List[dict]]:
+    """
+    Categorize Clio items as new or updated based on existing documents.
+
+    Args:
+        documents: List of documents from Clio API
+        communications: List of communications from Clio API
+        notes: List of notes from Clio API
+        existing_docs: List of existing document records from database
+
+    Returns:
+        Tuple of (new_items, updated_items) where each is a list of dicts
+        with keys: id, name, type, date
+    """
+    # Extract existing Clio IDs from metadata
+    existing_clio_ids = set()
+    for doc in existing_docs:
+        metadata = doc.get("metadata", {})
+        if metadata.get("clio_source") and metadata.get("clio_id"):
+            existing_clio_ids.add(str(metadata["clio_id"]))
+
+    new_items = []
+    updated_items = []
+
+    # Process documents
+    for doc in documents:
+        doc_id = str(doc["id"])
+        doc_name = doc.get("name", "Untitled Document")
+        doc_date = doc.get("created_at")
+
+        item = {
+            "id": doc_id,
+            "name": doc_name,
+            "type": "document",
+            "date": doc_date,
+            "raw_data": doc,
+        }
+
+        if doc_id in existing_clio_ids:
+            updated_items.append(item)
+        else:
+            new_items.append(item)
+
+    # Process communications
+    for comm in communications:
+        comm_id = str(comm.id)
+        comm_name = comm.subject or "Untitled Communication"
+        comm_date = comm.date
+
+        item = {
+            "id": comm_id,
+            "name": comm_name,
+            "type": "communication",
+            "date": comm_date,
+            "raw_data": comm,
+        }
+
+        if comm_id in existing_clio_ids:
+            updated_items.append(item)
+        else:
+            new_items.append(item)
+
+    # Process notes
+    for note in notes:
+        note_id = str(note["id"])
+        note_subject = note.get("subject", "Untitled Note")
+        note_date = note.get("created_at")
+
+        item = {
+            "id": note_id,
+            "name": note_subject,
+            "type": "note",
+            "date": note_date,
+            "raw_data": note,
+        }
+
+        if note_id in existing_clio_ids:
+            updated_items.append(item)
+        else:
+            new_items.append(item)
+
+    return new_items, updated_items
 
 
 @router.post("/import", response_model=ClioImportResponse)

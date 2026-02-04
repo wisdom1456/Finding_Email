@@ -21,6 +21,7 @@
 	import { Trash2, Edit, ArrowLeft } from 'lucide-svelte';
 	import type { CaseData } from '$lib/types';
 	import DocumentSummaryCard from '$lib/components/DocumentSummaryCard.svelte';
+	import { syncClioMatter, type ClioSyncResponse } from '$lib/api/cases';
 
 	let caseData = $state<CaseData | null>(null);
 	let documents = $state<any[]>([]);
@@ -45,6 +46,11 @@
 	// Pre-flight validation state
 	let showMissingTextWarning = $state(false);
 	let runningBulkOcr = $state(false);
+
+	// Clio sync state
+	let syncLoading = $state(false);
+	let syncResult = $state<ClioSyncResponse | null>(null);
+	let syncError = $state<string | null>(null);
 
 	// Documents that are ready but missing extracted text (will be skipped in analysis)
 	let docsWithoutText = $derived(
@@ -733,10 +739,32 @@
 
 		// Reset the selected files to only failed ones
 		selectedFiles = filesToRetry;
-		
+
 		// Close the summary modal and retry
 		showFailureSummary = false;
 		await uploadSelectedFiles();
+	}
+
+	async function handleSync() {
+		syncLoading = true;
+		syncError = null;
+		syncResult = null;
+
+		try {
+			const result = await syncClioMatter(caseData!.id);
+			syncResult = result;
+
+			// Reload documents if any changes were made
+			if (result.summary.new_items > 0 || result.summary.updated_items > 0) {
+				await loadDocuments();
+				toastStore.success(`Synced ${result.summary.total_processed} items from Clio`);
+			}
+		} catch (err) {
+			syncError = err instanceof Error ? err.message : 'Failed to sync';
+			toastStore.error(syncError);
+		} finally {
+			syncLoading = false;
+		}
 	}
 
 	async function promoteToIntakeForm(docId: string) {
@@ -1543,8 +1571,111 @@
 						<!-- Enhanced Documents Section -->
 		<div class="card-standard !p-0 overflow-hidden">
 			<div class="px-6 py-5 border-b border-gray-100">
-				<h3 class="text-lg font-heading font-semibold text-contrast">Documents</h3>
+				<div class="flex justify-between items-center">
+					<h3 class="text-lg font-heading font-semibold text-contrast">Documents</h3>
+
+					{#if caseData?.clio_matter_id}
+						<AsyncButton
+							onclick={handleSync}
+							loading={syncLoading}
+							variant="secondary"
+							size="sm"
+							loadingText="Syncing..."
+						>
+							Sync from Clio
+						</AsyncButton>
+					{/if}
+				</div>
 			</div>
+
+			<!-- Sync Results Display -->
+			{#if syncResult}
+				<div class="mx-4 mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+					<h4 class="text-sm font-semibold text-blue-900 mb-2">Sync Complete</h4>
+
+					{#if syncResult.summary.total_processed === 0}
+						<p class="text-sm text-blue-700">
+							No changes detected. Your documents are up to date.
+						</p>
+					{:else}
+						<div class="space-y-2">
+							<p class="text-sm text-blue-800">
+								<strong>{syncResult.summary.new_items}</strong> new item(s),
+								<strong>{syncResult.summary.updated_items}</strong> updated item(s)
+							</p>
+
+							{#if syncResult.details.new.length > 0}
+								<div>
+									<p class="text-xs font-semibold text-blue-900 mb-1">New Items:</p>
+									<ul class="text-xs text-blue-700 space-y-1 ml-4 list-disc">
+										{#each syncResult.details.new as item}
+											<li>
+												{item.name}
+												{#if item.date}
+													<span class="text-blue-600">({new Date(item.date).toLocaleDateString()})</span>
+												{/if}
+											</li>
+										{/each}
+									</ul>
+								</div>
+							{/if}
+
+							{#if syncResult.details.updated.length > 0}
+								<div>
+									<p class="text-xs font-semibold text-blue-900 mb-1">Updated Items:</p>
+									<ul class="text-xs text-blue-700 space-y-1 ml-4 list-disc">
+										{#each syncResult.details.updated as item}
+											<li>
+												{item.name}
+												{#if item.date}
+													<span class="text-blue-600">(updated {new Date(item.date).toLocaleDateString()})</span>
+												{/if}
+											</li>
+										{/each}
+									</ul>
+								</div>
+							{/if}
+
+							{#if syncResult.needs_reanalysis}
+								<p class="text-xs text-blue-800 mt-2 italic">
+									Changes detected - re-run analysis to update results.
+								</p>
+							{/if}
+						</div>
+					{/if}
+
+					<button
+						onclick={() => syncResult = null}
+						class="mt-3 text-xs text-blue-600 hover:text-blue-800 font-medium"
+					>
+						Dismiss
+					</button>
+				</div>
+			{/if}
+
+			<!-- Sync Error Display -->
+			{#if syncError}
+				<div class="mx-4 mt-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+					<h4 class="text-sm font-semibold text-red-900 mb-2">Sync Failed</h4>
+					<p class="text-sm text-red-700 mb-3">{syncError}</p>
+
+					{#if syncError.includes('authentication') || syncError.includes('authenticated')}
+						<button
+							onclick={() => goto('/app/settings?tab=integrations')}
+							class="text-sm text-red-600 hover:text-red-800 font-medium underline"
+						>
+							Reconnect to Clio
+						</button>
+					{/if}
+
+					<button
+						onclick={() => syncError = null}
+						class="ml-4 text-sm text-red-600 hover:text-red-800 font-medium"
+					>
+						Dismiss
+					</button>
+				</div>
+			{/if}
 
 			<!-- Drag and Drop Upload Zone -->
 			{#if selectedFiles.length === 0}

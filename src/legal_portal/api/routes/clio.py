@@ -6,7 +6,7 @@ Handles OAuth flow, matter search, and data import from Clio.
 import logging
 import uuid
 from datetime import datetime, timezone
-from typing import List, Optional
+from typing import List, Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import RedirectResponse
@@ -75,6 +75,37 @@ class ClioImportResponse(BaseModel):
     notes_count: int
     documents_count: int
     import_id: Optional[str] = None
+
+
+class ClioSyncItemDetail(BaseModel):
+    """Details about a single synced item."""
+    name: str
+    type: Literal["document", "communication", "note"]
+    date: Optional[datetime] = None
+    previous_version_date: Optional[datetime] = None
+
+
+class ClioSyncSummary(BaseModel):
+    """Summary of sync operation."""
+    new_items: int
+    updated_items: int
+    total_processed: int
+
+
+class ClioSyncDetails(BaseModel):
+    """Detailed breakdown of synced items."""
+    new: List[ClioSyncItemDetail]
+    updated: List[ClioSyncItemDetail]
+
+
+class ClioSyncResponse(BaseModel):
+    """Response from Clio sync operation."""
+    success: bool
+    case_id: str
+    synced_at: datetime
+    summary: ClioSyncSummary
+    details: ClioSyncDetails
+    needs_reanalysis: bool
 
 
 # ===== OAuth Flow =====

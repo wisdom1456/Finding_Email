@@ -348,10 +348,6 @@ class ClioClient:
 
                 page += 1
 
-                # Safety limit: don't fetch more than 500 communications
-                if len(all_communications) >= 500:
-                    break
-
             return all_communications
 
         except ClioAPIError:
@@ -378,20 +374,34 @@ class ClioClient:
             "limit": 100,
         }
 
+        all_notes = []
+        page = 1
+
         try:
-            response = self._make_request("GET", "notes.json", params=params)
+            while True:
+                params["page"] = page
+                response = self._make_request("GET", "notes.json", params=params)
 
-            notes = []
-            for note_data in response.get("data", []):
-                note = {
-                    "id": note_data.get("id"),
-                    "subject": note_data.get("subject", ""),
-                    "detail": note_data.get("detail", ""),
-                    "date": note_data.get("date", ""),
-                }
-                notes.append(note)
+                notes_data = response.get("data", [])
+                if not notes_data:
+                    break
 
-            return notes
+                for note_data in notes_data:
+                    note = {
+                        "id": note_data.get("id"),
+                        "subject": note_data.get("subject", ""),
+                        "detail": note_data.get("detail", ""),
+                        "date": note_data.get("date", ""),
+                    }
+                    all_notes.append(note)
+
+                # Check if there are more pages
+                if len(notes_data) < params["limit"]:
+                    break
+
+                page += 1
+
+            return all_notes
 
         except ClioAPIError:
             raise
@@ -416,22 +426,36 @@ class ClioClient:
             "limit": 100,
         }
 
+        all_documents = []
+        page = 1
+
         try:
-            response = self._make_request("GET", "documents.json", params=params)
+            while True:
+                params["page"] = page
+                response = self._make_request("GET", "documents.json", params=params)
 
-            documents = []
-            for doc_data in response.get("data", []):
-                document = {
-                    "id": doc_data.get("id"),
-                    "name": doc_data.get("name", ""),
-                    "content_type": doc_data.get("content_type", ""),
-                    "size": doc_data.get("size", 0),
-                    "created_at": doc_data.get("created_at", ""),
-                    "latest_document_version": doc_data.get("latest_document_version"),
-                }
-                documents.append(document)
+                documents_data = response.get("data", [])
+                if not documents_data:
+                    break
 
-            return documents
+                for doc_data in documents_data:
+                    document = {
+                        "id": doc_data.get("id"),
+                        "name": doc_data.get("name", ""),
+                        "content_type": doc_data.get("content_type", ""),
+                        "size": doc_data.get("size", 0),
+                        "created_at": doc_data.get("created_at", ""),
+                        "latest_document_version": doc_data.get("latest_document_version"),
+                    }
+                    all_documents.append(document)
+
+                # Check if there are more pages
+                if len(documents_data) < params["limit"]:
+                    break
+
+                page += 1
+
+            return all_documents
 
         except ClioAPIError:
             raise

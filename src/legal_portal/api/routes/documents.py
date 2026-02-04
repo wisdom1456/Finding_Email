@@ -13,6 +13,7 @@ from legal_portal.core.data_models import DocumentStatus, DocumentType
 from legal_portal.core.document_processor import DocumentProcessor, ValidationError
 from legal_portal.utils.security import sanitize_text_for_db
 from legal_portal.utils.google_vision_client import GoogleVisionClient
+from legal_portal.services.file_processors.eml_processor import process_eml
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -316,6 +317,45 @@ async def upload_document(
                             extraction_method = "failed"
                             extraction_quality = "low"
                             logger.error(f"Image extraction error for {file_name}: {ocr_err}")
+
+                elif file_type in ["message/rfc822", "eml"] or file_name.lower().endswith(".eml"):
+                    # Email file (.eml)
+                    try:
+                        import tempfile
+                        from starlette.concurrency import run_in_threadpool
+                        import asyncio
+
+                        # Write to temp file for eml processing
+                        with tempfile.NamedTemporaryFile(suffix=".eml", delete=False) as tmp:
+                            tmp.write(file_content)
+                            tmp_path = tmp.name
+
+                        try:
+                            # Process eml file asynchronously
+                            result = await process_eml(
+                                file_path=tmp_path,
+                                document_type=DocumentType.CORRESPONDENCE,
+                                original_filename=file_name,
+                            )
+
+                            extracted_text = result.content
+                            extraction_method = result.extraction_method or "email_parser"
+                            extraction_quality = result.extraction_quality or "high"
+                            extraction_error = result.extraction_error
+
+                            logger.info(f"Successfully extracted email content from {file_name}: {len(extracted_text)} chars")
+                        finally:
+                            # Clean up temp file
+                            import os
+                            try:
+                                os.unlink(tmp_path)
+                            except Exception:
+                                pass
+                    except Exception as e:
+                        extraction_error = f"Email extraction failed: {str(e)}"
+                        extraction_method = "failed"
+                        extraction_quality = "low"
+                        logger.error(f"Email extraction error for {file_name}: {e}")
 
                 else:
                     # Other file types - mark as needing extraction
@@ -1138,6 +1178,43 @@ async def trigger_extraction(
                     extraction_quality = "low"
                     logger.error(f"Image extraction error for {file_name}: {ocr_err}")
 
+        elif file_type in ["message/rfc822", "eml"] or file_name.lower().endswith(".eml"):
+            # Email file (.eml)
+            try:
+                import tempfile
+
+                # Write to temp file for eml processing
+                with tempfile.NamedTemporaryFile(suffix=".eml", delete=False) as tmp:
+                    tmp.write(file_bytes)
+                    tmp_path = tmp.name
+
+                try:
+                    # Process eml file asynchronously
+                    result = await process_eml(
+                        file_path=tmp_path,
+                        document_type=DocumentType.CORRESPONDENCE,
+                        original_filename=file_name,
+                    )
+
+                    extracted_text = result.content
+                    extraction_method = result.extraction_method or "email_parser"
+                    extraction_quality = result.extraction_quality or "high"
+                    extraction_error = result.extraction_error
+
+                    logger.info(f"Successfully extracted email content from {file_name}: {len(extracted_text)} chars")
+                finally:
+                    # Clean up temp file
+                    import os
+                    try:
+                        os.unlink(tmp_path)
+                    except Exception:
+                        pass
+            except Exception as e:
+                extraction_error = f"Email extraction failed: {str(e)}"
+                extraction_method = "failed"
+                extraction_quality = "low"
+                logger.error(f"Email extraction error for {file_name}: {e}")
+
         else:
             # Unsupported type
             extraction_error = f"Unsupported file type for extraction: {file_type}"
@@ -1295,6 +1372,43 @@ async def replace_document_file(
                 extraction_error = f"Failed to decode text: {e}"
                 extraction_method = "failed"
                 extraction_quality = "low"
+
+        elif file_type in ["message/rfc822", "eml"] or file_name.lower().endswith(".eml"):
+            # Email file (.eml)
+            try:
+                import tempfile
+
+                # Write to temp file for eml processing
+                with tempfile.NamedTemporaryFile(suffix=".eml", delete=False) as tmp:
+                    tmp.write(file_content)
+                    tmp_path = tmp.name
+
+                try:
+                    # Process eml file asynchronously
+                    result = await process_eml(
+                        file_path=tmp_path,
+                        document_type=DocumentType.CORRESPONDENCE,
+                        original_filename=file_name,
+                    )
+
+                    extracted_text = result.content
+                    extraction_method = result.extraction_method or "email_parser"
+                    extraction_quality = result.extraction_quality or "high"
+                    extraction_error = result.extraction_error
+
+                    logger.info(f"Successfully extracted email content from {file_name}: {len(extracted_text)} chars")
+                finally:
+                    # Clean up temp file
+                    import os
+                    try:
+                        os.unlink(tmp_path)
+                    except Exception:
+                        pass
+            except Exception as e:
+                extraction_error = f"Email extraction failed: {str(e)}"
+                extraction_method = "failed"
+                extraction_quality = "low"
+                logger.error(f"Email extraction error for {file_name}: {e}")
 
         # Sanitize extracted text to remove NULL characters that PostgreSQL can't store
         extracted_text = sanitize_text_for_db(extracted_text)

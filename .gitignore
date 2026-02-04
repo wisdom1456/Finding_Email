@@ -222,3 +222,6 @@ scripts/snapshots/
 output/letters/
 output/summaries/
 .vercel
+
+# Git worktrees
+.worktrees/

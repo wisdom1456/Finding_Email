@@ -1323,6 +1323,11 @@ async def start_analysis(
                 status_code=status.HTTP_409_CONFLICT, detail="Case is already being processed"
             )
 
+        # Clear needs_reanalysis flag when starting new analysis
+        user_supabase.table("cases").update({
+            "needs_reanalysis": False
+        }).eq("id", analysis_request.case_id).execute()
+
         # Create analysis record using user client
         analysis_response = (
             user_supabase.table("analysis_results")

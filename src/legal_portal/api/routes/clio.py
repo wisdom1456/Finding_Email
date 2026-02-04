@@ -1184,7 +1184,6 @@ async def sync_clio_matter(
         # Create a lookup for original objects
         comm_lookup = {str(c.id): c for c in communications}
         note_lookup = {str(n["id"]): n for n in notes}
-        doc_lookup = {str(d["id"]): d for d in documents}
 
         # Process updated items (delete old, import new version)
         for item in updated_items:
@@ -1212,8 +1211,6 @@ async def sync_clio_matter(
 
         # For simplicity, we'll process these synchronously
         # In production, consider using the background task pattern from import_clio_data
-        imported_count = 0
-
         for item in all_items_to_import:
             item_type = item["type"]
             clio_id = item["id"]
@@ -1231,11 +1228,15 @@ async def sync_clio_matter(
                 content += comm.body or ""
 
                 storage_path = f"clio/{case_id}/comm_{comm.id}.txt"
-                supabase.storage.from_("documents").upload(
-                    storage_path,
-                    content.encode("utf-8"),
-                    {"content-type": "text/plain"}
-                )
+                try:
+                    supabase.storage.from_("documents").upload(
+                        storage_path,
+                        content.encode("utf-8"),
+                        {"content-type": "text/plain"}
+                    )
+                except Exception as e:
+                    logger.warning(f"Failed to upload communication to storage: {e}")
+                    continue  # Skip this item if storage fails
 
                 supabase.table("documents").insert({
                     "case_id": case_id,
@@ -1254,7 +1255,6 @@ async def sync_clio_matter(
                         "clio_date": comm.date.isoformat() if comm.date else None,
                     }
                 }).execute()
-                imported_count += 1
 
             elif item_type == "note":
                 # Process note (similar to import_clio_data)
@@ -1268,11 +1268,15 @@ async def sync_clio_matter(
                 content = f"Subject: {note_subject}\n\n{note_detail}"
 
                 storage_path = f"clio/{case_id}/note_{note['id']}.txt"
-                supabase.storage.from_("documents").upload(
-                    storage_path,
-                    content.encode("utf-8"),
-                    {"content-type": "text/plain"}
-                )
+                try:
+                    supabase.storage.from_("documents").upload(
+                        storage_path,
+                        content.encode("utf-8"),
+                        {"content-type": "text/plain"}
+                    )
+                except Exception as e:
+                    logger.warning(f"Failed to upload note to storage: {e}")
+                    continue  # Skip this item if storage fails
 
                 supabase.table("documents").insert({
                     "case_id": case_id,
@@ -1291,7 +1295,6 @@ async def sync_clio_matter(
                         "clio_date": note.get("created_at"),
                     }
                 }).execute()
-                imported_count += 1
 
             elif item_type == "document":
                 # Process document (more complex, may need download)

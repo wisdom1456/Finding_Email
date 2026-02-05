@@ -18,7 +18,7 @@
   - onclick?: () => void - Click handler (useful for closing mobile menu)
 -->
 <script lang="ts">
-	import { browser } from '$app/environment';
+	import { page } from '$app/stores';
 
 	type NavLinkProps = {
 		href: string;
@@ -36,19 +36,14 @@
 		onclick
 	}: NavLinkProps = $props();
 
-	// Get current path safely - only on client side
-	let currentPath = $state('');
-	let isActive = $state(false);
+	// Determine active state reactively using $page store
+	let currentPath = $derived($page.url.pathname);
 
-	// Update active state on client only
-	$effect(() => {
-		if (browser) {
-			currentPath = window.location.pathname;
-			isActive = exact
-				? currentPath === href
-				: currentPath.startsWith(href);
-		}
-	});
+	let isActive = $derived(
+		exact
+			? currentPath === href
+			: currentPath.startsWith(href)
+	);
 
 	// Desktop nav classes
 	const desktopBaseClasses = 'inline-flex items-center px-4 py-2 text-sm font-semibold transition-colors rounded-md';

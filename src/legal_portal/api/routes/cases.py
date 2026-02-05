@@ -600,8 +600,49 @@ async def import_clio_documents_helper(
                 )
                 doc_id = doc["id"]
                 doc_name = doc.get("name", "Untitled Document")
+                doc_size = doc.get("size", 0)  # Size in bytes from Clio API
 
-                logger.debug("Processing document", extra={"doc_name": doc_name, "doc_id": doc_id})
+                logger.debug("Processing document", extra={"doc_name": doc_name, "doc_id": doc_id, "size_mb": f"{doc_size / (1024 * 1024):.2f}"})
+
+                # Check file size limits before downloading
+                # More restrictive for zips since they could contain videos
+                MAX_SIZE_ZIP_MB = 50
+                MAX_SIZE_OTHER_MB = 100
+                
+                is_zip = doc_name.lower().endswith(".zip")
+                size_limit_mb = MAX_SIZE_ZIP_MB if is_zip else MAX_SIZE_OTHER_MB
+                size_limit_bytes = size_limit_mb * 1024 * 1024
+                
+                if doc_size > size_limit_bytes:
+                    file_size_mb = doc_size / (1024 * 1024)
+                    logger.warning(
+                        f"Skipping large file {doc_name}: "
+                        f"{file_size_mb:.1f}MB exceeds {size_limit_mb}MB limit"
+                    )
+                    errors.append(
+                        f"Document {doc_name}: File too large ({file_size_mb:.1f}MB). "
+                        f"Maximum size is {size_limit_mb}MB for {'zip files' if is_zip else 'this file type'}."
+                    )
+                    # Save metadata-only record so user knows it was skipped
+                    skip_record = {
+                        "case_id": case_id,
+                        "file_name": doc_name,
+                        "file_type": doc.get("content_type", "application/octet-stream"),
+                        "file_size": doc_size,
+                        "storage_path": None,
+                        "status": "skipped_too_large",
+                        "extracted_text": None,
+                        "metadata": {
+                            "clio_source": True,
+                            "clio_type": "document",
+                            "clio_id": doc_id,
+                            "error": f"File too large ({file_size_mb:.1f}MB). Maximum size is {size_limit_mb}MB.",
+                            "error_type": "FILE_TOO_LARGE",
+                            "skip_reason": f"Exceeds {size_limit_mb}MB limit for {'zip files' if is_zip else 'documents'}",
+                        },
+                    }
+                    supabase.table("documents").insert(skip_record).execute()
+                    continue  # Skip to next document
 
                 # Clio doesn't provide download URLs in the documents list
                 # We need to construct the download URL using the document ID

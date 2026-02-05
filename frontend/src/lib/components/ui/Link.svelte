@@ -84,9 +84,11 @@
   );
 
   // External link attributes
-  const externalAttrs = isExternal
-    ? { target: '_blank', rel: 'noopener noreferrer' }
-    : {};
+  const externalAttrs = $derived(
+    isExternal
+      ? { target: '_blank', rel: 'noopener noreferrer' }
+      : {}
+  );
 </script>
 
 <a

@@ -323,6 +323,24 @@
 		}
 	}
 
+	async function loadAnalysisStatus() {
+		try {
+			const { data, error } = await supabase
+				.from('analysis_results')
+				.select('*')
+				.eq('case_id', caseId as string)
+				.order('created_at', { ascending: false })
+				.limit(1)
+				.maybeSingle();
+
+			if (error) throw error;
+			analysisStatus = data;
+		} catch (error: any) {
+			console.error('Failed to load analysis status:', error);
+			analysisStatus = null;
+		}
+	}
+
 	async function viewDocument(doc: any) {
 		viewingDocument = doc;
 		documentViewerContent = '';

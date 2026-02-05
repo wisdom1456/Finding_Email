@@ -629,7 +629,7 @@ async def import_clio_documents_helper(
                         "file_name": doc_name,
                         "file_type": doc.get("content_type", "application/octet-stream"),
                         "file_size": doc_size,
-                        "storage_path": None,
+                        "storage_path": "",  # Empty string instead of None to satisfy NOT NULL constraint
                         "status": "skipped_too_large",
                         "extracted_text": None,
                         "metadata": {
@@ -681,7 +681,7 @@ async def import_clio_documents_helper(
                         "file_name": doc_name,
                         "file_type": "application/octet-stream",
                         "file_size": 0,
-                        "storage_path": None,
+                        "storage_path": "",  # Empty string instead of None to satisfy NOT NULL constraint
                         "status": "download_timeout",
                         "extracted_text": None,
                         "metadata": {
@@ -794,7 +794,7 @@ async def import_clio_documents_helper(
                         "file_name": doc_name,
                         "file_type": content_type or "application/octet-stream",
                         "file_size": original_size,
-                        "storage_path": None,
+                        "storage_path": "",  # Empty string instead of None to satisfy NOT NULL constraint
                         "status": "processing_timeout",
                         "extracted_text": None,
                         "metadata": {

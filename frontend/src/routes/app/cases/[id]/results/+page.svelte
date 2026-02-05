@@ -316,7 +316,7 @@
 
 		try {
 			// Check if it's a PDF or image - need to download as blob
-			const isPdf = doc.file_type === 'application/pdf' || doc.file_name.toLowerCase().endswith('.pdf');
+			const isPdf = doc.file_type === 'application/pdf' || doc.file_name.toLowerCase().endsWith('.pdf');
 			const isImage = doc.file_type?.startsWith('image/');
 
 		if ((isPdf || isImage) && doc.storage_path) {

@@ -62,31 +62,77 @@
 		)
 	);
 
-	// Find all potential intake documents (any with "intake" in filename)
-	let intakeCandidates = $derived(
-		documents.filter(doc => doc.file_name.toLowerCase().includes('intake'))
-	);
+	// Helper functions to check document types
+	function isCaseSummary(doc: any): boolean {
+		return doc.file_name.toLowerCase().includes('case summary') || 
+		       doc.file_name.toLowerCase().includes('case_summary') ||
+		       doc.file_name.toLowerCase().includes('casesummary');
+	}
+	
+	function isIntakeForm(doc: any): boolean {
+		return doc.file_name.toLowerCase().includes('intake');
+	}
+	
+	function isPrimaryIntakeCandidate(doc: any): boolean {
+		return isCaseSummary(doc) || isIntakeForm(doc);
+	}
 
-	// Sort documents - intake candidates first, then others
+	// Find all potential intake documents (case summaries and intake forms)
+	let intakeCandidates = $derived(
+		documents.filter(doc => isPrimaryIntakeCandidate(doc))
+	);
+	
+	// Case summary documents (preferred over intake forms)
+	let caseSummaryDocs = $derived(
+		documents.filter(doc => isCaseSummary(doc))
+	);
+	
+	// Current primary intake document
+	let primaryIntakeDoc = $derived(
+		documents.find(doc => doc.metadata?.is_intake_form)
+	);
+	
+	// Recommended primary intake (case summary > intake form)
+	let recommendedPrimaryIntake = $derived(() => {
+		if (caseSummaryDocs.length > 0) {
+			// Prefer newest case summary
+			return [...caseSummaryDocs].sort((a, b) => 
+				new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+			)[0];
+		}
+		const intakeForms = documents.filter(doc => isIntakeForm(doc));
+		if (intakeForms.length > 0) {
+			// Use oldest intake form
+			return [...intakeForms].sort((a, b) => 
+				new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+			)[0];
+		}
+		return null;
+	});
+
+	// Sort documents - primary intake first, case summaries, intake forms, then others
 	let sortedDocuments = $derived(
 		[...documents].sort((a, b) => {
-			const aHasIntake = a.file_name.toLowerCase().includes('intake');
-			const bHasIntake = b.file_name.toLowerCase().includes('intake');
+			const aIsPrimary = a.metadata?.is_intake_form || false;
+			const bIsPrimary = b.metadata?.is_intake_form || false;
+			const aIsCaseSummary = isCaseSummary(a);
+			const bIsCaseSummary = isCaseSummary(b);
+			const aIsIntake = isIntakeForm(a);
+			const bIsIntake = isIntakeForm(b);
 			
-			// Both have "intake" - sort by explicitly marked, then by date
-			if (aHasIntake && bHasIntake) {
-				const aIsMarked = a.metadata?.is_intake_form || false;
-				const bIsMarked = b.metadata?.is_intake_form || false;
-				if (aIsMarked && !bIsMarked) return -1;
-				if (!aIsMarked && bIsMarked) return 1;
-				return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
-			}
+			// Primary intake first
+			if (aIsPrimary && !bIsPrimary) return -1;
+			if (!aIsPrimary && bIsPrimary) return 1;
 			
-			// Only one has "intake"
-			if (aHasIntake && !bHasIntake) return -1;
-			if (!aHasIntake && bHasIntake) return 1;
+			// Then case summaries
+			if (aIsCaseSummary && !bIsCaseSummary) return -1;
+			if (!aIsCaseSummary && bIsCaseSummary) return 1;
 			
-			// Neither has "intake"
+			// Then intake forms
+			if (aIsIntake && !bIsIntake) return -1;
+			if (!aIsIntake && bIsIntake) return 1;
+			
+			// Otherwise by date (oldest first)
 			return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
 		})
 	);
@@ -437,6 +483,9 @@
 		documentSummary = summary || null;
 	}
 
+	// Track whether we should start analysis after intake selection
+	let startAnalysisAfterIntakeSelection = $state(false);
+
 	async function confirmIntakeSelection() {
 		if (!selectedIntakeDocId) {
 			alert('Please select an intake document');
@@ -444,11 +493,19 @@
 		}
 
 		try {
+			const selectedDoc = documents.find(d => d.id === selectedIntakeDocId);
+			
+			// If already the current primary, just close modal
+			if (selectedDoc?.metadata?.is_intake_form) {
+				showIntakeDocumentSelector = false;
+				return;
+			}
+
 			// Update the selected document's metadata to mark it as intake form
 			const { error } = await (supabase
 				.from('documents') as any)
 				.update({
-					metadata: { ...documents.find(d => d.id === selectedIntakeDocId)?.metadata, is_intake_form: true }
+					metadata: { ...selectedDoc?.metadata, is_intake_form: true }
 				})
 				.eq('id', selectedIntakeDocId);
 
@@ -456,347 +513,18 @@
 
 			// Reload documents to reflect the change
 			await loadDocuments();
+			
+			toastStore.success(`Primary intake set to: ${selectedDoc?.file_name}`);
 
 			// Close modal
 			showIntakeDocumentSelector = false;
 
-			// Now start analysis
-			await startStreamingAnalysis();
-		} catch (error: any) {
-			alert('Failed to mark intake document: ' + error.message);
-		}
-	}
-
-	async function loadAnalysisStatus() {
-		try {
-			const { data, error } = await supabase
-				.from('analysis_results')
-				.select('*')
-				.eq('case_id', caseId as string)
-				.order('created_at', { ascending: false })
-				.limit(1);
-
-			if (error) {
-				console.error('Failed to load analysis status:', error);
-				return;
-			}
-			
-			analysisStatus = data && data.length > 0 ? data[0] : null;
-		} catch (error: any) {
-			console.error('Failed to load analysis status:', error);
-		}
-	}
-
-	// Enhanced file selection with drag-and-drop
-	function handleFilesSelected(files: FileList | File[]) {
-		// Filter out video and audio files
-		const videoAudioExtensions = [
-			'.mov', '.mp4', '.avi', '.mkv', '.wmv', '.flv', '.webm', '.m4v',  // Video
-			'.mp3', '.wav', '.aac', '.flac', '.m4a', '.ogg', '.wma', '.aiff',  // Audio
-		];
-		
-		const validFiles = Array.from(files).filter(file => {
-			const isVideoAudio = videoAudioExtensions.some(ext => 
-				file.name.toLowerCase().endsWith(ext)
-			);
-			if (isVideoAudio) {
-				console.log(`Skipping video/audio file: ${file.name}`);
-			}
-			return !isVideoAudio;
-		});
-		
-		// Show warning if any files were filtered out
-		if (validFiles.length < files.length) {
-			const skippedCount = files.length - validFiles.length;
-			errorMessage = `⏭️ Skipped ${skippedCount} video/audio file(s). Only documents and images are supported.`;
-			setTimeout(() => { 
-				if (errorMessage.includes('Skipped')) errorMessage = ''; 
-			}, 5000);
-		}
-		
-		selectedFiles = validFiles;
-		detectDuplicates();
-		autoDetectIntakeForms();
-	}
-
-	function detectDuplicates() {
-		const duplicates = new Set<number>();
-		
-		// Check against already uploaded documents
-		selectedFiles.forEach((file, index) => {
-			const isDuplicate = documents.some(
-				(doc) => doc.file_name === file.name && doc.file_size === file.size
-			);
-			if (isDuplicate) {
-				duplicates.add(index);
-			}
-		});
-
-		// Check for duplicates within selected files
-		selectedFiles.forEach((file, index) => {
-			const hasDuplicateInSelection = selectedFiles.some(
-				(otherFile, otherIndex) =>
-					index !== otherIndex &&
-					file.name === otherFile.name &&
-					file.size === otherFile.size
-			);
-			if (hasDuplicateInSelection) {
-				duplicates.add(index);
-			}
-		});
-
-		duplicateFiles = duplicates;
-	}
-
-	function autoDetectIntakeForms() {
-		const matches = selectedFiles
-			.map((f, i) => ({ file: f, index: i }))
-			.filter(({ file }) => file.name.toLowerCase().includes('intake'));
-		
-		if (matches.length === 0) {
-			intakeFormIndex = null;
-			showIntakeSelector = true; // User must select
-		} else if (matches.length === 1) {
-			intakeFormIndex = matches[0].index;
-			showIntakeSelector = false;
-		} else {
-			showIntakeSelector = true; // Multiple matches, user picks
-		}
-	}
-
-	function handleFileInput(event: Event) {
-		const target = event.target as HTMLInputElement;
-		if (target.files && target.files.length > 0) {
-			handleFilesSelected(target.files);
-		}
-	}
-
-	function handleDrop(event: DragEvent) {
-		event.preventDefault();
-		dragActive = false;
-		if (event.dataTransfer?.files && event.dataTransfer.files.length > 0) {
-			handleFilesSelected(event.dataTransfer.files);
-		}
-	}
-
-	function handleDragOver(event: DragEvent) {
-		event.preventDefault();
-		dragActive = true;
-	}
-
-	function handleDragLeave(event: DragEvent) {
-		event.preventDefault();
-		dragActive = false;
-	}
-
-	function removeSelectedFile(index: number) {
-		selectedFiles = selectedFiles.filter((_, i) => i !== index);
-		if (intakeFormIndex === index) {
-			intakeFormIndex = null;
-		} else if (intakeFormIndex !== null && intakeFormIndex > index) {
-			intakeFormIndex--;
-		}
-		if (selectedFiles.length > 0) {
-			detectDuplicates();
-			autoDetectIntakeForms();
-		} else {
-			duplicateFiles = new Set();
-		}
-	}
-
-	function selectIntakeForm(index: number | null) {
-		intakeFormIndex = index;
-		showIntakeSelector = false;
-	}
-
-	async function uploadSelectedFiles() {
-		if (selectedFiles.length === 0) return;
-
-		// Filter out duplicate files
-		const filesToUpload = selectedFiles.filter((_, index) => !duplicateFiles.has(index));
-		
-		if (filesToUpload.length === 0) {
-			errorMessage = 'All selected files are duplicates. Please select different files.';
-			return;
-		}
-
-		uploading = true;
-		errorMessage = '';
-		uploadFailures = [];
-		uploadedCount = 0;
-		totalUploadCount = filesToUpload.length;
-		let skippedCount = duplicateFiles.size;
-		let successCount = 0;
-
-		try {
-		const { session, user } = await getSecureSession();
-
-		if (!session || !user) throw new Error('Not authenticated');
-
-		// Upload each non-duplicate file
-			for (let i = 0; i < filesToUpload.length; i++) {
-				const file = filesToUpload[i];
-				currentUploadFile = file.name;
-				uploadedCount = i;
-				const originalIndex = selectedFiles.indexOf(file);
-
-				try {
-					// Pre-upload validation
-					const validation = validateFileBeforeUpload(file);
-					if (!validation.valid) {
-						uploadFailures.push({
-							fileName: file.name,
-							reason: validation.error!,
-							errorCode: validation.errorCode || 'UNKNOWN',
-							fileSizeMB: file.size / (1024 * 1024),
-							file: file
-						});
-						continue; // Skip this file, continue with others
-					}
-
-					// Upload file
-					const formData = new FormData();
-					formData.append('file', file);
-				formData.append('case_id', caseId as string);
-				formData.append('is_intake_form', (originalIndex === intakeFormIndex).toString());
-
-				const response = await fetch(`${getApiUrl()}/api/documents/upload`, {
-						method: 'POST',
-						headers: {
-							Authorization: `Bearer ${session.access_token}`
-						},
-						body: formData
-					});
-
-					if (!response.ok) {
-						const errorData = await response.json().catch(() => ({ detail: 'Upload failed' }));
-						uploadFailures.push({
-							fileName: file.name,
-							reason: errorData.detail || `Failed to upload ${file.name}`,
-							errorCode: categorizeError(errorData.detail, errorData.code),
-							fileSizeMB: file.size / (1024 * 1024),
-							file: file
-						});
-					} else {
-						successCount++;
-					}
-				} catch (error: any) {
-					uploadFailures.push({
-						fileName: file.name,
-						reason: error.message || 'Unknown error',
-						errorCode: 'UNKNOWN',
-						fileSizeMB: file.size / (1024 * 1024),
-						file: file
-					});
-				}
-
-				uploadProgress = ((i + 1) / filesToUpload.length) * 100;
-			}
-
-			// Reload documents
-			await loadDocuments();
-
-			// Show summary
-			if (uploadFailures.length > 0) {
-				showFailureSummary = true;
-				if (successCount > 0) {
-					errorMessage = `⚠️ Uploaded ${successCount} file(s), ${uploadFailures.length} failed. Click to see details.`;
-				}
-			} else {
-				// All successful
-				selectedFiles = [];
-				intakeFormIndex = null;
-				showIntakeSelector = false;
-				duplicateFiles = new Set();
-				
-				let message = `✅ Successfully uploaded ${successCount} file(s)`;
-				if (skippedCount > 0) {
-					message += `. Skipped ${skippedCount} duplicate(s)`;
-				}
-				errorMessage = message;
-				setTimeout(() => { errorMessage = ''; }, 5000);
+			// Start analysis if this was triggered during analysis flow
+			if (startAnalysisAfterIntakeSelection) {
+				startAnalysisAfterIntakeSelection = false;
+				await startStreamingAnalysis();
 			}
 		} catch (error: any) {
-			errorMessage = error.message || 'Failed to upload files';
-		} finally {
-			uploading = false;
-			uploadProgress = 0;
-			currentUploadFile = '';
-			uploadedCount = 0;
-			totalUploadCount = 0;
-		}
-	}
-
-	async function retryFailedUploads() {
-		if (uploadFailures.length === 0) return;
-
-		// Retry only the failed files
-		const filesToRetry = uploadFailures
-			.filter(f => f.file)
-			.map(f => f.file!);
-
-		if (filesToRetry.length === 0) return;
-
-		// Reset the selected files to only failed ones
-		selectedFiles = filesToRetry;
-
-		// Close the summary modal and retry
-		showFailureSummary = false;
-		await uploadSelectedFiles();
-	}
-
-	async function handleSync() {
-		syncLoading = true;
-		syncError = null;
-		syncResult = null;
-
-		try {
-			const result = await syncClioMatter(caseData!.id);
-			syncResult = result;
-
-			// Reload documents if any changes were made
-			if (result.summary.new_items > 0 || result.summary.updated_items > 0) {
-				await loadDocuments();
-				toastStore.success(`Synced ${result.summary.total_processed} items from Clio`);
-			}
-		} catch (err) {
-			syncError = err instanceof Error ? err.message : 'Failed to sync';
-			toastStore.error(syncError);
-		} finally {
-			syncLoading = false;
-		}
-	}
-
-	async function promoteToIntakeForm(docId: string) {
-		try {
-			const { session, user } = await getSecureSession();
-
-			if (!session || !user) {
-				throw new Error('Not authenticated');
-			}
-
-			const apiUrl = getApiUrl();
-			
-			// Call backend to update intake form designation
-			const response = await fetch(`${apiUrl}/api/cases/${caseId}/set-intake-form`, {
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json',
-					Authorization: `Bearer ${session.access_token}`
-				},
-				body: JSON.stringify({ document_id: docId })
-			});
-
-			if (!response.ok) {
-				const errorData = await response.json();
-				throw new Error(errorData.detail || 'Failed to update intake form');
-			}
-
-			// Reload documents to reflect changes
-			await loadDocuments();
-			errorMessage = '';
-		} catch (error: any) {
-			console.error('Error promoting to intake form:', error);
 			errorMessage = error.message || 'Failed to update intake form';
 		}
 	}
@@ -932,10 +660,14 @@
 			const markedIntake = intakeCandidates.find(doc => doc.metadata?.is_intake_form);
 			if (!markedIntake) {
 				// No document is marked, user must choose
+				startAnalysisAfterIntakeSelection = true;
 				showIntakeDocumentSelector = true;
 				return;
 			}
 			// If one is already marked, proceed with that one
+		} else if (intakeCandidates.length === 1 && !intakeCandidates[0].metadata?.is_intake_form) {
+			// Auto-select the only candidate
+			await promoteToIntakeForm(intakeCandidates[0].id);
 		}
 
 		analyzing = true;
@@ -1197,10 +929,14 @@
 			const markedIntake = intakeCandidates.find(doc => doc.metadata?.is_intake_form);
 			if (!markedIntake) {
 				// No document is marked, user must choose
+				startAnalysisAfterIntakeSelection = true;
 				showIntakeDocumentSelector = true;
 				return;
 			}
 			// If one is already marked, proceed with that one
+		} else if (intakeCandidates.length === 1 && !intakeCandidates[0].metadata?.is_intake_form) {
+			// Auto-select the only candidate
+			await promoteToIntakeForm(intakeCandidates[0].id);
 		}
 
 		showStreamingPanel = true;
@@ -1594,6 +1330,45 @@
 				</div>
 			</div>
 
+			<!-- Primary Intake Document Instructions -->
+			{#if intakeCandidates.length > 0}
+				<div class="mx-4 mt-4 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg">
+					<div class="flex items-start justify-between gap-4">
+						<div class="flex-1">
+							<h4 class="text-sm font-semibold text-blue-900 mb-1 flex items-center gap-2">
+								<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+								</svg>
+								Primary Intake Document
+							</h4>
+							<p class="text-xs text-blue-700 mb-2">
+								The primary intake document provides case context for analysis. 
+								<strong>Case summaries</strong> are preferred as they're more comprehensive than intake forms.
+							</p>
+							{#if primaryIntakeDoc}
+								<p class="text-xs text-blue-800">
+									<strong>Current:</strong> {primaryIntakeDoc.file_name}
+									{#if !isCaseSummary(primaryIntakeDoc) && caseSummaryDocs.length > 0}
+										<span class="text-amber-700 ml-2">💡 Consider using a case summary instead</span>
+									{/if}
+								</p>
+							{:else if recommendedPrimaryIntake()}
+								<p class="text-xs text-amber-700">
+									<strong>Recommended:</strong> {recommendedPrimaryIntake().file_name}
+									<span class="text-amber-600 ml-2">(Not yet selected)</span>
+								</p>
+							{/if}
+						</div>
+						<button
+							onclick={() => showIntakeDocumentSelector = true}
+							class="px-3 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-md transition-colors whitespace-nowrap"
+						>
+							{primaryIntakeDoc ? 'Change' : 'Select'} Primary Intake
+						</button>
+					</div>
+				</div>
+			{/if}
+
 			<!-- Sync Results Display -->
 			{#if syncResult}
 				<div class="mx-4 mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
@@ -1842,9 +1617,9 @@
 					<ul class="divide-y divide-gray-200">
 					{#each sortedDocuments as doc}
 							<li 
-								class="px-4 py-4 sm:px-6 group transition-colors {isVideoAudioFile(doc.file_name) ? 'bg-red-50 hover:bg-red-100 border-l-4 border-red-500 opacity-75' : doc.metadata?.is_intake_form ? 'bg-linear-to-r from-green-50 to-green-100 hover:from-green-100 hover:to-green-150 border-l-[6px] border-green-600' : doc.metadata?.is_intake_candidate ? 'bg-yellow-50 hover:bg-yellow-100 border-l-4 border-yellow-400' : 'hover:bg-gray-50'}"
+								class="px-4 py-4 sm:px-6 group transition-colors {isVideoAudioFile(doc.file_name) ? 'bg-red-50 hover:bg-red-100 border-l-4 border-red-500 opacity-75' : doc.metadata?.is_intake_form ? (isCaseSummary(doc) ? 'bg-gradient-to-r from-indigo-50 to-purple-50 hover:from-indigo-100 hover:to-purple-100 border-l-[6px] border-indigo-600' : 'bg-gradient-to-r from-green-50 to-green-100 hover:from-green-100 hover:to-green-150 border-l-[6px] border-green-600') : (isCaseSummary(doc) ? 'bg-indigo-50 hover:bg-indigo-100 border-l-4 border-indigo-400' : isIntakeForm(doc) ? 'bg-yellow-50 hover:bg-yellow-100 border-l-4 border-yellow-400' : 'hover:bg-gray-50')}"
 								role={doc.metadata?.is_intake_form ? 'article' : undefined}
-								aria-label={isVideoAudioFile(doc.file_name) ? 'Video/audio file - not analyzed' : doc.metadata?.is_intake_form ? 'Intake form document' : doc.metadata?.is_intake_candidate ? 'Alternate intake form candidate' : undefined}
+								aria-label={isVideoAudioFile(doc.file_name) ? 'Video/audio file - not analyzed' : doc.metadata?.is_intake_form ? (isCaseSummary(doc) ? 'Primary intake - Case summary' : 'Primary intake form') : (isCaseSummary(doc) ? 'Case summary document' : isIntakeForm(doc) ? 'Intake form candidate' : undefined)}
 								aria-describedby={doc.metadata?.is_intake_form ? `intake-desc-${doc.id}` : undefined}
 							>
 								{#if doc.metadata?.is_intake_form}
@@ -1867,14 +1642,25 @@
 														<title>Video/Audio - Not Analyzed</title>
 														<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
 													</svg>
+												{:else if doc.metadata?.is_intake_form && isCaseSummary(doc)}
+													<svg class="h-6 w-6 text-indigo-600 shrink-0 animate-pulse" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+														<title>Primary Intake - Case Summary</title>
+														<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+														<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+													</svg>
 												{:else if doc.metadata?.is_intake_form}
 													<svg class="h-6 w-6 text-green-600 shrink-0 animate-pulse" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
 														<title>Primary Intake Form</title>
 														<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
 													</svg>
-												{:else if doc.metadata?.is_intake_candidate}
+												{:else if isCaseSummary(doc)}
+													<svg class="h-5 w-5 text-indigo-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+														<title>Case Summary</title>
+														<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+													</svg>
+												{:else if isIntakeForm(doc)}
 													<svg class="h-5 w-5 text-yellow-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-														<title>Alternate Intake Form</title>
+														<title>Intake Form</title>
 														<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
 													</svg>
 												{:else if doc.metadata?.clio_source}
@@ -1883,20 +1669,28 @@
 														<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
 													</svg>
 												{/if}
-												<p class="text-sm font-medium {isVideoAudioFile(doc.file_name) ? 'text-red-900 line-through' : doc.metadata?.is_intake_form ? 'text-green-900' : doc.metadata?.is_intake_candidate ? 'text-yellow-900' : 'text-gray-900'} truncate hover:underline">
+												<p class="text-sm font-medium {isVideoAudioFile(doc.file_name) ? 'text-red-900 line-through' : doc.metadata?.is_intake_form ? (isCaseSummary(doc) ? 'text-indigo-900' : 'text-green-900') : (isCaseSummary(doc) ? 'text-indigo-900' : isIntakeForm(doc) ? 'text-yellow-900' : 'text-gray-900')} truncate hover:underline">
 													{doc.file_name}
 												</p>
 												{#if isVideoAudioFile(doc.file_name)}
 													<span class="px-2 py-0.5 text-xs font-bold rounded-full bg-red-600 text-white shadow-sm">
 														⏭️ NOT ANALYZED
 													</span>
+												{:else if doc.metadata?.is_intake_form && isCaseSummary(doc)}
+													<span class="px-3 py-1 text-base font-bold rounded-full bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-sm">
+														✓ PRIMARY INTAKE (SUMMARY)
+													</span>
 												{:else if doc.metadata?.is_intake_form}
 													<span class="px-3 py-1 text-base font-bold rounded-full bg-green-600 text-white shadow-sm">
 														✓ PRIMARY INTAKE
 													</span>
-												{:else if doc.metadata?.is_intake_candidate}
+												{:else if isCaseSummary(doc)}
+													<span class="px-2 py-0.5 text-sm font-semibold rounded-full bg-indigo-500 text-white">
+														CASE SUMMARY
+													</span>
+												{:else if isIntakeForm(doc)}
 													<span class="px-2 py-0.5 text-sm font-semibold rounded-full bg-yellow-500 text-white">
-														ALTERNATE INTAKE
+														INTAKE FORM
 													</span>
 												{/if}
 												{#if doc.metadata?.clio_source}
@@ -1905,25 +1699,29 @@
 													</span>
 												{/if}
 											</div>
-											<p class="text-sm {isVideoAudioFile(doc.file_name) ? 'text-red-700 font-semibold' : doc.metadata?.is_intake_form ? 'text-accent' : doc.metadata?.is_intake_candidate ? 'text-yellow-700' : 'text-gray-500'}">
+											<p class="text-sm {isVideoAudioFile(doc.file_name) ? 'text-red-700 font-semibold' : doc.metadata?.is_intake_form ? (isCaseSummary(doc) ? 'text-indigo-600' : 'text-accent') : (isCaseSummary(doc) ? 'text-indigo-600' : isIntakeForm(doc) ? 'text-yellow-700' : 'text-gray-500')}">
 												{formatFileSize(doc.file_size)} • {doc.file_type}
 												{#if isVideoAudioFile(doc.file_name)}
 													• Video/audio files are excluded from analysis
+												{:else if doc.metadata?.is_intake_form && isCaseSummary(doc)}
+													• Primary case context (preferred)
 												{:else if doc.metadata?.is_intake_form}
-													• Click to view
-												{:else if doc.metadata?.is_intake_candidate}
-													• Alternate intake form
+													• Primary case context
+												{:else if isCaseSummary(doc)}
+													• Comprehensive case overview (recommended for primary intake)
+												{:else if isIntakeForm(doc)}
+													• Intake form available for selection
 												{/if}
 											</p>
-											{#if doc.metadata?.is_intake_candidate}
+											{#if (isCaseSummary(doc) || isIntakeForm(doc)) && !doc.metadata?.is_intake_form}
 												<button
 													onclick={(e) => {
 														e.stopPropagation();
 														promoteToIntakeForm(doc.id);
 													}}
-													class="mt-2 text-xs text-accent hover:text-accent-hover hover:underline font-medium"
+													class="mt-2 text-xs {isCaseSummary(doc) ? 'text-indigo-600 hover:text-indigo-800' : 'text-accent hover:text-accent-hover'} hover:underline font-medium"
 												>
-													✓ Use as Primary Intake
+													{isCaseSummary(doc) ? '⭐ Use as Primary Intake (Recommended)' : '✓ Use as Primary Intake'}
 												</button>
 											{/if}
 										</div>
@@ -2531,43 +2329,69 @@
 	<div class="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4 z-50">
 		<div class="bg-white rounded-lg max-w-2xl w-full p-6 max-h-[80vh] overflow-y-auto">
 			<div class="mb-6">
-				<h3 class="text-lg font-medium text-gray-900 mb-2">Select Intake Document</h3>
-				<p class="text-sm text-gray-600">
-					Multiple documents contain "intake" in their filename. Please select which document is the actual intake form.
+				<h3 class="text-lg font-medium text-gray-900 mb-2">Select Primary Intake Document</h3>
+				<p class="text-sm text-gray-600 mb-3">
+					The primary intake document provides essential case context for analysis. 
+					<strong>Case summaries</strong> are preferred as they typically contain more comprehensive information than intake forms.
 				</p>
+				<div class="bg-blue-50 border border-blue-200 rounded-lg p-3">
+					<p class="text-xs text-blue-800">
+						<strong>💡 Recommendation:</strong> If you have a case summary document, select it for the most accurate analysis context.
+					</p>
+				</div>
 			</div>
 			
 			<div class="space-y-2 mb-6">
-				{#each intakeCandidates as doc}
-					<label class="flex items-start p-4 border rounded-lg cursor-pointer hover:bg-gray-50 transition-colors {selectedIntakeDocId === doc.id ? 'border-accent bg-accent/10' : 'border-gray-200'}">
+				{#each [...intakeCandidates].sort((a, b) => {
+					// Sort: case summaries first, then intake forms
+					const aIsSummary = isCaseSummary(a);
+					const bIsSummary = isCaseSummary(b);
+					if (aIsSummary && !bIsSummary) return -1;
+					if (!aIsSummary && bIsSummary) return 1;
+					return 0;
+				}) as doc}
+					<label class="flex items-start p-4 border rounded-lg cursor-pointer hover:bg-gray-50 transition-colors {selectedIntakeDocId === doc.id ? (isCaseSummary(doc) ? 'border-indigo-500 bg-indigo-50' : 'border-accent bg-accent/10') : (isCaseSummary(doc) ? 'border-indigo-200 bg-indigo-50/50' : 'border-gray-200')}">
 						<input
 							type="radio"
 							name="intake-document"
 							value={doc.id}
 							checked={selectedIntakeDocId === doc.id}
 							onchange={() => (selectedIntakeDocId = doc.id)}
-							class="mt-1 h-4 w-4 text-accent focus:ring-accent border-gray-300"
+							class="mt-1 h-4 w-4 {isCaseSummary(doc) ? 'text-indigo-600 focus:ring-indigo-500' : 'text-accent focus:ring-accent'} border-gray-300"
 						/>
 						<div class="ml-3 flex-1 min-w-0">
-							<div class="flex items-center space-x-2 mb-1">
-								{#if doc.metadata?.clio_source}
+							<div class="flex items-center space-x-2 mb-1 flex-wrap">
+								{#if isCaseSummary(doc)}
+									<svg class="h-4 w-4 text-indigo-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+									</svg>
+								{:else if doc.metadata?.clio_source}
 									<svg class="h-4 w-4 text-accent shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
 										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
 									</svg>
 								{/if}
-								<p class="text-sm font-medium text-gray-900 truncate">{doc.file_name}</p>
-								{#if doc.metadata?.clio_source}
+								<p class="text-sm font-medium {isCaseSummary(doc) ? 'text-indigo-900' : 'text-gray-900'} truncate">{doc.file_name}</p>
+								{#if isCaseSummary(doc)}
+									<span class="px-2 py-0.5 text-xs font-semibold rounded-full bg-indigo-500 text-white">
+										⭐ CASE SUMMARY (RECOMMENDED)
+									</span>
+								{:else if doc.metadata?.clio_source}
 									<span class="px-2 py-0.5 text-xs font-semibold rounded-full bg-purple-100 text-purple-800">
 										{doc.metadata.clio_type?.toUpperCase() || 'CLIO'}
 									</span>
 								{/if}
 								{#if doc.metadata?.is_intake_form}
-									<span class="px-2 py-0.5 text-xs font-semibold rounded-full bg-accent/20 text-contrast">
-										CURRENT
+									<span class="px-2 py-0.5 text-xs font-semibold rounded-full {isCaseSummary(doc) ? 'bg-indigo-600' : 'bg-accent'} text-white">
+										CURRENT PRIMARY
 									</span>
 								{/if}
 							</div>
-							<p class="text-xs text-gray-500">{formatFileSize(doc.file_size)} • {doc.file_type}</p>
+							<p class="text-xs {isCaseSummary(doc) ? 'text-indigo-600' : 'text-gray-500'}">{formatFileSize(doc.file_size)} • {doc.file_type}</p>
+							{#if isCaseSummary(doc)}
+								<p class="text-xs text-indigo-700 mt-1 font-medium">
+									✓ Comprehensive case overview - best for analysis context
+								</p>
+							{/if}
 							{#if doc.extracted_text}
 								<p class="text-xs text-gray-600 mt-1 line-clamp-2">{doc.extracted_text.substring(0, 150)}...</p>
 							{/if}
@@ -2587,9 +2411,13 @@
 				onclick={confirmIntakeSelection}
 				disabled={!selectedIntakeDocId}
 				variant="primary"
-				loadingText="Starting..."
+				loadingText="Saving..."
 			>
-				Confirm & Start Analysis
+				{#if intakeCandidates.find(d => d.id === selectedIntakeDocId)?.metadata?.is_intake_form}
+					Close
+				{:else}
+					Confirm Selection
+				{/if}
 			</AsyncButton>
 			</div>
 		</div>

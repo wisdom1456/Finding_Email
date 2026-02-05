@@ -987,6 +987,40 @@ def is_photo_rejection_message(text: str) -> bool:
     return any(phrase in text_lower for phrase in rejection_phrases)
 
 
+def is_low_quality_ocr_result(text: str) -> bool:
+    """
+    Detect if OCR result is too minimal to be a real text document,
+    indicating the image is likely a photo rather than a document.
+
+    Examples of low-quality results:
+    - Single characters: "O", "I", "."
+    - Very short results: "OK", "NO"
+    - Mostly punctuation/symbols with no real words
+    """
+    if not text or len(text.strip()) == 0:
+        return True
+
+    cleaned = text.strip()
+
+    # Very short results (< 20 chars) are likely spurious OCR detections
+    if len(cleaned) < 20:
+        return True
+
+    # Count actual words (not just whitespace/punctuation)
+    words = [w for w in cleaned.split() if any(c.isalnum() for c in w)]
+
+    # Less than 3 real words suggests this isn't a text document
+    if len(words) < 3:
+        return True
+
+    # If text is mostly non-alphanumeric (>80%), it's likely noise
+    alnum_chars = sum(c.isalnum() for c in cleaned)
+    if len(cleaned) > 0 and (alnum_chars / len(cleaned)) < 0.2:
+        return True
+
+    return False
+
+
 async def get_case_context(case_id: str, supabase_client) -> dict:
     """Get case context for image analysis."""
     try:
@@ -1240,10 +1274,11 @@ async def trigger_extraction(
                             extraction_quality = "high"
                             ocr_provider = "google_vision"
                             logger.info(f"Successfully extracted text from {file_name} using Google Vision")
-                            
-                            # Check if the OCR result is actually a photo rejection message
-                            if is_photo_rejection_message(extracted_text):
-                                logger.info(f"Google Vision detected photo (non-text image) in {file_name}, switching to visual analysis")
+
+                            # Check if the OCR result is a photo rejection message or low-quality result
+                            if is_photo_rejection_message(extracted_text) or is_low_quality_ocr_result(extracted_text):
+                                reason = "rejection message" if is_photo_rejection_message(extracted_text) else "low-quality OCR result"
+                                logger.info(f"Google Vision detected photo (non-text image) in {file_name} ({reason}), switching to visual analysis")
                                 try:
                                     # Get case context - use .get() to avoid KeyError
                                     case_id = document.get("case_id")
@@ -1347,10 +1382,12 @@ async def trigger_extraction(
                     extraction_quality = "high"
                     ocr_provider = "openai"
                     logger.info(f"Successfully extracted text from {file_name} using GPT-4o Vision")
-                    
-                    # Check if the OCR result is actually a photo rejection message
-                    if is_photo_rejection_message(extracted_text):
-                        logger.info(f"Detected photo (non-text image) in {file_name}, switching to visual analysis")
+
+
+                    # Check if the OCR result is a photo rejection message or low-quality result
+                    if is_photo_rejection_message(extracted_text) or is_low_quality_ocr_result(extracted_text):
+                        reason = "rejection message" if is_photo_rejection_message(extracted_text) else "low-quality OCR result"
+                        logger.info(f"Detected photo (non-text image) in {file_name} ({reason}), switching to visual analysis")
                         try:
                             # Get case context - use .get() to avoid KeyError
                             case_id = document.get("case_id")

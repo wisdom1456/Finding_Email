@@ -59,6 +59,7 @@
 	let criticalGapCount = $derived(gapAnalysis ? gapAnalysis.critical_count + gapAnalysis.high_count : 0);
 	let analyzingGaps = $state(false);
 	let gapAnalysisProgress = $state('');
+	let streamingGapSummary = $state(''); // Streaming attorney summary
 
 	// Recommendation letter state
 	let forceGeneration = $state(false);
@@ -396,6 +397,7 @@
 	async function analyzeGaps() {
 		analyzingGaps = true;
 		gapAnalysisProgress = 'Starting gap analysis...';
+		streamingGapSummary = ''; // Clear previous streaming content
 
 		try {
 			const { session, user } = await getSecureSession();
@@ -439,8 +441,12 @@
 							if (data.type === 'phase') {
 								gapAnalysisProgress = data.message;
 								if (data.gaps_found !== undefined) {
-									gapAnalysisProgress = `Found ${data.gaps_found} gaps. Saving...`;
+									gapAnalysisProgress = `Found ${data.gaps_found} gaps. Generating summary...`;
 								}
+							} else if (data.type === 'token') {
+								// Stream attorney summary tokens (NEW)
+								streamingGapSummary += data.token;
+								gapAnalysisProgress = 'Generating attorney summary...';
 							} else if (data.type === 'result') {
 								// Update results with gap analysis
 								if (results?.multi_stage_result) {
@@ -462,6 +468,7 @@
 		} finally {
 			analyzingGaps = false;
 			gapAnalysisProgress = '';
+			streamingGapSummary = ''; // Clear after complete
 		}
 	}
 
@@ -1097,6 +1104,18 @@ async function generateLetterRequest(body: Record<string, any>) {
 							<p class="text-sm text-blue-600 mt-4 animate-pulse">{gapAnalysisProgress}</p>
 						{:else}
 							<p class="text-xs text-gray-400 mt-4">Analysis typically takes 30-60 seconds</p>
+						{/if}
+
+						{#if streamingGapSummary}
+							<div class="mt-8 p-6 bg-blue-50 border border-blue-200 rounded-lg">
+								<h3 class="text-lg font-semibold text-contrast mb-4 flex items-center gap-2">
+									<span class="animate-pulse">●</span>
+									Attorney Summary (Generating...)
+								</h3>
+								<div class="prose prose-sm max-w-none">
+									<div class="whitespace-pre-wrap text-gray-700 leading-relaxed">{streamingGapSummary}<span class="animate-pulse">▊</span></div>
+								</div>
+							</div>
 						{/if}
 					</div>
 				</div>

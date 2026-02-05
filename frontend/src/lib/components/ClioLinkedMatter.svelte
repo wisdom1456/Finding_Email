@@ -378,7 +378,7 @@
 		onkeydown={(e) => { if (e.key === 'Escape' && !changingMatter) showChangeMatterModal = false; }}
 	>
 		<div
-			class="relative bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] flex flex-col"
+			class="relative card-standard shadow-xl max-w-4xl w-full max-h-[90vh] flex flex-col p-0"
 			role="presentation"
 			onclick={(e) => e.stopPropagation()}
 			onkeydown={(e) => e.stopPropagation()}

@@ -28,7 +28,11 @@ vi.mock('$lib/supabase', () => ({
 				data: { session: { access_token: 'mock-token' } }
 			})
 		}
-	}
+	},
+	getSecureSession: vi.fn().mockResolvedValue({
+		session: { access_token: 'mock-token' },
+		user: { id: 'user-123', email: 'test@example.com' }
+	})
 }));
 
 // Mock environment
@@ -56,7 +60,7 @@ describe('ClioConnect', () => {
 
 		const connectButton = screen.getByRole('button', { name: /connect to clio/i });
 		expect(connectButton).toBeInTheDocument();
-		expect(connectButton).toHaveClass('bg-accent');
+		expect(connectButton).toHaveClass('btn-primary');
 	});
 
 	it('connect button redirects to OAuth flow', async () => {
@@ -102,17 +106,14 @@ describe('ClioConnect', () => {
 		});
 
 		render(ClioConnect);
-		await screen.findByText('Disconnect');
+		await screen.findByText('Disconnect Clio');
 
-		const disconnectButton = screen.getByRole('button', { name: /disconnect/i });
+		const disconnectButton = screen.getByRole('button', { name: /disconnect clio/i });
 		expect(disconnectButton).toBeInTheDocument();
-		expect(disconnectButton).toHaveClass('text-red-700');
+		expect(disconnectButton).toHaveClass('text-red-600');
 	});
 
 	it('disconnect button shows confirmation dialog', async () => {
-		// Mock confirm
-		window.confirm = vi.fn().mockReturnValue(false);
-
 		// Mock connected state
 		(global.fetch as any).mockResolvedValueOnce({
 			ok: true,
@@ -120,23 +121,20 @@ describe('ClioConnect', () => {
 		});
 
 		render(ClioConnect);
-		await screen.findByText('Disconnect');
+		await screen.findByText('Disconnect Clio');
 
-		const disconnectButton = screen.getByRole('button', { name: /disconnect/i });
+		const disconnectButton = screen.getByRole('button', { name: /disconnect clio/i });
 		await fireEvent.click(disconnectButton);
 
-		expect(window.confirm).toHaveBeenCalledWith(
-			expect.stringContaining('Are you sure')
-		);
+		// Check that confirmation dialog appears
+		await screen.findByText(/are you sure you want to disconnect/i);
 	});
 
 	it('disconnect button calls API when confirmed', async () => {
-		window.confirm = vi.fn().mockReturnValue(true);
-
 		(global.fetch as any)
 			.mockResolvedValueOnce({
 				ok: true,
-				json: async () => ({ connected: true })
+				json: async () => ({ connected: true, clio_user_id: 'user-123' })
 			})
 			.mockResolvedValueOnce({
 				ok: true
@@ -145,11 +143,16 @@ describe('ClioConnect', () => {
 		const { clioStore } = await import('$lib/stores/clioStore');
 
 		render(ClioConnect);
-		await screen.findByText('Disconnect');
+		await screen.findByText('Disconnect Clio');
 
-		const disconnectButton = screen.getByRole('button', { name: /disconnect/i });
+		const disconnectButton = screen.getByRole('button', { name: /disconnect clio/i });
 		await fireEvent.click(disconnectButton);
 
+		// Confirm in the dialog
+		const confirmButton = await screen.findByRole('button', { name: /^disconnect$/i });
+		await fireEvent.click(confirmButton);
+
+		// Check API was called
 		expect(global.fetch).toHaveBeenCalledWith(
 			'http://localhost:8000/api/clio/disconnect',
 			expect.objectContaining({

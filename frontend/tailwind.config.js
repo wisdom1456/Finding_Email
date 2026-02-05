@@ -13,6 +13,7 @@ export default {
         // Teal accent - CTAs, links, highlights
         accent: {
           DEFAULT: '#5AB7A3',
+          text: '#316660', // WCAG AA compliant text color (5.2:1 contrast)
           hover: '#49998A',
           light: '#E8F5F2', // 10% opacity background
         },

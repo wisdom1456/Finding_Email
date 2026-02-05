@@ -2,6 +2,7 @@
 	import { supabase } from '$lib/supabase';
 	import { goto } from '$app/navigation';
 	import AsyncButton from '$lib/components/ui/AsyncButton.svelte';
+	import Input from '$lib/components/ui/Input.svelte';
 	import logoImg from '$lib/assets/logo-br.png';
 
 	let email = $state('');
@@ -55,7 +56,7 @@
 		</div>
 		
 		<!-- Card -->
-		<div class="bg-white rounded-lg shadow-card p-6">
+		<div class="card-standard">
 			<div class="mb-6">
 				<h2 class="text-2xl font-heading font-bold text-contrast text-center">
 					Create Your Account
@@ -66,59 +67,42 @@
 			</div>
 			
 			<form class="space-y-5" onsubmit={(e) => { e.preventDefault(); handleRegister(); }}>
-				<div>
-					<label for="full-name" class="block text-sm font-medium text-contrast mb-1">
-						Full Name
-					</label>
-					<input
-						id="full-name"
-						name="fullName"
-						type="text"
-						required
-						bind:value={fullName}
-						class="input-standard focus:ring-2 focus:ring-accent focus:border-transparent transition-colors"
-						placeholder="John Doe"
-					/>
-				</div>
-				
-				<div>
-					<label for="email-address" class="block text-sm font-medium text-contrast mb-1">
-						Email Address
-					</label>
-					<input
-						id="email-address"
-						name="email"
-						type="email"
-						autocomplete="email"
-						required
-						bind:value={email}
-						class="input-standard focus:ring-2 focus:ring-accent focus:border-transparent transition-colors"
-						placeholder="you@example.com"
-					/>
-				</div>
-				
-				<div>
-					<label for="password" class="block text-sm font-medium text-contrast mb-1">
-						Password
-					</label>
-					<input
-						id="password"
-						name="password"
-						type="password"
-						autocomplete="new-password"
-						required
-						bind:value={password}
-						class="input-standard focus:ring-2 focus:ring-accent focus:border-transparent transition-colors"
-						placeholder="Min. 8 characters"
-						minlength="8"
-					/>
-				</div>
+				<Input
+					id="full-name"
+					label="Full Name"
+					name="fullName"
+					type="text"
+					required
+					bind:value={fullName}
+					placeholder="John Doe"
+					error={errorMessage}
+				/>
 
-				{#if errorMessage}
-					<div class="rounded-md bg-red-50 border border-red-200 p-3">
-						<p class="text-sm text-red-700">{errorMessage}</p>
-					</div>
-				{/if}
+				<Input
+					id="email-address"
+					label="Email Address"
+					name="email"
+					type="email"
+					autocomplete="email"
+					required
+					bind:value={email}
+					placeholder="you@example.com"
+					error={errorMessage}
+				/>
+
+				<Input
+					id="password"
+					label="Password"
+					name="password"
+					type="password"
+					autocomplete="new-password"
+					required
+					bind:value={password}
+					placeholder="Min. 8 characters"
+					minlength="8"
+					error={errorMessage}
+					helper="Minimum 8 characters required"
+				/>
 
 				{#if successMessage}
 					<div class="rounded-md bg-accent/10 border border-accent/30 p-3">

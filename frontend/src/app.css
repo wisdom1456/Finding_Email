@@ -13,6 +13,7 @@
   --color-accent: #5AB7A3;
   --color-accent-hover: #49998A;
   --color-accent-light: #E8F5F2;
+  --color-accent-text: #316660;  /* Darker teal for text (WCAG AA compliant) */
   
   /* Primary Palette */
   --color-primary-50: #E8F5F2;
@@ -78,6 +79,7 @@
   --color-contrast-light: #39428E;
   --color-accent: #5AB7A3;
   --color-accent-hover: #49998A;
+  --color-accent-text: #316660;  /* Darker teal for text (WCAG AA: ~5.2:1) */
   --color-base: #FFFFFF;
   --font-heading: 'Raleway', system-ui, sans-serif;
   --font-body: 'Montserrat', system-ui, sans-serif;
@@ -117,19 +119,21 @@ h6 { font-size: var(--text-base); font-weight: 600; }
 
 /* Links */
 a {
-  color: var(--color-accent);
+  color: var(--color-accent-text);  /* Use darker teal for better contrast */
   text-decoration: none;
   transition: color 0.15s ease;
 }
 
 a:hover {
-  color: var(--color-accent-hover);
+  color: var(--color-accent);  /* Lighter teal on hover (with underline) */
+  text-decoration: underline;
 }
 
 /* Focus States for Accessibility */
 :focus-visible {
-  outline: 2px solid var(--color-accent);
-  outline-offset: 2px;
+  outline: none;
+  box-shadow: 0 0 0 2px var(--color-accent);
+  border-radius: 4px;
 }
 
 /* Form Elements Base Styling */
@@ -141,6 +145,26 @@ input, textarea, select {
 button {
   font-family: var(--font-body);
   cursor: pointer;
+}
+
+/* Skip to Content Link (Accessibility) */
+.skip-to-content {
+  position: absolute;
+  top: -100px;
+  left: 0;
+  z-index: 9999;
+  padding: 0.75rem 1.5rem;
+  background-color: var(--color-accent);
+  color: white;
+  font-weight: 600;
+  text-decoration: none;
+  border-radius: 0 0 6px 0;
+  transition: top 0.2s ease;
+}
+
+.skip-to-content:focus {
+  top: 0;
+  box-shadow: 0 4px 12px rgba(90, 183, 163, 0.4);
 }
 
 /* Utility Classes for Brand Typography */
@@ -162,6 +186,10 @@ button {
 
 .text-accent {
   color: var(--color-accent);
+}
+
+.text-accent-text {
+  color: var(--color-accent-text);  /* Use for body text that needs AA contrast */
 }
 
 /* Button Base Styles */
@@ -386,7 +414,7 @@ button {
 
 .input-standard:focus {
   outline: none;
-  ring: 2px solid var(--color-accent);
+  box-shadow: 0 0 0 2px var(--color-accent);
   border-color: transparent;
 }
 

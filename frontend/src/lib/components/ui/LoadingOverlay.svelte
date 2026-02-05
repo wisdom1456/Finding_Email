@@ -33,7 +33,7 @@
 		aria-modal="true"
 		aria-label="Loading"
 	>
-		<div class="bg-white rounded-lg shadow-2xl p-8 max-w-md w-full mx-4">
+		<div class="card-standard shadow-2xl p-8 max-w-md w-full mx-4">
 			<div class="flex flex-col items-center text-center">
 				<Loader2 class="h-12 w-12 text-accent animate-spin mb-6" />
 				

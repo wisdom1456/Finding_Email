@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { supabase } from '$lib/supabase';
 	import AsyncButton from '$lib/components/ui/AsyncButton.svelte';
+	import Input from '$lib/components/ui/Input.svelte';
 	import logoImg from '$lib/assets/logo-br.png';
 
 	let email = $state('');
@@ -42,7 +43,7 @@
 		</div>
 		
 		<!-- Card -->
-		<div class="bg-white rounded-lg shadow-card p-6">
+		<div class="card-standard">
 			<div class="mb-6">
 				<h2 class="text-2xl font-heading font-bold text-contrast text-center">
 					Welcome Back
@@ -53,43 +54,29 @@
 			</div>
 			
 			<form class="space-y-5" onsubmit={(e) => { e.preventDefault(); handleLogin(); }}>
-				<div>
-					<label for="email-address" class="block text-sm font-medium text-contrast mb-1">
-						Email address
-					</label>
-					<input
-						id="email-address"
-						name="email"
-						type="email"
-						autocomplete="email"
-						required
-						bind:value={email}
-						class="input-standard focus:ring-2 focus:ring-accent focus:border-transparent transition-colors"
-						placeholder="you@example.com"
-					/>
-				</div>
-				
-				<div>
-					<label for="password" class="block text-sm font-medium text-contrast mb-1">
-						Password
-					</label>
-					<input
-						id="password"
-						name="password"
-						type="password"
-						autocomplete="current-password"
-						required
-						bind:value={password}
-						class="input-standard focus:ring-2 focus:ring-accent focus:border-transparent transition-colors"
-						placeholder="••••••••"
-					/>
-				</div>
+				<Input
+					id="email-address"
+					label="Email address"
+					type="email"
+					name="email"
+					autocomplete="email"
+					required
+					bind:value={email}
+					placeholder="you@example.com"
+					error={errorMessage}
+				/>
 
-				{#if errorMessage}
-					<div class="rounded-md bg-red-50 border border-red-200 p-3">
-						<p class="text-sm text-red-700">{errorMessage}</p>
-					</div>
-				{/if}
+				<Input
+					id="password"
+					label="Password"
+					type="password"
+					name="password"
+					autocomplete="current-password"
+					required
+					bind:value={password}
+					placeholder="••••••••"
+					error={errorMessage}
+				/>
 
 			<div class="pt-2">
 				<AsyncButton

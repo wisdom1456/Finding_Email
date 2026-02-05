@@ -903,8 +903,6 @@
 </div>
 
 <style>
-	@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-
 	/* Container */
 	.help-container {
 		background: white;
@@ -947,7 +945,7 @@
 		font-weight: 700;
 		color: var(--contrast);
 		margin-bottom: 0.5rem;
-		font-family: 'Inter', sans-serif;
+		font-family: var(--font-heading);
 	}
 
 	.feature-description {
@@ -966,7 +964,7 @@
 		font-weight: 700;
 		color: var(--contrast);
 		margin-bottom: 1.5rem;
-		font-family: 'Inter', sans-serif;
+		font-family: var(--font-heading);
 		position: relative;
 		padding-bottom: 0.75rem;
 	}

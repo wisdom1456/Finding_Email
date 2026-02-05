@@ -55,21 +55,23 @@
 
 <div class="page-spacing">
 	<!-- Header -->
-	<div class="md:flex md:items-center md:justify-between">
-		<div class="flex-1 min-w-0">
-			<h1 class="text-2xl font-heading font-bold text-contrast sm:text-3xl">
-				Dashboard
-			</h1>
-			<p class="mt-1 text-sm text-gray-500">Welcome back, <span class="font-semibold text-contrast">{data.user?.email}</span></p>
-		</div>
-		<div class="mt-4 md:mt-0">
-			<a
-				href="/app/cases/new"
-				class="btn btn-primary shadow-sm shadow-accent/20"
-			>
-				<Plus class="h-4 w-4 mr-2" />
-				New Case
-			</a>
+	<div class="overflow-hidden rounded-2xl bg-gradient-to-br from-accent/5 via-transparent to-contrast/5 border border-accent/10 p-6 mb-6">
+		<div class="md:flex md:items-center md:justify-between">
+			<div class="flex-1 min-w-0">
+				<h1 class="text-2xl font-heading font-bold text-contrast sm:text-3xl">
+					Dashboard
+				</h1>
+				<p class="mt-1 text-sm text-gray-500">Welcome back, <span class="font-semibold text-contrast">{data.user?.email}</span></p>
+			</div>
+			<div class="mt-4 md:mt-0">
+				<a
+					href="/app/cases/new"
+					class="btn btn-primary shadow-sm shadow-accent/20"
+				>
+					<Plus class="h-4 w-4 mr-2" />
+					New Case
+				</a>
+			</div>
 		</div>
 	</div>
 

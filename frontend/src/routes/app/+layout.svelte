@@ -4,27 +4,19 @@
 	import { page } from '$app/stores';
 	import { getApiUrl } from '$lib/config';
 	import ClioConnect from '$lib/components/ClioConnect.svelte';
+	import Modal from '$lib/components/ui/Modal.svelte';
+	import NavLink from '$lib/components/ui/NavLink.svelte';
 	import { clioStore } from '$lib/stores/clioStore';
 	import { Menu, X, User, Settings, LogOut, Link2, HelpCircle } from 'lucide-svelte';
 	import type { LayoutData } from './$types';
 	import logoImg from '$lib/assets/logo-br.png';
 
 	let { data, children }: { data: LayoutData; children: any } = $props();
-	
+
 	let showClioModal = $state(false);
 	let clioConnected = $derived($clioStore.connected);
 	let isMobileMenuOpen = $state(false);
 	let isUserMenuOpen = $state(false);
-	
-	// Determine active route
-	let currentPath = $derived($page.url.pathname);
-	
-	function isActive(path: string): boolean {
-		if (path === '/app') {
-			return currentPath === '/app';
-		}
-		return currentPath.startsWith(path);
-	}
 
 	// Check Clio connection status on mount
 	onMount(async () => {
@@ -87,8 +79,13 @@
 </script>
 
 <div class="min-h-screen bg-[#F8FAFB]">
+	<!-- Skip to Content Link (Accessibility) -->
+	<a href="#main-content" class="skip-to-content">
+		Skip to main content
+	</a>
+
 	<!-- Navigation -->
-		<nav class="bg-contrast shadow-md">
+	<nav class="bg-contrast shadow-md">
 			<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
 				<div class="flex justify-between h-20">
 				<div class="flex">
@@ -99,39 +96,13 @@
 					</div>
 					<!-- Desktop Navigation -->
 					<div class="hidden md:ml-8 md:flex md:space-x-1">
-						<a
-							href="/app"
-							class="inline-flex items-center px-4 py-2 text-sm font-semibold transition-colors rounded-md {isActive('/app') && currentPath === '/app'
-								? 'bg-white/20 text-white border-b-2 border-accent'
-								: 'text-white/90 hover:bg-white/10 hover:text-white'}"
-						>
-							Dashboard
-						</a>
-						<a
-							href="/app/cases"
-							class="inline-flex items-center px-4 py-2 text-sm font-semibold transition-colors rounded-md {isActive('/app/cases')
-								? 'bg-white/20 text-white border-b-2 border-accent'
-								: 'text-white/90 hover:bg-white/10 hover:text-white'}"
-						>
-							Cases
-						</a>
-						<a
-							href="/app/settings"
-							class="inline-flex items-center px-4 py-2 text-sm font-semibold transition-colors rounded-md {isActive('/app/settings')
-								? 'bg-white/20 text-white border-b-2 border-accent'
-								: 'text-white/90 hover:bg-white/10 hover:text-white'}"
-						>
-							Settings
-						</a>
-						<a
-							href="/app/help"
-							class="inline-flex items-center px-4 py-2 text-sm font-semibold transition-colors rounded-md {isActive('/app/help')
-								? 'bg-white/20 text-white border-b-2 border-accent'
-								: 'text-white/90 hover:bg-white/10 hover:text-white'}"
-						>
+						<NavLink href="/app" exact>Dashboard</NavLink>
+						<NavLink href="/app/cases">Cases</NavLink>
+						<NavLink href="/app/settings">Settings</NavLink>
+						<NavLink href="/app/help">
 							<HelpCircle class="h-4 w-4 mr-1.5" />
 							Help
-						</a>
+						</NavLink>
 					</div>
 				</div>
 				
@@ -213,43 +184,19 @@
 		{#if isMobileMenuOpen}
 			<div class="md:hidden border-t border-white/10">
 				<div class="pt-2 pb-3 space-y-1 px-2">
-					<a
-						href="/app"
-						onclick={closeMobileMenu}
-						class="block px-3 py-2 rounded-md text-base font-semibold transition-colors {isActive('/app') && currentPath === '/app'
-							? 'bg-white/20 text-white border-l-4 border-accent'
-							: 'text-white/90 hover:bg-white/10 hover:text-white'}"
-					>
+					<NavLink href="/app" exact class="mobile" onclick={closeMobileMenu}>
 						Dashboard
-					</a>
-					<a
-						href="/app/cases"
-						onclick={closeMobileMenu}
-						class="block px-3 py-2 rounded-md text-base font-semibold transition-colors {isActive('/app/cases')
-							? 'bg-white/20 text-white border-l-4 border-accent'
-							: 'text-white/90 hover:bg-white/10 hover:text-white'}"
-					>
+					</NavLink>
+					<NavLink href="/app/cases" class="mobile" onclick={closeMobileMenu}>
 						Cases
-					</a>
-					<a
-						href="/app/settings"
-						onclick={closeMobileMenu}
-						class="block px-3 py-2 rounded-md text-base font-semibold transition-colors {isActive('/app/settings')
-							? 'bg-white/20 text-white border-l-4 border-accent'
-							: 'text-white/90 hover:bg-white/10 hover:text-white'}"
-					>
+					</NavLink>
+					<NavLink href="/app/settings" class="mobile" onclick={closeMobileMenu}>
 						Settings
-					</a>
-					<a
-						href="/app/help"
-						onclick={closeMobileMenu}
-						class="flex items-center px-3 py-2 rounded-md text-base font-semibold transition-colors {isActive('/app/help')
-							? 'bg-white/20 text-white border-l-4 border-accent'
-							: 'text-white/90 hover:bg-white/10 hover:text-white'}"
-					>
+					</NavLink>
+					<NavLink href="/app/help" class="mobile flex items-center" onclick={closeMobileMenu}>
 						<HelpCircle class="h-5 w-5 mr-3" />
 						Help
-					</a>
+					</NavLink>
 				</div>
 				<div class="pt-4 pb-3 border-t border-white/10">
 					<div class="flex items-center px-5 mb-3">
@@ -291,7 +238,7 @@
 	</nav>
 
 	<!-- Main Content -->
-	<main class="py-8">
+	<main id="main-content" class="py-8" tabindex="-1">
 		<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
 			{@render children()}
 		</div>
@@ -299,48 +246,19 @@
 </div>
 
 <!-- Clio Integration Modal -->
-{#if showClioModal}
-	<div
-		class="modal-overlay p-4"
-		role="dialog"
-		aria-modal="true"
-		tabindex="-1"
-		onclick={() => showClioModal = false}
-		onkeydown={(e) => { if (e.key === 'Escape') showClioModal = false; }}
-		aria-label="Close modal"
-	>
-		<div
-			class="card-standard max-w-md w-full"
-			role="presentation"
-			onclick={(e) => e.stopPropagation()}
-			onkeydown={(e) => e.stopPropagation()}
-		>
-			<div class="flex justify-between items-center mb-4">
-				<h3 class="text-lg font-heading font-semibold text-contrast">Clio Integration</h3>
-				<button
-					onclick={() => showClioModal = false}
-					class="text-gray-400 hover:text-gray-500 transition-colors"
-					aria-label="Close"
-				>
-					<X class="h-5 w-5" />
-				</button>
-			</div>
-			
-			<ClioConnect />
-			
-			<div class="mt-4 text-sm text-gray-500">
-				<p>Connect your Clio account to import matter details, documents, communications, and notes across all your cases.</p>
-			</div>
-			
-			<!-- OK Button -->
-			<div class="mt-6 flex justify-end">
-				<button
-					onclick={() => showClioModal = false}
-					class="inline-flex items-center px-4 py-2 text-sm font-medium rounded-md text-white bg-accent hover:bg-accent-hover transition-colors"
-				>
-					OK
-				</button>
-			</div>
-		</div>
+<Modal bind:open={showClioModal} title="Clio Integration" size="md">
+	<ClioConnect />
+
+	<div class="mt-4 text-sm text-gray-500">
+		<p>Connect your Clio account to import matter details, documents, communications, and notes across all your cases.</p>
 	</div>
-{/if}
+
+	{#snippet footer()}
+		<button
+			onclick={() => showClioModal = false}
+			class="btn btn-primary"
+		>
+			OK
+		</button>
+	{/snippet}
+</Modal>

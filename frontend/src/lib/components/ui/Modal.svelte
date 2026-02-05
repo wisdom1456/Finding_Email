@@ -1,16 +1,19 @@
 <!--
   Modal - Reusable modal/dialog component
-  
+
   Features:
   - Consistent overlay and backdrop blur
   - Keyboard (Escape) and click-outside to close
   - Size variants: sm, md, lg, xl, full
   - Optional close button
   - Accessible with ARIA attributes
+  - Focus trap (keeps Tab within modal)
+  - Returns focus to trigger element on close
 -->
 <script lang="ts">
   import { fade, scale } from 'svelte/transition';
   import { X } from 'lucide-svelte';
+  import { onMount } from 'svelte';
 
   type Size = 'sm' | 'md' | 'lg' | 'xl' | 'full';
 
@@ -42,9 +45,41 @@
     full: 'max-w-4xl',
   };
 
+  let modalElement = $state<HTMLDivElement | null>(null);
+  let previouslyFocusedElement = $state<HTMLElement | null>(null);
+
+  // Focus trap implementation
   function handleKeydown(event: KeyboardEvent) {
     if (closeOnEscape && event.key === 'Escape') {
       open = false;
+      return;
+    }
+
+    // Focus trap: handle Tab key
+    if (event.key === 'Tab' && modalElement) {
+      const focusableElements = modalElement.querySelectorAll(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+      );
+      const focusableArray = Array.from(focusableElements) as HTMLElement[];
+
+      if (focusableArray.length === 0) return;
+
+      const firstElement = focusableArray[0];
+      const lastElement = focusableArray[focusableArray.length - 1];
+
+      if (event.shiftKey) {
+        // Shift+Tab: if on first element, go to last
+        if (document.activeElement === firstElement) {
+          event.preventDefault();
+          lastElement.focus();
+        }
+      } else {
+        // Tab: if on last element, go to first
+        if (document.activeElement === lastElement) {
+          event.preventDefault();
+          firstElement.focus();
+        }
+      }
     }
   }
 
@@ -57,6 +92,33 @@
   function handleContentClick(event: MouseEvent) {
     event.stopPropagation();
   }
+
+  // Focus management effect
+  $effect(() => {
+    if (open) {
+      // Store previously focused element
+      previouslyFocusedElement = document.activeElement as HTMLElement;
+
+      // Focus first focusable element in modal after a brief delay
+      setTimeout(() => {
+        if (modalElement) {
+          const focusableElements = modalElement.querySelectorAll(
+            'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+          );
+          const firstFocusable = focusableElements[0] as HTMLElement;
+          if (firstFocusable) {
+            firstFocusable.focus();
+          }
+        }
+      }, 100);
+    } else {
+      // Return focus to previously focused element when modal closes
+      if (previouslyFocusedElement) {
+        previouslyFocusedElement.focus();
+        previouslyFocusedElement = null;
+      }
+    }
+  });
 </script>
 
 <svelte:window onkeydown={handleKeydown} />
@@ -74,6 +136,7 @@
   >
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div
+      bind:this={modalElement}
       class="card-standard {sizeClasses[size]} w-full max-h-[90vh] flex flex-col"
       onclick={handleContentClick}
       onkeydown={(e) => e.stopPropagation()}

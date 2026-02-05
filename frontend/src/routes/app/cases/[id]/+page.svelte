@@ -341,6 +341,37 @@
 		}
 	}
 
+	async function handleSync() {
+		if (!caseData?.clio_matter_id) {
+			toastStore.error('No Clio matter linked to this case');
+			return;
+		}
+
+		syncLoading = true;
+		syncError = null;
+		syncResult = null;
+
+		try {
+			const { session } = await getSecureSession();
+			if (!session) throw new Error('Not authenticated');
+
+			const result = await syncClioMatter(caseId as string, session.access_token);
+			syncResult = result;
+
+			// Reload documents to show newly synced items
+			await loadDocuments();
+
+			if (result.summary.total_processed > 0) {
+				toastStore.success(`Synced ${result.summary.total_processed} items from Clio`);
+			}
+		} catch (err) {
+			syncError = err instanceof Error ? err.message : 'Failed to sync';
+			toastStore.error(syncError);
+		} finally {
+			syncLoading = false;
+		}
+	}
+
 	async function viewDocument(doc: any) {
 		viewingDocument = doc;
 		documentViewerContent = '';

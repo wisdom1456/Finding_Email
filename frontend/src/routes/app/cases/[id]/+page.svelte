@@ -372,6 +372,152 @@
 		}
 	}
 
+	function handleFileInput(event: Event) {
+		const input = event.target as HTMLInputElement;
+		if (input.files && input.files.length > 0) {
+			const files = Array.from(input.files);
+			processSelectedFiles(files);
+		}
+	}
+
+	function handleDrop(event: DragEvent) {
+		event.preventDefault();
+		dragActive = false;
+
+		if (event.dataTransfer?.files && event.dataTransfer.files.length > 0) {
+			const files = Array.from(event.dataTransfer.files);
+			processSelectedFiles(files);
+		}
+	}
+
+	function handleDragOver(event: DragEvent) {
+		event.preventDefault();
+		dragActive = true;
+	}
+
+	function handleDragLeave(event: DragEvent) {
+		event.preventDefault();
+		dragActive = false;
+	}
+
+	function processSelectedFiles(files: File[]) {
+		// Check for duplicates
+		const existingFileNames = new Set(documents.map(doc => doc.file_name));
+		const newDuplicates = new Set<number>();
+
+		files.forEach((file, index) => {
+			if (existingFileNames.has(file.name)) {
+				newDuplicates.add(index);
+			}
+		});
+
+		duplicateFiles = newDuplicates;
+		selectedFiles = files;
+
+		// If there are files with "intake" in the name, show intake selector
+		const intakeFiles = files.filter((f, idx) => 
+			!newDuplicates.has(idx) && f.name.toLowerCase().includes('intake')
+		);
+
+		if (intakeFiles.length > 0) {
+			showIntakeSelector = true;
+		}
+	}
+
+	async function uploadSelectedFiles() {
+		if (selectedFiles.length === 0) return;
+
+		uploading = true;
+		uploadProgress = 0;
+		uploadedCount = 0;
+		totalUploadCount = selectedFiles.length;
+		uploadFailures = [];
+
+		try {
+			const { session, user } = await getSecureSession();
+			if (!session || !user) throw new Error('Not authenticated');
+
+			for (let originalIndex = 0; originalIndex < selectedFiles.length; originalIndex++) {
+				const file = selectedFiles[originalIndex];
+				currentUploadFile = file.name;
+
+				// Skip duplicates
+				if (duplicateFiles.has(originalIndex)) {
+					uploadFailures.push({
+						fileName: file.name,
+						reason: 'Duplicate file name already exists',
+						errorCode: 'DUPLICATE'
+					});
+					continue;
+				}
+
+				// Validate file
+				const validation = validateFileBeforeUpload(file);
+				if (!validation.valid) {
+					uploadFailures.push({
+						fileName: file.name,
+						reason: validation.error || 'Validation failed',
+						errorCode: validation.errorCode,
+						fileSizeMB: file.size / (1024 * 1024),
+						file: file
+					});
+					continue;
+				}
+
+				// Upload file
+				const formData = new FormData();
+				formData.append('file', file);
+			formData.append('case_id', caseId as string);
+			formData.append('is_intake_form', (originalIndex === intakeFormIndex).toString());
+
+			const response = await fetch(`${getApiUrl()}/api/documents/upload`, {
+					method: 'POST',
+					headers: {
+						Authorization: `Bearer ${session.access_token}`
+					},
+					body: formData
+				});
+
+				if (!response.ok) {
+					const errorData = await response.json().catch(() => ({ detail: 'Upload failed' }));
+					uploadFailures.push({
+						fileName: file.name,
+						reason: errorData.detail || 'Upload failed',
+						errorCode: categorizeError(errorData.detail || ''),
+						file: file
+					});
+				} else {
+					uploadedCount++;
+				}
+
+				uploadProgress = ((originalIndex + 1) / totalUploadCount) * 100;
+			}
+
+			// Reload documents
+			await loadDocuments();
+
+			// Show summary if there were failures
+			if (uploadFailures.length > 0) {
+				showFailureSummary = true;
+			} else {
+				toastStore.success(`Uploaded ${uploadedCount} file(s) successfully`);
+			}
+
+			// Clear selection
+			selectedFiles = [];
+			intakeFormIndex = null;
+			showIntakeSelector = false;
+			duplicateFiles = new Set();
+
+		} catch (error: any) {
+			errorMessage = error.message || 'Upload failed';
+			toastStore.error(errorMessage);
+		} finally {
+			uploading = false;
+			currentUploadFile = '';
+		}
+	}
+
 	async function viewDocument(doc: any) {
 		viewingDocument = doc;
 		documentViewerContent = '';

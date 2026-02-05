@@ -954,6 +954,119 @@ async def toggle_document_exclusion(
         ) from e
 
 
+def is_photo_rejection_message(text: str) -> bool:
+    """Check if OCR result is a message indicating the image is a photo, not a text document."""
+    if not text or len(text) < 20:
+        return False
+    
+    rejection_phrases = [
+        "unable to extract text",
+        "not a legal document",
+        "appears to be a photo",
+        "this is a photo",
+        "this image is",
+        "does not contain",
+        "no text to extract",
+        "cannot extract text",
+        "I can't extract",
+        "I'm unable to extract",
+    ]
+    
+    text_lower = text.lower()
+    return any(phrase in text_lower for phrase in rejection_phrases)
+
+
+async def get_case_context(case_id: str, supabase_client) -> dict:
+    """Get case context for image analysis."""
+    try:
+        response = supabase_client.table("cases").select("case_name, client_name, description").eq("id", case_id).execute()
+        if response.data and len(response.data) > 0:
+            case = response.data[0]
+            return {
+                "case_name": case.get("case_name", "Unknown Case"),
+                "client_name": case.get("client_name", "Unknown Client"),
+                "description": case.get("description", ""),
+            }
+    except Exception as e:
+        logger.warning(f"Could not fetch case context for {case_id}: {e}")
+    
+    return {"case_name": "Legal Case", "client_name": "", "description": ""}
+
+
+async def analyze_image_with_vision(file_bytes: bytes, file_name: str, case_context: dict) -> tuple[str, str]:
+    """
+    Analyze an image using vision AI with case context.
+    
+    Returns (visual_description, extraction_method)
+    """
+    import asyncio
+    import base64
+    from starlette.concurrency import run_in_threadpool
+    from legal_portal.utils.openai_client import OpenAIClient
+    
+    try:
+        logger.info(f"Analyzing image content for {file_name} with case context")
+        openai_client = OpenAIClient()
+        client = openai_client.client
+        
+        # Determine MIME type
+        mime_type = "image/jpeg" if file_name.lower().endswith((".jpg", ".jpeg")) else "image/png"
+        base64_image = base64.b64encode(file_bytes).decode("utf-8")
+        
+        # Build context-aware prompt
+        case_info = f"Case: {case_context['case_name']}"
+        if case_context.get('client_name'):
+            case_info += f" (Client: {case_context['client_name']})"
+        if case_context.get('description'):
+            case_info += f"\nCase Description: {case_context['description']}"
+        
+        prompt = (
+            f"This is an image from a legal case. {case_info}\n\n"
+            f"Filename: {file_name}\n\n"
+            "Analyze this image and provide a detailed description of what you see. Focus on:\n"
+            "1. What is shown in the image (objects, people, locations, conditions)\n"
+            "2. Any visible damage, injuries, defects, or conditions of concern\n"
+            "3. Any text, labels, dates, or identifying information visible\n"
+            "4. The context and setting of the image\n"
+            "5. Its potential relevance to the case described above\n\n"
+            "Provide a clear, objective description that would be useful as evidence documentation. "
+            "Be specific about what you observe."
+        )
+        
+        def vision_analysis():
+            return client.chat.completions.create(
+                model="gpt-4o",
+                messages=[{
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": prompt},
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:{mime_type};base64,{base64_image}",
+                                "detail": "high"
+                            }
+                        },
+                    ]
+                }],
+                max_tokens=1500,
+                temperature=0.3,
+            )
+        
+        response = await asyncio.wait_for(
+            run_in_threadpool(vision_analysis),
+            timeout=60.0,
+        )
+        
+        description = response.choices[0].message.content
+        logger.info(f"Successfully analyzed image {file_name} with vision AI: {len(description)} chars")
+        return description, "GPT-4o Vision (Image Analysis)"
+        
+    except Exception as e:
+        logger.error(f"Vision analysis failed for {file_name}: {e}")
+        raise
+
+
 @router.post("/{document_id}/extract")
 async def trigger_extraction(
     document_id: str,
@@ -1113,6 +1226,40 @@ async def trigger_extraction(
                             extraction_quality = "high"
                             ocr_provider = "google_vision"
                             logger.info(f"Successfully extracted text from {file_name} using Google Vision")
+                            
+                            # Check if the OCR result is actually a photo rejection message
+                            if is_photo_rejection_message(extracted_text):
+                                logger.info(f"Google Vision detected photo (non-text image) in {file_name}, switching to visual analysis")
+                                try:
+                                    # Get case context
+                                    case_context = await get_case_context(document["case_id"], user_supabase)
+                                    
+                                    # Analyze image with context
+                                    visual_description, vision_method = await analyze_image_with_vision(
+                                        file_bytes, file_name, case_context
+                                    )
+                                    
+                                    if visual_description and len(visual_description) > 50:
+                                        extracted_text = visual_description
+                                        extraction_method = vision_method
+                                        extraction_quality = "high"
+                                        ocr_provider = "openai_vision_analysis"
+                                        
+                                        # Mark as visual content in metadata
+                                        document_metadata = document.get("metadata", {}) or {}
+                                        document_metadata["is_visual_content"] = True
+                                        
+                                        # Update metadata in database
+                                        user_supabase.table("documents").update({
+                                            "metadata": document_metadata
+                                        }).eq("id", document_id).execute()
+                                        
+                                        logger.info(f"Successfully analyzed photo content for {file_name}")
+                                    else:
+                                        logger.warning(f"Vision analysis returned insufficient content for {file_name}")
+                                except Exception as vision_err:
+                                    logger.error(f"Vision analysis failed for {file_name}: {vision_err}")
+                                    # Keep the original rejection message if vision analysis fails
                         else:
                             raise ValueError("Google Vision returned empty text")
                     except Exception as google_err:
@@ -1180,6 +1327,41 @@ async def trigger_extraction(
                     extraction_quality = "high"
                     ocr_provider = "openai"
                     logger.info(f"Successfully extracted text from {file_name} using GPT-4o Vision")
+                    
+                    # Check if the OCR result is actually a photo rejection message
+                    if is_photo_rejection_message(extracted_text):
+                        logger.info(f"Detected photo (non-text image) in {file_name}, switching to visual analysis")
+                        try:
+                            # Get case context
+                            case_context = await get_case_context(document["case_id"], user_supabase)
+                            
+                            # Analyze image with context
+                            visual_description, vision_method = await analyze_image_with_vision(
+                                file_bytes, file_name, case_context
+                            )
+                            
+                            if visual_description and len(visual_description) > 50:
+                                extracted_text = visual_description
+                                extraction_method = vision_method
+                                extraction_quality = "high"
+                                ocr_provider = "openai_vision_analysis"
+                                
+                                # Mark as visual content in metadata
+                                document_metadata = document.get("metadata", {}) or {}
+                                document_metadata["is_visual_content"] = True
+                                
+                                # Update metadata in database
+                                user_supabase.table("documents").update({
+                                    "metadata": document_metadata
+                                }).eq("id", document_id).execute()
+                                
+                                logger.info(f"Successfully analyzed photo content for {file_name}")
+                            else:
+                                logger.warning(f"Vision analysis returned insufficient content for {file_name}")
+                        except Exception as vision_err:
+                            logger.error(f"Vision analysis failed for {file_name}: {vision_err}")
+                            # Keep the original rejection message if vision analysis fails
+                    
                 except Exception as ocr_err:
                     extraction_error = f"Image OCR failed: {str(ocr_err)}"
                     extraction_method = "failed"

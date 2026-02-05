@@ -961,6 +961,12 @@ def is_photo_rejection_message(text: str) -> bool:
     
     rejection_phrases = [
         "unable to extract text",
+        "unable to access",
+        "unable to analyze",
+        "can't access",
+        "can't analyze",
+        "cannot access",
+        "cannot analyze",
         "not a legal document",
         "appears to be a photo",
         "this is a photo",
@@ -970,6 +976,11 @@ def is_photo_rejection_message(text: str) -> bool:
         "cannot extract text",
         "I can't extract",
         "I'm unable to extract",
+        "I'm unable to access",
+        "I'm unable to analyze",
+        "how to describe an image",
+        "help you understand how to describe",
+        "general guide on how",
     ]
     
     text_lower = text.lower()
@@ -1021,16 +1032,19 @@ async def analyze_image_with_vision(file_bytes: bytes, file_name: str, case_cont
             case_info += f"\nCase Description: {case_context['description']}"
         
         prompt = (
-            f"This is an image from a legal case. {case_info}\n\n"
-            f"Filename: {file_name}\n\n"
-            "Analyze this image and provide a detailed description of what you see. Focus on:\n"
-            "1. What is shown in the image (objects, people, locations, conditions)\n"
-            "2. Any visible damage, injuries, defects, or conditions of concern\n"
-            "3. Any text, labels, dates, or identifying information visible\n"
-            "4. The context and setting of the image\n"
-            "5. Its potential relevance to the case described above\n\n"
-            "Provide a clear, objective description that would be useful as evidence documentation. "
-            "Be specific about what you observe."
+            f"You are analyzing an image as photographic evidence for a legal case.\n\n"
+            f"CASE CONTEXT:\n{case_info}\n\n"
+            f"IMAGE FILE: {file_name}\n\n"
+            "TASK: Describe exactly what you see in this image. This is actual photographic evidence, "
+            "not a document to extract text from.\n\n"
+            "In your description, include:\n"
+            "1. OBJECTS & SCENE: What physical objects, people, locations, or structures are visible\n"
+            "2. CONDITIONS: Any damage, defects, injuries, wear, contamination, or unusual conditions\n"
+            "3. VISIBLE TEXT: Any text, labels, signs, dates, numbers, or markings you can see\n"
+            "4. SETTING: The environment/location context (indoor/outdoor, type of space, lighting)\n"
+            "5. CASE RELEVANCE: How this visual evidence relates to the legal matter described above\n\n"
+            "IMPORTANT: DO NOT provide instructions or templates. Describe the ACTUAL SPECIFIC image "
+            "you are viewing right now. Start your response by describing what you see."
         )
         
         def vision_analysis():

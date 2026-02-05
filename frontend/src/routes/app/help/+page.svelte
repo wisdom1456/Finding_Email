@@ -298,6 +298,17 @@
 								</p>
 							</div>
 							<div class="detail-item">
+								<h4 class="detail-title">Smart Document Classification</h4>
+								<p class="detail-text">
+									<strong>New:</strong> Documents are automatically classified as <strong>IMAGE</strong> (photos, visual evidence)
+									or <strong>TEXT</strong> (text documents) at upload. Classification determines the extraction method: IMAGE documents
+									skip wasteful OCR and go straight to Vision AI analysis, while TEXT documents use efficient OCR.
+									Classification badges appear on document lists—click any badge to toggle between IMAGE and TEXT if needed.
+									In the document viewer, you can force specific extraction methods: click "Extract as Text" for OCR or
+									"Extract as Image" for Vision AI analysis, giving you full control over how each document is processed.
+								</p>
+							</div>
+							<div class="detail-item">
 								<h4 class="detail-title">File Size Handling</h4>
 								<p class="detail-text">
 									The system automatically handles large files up to 50MB each, with intelligent timeout
@@ -575,6 +586,26 @@
 					<!-- Major New Features -->
 					<section class="whats-new-section">
 						<h3 class="section-heading">🎯 Major New Features</h3>
+
+						<!-- Document Classification -->
+						<div class="update-card feature-update">
+							<div class="update-icon classification">
+								<FileImage class="h-5 w-5" />
+							</div>
+							<div class="update-content">
+								<h4 class="update-title">Smart Document Classification & Extraction Controls</h4>
+								<p class="update-description">
+									New classification system automatically determines whether documents are images or text, enabling efficient extraction workflows.
+								</p>
+								<ul class="update-list">
+									<li><strong>Automatic Classification:</strong> Documents classified as IMAGE (photos, visual evidence) or TEXT (text documents) at upload</li>
+									<li><strong>Efficient Processing:</strong> IMAGE documents skip wasteful OCR and go straight to Vision AI analysis</li>
+									<li><strong>Classification Badges:</strong> Click any badge on document lists to toggle between IMAGE and TEXT classification</li>
+									<li><strong>Extraction Method Controls:</strong> Force specific extraction methods with "Extract as Text" (OCR) or "Extract as Image" (Vision AI) buttons</li>
+									<li><strong>Improved Accuracy:</strong> Fixed case-sensitivity bug in OCR rejection detection for better error handling</li>
+								</ul>
+							</div>
+						</div>
 
 						<!-- Clio Integration -->
 						<div class="update-card feature-update">
@@ -1024,11 +1055,17 @@
 								The system automatically:
 							</p>
 							<ul class="faq-list">
-								<li><strong>Detects photo documents:</strong> Recognizes when a document is a photograph or diagram</li>
+								<li><strong>Classifies documents:</strong> Documents are tagged as IMAGE (photos, visual evidence) or TEXT (text documents) at upload</li>
+								<li><strong>Detects photo documents:</strong> Recognizes when a document is a photograph or diagram based on file metadata</li>
 								<li><strong>Assesses OCR quality:</strong> Identifies when OCR results are too low-quality to be useful</li>
-								<li><strong>Switches to Vision AI:</strong> Automatically uses advanced vision analysis instead of OCR</li>
+								<li><strong>Switches to Vision AI:</strong> IMAGE documents automatically skip OCR and use vision analysis instead</li>
 								<li><strong>Provides context:</strong> Analyzes visual content in the context of your case</li>
 							</ul>
+							<p class="mt-3">
+								<strong>Manual Control:</strong> You can toggle document classification by clicking the classification badge 
+								(IMAGE or TEXT) on any document in your case. In the document viewer, use "Extract as Text" to force OCR or 
+								"Extract as Image" to force Vision AI analysis—giving you full control when automatic classification needs adjustment.
+							</p>
 							<div class="mt-3 p-3 bg-cyan-50 rounded-lg">
 								<p class="text-sm text-cyan-800">
 									<strong>Examples:</strong> Accident scene photos, medical images, handwritten notes, damaged documents,
@@ -1878,6 +1915,10 @@
 
 	.update-icon.recommendation {
 		background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+	}
+
+	.update-icon.classification {
+		background: linear-gradient(135deg, #a855f7 0%, #9333ea 100%);
 	}
 
 	.update-icon.fix {

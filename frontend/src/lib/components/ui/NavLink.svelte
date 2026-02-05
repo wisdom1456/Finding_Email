@@ -37,6 +37,7 @@
 -->
 <script lang="ts">
 	import { page } from '$app/stores';
+	import { browser } from '$app/environment';
 
 	type NavLinkProps = {
 		href: string;
@@ -54,8 +55,8 @@
 		onclick
 	}: NavLinkProps = $props();
 
-	// Determine active state
-	let currentPath = $derived($page.url.pathname);
+	// Determine active state - safe for SSR by checking browser first
+	let currentPath = $derived(browser ? $page.url.pathname : href);
 
 	let isActive = $derived(
 		exact

@@ -1,0 +1,21 @@
+// UI Components - Explicit exports for better bundling
+export { default as AccordionItem } from './AccordionItem.svelte';
+export { default as AsyncButton } from './AsyncButton.svelte';
+export { default as Badge } from './Badge.svelte';
+export { default as Breadcrumbs } from './Breadcrumbs.svelte';
+export { default as Button } from './Button.svelte';
+export { default as Card } from './Card.svelte';
+export { default as ConfirmDialog } from './ConfirmDialog.svelte';
+export { default as Input } from './Input.svelte';
+export { default as Link } from './Link.svelte';
+export { default as LoadingOverlay } from './LoadingOverlay.svelte';
+export { default as Modal } from './Modal.svelte';
+export { default as NavLink } from './NavLink.svelte';
+export { default as PageHeader } from './PageHeader.svelte';
+export { default as Skeleton } from './Skeleton.svelte';
+export { default as SkeletonCard } from './SkeletonCard.svelte';
+export { default as SkeletonList } from './SkeletonList.svelte';
+export { default as Spinner } from './Spinner.svelte';
+export { default as Tabs } from './Tabs.svelte';
+export { default as Toast } from './Toast.svelte';
+export { default as ToastContainer } from './ToastContainer.svelte';

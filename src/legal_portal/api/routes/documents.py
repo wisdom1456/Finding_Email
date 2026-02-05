@@ -1245,8 +1245,13 @@ async def trigger_extraction(
                             if is_photo_rejection_message(extracted_text):
                                 logger.info(f"Google Vision detected photo (non-text image) in {file_name}, switching to visual analysis")
                                 try:
-                                    # Get case context
-                                    case_context = await get_case_context(document["case_id"], user_supabase)
+                                    # Get case context - use .get() to avoid KeyError
+                                    case_id = document.get("case_id")
+                                    if not case_id:
+                                        logger.error(f"No case_id found in document {document_id}")
+                                        raise ValueError("Document missing case_id")
+                                    
+                                    case_context = await get_case_context(case_id, user_supabase)
                                     
                                     # Analyze image with context
                                     visual_description, vision_method = await analyze_image_with_vision(
@@ -1272,8 +1277,9 @@ async def trigger_extraction(
                                     else:
                                         logger.warning(f"Vision analysis returned insufficient content for {file_name}")
                                 except Exception as vision_err:
-                                    logger.error(f"Vision analysis failed for {file_name}: {vision_err}")
+                                    logger.error(f"Vision analysis failed for {file_name}: {vision_err}", exc_info=True)
                                     # Keep the original rejection message if vision analysis fails
+                                    # Don't re-raise - we want to continue with OCR result
                         else:
                             raise ValueError("Google Vision returned empty text")
                     except Exception as google_err:
@@ -1346,8 +1352,13 @@ async def trigger_extraction(
                     if is_photo_rejection_message(extracted_text):
                         logger.info(f"Detected photo (non-text image) in {file_name}, switching to visual analysis")
                         try:
-                            # Get case context
-                            case_context = await get_case_context(document["case_id"], user_supabase)
+                            # Get case context - use .get() to avoid KeyError
+                            case_id = document.get("case_id")
+                            if not case_id:
+                                logger.error(f"No case_id found in document {document_id}")
+                                raise ValueError("Document missing case_id")
+                            
+                            case_context = await get_case_context(case_id, user_supabase)
                             
                             # Analyze image with context
                             visual_description, vision_method = await analyze_image_with_vision(
@@ -1373,8 +1384,9 @@ async def trigger_extraction(
                             else:
                                 logger.warning(f"Vision analysis returned insufficient content for {file_name}")
                         except Exception as vision_err:
-                            logger.error(f"Vision analysis failed for {file_name}: {vision_err}")
-                            # Keep the original rejection message if vision analysis fails
+                                    logger.error(f"Vision analysis failed for {file_name}: {vision_err}", exc_info=True)
+                                    # Keep the original rejection message if vision analysis fails
+                                    # Don't re-raise - we want to continue with OCR result
                     
                 except Exception as ocr_err:
                     extraction_error = f"Image OCR failed: {str(ocr_err)}"

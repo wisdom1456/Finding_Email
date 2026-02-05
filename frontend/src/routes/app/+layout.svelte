@@ -5,7 +5,7 @@
 	import { getApiUrl } from '$lib/config';
 	import ClioConnect from '$lib/components/ClioConnect.svelte';
 	import Modal from '$lib/components/ui/Modal.svelte';
-	import NavLink from '$lib/components/ui/NavLink.svelte';
+	import AppNavLink from '$lib/components/ui/AppNavLink.svelte';
 	import { clioStore } from '$lib/stores/clioStore';
 	import { Menu, X, User, Settings, LogOut, Link2, HelpCircle } from 'lucide-svelte';
 	import type { LayoutData } from './$types';
@@ -96,13 +96,13 @@
 					</div>
 					<!-- Desktop Navigation -->
 					<div class="hidden md:ml-8 md:flex md:space-x-1">
-						<NavLink href="/app" exact>Dashboard</NavLink>
-						<NavLink href="/app/cases">Cases</NavLink>
-						<NavLink href="/app/settings">Settings</NavLink>
-						<NavLink href="/app/help">
+						<AppNavLink href="/app" exact>Dashboard</AppNavLink>
+						<AppNavLink href="/app/cases">Cases</AppNavLink>
+						<AppNavLink href="/app/settings">Settings</AppNavLink>
+						<AppNavLink href="/app/help">
 							<HelpCircle class="h-4 w-4 mr-1.5" />
 							Help
-						</NavLink>
+						</AppNavLink>
 					</div>
 				</div>
 				
@@ -184,19 +184,19 @@
 		{#if isMobileMenuOpen}
 			<div class="md:hidden border-t border-white/10">
 				<div class="pt-2 pb-3 space-y-1 px-2">
-					<NavLink href="/app" exact class="mobile" onclick={closeMobileMenu}>
+					<AppNavLink href="/app" exact class="mobile" onclick={closeMobileMenu}>
 						Dashboard
-					</NavLink>
-					<NavLink href="/app/cases" class="mobile" onclick={closeMobileMenu}>
+					</AppNavLink>
+					<AppNavLink href="/app/cases" class="mobile" onclick={closeMobileMenu}>
 						Cases
-					</NavLink>
-					<NavLink href="/app/settings" class="mobile" onclick={closeMobileMenu}>
+					</AppNavLink>
+					<AppNavLink href="/app/settings" class="mobile" onclick={closeMobileMenu}>
 						Settings
-					</NavLink>
-					<NavLink href="/app/help" class="mobile flex items-center" onclick={closeMobileMenu}>
+					</AppNavLink>
+					<AppNavLink href="/app/help" class="mobile flex items-center" onclick={closeMobileMenu}>
 						<HelpCircle class="h-5 w-5 mr-3" />
 						Help
-					</NavLink>
+					</AppNavLink>
 				</div>
 				<div class="pt-4 pb-3 border-t border-white/10">
 					<div class="flex items-center px-5 mb-3">

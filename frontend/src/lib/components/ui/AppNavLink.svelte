@@ -1,5 +1,5 @@
 <!--
-  NavLink - Navigation link with automatic active state detection
+  AppNavLink - Navigation link with automatic active state detection
 
   A navigation link component that automatically highlights based on the current route.
   Provides consistent styling for both desktop and mobile navigation patterns.
@@ -14,29 +14,10 @@
   Props:
   - href: string (required) - The target route path
   - exact?: boolean - Use exact path matching (default: false)
-    Example: Set exact=true for "/app" to avoid matching "/app/cases"
   - class?: string - Additional CSS classes
-    Note: Add "mobile" class for mobile navigation styling
   - onclick?: () => void - Click handler (useful for closing mobile menu)
-
-  Usage:
-    <!-- Desktop navigation -->
-    <NavLink href="/app" exact>Dashboard</NavLink>
-    <NavLink href="/app/cases">Cases</NavLink>
-
-    <!-- Mobile navigation with menu close -->
-    <NavLink href="/app/settings" class="mobile" onclick={closeMobileMenu}>
-      Settings
-    </NavLink>
-
-    <!-- With icon -->
-    <NavLink href="/app/help">
-      <HelpCircle class="h-4 w-4 mr-1.5" />
-      Help
-    </NavLink>
 -->
 <script lang="ts">
-	import { page } from '$app/stores';
 	import { browser } from '$app/environment';
 
 	type NavLinkProps = {
@@ -55,14 +36,19 @@
 		onclick
 	}: NavLinkProps = $props();
 
-	// Determine active state - safe for SSR by checking browser first
-	let currentPath = $derived(browser ? $page.url.pathname : href);
+	// Get current path safely - only on client side
+	let currentPath = $state('');
+	let isActive = $state(false);
 
-	let isActive = $derived(
-		exact
-			? currentPath === href
-			: currentPath.startsWith(href)
-	);
+	// Update active state on client only
+	$effect(() => {
+		if (browser) {
+			currentPath = window.location.pathname;
+			isActive = exact
+				? currentPath === href
+				: currentPath.startsWith(href);
+		}
+	});
 
 	// Desktop nav classes
 	const desktopBaseClasses = 'inline-flex items-center px-4 py-2 text-sm font-semibold transition-colors rounded-md';

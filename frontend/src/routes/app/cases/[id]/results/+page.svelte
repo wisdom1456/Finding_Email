@@ -1490,14 +1490,19 @@ async function generateLetterRequest(body: Record<string, any>) {
 				</div>
 				
 				<div class="flex gap-3 bg-white p-2 rounded-lg border border-gray-200 shadow-sm focus-within:ring-2 focus-within:ring-accent/20 focus-within:border-accent transition-all">
-					<input
-						class="flex-1 border-0 focus:ring-0 text-sm py-3 px-4 text-contrast placeholder-gray-400 font-medium"
-						type="text"
-						placeholder="Ask a question about case facts, documents, or legal strategy..."
-						bind:value={chatInput}
-						onkeydown={(event) => event.key === 'Enter' && sendChatMessage()}
-						disabled={sendingMessage}
-					/>
+					<textarea
+					class="flex-1 border-0 focus:ring-0 text-sm py-3 px-4 text-contrast placeholder-gray-400 font-medium resize-none min-h-[48px] max-h-[200px]"
+					rows="1"
+					placeholder="Ask a question about case facts, documents, or legal strategy..."
+					bind:value={chatInput}
+					onkeydown={(event) => {
+						if (event.key === 'Enter' && !event.shiftKey) {
+							event.preventDefault();
+							sendChatMessage();
+						}
+					}}
+					disabled={sendingMessage}
+				></textarea>
 					<AsyncButton
 						variant="primary"
 						onclick={sendChatMessage}

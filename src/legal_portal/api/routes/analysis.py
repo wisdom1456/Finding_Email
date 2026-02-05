@@ -438,6 +438,32 @@ def _download_and_extract_documents(
             expected_size = doc.get("file_size", 0)
             download_success = False
 
+            # Check file size limits before downloading
+            # More restrictive for zips since they could contain videos
+            MAX_SIZE_ZIP_MB = 50
+            MAX_SIZE_OTHER_MB = 100
+            
+            is_zip = doc["file_name"].lower().endswith(".zip")
+            size_limit_mb = MAX_SIZE_ZIP_MB if is_zip else MAX_SIZE_OTHER_MB
+            size_limit_bytes = size_limit_mb * 1024 * 1024
+            
+            if expected_size > size_limit_bytes:
+                file_size_mb = expected_size / (1024 * 1024)
+                logger.warning(
+                    f"Skipping large file {doc['file_name']}: "
+                    f"{file_size_mb:.1f}MB exceeds {size_limit_mb}MB limit"
+                )
+                skipped_documents.append(
+                    SkippedDocument(
+                        document_id=doc["id"],
+                        file_name=doc["file_name"],
+                        reason=f"File too large ({file_size_mb:.1f}MB). Maximum size is {size_limit_mb}MB for {'zip files' if is_zip else 'this file type'}.",
+                        error_type="FILE_TOO_LARGE",
+                        recommendation="Large files are skipped to prevent timeouts. Consider extracting key content manually or splitting into smaller files.",
+                    )
+                )
+                continue
+
             for attempt in range(max_retries):
                 try:
                     file_data = supabase.storage.from_("documents").download(storage_path)

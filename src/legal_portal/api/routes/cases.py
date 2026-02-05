@@ -16,6 +16,9 @@ from legal_portal.core.data_models import DocumentStatus
 from legal_portal.core.document_processor import DocumentProcessor, ValidationError
 from legal_portal.services.progress_manager import ProgressManager, get_progress_manager
 
+# Import classification function from documents module
+from legal_portal.api.routes.documents import classify_document_type
+
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
@@ -757,6 +760,9 @@ async def import_clio_documents_helper(
                             },
                         )
 
+                    # Classify document type for efficient extraction
+                    classification = classify_document_type(doc_name, content_type or "application/octet-stream")
+
                     # Add Clio-specific metadata
                     doc_record["metadata"].update(
                         {
@@ -766,8 +772,10 @@ async def import_clio_documents_helper(
                             "clio_url": doc_url,
                             "clio_filename": doc_name,
                             "is_intake_candidate": is_intake_candidate,
+                            "classification": classification,  # Add classification
                         }
                     )
+                    logger.debug(f"Classified as {classification}: {doc_name}")
 
                     # Add duplicate info to metadata if detected
                     if is_duplicate:

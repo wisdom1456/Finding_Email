@@ -166,6 +166,13 @@ async def upload_document(
             logger.warning(f"Validation error: {e.error_code} - {str(e)}")
             return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content=error_response)
 
+        # Add classification to metadata
+        classification = classify_document_type(file.filename, file.content_type)
+        if "metadata" not in doc_record:
+            doc_record["metadata"] = {}
+        doc_record["metadata"]["classification"] = classification
+        logger.debug(f"Classified document as {classification}: {file.filename}")
+
         # Create document record in database (use user client for RLS)
         logger.debug("Creating document record in database...")
         doc_response = user_supabase.table("documents").insert(doc_record).execute()
@@ -974,10 +981,11 @@ def is_photo_rejection_message(text: str) -> bool:
         "does not contain",
         "no text to extract",
         "cannot extract text",
-        "I can't extract",
-        "I'm unable to extract",
-        "I'm unable to access",
-        "I'm unable to analyze",
+        "i can't extract",  # Fixed: lowercase
+        "i'm unable to extract",  # Fixed: lowercase
+        "i'm unable to access",  # Fixed: lowercase
+        "i'm unable to analyze",  # Fixed: lowercase
+        "i'm sorry, i can't",  # Added: catches "I'm sorry, I can't extract text"
         "how to describe an image",
         "help you understand how to describe",
         "general guide on how",
@@ -1019,6 +1027,59 @@ def is_low_quality_ocr_result(text: str) -> bool:
         return True
 
     return False
+
+
+def classify_document_type(file_name: str, file_type: str) -> str:
+    """
+    Classify if document is primarily IMAGE (visual evidence) or TEXT (text document).
+
+    This is a fast classification based on file type and name patterns.
+    No API calls are made - just metadata analysis.
+
+    Args:
+        file_name: Name of the file
+        file_type: MIME type of the file
+
+    Returns:
+        "IMAGE" or "TEXT"
+    """
+    file_name_lower = file_name.lower()
+
+    # Photos from phones/cameras are almost always visual evidence
+    if file_type in ["image/jpeg", "image/jpg", "image/png", "image/heic", "image/webp"]:
+        # Common photo filename patterns
+        photo_patterns = [
+            "img_",      # iPhone: IMG_1234.jpg
+            "photo_",    # Generic photo apps
+            "dcim",      # Camera folder
+            "camera",    # Camera apps
+            "dsc_",      # Digital cameras
+            "p_",        # Some cameras
+            "wp_",       # WhatsApp images
+            "screenshot" # Screenshots (though might have text)
+        ]
+
+        # Check if filename suggests it's a photo
+        if any(pattern in file_name_lower for pattern in photo_patterns):
+            return "IMAGE"
+
+        # Could be a scanned document, but default to IMAGE for safety
+        # (OCR will be tried if user reclassifies or if it has substantial text)
+        return "IMAGE"
+
+    # PDFs and Office documents are TEXT by default
+    if file_type in [
+        "application/pdf",
+        "application/msword",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",  # .docx
+        "text/plain",
+        "text/html",
+        "application/rtf"
+    ]:
+        return "TEXT"
+
+    # Default to TEXT for unknown types
+    return "TEXT"
 
 
 async def get_case_context(case_id: str, supabase_client) -> dict:
@@ -1118,6 +1179,7 @@ async def analyze_image_with_vision(file_bytes: bytes, file_name: str, case_cont
 @router.post("/{document_id}/extract")
 async def trigger_extraction(
     document_id: str,
+    force_method: Optional[str] = None,  # NEW: "ocr", "vision", or None for auto
     user=Depends(get_current_user),
     user_supabase=Depends(get_user_supabase_client),
     service_supabase=Depends(get_supabase_client),
@@ -1127,6 +1189,7 @@ async def trigger_extraction(
     Args:
     ----
         document_id: Document ID
+        force_method: Force extraction method - "ocr" for text extraction, "vision" for image analysis, None for auto
         user: Current authenticated user
         user_supabase: User-scoped Supabase client
         service_supabase: Service-role Supabase client
@@ -1159,6 +1222,19 @@ async def trigger_extraction(
         if document["cases"]["user_id"] != user["id"]:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
 
+        # Get classification from metadata
+        classification = document.get("metadata", {}).get("classification", "TEXT")
+        logger.debug(f"Document classification: {classification}, force_method: {force_method}")
+
+        # Check if we should use vision analysis directly (skip OCR)
+        use_vision_analysis = False
+        if force_method == "vision":
+            use_vision_analysis = True
+            logger.info(f"Forcing vision analysis (user requested)")
+        elif force_method != "ocr" and classification == "IMAGE":
+            use_vision_analysis = True
+            logger.info(f"Using vision analysis based on classification (IMAGE)")
+
         # Download file from storage
         storage_path = document["storage_path"]
         logger.debug(f"Downloading file from storage: {storage_path}")
@@ -1182,7 +1258,56 @@ async def trigger_extraction(
         extraction_error = None
         page_count = None
 
-        if file_type in ["application/pdf", "pdf"]:
+        # If we should use vision analysis, skip OCR and go straight to image analysis
+        if use_vision_analysis and file_type in ["image/png", "image/jpeg", "image/jpg", "image/heic"]:
+            logger.info(f"Skipping OCR, going straight to vision analysis for {file_name}")
+            try:
+                # Get case context
+                case_id = document.get("case_id")
+                if not case_id:
+                    logger.error(f"No case_id found in document {document_id}")
+                    raise ValueError("Document missing case_id")
+
+                case_context = await get_case_context(case_id, user_supabase)
+
+                # Analyze image with context
+                visual_description, vision_method = await analyze_image_with_vision(
+                    file_bytes, file_name, case_context
+                )
+
+                if visual_description and len(visual_description) > 50:
+                    extracted_text = visual_description
+                    extraction_method = vision_method
+                    extraction_quality = "high"
+                    ocr_provider = "openai_vision_analysis"
+
+                    # Update metadata to mark as visual content
+                    document_metadata = document.get("metadata", {}) or {}
+                    document_metadata["is_visual_content"] = True
+                    document_metadata["extraction_method_used"] = "vision_direct"
+
+                    # Update classification to IMAGE if it wasn't already
+                    if classification != "IMAGE":
+                        document_metadata["classification"] = "IMAGE"
+                        logger.info(f"Updated classification to IMAGE for {file_name}")
+
+                    user_supabase.table("documents").update({
+                        "metadata": document_metadata
+                    }).eq("id", document_id).execute()
+
+                    logger.info(f"Successfully analyzed image using vision analysis: {file_name}")
+                else:
+                    extraction_error = "Vision analysis returned insufficient content"
+                    extraction_method = "vision_failed"
+                    extraction_quality = "low"
+
+            except Exception as vision_err:
+                logger.error(f"Vision analysis failed for {file_name}: {vision_err}", exc_info=True)
+                extraction_error = f"Vision analysis failed: {str(vision_err)}"
+                extraction_method = "vision_failed"
+                extraction_quality = "low"
+
+        elif file_type in ["application/pdf", "pdf"]:
             # Write to temp file for PDF processing
             with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
                 tmp.write(file_bytes)
@@ -1476,6 +1601,18 @@ async def trigger_extraction(
 
         # Sanitize extracted text to remove NULL characters that PostgreSQL can't store
         extracted_text = sanitize_text_for_db(extracted_text)
+
+        # Update classification if force_method was used (and not already updated)
+        if force_method and not use_vision_analysis:
+            new_classification = "IMAGE" if force_method == "vision" else "TEXT"
+            if new_classification != classification:
+                logger.info(f"Updating classification from {classification} to {new_classification} based on force_method")
+                document_metadata = document.get("metadata", {}) or {}
+                document_metadata["classification"] = new_classification
+                document_metadata["classification_updated_by_user"] = True
+                user_supabase.table("documents").update({
+                    "metadata": document_metadata
+                }).eq("id", document_id).execute()
 
         # Update document with extraction results
         update_data = {

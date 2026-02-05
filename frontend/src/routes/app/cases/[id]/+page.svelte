@@ -1096,14 +1096,20 @@
 			});
 
 			if (!response.ok) throw new Error('Bulk extraction failed');
-			
+
 			const result = await response.json();
 			toastStore.success(`Extracted ${result.extracted_count} document(s)`);
-			
+
 			// Refresh documents and close warning
 			await loadDocuments();
+
+			// Force UI update by resetting the state flag before final checks
+			runningBulkOcr = false;
 			showMissingTextWarning = false;
-			
+
+			// Small delay to ensure UI has updated before checking
+			await new Promise(resolve => setTimeout(resolve, 100));
+
 			// If all docs now have text, proceed with analysis
 			if (docsWithoutText.length === 0) {
 				await startStreamingAnalysis();

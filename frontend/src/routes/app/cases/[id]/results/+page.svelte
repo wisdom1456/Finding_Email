@@ -15,6 +15,7 @@
 	import SkippedDocumentsAlert from '$lib/components/SkippedDocumentsAlert.svelte';
 	import DocumentSummaryCard from '$lib/components/DocumentSummaryCard.svelte';
 	import GapAnalysisPanel from '$lib/components/GapAnalysisPanel.svelte';
+	import FullAnalysisDisplay from '$lib/components/FullAnalysisDisplay.svelte';
 	import { AlertTriangle } from 'lucide-svelte';
 
 	// Get SSR data from load function
@@ -1101,16 +1102,21 @@ async function generateLetterRequest(body: Record<string, any>) {
 				</div>
 			{/if}
 		{:else if activeTab === 'fullAnalysis'}
-			<div class="card-standard">
-				<h2 class="text-2xl font-heading font-bold text-contrast mb-8 border-b border-gray-100 pb-4">Full Analysis</h2>
-				{#if results.streaming_analysis}
-					<div class="prose prose-slate max-w-none prose-headings:font-heading prose-h2:text-xl prose-h3:text-lg prose-p:text-gray-700 prose-li:text-gray-700 prose-strong:text-contrast">
-						{@html parseMarkdown(results.streaming_analysis)}
+			{#if results.streaming_analysis}
+				<FullAnalysisDisplay content={results.streaming_analysis} />
+			{:else}
+				<div class="card-standard">
+					<div class="text-center py-16">
+						<svg class="mx-auto h-20 w-20 text-gray-300 mb-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+						</svg>
+						<h3 class="text-xl font-bold text-gray-700 mb-3">No Full Analysis Available</h3>
+						<p class="text-gray-500 max-w-md mx-auto leading-relaxed">
+							Full analysis content is not available for this case. This comprehensive narrative is generated for new streaming analyses.
+						</p>
 					</div>
-				{:else}
-					<p class="text-gray-500">Full analysis content is not available for this case. This feature is available for new streaming analyses.</p>
-				{/if}
-			</div>
+				</div>
+			{/if}
 		{:else if activeTab === 'documents'}
 			{#if results.document_summaries && results.document_summaries.length > 0}
 				<div class="card-standard">

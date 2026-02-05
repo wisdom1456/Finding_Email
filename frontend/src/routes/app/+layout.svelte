@@ -4,7 +4,8 @@
 	import { page } from '$app/stores';
 	import { getApiUrl } from '$lib/config';
 	import ClioConnect from '$lib/components/ClioConnect.svelte';
-	import { Modal, NavLink } from '$lib/components/ui';
+	import Modal from '$lib/components/ui/Modal.svelte';
+	import NavLink from '$lib/components/ui/NavLink.svelte';
 	import { clioStore } from '$lib/stores/clioStore';
 	import { Menu, X, User, Settings, LogOut, Link2, HelpCircle } from 'lucide-svelte';
 	import type { LayoutData } from './$types';

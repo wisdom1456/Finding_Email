@@ -1117,7 +1117,7 @@
 
 	async function proceedWithoutMissingDocs() {
 		showMissingTextWarning = false;
-		await startStreamingAnalysis(); // Skip the missing text check and use streaming
+		await startStreamingAnalysis(true); // Skip the missing text check and use streaming
 	}
 
 	async function cancelAnalysis() {

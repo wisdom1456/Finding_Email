@@ -24,12 +24,20 @@
 		ChevronRight,
 		Library,
 		Zap,
-		Infinity
+		Infinity,
+		Eye,
+		Brain,
+		FileImage,
+		Shield,
+		TrendingUp,
+		Settings,
+		FileWarning
 	} from 'lucide-svelte';
 
 	const tabs = [
 		{ id: 'getting-started', label: 'Getting Started' },
 		{ id: 'features', label: 'Features & Guides' },
+		{ id: 'whats-new', label: "What's New" },
 		{ id: 'faq', label: 'FAQ' }
 	];
 
@@ -63,53 +71,6 @@
 		subtitle="Learn how to use the Legal Document Analysis Portal"
 		breadcrumbs={[{ label: 'Dashboard', href: '/app' }, { label: 'Help' }]}
 	/>
-
-	<!-- What's New Banner -->
-	<div class="mb-8 overflow-hidden rounded-2xl bg-gradient-to-br from-accent/10 via-accent/5 to-transparent border-2 border-accent/20 shadow-sm">
-		<div class="p-6 sm:p-8">
-			<div class="flex items-start gap-4">
-				<div class="shrink-0 rounded-xl bg-accent p-3 shadow-lg">
-					<Zap class="h-6 w-6 text-white" />
-				</div>
-				<div class="flex-1">
-					<h3 class="text-xl font-heading font-bold text-contrast mb-2">What's New</h3>
-					<div class="space-y-3">
-						<div class="flex items-start gap-3">
-							<CheckCircle class="h-5 w-5 text-accent shrink-0 mt-0.5" />
-							<div>
-								<p class="font-semibold text-contrast">Enhanced Full Analysis Display</p>
-								<p class="text-sm text-gray-600 mt-1">
-									The Full Analysis tab now features a beautiful magazine-style editorial layout with refined typography,
-									elegant visual hierarchy, and enhanced readability. Your comprehensive case narratives are now presented
-									in a polished, professional format.
-								</p>
-							</div>
-						</div>
-						<div class="flex items-start gap-3">
-							<Infinity class="h-5 w-5 text-accent shrink-0 mt-0.5" />
-							<div>
-								<p class="font-semibold text-contrast">Unlimited Document Import from Clio</p>
-								<p class="text-sm text-gray-600 mt-1">
-									Import as many documents as you need from your Clio matters. We've removed all pagination limits,
-									ensuring you get every document, communication, and note from your connected Clio account.
-								</p>
-							</div>
-						</div>
-						<div class="flex items-start gap-3">
-							<RefreshCw class="h-5 w-5 text-accent shrink-0 mt-0.5" />
-							<div>
-								<p class="font-semibold text-contrast">Improved Clio Sync Performance</p>
-								<p class="text-sm text-gray-600 mt-1">
-									Faster, more reliable Clio synchronization with better error handling and comprehensive pagination
-									support. All documents, emails, and notes are now imported with complete accuracy.
-								</p>
-							</div>
-						</div>
-					</div>
-				</div>
-			</div>
-		</div>
-	</div>
 
 	<div class="help-container">
 		<Tabs {tabs} bind:activeTab>
@@ -166,12 +127,14 @@
 									<p class="step-description">
 										Upload your case documents including intake forms, contracts, correspondence, and
 										supporting evidence. You can drag and drop multiple files at once. Supported
-										formats include PDF, DOCX, DOC, images (JPG, PNG), TXT, CSV, and EML files.
+										formats include PDF, DOCX, DOC, images (JPG, PNG), TXT, CSV, and EML (email) files.
+										The system handles files up to 50MB each with automatic processing optimization.
 									</p>
 									<div class="tip-box">
 										<p class="tip-text">
 											<strong>Tip:</strong> Include your client intake form for best results. The AI
-											uses this to understand the case context.
+											uses this to understand the case context. Photos and poor-quality scans are
+											automatically analyzed using Vision AI.
 										</p>
 									</div>
 								</div>
@@ -208,8 +171,9 @@
 										<h4 class="step-title">Review Results</h4>
 									</div>
 									<p class="step-description">
-										When analysis is complete, review the beautifully formatted Full Analysis, document
-										summaries, gap analysis, and case insights. You can verify extracted facts, check citations,
+										When analysis is complete, review the beautifully formatted Full Analysis (magazine-style
+										layout), document summaries, <strong>gap analysis</strong> (identifies missing evidence
+										and case weaknesses), and case insights. You can verify extracted facts, check citations,
 										and explore the comprehensive narrative before generating client deliverables.
 									</p>
 								</div>
@@ -237,7 +201,7 @@
 					<section class="formats-section">
 						<h3 class="section-heading">Supported Document Formats</h3>
 						<div class="formats-grid">
-							{#each [{ ext: 'PDF', desc: 'Adobe PDF' }, { ext: 'DOCX', desc: 'Word Document' }, { ext: 'DOC', desc: 'Word (Legacy)' }, { ext: 'TXT', desc: 'Plain Text' }, { ext: 'CSV', desc: 'Spreadsheets' }, { ext: 'JPG/PNG', desc: 'Images (OCR)' }, { ext: 'EML', desc: 'Email Files' }, { ext: 'HTML', desc: 'Web Pages' }] as format}
+							{#each [{ ext: 'PDF', desc: 'Adobe PDF' }, { ext: 'DOCX', desc: 'Word Document' }, { ext: 'DOC', desc: 'Word (Legacy)' }, { ext: 'EML', desc: 'Email Files (HTML)' }, { ext: 'JPG/PNG', desc: 'Photos (Vision AI)' }, { ext: 'TXT', desc: 'Plain Text' }, { ext: 'CSV', desc: 'Spreadsheets' }, { ext: 'HTML', desc: 'Web Pages' }] as format}
 								<div class="format-card">
 									<span class="format-ext">{format.ext}</span>
 									<p class="format-desc">{format.desc}</p>
@@ -323,11 +287,22 @@
 								</p>
 							</div>
 							<div class="detail-item">
-								<h4 class="detail-title">OCR & Text Extraction</h4>
+								<h4 class="detail-title">OCR & Vision AI Text Extraction</h4>
 								<p class="detail-text">
 									Scanned PDFs and images are automatically processed using GPT-4o Vision for text extraction.
-									If extraction fails or quality is low, you can retry OCR individually or in bulk through
-									the Verification Hub. Clear, high-resolution scans (300+ DPI) produce the best OCR results.
+									<strong>New:</strong> The system automatically detects low-quality OCR results and switches to
+									advanced Vision AI analysis for photos, diagrams, and poor-quality scans. Vision AI provides
+									contextual understanding of visual documents that traditional OCR cannot handle. If extraction
+									fails or quality is low, you can retry OCR individually or in bulk through the Verification Hub.
+									Clear, high-resolution scans (300+ DPI) produce the best OCR results.
+								</p>
+							</div>
+							<div class="detail-item">
+								<h4 class="detail-title">File Size Handling</h4>
+								<p class="detail-text">
+									The system automatically handles large files up to 50MB each, with intelligent timeout
+									prevention to avoid processing failures. Large document sets are processed in optimized
+									chunks to ensure reliable analysis without server timeouts.
 								</p>
 							</div>
 						</div>
@@ -341,7 +316,7 @@
 							</div>
 							<div>
 								<h2 class="feature-heading">Clio Integration</h2>
-								<p class="feature-description">Connect your Clio account to import matters.</p>
+								<p class="feature-description">Two-way synchronization with your Clio account.</p>
 							</div>
 						</div>
 						<div class="feature-details">
@@ -354,19 +329,29 @@
 								</p>
 							</div>
 							<div class="detail-item">
+								<h4 class="detail-title">Two-Way Synchronization</h4>
+								<p class="detail-text">
+									<strong>New:</strong> The system now provides automatic two-way sync between Clio and the portal.
+									Documents imported from Clio are analyzed, and results are automatically sent back to Clio.
+									The sync button on the documents page allows you to manually trigger updates. Smart change
+									detection tracks when Clio documents are modified and flags cases for re-analysis.
+								</p>
+							</div>
+							<div class="detail-item">
 								<h4 class="detail-title">Unlimited Document Import</h4>
 								<p class="detail-text">
-									Once connected, import complete Clio matters with <strong>no limits on document count</strong>.
+									Import complete Clio matters with <strong>no limits on document count</strong>.
 									All documents, communications, and notes are imported automatically—no pagination restrictions.
-									The improved sync ensures every file is captured accurately.
+									Whether you have 5 files or 500, every document is captured accurately. The improved sync
+									ensures reliable imports with better error handling and timezone support.
 								</p>
 							</div>
 							<div class="detail-item">
 								<h4 class="detail-title">Synced Content</h4>
 								<p class="detail-text">
 									The integration imports matter details, all associated documents, email communications,
-									and case notes. All imported items are available for analysis with improved reliability
-									and performance.
+									and case notes. Analysis results, including findings and recommendations, are automatically
+									uploaded back to Clio for seamless workflow integration.
 								</p>
 							</div>
 						</div>
@@ -424,6 +409,46 @@
 									Uses specialized AI models for different tasks: GPT-4o for fast document extraction,
 									GPT-4o-mini for legal issue identification, GPT-4.1 for comprehensive analysis, and
 									GPT-5.2 for professional findings email generation.
+								</p>
+							</div>
+						</div>
+					</section>
+
+					<!-- Gap Analysis -->
+					<section class="feature-section">
+						<div class="feature-header">
+							<div class="feature-icon accent">
+								<Brain class="h-6 w-6" />
+							</div>
+							<div>
+								<h2 class="feature-heading">Gap Analysis</h2>
+								<p class="feature-description">Identify missing information and case weaknesses.</p>
+							</div>
+						</div>
+						<div class="feature-details">
+							<div class="detail-item">
+								<h4 class="detail-title">Comprehensive Case Assessment</h4>
+								<p class="detail-text">
+									Gap Analysis is a new feature that systematically reviews your case to identify missing
+									information, evidence gaps, and potential weaknesses. It provides a thorough assessment
+									of what additional documentation or evidence would strengthen your case.
+								</p>
+							</div>
+							<div class="detail-item">
+								<h4 class="detail-title">Attorney Summary</h4>
+								<p class="detail-text">
+									Each gap analysis includes a concise executive summary written specifically for legal
+									professionals. The summary highlights critical gaps, prioritizes missing information,
+									and provides actionable recommendations. Analysis is generated in real-time with
+									streaming display so you can watch the assessment as it's created.
+								</p>
+							</div>
+							<div class="detail-item">
+								<h4 class="detail-title">Integration with Letters</h4>
+								<p class="detail-text">
+									Gap analysis results automatically inform recommendation letters and findings emails.
+									This integration helps prevent AI hallucinations by ensuring that generated letters
+									acknowledge identified weaknesses and only make claims supported by available evidence.
 								</p>
 							</div>
 						</div>
@@ -529,6 +554,325 @@
 					</section>
 				</div>
 
+				<!-- What's New Tab -->
+			{:else if activeTab === 'whats-new'}
+				<div class="help-content">
+					<!-- Header -->
+					<section class="feature-card welcome-card">
+						<div class="flex items-start gap-5">
+							<div class="feature-icon-large">
+								<Sparkles class="h-7 w-7" />
+							</div>
+							<div class="flex-1">
+								<h2 class="feature-heading">Recent Updates & Improvements</h2>
+								<p class="feature-description">
+									See what's been added, improved, and fixed since the Document Viewer tabbed interface update (January 23, 2025).
+								</p>
+							</div>
+						</div>
+					</section>
+
+					<!-- Major New Features -->
+					<section class="whats-new-section">
+						<h3 class="section-heading">🎯 Major New Features</h3>
+
+						<!-- Clio Integration -->
+						<div class="update-card feature-update">
+							<div class="update-icon clio">
+								<Link2 class="h-5 w-5" />
+							</div>
+							<div class="update-content">
+								<h4 class="update-title">Clio Integration & Two-Way Sync</h4>
+								<p class="update-description">
+									Seamlessly sync documents between Clio and the portal with automatic two-way synchronization.
+								</p>
+								<ul class="update-list">
+									<li><strong>Automatic Synchronization:</strong> New documents from Clio are imported, analyzed, and results are sent back automatically</li>
+									<li><strong>Sync Status Tracking:</strong> See which documents are up-to-date and which need re-analysis when changes occur</li>
+									<li><strong>One-Click Sync Button:</strong> Manually trigger syncs from the documents page to pull in the latest changes</li>
+									<li><strong>Smart Change Detection:</strong> Tracks when Clio documents are modified and flags cases for re-analysis</li>
+									<li><strong>Unlimited Imports:</strong> Removed all pagination limits—import complete Clio matters with every document, no matter how many files</li>
+								</ul>
+							</div>
+						</div>
+
+						<!-- Gap Analysis -->
+						<div class="update-card feature-update">
+							<div class="update-icon analysis">
+								<Brain class="h-5 w-5" />
+							</div>
+							<div class="update-content">
+								<h4 class="update-title">Gap Analysis</h4>
+								<p class="update-description">
+									New comprehensive case assessment that identifies missing information, evidence gaps, and weak points.
+								</p>
+								<ul class="update-list">
+									<li><strong>Case Assessment:</strong> Identifies missing information, evidence gaps, and weaknesses in your case</li>
+									<li><strong>Attorney Summary:</strong> Get a concise executive summary written specifically for legal professionals</li>
+									<li><strong>Real-time Streaming:</strong> Watch the analysis being generated live with streaming text display</li>
+									<li><strong>Letter Integration:</strong> Gap analysis results automatically inform recommendation letters to prevent hallucinations</li>
+								</ul>
+							</div>
+						</div>
+
+						<!-- Vision AI -->
+						<div class="update-card feature-update">
+							<div class="update-icon vision">
+								<Eye class="h-5 w-5" />
+							</div>
+							<div class="update-content">
+								<h4 class="update-title">Vision AI for Photos & Scanned Documents</h4>
+								<p class="update-description">
+									Advanced vision AI automatically analyzes photographs, diagrams, and poor-quality scans.
+								</p>
+								<ul class="update-list">
+									<li><strong>Automatic Detection:</strong> System recognizes when documents are photos or low-quality scans</li>
+									<li><strong>Intelligent Analysis:</strong> Uses GPT-4o Vision to analyze visual content that traditional OCR can't handle</li>
+									<li><strong>Contextual Understanding:</strong> Vision AI considers your case context when analyzing visual documents</li>
+									<li><strong>Quality Detection:</strong> Automatically switches to vision analysis when OCR quality is too low</li>
+								</ul>
+							</div>
+						</div>
+
+						<!-- Email Support -->
+						<div class="update-card feature-update">
+							<div class="update-icon email">
+								<Mail class="h-5 w-5" />
+							</div>
+							<div class="update-content">
+								<h4 class="update-title">Email File Support (.eml)</h4>
+								<p class="update-description">
+									Direct support for email files with proper HTML handling.
+								</p>
+								<ul class="update-list">
+									<li><strong>Direct .eml Processing:</strong> Upload email files directly without conversion</li>
+									<li><strong>HTML Email Handling:</strong> Properly processes emails that only contain HTML content</li>
+								</ul>
+							</div>
+						</div>
+
+						<!-- Recommendation System -->
+						<div class="update-card feature-update">
+							<div class="update-icon recommendation">
+								<FileText class="h-5 w-5" />
+							</div>
+							<div class="update-content">
+								<h4 class="update-title">Case Recommendation System</h4>
+								<p class="update-description">
+									Generate professional advisory letters with hallucination prevention.
+								</p>
+								<ul class="update-list">
+									<li><strong>Advisory Letters:</strong> Generate professional recommendation letters based on case analysis</li>
+									<li><strong>Hallucination Prevention:</strong> Letters are validated against actual case findings for accuracy</li>
+									<li><strong>Gap Analysis Integration:</strong> Recommendations informed by identified case gaps</li>
+								</ul>
+							</div>
+						</div>
+					</section>
+
+					<!-- User Interface Improvements -->
+					<section class="whats-new-section">
+						<h3 class="section-heading">🎨 User Interface Improvements</h3>
+
+						<div class="updates-grid">
+							<div class="update-card minor-update">
+								<div class="update-icon-small ui">
+									<TrendingUp class="h-4 w-4" />
+								</div>
+								<div>
+									<h5 class="update-title-small">Magazine-Style Full Analysis</h5>
+									<p class="update-description-small">
+										Full Analysis tab redesigned with modern editorial layout, refined typography (Playfair Display + IBM Plex Sans), and enhanced readability.
+									</p>
+								</div>
+							</div>
+
+							<div class="update-card minor-update">
+								<div class="update-icon-small ui">
+									<FileText class="h-4 w-4" />
+								</div>
+								<div>
+									<h5 class="update-title-small">Multi-line Chat Support</h5>
+									<p class="update-description-small">
+										Case chat assistant now supports multi-line text input for more natural conversations.
+									</p>
+								</div>
+							</div>
+
+							<div class="update-card minor-update">
+								<div class="update-icon-small ui">
+									<AlertCircle class="h-4 w-4" />
+								</div>
+								<div>
+									<h5 class="update-title-small">Outdated Analysis Banner</h5>
+									<p class="update-description-small">
+										Clear warnings when analysis needs to be refreshed due to document changes.
+									</p>
+								</div>
+							</div>
+
+							<div class="update-card minor-update">
+								<div class="update-icon-small ui">
+									<CheckCircle class="h-4 w-4" />
+								</div>
+								<div>
+									<h5 class="update-title-small">Primary Intake Selection</h5>
+									<p class="update-description-small">
+										Choose which document serves as the main case summary for analysis.
+									</p>
+								</div>
+							</div>
+
+							<div class="update-card minor-update">
+								<div class="update-icon-small ui">
+									<HelpCircle class="h-4 w-4" />
+								</div>
+								<div>
+									<h5 class="update-title-small">Modernized Help Page</h5>
+									<p class="update-description-small">
+										Completely redesigned help section with current features and clearer instructions.
+									</p>
+								</div>
+							</div>
+
+							<div class="update-card minor-update">
+								<div class="update-icon-small ui">
+									<Sparkles class="h-4 w-4" />
+								</div>
+								<div>
+									<h5 class="update-title-small">Enhanced Components</h5>
+									<p class="update-description-small">
+										Consistent, polished design across all pages with improved accessibility.
+									</p>
+								</div>
+							</div>
+						</div>
+					</section>
+
+					<!-- Performance & Reliability -->
+					<section class="whats-new-section">
+						<h3 class="section-heading">🔧 Performance & Reliability</h3>
+
+						<div class="update-card fix-update">
+							<div class="update-icon fix">
+								<FileWarning class="h-5 w-5" />
+							</div>
+							<div class="update-content">
+								<h4 class="update-title">Document Processing Improvements</h4>
+								<ul class="update-list compact">
+									<li><strong>File Size Limits:</strong> Automatic handling of large files (up to 50MB) to prevent timeouts</li>
+									<li><strong>Improved Error Handling:</strong> Better recovery from document extraction failures with 500 error handling</li>
+									<li><strong>Extraction Status Updates:</strong> UI now updates immediately when document extraction completes</li>
+									<li><strong>Skip Protection:</strong> Can process cases even if some documents have no extractable text</li>
+									<li><strong>Low-Quality Detection:</strong> Automatically detects poor OCR results and switches to vision analysis</li>
+								</ul>
+							</div>
+						</div>
+
+						<div class="update-card fix-update">
+							<div class="update-icon fix">
+								<Settings class="h-5 w-5" />
+							</div>
+							<div class="update-content">
+								<h4 class="update-title">System Stability Fixes</h4>
+								<ul class="update-list compact">
+									<li><strong>Race Condition Fixes:</strong> Resolved timing issues causing intermittent analysis failures</li>
+									<li><strong>Timeout Adjustments:</strong> Increased timeouts for complex analyses to prevent premature failures</li>
+									<li><strong>Async Processing:</strong> Fixed critical issues in background processing that could cause data loss</li>
+									<li><strong>Model Selection:</strong> Switched gap analysis to GPT-4.1 for more reliable, consistent results</li>
+								</ul>
+							</div>
+						</div>
+
+						<div class="update-card fix-update">
+							<div class="update-icon fix">
+								<Link2 class="h-5 w-5" />
+							</div>
+							<div class="update-content">
+								<h4 class="update-title">Clio Integration Reliability</h4>
+								<ul class="update-list compact">
+									<li><strong>Unlimited Pagination:</strong> Removed artificial limits—import any number of documents</li>
+									<li><strong>Timezone Handling:</strong> Fixed date/time comparison issues across time zones</li>
+									<li><strong>Upload Error Handling:</strong> Better recovery when uploading results back to Clio fails</li>
+									<li><strong>Comprehensive Testing:</strong> Added extensive automated tests for Clio integration</li>
+								</ul>
+							</div>
+						</div>
+					</section>
+
+					<!-- Technical Quality -->
+					<section class="whats-new-section">
+						<h3 class="section-heading">📝 Technical Quality</h3>
+						<div class="quality-grid">
+							<div class="quality-item">
+								<CheckCircle class="h-5 w-5 text-green-600" />
+								<div>
+									<p class="quality-title">Code Quality</p>
+									<p class="quality-text">Automatic linting and style improvements throughout codebase</p>
+								</div>
+							</div>
+							<div class="quality-item">
+								<CheckCircle class="h-5 w-5 text-green-600" />
+								<div>
+									<p class="quality-title">Test Coverage</p>
+									<p class="quality-text">Comprehensive unit and integration tests for critical features</p>
+								</div>
+							</div>
+							<div class="quality-item">
+								<CheckCircle class="h-5 w-5 text-green-600" />
+								<div>
+									<p class="quality-title">Documentation</p>
+									<p class="quality-text">Detailed implementation plans and design documents</p>
+								</div>
+							</div>
+							<div class="quality-item">
+								<CheckCircle class="h-5 w-5 text-green-600" />
+								<div>
+									<p class="quality-title">Deployment</p>
+									<p class="quality-text">Systematic testing procedures before production releases</p>
+								</div>
+							</div>
+						</div>
+					</section>
+
+					<!-- Summary -->
+					<section class="summary-card">
+						<h3 class="summary-title">Release Summary</h3>
+						<p class="summary-description">
+							This release focuses on three key areas:
+						</p>
+						<div class="summary-grid">
+							<div class="summary-item">
+								<div class="summary-icon clio">
+									<Link2 class="h-5 w-5" />
+								</div>
+								<div>
+									<h4 class="summary-item-title">Deeper Clio Integration</h4>
+									<p class="summary-item-text">Seamless two-way sync with automatic updates and unlimited document imports</p>
+								</div>
+							</div>
+							<div class="summary-item">
+								<div class="summary-icon analysis">
+									<Brain class="h-5 w-5" />
+								</div>
+								<div>
+									<h4 class="summary-item-title">Smarter Document Analysis</h4>
+									<p class="summary-item-text">Vision AI for photos, gap analysis for case assessment, better error handling</p>
+								</div>
+							</div>
+							<div class="summary-item">
+								<div class="summary-icon ui">
+									<Sparkles class="h-5 w-5" />
+								</div>
+								<div>
+									<h4 class="summary-item-title">Better User Experience</h4>
+									<p class="summary-item-text">Modern interface, clearer feedback, more reliable processing</p>
+								</div>
+							</div>
+						</div>
+					</section>
+				</div>
+
 				<!-- FAQ Tab -->
 			{:else if activeTab === 'faq'}
 				<div class="help-content">
@@ -550,15 +894,16 @@
 							<ul class="faq-list">
 								<li><strong>PDF</strong> - Standard and scanned (with OCR via GPT-4o Vision)</li>
 								<li><strong>DOCX/DOC</strong> - Microsoft Word documents</li>
+								<li><strong>EML</strong> - Email files with full HTML support (no conversion needed)</li>
+								<li><strong>JPG/PNG</strong> - Images and photos (analyzed via Vision AI or OCR)</li>
 								<li><strong>TXT</strong> - Plain text files</li>
 								<li><strong>CSV</strong> - Spreadsheet data</li>
-								<li><strong>JPG/PNG</strong> - Images (text extracted via OCR)</li>
-								<li><strong>EML</strong> - Email files</li>
 								<li><strong>HTML</strong> - Web page content</li>
 							</ul>
 							<p class="mt-2">
-								Maximum file size is 50MB per file. There is no limit on the number of documents per case.
-								For best results, use clear, high-quality scans for OCR processing.
+								Maximum file size is 50MB per file with automatic optimization for large files.
+								There is no limit on the number of documents per case. Photos and poor-quality scans
+								are automatically analyzed using Vision AI for better results.
 							</p>
 						</AccordionItem>
 
@@ -644,9 +989,58 @@
 							</div>
 						</AccordionItem>
 
+						<AccordionItem title="What is Gap Analysis?">
+							<p>
+								<strong>Gap Analysis</strong> is a comprehensive case assessment tool that identifies missing information,
+								evidence gaps, and potential weaknesses in your case.
+							</p>
+							<p class="mt-2">
+								When you run a gap analysis, the AI systematically reviews all your documents and identifies:
+							</p>
+							<ul class="faq-list">
+								<li><strong>Missing Evidence:</strong> What documentation would strengthen your case</li>
+								<li><strong>Weak Points:</strong> Areas where your case may be vulnerable</li>
+								<li><strong>Information Gaps:</strong> Key facts or details that are unclear or absent</li>
+								<li><strong>Recommendations:</strong> Specific actions to address identified gaps</li>
+							</ul>
+							<p class="mt-2">
+								The gap analysis includes an attorney summary with real-time streaming display. Results automatically
+								integrate with recommendation letters to ensure accuracy and prevent AI hallucinations.
+							</p>
+							<div class="mt-3 p-3 bg-purple-50 rounded-lg">
+								<p class="text-sm text-purple-800">
+									<strong>Pro Tip:</strong> Run gap analysis before generating client recommendations or demand
+									letters to ensure you address all case weaknesses proactively.
+								</p>
+							</div>
+						</AccordionItem>
+
+						<AccordionItem title="How does Vision AI work for photos and scanned documents?">
+							<p>
+								<strong>Vision AI</strong> uses GPT-4o Vision to analyze photographs, diagrams, and poor-quality scans
+								that traditional OCR cannot process effectively.
+							</p>
+							<p class="mt-2">
+								The system automatically:
+							</p>
+							<ul class="faq-list">
+								<li><strong>Detects photo documents:</strong> Recognizes when a document is a photograph or diagram</li>
+								<li><strong>Assesses OCR quality:</strong> Identifies when OCR results are too low-quality to be useful</li>
+								<li><strong>Switches to Vision AI:</strong> Automatically uses advanced vision analysis instead of OCR</li>
+								<li><strong>Provides context:</strong> Analyzes visual content in the context of your case</li>
+							</ul>
+							<div class="mt-3 p-3 bg-cyan-50 rounded-lg">
+								<p class="text-sm text-cyan-800">
+									<strong>Examples:</strong> Accident scene photos, medical images, handwritten notes, damaged documents,
+									architectural plans, and any visual evidence that needs interpretation rather than just text extraction.
+								</p>
+							</div>
+						</AccordionItem>
+
 						<AccordionItem title="What if my documents fail to process or don't have text?">
 							<p class="mb-3">
-								The system provides several ways to handle documents that fail to process or don't have extracted text:
+								The system provides several ways to handle documents that fail to process or don't have extracted text,
+								with improved error handling and automatic recovery:
 							</p>
 
 							<div class="space-y-3">
@@ -678,10 +1072,20 @@
 								</div>
 
 								<div>
+									<h5 class="font-semibold text-contrast text-sm mb-1">Automatic Improvements</h5>
+									<div class="text-sm text-gray-600 space-y-1">
+										<p><strong>Vision AI Fallback:</strong> Low-quality OCR automatically switches to Vision AI analysis</p>
+										<p><strong>File Size Handling:</strong> Large files (up to 50MB) are automatically optimized to prevent timeouts</p>
+										<p><strong>Better Error Recovery:</strong> Improved handling of extraction failures with automatic retry logic</p>
+										<p><strong>Skip Protection:</strong> Cases can now proceed even if some documents have no text</p>
+									</div>
+								</div>
+
+								<div>
 									<h5 class="font-semibold text-contrast text-sm mb-1">Common Document Issues</h5>
 									<div class="text-sm text-gray-600 space-y-1">
 										<p><strong>extraction_failed:</strong> Text extraction failed - run OCR to retry</p>
-										<p><strong>needs_review:</strong> Low quality extraction - verify or run OCR again</p>
+										<p><strong>needs_review:</strong> Low quality extraction - Vision AI may help</p>
 										<p><strong>corrupted:</strong> File is corrupted - re-upload a clean copy</p>
 										<p><strong>download_failed:</strong> Upload failed - retry upload</p>
 										<p><strong>duplicate:</strong> Same file uploaded twice - can exclude from analysis</p>
@@ -691,8 +1095,8 @@
 
 							<div class="mt-3 p-3 bg-blue-50 rounded-lg">
 								<p class="text-sm text-blue-800">
-									<strong>Pro Tip:</strong> OCR works best on clear, high-resolution scans. For poor quality documents,
-									consider re-scanning at higher DPI (300+ recommended) before uploading.
+									<strong>Pro Tip:</strong> For photos and visual documents, let Vision AI handle the analysis automatically.
+									For scanned text documents, clear high-resolution scans (300+ DPI) produce the best OCR results.
 								</p>
 							</div>
 						</AccordionItem>
@@ -715,14 +1119,16 @@
 
 						<AccordionItem title="What is Clio integration?">
 							<p>
-								Clio is a popular legal practice management software. Our integration allows you to:
+								Clio is a popular legal practice management software. Our integration provides <strong>two-way synchronization</strong> between Clio and the portal:
 							</p>
 							<ul class="faq-list">
 								<li>Connect your Clio account securely via OAuth</li>
 								<li>Search and import matters directly</li>
 								<li>Automatically pull <strong>all documents</strong>, communications, and notes (no limits)</li>
-								<li>Benefit from improved sync performance and reliability</li>
-								<li>Keep your workflow in sync with your existing systems</li>
+								<li><strong>Two-way sync:</strong> Analysis results are automatically sent back to Clio</li>
+								<li><strong>Change detection:</strong> System tracks when Clio documents are modified</li>
+								<li><strong>Manual sync button:</strong> Trigger updates anytime from the documents page</li>
+								<li>Benefit from improved sync performance, reliability, and error handling</li>
 							</ul>
 							<p class="mt-2">
 								Click the "Clio" button in the navigation to connect. The integration is optional -
@@ -730,8 +1136,8 @@
 							</p>
 							<div class="mt-3 p-3 bg-green-50 rounded-lg">
 								<p class="text-sm text-green-800">
-									<strong>New:</strong> We've removed all pagination limits! Import complete Clio matters with
-									every document, no matter how many files are attached.
+									<strong>New:</strong> We've removed all pagination limits and added two-way sync! Import complete
+									Clio matters with every document, and analysis results are automatically uploaded back to Clio.
 								</p>
 							</div>
 						</AccordionItem>
@@ -1417,6 +1823,279 @@
 		border-radius: 10px;
 	}
 
+	/* What's New Section Styles */
+	.whats-new-section {
+		margin: 3rem 0;
+		padding-top: 2rem;
+		border-top: 1px solid #e2e8f0;
+	}
+
+	.update-card {
+		background: white;
+		border: 2px solid #f1f5f9;
+		border-radius: 12px;
+		padding: 1.75rem;
+		transition: all 0.2s;
+	}
+
+	.feature-update {
+		display: flex;
+		gap: 1.25rem;
+		margin-bottom: 1.5rem;
+	}
+
+	.feature-update:hover {
+		border-color: var(--accent);
+		box-shadow: 0 4px 12px rgba(var(--accent-rgb), 0.1);
+	}
+
+	.update-icon {
+		flex-shrink: 0;
+		width: 48px;
+		height: 48px;
+		border-radius: 10px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		color: white;
+	}
+
+	.update-icon.clio {
+		background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+	}
+
+	.update-icon.analysis {
+		background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+	}
+
+	.update-icon.vision {
+		background: linear-gradient(135deg, #06b6d4 0%, #0891b2 100%);
+	}
+
+	.update-icon.email {
+		background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+	}
+
+	.update-icon.recommendation {
+		background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+	}
+
+	.update-icon.fix {
+		background: linear-gradient(135deg, #64748b 0%, #475569 100%);
+	}
+
+	.update-content {
+		flex: 1;
+	}
+
+	.update-title {
+		font-size: 1.125rem;
+		font-weight: 700;
+		color: var(--contrast);
+		margin-bottom: 0.5rem;
+	}
+
+	.update-description {
+		color: #64748b;
+		font-size: 0.9375rem;
+		line-height: 1.6;
+		margin-bottom: 1rem;
+	}
+
+	.update-list {
+		list-style: none;
+		padding: 0;
+		margin: 0;
+		display: flex;
+		flex-direction: column;
+		gap: 0.75rem;
+	}
+
+	.update-list li {
+		color: #64748b;
+		font-size: 0.9375rem;
+		line-height: 1.6;
+		padding-left: 1.5rem;
+		position: relative;
+	}
+
+	.update-list li::before {
+		content: '•';
+		position: absolute;
+		left: 0.5rem;
+		color: var(--accent);
+		font-weight: bold;
+	}
+
+	.update-list.compact {
+		gap: 0.5rem;
+	}
+
+	.update-list.compact li {
+		font-size: 0.875rem;
+	}
+
+	/* Minor Updates Grid */
+	.updates-grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+		gap: 1.25rem;
+	}
+
+	.minor-update {
+		display: flex;
+		gap: 1rem;
+		padding: 1.25rem;
+	}
+
+	.minor-update:hover {
+		border-color: var(--accent);
+		box-shadow: 0 2px 8px rgba(var(--accent-rgb), 0.1);
+	}
+
+	.update-icon-small {
+		flex-shrink: 0;
+		width: 36px;
+		height: 36px;
+		border-radius: 8px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		color: white;
+	}
+
+	.update-icon-small.ui {
+		background: linear-gradient(135deg, var(--accent) 0%, var(--accent-hover) 100%);
+	}
+
+	.update-title-small {
+		font-size: 0.9375rem;
+		font-weight: 600;
+		color: var(--contrast);
+		margin-bottom: 0.375rem;
+	}
+
+	.update-description-small {
+		color: #64748b;
+		font-size: 0.875rem;
+		line-height: 1.5;
+	}
+
+	/* Fix Updates */
+	.fix-update {
+		display: flex;
+		gap: 1.25rem;
+		margin-bottom: 1.25rem;
+	}
+
+	.fix-update:hover {
+		border-color: #94a3b8;
+		box-shadow: 0 2px 8px rgba(100, 116, 139, 0.1);
+	}
+
+	/* Quality Grid */
+	.quality-grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+		gap: 1.25rem;
+	}
+
+	.quality-item {
+		display: flex;
+		gap: 1rem;
+		padding: 1.25rem;
+		background: #f8fafc;
+		border-radius: 10px;
+		border: 1px solid #e2e8f0;
+	}
+
+	.quality-title {
+		font-weight: 600;
+		color: var(--contrast);
+		font-size: 0.9375rem;
+		margin-bottom: 0.25rem;
+	}
+
+	.quality-text {
+		color: #64748b;
+		font-size: 0.875rem;
+		line-height: 1.5;
+	}
+
+	/* Summary Card */
+	.summary-card {
+		margin: 3rem 0;
+		padding: 2rem;
+		background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+		border: 2px solid var(--accent);
+		border-radius: 14px;
+	}
+
+	.summary-title {
+		font-size: 1.375rem;
+		font-weight: 700;
+		color: var(--contrast);
+		margin-bottom: 0.75rem;
+		font-family: var(--font-heading);
+	}
+
+	.summary-description {
+		color: #64748b;
+		font-size: 1rem;
+		margin-bottom: 1.5rem;
+	}
+
+	.summary-grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+		gap: 1.5rem;
+	}
+
+	.summary-item {
+		display: flex;
+		gap: 1rem;
+		padding: 1.5rem;
+		background: white;
+		border-radius: 10px;
+		border: 1px solid #e2e8f0;
+	}
+
+	.summary-icon {
+		flex-shrink: 0;
+		width: 44px;
+		height: 44px;
+		border-radius: 10px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		color: white;
+	}
+
+	.summary-icon.clio {
+		background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+	}
+
+	.summary-icon.analysis {
+		background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+	}
+
+	.summary-icon.ui {
+		background: linear-gradient(135deg, var(--accent) 0%, var(--accent-hover) 100%);
+	}
+
+	.summary-item-title {
+		font-weight: 600;
+		color: var(--contrast);
+		font-size: 1rem;
+		margin-bottom: 0.375rem;
+	}
+
+	.summary-item-text {
+		color: #64748b;
+		font-size: 0.875rem;
+		line-height: 1.5;
+	}
+
 	/* Responsive */
 	@media (max-width: 768px) {
 		.help-content {
@@ -1441,6 +2120,19 @@
 		}
 
 		.practice-areas-grid {
+			grid-template-columns: 1fr;
+		}
+
+		.feature-update,
+		.fix-update {
+			flex-direction: column;
+		}
+
+		.updates-grid {
+			grid-template-columns: 1fr;
+		}
+
+		.summary-grid {
 			grid-template-columns: 1fr;
 		}
 	}

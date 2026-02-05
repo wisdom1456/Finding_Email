@@ -749,6 +749,50 @@
 		}
 	}
 
+	async function reExtractDocument(docId: string, forceMethod: 'ocr' | 'vision') {
+		try {
+			const { session, user } = await getSecureSession();
+			if (!session || !user) throw new Error('Not authenticated');
+
+			const methodLabel = forceMethod === 'vision' ? 'Image Analysis' : 'Text Extraction';
+			toastStore.info(`Starting ${methodLabel}...`);
+
+			const response = await fetch(`${getApiUrl()}/api/documents/${docId}/extract?force_method=${forceMethod}`, {
+				method: 'POST',
+				headers: {
+					Authorization: `Bearer ${session.access_token}`
+				}
+			});
+
+			if (!response.ok) {
+				const errorData = await response.json();
+				throw new Error(errorData.detail || `${methodLabel} failed`);
+			}
+
+			const result = await response.json();
+
+			// Reload documents to show updated extracted text
+			await loadDocuments();
+
+			// Update viewing document if it's currently being viewed
+			if (viewingDocument?.id === docId) {
+				const updatedDoc = documents.find(d => d.id === docId);
+				if (updatedDoc) {
+					viewingDocument = updatedDoc;
+					// Reload extracted text
+					if (documentViewerTab === 'text') {
+						await loadExtractedText(docId);
+					}
+				}
+			}
+
+			toastStore.success(`${methodLabel} completed successfully`);
+		} catch (error: any) {
+			console.error('Failed to re-extract document:', error);
+			toastStore.error(error.message || 'Re-extraction failed');
+		}
+	}
+
 	async function deleteCase() {
 		if (deleteCaseText !== 'DELETE') return;
 

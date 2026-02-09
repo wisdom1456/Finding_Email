@@ -13,23 +13,52 @@
 		Check,
 		ChevronDown
 	} from 'lucide-svelte';
-	import type { GapAnalysisResult, GapCategory, GapItem, GapSeverity, RecommendedLetterType } from '$lib/types';
+	import type {
+		GapAnalysisResult,
+		GapCategory,
+		GapItem,
+		GapResolutionInput,
+		GapSeverity,
+		RecommendedLetterType
+	} from '$lib/types';
 	import Badge from '$lib/components/ui/Badge.svelte';
 	import CaseRecommendationCard from '$lib/components/CaseRecommendationCard.svelte';
+	import AsyncButton from '$lib/components/ui/AsyncButton.svelte';
 
 	// Props
 	export let gapAnalysis: GapAnalysisResult;
+	export let availableDocuments: Array<{ id: string; file_name: string }> = [];
 	export let onGenerateRecommendationLetter: ((letterType: RecommendedLetterType) => void) | undefined = undefined;
 	export let generatingRecommendationLetter: boolean = false;
+	export let onResolveGaps:
+		| ((payload: {
+				resolutions: GapResolutionInput[];
+				global_resolution_notes?: string;
+				attached_document_ids?: string[];
+		  }) => Promise<void> | void)
+		| undefined = undefined;
+	export let resolvingGaps: boolean = false;
 
 	// State
 	let selectedSeverity: GapSeverity | 'all' = 'all';
 	let selectedCategory: GapCategory | 'all' = 'all';
 	let expandedGaps = new Set<string>();
 	let copiedGaps = new Set<string>();
+	let globalResolutionNotes = '';
+	let selectedDocumentIds = new Set<string>();
+	let gapResolutionDrafts: Record<string, string> = {};
+	let resolvedGapIds = new Set<string>();
 
 	// Get all gaps as a flat array
 	$: allGaps = Object.values(gapAnalysis.gaps_by_category).flat();
+	$: draftResolutionCount = allGaps.filter((gap) => {
+		const text = (gapResolutionDrafts[gap.gap_id] || '').trim();
+		return text.length > 0 || resolvedGapIds.has(gap.gap_id);
+	}).length;
+	$: canSubmitResolution =
+		draftResolutionCount > 0 ||
+		globalResolutionNotes.trim().length > 0 ||
+		selectedDocumentIds.size > 0;
 
 	// Filter gaps based on selected severity and category
 	$: filteredGaps = allGaps.filter((gap) => {
@@ -46,6 +75,58 @@
 			expandedGaps.add(gapId);
 		}
 		expandedGaps = expandedGaps;
+	}
+
+	function toggleDocumentSelection(documentId: string) {
+		if (selectedDocumentIds.has(documentId)) {
+			selectedDocumentIds.delete(documentId);
+		} else {
+			selectedDocumentIds.add(documentId);
+		}
+		selectedDocumentIds = selectedDocumentIds;
+	}
+
+	function updateResolutionDraft(gapId: string, value: string) {
+		gapResolutionDrafts = {
+			...gapResolutionDrafts,
+			[gapId]: value
+		};
+	}
+
+	function toggleResolved(gapId: string) {
+		if (resolvedGapIds.has(gapId)) {
+			resolvedGapIds.delete(gapId);
+		} else {
+			resolvedGapIds.add(gapId);
+		}
+		resolvedGapIds = resolvedGapIds;
+	}
+
+	async function applyResolutionAndRefresh() {
+		if (!onResolveGaps) return;
+
+		const resolutions: GapResolutionInput[] = allGaps
+			.map((gap) => {
+				const text = (gapResolutionDrafts[gap.gap_id] || '').trim();
+				const markedResolved = resolvedGapIds.has(gap.gap_id);
+				return {
+					gap_id: gap.gap_id,
+					resolution_text: text,
+					mark_resolved: markedResolved,
+					related_document_ids: []
+				};
+			})
+			.filter((item) => item.resolution_text || item.mark_resolved);
+
+		await onResolveGaps({
+			resolutions,
+			global_resolution_notes: globalResolutionNotes.trim() || undefined,
+			attached_document_ids: Array.from(selectedDocumentIds)
+		});
+
+		// Keep notes for traceability; clear per-gap drafts after successful submission.
+		gapResolutionDrafts = {};
+		resolvedGapIds = new Set<string>();
 	}
 
 	// Copy gap to clipboard
@@ -110,6 +191,8 @@
 				return Calendar;
 			case 'unverifiable_claim':
 				return FileQuestion;
+			case 'hallucination_risk':
+				return AlertTriangle;
 			case 'incomplete_info':
 				return ClipboardList;
 			default:
@@ -128,6 +211,8 @@
 				return 'Timeline Gap';
 			case 'unverifiable_claim':
 				return 'Unverifiable Claim';
+			case 'hallucination_risk':
+				return 'Hallucination Risk';
 			case 'incomplete_info':
 				return 'Incomplete Info';
 			default:
@@ -204,6 +289,63 @@
 				<p class="text-sm text-blue-800">{gapAnalysis.attorney_summary}</p>
 			</div>
 
+			<!-- Resolution + selective refresh -->
+			<div class="rounded-lg bg-emerald-50 border border-emerald-200 p-4 space-y-4">
+				<div>
+					<p class="text-sm font-semibold text-emerald-900 mb-1">Resolve Gaps Without Full Re-Run</p>
+					<p class="text-xs text-emerald-800">
+						Add corrective facts/documents below. The app re-runs only gap analysis against existing case analysis.
+					</p>
+				</div>
+
+				<div>
+					<label for="global-resolution-notes" class="text-xs font-semibold text-emerald-900 mb-1 block">
+						Global Resolution Notes
+					</label>
+					<textarea
+						id="global-resolution-notes"
+						class="w-full rounded-md border border-emerald-300 bg-white px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+						rows="3"
+						placeholder="Paste clarifications, corrections, or attorney notes that apply across multiple gaps..."
+						bind:value={globalResolutionNotes}
+					></textarea>
+				</div>
+
+				{#if availableDocuments.length > 0}
+					<div>
+						<p class="text-xs font-semibold text-emerald-900 mb-2">Attach Existing Case Documents</p>
+						<div class="max-h-32 overflow-y-auto rounded-md border border-emerald-200 bg-white p-2 space-y-1">
+							{#each availableDocuments as doc}
+								<label class="flex items-center gap-2 text-xs text-gray-700 cursor-pointer">
+									<input
+										type="checkbox"
+										class="h-3.5 w-3.5 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+										checked={selectedDocumentIds.has(doc.id)}
+										onchange={() => toggleDocumentSelection(doc.id)}
+									/>
+									<span class="truncate">{doc.file_name}</span>
+								</label>
+							{/each}
+						</div>
+					</div>
+				{/if}
+
+				<div class="flex flex-wrap items-center justify-between gap-3">
+					<span class="text-xs text-emerald-800">
+						{draftResolutionCount} gap{draftResolutionCount === 1 ? '' : 's'} with draft resolutions
+					</span>
+					<AsyncButton
+						variant="primary"
+						loading={resolvingGaps}
+						loadingText="Refreshing gap analysis..."
+						disabled={!canSubmitResolution || !onResolveGaps}
+						onclick={applyResolutionAndRefresh}
+					>
+						Apply Resolution & Refresh
+					</AsyncButton>
+				</div>
+			</div>
+
 			<!-- Filters -->
 			<div class="space-y-4">
 				<div class="flex flex-wrap gap-2">
@@ -275,6 +417,13 @@
 					>
 						<svelte:component this={FileQuestion} class="h-3 w-3" />
 						Unverifiable
+					</button>
+					<button
+						class="px-3 py-1 text-sm rounded-md transition-colors flex items-center gap-1 {selectedCategory === 'hallucination_risk' ? 'bg-accent text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}"
+						onclick={() => (selectedCategory = 'hallucination_risk')}
+					>
+						<svelte:component this={AlertTriangle} class="h-3 w-3" />
+						Hallucination
 					</button>
 					<button
 						class="px-3 py-1 text-sm rounded-md transition-colors flex items-center gap-1 {selectedCategory === 'incomplete_info' ? 'bg-accent text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}"
@@ -387,6 +536,28 @@
 									</div>
 								</div>
 							{/if}
+
+							<div class="rounded-md border border-emerald-200 bg-emerald-50 p-3 space-y-2">
+								<div class="flex items-center justify-between gap-3">
+									<p class="text-xs font-semibold text-emerald-900">Resolution Input</p>
+									<label class="inline-flex items-center gap-2 text-xs text-emerald-900 cursor-pointer">
+										<input
+											type="checkbox"
+											class="h-3.5 w-3.5 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+											checked={resolvedGapIds.has(gap.gap_id)}
+											onchange={() => toggleResolved(gap.gap_id)}
+										/>
+										Mark as resolved
+									</label>
+								</div>
+								<textarea
+									class="w-full rounded-md border border-emerald-300 bg-white px-3 py-2 text-xs text-gray-800 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+									rows="3"
+									placeholder="Type or paste facts/doc text that resolve this gap..."
+									value={gapResolutionDrafts[gap.gap_id] || ''}
+									oninput={(e) => updateResolutionDraft(gap.gap_id, (e.currentTarget as HTMLTextAreaElement).value)}
+								></textarea>
+							</div>
 						</div>
 					{/if}
 				</div>

@@ -10,7 +10,7 @@
 	import { ArrowLeft } from 'lucide-svelte';
 	import { parseMarkdown } from '$lib/utils/markdown';
 	import type { PageData } from './$types';
-	import type { RecommendedLetterType } from '$lib/types';
+	import type { GapResolutionRefreshRequest, RecommendedLetterType } from '$lib/types';
 	import { onMount } from 'svelte';
 	import SkippedDocumentsAlert from '$lib/components/SkippedDocumentsAlert.svelte';
 	import DocumentSummaryCard from '$lib/components/DocumentSummaryCard.svelte';
@@ -60,6 +60,7 @@
 	let analyzingGaps = $state(false);
 	let gapAnalysisProgress = $state('');
 	let streamingGapSummary = $state(''); // Streaming attorney summary
+	let resolvingGaps = $state(false);
 
 	// Recommendation letter state
 	let forceGeneration = $state(false);
@@ -469,6 +470,54 @@
 			analyzingGaps = false;
 			gapAnalysisProgress = '';
 			streamingGapSummary = ''; // Clear after complete
+		}
+	}
+
+	async function resolveGapsAndRefresh(
+		payload: Omit<GapResolutionRefreshRequest, 'case_id'>
+	) {
+		resolvingGaps = true;
+
+		try {
+			const { session, user } = await getSecureSession();
+			if (!session || !user) throw new Error('Not authenticated');
+
+			const apiUrl = getApiUrl();
+			const response = await fetch(`${apiUrl}/api/analysis/analyze-gaps/resolve`, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					Authorization: `Bearer ${session.access_token}`
+				},
+				body: JSON.stringify({
+					case_id: caseId,
+					...payload
+				})
+			});
+
+			if (!response.ok) {
+				const detail = await response.json().catch(() => ({}));
+				throw new Error(detail?.detail || 'Gap resolution refresh failed');
+			}
+
+			const data = await response.json();
+			const updatedGap = data?.gap_analysis || data;
+			if (results?.multi_stage_result && updatedGap) {
+				results.multi_stage_result.gap_analysis = updatedGap;
+				results = results;
+			}
+
+			if (data?.cache_hit) {
+				toastStore.success('No new changes detected. Using existing refreshed gap analysis.');
+			} else {
+				toastStore.success(
+					`Gap analysis updated. Completeness: ${updatedGap?.overall_completeness_score?.toFixed?.(0) ?? 'N/A'}`
+				);
+			}
+		} catch (err: any) {
+			toastStore.error(err.message || 'Failed to refresh gap analysis');
+		} finally {
+			resolvingGaps = false;
 		}
 	}
 
@@ -1077,9 +1126,11 @@ async function generateLetterRequest(body: Record<string, any>) {
 			{#if gapAnalysis}
 				<GapAnalysisPanel 
 					gapAnalysis={gapAnalysis} 
-					caseId={caseId}
+					availableDocuments={documents}
 					onGenerateRecommendationLetter={(letterType: RecommendedLetterType) => generateRecommendationLetter(letterType)}
 					{generatingRecommendationLetter}
+					onResolveGaps={resolveGapsAndRefresh}
+					{resolvingGaps}
 				/>
 			{:else}
 				<div class="card-standard">

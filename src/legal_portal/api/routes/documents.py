@@ -198,6 +198,7 @@ async def upload_document(
                 ocr_provider = None
                 extraction_error = None
                 page_count = None
+                signature_detection = None
 
                 if file_type in ["application/pdf", "pdf"] or file_name.lower().endswith(".pdf"):
                     # Write to temp file for PDF processing
@@ -217,6 +218,7 @@ async def upload_document(
                         ocr_provider = result.ocr_provider
                         extraction_error = result.extraction_error
                         page_count = result.page_count
+                        signature_detection = result.signature_detection
                     finally:
                         os.unlink(tmp_path)
 
@@ -388,6 +390,10 @@ async def upload_document(
                     "updated_at": datetime.utcnow().isoformat(),
                     "status": DocumentStatus.READY if extracted_text else DocumentStatus.EXTRACTION_FAILED,
                 }
+                if signature_detection:
+                    metadata = created_doc.get("metadata", {}) or {}
+                    metadata["signature_detection"] = signature_detection
+                    update_data["metadata"] = metadata
 
                 user_supabase.table("documents").update(update_data).eq("id", document_id).execute()
                 logger.info(
@@ -1257,6 +1263,7 @@ async def trigger_extraction(
         ocr_provider = None
         extraction_error = None
         page_count = None
+        signature_detection = None
 
         # If we should use vision analysis, skip OCR and go straight to image analysis
         if use_vision_analysis and file_type in ["image/png", "image/jpeg", "image/jpg", "image/heic"]:
@@ -1325,6 +1332,7 @@ async def trigger_extraction(
                 ocr_provider = result.ocr_provider
                 extraction_error = result.extraction_error
                 page_count = result.page_count
+                signature_detection = result.signature_detection
             finally:
                 os.unlink(tmp_path)
 
@@ -1613,6 +1621,8 @@ async def trigger_extraction(
                 user_supabase.table("documents").update({
                     "metadata": document_metadata
                 }).eq("id", document_id).execute()
+                # Keep local copy in sync so later metadata merges don't overwrite this update.
+                document["metadata"] = document_metadata
 
         # Update document with extraction results
         update_data = {
@@ -1626,6 +1636,10 @@ async def trigger_extraction(
             "updated_at": datetime.utcnow().isoformat(),
             "status": DocumentStatus.READY if extracted_text and extracted_text.strip() else DocumentStatus.EXTRACTION_FAILED,
         }
+        if signature_detection:
+            document_metadata = document.get("metadata", {}) or {}
+            document_metadata["signature_detection"] = signature_detection
+            update_data["metadata"] = document_metadata
 
         update_result = user_supabase.table("documents").update(update_data).eq("id", document_id).execute()
 

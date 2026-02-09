@@ -233,6 +233,7 @@ class DocumentProcessor:
             ocr_provider = None
             extraction_error = None
             page_count = None
+            signature_detection = None
 
             if skip_extraction:
                 # Mark for deferred extraction - faster bulk imports
@@ -277,6 +278,7 @@ class DocumentProcessor:
                         ocr_provider = processed_doc.ocr_provider
                         extraction_error = processed_doc.extraction_error
                         page_count = processed_doc.page_count
+                        signature_detection = processed_doc.signature_detection
                     else:
                         # Legacy fallback for unsupported types
                         from legal_portal.api.utils.content_extractor import (
@@ -312,6 +314,8 @@ class DocumentProcessor:
                 "compression": compression_meta,
                 "original_filename": original_name,
             }
+            if signature_detection:
+                metadata["signature_detection"] = signature_detection
 
             # Import DocumentStatus
             from legal_portal.core.data_models import DocumentStatus

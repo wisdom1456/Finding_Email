@@ -50,6 +50,8 @@ class GapAnalysisService:
         deep_analysis: DeepAnalysis,
         document_summaries: List[DocumentSummaryStructured],
         intake_content: Optional[str] = None,
+        resolution_context: Optional[str] = None,
+        prior_gap_analysis: Optional[GapAnalysisResult] = None,
     ) -> GapAnalysisResult:
         """Analyze case for gaps, contradictions, and weaknesses.
 
@@ -61,6 +63,8 @@ class GapAnalysisService:
             deep_analysis: Deep analysis from Stage 3
             document_summaries: Summaries of all documents
             intake_content: Original intake form content
+            resolution_context: Optional user-provided resolution context
+            prior_gap_analysis: Optional prior gap analysis for selective refresh
 
         Returns:
             GapAnalysisResult with identified gaps and completeness assessment
@@ -77,6 +81,8 @@ class GapAnalysisService:
                 deep_analysis=deep_analysis,
                 document_summaries=document_summaries,
                 intake_content=intake_content,
+                resolution_context=resolution_context,
+                prior_gap_analysis=prior_gap_analysis,
             )
 
             # Use GPT-4.1 for gap detection - faster and more reliable for structured JSON
@@ -168,6 +174,8 @@ class GapAnalysisService:
         deep_analysis: DeepAnalysis,
         document_summaries: List[DocumentSummaryStructured],
         intake_content: Optional[str],
+        resolution_context: Optional[str] = None,
+        prior_gap_analysis: Optional[GapAnalysisResult] = None,
     ) -> str:
         """Build the AI prompt for gap detection.
 
@@ -177,6 +185,8 @@ class GapAnalysisService:
             deep_analysis: Deep analysis
             document_summaries: Document summaries
             intake_content: Intake form content
+            resolution_context: Optional user-supplied context to resolve gaps
+            prior_gap_analysis: Optional prior gap analysis to reconcile
 
         Returns:
             Formatted prompt for GPT-5.2
@@ -204,6 +214,19 @@ class GapAnalysisService:
         # Evidence gaps from deep analysis
         evidence_gaps = "\n".join(deep_analysis.risk_assessment.evidence_gaps) if deep_analysis.risk_assessment.evidence_gaps else "None identified"
 
+        prior_gaps_summary = "None provided"
+        if prior_gap_analysis:
+            prior_lines = []
+            for category, gaps in prior_gap_analysis.gaps_by_category.items():
+                for gap in gaps[:12]:
+                    prior_lines.append(
+                        f"- [{gap.gap_id}] ({gap.severity}) {gap.title} | category={category}"
+                    )
+            if prior_lines:
+                prior_gaps_summary = "\n".join(prior_lines[:80])
+
+        resolution_section = resolution_context.strip() if resolution_context else "None provided"
+
         prompt = f"""You are a critical legal analyst reviewing a case file for completeness and consistency.
 Your role is to identify weaknesses, gaps, and concerns that an attorney should address BEFORE proceeding.
 
@@ -223,6 +246,12 @@ CONTEXT:
 
 **Known Evidence Gaps:**
 {evidence_gaps}
+
+**Prior Gap Analysis (if any):**
+{prior_gaps_summary}
+
+**User Resolution Inputs (if any):**
+{resolution_section}
 
 **Case Viability Assessment:**
 - Overall Strength: {deep_analysis.overall_case_strength}
@@ -282,6 +311,13 @@ Be thorough but balanced:
 - Don't invent problems that don't exist
 - Focus on material gaps that actually affect case viability
 - Consider whether the gap is truly critical or just "nice to have"
+
+If prior gaps and user resolutions are provided:
+- Reconcile each prior gap against the user input and supporting excerpts.
+- Reuse existing `gap_id` when the same underlying issue remains open.
+- If an issue appears fully resolved, omit it from `gaps_by_category`.
+- If partially resolved, keep it with reduced severity when justified.
+- Create new gap IDs only for genuinely new issues.
 
 Calculate an overall completeness score (0-100):
 - 90-100: Excellent documentation, minor gaps only

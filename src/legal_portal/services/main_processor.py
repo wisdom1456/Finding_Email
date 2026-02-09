@@ -1027,9 +1027,24 @@ def _format_documents_with_metadata(case_documents: list) -> str:
         # Add image flag for image documents
         doc_type_flag = " [📷 IMAGE FILE]" if _is_image_document(doc) else ""
 
+        # Add signature flag when available from PDF ingestion
+        signature_flag = ""
+        signature_data = getattr(doc, "signature_detection", None) or {}
+        signature_status = signature_data.get("status")
+        if signature_status:
+            signature_confidence = signature_data.get("confidence", "none")
+            signature_markers = signature_data.get("signature_marker_count", 0)
+            signature_flag = (
+                f" [SIGNATURE_STATUS={signature_status}; "
+                f"confidence={signature_confidence}; markers={signature_markers}]"
+            )
+            signing_date = signature_data.get("signing_date")
+            if signing_date:
+                signature_flag += f" [SIGNING_DATE={signing_date}]"
+
         content_preview = doc.content  # Send full content, no truncation
         formatted.append(
-            f"\n--- Document {i}: {doc.file_name}{quality_flag}{doc_type_flag} ---\n{content_preview}\n"
+            f"\n--- Document {i}: {doc.file_name}{quality_flag}{doc_type_flag}{signature_flag} ---\n{content_preview}\n"
         )
     return "".join(formatted)
 

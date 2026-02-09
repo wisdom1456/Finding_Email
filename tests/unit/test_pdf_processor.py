@@ -22,6 +22,7 @@ from legal_portal.core.data_models import (
     ProcessedDocument,
 )
 from legal_portal.services.file_processors.pdf_processor import (
+    _detect_pdf_signature,
     _is_likely_plain_text,
     _wait_for_file_ready,
     detect_pdf_corruption,
@@ -250,6 +251,7 @@ class TestDetectPdfCorruption:
         assert isinstance(is_valid, bool)
         assert isinstance(message, str)
 
+
     def test_nonexistent_file(self):
         """Test detection of nonexistent file."""
         is_valid, message = detect_pdf_corruption("/nonexistent/file.pdf")
@@ -284,6 +286,68 @@ class TestDetectPdfCorruption:
         # Should fail either due to no pages or being corrupt
         # The exact behavior depends on PDF library
         assert isinstance(is_valid, bool)
+
+
+# =============================================================================
+# Tests for signature detection
+# =============================================================================
+
+
+class TestSignatureDetection:
+    """Test PDF signature detection helpers."""
+
+    def test_detects_embedded_digital_signature_markers(self):
+        """Detect signature dictionaries and timestamp from raw PDF bytes."""
+        pdf_bytes = b"""%PDF-1.7
+1 0 obj
+<< /Type /Sig /ByteRange [0 123 456 789] /SubFilter /adbe.pkcs7.detached /M (D:20231003193936-07'00') >>
+endobj
+%%EOF
+"""
+        result = _detect_pdf_signature(pdf_bytes=pdf_bytes, extracted_text="")
+
+        assert result["status"] == "signed"
+        assert result["confidence"] == "high"
+        assert result["has_digital_signature"] is True
+        assert result["signing_date"] == "2023-10-03T19:39:36-07:00"
+
+    def test_detects_signature_from_text_markers(self):
+        """Detect signature when text contains strong signature markers."""
+        text = (
+            "Counterpart Signature Page\n"
+            "DocuSign Envelope ID: 1234-ABCD\n"
+            "Electronically signed by Erica Corley"
+        )
+        result = _detect_pdf_signature(pdf_bytes=b"%PDF-1.7\n%%EOF", extracted_text=text)
+
+        assert result["status"] == "signed"
+        assert result["has_digital_signature"] is False
+        assert result["has_signature_markers"] is True
+        assert result["signature_marker_count"] >= 2
+
+    @pytest.mark.asyncio
+    async def test_process_pdf_exposes_signature_detection(self, tmp_path):
+        """process_pdf should return signature metadata even when extraction libraries are unavailable."""
+        signed_pdf = tmp_path / "signed_like.pdf"
+        signed_pdf.write_bytes(
+            b"%PDF-1.7\n"
+            b"<< /Type /Sig /ByteRange [0 1 2 3] /SubFilter /adbe.pkcs7.detached >>\n"
+            b"%%EOF"
+            + (b" " * 200)
+        )
+
+        with patch("legal_portal.services.file_processors.pdf_processor.FITZ_AVAILABLE", False), patch(
+            "legal_portal.services.file_processors.pdf_processor.PYPDF_AVAILABLE", False
+        ):
+            result = await process_pdf(
+                file_path=str(signed_pdf),
+                document_type=DocumentType.CASE_DOCUMENT,
+                original_filename="signed_like.pdf",
+            )
+
+        assert result.signature_detection is not None
+        assert result.signature_detection["status"] == "signed"
+        assert result.signature_detection["has_digital_signature"] is True
 
 
 # =============================================================================
@@ -633,7 +697,4 @@ class TestConcurrentProcessing:
         for result in results:
             assert isinstance(result, ProcessedDocument)
             assert result.file_type == FileType.PDF
-
-
-
 

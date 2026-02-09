@@ -695,20 +695,37 @@ Output in clean markdown format."""
         """Stage 1: Extract structured facts from documents."""
         docs_context = []
         for doc in document_summaries:
-            doc_dict = doc.model_dump()
-            # Optimization: Limit content summary length to save tokens and avoid timeouts
-            # Stage 1 only needs high-level facts to build the matrix
-            summary = doc_dict.get("key_content", "")
-            if len(summary) > 2500:
-                summary = summary[:2500] + "... [truncated for brevity]"
+            doc_dict = doc.model_dump(mode="json")
+            structured_data = doc_dict.get("structured_data") or {}
+
+            summary = doc_dict.get("key_content") or doc_dict.get("executive_summary") or ""
+            summary = self._condense_doc_summary_for_fact_matrix(summary)
 
             docs_context.append(
                 {
-                    "filename": doc_dict.get("source_document", "Unknown"),
+                    "filename": doc_dict.get("document_name") or doc_dict.get("source_document") or "Unknown",
+                    "document_type": doc_dict.get("document_type") or "Unknown",
                     "content_summary": summary,
-                    "parties": doc_dict.get("parties_mentioned", []),
-                    "dates": doc_dict.get("dates_mentioned", []),
-                    "amounts": doc_dict.get("key_amounts", []),
+                    "important_details": doc_dict.get("important_details", [])[:8],
+                    "legal_significance": doc_dict.get("legal_significance"),
+                    # Prefer schema-backed fields, with compatibility fallbacks.
+                    "parties": (
+                        doc_dict.get("parties")
+                        or structured_data.get("parties")
+                        or doc_dict.get("parties_mentioned")
+                        or []
+                    ),
+                    "dates": (
+                        doc_dict.get("key_dates")
+                        or structured_data.get("dates")
+                        or doc_dict.get("dates_mentioned")
+                        or []
+                    ),
+                    "amounts": (
+                        doc_dict.get("key_amounts")
+                        or structured_data.get("amounts")
+                        or []
+                    ),
                 }
             )
 
@@ -887,6 +904,29 @@ RULES:
             ),
             extraction_notes=fact_data.get("extraction_notes"),
         )
+
+    @staticmethod
+    def _condense_doc_summary_for_fact_matrix(
+        summary: str,
+        max_chars: int = 5000,
+        tail_chars: int = 1600,
+    ) -> str:
+        """Condense long summaries while preserving tail content (often signature pages)."""
+        if not summary:
+            return ""
+        if len(summary) <= max_chars:
+            return summary
+
+        # Preserve both beginning and ending context; signatures are often near document end.
+        separator = "\n... [middle omitted for brevity] ...\n"
+        if tail_chars >= max_chars:
+            tail_chars = max_chars // 2
+        head_chars = max_chars - tail_chars - len(separator)
+        if head_chars < 500:
+            head_chars = max_chars // 2
+            tail_chars = max_chars - head_chars - len(separator)
+
+        return summary[:head_chars] + separator + summary[-tail_chars:]
 
     async def _map_legal_issues(
         self,

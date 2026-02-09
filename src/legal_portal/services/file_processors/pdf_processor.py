@@ -4,6 +4,7 @@ import asyncio
 import base64
 import mimetypes
 import os
+import re
 import time
 
 from starlette.concurrency import run_in_threadpool
@@ -122,6 +123,185 @@ try:
     logger.debug("pypdf available for PDF extraction")
 except ImportError:
     logger.debug("pypdf not available")
+
+
+SIGNATURE_TEXT_PATTERNS = [
+    ("Counterpart signature page", re.compile(r"\bcounterpart\s+signature\s+page\b", re.IGNORECASE)),
+    ("Signed by marker", re.compile(r"\bsigned\s+by\b", re.IGNORECASE)),
+    ("Electronic signature marker", re.compile(r"\belectronically\s+signed\b", re.IGNORECASE)),
+    ("DocuSign envelope marker", re.compile(r"\bdocusign\s+envelope\s+id\b", re.IGNORECASE)),
+    ("Signature label", re.compile(r"\bsignature\s*[:_]", re.IGNORECASE)),
+]
+
+
+def _normalize_pdf_signing_date(raw_date: str | None) -> str | None:
+    """Normalize PDF signing date (D:YYYYMMDDHHMMSS-07'00') to ISO 8601."""
+    if not raw_date:
+        return None
+
+    cleaned = raw_date.strip()
+    if cleaned.startswith("D:"):
+        cleaned = cleaned[2:]
+
+    match = re.match(
+        r"^(?P<year>\d{4})(?P<month>\d{2})(?P<day>\d{2})"
+        r"(?P<hour>\d{2})(?P<minute>\d{2})(?P<second>\d{2})?"
+        r"(?:(?P<tz_sign>[+\-Z])(?P<tz_hour>\d{2})'? ?(?P<tz_min>\d{2})'?)?$",
+        cleaned,
+    )
+    if not match:
+        return raw_date
+
+    year = match.group("year")
+    month = match.group("month")
+    day = match.group("day")
+    hour = match.group("hour")
+    minute = match.group("minute")
+    second = match.group("second") or "00"
+    tz_sign = match.group("tz_sign")
+    tz_hour = match.group("tz_hour")
+    tz_min = match.group("tz_min")
+
+    if tz_sign and tz_sign != "Z" and tz_hour and tz_min:
+        tz = f"{tz_sign}{tz_hour}:{tz_min}"
+    elif tz_sign == "Z":
+        tz = "Z"
+    else:
+        tz = ""
+
+    return f"{year}-{month}-{day}T{hour}:{minute}:{second}{tz}"
+
+
+def _extract_text_signature_markers(text: str) -> list[str]:
+    """Extract textual indicators that a document is signed."""
+    if not text:
+        return []
+
+    markers = []
+    for label, pattern in SIGNATURE_TEXT_PATTERNS:
+        if pattern.search(text):
+            markers.append(label)
+    return markers
+
+
+def _extract_signer_names(decoded_pdf: str, extracted_text: str) -> list[str]:
+    """Best-effort extraction of signer names from PDF metadata/text."""
+    names: list[str] = []
+
+    metadata_name_patterns = [
+        re.compile(r"/Name\s*\(([^)]+)\)"),
+        re.compile(r"/T\s*\(([^)]+)\)"),
+    ]
+    for pattern in metadata_name_patterns:
+        for match in pattern.findall(decoded_pdf):
+            candidate = re.sub(r"\s+", " ", match).strip()
+            if candidate and 2 <= len(candidate) <= 80:
+                names.append(candidate)
+
+    text_name_patterns = [
+        re.compile(r"(?im)^\s*signed\s+by\s*[:\-]\s*([A-Z][A-Za-z ,.'-]{2,80})\s*$"),
+        re.compile(r"(?im)^\s*signature\s*[:\-]\s*([A-Z][A-Za-z ,.'-]{2,80})\s*$"),
+    ]
+    for pattern in text_name_patterns:
+        for match in pattern.findall(extracted_text or ""):
+            candidate = re.sub(r"\s+", " ", match).strip()
+            if candidate and 2 <= len(candidate) <= 80:
+                names.append(candidate)
+
+    # Deduplicate while preserving order
+    deduped: list[str] = []
+    seen = set()
+    for name in names:
+        key = name.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(name)
+        if len(deduped) >= 5:
+            break
+
+    return deduped
+
+
+def _detect_pdf_signature(pdf_bytes: bytes, extracted_text: str) -> dict:
+    """Detect digital/text signature indicators from PDF bytes and extracted text."""
+    decoded_pdf = ""
+    if pdf_bytes:
+        decoded_pdf = pdf_bytes.decode("latin-1", errors="ignore")
+
+    indicators: list[str] = []
+
+    has_type_sig = b"/Type/Sig" in pdf_bytes if pdf_bytes else False
+    has_byte_range = b"/ByteRange" in pdf_bytes if pdf_bytes else False
+    has_sub_filter = b"/SubFilter" in pdf_bytes if pdf_bytes else False
+    has_sig_flags = b"/SigFlags" in pdf_bytes if pdf_bytes else False
+
+    if has_type_sig:
+        indicators.append("PDF signature dictionary present")
+    if has_byte_range:
+        indicators.append("Signature ByteRange present")
+    if has_sub_filter:
+        indicators.append("Signature SubFilter present")
+    if has_sig_flags:
+        indicators.append("AcroForm signature flags present")
+
+    # Detect e-sign provider hints in either metadata bytes or extracted text
+    if "docusign" in decoded_pdf.lower() or "docusign" in (extracted_text or "").lower():
+        indicators.append("DocuSign marker present")
+
+    has_digital_signature = has_type_sig or (has_byte_range and has_sub_filter)
+
+    text_markers = _extract_text_signature_markers(extracted_text or "")
+    indicators.extend(text_markers)
+    has_signature_markers = len(text_markers) > 0
+
+    raw_signing_date = None
+    for pattern in (
+        re.compile(r"/M\s*\((D:[^)]+)\)"),
+        re.compile(r"/SigningTime\s*\((D:[^)]+)\)"),
+    ):
+        match = pattern.search(decoded_pdf)
+        if match:
+            raw_signing_date = match.group(1).strip()
+            break
+    signing_date = _normalize_pdf_signing_date(raw_signing_date)
+
+    signer_names = _extract_signer_names(decoded_pdf, extracted_text or "")
+
+    if has_digital_signature:
+        status = "signed"
+        confidence = "high"
+    elif has_signature_markers:
+        status = "signed"
+        confidence = "medium" if len(text_markers) >= 2 else "low"
+    elif pdf_bytes or (extracted_text and extracted_text.strip()):
+        status = "not_detected"
+        confidence = "none"
+    else:
+        status = "unknown"
+        confidence = "none"
+
+    # Deduplicate indicator list while preserving order
+    deduped_indicators: list[str] = []
+    seen = set()
+    for indicator in indicators:
+        key = indicator.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped_indicators.append(indicator)
+
+    return {
+        "status": status,
+        "confidence": confidence,
+        "has_digital_signature": has_digital_signature,
+        "has_signature_markers": has_signature_markers,
+        "signature_marker_count": len(text_markers),
+        "signing_date": signing_date,
+        "signing_date_raw": raw_signing_date,
+        "signer_names": signer_names,
+        "indicators": deduped_indicators[:10],
+    }
 
 
 def _is_likely_plain_text(data: bytes) -> tuple[bool, str]:
@@ -1244,9 +1424,11 @@ async def process_pdf(
     file_size = 0
     extraction_method = "standard"
     pdf_bytes = None
+    raw_pdf_bytes = b""
     page_count = 0
     ocr_provider = None
     extraction_error = None
+    signature_detection = None
 
     # Pre-validate file exists and read into memory ONCE
     # This avoids race conditions in Vercel serverless where files may not be fully synced
@@ -1258,6 +1440,7 @@ async def process_pdf(
             # Read file into memory once - eliminates filesystem race conditions
             with open(file_path, "rb") as f:
                 pdf_bytes = f.read()
+            raw_pdf_bytes = pdf_bytes
             file_size = len(pdf_bytes)
             logger.debug(f"Read {file_size} bytes from {original_filename} into memory")
 
@@ -1462,6 +1645,18 @@ async def process_pdf(
         logger.info(f"✅ Created FileMetadata for {original_filename}, size: {file_size}")
         extraction_quality = "high" if len(text_content.strip()) > 200 else "medium"
 
+    signature_detection = _detect_pdf_signature(
+        pdf_bytes=raw_pdf_bytes,
+        extracted_text=text_content if not text_content.startswith("Error") else "",
+    )
+    if signature_detection.get("status") == "signed":
+        logger.info(
+            f"✅ Signature detected in {original_filename} | "
+            f"digital={signature_detection.get('has_digital_signature')} "
+            f"markers={signature_detection.get('signature_marker_count')} "
+            f"confidence={signature_detection.get('confidence')}"
+        )
+
     return ProcessedDocument(
         file_name=original_filename,
         content=text_content,
@@ -1473,4 +1668,5 @@ async def process_pdf(
         page_count=page_count,
         ocr_provider=ocr_provider,
         extraction_error=extraction_error,
+        signature_detection=signature_detection,
     )

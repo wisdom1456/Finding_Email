@@ -94,6 +94,7 @@ export type GapCategory =
 	| 'factual_contradiction'
 	| 'timeline_gap'
 	| 'unverifiable_claim'
+	| 'hallucination_risk'
 	| 'incomplete_info';
 
 /**
@@ -124,6 +125,24 @@ export interface GapAnalysisResult {
 	overall_completeness_score: number;
 	attorney_summary: string;
 	recommendation?: CaseRecommendation;
+}
+
+/**
+ * User-provided resolution payload for selective gap refresh.
+ */
+export interface GapResolutionInput {
+	gap_id: string;
+	resolution_text: string;
+	mark_resolved?: boolean;
+	related_document_ids?: string[];
+}
+
+export interface GapResolutionRefreshRequest {
+	case_id: string;
+	resolutions: GapResolutionInput[];
+	global_resolution_notes?: string;
+	attached_document_ids?: string[];
+	force_refresh?: boolean;
 }
 
 /**
@@ -168,4 +187,3 @@ export interface CaseRecommendation {
 	category_display_name: string;
 	category_color: 'green' | 'yellow' | 'orange' | 'red';
 }
-

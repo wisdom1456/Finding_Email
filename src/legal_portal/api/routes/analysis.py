@@ -1,6 +1,7 @@
 """Document analysis endpoints."""
 
 import asyncio
+import hashlib
 import json
 import logging
 import os
@@ -820,6 +821,7 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
                 page_count=doc.get("page_count"),
                 ocr_provider=doc.get("ocr_provider"),
                 document_id=doc["id"],
+                signature_detection=doc.get("metadata", {}).get("signature_detection"),
             )
 
             if pdoc.document_type == DocumentType.INTAKE_FORM:
@@ -2997,6 +2999,200 @@ class GapAnalysisRequest(BaseModel):
     """Request model for on-demand gap analysis."""
 
     case_id: str = Field(..., description="The case ID to analyze for gaps")
+    force_refresh: bool = Field(
+        default=False,
+        description="If true, bypass cached gap analysis and re-run AI gap analysis",
+    )
+
+
+class GapResolutionItemRequest(BaseModel):
+    """A user-provided resolution for a specific gap."""
+
+    gap_id: str = Field(..., description="Gap ID from the existing gap analysis")
+    resolution_text: str = Field(..., description="User explanation/evidence that addresses the gap")
+    mark_resolved: bool = Field(
+        default=True,
+        description="Whether user believes this gap is resolved",
+    )
+    related_document_ids: List[str] = Field(
+        default_factory=list,
+        description="Optional document IDs supporting this resolution",
+    )
+
+
+class GapResolutionRefreshRequest(BaseModel):
+    """Request model for applying user resolutions and refreshing gap analysis."""
+
+    case_id: str = Field(..., description="The case ID to update")
+    resolutions: List[GapResolutionItemRequest] = Field(
+        default_factory=list,
+        description="Per-gap user resolutions",
+    )
+    global_resolution_notes: Optional[str] = Field(
+        default=None,
+        description="General notes or context to apply across all gaps",
+    )
+    attached_document_ids: List[str] = Field(
+        default_factory=list,
+        description="Optional supporting case document IDs to prioritize",
+    )
+    force_refresh: bool = Field(
+        default=False,
+        description="If true, re-run even when resolution payload is unchanged",
+    )
+
+
+def _build_gap_resolution_hash(request: GapResolutionRefreshRequest) -> str:
+    """Build stable hash for resolution payload to avoid unnecessary re-runs."""
+    canonical = {
+        "resolutions": sorted(
+            [
+                {
+                    "gap_id": r.gap_id,
+                    "resolution_text": (r.resolution_text or "").strip(),
+                    "mark_resolved": bool(r.mark_resolved),
+                    "related_document_ids": sorted(r.related_document_ids or []),
+                }
+                for r in request.resolutions
+            ],
+            key=lambda x: x["gap_id"],
+        ),
+        "global_resolution_notes": (request.global_resolution_notes or "").strip(),
+        "attached_document_ids": sorted(request.attached_document_ids or []),
+    }
+    payload = json.dumps(canonical, sort_keys=True)
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def _parse_gap_document_summaries(result_payload: Dict[str, Any]):
+    """Parse and validate document summaries for gap analysis."""
+    from legal_portal.core.data_models import DocumentSummaryStructured
+
+    doc_summaries_raw = result_payload.get("document_summaries", [])
+    doc_summaries_array = []
+
+    if isinstance(doc_summaries_raw, str):
+        try:
+            doc_summaries_array = json.loads(doc_summaries_raw)
+            logger.info(
+                f"[GAP] Parsed {len(doc_summaries_array)} document summaries from JSON string"
+            )
+        except json.JSONDecodeError as json_err:
+            logger.warning(f"[GAP] Could not parse document_summaries JSON: {json_err}")
+    elif isinstance(doc_summaries_raw, list):
+        doc_summaries_array = doc_summaries_raw
+
+    doc_summaries_list = []
+    for doc_sum in doc_summaries_array:
+        try:
+            if isinstance(doc_sum, dict):
+                doc_summaries_list.append(DocumentSummaryStructured(**doc_sum))
+            elif hasattr(doc_sum, "model_dump"):
+                doc_summaries_list.append(doc_sum)
+            else:
+                logger.warning(f"[GAP] Unexpected doc summary type: {type(doc_sum)}")
+        except Exception as doc_err:
+            logger.warning(f"[GAP] Could not convert doc summary: {doc_err}")
+
+    return doc_summaries_list
+
+
+def _fetch_gap_intake_content(supabase, case_id: str, result_payload: Dict[str, Any]) -> Optional[str]:
+    """Fetch intake content for gap analysis, with fallback to streaming summary."""
+    try:
+        intake_response = supabase.table("intakes").select("content").eq("case_id", case_id).limit(1).execute()
+        return intake_response.data[0]["content"] if intake_response.data else None
+    except Exception as intake_err:
+        logger.warning(f"[GAP] Could not fetch intake content: {intake_err}")
+        return result_payload.get("streaming_analysis", "")[:5000]
+
+
+def _collect_resolution_documents(
+    supabase,
+    case_id: str,
+    attached_document_ids: List[str],
+) -> List[Dict[str, Any]]:
+    """Fetch selected documents to enrich resolution context."""
+    if not attached_document_ids:
+        return []
+
+    try:
+        docs_resp = (
+            supabase.table("documents")
+            .select("id, file_name, extracted_text, manual_text, metadata")
+            .eq("case_id", case_id)
+            .in_("id", attached_document_ids)
+            .execute()
+        )
+        docs = docs_resp.data or []
+    except Exception as doc_err:
+        logger.warning(f"[GAP_RESOLVE] Failed to load attached docs: {doc_err}")
+        return []
+
+    condensed_docs = []
+    for doc in docs:
+        text = (doc.get("manual_text") or doc.get("extracted_text") or "").strip()
+        if len(text) > 2200:
+            text = text[:1200] + "\n... [excerpt omitted] ...\n" + text[-800:]
+
+        sig = (doc.get("metadata") or {}).get("signature_detection")
+        condensed_docs.append(
+            {
+                "id": doc.get("id"),
+                "file_name": doc.get("file_name"),
+                "signature_detection": sig,
+                "text_excerpt": text,
+            }
+        )
+
+    return condensed_docs
+
+
+def _build_resolution_context(
+    existing_gap: Dict[str, Any],
+    request: GapResolutionRefreshRequest,
+    supporting_docs: List[Dict[str, Any]],
+) -> str:
+    """Create compact, structured context for selective gap re-analysis."""
+    lines = []
+    lines.append("USER GAP RESOLUTIONS")
+    lines.append(f"Total user resolutions: {len(request.resolutions)}")
+    if request.global_resolution_notes:
+        lines.append("Global notes:")
+        lines.append(request.global_resolution_notes.strip())
+
+    gap_lookup = {}
+    for gaps in (existing_gap or {}).get("gaps_by_category", {}).values():
+        for gap in gaps:
+            if isinstance(gap, dict) and gap.get("gap_id"):
+                gap_lookup[gap["gap_id"]] = gap
+
+    for idx, resolution in enumerate(request.resolutions, start=1):
+        original_gap = gap_lookup.get(resolution.gap_id, {})
+        lines.append("")
+        lines.append(f"Resolution {idx}:")
+        lines.append(f"- gap_id: {resolution.gap_id}")
+        lines.append(f"- user_mark_resolved: {resolution.mark_resolved}")
+        if original_gap:
+            lines.append(f"- original_title: {original_gap.get('title', '')}")
+            lines.append(f"- original_severity: {original_gap.get('severity', '')}")
+            lines.append(f"- original_category: {original_gap.get('category', '')}")
+        if resolution.related_document_ids:
+            lines.append(f"- related_document_ids: {', '.join(resolution.related_document_ids)}")
+        lines.append("- resolution_text:")
+        lines.append((resolution.resolution_text or "").strip())
+
+    if supporting_docs:
+        lines.append("")
+        lines.append("ATTACHED SUPPORTING DOCUMENT EXCERPTS")
+        for doc in supporting_docs[:8]:
+            lines.append(f"- {doc.get('file_name')} (id={doc.get('id')})")
+            if doc.get("signature_detection"):
+                lines.append(f"  signature_detection={doc.get('signature_detection')}")
+            if doc.get("text_excerpt"):
+                lines.append(f"  excerpt={doc.get('text_excerpt')}")
+
+    return "\n".join(lines).strip()
 
 
 @router.post("/analyze-gaps")
@@ -3039,7 +3235,7 @@ async def analyze_gaps_on_demand(
 
     # Check if gap analysis already exists
     existing_gap = multi_stage_result.get("gap_analysis")
-    if existing_gap:
+    if existing_gap and not gap_request.force_refresh:
         logger.info(f"[GAP_ENDPOINT] Returning cached gap analysis for case {case_id}")
         return existing_gap
 
@@ -3047,7 +3243,6 @@ async def analyze_gaps_on_demand(
         # Import gap analysis dependencies
         from legal_portal.core.data_models import (
             DeepAnalysis,
-            DocumentSummaryStructured,
             FactMatrix,
             LegalIssueMap,
         )
@@ -3071,41 +3266,10 @@ async def analyze_gaps_on_demand(
             )
 
         # Convert document summaries (stored as JSON string)
-        doc_summaries_raw = result_payload.get("document_summaries", [])
-        doc_summaries_array = []
-
-        # Parse JSON string if needed
-        if isinstance(doc_summaries_raw, str):
-            try:
-                doc_summaries_array = json.loads(doc_summaries_raw)
-                logger.info(f"[GAP_ENDPOINT] Parsed {len(doc_summaries_array)} document summaries from JSON string")
-            except json.JSONDecodeError as json_err:
-                logger.warning(f"[GAP_ENDPOINT] Could not parse document_summaries JSON: {json_err}")
-        elif isinstance(doc_summaries_raw, list):
-            doc_summaries_array = doc_summaries_raw
-
-        doc_summaries_list = []
-        for doc_sum in doc_summaries_array:
-            try:
-                # Handle both dict and already-parsed objects
-                if isinstance(doc_sum, dict):
-                    doc_summaries_list.append(DocumentSummaryStructured(**doc_sum))
-                elif hasattr(doc_sum, 'model_dump'):
-                    doc_summaries_list.append(doc_sum)
-                else:
-                    logger.warning(f"[GAP_ENDPOINT] Unexpected doc summary type: {type(doc_sum)}")
-            except Exception as doc_err:
-                logger.warning(f"[GAP_ENDPOINT] Could not convert doc summary: {doc_err}")
+        doc_summaries_list = _parse_gap_document_summaries(result_payload)
 
         # Fetch intake content
-        intake_content = None
-        try:
-            intake_response = supabase.table("intakes").select("content").eq("case_id", case_id).limit(1).execute()
-            intake_content = intake_response.data[0]["content"] if intake_response.data else None
-        except Exception as intake_err:
-            logger.warning(f"[GAP_ENDPOINT] Could not fetch intake content: {intake_err}")
-            # Use streaming_analysis as fallback
-            intake_content = result_payload.get("streaming_analysis", "")[:5000]
+        intake_content = _fetch_gap_intake_content(supabase, case_id, result_payload)
 
         logger.info(f"[GAP_ENDPOINT] Running gap analysis with {len(doc_summaries_list)} documents")
 
@@ -3140,6 +3304,157 @@ async def analyze_gaps_on_demand(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Gap analysis failed: {str(e)}",
+        ) from e
+
+
+@router.post("/analyze-gaps/resolve")
+@limiter.limit("10/minute")
+async def resolve_gaps_and_refresh(
+    resolution_request: GapResolutionRefreshRequest,
+    request: Request,
+    user=Depends(get_current_user),  # noqa: B008
+    supabase=Depends(get_user_supabase_client),  # noqa: B008
+    service_supabase=Depends(get_supabase_client),  # noqa: B008
+):
+    """Apply user-provided gap resolutions and refresh gap analysis selectively.
+
+    This avoids full case re-analysis by only re-running the gap stage with:
+    - Existing fact matrix / issue map / deep analysis
+    - Existing gap list
+    - User-entered resolutions and optional supporting docs
+    """
+    case_id = resolution_request.case_id
+    logger.info(f"[GAP_RESOLVE] Starting selective gap refresh for case {case_id}")
+
+    _ensure_case_access(supabase, case_id, user["id"])
+
+    analysis_record = _fetch_latest_analysis_result(supabase, case_id)
+    result_payload = analysis_record["result"]
+    analysis_id = analysis_record["id"]
+
+    multi_stage_result = result_payload.get("multi_stage_result")
+    if not multi_stage_result:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Gap resolution requires a completed multi-stage analysis. Please run case analysis first.",
+        )
+
+    existing_gap_dict = multi_stage_result.get("gap_analysis")
+    if not existing_gap_dict:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="No existing gap analysis found. Run gap analysis first.",
+        )
+
+    resolution_hash = _build_gap_resolution_hash(resolution_request)
+    prior_resolution_state = result_payload.get("gap_resolution_state") or {}
+    if (
+        not resolution_request.force_refresh
+        and prior_resolution_state.get("resolution_hash") == resolution_hash
+        and existing_gap_dict
+    ):
+        logger.info(f"[GAP_RESOLVE] Returning cached selective refresh for case {case_id}")
+        return {
+            "gap_analysis": existing_gap_dict,
+            "cache_hit": True,
+            "resolution_state": prior_resolution_state,
+        }
+
+    try:
+        from legal_portal.core.data_models import (
+            DeepAnalysis,
+            FactMatrix,
+            GapAnalysisResult,
+            LegalIssueMap,
+        )
+        from legal_portal.services.gap_analysis_service import GapAnalysisService
+
+        ai_preferences = await _get_user_ai_preferences(user["id"], supabase)
+        openai_client = OpenAIClient(user_preferences=ai_preferences)
+        gap_service = GapAnalysisService(openai_client=openai_client)
+
+        fact_matrix = FactMatrix(**multi_stage_result.get("fact_matrix", {}))
+        issue_map = LegalIssueMap(**multi_stage_result.get("issue_map", {}))
+        deep_analysis_data = multi_stage_result.get("deep_analysis", {})
+        deep_analysis = DeepAnalysis(**deep_analysis_data) if deep_analysis_data else None
+
+        if not deep_analysis:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Gap resolution requires deep analysis data. Please re-run case analysis.",
+            )
+
+        doc_summaries_list = _parse_gap_document_summaries(result_payload)
+        intake_content = _fetch_gap_intake_content(supabase, case_id, result_payload)
+        existing_gap_model = GapAnalysisResult(**existing_gap_dict)
+
+        all_doc_ids = set(resolution_request.attached_document_ids or [])
+        for item in resolution_request.resolutions:
+            all_doc_ids.update(item.related_document_ids or [])
+
+        supporting_docs = _collect_resolution_documents(
+            supabase=supabase,
+            case_id=case_id,
+            attached_document_ids=list(all_doc_ids),
+        )
+        resolution_context = _build_resolution_context(
+            existing_gap=existing_gap_dict,
+            request=resolution_request,
+            supporting_docs=supporting_docs,
+        )
+
+        logger.info(
+            f"[GAP_RESOLVE] Re-running gap stage with "
+            f"resolutions={len(resolution_request.resolutions)} "
+            f"supporting_docs={len(supporting_docs)}"
+        )
+
+        gap_result = await gap_service.analyze_gaps(
+            fact_matrix=fact_matrix,
+            issue_map=issue_map,
+            deep_analysis=deep_analysis,
+            document_summaries=doc_summaries_list,
+            intake_content=intake_content,
+            resolution_context=resolution_context,
+            prior_gap_analysis=existing_gap_model,
+        )
+
+        gap_dict = gap_result.model_dump(mode="json")
+        multi_stage_result["gap_analysis"] = gap_dict
+        result_payload["multi_stage_result"] = multi_stage_result
+
+        resolution_state = {
+            "resolution_hash": resolution_hash,
+            "updated_at": datetime.utcnow().isoformat(),
+            "applied_resolution_count": len(resolution_request.resolutions),
+            "applied_gap_ids": [r.gap_id for r in resolution_request.resolutions],
+            "attached_document_ids": list(all_doc_ids),
+            "global_resolution_notes": (resolution_request.global_resolution_notes or "").strip(),
+        }
+        result_payload["gap_resolution_state"] = resolution_state
+
+        service_supabase.table("analysis_results").update({
+            "result": result_payload,
+        }).eq("id", analysis_id).execute()
+
+        logger.info(
+            f"[GAP_RESOLVE] Selective gap refresh complete for case {case_id} | "
+            f"total_gaps={gap_result.total_gaps} score={gap_result.overall_completeness_score:.1f}"
+        )
+
+        return {
+            "gap_analysis": gap_dict,
+            "cache_hit": False,
+            "resolution_state": resolution_state,
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"[GAP_RESOLVE] Selective gap refresh failed: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Selective gap refresh failed: {str(e)}",
         ) from e
 
 
@@ -3187,7 +3502,7 @@ async def analyze_gaps_streaming(
 
             # Check if gap analysis already exists
             existing_gap = multi_stage_result.get("gap_analysis")
-            if existing_gap:
+            if existing_gap and not gap_request.force_refresh:
                 logger.info(f"[GAP_STREAM] Returning cached gap analysis for case {case_id}")
                 yield f"data: {json.dumps({'type': 'phase', 'phase': 'cached', 'message': 'Using cached analysis', 'elapsed': time.time() - start_time})}\n\n"
                 yield f"data: {json.dumps({'type': 'result', 'data': existing_gap})}\n\n"
@@ -3198,7 +3513,6 @@ async def analyze_gaps_streaming(
             # Import gap analysis dependencies
             from legal_portal.core.data_models import (
                 DeepAnalysis,
-                DocumentSummaryStructured,
                 FactMatrix,
                 LegalIssueMap,
             )
@@ -3220,36 +3534,10 @@ async def analyze_gaps_streaming(
                 return
 
             # Convert document summaries (stored as JSON string)
-            doc_summaries_raw = result_payload.get("document_summaries", [])
-            doc_summaries_array = []
-
-            if isinstance(doc_summaries_raw, str):
-                try:
-                    doc_summaries_array = json.loads(doc_summaries_raw)
-                    logger.info(f"[GAP_STREAM] Parsed {len(doc_summaries_array)} document summaries from JSON string")
-                except json.JSONDecodeError as json_err:
-                    logger.warning(f"[GAP_STREAM] Failed to parse document_summaries JSON: {json_err}")
-            elif isinstance(doc_summaries_raw, list):
-                doc_summaries_array = doc_summaries_raw
-
-            doc_summaries_list = []
-            for doc_sum in doc_summaries_array:
-                try:
-                    if isinstance(doc_sum, dict):
-                        doc_summaries_list.append(DocumentSummaryStructured(**doc_sum))
-                    elif hasattr(doc_sum, 'model_dump'):
-                        doc_summaries_list.append(doc_sum)
-                except Exception as doc_err:
-                    logger.warning(f"[GAP_STREAM] Failed to convert doc summary: {doc_err}")
+            doc_summaries_list = _parse_gap_document_summaries(result_payload)
 
             # Fetch intake content
-            intake_content = None
-            try:
-                intake_response = supabase.table("intakes").select("content").eq("case_id", case_id).limit(1).execute()
-                intake_content = intake_response.data[0]["content"] if intake_response.data else None
-            except Exception as intake_err:
-                logger.warning(f"[GAP_STREAM] Failed to fetch intake, using fallback: {intake_err}")
-                intake_content = result_payload.get("streaming_analysis", "")[:5000]
+            intake_content = _fetch_gap_intake_content(supabase, case_id, result_payload)
 
             # Phase 2: Analyzing
             yield f"data: {json.dumps({'type': 'phase', 'phase': 'analyzing', 'message': 'AI is analyzing case for gaps...', 'elapsed': time.time() - start_time, 'doc_count': len(doc_summaries_list)})}\n\n"

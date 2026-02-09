@@ -516,6 +516,7 @@
 			}
 		} catch (err: any) {
 			toastStore.error(err.message || 'Failed to refresh gap analysis');
+			throw err;
 		} finally {
 			resolvingGaps = false;
 		}

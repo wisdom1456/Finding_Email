@@ -7,6 +7,7 @@ from legal_portal.api.routes.analysis import (
     GapResolutionRefreshRequest,
     _build_gap_resolution_hash,
     _build_resolution_context,
+    _build_supporting_document_hash,
     _infer_signature_detection_from_text,
 )
 
@@ -130,3 +131,54 @@ def test_infer_signature_detection_from_text_ignores_single_blank_signature_labe
     text = "Borrower Signature: ____________________"
     result = _infer_signature_detection_from_text(text)
     assert result is None
+
+
+def test_supporting_document_hash_stable_across_row_ordering():
+    """Supporting-doc hash should be order-invariant for equivalent rows."""
+    rows_a = [
+        {
+            "id": "doc-b",
+            "updated_at": "2026-02-09T01:00:00Z",
+            "extracted_text": "Payment confirmation attached.",
+            "manual_text": None,
+            "metadata": {"signature_detection": {"status": "not_detected"}},
+        },
+        {
+            "id": "doc-a",
+            "updated_at": "2026-02-09T00:00:00Z",
+            "extracted_text": "DocuSign Envelope ID: XYZ",
+            "manual_text": None,
+            "metadata": {"signature_detection": {"status": "signed"}},
+        },
+    ]
+    rows_b = [rows_a[1], rows_a[0]]
+
+    hash_a = _build_supporting_document_hash(rows_a, ["doc-a", "doc-b"])
+    hash_b = _build_supporting_document_hash(rows_b, ["doc-b", "doc-a"])
+    assert hash_a == hash_b
+
+
+def test_supporting_document_hash_changes_when_text_changes():
+    """Hash should change when supporting doc content changes."""
+    rows = [
+        {
+            "id": "doc-a",
+            "updated_at": "2026-02-09T00:00:00Z",
+            "extracted_text": "Wire receipt amount 120000",
+            "manual_text": None,
+            "metadata": {},
+        }
+    ]
+    changed_rows = [
+        {
+            "id": "doc-a",
+            "updated_at": "2026-02-09T00:00:00Z",
+            "extracted_text": "Wire receipt amount 125000",
+            "manual_text": None,
+            "metadata": {},
+        }
+    ]
+
+    original = _build_supporting_document_hash(rows, ["doc-a"])
+    changed = _build_supporting_document_hash(changed_rows, ["doc-a"])
+    assert original != changed

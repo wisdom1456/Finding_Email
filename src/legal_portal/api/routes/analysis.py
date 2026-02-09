@@ -3224,6 +3224,61 @@ def _build_gap_resolution_hash(request: GapResolutionRefreshRequest) -> str:
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
+def _build_supporting_document_hash(
+    document_rows: List[Dict[str, Any]],
+    requested_document_ids: List[str],
+) -> str:
+    """Build stable hash for supporting document content/state."""
+    canonical_docs = []
+    for doc in document_rows or []:
+        text = (doc.get("manual_text") or doc.get("extracted_text") or "").strip()
+        text_hash = hashlib.sha256(text.encode("utf-8")).hexdigest()
+        sig = (doc.get("metadata") or {}).get("signature_detection")
+        sig_status = sig.get("status") if isinstance(sig, dict) else None
+        canonical_docs.append(
+            {
+                "id": doc.get("id"),
+                "updated_at": doc.get("updated_at"),
+                "text_hash": text_hash,
+                "signature_status": sig_status,
+            }
+        )
+
+    canonical = {
+        "requested_document_ids": sorted(set(requested_document_ids or [])),
+        "documents": sorted(canonical_docs, key=lambda d: (d.get("id") or "")),
+    }
+    payload = json.dumps(canonical, sort_keys=True)
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def _compute_resolution_document_state_hash(
+    supabase,
+    case_id: str,
+    attached_document_ids: List[str],
+) -> str:
+    """Compute a state hash for supporting docs used in selective gap refresh caching."""
+    doc_ids = sorted(set(attached_document_ids or []))
+    if not doc_ids:
+        return "no_supporting_documents"
+
+    try:
+        docs_resp = (
+            supabase.table("documents")
+            .select("id, updated_at, extracted_text, manual_text, metadata")
+            .eq("case_id", case_id)
+            .in_("id", doc_ids)
+            .execute()
+        )
+        rows = docs_resp.data or []
+        return _build_supporting_document_hash(rows, doc_ids)
+    except Exception as doc_err:
+        logger.warning(f"[GAP_RESOLVE] Failed to hash supporting docs: {doc_err}")
+        # Fallback to requested IDs only so cache still behaves deterministically.
+        fallback = json.dumps({"requested_document_ids": doc_ids}, sort_keys=True)
+        return f"fallback:{hashlib.sha256(fallback.encode('utf-8')).hexdigest()}"
+
+
 def _parse_gap_document_summaries(result_payload: Dict[str, Any]):
     """Parse and validate document summaries for gap analysis."""
     from legal_portal.core.data_models import DocumentSummaryStructured
@@ -3510,9 +3565,21 @@ async def resolve_gaps_and_refresh(
 
     resolution_hash = _build_gap_resolution_hash(resolution_request)
     prior_resolution_state = result_payload.get("gap_resolution_state") or {}
+
+    all_doc_ids = set(resolution_request.attached_document_ids or [])
+    for item in resolution_request.resolutions:
+        all_doc_ids.update(item.related_document_ids or [])
+    all_doc_ids_list = sorted(all_doc_ids)
+
+    supporting_doc_hash = _compute_resolution_document_state_hash(
+        supabase=supabase,
+        case_id=case_id,
+        attached_document_ids=all_doc_ids_list,
+    )
     if (
         not resolution_request.force_refresh
         and prior_resolution_state.get("resolution_hash") == resolution_hash
+        and prior_resolution_state.get("supporting_doc_hash") == supporting_doc_hash
         and existing_gap_dict
     ):
         logger.info(f"[GAP_RESOLVE] Returning cached selective refresh for case {case_id}")
@@ -3550,14 +3617,10 @@ async def resolve_gaps_and_refresh(
         intake_content = _fetch_gap_intake_content(supabase, case_id, result_payload)
         existing_gap_model = GapAnalysisResult(**existing_gap_dict)
 
-        all_doc_ids = set(resolution_request.attached_document_ids or [])
-        for item in resolution_request.resolutions:
-            all_doc_ids.update(item.related_document_ids or [])
-
         supporting_docs = _collect_resolution_documents(
             supabase=supabase,
             case_id=case_id,
-            attached_document_ids=list(all_doc_ids),
+            attached_document_ids=all_doc_ids_list,
         )
         resolution_context = _build_resolution_context(
             existing_gap=existing_gap_dict,
@@ -3590,7 +3653,8 @@ async def resolve_gaps_and_refresh(
             "updated_at": datetime.utcnow().isoformat(),
             "applied_resolution_count": len(resolution_request.resolutions),
             "applied_gap_ids": [r.gap_id for r in resolution_request.resolutions],
-            "attached_document_ids": list(all_doc_ids),
+            "attached_document_ids": all_doc_ids_list,
+            "supporting_doc_hash": supporting_doc_hash,
             "global_resolution_notes": (resolution_request.global_resolution_notes or "").strip(),
         }
         result_payload["gap_resolution_state"] = resolution_state

@@ -15,6 +15,7 @@
 	import AsyncButton from '$lib/components/ui/AsyncButton.svelte';
 	import InlineAnalysisProgress from '$lib/components/InlineAnalysisProgress.svelte';
 	import AnalysisStreamPanel from '$lib/components/AnalysisStreamPanel.svelte';
+	import ResultsWorkspace from './results/+page.svelte';
 	import { clioStore } from '$lib/stores/clioStore';
 	import { progressStore } from '$lib/stores/progressStore';
 	import { toastStore } from '$lib/stores/toastStore';
@@ -32,6 +33,11 @@
 	let showProgressModal = $state(false);
 	let currentAnalysisId = $state<string | null>(null);
 	let navigatingToResults = $state(false);
+	let showingEmbeddedResults = $state(false);
+	let embeddedResultsData = $state<any | null>(null);
+	let embeddedResultsKey = $state(0);
+	let loadingEmbeddedResults = $state(false);
+	let embeddedResultsError = $state('');
 	
 	// Streaming analysis state
 	let showStreamingPanel = $state(false);
@@ -192,17 +198,109 @@
 	// Tab state
 	let activeTab = $state('overview');
 
+	function applyViewFromUrl() {
+		if (typeof window === 'undefined') return;
+		const url = new URL(window.location.href);
+		const tabParam = url.searchParams.get('tab');
+		const viewParam = url.searchParams.get('view');
+
+		if (tabParam && ['overview', 'documents', 'verification', 'analysis'].includes(tabParam)) {
+			activeTab = tabParam;
+		}
+		if (viewParam === 'results') {
+			showingEmbeddedResults = true;
+		}
+	}
+
+	function persistAnalysisViewToUrl() {
+		if (typeof window === 'undefined') return;
+		const url = new URL(window.location.href);
+		url.searchParams.set('tab', activeTab);
+		if (activeTab === 'analysis' && showingEmbeddedResults) {
+			url.searchParams.set('view', 'results');
+		} else {
+			url.searchParams.delete('view');
+		}
+		window.history.replaceState({}, '', `${url.pathname}${url.search}`);
+	}
+
+	async function loadEmbeddedResults(force = false) {
+		if (loadingEmbeddedResults) return;
+		if (!force && embeddedResultsData) {
+			showingEmbeddedResults = true;
+			return;
+		}
+
+		loadingEmbeddedResults = true;
+		embeddedResultsError = '';
+
+		try {
+			const { session, user } = await getSecureSession();
+			if (!session || !user) throw new Error('Not authenticated');
+
+			const apiUrl = getApiUrl();
+			const [resultsResponse, profileResponse] = await Promise.all([
+				fetch(`${apiUrl}/api/analysis/results/${caseId}`, {
+					headers: { Authorization: `Bearer ${session.access_token}` }
+				}),
+				fetch(`${apiUrl}/api/profile`, {
+					headers: { Authorization: `Bearer ${session.access_token}` }
+				})
+			]);
+
+			if (!resultsResponse.ok) {
+				const detail = await resultsResponse.json().catch(() => ({}));
+				throw new Error(detail?.detail || 'Failed to load analysis results');
+			}
+
+			const [resultsPayload, profilePayload] = await Promise.all([
+				resultsResponse.json(),
+				profileResponse.ok ? profileResponse.json() : Promise.resolve(null)
+			]);
+
+			const docsSnapshot = (documents || []).map((doc: any) => ({ ...doc }));
+			embeddedResultsData = {
+				caseId,
+				streamed: {
+					results: Promise.resolve(resultsPayload),
+					documents: Promise.resolve(docsSnapshot),
+					profile: Promise.resolve(profilePayload)
+				}
+			};
+			embeddedResultsKey += 1;
+			showingEmbeddedResults = true;
+			persistAnalysisViewToUrl();
+		} catch (error: any) {
+			embeddedResultsError = error.message || 'Failed to load embedded results workspace.';
+		} finally {
+			loadingEmbeddedResults = false;
+		}
+	}
+
 	$effect(() => {
 		if (viewingDocument && documentViewerTab === 'text' && !extractedTextData && !loadingExtractedText) {
 			loadExtractedText(viewingDocument.id);
 		}
 	});
 
+	$effect(() => {
+		if (activeTab !== 'analysis' && showingEmbeddedResults) {
+			showingEmbeddedResults = false;
+		}
+		if (!loading) {
+			persistAnalysisViewToUrl();
+		}
+	});
+
 	onMount(async () => {
+		applyViewFromUrl();
 		await loadCase();
 		await loadDocuments();
 		await loadAnalysisStatus();
 		await loadSettings();
+		if (analysisStatus?.status === 'completed' && showingEmbeddedResults) {
+			await loadEmbeddedResults(true);
+		}
 	});
 
 	onDestroy(() => {
@@ -1186,18 +1284,19 @@
 
 	async function handleStreamingComplete(content: string) {
 		streamedContent = content;
-		toastStore.success('Analysis complete! Redirecting to results...');
+		toastStore.success('Analysis complete! Loading results workspace...');
 		
-		// Wait a moment for the save to complete, then redirect to results
+		// Wait a moment for the save to complete.
 		await new Promise(resolve => setTimeout(resolve, 1500));
 		
 		// Reload analysis status to get the new result
 		await loadAnalysisStatus();
-		
-		// Navigate to results page
 		navigatingToResults = true;
 		showStreamingPanel = false;
-		await goto(`/app/cases/${caseId}/results`);
+		activeTab = 'analysis';
+		showingEmbeddedResults = true;
+		await loadEmbeddedResults(true);
+		persistAnalysisViewToUrl();
 		navigatingToResults = false;
 	}
 
@@ -2064,15 +2163,18 @@
 
 						<!-- Inline Progress (when analysis is running) -->
 						{#if showProgressModal && currentAnalysisId}
-							<InlineAnalysisProgress 
-								analysisId={currentAnalysisId}
-								onComplete={async () => {
-									showProgressModal = false;
-									await loadAnalysisStatus();
-									await loadCase();
-									analyzing = false;
-									goto(`/app/cases/${caseId}/results`);
-								}}
+								<InlineAnalysisProgress 
+									analysisId={currentAnalysisId}
+									onComplete={async () => {
+										showProgressModal = false;
+										await loadAnalysisStatus();
+										await loadCase();
+										analyzing = false;
+										activeTab = 'analysis';
+										showingEmbeddedResults = true;
+										await loadEmbeddedResults(true);
+										persistAnalysisViewToUrl();
+									}}
 								onError={(error) => {
 									showProgressModal = false;
 									analyzing = false;
@@ -2085,6 +2187,36 @@
 
 						<!-- Analysis Section - hidden when streaming panel is active -->
 						{#if !showStreamingPanel}
+						{#if showingEmbeddedResults && analysisStatus?.status === 'completed'}
+							<div class="card-standard flex flex-wrap items-center justify-between gap-3">
+								<div>
+									<h3 class="text-base font-heading font-semibold text-contrast">Results Workspace</h3>
+									<p class="text-sm text-gray-500">You are viewing analysis results inline for this case.</p>
+								</div>
+								<div class="flex items-center gap-2">
+									<AsyncButton
+										onclick={() => {
+											showingEmbeddedResults = false;
+											persistAnalysisViewToUrl();
+										}}
+										variant="secondary"
+									>
+										Back to Analysis Controls
+									</AsyncButton>
+									<AsyncButton
+										onclick={() => {
+											showingEmbeddedResults = false;
+											startStreamingAnalysis();
+										}}
+										loading={showStreamingPanel || analyzing}
+										variant="primary"
+										loadingText="Starting..."
+									>
+										Run New Analysis
+									</AsyncButton>
+								</div>
+							</div>
+						{:else}
 						<div class="card-standard">
 							<div class="flex justify-between items-center mb-6">
 								<h3 class="text-lg font-heading font-semibold text-contrast">Analysis</h3>
@@ -2132,22 +2264,25 @@
 						</dd>
 					</div>
 
-				{#if analysisStatus.status === 'completed' && analysisStatus.result}
-					<div class="flex items-center space-x-3">
-						<AsyncButton
-							onclick={async () => {
-								navigatingToResults = true;
-								await goto(`/app/cases/${caseId}/results`);
-							}}
-							loading={navigatingToResults}
-							variant="primary"
-							loadingText="Loading Results..."
-						>
+					{#if analysisStatus.status === 'completed' && analysisStatus.result}
+						<div class="flex items-center space-x-3">
+							<AsyncButton
+								onclick={async () => {
+									navigatingToResults = true;
+									showingEmbeddedResults = true;
+									await loadEmbeddedResults(true);
+									persistAnalysisViewToUrl();
+									navigatingToResults = false;
+								}}
+								loading={navigatingToResults}
+								variant="primary"
+								loadingText="Loading Results..."
+							>
 							<svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
 							</svg>
-							View Results
-						</AsyncButton>
+								Open Results Workspace
+							</AsyncButton>
 					<AsyncButton
 						onclick={() => startStreamingAnalysis()}
 						loading={showStreamingPanel || analyzing}
@@ -2186,13 +2321,33 @@
 							{/if}
 						</div>
 					{/if}
-				</div>
-				{/if}
 					</div>
-				{/if}
-			{/snippet}
-		</Tabs>
-	{/if}
+					{/if}
+					{/if}
+
+						{#if analysisStatus?.status === 'completed'}
+							<div class="mt-6">
+								{#if loadingEmbeddedResults}
+									<div class="card-standard flex items-center gap-3 text-sm text-gray-600">
+										<div class="animate-spin rounded-full h-4 w-4 border-b-2 border-accent"></div>
+										Loading unified results workspace...
+									</div>
+								{:else if embeddedResultsError}
+									<div class="card-standard border border-red-200 bg-red-50 text-sm text-red-700">
+										{embeddedResultsError}
+									</div>
+								{:else if showingEmbeddedResults && embeddedResultsData}
+									{#key embeddedResultsKey}
+										<ResultsWorkspace data={embeddedResultsData} embedded={true} />
+									{/key}
+								{/if}
+							</div>
+						{/if}
+					</div>
+					{/if}
+				{/snippet}
+			</Tabs>
+		{/if}
 </div>
 
 <!-- Intake Form Selector Modal -->
@@ -2750,4 +2905,3 @@
 {/if}
 
 <!-- Analysis progress is now shown inline on the Analysis tab -->
-

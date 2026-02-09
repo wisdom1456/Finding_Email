@@ -45,8 +45,6 @@
 	let selectedCategory: GapCategory | 'all' = 'all';
 	let expandedGaps = new Set<string>();
 	let copiedGaps = new Set<string>();
-	let globalResolutionNotes = '';
-	let selectedDocumentIds = new Set<string>();
 	let gapResolutionDrafts: Record<string, string> = {};
 	let resolvedGapIds = new Set<string>();
 	let gapRelatedDocumentIds: Record<string, string[]> = {};
@@ -57,14 +55,10 @@
 	$: allGaps = Object.values(gapAnalysis.gaps_by_category).flat();
 	$: draftResolutionCount = allGaps.filter((gap) => {
 		const text = (gapResolutionDrafts[gap.gap_id] || '').trim();
-		return text.length > 0 || resolvedGapIds.has(gap.gap_id);
+		const hasRelatedDocs = (gapRelatedDocumentIds[gap.gap_id] || []).length > 0;
+		return text.length > 0 || resolvedGapIds.has(gap.gap_id) || hasRelatedDocs;
 	}).length;
-	$: hasPerGapDocSelections = Object.values(gapRelatedDocumentIds).some((ids) => ids.length > 0);
-	$: canSubmitResolution =
-		draftResolutionCount > 0 ||
-		globalResolutionNotes.trim().length > 0 ||
-		selectedDocumentIds.size > 0 ||
-		hasPerGapDocSelections;
+	$: canSubmitResolution = draftResolutionCount > 0;
 
 	// Filter gaps based on selected severity and category
 	$: filteredGaps = allGaps.filter((gap) => {
@@ -81,15 +75,6 @@
 			expandedGaps.add(gapId);
 		}
 		expandedGaps = expandedGaps;
-	}
-
-	function toggleDocumentSelection(documentId: string) {
-		if (selectedDocumentIds.has(documentId)) {
-			selectedDocumentIds.delete(documentId);
-		} else {
-			selectedDocumentIds.add(documentId);
-		}
-		selectedDocumentIds = selectedDocumentIds;
 	}
 
 	function updateResolutionDraft(gapId: string, value: string) {
@@ -148,12 +133,10 @@
 		try {
 			await onResolveGaps({
 				resolutions,
-				global_resolution_notes: globalResolutionNotes.trim() || undefined,
-				attached_document_ids: Array.from(selectedDocumentIds),
 				force_refresh: forceRefresh || undefined
 			});
 
-			// Keep global notes for traceability; clear per-gap drafts only on success.
+			// Clear per-gap drafts only on success.
 			gapResolutionDrafts = {};
 			resolvedGapIds = new Set<string>();
 			gapRelatedDocumentIds = {};
@@ -323,79 +306,8 @@
 				<p class="text-sm text-blue-800">{gapAnalysis.attorney_summary}</p>
 			</div>
 
-			<!-- Resolution + selective refresh -->
-			<div class="rounded-lg bg-emerald-50 border border-emerald-200 p-4 space-y-4">
-				<div>
-					<p class="text-sm font-semibold text-emerald-900 mb-1">Resolve Gaps Without Full Re-Run</p>
-					<p class="text-xs text-emerald-800">
-						Add corrective facts/documents below. The app re-runs only gap analysis against existing case analysis.
-					</p>
-				</div>
-
-				<div>
-					<label for="global-resolution-notes" class="text-xs font-semibold text-emerald-900 mb-1 block">
-						Global Resolution Notes
-					</label>
-					<textarea
-						id="global-resolution-notes"
-						class="w-full rounded-md border border-emerald-300 bg-white px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-						rows="3"
-						placeholder="Paste clarifications, corrections, or attorney notes that apply across multiple gaps..."
-						bind:value={globalResolutionNotes}
-					></textarea>
-				</div>
-
-				{#if availableDocuments.length > 0}
-					<div>
-						<p class="text-xs font-semibold text-emerald-900 mb-2">Attach Existing Case Documents</p>
-						<div class="max-h-32 overflow-y-auto rounded-md border border-emerald-200 bg-white p-2 space-y-1">
-							{#each availableDocuments as doc}
-								<label class="flex items-center gap-2 text-xs text-gray-700 cursor-pointer">
-									<input
-										type="checkbox"
-										class="h-3.5 w-3.5 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
-										checked={selectedDocumentIds.has(doc.id)}
-										onchange={() => toggleDocumentSelection(doc.id)}
-									/>
-									<span class="truncate">{doc.file_name}</span>
-								</label>
-							{/each}
-						</div>
-					</div>
-				{/if}
-
-					<div class="flex flex-wrap items-center justify-between gap-3">
-						<span class="text-xs text-emerald-800">
-							{draftResolutionCount} gap{draftResolutionCount === 1 ? '' : 's'} with draft resolutions
-						</span>
-						<div class="flex items-center gap-3">
-							<label class="inline-flex items-center gap-2 text-xs text-emerald-900 cursor-pointer">
-								<input
-									type="checkbox"
-									class="h-3.5 w-3.5 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
-									bind:checked={forceRefresh}
-								/>
-								Force refresh
-							</label>
-							<AsyncButton
-								variant="primary"
-								loading={resolvingGaps}
-								loadingText="Refreshing gap analysis..."
-								disabled={!canSubmitResolution || !onResolveGaps}
-								onclick={applyResolutionAndRefresh}
-							>
-								Apply Resolution & Refresh
-							</AsyncButton>
-						</div>
-					</div>
-
-					{#if resolutionError}
-						<p class="text-xs text-red-700">{resolutionError}</p>
-					{/if}
-				</div>
-
-			<!-- Filters -->
-			<div class="space-y-4">
+				<!-- Filters -->
+				<div class="space-y-4">
 				<div class="flex flex-wrap gap-2">
 					<span class="text-sm font-medium text-gray-700 self-center">Severity:</span>
 					<button
@@ -482,11 +394,43 @@
 					</button>
 				</div>
 			</div>
+			</div>
 		</div>
-	</div>
 
-	<!-- Gap Items -->
-	<div class="space-y-4">
+		{#if onResolveGaps}
+			<div class="rounded-lg bg-emerald-50 border border-emerald-200 p-4 space-y-3">
+				<div class="flex flex-wrap items-center justify-between gap-3">
+					<p class="text-xs text-emerald-900">
+						Add resolution text and document references inside each expanded gap card, then refresh.
+					</p>
+					<div class="flex items-center gap-3">
+						<label class="inline-flex items-center gap-2 text-xs text-emerald-900 cursor-pointer">
+							<input
+								type="checkbox"
+								class="h-3.5 w-3.5 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+								bind:checked={forceRefresh}
+							/>
+							Force refresh
+						</label>
+						<AsyncButton
+							variant="primary"
+							loading={resolvingGaps}
+							loadingText="Refreshing gap analysis..."
+							disabled={!canSubmitResolution}
+							onclick={applyResolutionAndRefresh}
+						>
+							Refresh Gaps ({draftResolutionCount})
+						</AsyncButton>
+					</div>
+				</div>
+				{#if resolutionError}
+					<p class="text-xs text-red-700">{resolutionError}</p>
+				{/if}
+			</div>
+		{/if}
+
+		<!-- Gap Items -->
+		<div class="space-y-4">
 		{#if filteredGaps.length === 0}
 			<div class="card-standard text-center py-12">
 				<svelte:component this={Info} class="h-16 w-16 mx-auto mb-4 text-gray-300" />
@@ -587,7 +531,7 @@
 
 								<div class="rounded-md border border-emerald-200 bg-emerald-50 p-3 space-y-2">
 									<div class="flex items-center justify-between gap-3">
-										<p class="text-xs font-semibold text-emerald-900">Resolution Input</p>
+										<p class="text-xs font-semibold text-emerald-900">Gap Resolution</p>
 										<label class="inline-flex items-center gap-2 text-xs text-emerald-900 cursor-pointer">
 										<input
 											type="checkbox"
@@ -602,7 +546,7 @@
 									<textarea
 										class="w-full rounded-md border border-emerald-300 bg-white px-3 py-2 text-xs text-gray-800 focus:outline-none focus:ring-2 focus:ring-emerald-500"
 										rows="3"
-										placeholder="Type or paste facts/doc text that resolve this gap..."
+										placeholder="Type or paste facts for this gap, and cite supporting documents..."
 										value={gapResolutionDrafts[gap.gap_id] || ''}
 										onclick={(e) => e.stopPropagation()}
 										oninput={(e) => updateResolutionDraft(gap.gap_id, (e.currentTarget as HTMLTextAreaElement).value)}
@@ -614,7 +558,7 @@
 												class="cursor-pointer list-none px-2 py-1 text-[11px] font-semibold text-emerald-900"
 												onclick={(e) => e.stopPropagation()}
 											>
-												Attach docs for this gap ({(gapRelatedDocumentIds[gap.gap_id] || []).length})
+													Reference case documents ({(gapRelatedDocumentIds[gap.gap_id] || []).length})
 											</summary>
 											<div class="max-h-28 overflow-y-auto border-t border-emerald-100 px-2 py-2 space-y-1">
 												{#each availableDocuments as doc}

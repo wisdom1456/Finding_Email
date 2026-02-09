@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import { page } from '$app/stores';
 	import { getApiUrl } from '$lib/config';
 	import { supabase, getSecureSession } from '$lib/supabase';
 	import { toastStore } from '$lib/stores/toastStore';
@@ -9,7 +8,6 @@
 	import AsyncButton from '$lib/components/ui/AsyncButton.svelte';
 	import { ArrowLeft } from 'lucide-svelte';
 	import { parseMarkdown } from '$lib/utils/markdown';
-	import type { PageData } from './$types';
 	import type { GapResolutionRefreshRequest, RecommendedLetterType } from '$lib/types';
 	import { onMount } from 'svelte';
 	import SkippedDocumentsAlert from '$lib/components/SkippedDocumentsAlert.svelte';
@@ -18,8 +16,17 @@
 	import FullAnalysisDisplay from '$lib/components/FullAnalysisDisplay.svelte';
 	import { AlertTriangle } from 'lucide-svelte';
 
-	// Get SSR data from load function
-	let { data }: { data: PageData } = $props();
+	type ResultsWorkspaceData = {
+		caseId: string;
+		streamed: {
+			results: Promise<any>;
+			documents: Promise<any[]>;
+			profile: Promise<any>;
+		};
+	};
+
+	// Get SSR data from load function (or embedded usage in /cases/[id])
+	let { data, embedded = false }: { data: ResultsWorkspaceData; embedded?: boolean } = $props();
 
 	const caseId = $derived(data.caseId);
 	
@@ -826,61 +833,65 @@ async function generateLetterRequest(body: Record<string, any>) {
 	}
 </script>
 
-<!-- Back Button -->
-<button
-	onclick={() => goto(`/app/cases/${caseId}`)}
-	class="inline-flex items-center text-sm font-medium text-gray-500 hover:text-gray-700 transition-colors mb-6"
->
-	<ArrowLeft class="h-4 w-4 mr-2" />
-	Back to Case
-</button>
+{#if !embedded}
+	<!-- Back Button -->
+	<button
+		onclick={() => goto(`/app/cases/${caseId}`)}
+		class="inline-flex items-center text-sm font-medium text-gray-500 hover:text-gray-700 transition-colors mb-6"
+	>
+		<ArrowLeft class="h-4 w-4 mr-2" />
+		Back to Case
+	</button>
+{/if}
 
 <div class="page-spacing">
-	<PageHeader
-		title="Analysis Results"
-	breadcrumbs={[
-		{ label: 'Dashboard', href: '/app' },
-		{ label: 'Cases', href: '/app/cases' },
-		{ label: 'Case Details', href: `/app/cases/${caseId}` },
-		{ label: 'Results' }
-	]}
->
+	{#if !embedded}
+		<PageHeader
+			title="Analysis Results"
+		breadcrumbs={[
+			{ label: 'Dashboard', href: '/app' },
+			{ label: 'Cases', href: '/app/cases' },
+			{ label: 'Case Details', href: `/app/cases/${caseId}` },
+			{ label: 'Results' }
+		]}
+	>
 
-		{#snippet children()}
-			<!-- AI Models Info -->
-			{#if modelsUsed}
-				<div class="flex items-center gap-2">
-					<span class="text-xs text-gray-500">AI Models:</span>
-					<div class="flex gap-2 flex-wrap">
-						{#if modelsUsed.document_analysis}
-							<span class="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-accent/10 text-accent border border-accent/30" title="Document Analysis">
-								<svg class="h-3 w-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-								</svg>
-								{modelsUsed.document_analysis}
-							</span>
-						{/if}
-						{#if modelsUsed.letter_generation}
-							<span class="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-green-50 text-green-700 border border-green-200" title="Findings Email & Demand Letter">
-								<svg class="h-3 w-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-								</svg>
-								{modelsUsed.letter_generation}
-							</span>
-						{/if}
-						{#if modelsUsed.multi_stage_analysis}
-							<span class="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-purple-50 text-purple-700 border border-purple-200" title="Multi-Stage Analysis">
-								<svg class="h-3 w-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-								</svg>
-								{modelsUsed.multi_stage_analysis}
-							</span>
-						{/if}
+			{#snippet children()}
+				<!-- AI Models Info -->
+				{#if modelsUsed}
+					<div class="flex items-center gap-2">
+						<span class="text-xs text-gray-500">AI Models:</span>
+						<div class="flex gap-2 flex-wrap">
+							{#if modelsUsed.document_analysis}
+								<span class="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-accent/10 text-accent border border-accent/30" title="Document Analysis">
+									<svg class="h-3 w-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+									</svg>
+									{modelsUsed.document_analysis}
+								</span>
+							{/if}
+							{#if modelsUsed.letter_generation}
+								<span class="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-green-50 text-green-700 border border-green-200" title="Findings Email & Demand Letter">
+									<svg class="h-3 w-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+									</svg>
+									{modelsUsed.letter_generation}
+								</span>
+							{/if}
+							{#if modelsUsed.multi_stage_analysis}
+								<span class="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-purple-50 text-purple-700 border border-purple-200" title="Multi-Stage Analysis">
+									<svg class="h-3 w-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+									</svg>
+									{modelsUsed.multi_stage_analysis}
+								</span>
+							{/if}
+						</div>
 					</div>
-				</div>
-			{/if}
-		{/snippet}
-	</PageHeader>
+				{/if}
+			{/snippet}
+		</PageHeader>
+	{/if}
 
 	{#if loading}
 		<div class="flex flex-col items-center justify-center py-20">

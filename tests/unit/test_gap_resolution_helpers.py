@@ -222,7 +222,7 @@ def test_signature_evidence_collects_metadata_and_sorts_by_filename():
             "file_name": "B.pdf",
             "file_type": "application/pdf",
             "manual_text": "",
-            "extracted_text": "Signed by: A",
+            "extracted_text": "Subscription Agreement\nSigned by: A",
             "metadata": {"signature_detection": {"status": "signed", "confidence": "medium"}},
         },
         {
@@ -239,6 +239,7 @@ def test_signature_evidence_collects_metadata_and_sorts_by_filename():
 
     assert [row["file_name"] for row in evidence] == ["A.pdf", "B.pdf"]
     assert evidence[1]["status"] == "signed"
+    assert "subscription agreement" in evidence[1]["instrument_hints"]
 
 
 def test_gap_analysis_input_hash_changes_when_document_state_changes():

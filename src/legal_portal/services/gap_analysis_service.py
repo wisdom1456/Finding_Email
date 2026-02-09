@@ -251,6 +251,7 @@ class GapAnalysisService:
             digital = bool(item.get("has_digital_signature"))
             signing_date = item.get("signing_date")
             source = item.get("detection_source")
+            instrument_hints = item.get("instrument_hints") or []
 
             line = (
                 f"- {file_name}: status={status}, confidence={confidence}, "
@@ -260,6 +261,9 @@ class GapAnalysisService:
                 line += f", signing_date={signing_date}"
             if source:
                 line += f", source={source}"
+            if instrument_hints:
+                preview = ", ".join(str(h) for h in instrument_hints[:3])
+                line += f", hints={preview}"
             lines.append(line)
 
         if len(rows) > 40:
@@ -280,14 +284,8 @@ class GapAnalysisService:
             "from",
             "that",
             "this",
-            "agreement",
-            "contract",
             "document",
-            "executed",
-            "signed",
             "missing",
-            "investment",
-            "subscription",
             "terms",
             "copy",
             "final",
@@ -370,15 +368,44 @@ class GapAnalysisService:
             file_name = doc.get("file_name") or ""
             file_name_lc = file_name.lower()
             base_name = file_name_lc.rsplit(".", 1)[0]
-            doc_tokens = self._tokenize_for_match(base_name)
+            hint_phrases = [
+                str(h).strip().lower()
+                for h in (doc.get("instrument_hints") or [])
+                if str(h).strip()
+            ]
+            signer_names = [
+                str(name).strip()
+                for name in (doc.get("signer_names") or [])
+                if str(name).strip()
+            ]
+            matching_blob = " ".join([base_name, " ".join(hint_phrases), " ".join(signer_names)]).strip()
+            doc_tokens = self._tokenize_for_match(matching_blob)
             overlap = gap_tokens & doc_tokens
+            hint_phrase_match = any(
+                phrase in blob
+                for phrase in hint_phrases
+                if len(phrase) >= 6
+            )
 
             strong_match = file_name_lc in blob or base_name in blob
             fuzzy_match = len(overlap) >= 2
+            semantic_overlap = {
+                "agreement",
+                "subscription",
+                "contract",
+                "investment",
+                "purchase",
+                "financing",
+                "promissory",
+                "note",
+                "membership",
+                "units",
+            } & overlap
+            semantic_match = len(semantic_overlap) >= 1
             thematic_match = (
                 len(overlap) >= 1
                 and any(
-                    kw in file_name_lc
+                    kw in matching_blob
                     for kw in ("agreement", "contract", "subscription", "investment", "financing")
                 )
                 and any(
@@ -387,7 +414,7 @@ class GapAnalysisService:
                 )
             )
 
-            if strong_match or fuzzy_match or thematic_match:
+            if strong_match or hint_phrase_match or fuzzy_match or semantic_match or thematic_match:
                 key = file_name_lc or str(doc.get("document_id"))
                 if key in seen:
                     continue

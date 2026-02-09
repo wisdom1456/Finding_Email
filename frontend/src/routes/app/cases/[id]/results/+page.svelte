@@ -97,6 +97,16 @@
 
 	// Collapsible document analysis state
 	let collapsedDocs = $state<Set<string>>(new Set());
+	let signatureDetectionByDocName = $derived.by(() => {
+		const lookup = new Map<string, Record<string, any>>();
+		for (const doc of documents || []) {
+			const docName = doc?.file_name;
+			const signatureDetection = doc?.metadata?.signature_detection;
+			if (!docName || !signatureDetection || typeof signatureDetection !== 'object') continue;
+			lookup.set(String(docName).toLowerCase(), signatureDetection as Record<string, any>);
+		}
+		return lookup;
+	});
 
 	// Initialize from streamed data
 	onMount(async () => {
@@ -404,14 +414,8 @@
 	}
 
 	function getDocumentSignatureDetection(documentName: string): Record<string, any> | null {
-		let doc = documents.find((d) => d.file_name === documentName);
-		if (!doc) {
-			const lowerName = documentName.toLowerCase();
-			doc = documents.find((d) => d.file_name?.toLowerCase() === lowerName);
-		}
-
-		const signatureDetection = doc?.metadata?.signature_detection;
-		return signatureDetection && typeof signatureDetection === 'object' ? signatureDetection : null;
+		if (!documentName) return null;
+		return signatureDetectionByDocName.get(documentName.toLowerCase()) || null;
 	}
 
 	async function analyzeGaps(forceRefresh: boolean = forceGapRefresh) {

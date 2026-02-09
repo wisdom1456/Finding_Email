@@ -2382,15 +2382,21 @@
 									<div class="card-standard border border-red-200 bg-red-50 text-sm text-red-700">
 										{embeddedResultsError}
 									</div>
-								{:else if showingEmbeddedResults && embeddedResultsData}
-									{#key embeddedResultsKey}
-										<ResultsWorkspace data={embeddedResultsData} embedded={true} />
-									{/key}
 								{/if}
 							</div>
 						{/if}
 					</div>
 					{/if}
+
+				{#if analysisStatus?.status === 'completed' && showingEmbeddedResults && embeddedResultsData}
+					<div class={activeTab === 'analysis' ? '' : 'hidden'} aria-hidden={activeTab !== 'analysis'}>
+						<div class="mt-6">
+							{#key embeddedResultsKey}
+								<ResultsWorkspace data={embeddedResultsData} embedded={true} />
+							{/key}
+						</div>
+					</div>
+				{/if}
 				{/snippet}
 			</Tabs>
 		{/if}

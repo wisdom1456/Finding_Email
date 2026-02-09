@@ -177,6 +177,18 @@ _SIGNER_NAME_PATTERNS = [
     re.compile(r"(?im)^\s*/s/\s*([A-Z][A-Za-z ,.'-]{2,80})\s*$"),
 ]
 
+_SIGNATURE_INSTRUMENT_HINT_PATTERNS = [
+    ("subscription agreement", re.compile(r"\bsubscription\s+agreement\b", re.IGNORECASE)),
+    ("investment agreement", re.compile(r"\binvestment\s+agreement\b", re.IGNORECASE)),
+    ("purchase agreement", re.compile(r"\b(?:unit\s+)?purchase\s+agreement\b", re.IGNORECASE)),
+    ("operating agreement", re.compile(r"\boperating\s+agreement\b", re.IGNORECASE)),
+    ("promissory note", re.compile(r"\bpromissory\s+note\b", re.IGNORECASE)),
+    ("convertible note", re.compile(r"\bconvertible\s+note\b", re.IGNORECASE)),
+    ("loan agreement", re.compile(r"\bloan\s+agreement\b", re.IGNORECASE)),
+    ("financing agreement", re.compile(r"\bfinancing\s+agreement\b", re.IGNORECASE)),
+    ("membership units", re.compile(r"\bclass\s+[a-z0-9]+\s+units?\b", re.IGNORECASE)),
+]
+
 
 def _normalize_text_signing_date(raw_date: Optional[str]) -> Optional[str]:
     """Normalize common textual signing date formats to ISO-like strings."""
@@ -273,6 +285,45 @@ def _is_pdf_like_document(file_name: Optional[str], file_type: Optional[str]) ->
     ft = (file_type or "").lower()
     name = (file_name or "").lower()
     return ft in {"application/pdf", "pdf"} or name.endswith(".pdf")
+
+
+def _sample_text_for_state_hash(raw_text: Optional[str], limit: int = 16000) -> str:
+    """Build a compact text sample for deterministic state hashing."""
+    text = (raw_text or "").strip()
+    if not text:
+        return ""
+    if len(text) <= limit:
+        return text
+    head = text[: limit // 2]
+    tail = text[-(limit // 2) :]
+    return f"{head}\n... [omitted for hash] ...\n{tail}"
+
+
+def _extract_signature_instrument_hints(
+    file_name: Optional[str],
+    extracted_text: Optional[str],
+) -> List[str]:
+    """Extract contract/instrument hints for signature reconciliation matching."""
+    sampled_text = _sample_text_for_state_hash(extracted_text, limit=24000)
+    corpus = f"{file_name or ''}\n{sampled_text}"
+
+    hints: List[str] = []
+    for label, pattern in _SIGNATURE_INSTRUMENT_HINT_PATTERNS:
+        if pattern.search(corpus):
+            hints.append(label)
+
+    deduped: List[str] = []
+    seen = set()
+    for hint in hints:
+        key = hint.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(hint)
+        if len(deduped) >= 6:
+            break
+
+    return deduped
 
 
 # Optional WeasyPrint import for PDF generation
@@ -3302,14 +3353,17 @@ def _build_case_document_state_hash(document_rows: List[Dict[str, Any]]) -> str:
             if isinstance(signature_detection, dict)
             else None
         )
+        sampled_text = _sample_text_for_state_hash(
+            doc.get("manual_text") or doc.get("extracted_text")
+        )
+        text_fingerprint = hashlib.sha256(sampled_text.encode("utf-8")).hexdigest()
         canonical_rows.append(
             {
                 "id": doc.get("id"),
                 "updated_at": doc.get("updated_at"),
                 "status": str(doc.get("status") or ""),
                 "file_name": doc.get("file_name"),
-                "manual_len": len((doc.get("manual_text") or "").strip()),
-                "extracted_len": len((doc.get("extracted_text") or "").strip()),
+                "text_fingerprint": text_fingerprint,
                 "signature_status": signature_status,
             }
         )
@@ -3333,6 +3387,14 @@ def _build_signature_evidence(
         if not isinstance(signature_detection, dict):
             continue
 
+        combined_text = (doc.get("manual_text") or doc.get("extracted_text") or "").strip()
+        instrument_hints = _extract_signature_instrument_hints(
+            file_name=doc.get("file_name"),
+            extracted_text=combined_text,
+        )
+        signer_names = signature_detection.get("signer_names")
+        indicators = signature_detection.get("indicators")
+
         evidence.append(
             {
                 "document_id": doc.get("id"),
@@ -3344,6 +3406,9 @@ def _build_signature_evidence(
                 ),
                 "signing_date": signature_detection.get("signing_date"),
                 "detection_source": signature_detection.get("detection_source"),
+                "signer_names": signer_names if isinstance(signer_names, list) else [],
+                "indicators": indicators if isinstance(indicators, list) else [],
+                "instrument_hints": instrument_hints,
             }
         )
 
@@ -3728,6 +3793,9 @@ async def resolve_gaps_and_refresh(
         all_doc_ids.update(item.related_document_ids or [])
     all_doc_ids_list = sorted(all_doc_ids)
 
+    case_document_rows = _fetch_case_documents_for_gap_context(supabase, case_id)
+    case_document_state_hash = _build_case_document_state_hash(case_document_rows)
+
     supporting_doc_hash = _compute_resolution_document_state_hash(
         supabase=supabase,
         case_id=case_id,
@@ -3737,6 +3805,7 @@ async def resolve_gaps_and_refresh(
         not resolution_request.force_refresh
         and prior_resolution_state.get("resolution_hash") == resolution_hash
         and prior_resolution_state.get("supporting_doc_hash") == supporting_doc_hash
+        and prior_resolution_state.get("case_document_state_hash") == case_document_state_hash
         and existing_gap_dict
     ):
         logger.info(f"[GAP_RESOLVE] Returning cached selective refresh for case {case_id}")
@@ -3759,8 +3828,6 @@ async def resolve_gaps_and_refresh(
         openai_client = OpenAIClient(user_preferences=ai_preferences)
         gap_service = GapAnalysisService(openai_client=openai_client)
 
-        case_document_rows = _fetch_case_documents_for_gap_context(supabase, case_id)
-        case_document_state_hash = _build_case_document_state_hash(case_document_rows)
         signature_evidence = _build_signature_evidence(case_document_rows)
 
         fact_matrix = FactMatrix(**multi_stage_result.get("fact_matrix", {}))

@@ -112,3 +112,44 @@ def test_reconcile_does_not_suppress_party_identity_execution_gap():
     assert reconciled.total_gaps == 1
     assert reconciled.high_count == 1
     assert len(reconciled.gaps_by_category[GapCategory.MISSING_DOCUMENT.value]) == 1
+
+
+def test_reconcile_matches_signed_doc_with_uuid_filename_using_instrument_hints():
+    """Signed docs with opaque filenames should still reconcile by instrument hints."""
+    missing_gap = GapItem(
+        gap_id="gap-exec-generic",
+        category=GapCategory.MISSING_DOCUMENT,
+        severity=GapSeverity.HIGH,
+        title="Missing executed investment/contract documents",
+        description="No executed contract documents were identified in the record.",
+        affected_issue="Breach of contract",
+        related_documents=[],
+        recommendations=["Provide signed investment agreement documents."],
+        impact_on_case="Contract enforceability remains uncertain.",
+    )
+    result = GapAnalysisResult(
+        total_gaps=1,
+        critical_count=0,
+        high_count=1,
+        medium_count=0,
+        low_count=0,
+        gaps_by_category={GapCategory.MISSING_DOCUMENT.value: [missing_gap]},
+        overall_completeness_score=66.0,
+        attorney_summary="Executed agreement support is unclear.",
+    )
+    signature_evidence = [
+        {
+            "file_name": "020a16cd-33bf-4fb6-b580-da7423ba8de5.pdf",
+            "status": "signed",
+            "confidence": "high",
+            "has_digital_signature": True,
+            "instrument_hints": ["subscription agreement", "membership units"],
+        }
+    ]
+
+    service = GapAnalysisService(openai_client=None)  # type: ignore[arg-type]
+    reconciled = service._reconcile_signature_execution_gaps(result, signature_evidence)
+
+    assert reconciled.total_gaps == 0
+    assert reconciled.high_count == 0
+    assert reconciled.gaps_by_category[GapCategory.MISSING_DOCUMENT.value] == []

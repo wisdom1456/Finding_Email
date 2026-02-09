@@ -68,6 +68,7 @@
 	let gapAnalysisProgress = $state('');
 	let streamingGapSummary = $state(''); // Streaming attorney summary
 	let resolvingGaps = $state(false);
+	let forceGapRefresh = $state(false);
 
 	// Recommendation letter state
 	let forceGeneration = $state(false);
@@ -402,7 +403,18 @@
 		return doc?.extracted_text || doc?.manual_text || '';
 	}
 
-	async function analyzeGaps() {
+	function getDocumentSignatureDetection(documentName: string): Record<string, any> | null {
+		let doc = documents.find((d) => d.file_name === documentName);
+		if (!doc) {
+			const lowerName = documentName.toLowerCase();
+			doc = documents.find((d) => d.file_name?.toLowerCase() === lowerName);
+		}
+
+		const signatureDetection = doc?.metadata?.signature_detection;
+		return signatureDetection && typeof signatureDetection === 'object' ? signatureDetection : null;
+	}
+
+	async function analyzeGaps(forceRefresh: boolean = forceGapRefresh) {
 		analyzingGaps = true;
 		gapAnalysisProgress = 'Starting gap analysis...';
 		streamingGapSummary = ''; // Clear previous streaming content
@@ -418,7 +430,10 @@
 					'Content-Type': 'application/json',
 					Authorization: `Bearer ${session.access_token}`
 				},
-				body: JSON.stringify({ case_id: caseId })
+				body: JSON.stringify({
+					case_id: caseId,
+					force_refresh: forceRefresh || undefined
+				})
 			});
 
 			if (!response.ok) {
@@ -1136,6 +1151,31 @@ async function generateLetterRequest(body: Record<string, any>) {
 			</div>
 		{:else if activeTab === 'gaps'}
 			{#if gapAnalysis}
+				<div class="card-standard mb-4">
+					<div class="flex flex-wrap items-center justify-between gap-3">
+						<p class="text-sm text-gray-600">
+							Re-run gap analysis after document updates. Use force refresh to bypass cache.
+						</p>
+						<div class="flex items-center gap-3">
+							<label class="inline-flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+								<input
+									type="checkbox"
+									class="h-4 w-4 rounded border-gray-300 text-accent focus:ring-accent"
+									bind:checked={forceGapRefresh}
+								/>
+								Force refresh
+							</label>
+							<AsyncButton
+								variant="secondary"
+								onclick={() => analyzeGaps(forceGapRefresh)}
+								loading={analyzingGaps}
+								loadingText={gapAnalysisProgress || 'Refreshing gaps...'}
+							>
+								Re-run Gap Analysis
+							</AsyncButton>
+						</div>
+					</div>
+				</div>
 				<GapAnalysisPanel 
 					gapAnalysis={gapAnalysis} 
 					availableDocuments={documents}
@@ -1154,9 +1194,19 @@ async function generateLetterRequest(body: Record<string, any>) {
 						<p class="text-gray-500 max-w-md mx-auto mb-8">
 							Identify missing documents, factual contradictions, timeline gaps, and unverifiable claims in your case materials.
 						</p>
+						<div class="mb-4 flex items-center justify-center">
+							<label class="inline-flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+								<input
+									type="checkbox"
+									class="h-4 w-4 rounded border-gray-300 text-accent focus:ring-accent"
+									bind:checked={forceGapRefresh}
+								/>
+								Force refresh
+							</label>
+						</div>
 						<AsyncButton
 							variant="primary"
-							onclick={analyzeGaps}
+							onclick={() => analyzeGaps(forceGapRefresh)}
 							loading={analyzingGaps}
 							loadingText={gapAnalysisProgress || "Analyzing gaps..."}
 							class="px-8"
@@ -1208,6 +1258,7 @@ async function generateLetterRequest(body: Record<string, any>) {
 							<DocumentSummaryCard 
 								summary={doc}
 								rawText={getDocumentRawText(doc.document_name)}
+								signatureDetection={getDocumentSignatureDetection(doc.document_name)}
 								collapsible={true}
 								defaultCollapsed={collapsedDocs.has(doc.document_name)}
 							/>
@@ -1824,6 +1875,7 @@ async function generateLetterRequest(body: Record<string, any>) {
 						<DocumentSummaryCard 
 							summary={documentSummary}
 							rawText={viewingDocument?.extracted_text || ''}
+							signatureDetection={getDocumentSignatureDetection(documentSummary.document_name)}
 							collapsible={false}
 							showHeader={false}
 						/>

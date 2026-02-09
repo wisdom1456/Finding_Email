@@ -39,6 +39,7 @@
 	interface Props {
 		summary: DocumentSummary;
 		rawText?: string;
+		signatureDetection?: Record<string, any> | null;
 		collapsible?: boolean;
 		defaultCollapsed?: boolean;
 		showHeader?: boolean;
@@ -48,6 +49,7 @@
 	let { 
 		summary, 
 		rawText = '', 
+		signatureDetection = null,
 		collapsible = true, 
 		defaultCollapsed = false,
 		showHeader = true,
@@ -92,6 +94,32 @@
 		medium: 'bg-amber-50 text-amber-700 border-amber-200',
 		low: 'bg-red-50 text-red-700 border-red-200'
 	};
+
+	function getSignatureStatus(): 'signed' | 'not_detected' | 'other' | 'none' {
+		if (!signatureDetection || typeof signatureDetection !== 'object') return 'none';
+		const status = String(signatureDetection.status || '').toLowerCase();
+		if (status === 'signed') return 'signed';
+		if (status === 'not_detected') return 'not_detected';
+		return 'other';
+	}
+
+	function getSignatureLabel(): string {
+		if (!signatureDetection) return '';
+		const confidence = signatureDetection?.confidence
+			? ` (${String(signatureDetection.confidence).toUpperCase()})`
+			: '';
+		const status = getSignatureStatus();
+		if (status === 'signed') return `Signed${confidence}`;
+		if (status === 'not_detected') return `No signature detected${confidence}`;
+		return `Signature: ${String(signatureDetection.status || 'unknown')}${confidence}`;
+	}
+
+	function getSignatureClasses(): string {
+		const status = getSignatureStatus();
+		if (status === 'signed') return 'bg-emerald-50 text-emerald-700 border-emerald-200';
+		if (status === 'not_detected') return 'bg-amber-50 text-amber-700 border-amber-200';
+		return 'bg-gray-50 text-gray-700 border-gray-200';
+	}
 </script>
 
 <div class="border border-gray-200 rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow bg-white">
@@ -128,6 +156,14 @@
 						{#if summary.relevance_to_case}
 							<span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold tracking-wider uppercase bg-accent/10 text-accent border border-accent/20">
 								Relevant
+							</span>
+						{/if}
+						{#if getSignatureStatus() !== 'none'}
+							<span
+								class={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold tracking-wider uppercase border ${getSignatureClasses()}`}
+								title={getSignatureLabel()}
+							>
+								{getSignatureLabel()}
 							</span>
 						{/if}
 					</div>

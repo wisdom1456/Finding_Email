@@ -999,6 +999,7 @@ const { session, user } = await getSecureSession();
 						<DocumentSummaryCard 
 							summary={documentSummary}
 							rawText={viewingDocument?.extracted_text || ''}
+							signatureDetection={viewingDocument?.metadata?.signature_detection || null}
 							collapsible={false}
 							showHeader={false}
 						/>

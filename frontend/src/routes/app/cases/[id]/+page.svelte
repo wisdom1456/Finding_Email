@@ -284,9 +284,8 @@
 	});
 
 	$effect(() => {
-		if (activeTab !== 'analysis' && showingEmbeddedResults) {
-			showingEmbeddedResults = false;
-		}
+		// Keep embedded results state sticky across tab switches so returning to
+		// Analysis is instant without forcing the user to reopen results.
 		if (!loading) {
 			persistAnalysisViewToUrl();
 		}
@@ -1249,6 +1248,45 @@
 		return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
 	}
 
+	type SignatureStatus = 'signed' | 'not_detected' | 'other' | 'none';
+
+	function getDocumentSignatureDetection(doc: any): any | null {
+		const sig = doc?.metadata?.signature_detection;
+		return sig && typeof sig === 'object' ? sig : null;
+	}
+
+	function getDocumentSignatureStatus(doc: any): SignatureStatus {
+		const signatureDetection = getDocumentSignatureDetection(doc);
+		if (!signatureDetection) return 'none';
+		const status = String(signatureDetection.status || '').toLowerCase();
+		if (status === 'signed') return 'signed';
+		if (status === 'not_detected') return 'not_detected';
+		return 'other';
+	}
+
+	function getDocumentSignatureLabel(doc: any): string {
+		const signatureDetection = getDocumentSignatureDetection(doc);
+		if (!signatureDetection) return '';
+		const status = getDocumentSignatureStatus(doc);
+		const confidence = signatureDetection?.confidence
+			? ` (${String(signatureDetection.confidence).toUpperCase()})`
+			: '';
+		if (status === 'signed') return `SIGNED${confidence}`;
+		if (status === 'not_detected') return `NO SIGNATURE DETECTED${confidence}`;
+		return `SIGNATURE: ${String(signatureDetection.status || 'UNKNOWN').toUpperCase()}${confidence}`;
+	}
+
+	function getDocumentSignatureBadgeClass(doc: any): string {
+		const status = getDocumentSignatureStatus(doc);
+		if (status === 'signed') {
+			return 'bg-emerald-100 text-emerald-800 border-emerald-300';
+		}
+		if (status === 'not_detected') {
+			return 'bg-amber-100 text-amber-800 border-amber-300';
+		}
+		return 'bg-gray-100 text-gray-700 border-gray-300';
+	}
+
 	// Start streaming analysis (fast single-pass)
 	async function startStreamingAnalysis(skipMissingTextCheck = false) {
 		// Refresh documents from database first to get latest state
@@ -2031,6 +2069,14 @@
 														INTAKE FORM
 													</span>
 												{/if}
+												{#if getDocumentSignatureStatus(doc) !== 'none'}
+													<span
+														class="px-2 py-0.5 text-xs font-semibold rounded-full border {getDocumentSignatureBadgeClass(doc)}"
+														title={`Signature status: ${getDocumentSignatureLabel(doc)}`}
+													>
+														{getDocumentSignatureLabel(doc)}
+													</span>
+												{/if}
 												{#if doc.metadata?.clio_source}
 													<span class="px-2 py-0.5 text-xs font-semibold rounded-full bg-purple-100 text-purple-800">
 														{doc.metadata.clio_type?.toUpperCase() || 'CLIO'}
@@ -2622,6 +2668,7 @@
 						<DocumentSummaryCard 
 							summary={documentSummary}
 							rawText={viewingDocument?.extracted_text || extractedTextData?.extracted_text || ''}
+							signatureDetection={viewingDocument?.metadata?.signature_detection || null}
 							collapsible={false}
 							showHeader={false}
 						/>

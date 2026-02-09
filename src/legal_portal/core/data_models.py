@@ -1048,6 +1048,13 @@ class GapAnalysisResult(BaseModel):
     attorney_summary: str = Field(
         description="Executive summary for attorney about case completeness"
     )
+    reconciliation_notes: List[str] = Field(
+        default_factory=list,
+        description=(
+            "System-generated reconciliation notes explaining deterministic post-processing "
+            "adjustments applied after model output."
+        ),
+    )
     recommendation: Optional[CaseRecommendation] = Field(
         default=None, description="Case recommendation based on gap analysis"
     )

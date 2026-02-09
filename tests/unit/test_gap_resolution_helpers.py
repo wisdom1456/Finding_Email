@@ -5,8 +5,11 @@ from __future__ import annotations
 from legal_portal.api.routes.analysis import (
     GapResolutionItemRequest,
     GapResolutionRefreshRequest,
+    _build_case_document_state_hash,
+    _build_gap_analysis_input_hash,
     _build_gap_resolution_hash,
     _build_resolution_context,
+    _build_signature_evidence,
     _build_supporting_document_hash,
     _infer_signature_detection_from_text,
 )
@@ -182,3 +185,82 @@ def test_supporting_document_hash_changes_when_text_changes():
     original = _build_supporting_document_hash(rows, ["doc-a"])
     changed = _build_supporting_document_hash(changed_rows, ["doc-a"])
     assert original != changed
+
+
+def test_case_document_state_hash_changes_when_signature_status_changes():
+    """Case-document state hash should invalidate cache when signature status changes."""
+    docs_unsigned = [
+        {
+            "id": "doc-a",
+            "updated_at": "2026-02-09T00:00:00Z",
+            "status": "ready",
+            "file_name": "Subscription Agreement.pdf",
+            "file_type": "application/pdf",
+            "manual_text": "",
+            "extracted_text": "Subscription Agreement text",
+            "metadata": {"signature_detection": {"status": "not_detected"}},
+        }
+    ]
+    docs_signed = [
+        {
+            **docs_unsigned[0],
+            "metadata": {"signature_detection": {"status": "signed", "confidence": "high"}},
+        }
+    ]
+
+    unsigned_hash = _build_case_document_state_hash(docs_unsigned)
+    signed_hash = _build_case_document_state_hash(docs_signed)
+
+    assert unsigned_hash != signed_hash
+
+
+def test_signature_evidence_collects_metadata_and_sorts_by_filename():
+    """Signature evidence should include parsed rows and preserve authoritative status fields."""
+    docs = [
+        {
+            "id": "doc-2",
+            "file_name": "B.pdf",
+            "file_type": "application/pdf",
+            "manual_text": "",
+            "extracted_text": "Signed by: A",
+            "metadata": {"signature_detection": {"status": "signed", "confidence": "medium"}},
+        },
+        {
+            "id": "doc-1",
+            "file_name": "A.pdf",
+            "file_type": "application/pdf",
+            "manual_text": "",
+            "extracted_text": "Borrower Signature: _______",
+            "metadata": {"signature_detection": {"status": "not_detected", "confidence": "high"}},
+        },
+    ]
+
+    evidence = _build_signature_evidence(docs)
+
+    assert [row["file_name"] for row in evidence] == ["A.pdf", "B.pdf"]
+    assert evidence[1]["status"] == "signed"
+
+
+def test_gap_analysis_input_hash_changes_when_document_state_changes():
+    """Gap-input hash should change when case document state hash changes."""
+    payload = {
+        "document_summaries": [{"document_name": "Agreement.pdf"}],
+        "multi_stage_result": {
+            "fact_matrix": {"parties": []},
+            "issue_map": {"primary_issues": []},
+            "deep_analysis": {"overall_case_strength": "moderate"},
+        },
+    }
+
+    hash_a = _build_gap_analysis_input_hash(
+        analysis_id="analysis-1",
+        result_payload=payload,
+        case_document_state_hash="state-a",
+    )
+    hash_b = _build_gap_analysis_input_hash(
+        analysis_id="analysis-1",
+        result_payload=payload,
+        case_document_state_hash="state-b",
+    )
+
+    assert hash_a != hash_b

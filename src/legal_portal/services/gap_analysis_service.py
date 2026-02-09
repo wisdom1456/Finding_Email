@@ -9,8 +9,9 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 import time
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional, Set
 
 from legal_portal.core.data_models import (
     CaseRecommendation,
@@ -52,6 +53,7 @@ class GapAnalysisService:
         intake_content: Optional[str] = None,
         resolution_context: Optional[str] = None,
         prior_gap_analysis: Optional[GapAnalysisResult] = None,
+        signature_evidence: Optional[List[Dict[str, Any]]] = None,
     ) -> GapAnalysisResult:
         """Analyze case for gaps, contradictions, and weaknesses.
 
@@ -65,13 +67,27 @@ class GapAnalysisService:
             intake_content: Original intake form content
             resolution_context: Optional user-provided resolution context
             prior_gap_analysis: Optional prior gap analysis for selective refresh
+            signature_evidence: Optional authoritative signature metadata per case document
 
         Returns:
             GapAnalysisResult with identified gaps and completeness assessment
 
         """
         logger.info("[GAP_SERVICE] Starting gap analysis (Stage 3.5)")
-        logger.info(f"[GAP_SERVICE] Inputs - fact_matrix parties: {len(fact_matrix.parties)}, issues: {len(issue_map.primary_issues)}, docs: {len(document_summaries)}")
+        signed_count = sum(
+            1
+            for item in (signature_evidence or [])
+            if (item.get("status") or "").lower() == "signed"
+        )
+        logger.info(
+            "[GAP_SERVICE] Inputs - fact_matrix parties: %s, issues: %s, docs: %s, "
+            "signature_records: %s, signed_docs: %s",
+            len(fact_matrix.parties),
+            len(issue_map.primary_issues),
+            len(document_summaries),
+            len(signature_evidence or []),
+            signed_count,
+        )
 
         try:
             # Build the analysis prompt
@@ -83,6 +99,7 @@ class GapAnalysisService:
                 intake_content=intake_content,
                 resolution_context=resolution_context,
                 prior_gap_analysis=prior_gap_analysis,
+                signature_evidence=signature_evidence,
             )
 
             # Use GPT-4.1 for gap detection - faster and more reliable for structured JSON
@@ -142,6 +159,10 @@ class GapAnalysisService:
             # Parse JSON response
             response_json = json.loads(raw_response)
             result = GapAnalysisResult(**response_json)
+            result = self._reconcile_signature_execution_gaps(
+                result=result,
+                signature_evidence=signature_evidence,
+            )
 
             # Generate case recommendation based on gap analysis and deep analysis
             recommendation = self._generate_recommendation(
@@ -167,6 +188,312 @@ class GapAnalysisService:
             )
             return fallback
 
+    @staticmethod
+    def _truncate_text(value: Optional[str], limit: int) -> str:
+        """Trim text for prompt context blocks without dropping key signal."""
+        text = (value or "").strip()
+        if not text:
+            return ""
+        if len(text) <= limit:
+            return text
+        return text[: limit - 3].rstrip() + "..."
+
+    def _build_document_evidence_summary(
+        self,
+        document_summaries: List[DocumentSummaryStructured],
+    ) -> str:
+        """Create compact per-document evidence context from structured summaries."""
+        if not document_summaries:
+            return "No structured document summaries were provided."
+
+        lines: List[str] = []
+        for doc in document_summaries[:30]:
+            lines.append(f"- {doc.document_name} ({doc.document_type})")
+            overview = self._truncate_text(doc.executive_summary, 260)
+            if not overview:
+                overview = self._truncate_text(doc.key_content, 260)
+            if overview:
+                lines.append(f"  overview: {overview}")
+            if doc.legal_significance:
+                lines.append(
+                    f"  legal_significance: {self._truncate_text(doc.legal_significance, 220)}"
+                )
+            if doc.important_details:
+                details = "; ".join(
+                    self._truncate_text(detail, 120)
+                    for detail in doc.important_details[:3]
+                    if (detail or "").strip()
+                )
+                if details:
+                    lines.append(f"  details: {details}")
+
+        if len(document_summaries) > 30:
+            lines.append(
+                f"... {len(document_summaries) - 30} additional document summaries omitted for brevity."
+            )
+
+        return "\n".join(lines)
+
+    def _build_signature_evidence_summary(
+        self,
+        signature_evidence: Optional[List[Dict[str, Any]]],
+    ) -> str:
+        """Format authoritative signature metadata for the prompt."""
+        rows = signature_evidence or []
+        if not rows:
+            return "No signature metadata was provided."
+
+        lines: List[str] = []
+        for item in rows[:40]:
+            file_name = item.get("file_name") or "Unknown document"
+            status = (item.get("status") or "unknown").lower()
+            confidence = item.get("confidence") or "unknown"
+            digital = bool(item.get("has_digital_signature"))
+            signing_date = item.get("signing_date")
+            source = item.get("detection_source")
+
+            line = (
+                f"- {file_name}: status={status}, confidence={confidence}, "
+                f"digital={digital}"
+            )
+            if signing_date:
+                line += f", signing_date={signing_date}"
+            if source:
+                line += f", source={source}"
+            lines.append(line)
+
+        if len(rows) > 40:
+            lines.append(
+                f"... {len(rows) - 40} additional signature records omitted for brevity."
+            )
+
+        return "\n".join(lines)
+
+    @staticmethod
+    def _tokenize_for_match(value: str) -> Set[str]:
+        """Tokenize text for lightweight fuzzy document-name matching."""
+        stopwords = {
+            "the",
+            "and",
+            "for",
+            "with",
+            "from",
+            "that",
+            "this",
+            "agreement",
+            "contract",
+            "document",
+            "executed",
+            "signed",
+            "missing",
+            "investment",
+            "subscription",
+            "terms",
+            "copy",
+            "final",
+            "draft",
+            "pdf",
+        }
+        normalized = re.sub(r"[^a-z0-9]+", " ", (value or "").lower())
+        return {
+            token
+            for token in normalized.split()
+            if len(token) >= 3 and token not in stopwords
+        }
+
+    @staticmethod
+    def _is_execution_gap(gap: GapItem) -> bool:
+        """Heuristic: identify missing-document gaps specifically about execution/signature."""
+        blob = " ".join(
+            [
+                gap.title or "",
+                gap.description or "",
+                gap.impact_on_case or "",
+                " ".join(gap.recommendations or []),
+            ]
+        ).lower()
+        execution_terms = ("executed", "signed", "signature", "execution")
+        instrument_terms = (
+            "agreement",
+            "contract",
+            "subscription",
+            "investment",
+            "financing",
+            "purchase",
+            "note",
+        )
+        missing_terms = ("missing", "not provided", "not produced", "unsigned", "no executed")
+
+        return (
+            gap.category == GapCategory.MISSING_DOCUMENT
+            and any(term in blob for term in execution_terms)
+            and any(term in blob for term in instrument_terms)
+            and any(term in blob for term in missing_terms)
+        )
+
+    @staticmethod
+    def _is_identity_or_party_gap_text(blob: str) -> bool:
+        """Avoid suppressing genuinely distinct standing/party-identity concerns."""
+        markers = (
+            "standing",
+            "beneficiary",
+            "individual vs",
+            "entity",
+            "investor identity",
+            "correct plaintiff",
+            "party mismatch",
+            "assignee",
+        )
+        text = (blob or "").lower()
+        return any(marker in text for marker in markers)
+
+    def _find_matching_signed_docs(
+        self,
+        gap: GapItem,
+        signed_docs: List[Dict[str, Any]],
+    ) -> List[str]:
+        """Match an execution gap to signed docs using name and token overlap."""
+        blob = " ".join(
+            [
+                gap.title or "",
+                gap.description or "",
+                gap.impact_on_case or "",
+                " ".join(gap.related_documents or []),
+                " ".join(gap.recommendations or []),
+            ]
+        ).lower()
+        gap_tokens = self._tokenize_for_match(blob)
+        matched: List[str] = []
+        seen = set()
+
+        for doc in signed_docs:
+            file_name = doc.get("file_name") or ""
+            file_name_lc = file_name.lower()
+            base_name = file_name_lc.rsplit(".", 1)[0]
+            doc_tokens = self._tokenize_for_match(base_name)
+            overlap = gap_tokens & doc_tokens
+
+            strong_match = file_name_lc in blob or base_name in blob
+            fuzzy_match = len(overlap) >= 2
+            thematic_match = (
+                len(overlap) >= 1
+                and any(
+                    kw in file_name_lc
+                    for kw in ("agreement", "contract", "subscription", "investment", "financing")
+                )
+                and any(
+                    kw in blob
+                    for kw in ("agreement", "contract", "subscription", "investment", "financing")
+                )
+            )
+
+            if strong_match or fuzzy_match or thematic_match:
+                key = file_name_lc or str(doc.get("document_id"))
+                if key in seen:
+                    continue
+                seen.add(key)
+                matched.append(file_name or "Unknown document")
+
+        return matched
+
+    def _reconcile_signature_execution_gaps(
+        self,
+        result: GapAnalysisResult,
+        signature_evidence: Optional[List[Dict[str, Any]]],
+    ) -> GapAnalysisResult:
+        """Suppress false missing-executed gaps when signed evidence is authoritative."""
+        signed_docs = [
+            item
+            for item in (signature_evidence or [])
+            if (item.get("status") or "").lower() == "signed"
+        ]
+        if not signed_docs:
+            return result
+
+        missing_gaps = list(result.gaps_by_category.get(GapCategory.MISSING_DOCUMENT.value, []))
+        if not missing_gaps:
+            return result
+
+        kept: List[GapItem] = []
+        removed: List[GapItem] = []
+        matched_doc_names: List[str] = []
+
+        for gap in missing_gaps:
+            if not self._is_execution_gap(gap):
+                kept.append(gap)
+                continue
+
+            gap_blob = " ".join(
+                [
+                    gap.title or "",
+                    gap.description or "",
+                    gap.impact_on_case or "",
+                    " ".join(gap.recommendations or []),
+                ]
+            )
+            if self._is_identity_or_party_gap_text(gap_blob):
+                kept.append(gap)
+                continue
+
+            matched = self._find_matching_signed_docs(gap, signed_docs)
+            if matched:
+                removed.append(gap)
+                matched_doc_names.extend(matched)
+            else:
+                kept.append(gap)
+
+        if not removed:
+            return result
+
+        result.gaps_by_category[GapCategory.MISSING_DOCUMENT.value] = kept
+
+        all_gaps = [g for gaps in result.gaps_by_category.values() for g in gaps]
+        result.total_gaps = len(all_gaps)
+        result.critical_count = sum(1 for g in all_gaps if g.severity == GapSeverity.CRITICAL)
+        result.high_count = sum(1 for g in all_gaps if g.severity == GapSeverity.HIGH)
+        result.medium_count = sum(1 for g in all_gaps if g.severity == GapSeverity.MEDIUM)
+        result.low_count = sum(1 for g in all_gaps if g.severity == GapSeverity.LOW)
+
+        severity_bonus = {
+            GapSeverity.CRITICAL: 9.0,
+            GapSeverity.HIGH: 6.0,
+            GapSeverity.MEDIUM: 3.0,
+            GapSeverity.LOW: 1.0,
+        }
+        bonus = sum(severity_bonus.get(g.severity, 0.0) for g in removed)
+        if bonus > 0:
+            result.overall_completeness_score = min(
+                100.0,
+                round(float(result.overall_completeness_score) + bonus, 1),
+            )
+
+        unique_docs = sorted({name for name in matched_doc_names if name})
+        if unique_docs:
+            docs_preview = ", ".join(unique_docs[:3])
+            if len(unique_docs) > 3:
+                docs_preview += f", +{len(unique_docs) - 3} more"
+        else:
+            docs_preview = "signed case documents"
+
+        note = (
+            f"Execution metadata confirms signed documents ({docs_preview}); "
+            f"removed {len(removed)} false missing-executed gap(s)."
+        )
+        notes = list(getattr(result, "reconciliation_notes", []) or [])
+        if note not in notes:
+            notes.append(note)
+        result.reconciliation_notes = notes
+
+        summary = (result.attorney_summary or "").strip()
+        if note not in summary:
+            result.attorney_summary = f"{summary} {note}".strip() if summary else note
+
+        logger.info(
+            "[GAP_SERVICE] Suppressed %s execution gap(s) using signature evidence",
+            len(removed),
+        )
+        return result
+
     def _build_gap_analysis_prompt(
         self,
         fact_matrix: FactMatrix,
@@ -176,6 +503,7 @@ class GapAnalysisService:
         intake_content: Optional[str],
         resolution_context: Optional[str] = None,
         prior_gap_analysis: Optional[GapAnalysisResult] = None,
+        signature_evidence: Optional[List[Dict[str, Any]]] = None,
     ) -> str:
         """Build the AI prompt for gap detection.
 
@@ -187,13 +515,16 @@ class GapAnalysisService:
             intake_content: Intake form content
             resolution_context: Optional user-supplied context to resolve gaps
             prior_gap_analysis: Optional prior gap analysis to reconcile
+            signature_evidence: Optional authoritative signature metadata
 
         Returns:
             Formatted prompt for GPT-5.2
 
         """
         # Prepare document list
-        doc_list = "\n".join([f"- {doc.document_name}" for doc in document_summaries])
+        doc_list = "\n".join([f"- {doc.document_name}" for doc in document_summaries]) or "None provided"
+        doc_evidence_summary = self._build_document_evidence_summary(document_summaries)
+        signature_evidence_summary = self._build_signature_evidence_summary(signature_evidence)
 
         # Prepare parties
         parties_list = "\n".join([f"- {p.name} ({p.role})" for p in fact_matrix.parties])
@@ -234,6 +565,12 @@ CONTEXT:
 
 **Documents Provided:**
 {doc_list}
+
+**Document Evidence (Structured Summaries):**
+{doc_evidence_summary}
+
+**Execution/Signature Evidence (Authoritative Metadata):**
+{signature_evidence_summary}
 
 **Parties Involved:**
 {parties_list}
@@ -318,6 +655,11 @@ If prior gaps and user resolutions are provided:
 - If an issue appears fully resolved, omit it from `gaps_by_category`.
 - If partially resolved, keep it with reduced severity when justified.
 - Create new gap IDs only for genuinely new issues.
+
+Execution guardrails:
+- Treat the "Execution/Signature Evidence" block as authoritative metadata.
+- If a document is marked `status=signed`, do NOT claim that same document is missing execution/signature.
+- If signatures exist but party/standing alignment is unclear, classify that as contradiction/incomplete info, not missing executed documents.
 
 Calculate an overall completeness score (0-100):
 - 90-100: Excellent documentation, minor gaps only

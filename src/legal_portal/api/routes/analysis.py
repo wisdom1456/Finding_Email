@@ -3252,6 +3252,136 @@ def _build_supporting_document_hash(
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
+def _derive_signature_detection_for_gap_doc(doc: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Derive signature detection for a document row, with text fallback for legacy PDFs."""
+    sig = (doc.get("metadata") or {}).get("signature_detection")
+    if sig:
+        return sig
+
+    if not _is_pdf_like_document(doc.get("file_name"), doc.get("file_type")):
+        return None
+
+    text = (doc.get("manual_text") or doc.get("extracted_text") or "").strip()
+    if not text:
+        return None
+
+    return _infer_signature_detection_from_text(text)
+
+
+def _fetch_case_documents_for_gap_context(
+    supabase,
+    case_id: str,
+) -> List[Dict[str, Any]]:
+    """Fetch case documents used to build signature evidence and cache invalidation hashes."""
+    try:
+        docs_resp = (
+            supabase.table("documents")
+            .select(
+                "id, file_name, file_type, status, updated_at, extracted_text, "
+                "manual_text, metadata"
+            )
+            .eq("case_id", case_id)
+            .execute()
+        )
+        return docs_resp.data or []
+    except Exception as doc_err:
+        logger.warning(f"[GAP] Failed to load case documents for context: {doc_err}")
+        return []
+
+
+def _build_case_document_state_hash(document_rows: List[Dict[str, Any]]) -> str:
+    """Build lightweight state hash for document set to avoid stale gap-analysis cache hits."""
+    if not document_rows:
+        return "no_case_documents"
+
+    canonical_rows: List[Dict[str, Any]] = []
+    for doc in document_rows:
+        signature_detection = _derive_signature_detection_for_gap_doc(doc)
+        signature_status = (
+            signature_detection.get("status")
+            if isinstance(signature_detection, dict)
+            else None
+        )
+        canonical_rows.append(
+            {
+                "id": doc.get("id"),
+                "updated_at": doc.get("updated_at"),
+                "status": str(doc.get("status") or ""),
+                "file_name": doc.get("file_name"),
+                "manual_len": len((doc.get("manual_text") or "").strip()),
+                "extracted_len": len((doc.get("extracted_text") or "").strip()),
+                "signature_status": signature_status,
+            }
+        )
+
+    payload = json.dumps(
+        sorted(canonical_rows, key=lambda row: (row.get("id") or "")),
+        sort_keys=True,
+        default=str,
+    )
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def _build_signature_evidence(
+    document_rows: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    """Create compact signature evidence list for gap-analysis prompt grounding."""
+    evidence: List[Dict[str, Any]] = []
+
+    for doc in document_rows:
+        signature_detection = _derive_signature_detection_for_gap_doc(doc)
+        if not isinstance(signature_detection, dict):
+            continue
+
+        evidence.append(
+            {
+                "document_id": doc.get("id"),
+                "file_name": doc.get("file_name"),
+                "status": signature_detection.get("status"),
+                "confidence": signature_detection.get("confidence"),
+                "has_digital_signature": bool(
+                    signature_detection.get("has_digital_signature")
+                ),
+                "signing_date": signature_detection.get("signing_date"),
+                "detection_source": signature_detection.get("detection_source"),
+            }
+        )
+
+    return sorted(evidence, key=lambda row: (row.get("file_name") or "").lower())
+
+
+def _hash_jsonable(value: Any) -> str:
+    """Compute deterministic hash for JSON-serializable payloads."""
+    serialized = json.dumps(value, sort_keys=True, default=str)
+    return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
+
+
+def _build_gap_analysis_input_hash(
+    analysis_id: str,
+    result_payload: Dict[str, Any],
+    case_document_state_hash: str,
+) -> str:
+    """Build stable hash representing inputs that materially affect gap-analysis output."""
+    document_summaries_raw = result_payload.get("document_summaries", [])
+    if isinstance(document_summaries_raw, str):
+        document_summaries_hash = hashlib.sha256(
+            document_summaries_raw.encode("utf-8")
+        ).hexdigest()
+    else:
+        document_summaries_hash = _hash_jsonable(document_summaries_raw)
+
+    multi_stage = result_payload.get("multi_stage_result") or {}
+    canonical = {
+        "analysis_id": analysis_id,
+        "fact_matrix_hash": _hash_jsonable(multi_stage.get("fact_matrix", {})),
+        "issue_map_hash": _hash_jsonable(multi_stage.get("issue_map", {})),
+        "deep_analysis_hash": _hash_jsonable(multi_stage.get("deep_analysis", {})),
+        "document_summaries_hash": document_summaries_hash,
+        "case_document_state_hash": case_document_state_hash,
+    }
+    return _hash_jsonable(canonical)
+
+
 def _compute_resolution_document_state_hash(
     supabase,
     case_id: str,
@@ -3450,11 +3580,26 @@ async def analyze_gaps_on_demand(
             detail="Gap analysis requires a completed multi-stage analysis. Please run case analysis first.",
         )
 
+    case_document_rows = _fetch_case_documents_for_gap_context(supabase, case_id)
+    case_document_state_hash = _build_case_document_state_hash(case_document_rows)
+    signature_evidence = _build_signature_evidence(case_document_rows)
+    gap_input_hash = _build_gap_analysis_input_hash(
+        analysis_id=analysis_id,
+        result_payload=result_payload,
+        case_document_state_hash=case_document_state_hash,
+    )
+
     # Check if gap analysis already exists
     existing_gap = multi_stage_result.get("gap_analysis")
+    existing_gap_state = result_payload.get("gap_analysis_state") or {}
     if existing_gap and not gap_request.force_refresh:
-        logger.info(f"[GAP_ENDPOINT] Returning cached gap analysis for case {case_id}")
-        return existing_gap
+        if existing_gap_state.get("input_hash") == gap_input_hash:
+            logger.info(f"[GAP_ENDPOINT] Returning cached gap analysis for case {case_id}")
+            return existing_gap
+        logger.info(
+            "[GAP_ENDPOINT] Cached gap analysis invalidated for case %s (state mismatch)",
+            case_id,
+        )
 
     try:
         # Import gap analysis dependencies
@@ -3497,6 +3642,7 @@ async def analyze_gaps_on_demand(
             deep_analysis=deep_analysis,
             document_summaries=doc_summaries_list,
             intake_content=intake_content,
+            signature_evidence=signature_evidence,
         )
 
         logger.info(f"[GAP_ENDPOINT] Gap analysis complete: {gap_result.total_gaps} gaps found")
@@ -3505,6 +3651,17 @@ async def analyze_gaps_on_demand(
         gap_dict = gap_result.model_dump(mode="json")
         multi_stage_result["gap_analysis"] = gap_dict
         result_payload["multi_stage_result"] = multi_stage_result
+        result_payload["gap_analysis_state"] = {
+            "input_hash": gap_input_hash,
+            "case_document_state_hash": case_document_state_hash,
+            "signature_record_count": len(signature_evidence),
+            "signed_document_count": sum(
+                1
+                for row in signature_evidence
+                if (row.get("status") or "").lower() == "signed"
+            ),
+            "updated_at": datetime.utcnow().isoformat(),
+        }
 
         service_supabase.table("analysis_results").update({
             "result": result_payload,
@@ -3602,6 +3759,10 @@ async def resolve_gaps_and_refresh(
         openai_client = OpenAIClient(user_preferences=ai_preferences)
         gap_service = GapAnalysisService(openai_client=openai_client)
 
+        case_document_rows = _fetch_case_documents_for_gap_context(supabase, case_id)
+        case_document_state_hash = _build_case_document_state_hash(case_document_rows)
+        signature_evidence = _build_signature_evidence(case_document_rows)
+
         fact_matrix = FactMatrix(**multi_stage_result.get("fact_matrix", {}))
         issue_map = LegalIssueMap(**multi_stage_result.get("issue_map", {}))
         deep_analysis_data = multi_stage_result.get("deep_analysis", {})
@@ -3642,6 +3803,7 @@ async def resolve_gaps_and_refresh(
             intake_content=intake_content,
             resolution_context=resolution_context,
             prior_gap_analysis=existing_gap_model,
+            signature_evidence=signature_evidence,
         )
 
         gap_dict = gap_result.model_dump(mode="json")
@@ -3655,6 +3817,13 @@ async def resolve_gaps_and_refresh(
             "applied_gap_ids": [r.gap_id for r in resolution_request.resolutions],
             "attached_document_ids": all_doc_ids_list,
             "supporting_doc_hash": supporting_doc_hash,
+            "case_document_state_hash": case_document_state_hash,
+            "signature_record_count": len(signature_evidence),
+            "signed_document_count": sum(
+                1
+                for row in signature_evidence
+                if (row.get("status") or "").lower() == "signed"
+            ),
             "global_resolution_notes": (resolution_request.global_resolution_notes or "").strip(),
         }
         result_payload["gap_resolution_state"] = resolution_state
@@ -3726,13 +3895,28 @@ async def analyze_gaps_streaming(
                 yield f"data: {json.dumps({'type': 'error', 'error': 'Gap analysis requires a completed multi-stage analysis. Please run case analysis first.'})}\n\n"
                 return
 
+            case_document_rows = _fetch_case_documents_for_gap_context(supabase, case_id)
+            case_document_state_hash = _build_case_document_state_hash(case_document_rows)
+            signature_evidence = _build_signature_evidence(case_document_rows)
+            gap_input_hash = _build_gap_analysis_input_hash(
+                analysis_id=analysis_id,
+                result_payload=result_payload,
+                case_document_state_hash=case_document_state_hash,
+            )
+
             # Check if gap analysis already exists
             existing_gap = multi_stage_result.get("gap_analysis")
+            existing_gap_state = result_payload.get("gap_analysis_state") or {}
             if existing_gap and not gap_request.force_refresh:
-                logger.info(f"[GAP_STREAM] Returning cached gap analysis for case {case_id}")
-                yield f"data: {json.dumps({'type': 'phase', 'phase': 'cached', 'message': 'Using cached analysis', 'elapsed': time.time() - start_time})}\n\n"
-                yield f"data: {json.dumps({'type': 'result', 'data': existing_gap})}\n\n"
-                return
+                if existing_gap_state.get("input_hash") == gap_input_hash:
+                    logger.info(f"[GAP_STREAM] Returning cached gap analysis for case {case_id}")
+                    yield f"data: {json.dumps({'type': 'phase', 'phase': 'cached', 'message': 'Using cached analysis', 'elapsed': time.time() - start_time})}\n\n"
+                    yield f"data: {json.dumps({'type': 'result', 'data': existing_gap})}\n\n"
+                    return
+                logger.info(
+                    "[GAP_STREAM] Cached gap analysis invalidated for case %s (state mismatch)",
+                    case_id,
+                )
 
             yield f"data: {json.dumps({'type': 'phase', 'phase': 'preparing', 'message': 'Converting documents...', 'elapsed': time.time() - start_time})}\n\n"
 
@@ -3777,6 +3961,7 @@ async def analyze_gaps_streaming(
                 deep_analysis=deep_analysis,
                 document_summaries=doc_summaries_list,
                 intake_content=intake_content,
+                signature_evidence=signature_evidence,
             )
 
             logger.info(f"[GAP_STREAM] Gap analysis complete: {gap_result.total_gaps} gaps found")
@@ -3788,6 +3973,17 @@ async def analyze_gaps_streaming(
             gap_dict = gap_result.model_dump(mode="json")
             multi_stage_result["gap_analysis"] = gap_dict
             result_payload["multi_stage_result"] = multi_stage_result
+            result_payload["gap_analysis_state"] = {
+                "input_hash": gap_input_hash,
+                "case_document_state_hash": case_document_state_hash,
+                "signature_record_count": len(signature_evidence),
+                "signed_document_count": sum(
+                    1
+                    for row in signature_evidence
+                    if (row.get("status") or "").lower() == "signed"
+                ),
+                "updated_at": datetime.utcnow().isoformat(),
+            }
 
             service_supabase.table("analysis_results").update({
                 "result": result_payload,

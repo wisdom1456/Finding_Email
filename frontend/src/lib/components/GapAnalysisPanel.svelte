@@ -248,6 +248,21 @@
 					: gapAnalysis.overall_completeness_score >= 40
 						? 'text-orange-600'
 						: 'text-red-600';
+
+	const signatureReconciliationPattern = /Execution metadata confirms signed documents[^.]*\./i;
+	$: fallbackReconciliationNote = (() => {
+		const summary = (gapAnalysis.attorney_summary || '').trim();
+		if (!summary) return '';
+		const match = summary.match(signatureReconciliationPattern);
+		return match?.[0] || '';
+	})();
+	$: reconciliationNotes = (() => {
+		const notes = Array.isArray(gapAnalysis.reconciliation_notes)
+			? gapAnalysis.reconciliation_notes.filter((note) => !!note?.trim())
+			: [];
+		if (notes.length > 0) return notes;
+		return fallbackReconciliationNote ? [fallbackReconciliationNote] : [];
+	})();
 </script>
 
 <div class="space-y-6">
@@ -305,6 +320,17 @@
 				<p class="text-sm font-semibold text-blue-900 mb-2">Attorney Summary</p>
 				<p class="text-sm text-blue-800">{gapAnalysis.attorney_summary}</p>
 			</div>
+
+			{#if reconciliationNotes.length > 0}
+				<div class="rounded-lg bg-emerald-50 border border-emerald-200 p-4">
+					<p class="text-sm font-semibold text-emerald-900 mb-2">Gap Reconciliation Notes</p>
+					<ul class="space-y-1">
+						{#each reconciliationNotes as note}
+							<li class="text-sm text-emerald-800">• {note}</li>
+						{/each}
+					</ul>
+				</div>
+			{/if}
 
 				<!-- Filters -->
 				<div class="space-y-4">

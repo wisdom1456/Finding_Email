@@ -158,6 +158,38 @@
 		const i = Math.floor(Math.log(bytes) / Math.log(k));
 		return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
 	}
+
+	function getSignatureStatus(): 'signed' | 'not_detected' | 'other' | 'none' {
+		const signatureDetection = doc?.metadata?.signature_detection;
+		if (!signatureDetection || typeof signatureDetection !== 'object') return 'none';
+		const status = String(signatureDetection.status || '').toLowerCase();
+		if (status === 'signed') return 'signed';
+		if (status === 'not_detected') return 'not_detected';
+		return 'other';
+	}
+
+	function getSignatureLabel(): string {
+		const signatureDetection = doc?.metadata?.signature_detection;
+		if (!signatureDetection) return '';
+		const status = getSignatureStatus();
+		const confidence = signatureDetection?.confidence
+			? ` (${String(signatureDetection.confidence).toUpperCase()})`
+			: '';
+		if (status === 'signed') return `Signed${confidence}`;
+		if (status === 'not_detected') return `No signature detected${confidence}`;
+		return `Signature: ${String(signatureDetection.status || 'unknown')}${confidence}`;
+	}
+
+	function getSignatureClasses(): string {
+		const status = getSignatureStatus();
+		if (status === 'signed') {
+			return 'bg-emerald-100 text-emerald-800 border-emerald-300';
+		}
+		if (status === 'not_detected') {
+			return 'bg-amber-100 text-amber-800 border-amber-300';
+		}
+		return 'bg-gray-100 text-gray-700 border-gray-300';
+	}
 </script>
 
 <div 
@@ -189,6 +221,15 @@
 							<Badge variant={doc.extraction_quality === 'high' ? 'ready' : doc.extraction_quality === 'medium' ? 'needs_review' : 'error'} size="xs">
 								{doc.extraction_quality} Quality
 							</Badge>
+						{/if}
+						{#if getSignatureStatus() !== 'none'}
+							<span class="text-xs text-gray-400">•</span>
+							<span
+								class={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold uppercase border ${getSignatureClasses()}`}
+								title={getSignatureLabel()}
+							>
+								{getSignatureLabel()}
+							</span>
 						{/if}
 					</div>
 				</div>
@@ -377,4 +418,3 @@
 		</div>
 	</div>
 </div>
-

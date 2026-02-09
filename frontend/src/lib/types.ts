@@ -124,6 +124,7 @@ export interface GapAnalysisResult {
 	gaps_by_category: Record<GapCategory, GapItem[]>;
 	overall_completeness_score: number;
 	attorney_summary: string;
+	reconciliation_notes?: string[];
 	recommendation?: CaseRecommendation;
 }
 

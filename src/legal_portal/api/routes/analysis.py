@@ -129,6 +129,152 @@ async def _get_user_ai_preferences(user_id: str, supabase) -> Optional[Dict[str,
     return None
 
 
+_SIGNATURE_TEXT_FALLBACK_PATTERNS = [
+    (
+        "Counterpart signature page",
+        re.compile(r"\bcounterpart\s+signature\s+page\b", re.IGNORECASE),
+        True,
+    ),
+    (
+        "Signed by marker",
+        re.compile(r"\bsigned\s+by\b", re.IGNORECASE),
+        True,
+    ),
+    (
+        "Electronic signature marker",
+        re.compile(r"\belectronically\s+signed\b", re.IGNORECASE),
+        True,
+    ),
+    (
+        "DocuSign envelope marker",
+        re.compile(r"\bdocusign\s+envelope\s+id\b", re.IGNORECASE),
+        True,
+    ),
+    (
+        "Signature date marker",
+        re.compile(r"\b(?:date\s+signed|signed\s+on|signature\s+date|executed\s+on)\b", re.IGNORECASE),
+        True,
+    ),
+    (
+        "Signature label",
+        re.compile(r"\bsignature\s*[:_]", re.IGNORECASE),
+        False,
+    ),
+]
+
+_TEXT_SIGNING_DATE_PATTERNS = [
+    re.compile(
+        r"(?im)\b(?:date\s+signed|signed\s+on|signature\s+date|executed\s+on|completed)\s*[:\-]?\s*"
+        r"(?P<date>[A-Za-z]{3,9}\s+\d{1,2},\s+\d{4}|"
+        r"\d{1,2}/\d{1,2}/\d{2,4}(?:\s+\d{1,2}:\d{2}(?::\d{2})?\s*(?:AM|PM)?)?|"
+        r"\d{4}-\d{2}-\d{2}(?:[T ]\d{2}:\d{2}(?::\d{2})?)?)"
+    ),
+]
+
+_SIGNER_NAME_PATTERNS = [
+    re.compile(r"(?im)^\s*signed\s+by\s*[:\-]\s*([A-Z][A-Za-z ,.'-]{2,80})\s*$"),
+    re.compile(r"(?im)^\s*signature\s*[:\-]\s*([A-Z][A-Za-z ,.'-]{2,80})\s*$"),
+    re.compile(r"(?im)^\s*/s/\s*([A-Z][A-Za-z ,.'-]{2,80})\s*$"),
+]
+
+
+def _normalize_text_signing_date(raw_date: Optional[str]) -> Optional[str]:
+    """Normalize common textual signing date formats to ISO-like strings."""
+    if not raw_date:
+        return None
+
+    cleaned = raw_date.strip()
+    for fmt in (
+        "%Y-%m-%d",
+        "%Y-%m-%d %H:%M",
+        "%Y-%m-%d %H:%M:%S",
+        "%m/%d/%Y",
+        "%m/%d/%y",
+        "%m/%d/%Y %I:%M %p",
+        "%m/%d/%Y %I:%M:%S %p",
+        "%b %d, %Y",
+        "%B %d, %Y",
+    ):
+        try:
+            parsed = datetime.strptime(cleaned, fmt)
+            if " " in fmt:
+                return parsed.strftime("%Y-%m-%dT%H:%M:%S")
+            return parsed.strftime("%Y-%m-%d")
+        except ValueError:
+            continue
+
+    return cleaned
+
+
+def _infer_signature_detection_from_text(extracted_text: Optional[str]) -> Optional[Dict[str, Any]]:
+    """Infer likely signature presence for legacy PDFs lacking signature metadata."""
+    text = (extracted_text or "").strip()
+    if not text:
+        return None
+
+    indicators: List[str] = []
+    strong_hits = 0
+    weak_hits = 0
+
+    for label, pattern, is_strong in _SIGNATURE_TEXT_FALLBACK_PATTERNS:
+        if pattern.search(text):
+            indicators.append(label)
+            if is_strong:
+                strong_hits += 1
+            else:
+                weak_hits += 1
+
+    # Avoid false positives from a single blank "Signature:" label.
+    if strong_hits == 0 and weak_hits < 2:
+        return None
+
+    raw_signing_date = None
+    for pattern in _TEXT_SIGNING_DATE_PATTERNS:
+        match = pattern.search(text)
+        if match:
+            raw_signing_date = (match.group("date") or "").strip()
+            break
+
+    signer_names: List[str] = []
+    seen_signer_keys = set()
+    for pattern in _SIGNER_NAME_PATTERNS:
+        for match in pattern.findall(text):
+            candidate = re.sub(r"\s+", " ", match).strip()
+            if not candidate:
+                continue
+            key = candidate.lower()
+            if key in seen_signer_keys:
+                continue
+            seen_signer_keys.add(key)
+            signer_names.append(candidate)
+            if len(signer_names) >= 5:
+                break
+        if len(signer_names) >= 5:
+            break
+
+    confidence = "high" if strong_hits >= 2 else "medium" if strong_hits == 1 else "low"
+
+    return {
+        "status": "signed",
+        "confidence": confidence,
+        "has_digital_signature": False,
+        "has_signature_markers": True,
+        "signature_marker_count": len(indicators),
+        "signing_date": _normalize_text_signing_date(raw_signing_date),
+        "signing_date_raw": raw_signing_date,
+        "signer_names": signer_names,
+        "indicators": indicators[:10],
+        "detection_source": "analysis_text_fallback",
+    }
+
+
+def _is_pdf_like_document(file_name: Optional[str], file_type: Optional[str]) -> bool:
+    """Return True when a document is likely a PDF."""
+    ft = (file_type or "").lower()
+    name = (file_name or "").lower()
+    return ft in {"application/pdf", "pdf"} or name.endswith(".pdf")
+
+
 # Optional WeasyPrint import for PDF generation
 try:
     from weasyprint import HTML
@@ -806,12 +952,26 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
                 file_size=doc.get("file_size", 0),
             )
 
+            doc_metadata = doc.get("metadata", {}) or {}
+            signature_detection = doc_metadata.get("signature_detection")
+            if not signature_detection and _is_pdf_like_document(
+                doc.get("file_name"), doc.get("file_type")
+            ):
+                signature_detection = _infer_signature_detection_from_text(text)
+                if signature_detection:
+                    logger.info(
+                        "Inferred legacy PDF signature markers for %s (doc_id=%s, confidence=%s)",
+                        doc_name,
+                        doc.get("id"),
+                        signature_detection.get("confidence"),
+                    )
+
             pdoc = ProcessedDocument(
                 file_name=doc["file_name"],
                 content=text,
                 document_type=(
                     DocumentType.INTAKE_FORM
-                    if doc.get("metadata", {}).get("is_intake_form")
+                    if doc_metadata.get("is_intake_form")
                     else DocumentType.CASE_DOCUMENT
                 ),
                 file_type=FileType.PDF,
@@ -821,7 +981,7 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
                 page_count=doc.get("page_count"),
                 ocr_provider=doc.get("ocr_provider"),
                 document_id=doc["id"],
-                signature_detection=doc.get("metadata", {}).get("signature_detection"),
+                signature_detection=signature_detection,
             )
 
             if pdoc.document_type == DocumentType.INTAKE_FORM:
@@ -3119,7 +3279,7 @@ def _collect_resolution_documents(
     try:
         docs_resp = (
             supabase.table("documents")
-            .select("id, file_name, extracted_text, manual_text, metadata")
+            .select("id, file_name, file_type, extracted_text, manual_text, metadata")
             .eq("case_id", case_id)
             .in_("id", attached_document_ids)
             .execute()
@@ -3136,6 +3296,8 @@ def _collect_resolution_documents(
             text = text[:1200] + "\n... [excerpt omitted] ...\n" + text[-800:]
 
         sig = (doc.get("metadata") or {}).get("signature_detection")
+        if not sig and _is_pdf_like_document(doc.get("file_name"), doc.get("file_type")):
+            sig = _infer_signature_detection_from_text(text)
         condensed_docs.append(
             {
                 "id": doc.get("id"),

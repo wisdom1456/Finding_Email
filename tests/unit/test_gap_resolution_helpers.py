@@ -7,6 +7,7 @@ from legal_portal.api.routes.analysis import (
     GapResolutionRefreshRequest,
     _build_gap_resolution_hash,
     _build_resolution_context,
+    _infer_signature_detection_from_text,
 )
 
 
@@ -102,3 +103,30 @@ def test_resolution_context_includes_prior_gap_and_resolution_text():
     assert "DocuSign envelope ID" in context or "DocuSign Envelope ID" in context
     assert "ATTACHED SUPPORTING DOCUMENT EXCERPTS" in context
     assert "signature_detection" in context
+
+
+def test_infer_signature_detection_from_text_detects_signed_markers():
+    """Legacy extracted text with strong markers should be treated as signed."""
+    text = """
+    Subscription Agreement
+    Counterpart Signature Page
+    Signed by: Erica Corley
+    Date Signed: 01/13/2026
+    DocuSign Envelope ID: ABC-123
+    """
+
+    result = _infer_signature_detection_from_text(text)
+
+    assert result is not None
+    assert result["status"] == "signed"
+    assert result["has_signature_markers"] is True
+    assert result["signature_marker_count"] >= 3
+    assert result["signing_date"] == "2026-01-13"
+    assert "DocuSign envelope marker" in result["indicators"]
+
+
+def test_infer_signature_detection_from_text_ignores_single_blank_signature_label():
+    """A lone placeholder signature field should not imply an executed document."""
+    text = "Borrower Signature: ____________________"
+    result = _infer_signature_detection_from_text(text)
+    assert result is None

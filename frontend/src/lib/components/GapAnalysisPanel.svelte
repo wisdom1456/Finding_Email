@@ -470,19 +470,10 @@
 				{@const isCopied = copiedGaps.has(gap.gap_id)}
 
 				<div
-					class="card-standard cursor-pointer hover:shadow-md transition-shadow {
+					class="card-standard hover:shadow-md transition-shadow {
 						gap.severity === 'critical' ? 'border-l-4 border-l-red-500' :
 						gap.severity === 'high' ? 'border-l-4 border-l-orange-500' : ''
 					}"
-					role="button"
-					tabindex="0"
-					onclick={() => toggleGap(gap.gap_id)}
-					onkeydown={(e) => {
-						if (e.key === 'Enter' || e.key === ' ') {
-							e.preventDefault();
-							toggleGap(gap.gap_id);
-						}
-					}}
 				>
 					<div class="flex items-start justify-between gap-4">
 						<div class="flex-1">
@@ -503,20 +494,31 @@
 							</div>
 							<h3 class="text-lg font-semibold text-contrast mb-2 flex items-center gap-2">
 								{gap.title}
-								<svelte:component this={ChevronDown} class="h-4 w-4 text-gray-400 transition-transform {isExpanded ? 'rotate-180' : ''}" />
 							</h3>
 						</div>
-						<button
-							class="p-2 text-gray-400 hover:text-gray-600 transition-colors rounded"
-							onclick={(e) => copyGap(gap, e)}
-							title="Copy gap details"
-						>
-							{#if isCopied}
-								<svelte:component this={Check} class="h-5 w-5 text-green-500" />
-							{:else}
-								<svelte:component this={Copy} class="h-5 w-5" />
-							{/if}
-						</button>
+						<div class="flex items-center gap-1">
+							<button
+								type="button"
+								class="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors rounded"
+								onclick={() => toggleGap(gap.gap_id)}
+								aria-expanded={isExpanded}
+								aria-label={`Toggle gap details: ${gap.title}`}
+								title={isExpanded ? 'Collapse details' : 'Expand details'}
+							>
+								<svelte:component this={ChevronDown} class="h-4 w-4 transition-transform {isExpanded ? 'rotate-180' : ''}" />
+							</button>
+							<button
+								class="p-2 text-gray-400 hover:text-gray-600 transition-colors rounded"
+								onclick={(e) => copyGap(gap, e)}
+								title="Copy gap details"
+							>
+								{#if isCopied}
+									<svelte:component this={Check} class="h-5 w-5 text-green-500" />
+								{:else}
+									<svelte:component this={Copy} class="h-5 w-5" />
+								{/if}
+							</button>
+						</div>
 					</div>
 
 					{#if isExpanded}
@@ -575,6 +577,7 @@
 										placeholder="Type or paste facts for this gap, and cite supporting documents..."
 										value={gapResolutionDrafts[gap.gap_id] || ''}
 										onclick={(e) => e.stopPropagation()}
+										onkeydown={(e) => e.stopPropagation()}
 										oninput={(e) => updateResolutionDraft(gap.gap_id, (e.currentTarget as HTMLTextAreaElement).value)}
 									></textarea>
 

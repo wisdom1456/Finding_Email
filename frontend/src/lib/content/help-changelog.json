@@ -1,0 +1,56 @@
+{
+	"helpLastReviewed": "February 11, 2026",
+	"entries": [
+		{
+			"checkInDate": "2026-02-11",
+			"title": "Gap Resolution Workflow + Signature Reconciliation Hardening",
+			"summary": "Gap resolution now supports targeted refreshes and improved signed-document reconciliation, including opaque/UUID filenames.",
+			"highlights": [
+				"Per-gap resolution text is entered inside each expanded gap card, with optional related-document references.",
+				"Selective gap refresh now validates cache state against case document changes to reduce stale gap results.",
+				"Signed document reconciliation now uses document content hints (not only filenames), reducing false \"missing executed agreement\" flags.",
+				"Signature evidence and reconciliation notes are surfaced directly in gap analysis results."
+			]
+		},
+		{
+			"checkInDate": "2026-02-11",
+			"title": "Case Page Results Workspace Persistence",
+			"summary": "The results workspace is retained while moving between case tabs to reduce context loss and improve responsiveness.",
+			"highlights": [
+				"Results stay mounted in the background when switching away from Analysis and back.",
+				"Re-entry to Analysis is faster and does not require re-opening the workspace.",
+				"Analysis view state is synchronized to URL parameters for clearer navigation continuity."
+			]
+		},
+		{
+			"checkInDate": "2026-02-10",
+			"title": "Unified Case + Results Navigation",
+			"summary": "Case analysis and results workflows are now more tightly integrated from the case page.",
+			"highlights": [
+				"Results workspace is available inline within the case experience.",
+				"Users can move from analysis controls into results without leaving case context.",
+				"Reduced workflow choppiness between document management and analysis outputs."
+			]
+		},
+		{
+			"checkInDate": "2026-02-04",
+			"title": "Clio Sync Enhancements",
+			"summary": "Clio integration reliability and scale were expanded to support heavier real-world matters.",
+			"highlights": [
+				"Two-way sync improvements with stronger change detection and re-analysis signaling.",
+				"Pagination limits removed for full-matter imports.",
+				"Sync feedback and error handling expanded for operational clarity."
+			]
+		},
+		{
+			"checkInDate": "2026-02-03",
+			"title": "Document Processing and Vision Pipeline Improvements",
+			"summary": "Document extraction now handles mixed-quality inputs more consistently, with better fallback behavior.",
+			"highlights": [
+				"Expanded OCR/Vision fallback logic for low-quality and image-heavy documents.",
+				"Improved extraction status visibility and retry workflows in verification tooling.",
+				"Stronger handling of extraction failures so analysis can proceed with clear warnings."
+			]
+		}
+	]
+}

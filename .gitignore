@@ -14,6 +14,7 @@ config/secrets/
 !frontend/package-lock.json
 !tsconfig.json
 !frontend/tsconfig.json
+!frontend/src/lib/content/help-changelog.json
 brflorida-*.json
 *-credentials.json
 brflorida-2800217d04c3.json

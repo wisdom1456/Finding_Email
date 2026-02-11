@@ -4,6 +4,7 @@
 	import PageHeader from '$lib/components/ui/PageHeader.svelte';
 	import Tabs from '$lib/components/ui/Tabs.svelte';
 	import AccordionItem from '$lib/components/ui/AccordionItem.svelte';
+	import helpChangelog from '$lib/content/help-changelog.json';
 	import {
 		BookOpen,
 		FolderOpen,
@@ -16,22 +17,10 @@
 		Sparkles,
 		Mail,
 		HelpCircle,
-		CheckCircle,
-		Clock,
-		AlertCircle,
-		RefreshCw,
 		Scale,
 		ChevronRight,
 		Library,
-		Zap,
-		Infinity,
-		Eye,
 		Brain,
-		FileImage,
-		Shield,
-		TrendingUp,
-		Settings,
-		FileWarning
 	} from 'lucide-svelte';
 
 	const tabs = [
@@ -42,6 +31,21 @@
 	];
 
 	let activeTab = $state('getting-started');
+
+	type ChangelogEntry = {
+		checkInDate: string;
+		title: string;
+		summary: string;
+		highlights: string[];
+	};
+	type HelpChangelogSource = {
+		helpLastReviewed: string;
+		entries: ChangelogEntry[];
+	};
+
+	const changelogSource = helpChangelog as HelpChangelogSource;
+	const helpLastReviewed = changelogSource.helpLastReviewed;
+	const changelogEntries: ChangelogEntry[] = changelogSource.entries;
 
 	// Support URL hash for deep linking
 	onMount(() => {
@@ -422,6 +426,14 @@
 									GPT-5.2 for professional findings email generation.
 								</p>
 							</div>
+							<div class="detail-item">
+								<h4 class="detail-title">Unified Results Workspace</h4>
+								<p class="detail-text">
+									Analysis results are available inline from the case page, and the workspace remains mounted
+									when switching tabs. This reduces reload friction when moving between Documents, Verification,
+									and Analysis during active case work.
+								</p>
+							</div>
 						</div>
 					</section>
 
@@ -440,26 +452,32 @@
 							<div class="detail-item">
 								<h4 class="detail-title">Comprehensive Case Assessment</h4>
 								<p class="detail-text">
-									Gap Analysis is a new feature that systematically reviews your case to identify missing
-									information, evidence gaps, and potential weaknesses. It provides a thorough assessment
-									of what additional documentation or evidence would strengthen your case.
+									Gap Analysis reviews your case for missing documents, contradictions, timeline gaps,
+									unverifiable claims, hallucination risk, and incomplete information. It scores case
+									completeness and prioritizes risk by severity.
 								</p>
 							</div>
 							<div class="detail-item">
-								<h4 class="detail-title">Attorney Summary</h4>
+								<h4 class="detail-title">Targeted Gap Resolution (No Full Re-Run Required)</h4>
 								<p class="detail-text">
-									Each gap analysis includes a concise executive summary written specifically for legal
-									professionals. The summary highlights critical gaps, prioritizes missing information,
-									and provides actionable recommendations. Analysis is generated in real-time with
-									streaming display so you can watch the assessment as it's created.
+									You can resolve gaps directly on each gap card by adding resolution notes and related
+									document references, then refresh only the gap stage. This avoids unnecessary full case
+									re-analysis when new context is limited to specific gaps.
 								</p>
 							</div>
 							<div class="detail-item">
-								<h4 class="detail-title">Integration with Letters</h4>
+								<h4 class="detail-title">Signature-Aware Reconciliation</h4>
 								<p class="detail-text">
-									Gap analysis results automatically inform recommendation letters and findings emails.
-									This integration helps prevent AI hallucinations by ensuring that generated letters
-									acknowledge identified weaknesses and only make claims supported by available evidence.
+									Signed-document metadata is used to suppress false "missing executed agreement"
+									gaps where evidence confirms execution. This includes improved matching for
+									non-descriptive filenames (for example, UUID-style PDF filenames).
+								</p>
+							</div>
+							<div class="detail-item">
+								<h4 class="detail-title">Attorney Summary + Letter Guardrails</h4>
+								<p class="detail-text">
+									Gap analysis results feed recommendation and findings generation so draft outputs stay
+									aligned with evidentiary support and flagged weaknesses.
 								</p>
 							</div>
 						</div>
@@ -575,331 +593,35 @@
 								<Sparkles class="h-7 w-7" />
 							</div>
 							<div class="flex-1">
-								<h2 class="feature-heading">Recent Updates & Improvements</h2>
+								<h2 class="feature-heading">Product Changelog</h2>
 								<p class="feature-description">
-									See what's been added, improved, and fixed since the Document Viewer tabbed interface update (January 23, 2025).
+									Recent check-ins are listed below in reverse chronological order, focused on major feature and workflow changes.
 								</p>
 							</div>
 						</div>
 					</section>
 
-					<!-- Major New Features -->
 					<section class="whats-new-section">
-						<h3 class="section-heading">🎯 Major New Features</h3>
-
-						<!-- Document Classification -->
-						<div class="update-card feature-update">
-							<div class="update-icon classification">
-								<FileImage class="h-5 w-5" />
-							</div>
-							<div class="update-content">
-								<h4 class="update-title">Smart Document Classification & Extraction Controls</h4>
-								<p class="update-description">
-									New classification system automatically determines whether documents are images or text, enabling efficient extraction workflows.
-								</p>
-								<ul class="update-list">
-									<li><strong>Automatic Classification:</strong> Documents classified as IMAGE (photos, visual evidence) or TEXT (text documents) at upload</li>
-									<li><strong>Efficient Processing:</strong> IMAGE documents skip wasteful OCR and go straight to Vision AI analysis</li>
-									<li><strong>Classification Badges:</strong> Click any badge on document lists to toggle between IMAGE and TEXT classification</li>
-									<li><strong>Extraction Method Controls:</strong> Force specific extraction methods with "Extract as Text" (OCR) or "Extract as Image" (Vision AI) buttons</li>
-									<li><strong>Improved Accuracy:</strong> Fixed case-sensitivity bug in OCR rejection detection for better error handling</li>
-								</ul>
-							</div>
+						<div class="release-meta">
+							<p class="release-meta-text"><strong>Last reviewed:</strong> {helpLastReviewed}</p>
+							<p class="release-meta-text">Entries are grouped by check-in date (newest first).</p>
 						</div>
 
-						<!-- Clio Integration -->
-						<div class="update-card feature-update">
-							<div class="update-icon clio">
-								<Link2 class="h-5 w-5" />
-							</div>
-							<div class="update-content">
-								<h4 class="update-title">Clio Integration & Two-Way Sync</h4>
-								<p class="update-description">
-									Seamlessly sync documents between Clio and the portal with automatic two-way synchronization.
-								</p>
-								<ul class="update-list">
-									<li><strong>Automatic Synchronization:</strong> New documents from Clio are imported, analyzed, and results are sent back automatically</li>
-									<li><strong>Sync Status Tracking:</strong> See which documents are up-to-date and which need re-analysis when changes occur</li>
-									<li><strong>One-Click Sync Button:</strong> Manually trigger syncs from the documents page to pull in the latest changes</li>
-									<li><strong>Smart Change Detection:</strong> Tracks when Clio documents are modified and flags cases for re-analysis</li>
-									<li><strong>Unlimited Imports:</strong> Removed all pagination limits—import complete Clio matters with every document, no matter how many files</li>
-								</ul>
-							</div>
-						</div>
-
-						<!-- Gap Analysis -->
-						<div class="update-card feature-update">
-							<div class="update-icon analysis">
-								<Brain class="h-5 w-5" />
-							</div>
-							<div class="update-content">
-								<h4 class="update-title">Gap Analysis</h4>
-								<p class="update-description">
-									New comprehensive case assessment that identifies missing information, evidence gaps, and weak points.
-								</p>
-								<ul class="update-list">
-									<li><strong>Case Assessment:</strong> Identifies missing information, evidence gaps, and weaknesses in your case</li>
-									<li><strong>Attorney Summary:</strong> Get a concise executive summary written specifically for legal professionals</li>
-									<li><strong>Real-time Streaming:</strong> Watch the analysis being generated live with streaming text display</li>
-									<li><strong>Letter Integration:</strong> Gap analysis results automatically inform recommendation letters to prevent hallucinations</li>
-								</ul>
-							</div>
-						</div>
-
-						<!-- Vision AI -->
-						<div class="update-card feature-update">
-							<div class="update-icon vision">
-								<Eye class="h-5 w-5" />
-							</div>
-							<div class="update-content">
-								<h4 class="update-title">Vision AI for Photos & Scanned Documents</h4>
-								<p class="update-description">
-									Advanced vision AI automatically analyzes photographs, diagrams, and poor-quality scans.
-								</p>
-								<ul class="update-list">
-									<li><strong>Automatic Detection:</strong> System recognizes when documents are photos or low-quality scans</li>
-									<li><strong>Intelligent Analysis:</strong> Uses GPT-4o Vision to analyze visual content that traditional OCR can't handle</li>
-									<li><strong>Contextual Understanding:</strong> Vision AI considers your case context when analyzing visual documents</li>
-									<li><strong>Quality Detection:</strong> Automatically switches to vision analysis when OCR quality is too low</li>
-								</ul>
-							</div>
-						</div>
-
-						<!-- Email Support -->
-						<div class="update-card feature-update">
-							<div class="update-icon email">
-								<Mail class="h-5 w-5" />
-							</div>
-							<div class="update-content">
-								<h4 class="update-title">Email File Support (.eml)</h4>
-								<p class="update-description">
-									Direct support for email files with proper HTML handling.
-								</p>
-								<ul class="update-list">
-									<li><strong>Direct .eml Processing:</strong> Upload email files directly without conversion</li>
-									<li><strong>HTML Email Handling:</strong> Properly processes emails that only contain HTML content</li>
-								</ul>
-							</div>
-						</div>
-
-						<!-- Recommendation System -->
-						<div class="update-card feature-update">
-							<div class="update-icon recommendation">
-								<FileText class="h-5 w-5" />
-							</div>
-							<div class="update-content">
-								<h4 class="update-title">Case Recommendation System</h4>
-								<p class="update-description">
-									Generate professional advisory letters with hallucination prevention.
-								</p>
-								<ul class="update-list">
-									<li><strong>Advisory Letters:</strong> Generate professional recommendation letters based on case analysis</li>
-									<li><strong>Hallucination Prevention:</strong> Letters are validated against actual case findings for accuracy</li>
-									<li><strong>Gap Analysis Integration:</strong> Recommendations informed by identified case gaps</li>
-								</ul>
-							</div>
-						</div>
-					</section>
-
-					<!-- User Interface Improvements -->
-					<section class="whats-new-section">
-						<h3 class="section-heading">🎨 User Interface Improvements</h3>
-
-						<div class="updates-grid">
-							<div class="update-card minor-update">
-								<div class="update-icon-small ui">
-									<TrendingUp class="h-4 w-4" />
-								</div>
-								<div>
-									<h5 class="update-title-small">Magazine-Style Full Analysis</h5>
-									<p class="update-description-small">
-										Full Analysis tab redesigned with modern editorial layout, refined typography (Playfair Display + IBM Plex Sans), and enhanced readability.
-									</p>
-								</div>
-							</div>
-
-							<div class="update-card minor-update">
-								<div class="update-icon-small ui">
-									<FileText class="h-4 w-4" />
-								</div>
-								<div>
-									<h5 class="update-title-small">Multi-line Chat Support</h5>
-									<p class="update-description-small">
-										Case chat assistant now supports multi-line text input for more natural conversations.
-									</p>
-								</div>
-							</div>
-
-							<div class="update-card minor-update">
-								<div class="update-icon-small ui">
-									<AlertCircle class="h-4 w-4" />
-								</div>
-								<div>
-									<h5 class="update-title-small">Outdated Analysis Banner</h5>
-									<p class="update-description-small">
-										Clear warnings when analysis needs to be refreshed due to document changes.
-									</p>
-								</div>
-							</div>
-
-							<div class="update-card minor-update">
-								<div class="update-icon-small ui">
-									<CheckCircle class="h-4 w-4" />
-								</div>
-								<div>
-									<h5 class="update-title-small">Primary Intake Selection</h5>
-									<p class="update-description-small">
-										Choose which document serves as the main case summary for analysis.
-									</p>
-								</div>
-							</div>
-
-							<div class="update-card minor-update">
-								<div class="update-icon-small ui">
-									<HelpCircle class="h-4 w-4" />
-								</div>
-								<div>
-									<h5 class="update-title-small">Modernized Help Page</h5>
-									<p class="update-description-small">
-										Completely redesigned help section with current features and clearer instructions.
-									</p>
-								</div>
-							</div>
-
-							<div class="update-card minor-update">
-								<div class="update-icon-small ui">
-									<Sparkles class="h-4 w-4" />
-								</div>
-								<div>
-									<h5 class="update-title-small">Enhanced Components</h5>
-									<p class="update-description-small">
-										Consistent, polished design across all pages with improved accessibility.
-									</p>
-								</div>
-							</div>
-						</div>
-					</section>
-
-					<!-- Performance & Reliability -->
-					<section class="whats-new-section">
-						<h3 class="section-heading">🔧 Performance & Reliability</h3>
-
-						<div class="update-card fix-update">
-							<div class="update-icon fix">
-								<FileWarning class="h-5 w-5" />
-							</div>
-							<div class="update-content">
-								<h4 class="update-title">Document Processing Improvements</h4>
-								<ul class="update-list compact">
-									<li><strong>File Size Limits:</strong> Automatic handling of large files (up to 50MB) to prevent timeouts</li>
-									<li><strong>Improved Error Handling:</strong> Better recovery from document extraction failures with 500 error handling</li>
-									<li><strong>Extraction Status Updates:</strong> UI now updates immediately when document extraction completes</li>
-									<li><strong>Skip Protection:</strong> Can process cases even if some documents have no extractable text</li>
-									<li><strong>Low-Quality Detection:</strong> Automatically detects poor OCR results and switches to vision analysis</li>
-								</ul>
-							</div>
-						</div>
-
-						<div class="update-card fix-update">
-							<div class="update-icon fix">
-								<Settings class="h-5 w-5" />
-							</div>
-							<div class="update-content">
-								<h4 class="update-title">System Stability Fixes</h4>
-								<ul class="update-list compact">
-									<li><strong>Race Condition Fixes:</strong> Resolved timing issues causing intermittent analysis failures</li>
-									<li><strong>Timeout Adjustments:</strong> Increased timeouts for complex analyses to prevent premature failures</li>
-									<li><strong>Async Processing:</strong> Fixed critical issues in background processing that could cause data loss</li>
-									<li><strong>Model Selection:</strong> Switched gap analysis to GPT-4.1 for more reliable, consistent results</li>
-								</ul>
-							</div>
-						</div>
-
-						<div class="update-card fix-update">
-							<div class="update-icon fix">
-								<Link2 class="h-5 w-5" />
-							</div>
-							<div class="update-content">
-								<h4 class="update-title">Clio Integration Reliability</h4>
-								<ul class="update-list compact">
-									<li><strong>Unlimited Pagination:</strong> Removed artificial limits—import any number of documents</li>
-									<li><strong>Timezone Handling:</strong> Fixed date/time comparison issues across time zones</li>
-									<li><strong>Upload Error Handling:</strong> Better recovery when uploading results back to Clio fails</li>
-									<li><strong>Comprehensive Testing:</strong> Added extensive automated tests for Clio integration</li>
-								</ul>
-							</div>
-						</div>
-					</section>
-
-					<!-- Technical Quality -->
-					<section class="whats-new-section">
-						<h3 class="section-heading">📝 Technical Quality</h3>
-						<div class="quality-grid">
-							<div class="quality-item">
-								<CheckCircle class="h-5 w-5 text-green-600" />
-								<div>
-									<p class="quality-title">Code Quality</p>
-									<p class="quality-text">Automatic linting and style improvements throughout codebase</p>
-								</div>
-							</div>
-							<div class="quality-item">
-								<CheckCircle class="h-5 w-5 text-green-600" />
-								<div>
-									<p class="quality-title">Test Coverage</p>
-									<p class="quality-text">Comprehensive unit and integration tests for critical features</p>
-								</div>
-							</div>
-							<div class="quality-item">
-								<CheckCircle class="h-5 w-5 text-green-600" />
-								<div>
-									<p class="quality-title">Documentation</p>
-									<p class="quality-text">Detailed implementation plans and design documents</p>
-								</div>
-							</div>
-							<div class="quality-item">
-								<CheckCircle class="h-5 w-5 text-green-600" />
-								<div>
-									<p class="quality-title">Deployment</p>
-									<p class="quality-text">Systematic testing procedures before production releases</p>
-								</div>
-							</div>
-						</div>
-					</section>
-
-					<!-- Summary -->
-					<section class="summary-card">
-						<h3 class="summary-title">Release Summary</h3>
-						<p class="summary-description">
-							This release focuses on three key areas:
-						</p>
-						<div class="summary-grid">
-							<div class="summary-item">
-								<div class="summary-icon clio">
-									<Link2 class="h-5 w-5" />
-								</div>
-								<div>
-									<h4 class="summary-item-title">Deeper Clio Integration</h4>
-									<p class="summary-item-text">Seamless two-way sync with automatic updates and unlimited document imports</p>
-								</div>
-							</div>
-							<div class="summary-item">
-								<div class="summary-icon analysis">
-									<Brain class="h-5 w-5" />
-								</div>
-								<div>
-									<h4 class="summary-item-title">Smarter Document Analysis</h4>
-									<p class="summary-item-text">Vision AI for photos, gap analysis for case assessment, better error handling</p>
-								</div>
-							</div>
-							<div class="summary-item">
-								<div class="summary-icon ui">
-									<Sparkles class="h-5 w-5" />
-								</div>
-								<div>
-									<h4 class="summary-item-title">Better User Experience</h4>
-									<p class="summary-item-text">Modern interface, clearer feedback, more reliable processing</p>
-								</div>
-							</div>
+						<div class="changelog-list">
+							{#each changelogEntries as entry}
+								<article class="update-card changelog-card">
+									<div class="changelog-header">
+										<span class="changelog-date">{entry.checkInDate}</span>
+										<h3 class="changelog-title">{entry.title}</h3>
+									</div>
+									<p class="update-description">{entry.summary}</p>
+									<ul class="update-list compact">
+										{#each entry.highlights as highlight}
+											<li>{highlight}</li>
+										{/each}
+									</ul>
+								</article>
+							{/each}
 						</div>
 					</section>
 				</div>
@@ -1026,22 +748,26 @@
 								evidence gaps, and potential weaknesses in your case.
 							</p>
 							<p class="mt-2">
-								When you run a gap analysis, the AI systematically reviews all your documents and identifies:
+								When you run a gap analysis, the AI reviews your case across six categories:
 							</p>
 							<ul class="faq-list">
-								<li><strong>Missing Evidence:</strong> What documentation would strengthen your case</li>
-								<li><strong>Weak Points:</strong> Areas where your case may be vulnerable</li>
-								<li><strong>Information Gaps:</strong> Key facts or details that are unclear or absent</li>
-								<li><strong>Recommendations:</strong> Specific actions to address identified gaps</li>
+								<li><strong>Missing Documents</strong></li>
+								<li><strong>Factual Contradictions</strong></li>
+								<li><strong>Timeline Gaps</strong></li>
+								<li><strong>Unverifiable Claims</strong></li>
+								<li><strong>Hallucination Risk</strong></li>
+								<li><strong>Incomplete Information</strong></li>
 							</ul>
 							<p class="mt-2">
-								The gap analysis includes an attorney summary with real-time streaming display. Results automatically
-								integrate with recommendation letters to ensure accuracy and prevent AI hallucinations.
+								For each gap, you can enter resolution notes and reference supporting case documents directly in the
+								gap card, then refresh only the gap stage. This avoids unnecessary full case re-runs for routine
+								gap-closure work.
 							</p>
 							<div class="mt-3 p-3 bg-purple-50 rounded-lg">
 								<p class="text-sm text-purple-800">
-									<strong>Pro Tip:</strong> Run gap analysis before generating client recommendations or demand
-									letters to ensure you address all case weaknesses proactively.
+									<strong>Pro Tip:</strong> If new information is limited to a few missing facts or documents,
+									use gap refresh first. Run a full analysis re-run when core case facts, timelines, or primary
+									documents have materially changed.
 								</p>
 							</div>
 						</AccordionItem>
@@ -1247,16 +973,15 @@
 
 						<AccordionItem title="Can I re-run analysis on a case?">
 							<p>
-								Yes! You can re-run analysis at any time:
+								Yes. You have two re-run paths, depending on scope:
 							</p>
 							<ul class="faq-list">
-								<li>Add new documents and run analysis again</li>
-								<li>Change the selected legal issue and re-analyze</li>
-								<li>Re-run if the initial analysis had issues</li>
+								<li><strong>Gap refresh:</strong> Use this when you are resolving specific gap findings with new notes or references.</li>
+								<li><strong>Full analysis re-run:</strong> Use this when key documents, extracted text, timeline facts, or intake context changed materially.</li>
 							</ul>
 							<p class="mt-2">
-								Previous analysis results will be replaced with the new analysis. Consider creating a
-								new case if you want to preserve old results.
+								You do not need to delete and recreate a case to update analysis. Keep the same case, add or update
+								documents, then choose the appropriate refresh path.
 							</p>
 						</AccordionItem>
 
@@ -1867,73 +1592,65 @@
 		border-top: 1px solid #e2e8f0;
 	}
 
+	.release-meta {
+		margin-bottom: 1.5rem;
+		padding: 1rem 1.25rem;
+		background: #f8fafc;
+		border: 1px solid #e2e8f0;
+		border-radius: 10px;
+	}
+
+	.release-meta-text {
+		font-size: 0.875rem;
+		color: #475569;
+		line-height: 1.6;
+		margin: 0;
+	}
+
+	.changelog-list {
+		display: flex;
+		flex-direction: column;
+		gap: 1rem;
+	}
+
+	.changelog-card {
+		padding: 1.25rem 1.5rem;
+	}
+
+	.changelog-header {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.75rem;
+		margin-bottom: 0.625rem;
+	}
+
+	.changelog-date {
+		display: inline-flex;
+		align-items: center;
+		padding: 0.25rem 0.625rem;
+		border-radius: 9999px;
+		border: 1px solid #cbd5e1;
+		background: #f8fafc;
+		color: #334155;
+		font-size: 0.75rem;
+		font-weight: 700;
+		letter-spacing: 0.01em;
+	}
+
+	.changelog-title {
+		font-size: 1rem;
+		font-weight: 700;
+		color: var(--contrast);
+		margin: 0;
+	}
+
 	.update-card {
 		background: white;
 		border: 2px solid #f1f5f9;
 		border-radius: 12px;
 		padding: 1.75rem;
 		transition: all 0.2s;
-	}
-
-	.feature-update {
-		display: flex;
-		gap: 1.25rem;
-		margin-bottom: 1.5rem;
-	}
-
-	.feature-update:hover {
-		border-color: var(--accent);
-		box-shadow: 0 4px 12px rgba(var(--accent-rgb), 0.1);
-	}
-
-	.update-icon {
-		flex-shrink: 0;
-		width: 48px;
-		height: 48px;
-		border-radius: 10px;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		color: white;
-	}
-
-	.update-icon.clio {
-		background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
-	}
-
-	.update-icon.analysis {
-		background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
-	}
-
-	.update-icon.vision {
-		background: linear-gradient(135deg, #06b6d4 0%, #0891b2 100%);
-	}
-
-	.update-icon.email {
-		background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-	}
-
-	.update-icon.recommendation {
-		background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
-	}
-
-	.update-icon.classification {
-		background: linear-gradient(135deg, #a855f7 0%, #9333ea 100%);
-	}
-
-	.update-icon.fix {
-		background: linear-gradient(135deg, #64748b 0%, #475569 100%);
-	}
-
-	.update-content {
-		flex: 1;
-	}
-
-	.update-title {
-		font-size: 1.125rem;
-		font-weight: 700;
-		color: var(--contrast);
-		margin-bottom: 0.5rem;
 	}
 
 	.update-description {
@@ -1976,167 +1693,6 @@
 		font-size: 0.875rem;
 	}
 
-	/* Minor Updates Grid */
-	.updates-grid {
-		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-		gap: 1.25rem;
-	}
-
-	.minor-update {
-		display: flex;
-		gap: 1rem;
-		padding: 1.25rem;
-	}
-
-	.minor-update:hover {
-		border-color: var(--accent);
-		box-shadow: 0 2px 8px rgba(var(--accent-rgb), 0.1);
-	}
-
-	.update-icon-small {
-		flex-shrink: 0;
-		width: 36px;
-		height: 36px;
-		border-radius: 8px;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		color: white;
-	}
-
-	.update-icon-small.ui {
-		background: linear-gradient(135deg, var(--accent) 0%, var(--accent-hover) 100%);
-	}
-
-	.update-title-small {
-		font-size: 0.9375rem;
-		font-weight: 600;
-		color: var(--contrast);
-		margin-bottom: 0.375rem;
-	}
-
-	.update-description-small {
-		color: #64748b;
-		font-size: 0.875rem;
-		line-height: 1.5;
-	}
-
-	/* Fix Updates */
-	.fix-update {
-		display: flex;
-		gap: 1.25rem;
-		margin-bottom: 1.25rem;
-	}
-
-	.fix-update:hover {
-		border-color: #94a3b8;
-		box-shadow: 0 2px 8px rgba(100, 116, 139, 0.1);
-	}
-
-	/* Quality Grid */
-	.quality-grid {
-		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-		gap: 1.25rem;
-	}
-
-	.quality-item {
-		display: flex;
-		gap: 1rem;
-		padding: 1.25rem;
-		background: #f8fafc;
-		border-radius: 10px;
-		border: 1px solid #e2e8f0;
-	}
-
-	.quality-title {
-		font-weight: 600;
-		color: var(--contrast);
-		font-size: 0.9375rem;
-		margin-bottom: 0.25rem;
-	}
-
-	.quality-text {
-		color: #64748b;
-		font-size: 0.875rem;
-		line-height: 1.5;
-	}
-
-	/* Summary Card */
-	.summary-card {
-		margin: 3rem 0;
-		padding: 2rem;
-		background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
-		border: 2px solid var(--accent);
-		border-radius: 14px;
-	}
-
-	.summary-title {
-		font-size: 1.375rem;
-		font-weight: 700;
-		color: var(--contrast);
-		margin-bottom: 0.75rem;
-		font-family: var(--font-heading);
-	}
-
-	.summary-description {
-		color: #64748b;
-		font-size: 1rem;
-		margin-bottom: 1.5rem;
-	}
-
-	.summary-grid {
-		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-		gap: 1.5rem;
-	}
-
-	.summary-item {
-		display: flex;
-		gap: 1rem;
-		padding: 1.5rem;
-		background: white;
-		border-radius: 10px;
-		border: 1px solid #e2e8f0;
-	}
-
-	.summary-icon {
-		flex-shrink: 0;
-		width: 44px;
-		height: 44px;
-		border-radius: 10px;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		color: white;
-	}
-
-	.summary-icon.clio {
-		background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
-	}
-
-	.summary-icon.analysis {
-		background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
-	}
-
-	.summary-icon.ui {
-		background: linear-gradient(135deg, var(--accent) 0%, var(--accent-hover) 100%);
-	}
-
-	.summary-item-title {
-		font-weight: 600;
-		color: var(--contrast);
-		font-size: 1rem;
-		margin-bottom: 0.375rem;
-	}
-
-	.summary-item-text {
-		color: #64748b;
-		font-size: 0.875rem;
-		line-height: 1.5;
-	}
-
 	/* Responsive */
 	@media (max-width: 768px) {
 		.help-content {
@@ -2161,19 +1717,6 @@
 		}
 
 		.practice-areas-grid {
-			grid-template-columns: 1fr;
-		}
-
-		.feature-update,
-		.fix-update {
-			flex-direction: column;
-		}
-
-		.updates-grid {
-			grid-template-columns: 1fr;
-		}
-
-		.summary-grid {
 			grid-template-columns: 1fr;
 		}
 	}

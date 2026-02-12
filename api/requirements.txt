@@ -3,12 +3,10 @@
 
 # Core FastAPI (Essential)
 fastapi==0.109.0
-uvicorn[standard]==0.27.0
 python-multipart==0.0.9
 
 # Authentication & Security (Essential)
 PyJWT==2.8.0
-python-jose[cryptography]==3.3.0
 
 # Supabase Client (Essential)
 supabase>=2.0.0
@@ -18,8 +16,8 @@ supabase>=2.0.0
 # v1.70.0+ required for GPT-5 parameters (reasoning_effort, max_completion_tokens)
 openai>=1.70.0
 
-# Google Cloud Vision (Essential for OCR - faster and cheaper than GPT-4o Vision)
-google-cloud-vision>=3.0.0
+# Google Cloud Vision SDK intentionally omitted in serverless package size profile.
+# The app falls back to GPT-4o Vision OCR when unavailable.
 
 # Configuration (Essential)
 python-dotenv==1.0.1
@@ -49,6 +47,4 @@ pypdf>=4.0.0
 html2text==2020.1.16
 markdown2>=2.4.0
 
-# Required at import-time by startup route graph
-Pillow>=10.0.0
-python-docx>=1.1.0
+# Pillow/python-docx are optional. Startup paths now degrade gracefully when absent.

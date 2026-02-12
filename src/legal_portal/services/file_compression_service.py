@@ -13,12 +13,19 @@ import tempfile
 from dataclasses import dataclass
 from typing import Optional, Tuple
 
-from PIL import Image
-
 from legal_portal.config.default import settings
 from legal_portal.utils.logging_config import get_module_logger
 
 logger = get_module_logger(__name__)
+
+try:
+    from PIL import Image
+
+    PIL_AVAILABLE = True
+except ImportError:
+    Image = None
+    PIL_AVAILABLE = False
+    logger.warning("Pillow not available - image compression will be skipped")
 
 
 @dataclass
@@ -335,9 +342,12 @@ class FileCompressionService:
             Tuple of (compressed_data, method_name)
 
         """
+        if not PIL_AVAILABLE:
+            logger.warning("Pillow not available for aggressive PDF compression")
+            return pdf_data, "pillow-unavailable"
+
         try:
             import fitz  # PyMuPDF
-            from PIL import Image
 
             # Open PDF
             doc = fitz.open(stream=pdf_data, filetype="pdf")
@@ -396,6 +406,10 @@ class FileCompressionService:
             Tuple of (compressed_data, method_name)
 
         """
+        if not PIL_AVAILABLE:
+            logger.warning("Pillow not available for image compression")
+            return image_data, "pillow-unavailable"
+
         try:
             # Open image
             img = Image.open(io.BytesIO(image_data))

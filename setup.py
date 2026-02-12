@@ -7,7 +7,8 @@ setup(
     package_dir={"": "src"},
     python_requires=">=3.8",
     install_requires=[
-        "streamlit",
+        "fastapi",
+        "uvicorn",
         "openai",
         "python-dotenv",
         "pyyaml",

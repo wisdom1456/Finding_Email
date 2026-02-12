@@ -71,24 +71,8 @@ jobs:
             
         print('\n'.join(critical_imports))
         
-        # Check for missing dependencies
-        missing_deps = []
-        try:
-            import streamlit_authenticator
-        except ImportError:
-            missing_deps.append('streamlit_authenticator')
-            
-        if missing_deps:
-            print(f'\n⚠️ Missing optional dependencies: {", ".join(missing_deps)}')
-            print('These may be needed for full functionality but are not critical for startup.')
         EOF
         python check_imports.py
-    
-    # Commented out Streamlit app test as it requires display
-    # - name: Test Streamlit app startup (basic check)
-    #   run: |
-    #     echo "Testing if Streamlit app can be imported..."
-    #     python -c "import app; print('✅ app.py can be imported')"
     
     - name: Generate test report
       if: always()

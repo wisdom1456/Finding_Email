@@ -161,7 +161,7 @@ gcloud run services describe legal-portal \
 ### Test locally:
 ```bash
 # Load .env file and run
-streamlit run src/legal_portal/ui/main.py
+./scripts/start_local_dev.sh
 ```
 
 ### Check logs for issues:
@@ -239,4 +239,3 @@ echo "🔗 Service URL: https://legal-portal-vdgt5dqjfa-uc.a.run.app"
 ---
 
 **Last Updated**: November 7, 2025
-

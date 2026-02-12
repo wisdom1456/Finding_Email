@@ -86,8 +86,6 @@ else:
     allowed_origins = [
         "http://localhost:5173",  # SvelteKit dev
         "http://127.0.0.1:5173",  # SvelteKit dev (IP)
-        "http://localhost:8501",  # Streamlit dev
-        "http://127.0.0.1:8501",  # Streamlit dev (IP)
     ]
 
     # Add Vercel URL if available (production/preview deployments)

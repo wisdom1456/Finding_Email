@@ -100,7 +100,7 @@ Before you can use the CLIO integration, you need:
 # CLIO Integration (Optional)
 CLIO_CLIENT_ID=your_client_id_from_step_1
 CLIO_CLIENT_SECRET=your_client_secret_from_step_1
-CLIO_REDIRECT_URI=http://localhost:8501
+CLIO_REDIRECT_URI=http://localhost:5173/auth/callback
 CLIO_ENVIRONMENT=sandbox  # or 'production'
 ```
 
@@ -113,7 +113,7 @@ CLIO_ENVIRONMENT=sandbox  # or 'production'
 ```bash
 # Stop the current application (Ctrl+C)
 # Then restart:
-streamlit run src/legal_portal/ui/main.py
+./scripts/start_local_dev.sh
 ```
 
 ### Step 3: Verify Installation
@@ -468,4 +468,3 @@ Planned for upcoming releases:
   - Task/deadline integration
   - Custom field mapping configuration
   - Communication threading
-

@@ -93,7 +93,7 @@ async def process_intake_form(
         mock_file = MockUploadedFile(file.filename, temp_file_path)
 
         # Process the document
-        processed_docs = await processor.process_documents_from_streamlit(
+        processed_docs = await processor.process_uploaded_files(
             [mock_file], intake_filenames=["intake"]
         )
 

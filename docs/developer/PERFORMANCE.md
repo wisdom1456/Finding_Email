@@ -162,11 +162,11 @@ class CacheManager:
 - **Speedup**: 486.7x for cached operations
 - **Storage Efficiency**: Compressed cache files
 
-### 3. Async Streamlit Helper (`utils/async_streamlit.py`)
+### 3. Async Processing Helper (Legacy Reference)
 
 #### Implementation
 ```python
-class AsyncStreamlit:
+class AsyncProcessor:
     def __init__(self):
         self.executor = ThreadPoolExecutor(max_workers=5)
         self.progress_callback = None

@@ -40,7 +40,6 @@ def setup_logging(app_name: str = "legal-portal", level: str = None):
     logging.getLogger("urllib3").setLevel(logging.WARNING)
     logging.getLogger("requests").setLevel(logging.WARNING)
     logging.getLogger("openai").setLevel(logging.WARNING)
-    logging.getLogger("streamlit").setLevel(logging.WARNING)
 
     # Initialize metrics collector (available for future use)
     _ = MetricsCollector()

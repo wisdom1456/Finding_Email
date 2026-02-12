@@ -21,7 +21,7 @@ USE_MULTI_STAGE_ANALYSIS=false  # Use original workflow
 
 ```bash
 # Start the application normally
-streamlit run src/legal_portal/ui/main.py
+./scripts/start_local_dev.sh
 ```
 
 ### 3. Process a Test Case
@@ -346,6 +346,5 @@ The multi-stage analysis pipeline is a significant enhancement that should produ
 **Remember:** The system will automatically fall back to the standard workflow if any issues occur, so production operation is safe even during testing phase.
 
 Good luck with testing! 🚀
-
 
 

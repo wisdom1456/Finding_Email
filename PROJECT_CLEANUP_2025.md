@@ -86,42 +86,33 @@ frontend*.log
 ## Phase 3: Project Structure Analysis
 
 ### 3.1 Current Architecture
-The project supports **dual architecture**:
+The project uses **FastAPI + SvelteKit**:
 
-1. **Streamlit (Legacy)**: `src/legal_portal/ui/main.py`
-   - Uses `start_app.sh` for startup
-   - Single-page application
-   - PIN-based authentication
-
-2. **FastAPI + SvelteKit (Current)**: 
-   - Backend: `src/legal_portal/api/main.py`
-   - Frontend: `frontend/` directory
-   - Uses `start_local_dev.sh`, `start_backend.sh`, `start_frontend.sh`
-   - Supabase authentication
+1. **Backend**: `src/legal_portal/api/main.py`
+2. **Frontend**: `frontend/` directory
+3. **Local startup**: `start_local_dev.sh`, `start_backend.sh`, `start_frontend.sh`
+4. **Authentication**: Supabase authentication
 
 ### 3.2 Startup Scripts
 **Current Scripts**:
 - `start_local_dev.sh` - Starts both backend and frontend (recommended for development)
 - `start_backend.sh` - Starts FastAPI backend only
 - `start_frontend.sh` - Starts SvelteKit frontend only
-- `start_app.sh` - Starts Streamlit application (legacy)
 - `start_backend_debug.sh` - Debug mode for backend
-- `restart_app.sh` - Restart script
 - `stop_local_dev.sh` - Stop development servers
 
-**Recommendation**: Keep all scripts as they serve different purposes:
+**Recommendation**: Keep scripts that support the current FastAPI/SvelteKit workflow:
 - `start_local_dev.sh` for full-stack development
 - Individual scripts for debugging specific components
-- `start_app.sh` for Streamlit if still in use
 
 ### 3.3 Service Duplication Analysis
 **Found Duplicate Services**:
-- `src/legal_portal/api/services/clio_auth_service.py` (FastAPI version)
-- `src/legal_portal/services/clio_auth_service.py` (Streamlit version)
-- `src/legal_portal/api/services/clio_client.py` (FastAPI version)
-- `src/legal_portal/services/clio_client.py` (Streamlit version)
+- `src/legal_portal/api/services/clio_auth_service.py`
+- `src/legal_portal/services/clio_auth_service.py`
+- `src/legal_portal/api/services/clio_client.py`
+- `src/legal_portal/services/clio_client.py`
 
-**Status**: ✅ **Intentional** - Both versions needed for dual architecture support
+**Status**: ⚠️ Review recommended to ensure only current-runtime variants remain.
 
 ---
 
@@ -166,7 +157,7 @@ Already completed in `TECH_DEBT_CLEANUP_COMPLETED.md`:
 
 ### 6.1 Current Dependencies
 **Python** (`requirements.txt`):
-- Core: Streamlit, FastAPI, Supabase
+- Core: FastAPI, Supabase
 - AI: OpenAI, Anthropic (optional)
 - Document Processing: PyMuPDF, python-docx, Pillow
 - Utilities: Pydantic, requests, python-dotenv
@@ -177,7 +168,6 @@ Already completed in `TECH_DEBT_CLEANUP_COMPLETED.md`:
 - Consider splitting `requirements.txt` into:
   - `requirements-base.txt` - Core dependencies
   - `requirements-dev.txt` - Development dependencies
-  - `requirements-streamlit.txt` - Streamlit-specific (if keeping)
   - `requirements-fastapi.txt` - FastAPI-specific
 
 ---
@@ -255,4 +245,3 @@ All changes verified:
 **Completion Date**: January 2025  
 **All Planned Tasks**: ✅ Completed  
 **Project Status**: Clean, Organized, Production Ready
-

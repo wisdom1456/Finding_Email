@@ -61,10 +61,6 @@ All external dependencies are mocked to ensure:
    - Returns fake extracted text for PDF, DOCX, TXT, and image files
    - No actual file I/O operations
 
-4. **Streamlit Context** (`mock_streamlit_context` fixture)
-   - Global autouse fixture prevents RuntimeErrors
-   - Mocks `st.session_state`, `st.error`, `st.warning`, etc.
-
 ## Test Coverage
 
 ### Integration Tests (`tests/integration/test_workflows.py`)
@@ -172,7 +168,4 @@ If you see async warnings, ensure `pytest-asyncio` is installed and configured:
 ```bash
 pip install pytest-asyncio
 ```
-
-### Streamlit Context Errors
-The `mock_streamlit_context` fixture should prevent these. If you see `RuntimeError: No SessionContext`, check that the fixture is being applied (it's autouse, so it should be automatic).
 

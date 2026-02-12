@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from datetime import datetime
 from typing import Any, AsyncGenerator, Dict, List
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 import pytest_asyncio
@@ -21,35 +21,6 @@ from legal_portal.core.data_models import (
     KeyDate,
     ProcessedDocument,
 )
-
-
-@pytest.fixture(scope="session", autouse=True)
-def mock_streamlit_context():
-    """Global autouse fixture to mock Streamlit context and prevent RuntimeErrors.
-
-    This prevents tests from crashing when code tries to access st.session_state
-    or other Streamlit components that require a running Streamlit app.
-    """
-    with patch("streamlit.session_state", new_callable=dict) as mock_session:
-        with patch("streamlit.error") as mock_error:
-            with patch("streamlit.warning") as mock_warning:
-                with patch("streamlit.info") as mock_info:
-                    with patch("streamlit.success") as mock_success:
-                        with patch("streamlit.spinner"):
-                            # Set up default session state values
-                            mock_session.update(
-                                {
-                                    "authenticated": True,
-                                    "progress_callback": None,
-                                }
-                            )
-                            yield {
-                                "session_state": mock_session,
-                                "error": mock_error,
-                                "warning": mock_warning,
-                                "info": mock_info,
-                                "success": mock_success,
-                            }
 
 
 # pytest-asyncio is configured via pytest.ini or pyproject.toml

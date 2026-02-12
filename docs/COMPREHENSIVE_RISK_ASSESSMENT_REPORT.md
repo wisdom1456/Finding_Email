@@ -138,7 +138,7 @@ pip install -r requirements.txt
 uvicorn main:app --reload --port 8000
 
 # 3. Update frontend configuration
-streamlit run app.py --server.port 8501
+cd frontend && npm run dev
 ```
 
 **Rollback Verification Steps:**

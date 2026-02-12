@@ -201,7 +201,7 @@ graph TD
 - **Security Assessment**: No known vulnerabilities in current dependency set
 
 **Dependency Status**:
-- ✅ **streamlit**: Core application framework - Current and stable
+- ✅ **fastapi**: Core backend framework - Current and stable
 - ✅ **openai**: AI integration - Modern SDK v1.3.0+ validated
 - ✅ **python-docx**: Document processing - Functional and current
 - ✅ **PyPDF2**: PDF processing - Working with fallback options
@@ -1276,7 +1276,7 @@ This final validation report synthesizes findings from extensive documentation a
 **Deployment Configuration**:
 - [`railway.toml`](railway.toml) - Railway deployment configuration
 - [`.env.template`](.env.template) - Environment variable template
-- [`start_app.sh`](start_app.sh) - Application startup script
+- [`scripts/start_local_dev.sh`](scripts/start_local_dev.sh) - Local startup script
 
 #### Sample Data and Test Cases 📁
 

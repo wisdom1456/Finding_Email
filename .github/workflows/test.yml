@@ -197,7 +197,7 @@ jobs:
           python run_app.py &
           echo $! > backend.pid
           # Wait for backend to be ready
-          timeout 60 bash -c 'until curl -f http://localhost:8000/api/health; do sleep 2; done'
+          timeout 60 bash -c 'until curl -f http://localhost:8000/health; do sleep 2; done'
       
       - name: Run Playwright tests
         working-directory: ./frontend
@@ -248,6 +248,5 @@ jobs:
           fi
           
           echo "✅ All required tests passed"
-
 
 

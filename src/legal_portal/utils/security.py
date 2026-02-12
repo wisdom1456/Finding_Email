@@ -16,16 +16,6 @@ import time
 from pathlib import Path
 from typing import Optional, Tuple
 
-# Try to import streamlit, but make it optional
-# Streamlit is only needed for Streamlit apps, not FastAPI backend
-try:
-    import streamlit as st
-
-    HAS_STREAMLIT = True
-except ImportError:
-    HAS_STREAMLIT = False
-    st = None  # type: ignore
-
 # Try to import python-magic, but make it optional
 # python-magic requires libmagic which may not be available in serverless environments
 try:

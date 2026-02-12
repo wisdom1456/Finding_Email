@@ -519,20 +519,20 @@ class DocumentProcessor:
 
         return result
 
-    async def process_documents_from_streamlit(
+    async def process_uploaded_files(
         self,
-        streamlit_files: List[Any],
+        uploaded_files: List[Any],
         intake_filenames: Optional[List[str]] = None,
         progress_callback: Optional[Callable] = None,  # Add progress_callback
     ) -> List[ProcessedDocument]:
-        """Process a list of Streamlit UploadedFile objects with optimized batch processing for images."""
-        total_docs = len(streamlit_files)
+        """Process a list of uploaded file objects with optimized image batching."""
+        total_docs = len(uploaded_files)
 
         # Separate images from other files for batch processing
         image_files = []
         non_image_files = []
 
-        for file in streamlit_files:
+        for file in uploaded_files:
             filename = file.name.lower() if hasattr(file, "name") else str(file).lower()
             if filename.endswith((".jpg", ".jpeg", ".png")):
                 image_files.append(file)
@@ -703,7 +703,7 @@ class DocumentProcessor:
 
         Args:
         ----
-            uploaded_file: Streamlit UploadedFile object
+            uploaded_file: Uploaded file object
             intake_filenames: List of filenames that should be treated as intake forms
             progress_callback: Optional callback for granular progress updates
 
@@ -822,8 +822,8 @@ class DocumentProcessor:
                 file_path = file.file_path
                 filename = file.original_filename
             elif hasattr(file, "name"):
-                # Streamlit UploadedFile object
-                return await self.process_documents_from_streamlit(files, intake_filenames)
+                # Generic uploaded file object
+                return await self.process_uploaded_files(files, intake_filenames)
             else:
                 msg = f"Unsupported file object type: {type(file)}"
                 raise DocumentProcessingError(msg)

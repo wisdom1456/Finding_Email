@@ -211,7 +211,6 @@ consolidation.log
 pre-consolidation-backup-*.tar.gz
 
 # Additional build and debug outputs
-streamlit_live.log
 session_audit.log
 debug_output/
 validation_output/

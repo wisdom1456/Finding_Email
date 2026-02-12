@@ -24,7 +24,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 
 class MockFile:
-    """Mock Streamlit UploadedFile for testing."""
+    """Mock uploaded file for testing."""
 
     def __init__(self, file_path: Path):
         self.path = file_path
@@ -181,7 +181,7 @@ async def run_test():
     print("=" * 80)
     start_time = datetime.now()
 
-    processed_intake = await doc_processor.process_documents_from_streamlit(
+    processed_intake = await doc_processor.process_uploaded_files(
         [mock_intake], intake_filenames=[mock_intake.name]
     )
 
@@ -203,7 +203,7 @@ async def run_test():
     print("=" * 80)
     start_time = datetime.now()
 
-    processed_case_docs = await doc_processor.process_documents_from_streamlit(
+    processed_case_docs = await doc_processor.process_uploaded_files(
         mock_case_docs, intake_filenames=[]
     )
 

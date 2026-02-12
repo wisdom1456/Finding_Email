@@ -61,7 +61,6 @@ cost_sessions/
 
 # Session files
 session_audit.log
-streamlit_live.log
 
 # Test data (comment out if needed in production)
 test_data/

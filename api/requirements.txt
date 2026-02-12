@@ -15,6 +15,7 @@ supabase>=2.0.0
 # OpenAI (Essential for AI features)
 # v1.70.0+ required for GPT-5 parameters (reasoning_effort, max_completion_tokens)
 openai>=1.70.0
+requests>=2.31.0
 
 # Google Cloud Vision SDK intentionally omitted in serverless package size profile.
 # The app falls back to GPT-4o Vision OCR when unavailable.

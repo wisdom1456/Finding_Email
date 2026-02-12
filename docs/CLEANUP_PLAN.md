@@ -78,8 +78,8 @@ These are historical development notes that should be archived for reference:
 ## Scripts to Consolidate
 
 ### Keep These Scripts
-- `start_app.sh` - Primary app startup (comprehensive, well-documented)
-- `run_app.py` - Python entry point for Streamlit
+- `scripts/start_local_dev.sh` - Primary local startup for backend + frontend
+- `run_app.py` - Python entry point for FastAPI backend
 
 ### Archive or Remove
 - `run_app.sh` - Outdated (references incorrect path: app/main.py)
@@ -94,7 +94,7 @@ These are historical development notes that should be archived for reference:
 
 ## Log Files to Remove
 - build.log
-- streamlit_live.log
+- frontend_live.log
 - session_audit.log
 - ruff_lint_report.txt
 - ruff_final_report.txt
@@ -141,4 +141,3 @@ After cleanup, the root directory will contain:
 - Core configuration files
 - Primary startup script
 - Standard project directories (src/, tests/, docs/, scripts/)
-

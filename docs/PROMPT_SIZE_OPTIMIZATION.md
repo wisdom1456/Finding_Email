@@ -106,7 +106,7 @@ After:  ~5,600 lines  → ~40,000-50,000 tokens (within limits)
 ### Verification Steps
 ```bash
 # 1. Generate a letter for a case
-python -m streamlit run app/main.py
+./scripts/start_local_dev.sh
 
 # 2. Check the final prompt size
 wc -l validation_output/final_prompt.txt
@@ -158,4 +158,3 @@ This optimization aligns with the "Enhanced Document Analysis Extraction" strate
 - `memory-bank/activeContext.md` - Enhanced Document Analysis strategy
 - `docs/FULL_DOCUMENT_CONTENT_ARCHITECTURE.md` - Document content handling
 - `DATA_PROPAGATION_ANALYSIS.md` - Data flow through system phases
-

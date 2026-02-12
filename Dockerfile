@@ -48,18 +48,10 @@ USER appuser
 
 # Health check for Google Cloud Run
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD curl -f http://localhost:$PORT/_stcore/health || exit 1
+    CMD curl -f http://localhost:$PORT/health || exit 1
 
 # Expose port (Google Cloud Run expects PORT env var)
 EXPOSE $PORT
 
-# Run the Streamlit application with production optimizations
-CMD streamlit run src/legal_portal/ui/main.py \
-    --server.port=$PORT \
-    --server.address=0.0.0.0 \
-    --server.headless=true \
-    --server.runOnSave=false \
-    --server.allowRunOnSave=false \
-    --server.fileWatcherType=none \
-    --browser.gatherUsageStats=false \
-    --global.developmentMode=false
+# Run the FastAPI backend
+CMD uvicorn legal_portal.api.main:app --host 0.0.0.0 --port $PORT

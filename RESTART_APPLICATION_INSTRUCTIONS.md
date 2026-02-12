@@ -5,28 +5,18 @@ The code fix has been applied, but Python code changes require restarting the ap
 
 ## Steps to Restart the Application
 
-### Option 1: Restart Streamlit (Recommended)
-
-If you're running the app via Streamlit:
+### Option 1: Restart Local Dev Servers (Recommended)
 
 ```bash
-# Stop the current process (Ctrl+C in the terminal running the app)
+# Stop any running local processes first
+./stop_local_dev.sh || true
 
 # Clear Python cache files (optional but recommended)
 find . -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true
 find . -name '*.pyc' -delete 2>/dev/null || true
 
-# Restart the application
-streamlit run src/legal_portal/ui/main.py
-```
-
-Or if you use the start script:
-
-```bash
-# Stop the current process (Ctrl+C)
-
-# Restart using the start script
-./start_app.sh
+# Restart backend + frontend
+./scripts/start_local_dev.sh
 ```
 
 ### Option 2: Clear Python Cache Only
@@ -39,7 +29,7 @@ find . -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true
 find . -name '*.pyc' -delete 2>/dev/null || true
 ```
 
-Then trigger a reload in Streamlit (it should happen automatically or click "Rerun" in the top-right).
+Then refresh the browser.
 
 ### Option 3: Force Browser Cache Clear
 
@@ -108,4 +98,3 @@ If you still see code fences after following these steps, let me know and I can:
 1. Check for additional places where caching might occur
 2. Add logging to trace exactly what the AI is returning
 3. Implement additional fallback cleaning mechanisms
-

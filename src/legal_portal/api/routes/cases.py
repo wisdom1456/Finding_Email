@@ -281,7 +281,6 @@ async def delete_case(
     case_id: str,
     user=Depends(get_current_user),  # noqa: B008
     user_supabase=Depends(get_user_supabase_client),  # noqa: B008
-    service_supabase=Depends(get_supabase_client),  # noqa: B008
 ):
     """Delete a case and all associated documents from storage and database.
 
@@ -290,7 +289,6 @@ async def delete_case(
         case_id: Case ID
         user: Current authenticated user
         user_supabase: User-scoped Supabase client
-        service_supabase: Service-role Supabase client
 
     """
     try:
@@ -310,15 +308,27 @@ async def delete_case(
             user_supabase.table("documents").select("storage_path").eq("case_id", case_id).execute()
         )
 
-        # Delete files from storage (use service client)
+        # Resolve the service client lazily so missing service-role env vars
+        # don't block case deletion in production.
+        service_supabase = None
+        try:
+            service_supabase = get_supabase_client()
+        except Exception as service_client_error:
+            logger.warning(
+                "Service-role Supabase client unavailable; skipping storage cleanup",
+                extra={"case_id": case_id, "error": str(service_client_error)},
+            )
+
+        # Delete files from storage only if we have service client access.
         if docs_response.data:
             storage_paths = [doc["storage_path"] for doc in docs_response.data]
             logger.debug("Deleting files from storage", extra={"count": len(storage_paths)})
-            try:
-                service_supabase.storage.from_("documents").remove(storage_paths)
-                logger.debug("Storage files deleted successfully")
-            except Exception as storage_error:
-                logger.warning("Storage deletion error (continuing)", extra={"error": str(storage_error)})
+            if service_supabase:
+                try:
+                    service_supabase.storage.from_("documents").remove(storage_paths)
+                    logger.debug("Storage files deleted successfully")
+                except Exception as storage_error:
+                    logger.warning("Storage deletion error (continuing)", extra={"error": str(storage_error)})
 
         # Delete case from database (cascade deletes documents and analysis_results)
         logger.debug("Deleting case from database (cascade delete)")

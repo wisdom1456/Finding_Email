@@ -92,7 +92,7 @@ def get_user_supabase_client(credentials: HTTPAuthorizationCredentials = Depends
 
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
-    supabase: Client = Depends(get_supabase_client),
+    supabase: Client = Depends(get_user_supabase_client),
 ) -> dict:
     """Verify JWT token and get current user.
 
@@ -145,7 +145,7 @@ async def get_current_user(
 
 async def get_optional_user(
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
-    supabase: Client = Depends(get_supabase_client),
+    supabase: Client = Depends(get_user_supabase_client),
 ) -> Optional[dict]:
     """Get current user if authenticated, otherwise None.
 

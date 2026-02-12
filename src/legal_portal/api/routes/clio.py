@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 
-from legal_portal.api.dependencies import get_current_user, get_supabase_client
+from legal_portal.api.dependencies import get_current_user, get_supabase_client, get_user_supabase_client
 from legal_portal.api.services.clio_auth_service import ClioAuthService
 from legal_portal.api.services.clio_client import (
     ClioAPIError,
@@ -263,7 +263,7 @@ async def clio_callback(
 @router.get("/status", response_model=ClioConnectionStatus)
 async def get_clio_status(
     user=Depends(get_current_user),  # noqa: B008
-    supabase: Client = Depends(get_supabase_client),  # noqa: B008
+    supabase: Client = Depends(get_user_supabase_client),  # noqa: B008
 ):
     """Get Clio connection status for current user."""
     try:
@@ -305,7 +305,7 @@ async def get_clio_status(
 @router.delete("/disconnect")
 async def disconnect_clio(
     user=Depends(get_current_user),  # noqa: B008
-    supabase: Client = Depends(get_supabase_client),
+    supabase: Client = Depends(get_user_supabase_client),
 ):
     """Disconnect Clio integration for current user."""
     try:
@@ -320,7 +320,7 @@ async def disconnect_clio(
 # ===== Matter Search =====
 async def get_clio_client(
     user=Depends(get_current_user),  # noqa: B008
-    supabase: Client = Depends(get_supabase_client),
+    supabase: Client = Depends(get_user_supabase_client),
 ) -> ClioClient:
     """Dependency to get authenticated Clio client."""
     try:

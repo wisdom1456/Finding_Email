@@ -1705,7 +1705,6 @@ async def cancel_analysis(
     analysis_id: str,
     user=Depends(get_current_user),  # noqa: B008
     user_supabase=Depends(get_user_supabase_client),  # noqa: B008
-    service_supabase=Depends(get_supabase_client),  # noqa: B008
 ):
     """Cancel an in-progress analysis and un-stick the case.
 
@@ -1731,7 +1730,7 @@ async def cancel_analysis(
 
         progress_manager = ProgressManager.get_instance()
         await _cancel_analysis(
-            supabase=service_supabase,
+            supabase=user_supabase,
             case_id=case_id,
             analysis_id=analysis_id,
             progress_manager=progress_manager,
@@ -1752,7 +1751,6 @@ async def cancel_case_analysis(
     case_id: str,
     user=Depends(get_current_user),  # noqa: B008
     user_supabase=Depends(get_user_supabase_client),  # noqa: B008
-    service_supabase=Depends(get_supabase_client),  # noqa: B008
 ):
     r"""Cancel the most recent in-progress analysis for a case.
 
@@ -1784,7 +1782,7 @@ async def cancel_case_analysis(
 
         progress_manager = ProgressManager.get_instance()
         await _cancel_analysis(
-            supabase=service_supabase,
+            supabase=user_supabase,
             case_id=case_id,
             analysis_id=analysis_id,
             progress_manager=progress_manager,

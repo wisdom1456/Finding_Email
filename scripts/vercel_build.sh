@@ -28,6 +28,21 @@ else
   echo "⚠️ WARNING: api/requirements.txt not found"
 fi
 
+echo ">>> Verifying critical Python imports for API runtime"
+python3 - <<'PY'
+import os
+import sys
+
+sys.path.insert(0, os.path.join("api", "packages"))
+sys.path.insert(0, "src")
+
+required_modules = ["fastapi", "supabase", "openai", "markdown2"]
+for module_name in required_modules:
+    __import__(module_name)
+
+print("✅ Critical API imports verified")
+PY
+
 echo ">>> Verifying environment variables"
 echo "Checking required environment variables..."
 

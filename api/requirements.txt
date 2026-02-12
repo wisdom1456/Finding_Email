@@ -47,3 +47,4 @@ pypdf>=4.0.0
 
 # Lightweight text processing
 html2text==2020.1.16
+markdown2>=2.4.0

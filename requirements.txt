@@ -25,6 +25,7 @@ PyPDF2>=3.0.0
 
 # Document Output (REQUIRED for analysis results)
 html2text>=2020.1.16
+markdown2>=2.4.0
 
 # Utility Libraries
 tenacity>=8.2.3

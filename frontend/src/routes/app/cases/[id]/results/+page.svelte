@@ -418,6 +418,53 @@
 		return signatureDetectionByDocName.get(documentName.toLowerCase()) || null;
 	}
 
+	function isTextPreviewableDocument(doc: any): boolean {
+		const fileType = String(doc?.file_type || '').toLowerCase();
+		const fileName = String(doc?.file_name || '').toLowerCase();
+		return (
+			fileType.startsWith('text/') ||
+			fileName.endsWith('.txt') ||
+			fileName.endsWith('.md') ||
+			fileName.endsWith('.csv') ||
+			fileName.endsWith('.log')
+		);
+	}
+
+	function getDocumentTextPreview(doc: any): string {
+		return String(doc?.extracted_text || doc?.manual_text || '').trim();
+	}
+
+	function applyGapAnalysisResult(gapResult: any) {
+		if (!results?.multi_stage_result || !gapResult) return;
+		results.multi_stage_result.gap_analysis = gapResult;
+		results = results; // Trigger reactivity
+	}
+
+	async function runGapAnalysisFallback(
+		apiUrl: string,
+		accessToken: string,
+		forceRefresh: boolean
+	): Promise<any> {
+		const response = await fetch(`${apiUrl}/api/analysis/analyze-gaps`, {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json',
+				Authorization: `Bearer ${accessToken}`
+			},
+			body: JSON.stringify({
+				case_id: caseId,
+				force_refresh: forceRefresh || undefined
+			})
+		});
+
+		if (!response.ok) {
+			const detail = await response.json().catch(() => ({}));
+			throw new Error(detail?.detail || 'Gap analysis failed');
+		}
+
+		return response.json();
+	}
+
 	async function analyzeGaps(forceRefresh: boolean = forceGapRefresh) {
 		analyzingGaps = true;
 		gapAnalysisProgress = 'Starting gap analysis...';
@@ -428,66 +475,86 @@
 			if (!session || !user) throw new Error('Not authenticated');
 
 			const apiUrl = getApiUrl();
-			const response = await fetch(`${apiUrl}/api/analysis/analyze-gaps/stream`, {
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json',
-					Authorization: `Bearer ${session.access_token}`
-				},
-				body: JSON.stringify({
-					case_id: caseId,
-					force_refresh: forceRefresh || undefined
-				})
-			});
+			let receivedResult = false;
 
-			if (!response.ok) {
-				const detail = await response.json().catch(() => ({}));
-				throw new Error(detail?.detail || 'Gap analysis failed');
-			}
+			try {
+				const response = await fetch(`${apiUrl}/api/analysis/analyze-gaps/stream`, {
+					method: 'POST',
+					headers: {
+						'Content-Type': 'application/json',
+						Authorization: `Bearer ${session.access_token}`
+					},
+					body: JSON.stringify({
+						case_id: caseId,
+						force_refresh: forceRefresh || undefined
+					})
+				});
 
-			// Handle streaming response
-			const reader = response.body?.getReader();
-			if (!reader) throw new Error('No response body');
+				if (!response.ok) {
+					const detail = await response.json().catch(() => ({}));
+					throw new Error(detail?.detail || 'Gap analysis failed');
+				}
 
-			const decoder = new TextDecoder();
-			let buffer = '';
+				const reader = response.body?.getReader();
+				if (!reader) throw new Error('No response body');
 
-			while (true) {
-				const { done, value } = await reader.read();
-				if (done) break;
+				const decoder = new TextDecoder();
+				let buffer = '';
 
-				buffer += decoder.decode(value, { stream: true });
-				const lines = buffer.split('\n');
-				buffer = lines.pop() || '';
+				while (true) {
+					const { done, value } = await reader.read();
+					if (done) break;
 
-				for (const line of lines) {
-					if (line.startsWith('data: ')) {
+					buffer += decoder.decode(value, { stream: true });
+					const events = buffer.split('\n\n');
+					buffer = events.pop() || '';
+
+					for (const eventText of events) {
+						const dataLine = eventText
+							.split('\n')
+							.map((line) => line.trim())
+							.find((line) => line.startsWith('data: '));
+
+						if (!dataLine) continue;
+
+						let data: any;
 						try {
-							const data = JSON.parse(line.slice(6));
+							data = JSON.parse(dataLine.slice(6));
+						} catch {
+							// Ignore parse errors for incomplete chunks; stream fallback handles hard failures
+							continue;
+						}
 
-							if (data.type === 'phase') {
-								gapAnalysisProgress = data.message;
-								if (data.gaps_found !== undefined) {
-									gapAnalysisProgress = `Found ${data.gaps_found} gaps. Generating summary...`;
-								}
-							} else if (data.type === 'token') {
-								// Stream attorney summary tokens (NEW)
-								streamingGapSummary += data.token;
-								gapAnalysisProgress = 'Generating attorney summary...';
-							} else if (data.type === 'result') {
-								// Update results with gap analysis
-								if (results?.multi_stage_result) {
-									results.multi_stage_result.gap_analysis = data.data;
-									results = results; // Trigger reactivity
-								}
-								toastStore.success(`Gap analysis complete! Found ${data.data.total_gaps} gaps.`);
-							} else if (data.type === 'error') {
-								throw new Error(data.error);
+						if (data.type === 'phase') {
+							gapAnalysisProgress = data.message;
+							if (data.gaps_found !== undefined) {
+								gapAnalysisProgress = `Found ${data.gaps_found} gaps. Generating summary...`;
 							}
-						} catch (parseErr) {
-							// Ignore JSON parse errors for partial data
+						} else if (data.type === 'token') {
+							streamingGapSummary += data.token;
+							gapAnalysisProgress = 'Generating attorney summary...';
+						} else if (data.type === 'result') {
+							applyGapAnalysisResult(data.data);
+							receivedResult = true;
+							toastStore.success(`Gap analysis complete! Found ${data.data.total_gaps} gaps.`);
+						} else if (data.type === 'error') {
+							throw new Error(data.error || 'Gap analysis failed');
 						}
 					}
+				}
+
+				if (!receivedResult) {
+					throw new Error('Gap analysis stream ended before returning results');
+				}
+			} catch (streamErr) {
+				if (receivedResult) {
+					console.warn('[GapAnalysis] Stream interrupted after result payload', streamErr);
+				} else {
+					console.warn('[GapAnalysis] Streaming failed, retrying via non-stream endpoint', streamErr);
+					gapAnalysisProgress = 'Connection interrupted. Retrying...';
+					const gapResult = await runGapAnalysisFallback(apiUrl, session.access_token, forceRefresh);
+					applyGapAnalysisResult(gapResult);
+					toastStore.success(`Gap analysis complete! Found ${gapResult.total_gaps} gaps.`);
 				}
 			}
 		} catch (err: any) {
@@ -1865,6 +1932,21 @@ async function generateLetterRequest(body: Record<string, any>) {
 						{:else}
 							<p class="text-red-500">Failed to load image preview.</p>
 						{/if}
+					{:else if isTextPreviewableDocument(viewingDocument)}
+						{@const previewText = getDocumentTextPreview(viewingDocument)}
+						{#if previewText}
+							<div class="bg-gray-900 rounded-lg p-4 max-h-[600px] overflow-auto">
+								<pre class="whitespace-pre-wrap font-mono text-xs text-gray-300 leading-relaxed">{previewText}</pre>
+							</div>
+						{:else}
+							<div class="flex flex-col items-center justify-center h-64 text-gray-400">
+								<svg class="h-12 w-12 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+								</svg>
+								<p class="font-medium text-gray-600">No text preview available yet</p>
+								<p class="text-sm mt-2">Run extraction to generate a preview for this text document.</p>
+							</div>
+						{/if}
 					{:else}
 						<div class="flex flex-col items-center justify-center h-64 text-gray-400">
 							<svg class="h-12 w-12 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1895,9 +1977,9 @@ async function generateLetterRequest(body: Record<string, any>) {
 						</div>
 					{/if}
 				{:else if documentViewerTab === 'text'}
-					{#if viewingDocument.extracted_text}
+					{#if getDocumentTextPreview(viewingDocument)}
 						<div class="bg-gray-900 rounded-lg p-4 max-h-[600px] overflow-auto">
-							<pre class="whitespace-pre-wrap font-mono text-xs text-gray-300 leading-relaxed">{viewingDocument.extracted_text}</pre>
+							<pre class="whitespace-pre-wrap font-mono text-xs text-gray-300 leading-relaxed">{getDocumentTextPreview(viewingDocument)}</pre>
 						</div>
 					{:else}
 						<div class="flex flex-col items-center justify-center h-64 text-gray-400">

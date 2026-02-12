@@ -1250,6 +1250,32 @@
 
 	type SignatureStatus = 'signed' | 'not_detected' | 'other' | 'none';
 
+	const signatureRequiredKeywords = [
+		'agreement',
+		'contract',
+		'lease',
+		'addendum',
+		'amendment',
+		'settlement',
+		'release',
+		'authorization',
+		'consent',
+		'affidavit',
+		'declaration',
+		'stipulation',
+		'promissory note',
+		'guaranty',
+		'power of attorney',
+		'poa',
+		'signature page',
+		'executed'
+	];
+
+	function requiresSignatureReview(doc: any): boolean {
+		const fileName = String(doc?.file_name || '').toLowerCase();
+		return signatureRequiredKeywords.some((keyword) => fileName.includes(keyword));
+	}
+
 	function getDocumentSignatureDetection(doc: any): any | null {
 		const sig = doc?.metadata?.signature_detection;
 		return sig && typeof sig === 'object' ? sig : null;
@@ -1285,6 +1311,13 @@
 			return 'bg-amber-100 text-amber-800 border-amber-300';
 		}
 		return 'bg-gray-100 text-gray-700 border-gray-300';
+	}
+
+	function shouldShowSignatureBadge(doc: any): boolean {
+		const status = getDocumentSignatureStatus(doc);
+		if (status === 'none') return false;
+		if (status === 'signed') return true;
+		return requiresSignatureReview(doc);
 	}
 
 	// Start streaming analysis (fast single-pass)
@@ -2069,7 +2102,7 @@
 														INTAKE FORM
 													</span>
 												{/if}
-												{#if getDocumentSignatureStatus(doc) !== 'none'}
+												{#if shouldShowSignatureBadge(doc)}
 													<span
 														class="px-2 py-0.5 text-xs font-semibold rounded-full border {getDocumentSignatureBadgeClass(doc)}"
 														title={`Signature status: ${getDocumentSignatureLabel(doc)}`}

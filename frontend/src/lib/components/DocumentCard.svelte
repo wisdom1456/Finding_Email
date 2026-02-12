@@ -159,6 +159,32 @@
 		return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
 	}
 
+	const signatureRequiredKeywords = [
+		'agreement',
+		'contract',
+		'lease',
+		'addendum',
+		'amendment',
+		'settlement',
+		'release',
+		'authorization',
+		'consent',
+		'affidavit',
+		'declaration',
+		'stipulation',
+		'promissory note',
+		'guaranty',
+		'power of attorney',
+		'poa',
+		'signature page',
+		'executed'
+	];
+
+	function requiresSignatureReview(fileName: string | undefined): boolean {
+		const normalizedName = String(fileName || '').toLowerCase();
+		return signatureRequiredKeywords.some((keyword) => normalizedName.includes(keyword));
+	}
+
 	function getSignatureStatus(): 'signed' | 'not_detected' | 'other' | 'none' {
 		const signatureDetection = doc?.metadata?.signature_detection;
 		if (!signatureDetection || typeof signatureDetection !== 'object') return 'none';
@@ -189,6 +215,13 @@
 			return 'bg-amber-100 text-amber-800 border-amber-300';
 		}
 		return 'bg-gray-100 text-gray-700 border-gray-300';
+	}
+
+	function shouldShowSignatureBadge(): boolean {
+		const status = getSignatureStatus();
+		if (status === 'none') return false;
+		if (status === 'signed') return true;
+		return requiresSignatureReview(doc?.file_name);
 	}
 </script>
 
@@ -222,7 +255,7 @@
 								{doc.extraction_quality} Quality
 							</Badge>
 						{/if}
-						{#if getSignatureStatus() !== 'none'}
+						{#if shouldShowSignatureBadge()}
 							<span class="text-xs text-gray-400">•</span>
 							<span
 								class={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold uppercase border ${getSignatureClasses()}`}

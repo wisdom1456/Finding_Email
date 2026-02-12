@@ -26,8 +26,8 @@
 
 <div class="w-full">
 	<!-- Tab Navigation -->
-	<div class="border-b border-gray-200">
-		<nav class="-mb-px flex space-x-8" aria-label="Tabs">
+	<div class="border-b border-gray-200 px-4 sm:px-6">
+		<nav class="-mb-px flex flex-wrap gap-x-8" aria-label="Tabs">
 			{#each tabs as tab}
 				<button
 					type="button"
@@ -51,6 +51,5 @@
 		{/if}
 	</div>
 </div>
-
 
 

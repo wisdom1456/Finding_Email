@@ -233,6 +233,44 @@ async def upload_document(
                         extraction_method = "failed"
                         extraction_quality = "low"
 
+                elif file_type in [
+                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                    "application/msword",
+                    "docx",
+                    "doc",
+                ] or file_name.lower().endswith((".docx", ".doc")):
+                    # Microsoft Word documents should be extracted immediately, same as PDF/TXT
+                    import io
+
+                    try:
+                        import docx
+
+                        document = docx.Document(io.BytesIO(file_content))
+
+                        paragraphs = [para.text for para in document.paragraphs if para.text.strip()]
+                        table_text = []
+                        for table in document.tables:
+                            for row in table.rows:
+                                row_text = [cell.text.strip() for cell in row.cells if cell.text.strip()]
+                                if row_text:
+                                    table_text.append(" | ".join(row_text))
+
+                        extracted_text = "\n".join(paragraphs + table_text)
+                        extraction_method = "docx_direct"
+                        extraction_quality = "high" if len(extracted_text) > 50 else "medium"
+                        logger.info(
+                            f"DOCX immediate extraction: {len(paragraphs)} paragraphs, {len(table_text)} table rows"
+                        )
+                    except ImportError:
+                        extraction_error = "python-docx library not available for DOCX extraction"
+                        extraction_method = "failed"
+                        extraction_quality = "low"
+                    except Exception as docx_err:
+                        extraction_error = f"DOCX extraction failed: {docx_err}"
+                        extraction_method = "failed"
+                        extraction_quality = "low"
+                        logger.error(f"DOCX extraction error for {file_name}: {docx_err}")
+
                 elif file_type in ["image/png", "image/jpeg", "image/jpg"] or file_name.lower().endswith((".png", ".jpg", ".jpeg")):
                     # Image file - use Google Vision OCR (with GPT-4o fallback)
                     try:

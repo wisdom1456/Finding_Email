@@ -95,6 +95,38 @@
 		low: 'bg-red-50 text-red-700 border-red-200'
 	};
 
+	const signatureRequiredKeywords = [
+		'agreement',
+		'contract',
+		'lease',
+		'addendum',
+		'amendment',
+		'settlement',
+		'release',
+		'authorization',
+		'consent',
+		'affidavit',
+		'declaration',
+		'stipulation',
+		'promissory note',
+		'guaranty',
+		'power of attorney',
+		'poa',
+		'signature page',
+		'executed'
+	];
+
+	function requiresSignatureReview(documentName: string | undefined, documentType: string | undefined): boolean {
+		const normalizedName = String(documentName || '').toLowerCase();
+		const normalizedType = String(documentType || '').toLowerCase();
+
+		if (normalizedType.includes('contract') || normalizedType.includes('agreement')) {
+			return true;
+		}
+
+		return signatureRequiredKeywords.some((keyword) => normalizedName.includes(keyword));
+	}
+
 	function getSignatureStatus(): 'signed' | 'not_detected' | 'other' | 'none' {
 		if (!signatureDetection || typeof signatureDetection !== 'object') return 'none';
 		const status = String(signatureDetection.status || '').toLowerCase();
@@ -119,6 +151,13 @@
 		if (status === 'signed') return 'bg-emerald-50 text-emerald-700 border-emerald-200';
 		if (status === 'not_detected') return 'bg-amber-50 text-amber-700 border-amber-200';
 		return 'bg-gray-50 text-gray-700 border-gray-200';
+	}
+
+	function shouldShowSignatureBadge(): boolean {
+		const status = getSignatureStatus();
+		if (status === 'none') return false;
+		if (status === 'signed') return true;
+		return requiresSignatureReview(summary.document_name, summary.document_type);
 	}
 </script>
 
@@ -158,7 +197,7 @@
 								Relevant
 							</span>
 						{/if}
-						{#if getSignatureStatus() !== 'none'}
+						{#if shouldShowSignatureBadge()}
 							<span
 								class={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold tracking-wider uppercase border ${getSignatureClasses()}`}
 								title={getSignatureLabel()}

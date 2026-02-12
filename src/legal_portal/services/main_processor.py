@@ -1635,7 +1635,7 @@ OUTPUT FORMAT (STRICT JSON):
   "documents": [
     {{
       "document_name": "exact_filename.pdf",
-      "document_type": "Contract" | "Evidence" | "Notice" | "Other",
+      "document_type": "Contract" | "Evidence" | "Notice" | "Correspondence" | "Other",
 
           "executive_summary": "2-3 sentence overview: What this document is and why it matters",
 
@@ -1705,5 +1705,6 @@ CRITICAL RULES:
 - Include page numbers or section references when possible
 - Be specific with amounts, dates, and names when they appear
 - Capture admissions, contradictions, or particularly strong/weak points
+- Use "Correspondence" for letters, emails, and documented correspondence regardless of file extension
 - Return ONLY valid JSON, no markdown code blocks
 """

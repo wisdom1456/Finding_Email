@@ -9,6 +9,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from legal_portal.api.dependencies import get_current_user, get_supabase_client, get_user_supabase_client
+from legal_portal.api.utils.content_extractor import DocumentProcessor as ContentExtractor
 from legal_portal.core.data_models import DocumentStatus, DocumentType
 from legal_portal.core.document_processor import DocumentProcessor, ValidationError
 from legal_portal.services.file_processors.eml_processor import process_eml
@@ -240,31 +241,12 @@ async def upload_document(
                     "doc",
                 ] or file_name.lower().endswith((".docx", ".doc")):
                     # Microsoft Word documents should be extracted immediately, same as PDF/TXT
-                    import io
-
                     try:
-                        import docx
-
-                        document = docx.Document(io.BytesIO(file_content))
-
-                        paragraphs = [para.text for para in document.paragraphs if para.text.strip()]
-                        table_text = []
-                        for table in document.tables:
-                            for row in table.rows:
-                                row_text = [cell.text.strip() for cell in row.cells if cell.text.strip()]
-                                if row_text:
-                                    table_text.append(" | ".join(row_text))
-
-                        extracted_text = "\n".join(paragraphs + table_text)
-                        extraction_method = "docx_direct"
+                        extracted_text, docx_backend = ContentExtractor.extract_text_from_docx_with_method(file_content)
+                        extracted_text = extracted_text.strip()
+                        extraction_method = docx_backend
                         extraction_quality = "high" if len(extracted_text) > 50 else "medium"
-                        logger.info(
-                            f"DOCX immediate extraction: {len(paragraphs)} paragraphs, {len(table_text)} table rows"
-                        )
-                    except ImportError:
-                        extraction_error = "python-docx library not available for DOCX extraction"
-                        extraction_method = "failed"
-                        extraction_quality = "low"
+                        logger.info(f"DOCX immediate extraction ({docx_backend}): {len(extracted_text)} characters")
                     except Exception as docx_err:
                         extraction_error = f"DOCX extraction failed: {docx_err}"
                         extraction_method = "failed"
@@ -1387,34 +1369,12 @@ async def trigger_extraction(
             "doc",
         ] or file_name.lower().endswith((".docx", ".doc")):
             # Microsoft Word document - extract text directly (no OCR needed)
-            import io
             try:
-                import docx
-                document = docx.Document(io.BytesIO(file_bytes))
-
-                # Extract text from paragraphs
-                paragraphs = [para.text for para in document.paragraphs if para.text.strip()]
-
-                # Also extract text from tables
-                table_text = []
-                for table in document.tables:
-                    for row in table.rows:
-                        row_text = [cell.text.strip() for cell in row.cells if cell.text.strip()]
-                        if row_text:
-                            table_text.append(" | ".join(row_text))
-
-                # Combine paragraphs and table content
-                all_text = paragraphs + table_text
-                extracted_text = "\n".join(all_text)
-
-                extraction_method = "docx_direct"
+                extracted_text, docx_backend = ContentExtractor.extract_text_from_docx_with_method(file_bytes)
+                extracted_text = extracted_text.strip()
+                extraction_method = docx_backend
                 extraction_quality = "high" if len(extracted_text) > 50 else "medium"
-                logger.info(f"DOCX extraction: {len(paragraphs)} paragraphs, {len(table_text)} table rows")
-
-            except ImportError:
-                extraction_error = "python-docx library not available for DOCX extraction"
-                extraction_method = "none"
-                extraction_quality = "low"
+                logger.info(f"DOCX extraction ({docx_backend}): {len(extracted_text)} characters")
             except Exception as docx_err:
                 extraction_error = f"DOCX extraction failed: {str(docx_err)}"
                 extraction_method = "none"
@@ -1814,6 +1774,23 @@ async def replace_document_file(
                 extraction_error = f"Failed to decode text: {e}"
                 extraction_method = "failed"
                 extraction_quality = "low"
+        elif file_type in [
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "application/msword",
+            "docx",
+            "doc",
+        ] or file_name.lower().endswith((".docx", ".doc")):
+            try:
+                extracted_text, docx_backend = ContentExtractor.extract_text_from_docx_with_method(file_content)
+                extracted_text = extracted_text.strip()
+                extraction_method = docx_backend
+                extraction_quality = "high" if len(extracted_text) > 50 else "medium"
+                logger.info(f"DOCX replacement extraction ({docx_backend}): {len(extracted_text)} characters")
+            except Exception as docx_err:
+                extraction_error = f"DOCX extraction failed: {docx_err}"
+                extraction_method = "failed"
+                extraction_quality = "low"
+                logger.error(f"DOCX extraction error for {file_name}: {docx_err}")
 
         elif file_type in ["message/rfc822", "eml"] or file_name.lower().endswith(".eml"):
             # Email file (.eml)

@@ -3,6 +3,8 @@
 import io
 import re
 import time
+import zipfile
+import xml.etree.ElementTree as ET
 from typing import Optional, Tuple
 
 import requests
@@ -52,6 +54,8 @@ except ImportError:
 
 class DocumentProcessor:
     """Handles document download and text extraction."""
+
+    _WORD_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 
     @staticmethod
     def download_file(url: str, access_token: str, max_retries: int = 5) -> Tuple[bytes, str]:
@@ -182,6 +186,90 @@ class DocumentProcessor:
         raise Exception("No PDF extraction library available (install pypdf or PyMuPDF)")
 
     @staticmethod
+    def _extract_word_paragraph_text(paragraph: ET.Element) -> str:
+        """Extract readable text from a WordprocessingML paragraph element."""
+        ns = f"{{{DocumentProcessor._WORD_NS}}}"
+        chunks = []
+        for element in paragraph.iter():
+            if element.tag == f"{ns}t" and element.text:
+                chunks.append(element.text)
+            elif element.tag == f"{ns}tab":
+                chunks.append("\t")
+            elif element.tag in (f"{ns}br", f"{ns}cr"):
+                chunks.append("\n")
+        return "".join(chunks).strip()
+
+    @staticmethod
+    def _extract_text_from_docx_xml(file_content: bytes) -> str:
+        """Extract DOCX text directly from zipped WordprocessingML XML."""
+        ns = f"{{{DocumentProcessor._WORD_NS}}}"
+        try:
+            with zipfile.ZipFile(io.BytesIO(file_content)) as archive:
+                if "word/document.xml" not in archive.namelist():
+                    raise Exception("Missing word/document.xml")
+
+                lines: list[str] = []
+                root = ET.fromstring(archive.read("word/document.xml"))
+                body = root.find(f".//{ns}body")
+                if body is None:
+                    raise Exception("Malformed DOCX: missing document body")
+
+                for child in body:
+                    if child.tag == f"{ns}p":
+                        paragraph_text = DocumentProcessor._extract_word_paragraph_text(child)
+                        if paragraph_text:
+                            lines.append(paragraph_text)
+                    elif child.tag == f"{ns}tbl":
+                        for row in child.findall(f"{ns}tr"):
+                            row_cells = []
+                            for cell in row.findall(f"{ns}tc"):
+                                cell_paragraphs = []
+                                for paragraph in cell.findall(f".//{ns}p"):
+                                    paragraph_text = DocumentProcessor._extract_word_paragraph_text(paragraph)
+                                    if paragraph_text:
+                                        cell_paragraphs.append(paragraph_text)
+                                cell_text = " ".join(cell_paragraphs).strip()
+                                if cell_text:
+                                    row_cells.append(cell_text)
+                            if row_cells:
+                                lines.append(" | ".join(row_cells))
+
+                return "\n".join(lines)
+        except zipfile.BadZipFile as e:
+            raise Exception("Invalid DOCX container (not a valid ZIP)") from e
+        except ET.ParseError as e:
+            raise Exception("Invalid DOCX XML structure") from e
+
+    @staticmethod
+    def extract_text_from_docx_with_method(file_content: bytes) -> Tuple[str, str]:
+        """Extract text from DOCX and return both content and extraction backend."""
+        if DOCX_AVAILABLE:
+            try:
+                doc = Document(io.BytesIO(file_content))
+                paragraphs = [paragraph.text.strip() for paragraph in doc.paragraphs if paragraph.text.strip()]
+                table_rows = []
+                for table in doc.tables:
+                    for row in table.rows:
+                        row_text = [cell.text.strip() for cell in row.cells if cell.text.strip()]
+                        if row_text:
+                            table_rows.append(" | ".join(row_text))
+
+                text = "\n".join(paragraphs + table_rows).strip()
+                if text:
+                    return text, "python-docx"
+                logger.warning("python-docx returned empty content; trying XML fallback")
+            except Exception as e:
+                logger.warning(f"python-docx extraction failed, trying XML fallback: {e}")
+
+        try:
+            text = DocumentProcessor._extract_text_from_docx_xml(file_content).strip()
+            if text:
+                return text, "docx_xml_fallback"
+            raise Exception("DOCX XML extraction returned empty content")
+        except Exception as e:
+            raise Exception(f"Failed to extract text from DOCX: {str(e)}") from e
+
+    @staticmethod
     def extract_text_from_docx(file_content: bytes) -> str:
         """Extract text from DOCX file.
 
@@ -194,15 +282,8 @@ class DocumentProcessor:
             Extracted text
 
         """
-        if not DOCX_AVAILABLE:
-            raise Exception("python-docx not available for DOCX extraction")
-
-        try:
-            doc = Document(io.BytesIO(file_content))
-            text_parts = [paragraph.text for paragraph in doc.paragraphs]
-            return "\n".join(text_parts)
-        except Exception as e:
-            raise Exception(f"Failed to extract text from DOCX: {str(e)}") from e
+        extracted_text, _ = DocumentProcessor.extract_text_from_docx_with_method(file_content)
+        return extracted_text
 
     @staticmethod
     def extract_text_from_txt(file_content: bytes) -> str:
@@ -263,9 +344,6 @@ class DocumentProcessor:
             content_type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
             or extension == "docx"
         ):
-            if not DOCX_AVAILABLE:
-                logger.warning(f"python-docx not available to extract text from {filename}")
-                return None
             extracted = cls.extract_text_from_docx(file_content)
 
         # Plain text

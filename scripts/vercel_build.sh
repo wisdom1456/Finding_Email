@@ -30,17 +30,18 @@ fi
 
 echo ">>> Verifying critical Python imports for API runtime"
 python3 - <<'PY'
-import os
+import importlib
 import sys
 
-sys.path.insert(0, os.path.join("api", "packages"))
+sys.path.insert(0, "api/packages")
 sys.path.insert(0, "src")
+sys.path.insert(0, ".")
 
-required_modules = ["fastapi", "supabase", "openai", "markdown2"]
-for module_name in required_modules:
-    __import__(module_name)
+# Import the real serverless entrypoint to catch startup-time missing deps.
+module = importlib.import_module("api.index")
+assert hasattr(module, "app"), "api.index did not expose app"
 
-print("✅ Critical API imports verified")
+print("✅ API runtime import smoke check passed")
 PY
 
 echo ">>> Verifying environment variables"

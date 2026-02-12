@@ -3,154 +3,222 @@
 from __future__ import annotations
 
 import json
-from unittest.mock import AsyncMock, MagicMock, patch
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from legal_portal.core.data_models import ProcessingResult
+from legal_portal.core.data_models import (
+    DeepAnalysis,
+    DocumentType,
+    FactMatrix,
+    FileMetadata,
+    FileType,
+    LegalIssueMap,
+    LetterStructure,
+    MultiStageAnalysisResult,
+    ProcessedDocument,
+    ProcessingResult,
+)
 from legal_portal.services.main_processor import process_case_documents
+
+
+def _make_processed_document(
+    file_name: str,
+    content: str,
+    document_type: DocumentType,
+    file_type: FileType,
+) -> ProcessedDocument:
+    """Create a ProcessedDocument compatible with the current processing pipeline."""
+    return ProcessedDocument(
+        file_name=file_name,
+        content=content,
+        document_type=document_type,
+        file_type=file_type,
+        metadata=FileMetadata(file_name=file_name, file_type=file_type, file_size=len(content)),
+        extraction_method="test_extraction",
+        extraction_quality="high",
+    )
+
+
+def _sample_multi_stage_result() -> MultiStageAnalysisResult:
+    """Build a minimal deterministic multi-stage result for integration tests."""
+    return MultiStageAnalysisResult(
+        fact_matrix=FactMatrix(
+            parties=[
+                {
+                    "name": "John Doe",
+                    "role": "Client",
+                    "is_opposing_party": False,
+                    "entity_type": "individual",
+                },
+                {
+                    "name": "Acme Corporation",
+                    "role": "Opposing Party",
+                    "is_opposing_party": True,
+                    "entity_type": "corporation",
+                },
+            ],
+            timeline=[
+                {
+                    "date": "2024-01-15",
+                    "description": "Contract signed and performance obligations established.",
+                    "source_document": "contract.pdf",
+                    "significance": "Establishes core contractual duties.",
+                }
+            ],
+            financial_data=[
+                {
+                    "amount": 50000.0,
+                    "description": "Contract purchase price",
+                    "date": "2024-01-15",
+                    "source_document": "contract.pdf",
+                    "payment_type": "paid",
+                    "category": "payment_made",
+                }
+            ],
+            key_documents=[
+                {
+                    "document_name": "contract.pdf",
+                    "document_type": "Contract",
+                    "date": "2024-01-15",
+                    "significance": "Primary governing agreement.",
+                }
+            ],
+            preliminary_issues=["Breach of contract", "Breach of warranty"],
+        ),
+        issue_map=LegalIssueMap(
+            primary_issues=[],
+            secondary_issues=[],
+            relevant_statutes=["Fla. Stat. § 501.204"],
+            procedural_requirements=[],
+            case_complexity="moderate",
+            complexity_reasoning="Standard contract dispute",
+        ),
+        deep_analysis=DeepAnalysis(
+            issue_analyses=[
+                {
+                    "issue_name": "Breach of Contract",
+                    "legal_standard": "A valid contract, breach, and damages are required.",
+                    "fact_application": "Documents indicate late delivery and defective performance.",
+                    "statute_analysis": "Potential FDUTPA overlap under Fla. Stat. § 501.204.",
+                    "remedies_available": ["Damages"],
+                    "confidence_level": "strong",
+                }
+            ],
+            risk_assessment={
+                "major_risks": ["Potential factual disputes"],
+                "risk_mitigation_steps": ["Preserve documentary evidence"],
+            },
+            deadline_tracking=[],
+            evidence_strength={
+                "strong_evidence": ["Signed contract", "Correspondence"],
+                "weak_evidence": [],
+                "missing_evidence": [],
+                "overall_strength": "strong",
+            },
+            overall_case_strength="strong",
+            key_strengths=["Documented contract terms"],
+            key_challenges=["Contested damages scope"],
+            is_viable=True,
+            recommend_demand_letter=True,
+        ),
+        letter_structure=LetterStructure(
+            style="natural_flow",
+            intro="Here are the key points of our analysis:",
+            issue_format="flowing_bullet_paragraphs",
+            reasoning="Client-friendly narrative format.",
+        ),
+        verified_statutes=[
+            {
+                "citation": "Fla. Stat. § 501.204",
+                "title": "FDUTPA",
+                "summary": "Consumer protection",
+            }
+        ],
+        processing_time_seconds=0.25,
+        stage_timings={"stage1": 0.05, "stage2": 0.10, "stage3": 0.10},
+    )
 
 
 @pytest.mark.asyncio
 async def test_full_document_processing_workflow(
     mock_openai_client,
-    mock_file_processors,
     sample_intake_content,
     sample_case_info,
     sample_review_data,
-    tmp_path,
+    sample_document_summaries,
 ):
-    """Test the complete document processing workflow from intake to findings email."""
-    # Create temporary intake file
-    intake_file = tmp_path / "intake_form.txt"
-    intake_file.write_text(sample_intake_content)
+    """Test end-to-end analysis workflow using current processed-document inputs."""
+    mock_openai_client.get_preferred_model = lambda _op, fallback: fallback
+    processed_intake = [
+        _make_processed_document(
+            file_name="intake_form.txt",
+            content=sample_intake_content,
+            document_type=DocumentType.INTAKE_FORM,
+            file_type=FileType.TXT,
+        )
+    ]
+    processed_case_docs = [
+        _make_processed_document(
+            file_name="contract.pdf",
+            content="Sample contract content",
+            document_type=DocumentType.CASE_DOCUMENT,
+            file_type=FileType.PDF,
+        )
+    ]
 
-    # Create temporary case document
-    case_doc = tmp_path / "contract.pdf"
-    case_doc.write_text("Sample contract content")
+    with (
+        patch(
+            "legal_portal.services.main_processor.get_settings",
+            return_value=SimpleNamespace(suggest_statutes=False, corpus_coverage_warnings=True),
+        ),
+        patch(
+            "legal_portal.services.main_processor._generate_document_summaries",
+            new=AsyncMock(return_value=(sample_document_summaries, [])),
+        ),
+        patch("legal_portal.services.main_processor._detect_near_duplicates"),
+        patch(
+            "legal_portal.services.main_processor._generate_case_analysis_summary",
+            return_value={
+                "case_summary": "Contract and warranty dispute with documented defects.",
+                "practice_area": "Consumer Protection",
+                "key_issues": ["Breach of contract", "Breach of warranty"],
+                "relevant_statutes": [
+                    {"statute": "Fla. Stat. § 501.204", "relevance": "Consumer protection"}
+                ],
+                "additional_details": "",
+            },
+        ),
+        patch("legal_portal.services.main_processor.CorpusCoverageService") as mock_coverage,
+        patch("legal_portal.services.main_processor.StatuteRecommendationService"),
+        patch("legal_portal.services.main_processor.MultiStageAnalyzer") as mock_multi_stage,
+        patch(
+            "legal_portal.services.deadline_extraction_service.DeadlineExtractionService"
+        ) as mock_deadline_class,
+    ):
+        mock_coverage.return_value.analyze_coverage.return_value = {"is_covered": True, "warnings": []}
+        mock_multi_stage.return_value.analyze_case = AsyncMock(return_value=_sample_multi_stage_result())
+        mock_deadline_class.return_value.extract_deadlines.return_value = []
 
-    # Mock DocumentProcessor to return ProcessedDocument objects
-    with patch("legal_portal.services.main_processor.DocumentProcessor") as mock_doc_processor:
-        mock_processor_instance = MagicMock()
-        mock_processed_doc = MagicMock()
-        mock_processed_doc.content = "Sample contract content"
-        mock_processed_doc.file_name = "contract.pdf"
-        mock_processed_doc.extraction_quality = "high"
-        mock_processed_doc.extraction_method = "pdf_extraction"
+        result = await process_case_documents(
+            processed_intake=processed_intake,
+            processed_case_docs=processed_case_docs,
+            case_info=sample_case_info,
+            review_data=sample_review_data,
+        )
 
-        async def mock_process_from_paths(paths, intake_filenames=None, progress_callback=None):
-            if "intake" in str(paths[0]).lower():
-                return [mock_processed_doc]
-            return [mock_processed_doc]
-
-        mock_processor_instance.process_documents_from_paths = AsyncMock(side_effect=mock_process_from_paths)
-        mock_doc_processor.return_value = mock_processor_instance
-
-        # Mock OpenAI client responses
-        def mock_create_chat_completion(model, messages, temperature=0.3, max_tokens=4000):
-            user_content = messages[-1]["content"] if messages else ""
-
-            if "documents" in user_content.lower():
-                # Document summarization response
-                return {
-                    "content": json.dumps(
-                        {
-                            "documents": [
-                                {
-                                    "document_name": "contract.pdf",
-                                    "document_type": "Contract",
-                                    "parties": ["John Doe", "Acme Corporation"],
-                                    "key_dates": [
-                                        {
-                                            "date": "2024-01-15",
-                                            "event": "Contract signed",
-                                            "source_document": "contract.pdf",
-                                        }
-                                    ],
-                                    "key_amounts": [
-                                        {
-                                            "amount": "$50,000.00",
-                                            "description": "Purchase price",
-                                            "source_document": "contract.pdf",
-                                        }
-                                    ],
-                                    "issues_identified": ["Breach of warranty"],
-                                    "relevance_to_case": "Establishes contractual obligations",
-                                    "extraction_quality": "high",
-                                }
-                            ]
-                        }
-                    ),
-                    "usage": {"prompt_tokens": 1000, "completion_tokens": 2000, "total_tokens": 3000},
-                }
-            else:
-                # Letter generation response
-                return {
-                    "content": """<html><body>
-                        <h1>Findings Email</h1>
-                        <p>Dear John Doe,</p>
-                        <p>This letter summarizes our analysis. We have identified potential
-                        claims under Fla. Stat. § 501.204.</p>
-                    </body></html>""",
-                    "usage": {"prompt_tokens": 2000, "completion_tokens": 3000, "total_tokens": 5000},
-                }
-
-        mock_openai_client.create_chat_completion = mock_create_chat_completion
-
-        # Mock LetterReviewService
-        with patch("legal_portal.services.main_processor.LetterReviewService") as mock_review_service:
-            mock_review_instance = MagicMock()
-            mock_review_instance.review_and_improve_letter.return_value = (
-                "<html><body><h1>Findings Email</h1><p>Dear John Doe,</p>"
-                "<p>Analysis under Fla. Stat. § 501.204.</p></body></html>",
-                None,
-            )
-            mock_review_service.return_value = mock_review_instance
-
-            # Mock other services
-            with patch("legal_portal.services.main_processor.CorpusCoverageService") as mock_coverage:
-                mock_coverage_instance = MagicMock()
-                mock_coverage_instance.analyze_coverage.return_value = {"is_covered": True, "warnings": []}
-                mock_coverage.return_value = mock_coverage_instance
-
-                # Patch the imports inside the function (they're imported inside try blocks)
-                # These services are imported inside process_case_documents, so we patch at the source
-                with patch(
-                    "legal_portal.services.citation_tracking_service.CitationTrackingService"
-                ) as mock_citation_class:
-                    mock_citation_instance = MagicMock()
-                    mock_citation_instance.clean_filename_hashes.return_value = "<html>test</html>"
-                    mock_citation_instance.remove_citations_from_letter.return_value = "<html>test</html>"
-                    mock_citation_class.return_value = mock_citation_instance
-
-                    with patch(
-                        "legal_portal.services.document_formatter.DocumentFormatterService"
-                    ) as mock_formatter_class:
-                        mock_formatter_instance = MagicMock()
-                        mock_formatter_instance.format_findings_letter.return_value = "<html>formatted</html>"
-                        mock_formatter_class.return_value = mock_formatter_instance
-
-                        # Call the main processing function
-                        result = await process_case_documents(
-                            intake_form_path=str(intake_file),
-                            case_document_paths=[str(case_doc)],
-                            case_info=sample_case_info,
-                            review_data=sample_review_data,
-                        )
-
-    # Assertions - focus on structure, not exact content (mocks return simplified content)
+    # Assertions - focus on structure and artifact completeness.
     assert isinstance(result, ProcessingResult)
     assert result.status == "completed"
-    assert result.document_count > 0
+    assert result.document_count == len(processed_case_docs)
     assert result.processing_time_seconds > 0
-    assert "main_letter" in result.model_dump()
-    assert len(result.main_letter) > 0
-    # Note: Mock formatter returns simplified content, so we just check structure exists
-    assert isinstance(result.main_letter, str)
-    assert result.main_letter_with_citations is not None
+    assert result.main_letter == ""
+    assert result.main_letter_with_citations == ""
     assert result.document_summaries is not None
     assert result.case_analysis is not None
-    # The actual content validation is done in test_letter_generation_contains_required_elements
+    assert result.artifacts is not None
+    assert result.multi_stage_result is not None
 
 
 def test_api_contract_serialization(sample_document_summaries):
@@ -220,41 +288,52 @@ def test_api_contract_serialization(sample_document_summaries):
 
 @pytest.mark.asyncio
 async def test_workflow_graceful_failure(
+    mock_openai_client,
     sample_intake_content,
     sample_case_info,
     sample_review_data,
-    tmp_path,
 ):
     """Test that workflow handles failures gracefully without crashing."""
-    intake_file = tmp_path / "intake_form.txt"
-    intake_file.write_text(sample_intake_content)
+    mock_openai_client.get_preferred_model = lambda _op, fallback: fallback
+    processed_intake = [
+        _make_processed_document(
+            file_name="intake_form.txt",
+            content=sample_intake_content,
+            document_type=DocumentType.INTAKE_FORM,
+            file_type=FileType.TXT,
+        )
+    ]
 
-    # Mock OpenAI client to raise an exception
-    with patch("legal_portal.services.main_processor.OpenAIClient") as mock_client_class:
-        mock_client = MagicMock()
-        mock_client.create_chat_completion.side_effect = Exception("API connection failed")
-        mock_client_class.return_value = mock_client
-
-        # Mock DocumentProcessor to succeed
-        with patch("legal_portal.services.main_processor.DocumentProcessor") as mock_doc_processor:
-            mock_processor_instance = MagicMock()
-            mock_processed_doc = MagicMock()
-            mock_processed_doc.content = sample_intake_content
-            mock_processed_doc.file_name = "intake_form.txt"
-
-            async def mock_process(paths, intake_filenames=None, progress_callback=None):
-                return [mock_processed_doc]
-
-            mock_processor_instance.process_documents_from_paths = AsyncMock(side_effect=mock_process)
-            mock_doc_processor.return_value = mock_processor_instance
-
-            # Call process_case_documents - should NOT raise exception
-            result = await process_case_documents(
-                intake_form_path=str(intake_file),
-                case_document_paths=[],
-                case_info=sample_case_info,
-                review_data=sample_review_data,
-            )
+    with (
+        patch(
+            "legal_portal.services.main_processor.get_settings",
+            return_value=SimpleNamespace(suggest_statutes=False, corpus_coverage_warnings=False),
+        ),
+        patch(
+            "legal_portal.services.main_processor._generate_document_summaries",
+            new=AsyncMock(side_effect=Exception("API connection failed")),
+        ),
+        patch("legal_portal.services.main_processor._detect_near_duplicates"),
+        patch(
+            "legal_portal.services.main_processor._generate_case_analysis_summary",
+            return_value={
+                "case_summary": "unused",
+                "practice_area": "unused",
+                "key_issues": [],
+                "relevant_statutes": [],
+                "additional_details": "",
+            },
+        ),
+        patch("legal_portal.services.main_processor.StatuteRecommendationService"),
+        patch("legal_portal.services.main_processor.MultiStageAnalyzer") as mock_multi_stage,
+    ):
+        mock_multi_stage.return_value.analyze_case = AsyncMock(return_value=_sample_multi_stage_result())
+        result = await process_case_documents(
+            processed_intake=processed_intake,
+            processed_case_docs=[],
+            case_info=sample_case_info,
+            review_data=sample_review_data,
+        )
 
     # Assert graceful failure handling
     assert isinstance(result, ProcessingResult)
@@ -277,7 +356,7 @@ async def test_letter_generation_contains_required_elements(
     from legal_portal.services.json_processing_service import JsonProcessingService
 
     # Mock the letter generation response - need to return markdown that gets converted to HTML
-    def mock_create_chat_completion(model, messages, temperature=0.3, max_tokens=12000):
+    def mock_create_response(**_kwargs):
         # Return markdown content (the service converts it to HTML)
         return {
             "content": """# Findings Email
@@ -296,7 +375,7 @@ The contract dated January 15, 2024 establishes clear obligations.""",
             "usage": {"prompt_tokens": 2000, "completion_tokens": 3000, "total_tokens": 5000},
         }
 
-    mock_openai_client.create_chat_completion = mock_create_chat_completion
+    mock_openai_client.create_response = mock_create_response
 
     # Create service instance
     service = JsonProcessingService(client=mock_openai_client, config={})
@@ -333,73 +412,66 @@ async def test_corpus_coverage_warnings_appear_in_result(
     sample_intake_content,
     sample_case_info,
     sample_review_data,
-    tmp_path,
+    sample_document_summaries,
 ):
     """Test that corpus coverage warnings appear in ProcessingResult."""
-    intake_file = tmp_path / "intake_form.txt"
     # Add federal keywords to trigger unsupported area warning
     federal_intake = (
         sample_intake_content + "\n\nThis case involves federal court jurisdiction and USC violations."
     )
-    intake_file.write_text(federal_intake)
+    mock_openai_client.get_preferred_model = lambda _op, fallback: fallback
+    processed_intake = [
+        _make_processed_document(
+            file_name="intake_form.txt",
+            content=federal_intake,
+            document_type=DocumentType.INTAKE_FORM,
+            file_type=FileType.TXT,
+        )
+    ]
 
-    with patch("legal_portal.services.main_processor.DocumentProcessor") as mock_doc_processor:
-        mock_processor_instance = MagicMock()
-        mock_processed_doc = MagicMock()
-        mock_processed_doc.content = federal_intake
-        mock_processed_doc.file_name = "intake_form.txt"
+    with (
+        patch(
+            "legal_portal.services.main_processor.get_settings",
+            return_value=SimpleNamespace(suggest_statutes=False, corpus_coverage_warnings=True),
+        ),
+        patch(
+            "legal_portal.services.main_processor._generate_document_summaries",
+            new=AsyncMock(return_value=(sample_document_summaries, [])),
+        ),
+        patch("legal_portal.services.main_processor._detect_near_duplicates"),
+        patch(
+            "legal_portal.services.main_processor._generate_case_analysis_summary",
+            return_value={
+                "case_summary": "Federal issues referenced in intake.",
+                "practice_area": "General Legal Matter",
+                "key_issues": ["Federal Claims (Not Supported)"],
+                "relevant_statutes": [],
+                "additional_details": "",
+            },
+        ),
+        patch("legal_portal.services.main_processor.CorpusCoverageService") as mock_coverage,
+        patch("legal_portal.services.main_processor.StatuteRecommendationService"),
+        patch("legal_portal.services.main_processor.MultiStageAnalyzer") as mock_multi_stage,
+        patch(
+            "legal_portal.services.deadline_extraction_service.DeadlineExtractionService"
+        ) as mock_deadline_class,
+    ):
+        mock_coverage.return_value.analyze_coverage.return_value = {
+            "is_covered": False,
+            "warnings": [
+                "⚠️ This case appears to involve unsupported areas: Federal Claims (Not Supported)."
+            ],
+            "unsupported_areas": ["Federal Claims (Not Supported)"],
+        }
+        mock_multi_stage.return_value.analyze_case = AsyncMock(return_value=_sample_multi_stage_result())
+        mock_deadline_class.return_value.extract_deadlines.return_value = []
 
-        async def mock_process(paths, intake_filenames=None, progress_callback=None):
-            return [mock_processed_doc]
-
-        mock_processor_instance.process_documents_from_paths = AsyncMock(side_effect=mock_process)
-        mock_doc_processor.return_value = mock_processor_instance
-
-        # Mock OpenAI responses
-        def mock_create_chat_completion(model, messages, temperature=0.3, max_tokens=4000):
-            return {
-                "content": json.dumps({"documents": []}),
-                "usage": {"prompt_tokens": 1000, "completion_tokens": 2000, "total_tokens": 3000},
-            }
-
-        mock_openai_client.create_chat_completion = mock_create_chat_completion
-
-        # Mock CorpusCoverageService to return warnings
-        with patch("legal_portal.services.main_processor.CorpusCoverageService") as mock_coverage:
-            mock_coverage_instance = MagicMock()
-            mock_coverage_instance.analyze_coverage.return_value = {
-                "is_covered": False,
-                "warnings": [
-                    "⚠️ This case appears to involve unsupported areas: Federal Claims (Not Supported)."
-                ],
-                "unsupported_areas": ["Federal Claims (Not Supported)"],
-            }
-            mock_coverage.return_value = mock_coverage_instance
-
-            # Mock other required services
-            with patch("legal_portal.services.main_processor.JsonProcessingService") as mock_json_service:
-                mock_json_instance = MagicMock()
-                mock_json_instance.generate_findings_letter_from_json = AsyncMock(
-                    return_value="<html><body>Test letter</body></html>"
-                )
-                mock_json_service.return_value = mock_json_instance
-
-                with patch("legal_portal.services.main_processor.LetterReviewService") as mock_review:
-                    mock_review_instance = MagicMock()
-                    mock_review_instance.review_and_improve_letter.return_value = (
-                        "<html><body>Test</body></html>",
-                        None,
-                    )
-                    mock_review.return_value = mock_review_instance
-
-                    with patch("legal_portal.services.citation_tracking_service.CitationTrackingService"):
-                        with patch("legal_portal.services.document_formatter.DocumentFormatterService"):
-                            result = await process_case_documents(
-                                intake_form_path=str(intake_file),
-                                case_document_paths=[],
-                                case_info=sample_case_info,
-                                review_data=sample_review_data,
-                            )
+        result = await process_case_documents(
+            processed_intake=processed_intake,
+            processed_case_docs=[],
+            case_info=sample_case_info,
+            review_data=sample_review_data,
+        )
 
     # Assert warnings are present (may be empty if coverage check fails, but structure should be correct)
     assert isinstance(result, ProcessingResult)
@@ -420,57 +492,61 @@ async def test_cost_tracking_aggregates_correctly(
     sample_intake_content,
     sample_case_info,
     sample_review_data,
-    tmp_path,
+    sample_document_summaries,
 ):
     """Test that cost tracking aggregates correctly from token usage."""
-    intake_file = tmp_path / "intake_form.txt"
-    intake_file.write_text(sample_intake_content)
+    mock_openai_client.get_preferred_model = lambda _op, fallback: fallback
+    processed_intake = [
+        _make_processed_document(
+            file_name="intake_form.txt",
+            content=sample_intake_content,
+            document_type=DocumentType.INTAKE_FORM,
+            file_type=FileType.TXT,
+        )
+    ]
 
-    # Track token usage
-    known_tokens = {"prompt_tokens": 1000, "completion_tokens": 2000, "total_tokens": 3000}
+    with (
+        patch(
+            "legal_portal.services.main_processor.get_settings",
+            return_value=SimpleNamespace(suggest_statutes=False, corpus_coverage_warnings=False),
+        ),
+        patch(
+            "legal_portal.services.main_processor._generate_document_summaries",
+            new=AsyncMock(return_value=(sample_document_summaries, [])),
+        ),
+        patch("legal_portal.services.main_processor._detect_near_duplicates"),
+        patch(
+            "legal_portal.services.main_processor._generate_case_analysis_summary",
+            return_value={
+                "case_summary": "Cost tracking integration test case summary.",
+                "practice_area": "Consumer Protection",
+                "key_issues": ["Breach of contract"],
+                "relevant_statutes": [
+                    {"statute": "Fla. Stat. § 501.204", "relevance": "consumer protection"}
+                ],
+                "additional_details": "",
+            },
+        ),
+        patch("legal_portal.services.main_processor.StatuteRecommendationService"),
+        patch("legal_portal.services.main_processor.MultiStageAnalyzer") as mock_multi_stage,
+        patch(
+            "legal_portal.services.deadline_extraction_service.DeadlineExtractionService"
+        ) as mock_deadline_class,
+    ):
+        mock_multi_stage.return_value.analyze_case = AsyncMock(return_value=_sample_multi_stage_result())
+        mock_deadline_class.return_value.extract_deadlines.return_value = []
 
-    def mock_create_chat_completion(model, messages, temperature=0.3, max_tokens=4000):
-        return {"content": json.dumps({"documents": []}), "usage": known_tokens, "model": model}
-
-    mock_openai_client.create_chat_completion = mock_create_chat_completion
-
-    with patch("legal_portal.services.main_processor.DocumentProcessor") as mock_doc_processor:
-        mock_processor_instance = MagicMock()
-        mock_processed_doc = MagicMock()
-        mock_processed_doc.content = sample_intake_content
-        mock_processed_doc.file_name = "intake_form.txt"
-
-        async def mock_process(paths, intake_filenames=None, progress_callback=None):
-            return [mock_processed_doc]
-
-        mock_processor_instance.process_documents_from_paths = AsyncMock(side_effect=mock_process)
-        mock_doc_processor.return_value = mock_processor_instance
-
-        # Mock other services
-        with patch("legal_portal.services.main_processor.JsonProcessingService") as mock_json:
-            mock_json_instance = MagicMock()
-            mock_json_instance.generate_findings_letter_from_json = AsyncMock(
-                return_value="<html>test</html>"
-            )
-            mock_json.return_value = mock_json_instance
-
-            with patch("legal_portal.services.main_processor.LetterReviewService") as mock_review:
-                mock_review_instance = MagicMock()
-                mock_review_instance.review_and_improve_letter.return_value = ("<html>test</html>", None)
-                mock_review.return_value = mock_review_instance
-
-                with patch("legal_portal.services.citation_tracking_service.CitationTrackingService"):
-                    with patch("legal_portal.services.document_formatter.DocumentFormatterService"):
-                        result = await process_case_documents(
-                            intake_form_path=str(intake_file),
-                            case_document_paths=[],
-                            case_info=sample_case_info,
-                            review_data=sample_review_data,
-                        )
+        result = await process_case_documents(
+            processed_intake=processed_intake,
+            processed_case_docs=[],
+            case_info=sample_case_info,
+            review_data=sample_review_data,
+        )
 
     # Cost tracking is done via usage logs, so we verify the structure exists
     # The actual cost calculation is tested in unit tests
     assert isinstance(result, ProcessingResult)
+    assert result.status == "completed"
     assert result.processing_time_seconds is not None
     assert result.processing_time_seconds >= 0
 

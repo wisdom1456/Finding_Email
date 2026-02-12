@@ -10,6 +10,7 @@ import markdown2
 from legal_portal.core.data_models import DeepAnalysis, DocumentSummaryStructured, FactMatrix, Party
 from legal_portal.services.document_formatter import DocumentFormatterService
 from legal_portal.utils.logging_config import get_module_logger
+from legal_portal.utils.markdown_utils import clean_markdown_response
 from legal_portal.utils.openai_client import OpenAIClient
 
 logger = get_module_logger(__name__)
@@ -17,6 +18,11 @@ logger = get_module_logger(__name__)
 
 class DemandLetterService:
     """Generates professional demand letters targeted at a specific opposing party."""
+
+    JURISDICTION_STATUTE_EXAMPLES = {
+        "Florida": "Fla. Stat. § 83.51",
+        "New Mexico": "N.M. Stat. Ann. § 57-12-2",
+    }
 
     def __init__(self, openai_client: OpenAIClient) -> None:
         self.client = openai_client
@@ -50,6 +56,8 @@ class DemandLetterService:
             jurisdiction=jurisdiction,
         ):
             markdown_content += token
+
+        markdown_content = self._clean_markdown_response(markdown_content)
 
         # Convert markdown to HTML
         html = markdown2.markdown(
@@ -92,16 +100,11 @@ class DemandLetterService:
                 except Exception as e:
                     logger.warning(f"Failed to parse document summary: {e}")
 
-        # Jurisdiction-specific citation prefixes
-        statute_example = "Fla. Stat. § 83.51"
-        if jurisdiction == "New Mexico":
-            statute_example = "N.M. Stat. Ann. § 57-12-2"
-
-        prompt = self._load_template().format(
+        prompt = self._build_demand_prompt(
             target_party_name=target_party_name,
             party_context=self._build_party_context(fact_matrix, party),
             analysis_context=self._format_analysis_context(deep_analysis, doc_summaries),
-            demand_amount=f"${demand_amount:,.2f}" if demand_amount else "N/A",
+            demand_amount=demand_amount,
             demand_deadline=demand_deadline,
             specific_demands=self._format_demands(specific_demands),
             attorney_name=attorney_info.get("name") or "Attorney",
@@ -110,7 +113,6 @@ class DemandLetterService:
             contact_email=attorney_info.get("email") or "",
             client_name=client_name or "Client",
             jurisdiction_name=jurisdiction,
-            statute_example=statute_example,
         )
 
         logger.info(f"Streaming demand letter for {target_party_name} in {jurisdiction}")
@@ -129,6 +131,54 @@ class DemandLetterService:
             verbosity="high",
         ):
             yield token
+
+    def _build_demand_prompt(
+        self,
+        target_party_name: str,
+        party_context: str,
+        analysis_context: str,
+        demand_amount: Optional[float],
+        demand_deadline: str,
+        specific_demands: str,
+        attorney_name: str,
+        firm_name: str,
+        contact_phone: str,
+        contact_email: str,
+        client_name: str,
+        jurisdiction_name: str,
+    ) -> str:
+        """Build demand-letter prompt using normalized context values."""
+        statute_example = self.JURISDICTION_STATUTE_EXAMPLES.get(
+            jurisdiction_name,
+            self.JURISDICTION_STATUTE_EXAMPLES["Florida"],
+        )
+        demand_amount_text = self._format_demand_amount_for_prompt(demand_amount)
+
+        return self._load_template().format(
+            target_party_name=target_party_name,
+            party_context=party_context,
+            analysis_context=analysis_context,
+            demand_amount=demand_amount_text,
+            demand_deadline=demand_deadline,
+            specific_demands=specific_demands,
+            attorney_name=attorney_name,
+            firm_name=firm_name,
+            contact_phone=contact_phone,
+            contact_email=contact_email,
+            client_name=client_name,
+            jurisdiction_name=jurisdiction_name,
+            statute_example=statute_example,
+        )
+
+    def _format_demand_amount_for_prompt(self, demand_amount: Optional[float]) -> str:
+        """Format demand amount and avoid unresolved placeholders in prompts."""
+        if demand_amount is None:
+            return "To be determined based on currently documented losses."
+        return f"${demand_amount:,.2f}"
+
+    def _clean_markdown_response(self, response_text: str) -> str:
+        """Strip code fences and normalize streamed markdown output."""
+        return clean_markdown_response(response_text)
 
     def _build_party_context(self, fact_matrix: FactMatrix, party: Party) -> str:
         timeline = [

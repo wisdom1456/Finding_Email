@@ -18,6 +18,7 @@ from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_fi
 from legal_portal.core.data_models import ProcessingError
 from legal_portal.utils.diagnostic_logger import DiagnosticLogger
 from legal_portal.utils.logging_config import get_module_logger
+from legal_portal.utils.markdown_utils import clean_markdown_response
 from legal_portal.utils.openai_client import OpenAIClient
 
 logger = get_module_logger(__name__)
@@ -207,6 +208,133 @@ class JsonProcessingService:
             logger.exception("Unexpected error in HTML letter generation")
             raise e
 
+    def _format_confirmed_qa_context(self, confirmed_qa_pairs: Optional[list]) -> Tuple[str, int]:
+        """Format confirmed intake Q&A pairs for prompt insertion."""
+        if not confirmed_qa_pairs:
+            return "No user-confirmed Q&A pairs available.", 0
+
+        if isinstance(confirmed_qa_pairs, str):
+            cleaned_context = confirmed_qa_pairs.strip()
+            if cleaned_context:
+                return cleaned_context, 0
+            return "No user-confirmed Q&A pairs available.", 0
+
+        if not isinstance(confirmed_qa_pairs, list):
+            return str(confirmed_qa_pairs), 0
+
+        formatted_pairs = []
+        for i, qa in enumerate(confirmed_qa_pairs, 1):
+            if isinstance(qa, dict):
+                question = qa.get("question", "N/A")
+                answer = qa.get("answer", "N/A")
+            else:
+                question = str(qa)
+                answer = "N/A"
+            formatted_pairs.append(f"{i}. Q: {question}\n   A: {answer}")
+
+        if not formatted_pairs:
+            return "No user-confirmed Q&A pairs available.", 0
+
+        qa_context = "USER-CONFIRMED INTAKE QUESTIONS & ANSWERS:\n\n"
+        qa_context += "\n\n".join(formatted_pairs)
+        qa_context += "\n\n"
+        return qa_context, len(formatted_pairs)
+
+    def _resolve_attorney_and_firm_names(
+        self,
+        intake_content: str,
+        attorney_name: Optional[str],
+        firm_name: Optional[str],
+    ) -> Tuple[str, str]:
+        """Resolve attorney and firm names from explicit args or intake content."""
+        resolved_attorney_name = attorney_name
+        if not resolved_attorney_name:
+            attorney_match = re.search(
+                r'"attorney_name":\s*"([^"]+)"',
+                intake_content or "",
+                re.IGNORECASE,
+            )
+            if not attorney_match:
+                attorney_match = re.search(r'"attorneyName":\s*"([^"]+)"', intake_content or "")
+            resolved_attorney_name = attorney_match.group(1) if attorney_match else "Senior Partner"
+
+        resolved_firm_name = firm_name
+        if not resolved_firm_name:
+            firm_match = re.search(r'"firm_name":\s*"([^"]+)"', intake_content or "", re.IGNORECASE)
+            resolved_firm_name = firm_match.group(1) if firm_match else ""
+
+        return resolved_attorney_name, resolved_firm_name
+
+    def _resolve_contact_details(
+        self,
+        jurisdiction: str,
+        contact_phone: Optional[str],
+        contact_email: Optional[str],
+    ) -> Tuple[str, str]:
+        """Resolve contact phone/email values with jurisdiction-specific defaults."""
+        default_phone = "(727) 275-9575" if jurisdiction == "Florida" else "(505) 555-0199"
+        resolved_contact_phone = contact_phone if contact_phone else default_phone
+        resolved_contact_email = contact_email if contact_email else ""
+        return resolved_contact_phone, resolved_contact_email
+
+    def _build_verified_statute_context(self, verified_statutes: list, jurisdiction: str) -> str:
+        """Build prompt context for verified statutes from the legal corpus."""
+        if not verified_statutes:
+            return ""
+
+        statute_prefix = "FLORIDA" if jurisdiction == "Florida" else "NEW MEXICO"
+        statute_context = f"\n\nVERIFIED {statute_prefix} STATUTES:\n\n"
+        for statute in verified_statutes:
+            citation = statute.get("citation", "Unknown Citation")
+            title = statute.get("title", "")
+            summary = statute.get("summary", "")
+            relevance = statute.get("relevance_reason", statute.get("relevance", ""))
+
+            statute_context += f"{citation}: {title}\n"
+            statute_context += f"Summary: {summary}\n"
+            if relevance:
+                statute_context += f"Relevance: {relevance}\n"
+            statute_context += "\n"
+
+        return statute_context
+
+    def _build_findings_prompt(
+        self,
+        jurisdiction: str,
+        intake_content: str,
+        document_summaries: str,
+        quality_context: str,
+        statute_context: str,
+        attorney_name: str,
+        firm_name: str,
+        contact_phone: str,
+        contact_email: str,
+        clio_matter_context: str,
+        qa_context: str,
+        structure_guidance=None,  # LetterStructure for adaptive generation
+    ) -> str:
+        """Build the findings prompt for JSON, adaptive, and streaming generation."""
+        prompt_template = self._load_prompt_template(jurisdiction=jurisdiction)
+        prompt = prompt_template.format(
+            qa_context=qa_context,
+            intake_data=(intake_content or "")[:5000],
+            document_summaries=document_summaries,
+            quality_context=quality_context or "",
+            statute_context=statute_context or "",
+            attorney_name=attorney_name,
+            attorney_title="Senior Partner",
+            firm_name=firm_name or "",
+            contact_phone=contact_phone,
+            contact_email=contact_email,
+            clio_matter_context=clio_matter_context or "",
+        )
+
+        if structure_guidance is not None:
+            structure_instruction = self._create_structure_instruction(structure_guidance)
+            prompt = f"{prompt}\n\n{structure_instruction}"
+
+        return prompt
+
     async def generate_findings_letter_from_json(
         self,
         intake_content: str,
@@ -246,65 +374,38 @@ class JsonProcessingService:
         """
         logger.info(f"Generating letter for {jurisdiction} from structured JSON input")
 
-        # Format Q&A pairs for prompt context
-        qa_context = ""
-        if confirmed_qa_pairs:
-            qa_context = "USER-CONFIRMED INTAKE QUESTIONS & ANSWERS:\n\n"
-            for i, qa in enumerate(confirmed_qa_pairs, 1):
-                question = qa.get("question", "N/A")
-                answer = qa.get("answer", "N/A")
-                qa_context += f"{i}. Q: {question}\n   A: {answer}\n\n"
-            logger.info(f"Including {len(confirmed_qa_pairs)} user-confirmed Q&A pairs in letter generation")
+        qa_context, qa_pair_count = self._format_confirmed_qa_context(confirmed_qa_pairs)
+        if qa_pair_count > 0:
+            logger.info(f"Including {qa_pair_count} user-confirmed Q&A pairs in letter generation")
         else:
-            qa_context = "No user-confirmed Q&A pairs available."
             logger.info("No confirmed Q&A pairs provided for letter generation")
 
-        # Load enhanced prompt template with jurisdiction-specific guidance pre-injected
-        prompt_template = self._load_prompt_template(jurisdiction=jurisdiction)
-
-        # Extract attorney name from intake if not provided
-        if not attorney_name:
-            import re
-
-            attorney_match = re.search(r'"attorney_name":\s*"([^"]+)"', intake_content, re.IGNORECASE)
-            if not attorney_match:
-                attorney_match = re.search(r'"attorneyName":\s*"([^"]+)"', intake_content)
-            attorney_name = attorney_match.group(1) if attorney_match else "Senior Partner"
-
-        if not firm_name:
-            import re
-
-            firm_match = re.search(r'"firm_name":\s*"([^"]+)"', intake_content, re.IGNORECASE)
-            firm_name = firm_match.group(1) if firm_match else ""
-
-        # Use provided contact info or fallback to defaults/placeholders
-        if not contact_phone:
-            contact_phone = "(727) 275-9575" if jurisdiction == "Florida" else "(505) 555-0199"
-        contact_email_value = contact_email if contact_email else "[EMAIL PLACEHOLDER]"
-
-        # Keep statute context separate for prominence in prompt
-        statute_context_formatted = statute_context if statute_context else ""
-
-        # Only append CLIO context to quality_context
-        full_quality_context = quality_context
-        if clio_matter_context:
-            full_quality_context = f"{full_quality_context}\n\n{clio_matter_context}"
-            logger.info("Added CLIO matter context to letter generation prompt")
-
-        # Format prompt with JSON input and signature variables
-        # Note: _load_prompt_template already formatted jurisdiction-specific fields
-        prompt = prompt_template.format(
-            qa_context=qa_context,
-            intake_data=intake_content[:5000],
-            document_summaries=document_summaries_json,  # Pass JSON directly
-            quality_context=full_quality_context,
-            statute_context=statute_context_formatted,  # Prominent statute context
+        attorney_name, firm_name = self._resolve_attorney_and_firm_names(
+            intake_content=intake_content,
             attorney_name=attorney_name,
-            attorney_title="Senior Partner",  # Default title
+            firm_name=firm_name,
+        )
+        contact_phone, contact_email_value = self._resolve_contact_details(
+            jurisdiction=jurisdiction,
+            contact_phone=contact_phone,
+            contact_email=contact_email,
+        )
+
+        if clio_matter_context:
+            logger.info("Including CLIO matter context in dedicated prompt section")
+
+        prompt = self._build_findings_prompt(
+            jurisdiction=jurisdiction,
+            intake_content=intake_content,
+            document_summaries=document_summaries_json,
+            quality_context=quality_context,
+            statute_context=statute_context,
+            attorney_name=attorney_name,
             firm_name=firm_name,
             contact_phone=contact_phone,
             contact_email=contact_email_value,
             clio_matter_context=clio_matter_context,
+            qa_context=qa_context,
         )
 
         logger.info("Making OpenAI request for letter generation from JSON")
@@ -374,6 +475,9 @@ class JsonProcessingService:
             quality_context: Quality assessment context
             clio_matter_context: CLIO matter context
             jurisdiction: State jurisdiction (e.g., "Florida", "New Mexico")
+            diag_logger: Optional diagnostic logger for stage-by-stage artifacts
+            original_documents: Optional raw source document content for precision/citations
+            gap_analysis: Optional gap analysis result used for anti-hallucination guardrails
 
         Returns:
         -------
@@ -388,38 +492,20 @@ class JsonProcessingService:
             extra={"structure": "natural_flow", "issues": num_issues, "jurisdiction": jurisdiction},
         )
 
-        # Format Q&A pairs for prompt context
-        qa_context = ""
-        if confirmed_qa_pairs:
-            qa_context = "USER-CONFIRMED INTAKE QUESTIONS & ANSWERS:\n\n"
-            for i, qa in enumerate(confirmed_qa_pairs, 1):
-                qa_context += f"{i}. Q: {qa.get('question', 'N/A')}\n   A: {qa.get('answer', 'N/A')}\n\n"
-            logger.info(f"Including {len(confirmed_qa_pairs)} confirmed Q&A pairs")
-        else:
-            qa_context = "No user-confirmed Q&A pairs available."
+        qa_context, qa_pair_count = self._format_confirmed_qa_context(confirmed_qa_pairs)
+        if qa_pair_count > 0:
+            logger.info(f"Including {qa_pair_count} confirmed Q&A pairs")
 
-        # Load enhanced prompt template with jurisdiction-specific guidance pre-injected
-        prompt_template = self._load_prompt_template(jurisdiction=jurisdiction)
-
-        # Extract attorney info if not provided
-        if not attorney_name:
-            import re
-
-            attorney_match = re.search(r'"attorney_name":\s*"([^"]+)"', intake_content, re.IGNORECASE)
-            if not attorney_match:
-                attorney_match = re.search(r'"attorneyName":\s*"([^"]+)"', intake_content)
-            attorney_name = attorney_match.group(1) if attorney_match else "Senior Partner"
-
-        if not firm_name:
-            import re
-
-            firm_match = re.search(r'"firm_name":\s*"([^"]+)"', intake_content, re.IGNORECASE)
-            firm_name = firm_match.group(1) if firm_match else ""
-
-        # Contact info
-        if not contact_phone:
-            contact_phone = "(727) 275-9575" if jurisdiction == "Florida" else "(505) 555-0199"
-        contact_email_value = contact_email if contact_email else "[EMAIL PLACEHOLDER]"
+        attorney_name, firm_name = self._resolve_attorney_and_firm_names(
+            intake_content=intake_content,
+            attorney_name=attorney_name,
+            firm_name=firm_name,
+        )
+        contact_phone, contact_email_value = self._resolve_contact_details(
+            jurisdiction=jurisdiction,
+            contact_phone=contact_phone,
+            contact_email=contact_email,
+        )
 
         # Format structured analysis for prompt
         structured_context = self._format_multi_stage_context(
@@ -428,49 +514,24 @@ class JsonProcessingService:
             gap_analysis=gap_analysis,
         )
 
-        # Build statute context
-        statute_context = ""
-        if verified_statutes:
-            statute_prefix = "FLORIDA" if jurisdiction == "Florida" else "NEW MEXICO"
-            statute_context = f"\n\nVERIFIED {statute_prefix} STATUTES:\n\n"
-            for statute in verified_statutes:
-                citation = statute.get('citation', 'Unknown Citation')
-                title = statute.get('title', '')
-                summary = statute.get('summary', '')
-                relevance = statute.get('relevance_reason', statute.get('relevance', ''))
-
-                statute_context += f"{citation}: {title}\n"
-                statute_context += f"Summary: {summary}\n"
-                if relevance:  # Only include relevance line if present
-                    statute_context += f"Relevance: {relevance}\n"
-                statute_context += "\n"
-
-        # Combine contexts
-        full_quality_context = quality_context
-        if clio_matter_context:
-            full_quality_context = f"{full_quality_context}\n\n{clio_matter_context}"
-
-        # Add structure instruction before the closing
-        structure_instruction = self._create_structure_instruction(structure_guidance)
-
-        # Format prompt
-        # Note: _load_prompt_template already formatted jurisdiction-specific fields
-        prompt = prompt_template.format(
-            qa_context=qa_context,
-            intake_data=intake_content[:5000],
-            document_summaries=structured_context,  # Use structured analysis instead of raw summaries
-            quality_context=full_quality_context,
+        statute_context = self._build_verified_statute_context(
+            verified_statutes=verified_statutes,
+            jurisdiction=jurisdiction,
+        )
+        prompt = self._build_findings_prompt(
+            jurisdiction=jurisdiction,
+            intake_content=intake_content,
+            document_summaries=structured_context,
+            quality_context=quality_context,
             statute_context=statute_context,
             attorney_name=attorney_name,
-            attorney_title="Senior Partner",
             firm_name=firm_name,
             contact_phone=contact_phone,
             contact_email=contact_email_value,
             clio_matter_context=clio_matter_context,
+            qa_context=qa_context,
+            structure_guidance=structure_guidance,
         )
-
-        # Add structure instruction before the closing
-        prompt = f"{prompt}\n\n{structure_instruction}"
 
         logger.info("Making OpenAI request for adaptive letter generation")
 
@@ -566,54 +627,36 @@ class JsonProcessingService:
             gap_analysis=gap_analysis,
         )
 
-        # Build statute context
-        statute_context = ""
-        if verified_statutes:
-            statute_prefix = "FLORIDA" if jurisdiction == "Florida" else "NEW MEXICO"
-            statute_context = f"\n\nVERIFIED {statute_prefix} STATUTES:\n\n"
-            for statute in verified_statutes:
-                citation = statute.get('citation', 'Unknown Citation')
-                title = statute.get('title', '')
-                summary = statute.get('summary', '')
-                relevance = statute.get('relevance_reason', statute.get('relevance', ''))
-
-                statute_context += f"{citation}: {title}\n"
-                statute_context += f"Summary: {summary}\n"
-                if relevance:  # Only include relevance line if present
-                    statute_context += f"Relevance: {relevance}\n"
-                statute_context += "\n"
-
-        # Combine contexts
-        full_quality_context = quality_context
-        if clio_matter_context:
-            full_quality_context = f"{full_quality_context}\n\n{clio_matter_context}"
-
-        # Load enhanced prompt template
-        prompt_template = self._load_prompt_template(jurisdiction=jurisdiction)
+        qa_context, qa_pair_count = self._format_confirmed_qa_context(confirmed_qa_pairs)
+        if qa_pair_count > 0:
+            logger.info(f"Including {qa_pair_count} confirmed Q&A pairs in streaming generation")
 
         # Signature details
         attorney_name = attorney_name or "Senior Partner"
-        contact_phone = contact_phone or ("(727) 275-9575" if jurisdiction == "Florida" else "(505) 555-0199")
-        contact_email_value = contact_email or "[EMAIL PLACEHOLDER]"
+        contact_phone, contact_email_value = self._resolve_contact_details(
+            jurisdiction=jurisdiction,
+            contact_phone=contact_phone,
+            contact_email=contact_email,
+        )
 
-        # Format prompt
-        prompt = prompt_template.format(
-            qa_context=confirmed_qa_pairs or "No user-confirmed Q&A pairs available.",
-            intake_data=intake_content[:5000],
+        statute_context = self._build_verified_statute_context(
+            verified_statutes=verified_statutes,
+            jurisdiction=jurisdiction,
+        )
+        prompt = self._build_findings_prompt(
+            jurisdiction=jurisdiction,
+            intake_content=intake_content,
             document_summaries=structured_context,
-            quality_context=full_quality_context,
+            quality_context=quality_context,
             statute_context=statute_context,
             attorney_name=attorney_name,
-            attorney_title="Senior Partner",
             firm_name=firm_name or "",
             contact_phone=contact_phone,
             contact_email=contact_email_value,
             clio_matter_context=clio_matter_context,
+            qa_context=qa_context,
+            structure_guidance=structure_guidance,
         )
-
-        # Add structure instruction
-        structure_instruction = self._create_structure_instruction(structure_guidance)
-        prompt = f"{prompt}\n\n{structure_instruction}"
 
         logger.info(f"Streaming adaptive findings email for {jurisdiction}")
 
@@ -699,7 +742,7 @@ class JsonProcessingService:
             # List critical and high gaps explicitly
             if gap_analysis.critical_count > 0 or gap_analysis.high_count > 0:
                 context += "\n**CRITICAL/HIGH SEVERITY GAPS (MUST ADDRESS IN LETTER):**\n"
-                for category, gaps in gap_analysis.gaps_by_category.items():
+                for _category, gaps in gap_analysis.gaps_by_category.items():
                     for gap in gaps:
                         if hasattr(gap, 'severity') and gap.severity in ['critical', 'high']:
                             context += f"- [{gap.severity.upper()}] {gap.title}: {gap.description}\n"
@@ -881,29 +924,7 @@ Thank you,
             Cleaned Markdown content
 
         """
-        if not response_text:
-            return ""
-
-        cleaned = response_text.strip()
-
-        # Remove code fences with language specifiers (```html, ```markdown, etc.)
-        # Match opening fence with optional language specifier at start
-        cleaned = re.sub(r"^\s*```(?:html|markdown|md)?\s*\n?", "", cleaned, flags=re.MULTILINE)
-
-        # Remove closing code fences
-        cleaned = re.sub(r"\n?\s*```\s*$", "", cleaned, flags=re.MULTILINE)
-
-        # Clean up any remaining stray code fences (in case of multiple wrappings)
-        cleaned = re.sub(r"```(?:html|markdown|md)?\s*\n?", "", cleaned)
-        cleaned = re.sub(r"\n?\s*```", "", cleaned)
-
-        cleaned = cleaned.strip()
-
-        # DO NOT remove HTML tags - the AI should be generating markdown, not HTML
-        # The markdown will be converted to HTML later
-        # If the AI accidentally includes some HTML, markdown2 will handle it gracefully
-
-        return cleaned
+        return clean_markdown_response(response_text)
 
     @retry(
         stop=stop_after_attempt(3),

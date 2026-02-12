@@ -130,9 +130,87 @@ def mock_openai_client(monkeypatch):
             "model": model,
         }
 
+    def mock_create_response(
+        model: str,
+        input: str,
+        instructions: str | None = None,
+        reasoning_effort: str | None = None,
+        verbosity: str | None = None,
+        max_output_tokens: int = 4000,
+    ) -> Dict[str, Any]:
+        """Return deterministic mock response for Responses API callers."""
+        user_input = input or ""
+
+        if "OUTPUT AS STRICT JSON" in user_input and "case_summary" in user_input:
+            response_json = {
+                "case_summary": "Deterministic case summary for testing.",
+                "practice_area": "Consumer Protection",
+                "key_issues": ["Breach of contract", "Breach of warranty"],
+                "relevant_statutes": [{"statute": "Fla. Stat. § 501.204", "relevance": "FDUTPA"}],
+                "additional_details": "",
+            }
+            return {
+                "content": json.dumps(response_json),
+                "usage": {"prompt_tokens": 1200, "completion_tokens": 800, "total_tokens": 2000},
+                "model": model,
+            }
+
+        if "document" in user_input.lower():
+            response_json = {
+                "documents": [
+                    {
+                        "document_name": "Contract.pdf",
+                        "document_type": "Contract",
+                        "parties": ["John Doe", "Acme Corporation"],
+                        "key_dates": [
+                            {
+                                "date": "2024-01-15",
+                                "event": "Contract signed",
+                                "source_document": "Contract.pdf, Page 1",
+                            }
+                        ],
+                        "key_amounts": [
+                            {
+                                "amount": "$50,000.00",
+                                "description": "Purchase price",
+                                "source_document": "Contract.pdf, Section 3.1",
+                            }
+                        ],
+                        "issues_identified": ["Breach of warranty clause 5.2", "Failure to deliver on time"],
+                        "risk_items": [],
+                        "contract_clauses_referenced": [
+                            {
+                                "clause_number": "5.2",
+                                "title": "Warranty",
+                                "snippet": "Seller warrants that goods are free from defects",
+                            }
+                        ],
+                        "procedural_requirements": [],
+                        "relevance_to_case": "Establishes contractual obligations and breach terms",
+                        "extraction_quality": "high",
+                        "extraction_notes": None,
+                    }
+                ]
+            }
+            return {
+                "content": json.dumps(response_json),
+                "usage": {"prompt_tokens": 1000, "completion_tokens": 2000, "total_tokens": 3000},
+                "model": model,
+            }
+
+        return {
+            "content": (
+                "# Findings Email\n\nDear John Doe,\n\n## Legal Analysis\n\n"
+                "Based on our review, potential claims may arise under Fla. Stat. § 501.204."
+            ),
+            "usage": {"prompt_tokens": 1100, "completion_tokens": 900, "total_tokens": 2000},
+            "model": model,
+        }
+
     # Mock the OpenAIClient class
     mock_client = MagicMock()
     mock_client.create_chat_completion = mock_create_chat_completion
+    mock_client.create_response = mock_create_response
     mock_client.analyze_with_prompt = mock_create_chat_completion
 
     # Patch the OpenAIClient instantiation

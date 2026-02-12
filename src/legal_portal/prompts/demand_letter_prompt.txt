@@ -14,6 +14,9 @@ DEMAND DETAILS:
 - Specific Demands:
 {specific_demands}
 
+If the Amount field says "To be determined based on currently documented losses," do NOT invent a dollar figure.
+In that case, demand full compensation in an amount to be finalized after complete accounting and document review.
+
 ATTORNEY CONTACT:
 {attorney_name}
 {firm_name}
@@ -81,7 +84,9 @@ REQUIRED LETTER STRUCTURE:
      2. [Second demand with complete specifics]  
      3. [Additional demands as needed]
    - Blank line after list
-   - Include monetary paragraph: "We demand the payment of [Written Amount] U.S. Dollars and [Cents] Cents ($X,XXX.XX) as compensation for [reason], to be received within {demand_deadline} from receipt of this letter."
+   - Monetary paragraph:
+     - If a specific amount is provided, use: "We demand the payment of [Written Amount] U.S. Dollars and [Cents] Cents ($X,XXX.XX) as compensation for [reason], to be received within {demand_deadline} from receipt of this letter."
+     - If amount is "To be determined based on currently documented losses", use: "We demand full compensation for all documented losses in an amount to be finalized upon complete accounting, with payment due within {demand_deadline} from receipt of this letter."
    - Blank line
    - Consequences paragraph: "Should we fail to receive any response within this timeframe, we will assume you intend to reject this demand and will proceed to take any necessary legal action afforded to our Client, including [list specific remedies: filing a lawsuit for breach of contract, seeking specific performance, pursuing attorney's fees, etc.]."
 
@@ -107,6 +112,7 @@ STYLE REQUIREMENTS:
 - No hedging in demands - be direct and specific
 - **No Markdown code fences in output** (no ``` blocks)
 - No placeholders like "[insert]" - use actual data from context
+- Never fabricate missing figures (especially dollar amounts)
 - Use proper paragraph spacing (blank lines between sections)
 - Use blockquotes (>) for contract provisions
 - Use ## for section headings if including them (optional)

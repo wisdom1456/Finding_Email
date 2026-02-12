@@ -22,6 +22,7 @@
 	import { Trash2, Edit, ArrowLeft } from 'lucide-svelte';
 	import type { CaseData } from '$lib/types';
 	import DocumentSummaryCard from '$lib/components/DocumentSummaryCard.svelte';
+	import DocumentPreviewPane from '$lib/components/DocumentPreviewPane.svelte';
 	import { syncClioMatter, type ClioSyncResponse } from '$lib/api/cases';
 
 	let caseData = $state<CaseData | null>(null);
@@ -153,10 +154,10 @@
 	let loadingExtractedText = $state(false);
 	let extractedTextData = $state<any>(null);
 	let pdfBlobUrl = $state<string | null>(null);
-	let isPdfDocument = $derived(viewingDocument?.file_type === 'application/pdf');
-	let isImageDocument = $derived(
-		viewingDocument?.file_type?.startsWith('image/') || false
-	);
+	let previewBlobDocumentId = $state<string | null>(null);
+	let loadingPreview = $state(false);
+	let isPdfDocument = $derived(isPdfLikeDocument(viewingDocument));
+	let isImageDocument = $derived(isImageLikeDocument(viewingDocument));
 
 	// Intake document selection state
 	let showIntakeDocumentSelector = $state(false);
@@ -449,10 +450,7 @@
 		syncResult = null;
 
 		try {
-			const { session } = await getSecureSession();
-			if (!session) throw new Error('Not authenticated');
-
-			const result = await syncClioMatter(caseId as string, session.access_token);
+			const result = await syncClioMatter(caseId as string);
 			syncResult = result;
 
 			// Reload documents to show newly synced items
@@ -521,6 +519,52 @@
 		}
 	}
 
+	function removeSelectedFile(index: number) {
+		if (index < 0 || index >= selectedFiles.length) return;
+
+		const nextSelectedFiles = selectedFiles.filter((_, i) => i !== index);
+		selectedFiles = nextSelectedFiles;
+
+		const adjustedDuplicates = new Set<number>();
+		for (const duplicateIndex of duplicateFiles) {
+			if (duplicateIndex === index) continue;
+			adjustedDuplicates.add(duplicateIndex > index ? duplicateIndex - 1 : duplicateIndex);
+		}
+		duplicateFiles = adjustedDuplicates;
+
+		if (intakeFormIndex !== null) {
+			if (intakeFormIndex === index) {
+				intakeFormIndex = null;
+			} else if (intakeFormIndex > index) {
+				intakeFormIndex -= 1;
+			}
+		}
+
+		showIntakeSelector = nextSelectedFiles.some(
+			(file, i) => !adjustedDuplicates.has(i) && file.name.toLowerCase().includes('intake')
+		);
+	}
+
+	function selectIntakeForm(index: number | null) {
+		intakeFormIndex = index;
+		showIntakeSelector = false;
+	}
+
+	function retryFailedUploads() {
+		const retryFiles = uploadFailures
+			.map((failure) => failure.file)
+			.filter((file): file is File => file instanceof File);
+
+		if (retryFiles.length === 0) {
+			toastStore.warning('No retryable files were included in the failed upload list.');
+			return;
+		}
+
+		showFailureSummary = false;
+		uploadFailures = [];
+		processSelectedFiles(retryFiles);
+	}
+
 	async function uploadSelectedFiles() {
 		if (selectedFiles.length === 0) return;
 
@@ -554,7 +598,7 @@
 					uploadFailures.push({
 						fileName: file.name,
 						reason: validation.error || 'Validation failed',
-						errorCode: validation.errorCode,
+						errorCode: validation.errorCode || 'VALIDATION_FAILED',
 						fileSizeMB: file.size / (1024 * 1024),
 						file: file
 					});
@@ -620,68 +664,116 @@
 		documentViewerContent = '';
 		documentViewerTab = 'preview';
 		documentSummary = null;
-		
+		loadingPreview = false;
+		extractedTextData = null;
+
 		// Clean up previous blob URL if it exists
 		if (pdfBlobUrl) {
 			URL.revokeObjectURL(pdfBlobUrl);
 			pdfBlobUrl = null;
 		}
-		
+		previewBlobDocumentId = null;
+
 		// Try to find document summary if we have analysis results
 		await loadDocumentSummary(doc.file_name);
 
 		try {
-			// Check if it's a PDF or image - need to download as blob
-			const isPdf = doc.file_type === 'application/pdf';
-			const isImage = doc.file_type?.startsWith('image/');
-
-			if (isPdf || isImage) {
-				// Download from storage
-		const { session, user } = await getSecureSession();
-
-		if (!session || !user) {
-			documentViewerContent = 'Error: Not authenticated';
-			return;
-		}
-
-				const { data, error } = await supabase.storage
-					.from('documents')
-					.download(doc.storage_path);
-
-				if (error) throw error;
-
-				// Create blob URL for PDF or image
-				pdfBlobUrl = URL.createObjectURL(data);
+			// Images are lightweight enough for immediate preview.
+			// PDFs are loaded on demand to avoid expensive click-path work.
+			if (isImageLikeDocument(doc)) {
+				await loadDocumentBinaryPreview(doc);
+				return;
+			}
+			if (isPdfLikeDocument(doc)) {
 				return;
 			}
 
-			// For text files, check if document has extracted_text
 			if (doc.extracted_text) {
 				documentViewerContent = doc.extracted_text;
 				return;
 			}
 
-			// Otherwise, try to download and display as text
-			const { session, user } = await getSecureSession();
+			if (!isTextLikeDocument(doc)) {
+				documentViewerContent = `Unable to display this document. File type: ${doc.file_type}`;
+				return;
+			}
 
+			const { session, user } = await getSecureSession();
 			if (!session || !user) {
 				documentViewerContent = 'Error: Not authenticated';
 				return;
 			}
 
-			// Download from storage
 			const { data, error } = await supabase.storage
 				.from('documents')
 				.download(doc.storage_path);
 
 			if (error) throw error;
 
-			// Try to read as text
-			const text = await data.text();
-			documentViewerContent = text;
+			documentViewerContent = await data.text();
 		} catch (error: any) {
 			console.error('Failed to load document:', error);
 			documentViewerContent = `Unable to display this document. File type: ${doc.file_type}`;
+		}
+	}
+
+	function isPdfLikeDocument(doc: any): boolean {
+		if (!doc) return false;
+		const fileType = String(doc.file_type || '').toLowerCase();
+		const fileName = String(doc.file_name || '').toLowerCase();
+		return fileType === 'application/pdf' || fileName.endsWith('.pdf');
+	}
+
+	function isImageLikeDocument(doc: any): boolean {
+		if (!doc) return false;
+		return String(doc.file_type || '').toLowerCase().startsWith('image/');
+	}
+
+	function isTextLikeDocument(doc: any): boolean {
+		if (!doc) return false;
+		const fileType = String(doc.file_type || '').toLowerCase();
+		const fileName = String(doc.file_name || '').toLowerCase();
+		return (
+			fileType.startsWith('text/') ||
+			fileName.endsWith('.txt') ||
+			fileName.endsWith('.md') ||
+			fileName.endsWith('.csv') ||
+			fileName.endsWith('.log')
+		);
+	}
+
+	async function loadDocumentBinaryPreview(doc: any = viewingDocument) {
+		if (!doc?.storage_path) return;
+
+		const docId = doc.id ? String(doc.id) : null;
+		if (docId && previewBlobDocumentId === docId && pdfBlobUrl) {
+			return;
+		}
+
+		loadingPreview = true;
+		try {
+			const { session, user } = await getSecureSession();
+			if (!session || !user) {
+				documentViewerContent = 'Error: Not authenticated';
+				return;
+			}
+
+			const { data, error } = await supabase.storage
+				.from('documents')
+				.download(doc.storage_path);
+
+			if (error) throw error;
+
+			if (pdfBlobUrl) {
+				URL.revokeObjectURL(pdfBlobUrl);
+			}
+			pdfBlobUrl = URL.createObjectURL(data);
+			previewBlobDocumentId = docId;
+		} catch (error: any) {
+			console.error('Failed to load document preview:', error);
+			toastStore.error('Failed to load document preview');
+		} finally {
+			loadingPreview = false;
 		}
 	}
 
@@ -715,9 +807,11 @@
 			URL.revokeObjectURL(pdfBlobUrl);
 			pdfBlobUrl = null;
 		}
+		previewBlobDocumentId = null;
 		viewingDocument = null;
 		documentViewerContent = '';
 		documentViewerTab = 'preview';
+		loadingPreview = false;
 		extractedTextData = null;
 		loadingExtractedText = false;
 		documentSummary = null;
@@ -778,6 +872,37 @@
 	// Track whether we should start analysis after intake selection
 	let startAnalysisAfterIntakeSelection = $state(false);
 
+	async function promoteToIntakeForm(docId: string, options: { suppressToast?: boolean } = {}) {
+		const targetDoc = documents.find((doc) => doc.id === docId);
+		if (!targetDoc) throw new Error('Selected intake document no longer exists');
+
+		const docsToEvaluate = documents.filter(
+			(doc) => doc.id === docId || Boolean(doc.metadata?.is_intake_form)
+		);
+
+		for (const doc of docsToEvaluate) {
+			const shouldBePrimary = doc.id === docId;
+			const isPrimaryNow = Boolean(doc.metadata?.is_intake_form);
+			if (shouldBePrimary === isPrimaryNow) continue;
+
+			const { error } = await (supabase
+				.from('documents') as any)
+				.update({
+					metadata: { ...(doc.metadata || {}), is_intake_form: shouldBePrimary }
+				})
+				.eq('id', doc.id);
+
+			if (error) throw error;
+		}
+
+		selectedIntakeDocId = docId;
+		await loadDocuments();
+
+		if (!options.suppressToast) {
+			toastStore.success(`Primary intake set to: ${targetDoc.file_name}`);
+		}
+	}
+
 	async function confirmIntakeSelection() {
 		if (!selectedIntakeDocId) {
 			alert('Please select an intake document');
@@ -790,23 +915,14 @@
 			// If already the current primary, just close modal
 			if (selectedDoc?.metadata?.is_intake_form) {
 				showIntakeDocumentSelector = false;
+				if (startAnalysisAfterIntakeSelection) {
+					startAnalysisAfterIntakeSelection = false;
+					await startStreamingAnalysis();
+				}
 				return;
 			}
 
-			// Update the selected document's metadata to mark it as intake form
-			const { error } = await (supabase
-				.from('documents') as any)
-				.update({
-					metadata: { ...selectedDoc?.metadata, is_intake_form: true }
-				})
-				.eq('id', selectedIntakeDocId);
-
-			if (error) throw error;
-
-			// Reload documents to reflect the change
-			await loadDocuments();
-			
-			toastStore.success(`Primary intake set to: ${selectedDoc?.file_name}`);
+			await promoteToIntakeForm(selectedIntakeDocId);
 
 			// Close modal
 			showIntakeDocumentSelector = false;
@@ -2661,37 +2777,30 @@
 			<!-- Content -->
 			<div class="flex-1 overflow-y-auto p-6">
 				{#if documentViewerTab === 'preview'}
-					{#if isPdfDocument && pdfBlobUrl}
-						<!-- PDF Viewer using browser's native PDF renderer -->
-						<iframe
-							src={pdfBlobUrl}
-							class="w-full h-[600px] border border-gray-300 rounded-lg"
-							title="PDF Viewer"
-						></iframe>
-					{:else if isImageDocument && pdfBlobUrl}
-						<!-- Image Viewer -->
-						<div class="flex items-center justify-center">
-							<img
-								src={pdfBlobUrl}
-								alt={viewingDocument.file_name}
-								class="max-w-full h-auto rounded-lg shadow-lg"
-							/>
-						</div>
-					{:else if documentViewerContent}
-						<!-- Text Content Viewer -->
-						<pre class="whitespace-pre-wrap font-mono text-sm text-gray-800 bg-gray-50 p-4 rounded-lg">{documentViewerContent}</pre>
-					{:else}
-						<!-- Loading State -->
-						<div class="flex items-center justify-center h-64">
-							<div class="text-center">
-								<svg class="mx-auto h-12 w-12 text-gray-400 animate-spin" fill="none" viewBox="0 0 24 24">
-									<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-									<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-								</svg>
-								<p class="mt-2 text-sm text-gray-500">Loading document preview...</p>
-							</div>
-						</div>
-					{/if}
+					<DocumentPreviewPane
+						fileName={viewingDocument.file_name}
+						fileType={viewingDocument.file_type}
+						documentId={viewingDocument.id}
+						hasStoragePath={Boolean(viewingDocument.storage_path)}
+						previewUrl={pdfBlobUrl}
+						loading={loadingPreview}
+						isPdf={isPdfDocument}
+						isImage={isImageDocument}
+						isTextDocument={!isPdfDocument && !isImageDocument}
+						textPreview={documentViewerContent}
+						onLoadPreview={() => loadDocumentBinaryPreview(viewingDocument)}
+						loadingLabel="Loading document preview..."
+						pdfHintMessage="PDF preview is loaded on demand to reduce click latency and suppress browser PDF viewer warnings."
+						unavailableStorageMessage="PDF preview unavailable because the original file could not be loaded from storage."
+						loadPdfLabel="Load PDF Preview"
+						loadImageLabel="Load Image Preview"
+						openLinkLabel="Open PDF in New Tab"
+						openInNewTab={true}
+						linkDownload={false}
+						noPreviewTitle="No file preview available"
+						textTheme="light"
+						previewHeightClass="h-[600px]"
+					/>
 				{:else if documentViewerTab === 'summary'}
 					{#if loadingDocumentSummary}
 						<div class="flex items-center justify-center h-64">

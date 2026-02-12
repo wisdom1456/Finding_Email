@@ -5,6 +5,7 @@
 	import AsyncButton from './ui/AsyncButton.svelte';
 	import Modal from './ui/Modal.svelte';
 	import Badge from './ui/Badge.svelte';
+	import DocumentPreviewPane from './DocumentPreviewPane.svelte';
 
 	// Props
 	let {
@@ -238,36 +239,26 @@ const { session, user } = await getSecureSession();
 				</AsyncButton>
 			</div>
 			<div class="flex-1 overflow-auto p-4 bg-gray-100">
-				{#if loadingPreview}
-					<div class="flex items-center justify-center h-full">
-						<svg class="animate-spin h-8 w-8 text-gray-400" fill="none" viewBox="0 0 24 24">
-							<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-							<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-						</svg>
-					</div>
-				{:else if pdfBlobUrl}
-					{#if document.file_type === 'application/pdf'}
-						<iframe
-							src={pdfBlobUrl}
-							class="w-full h-full border border-gray-300 rounded-lg bg-white"
-							title="PDF Preview"
-						></iframe>
-					{:else if document.file_type?.startsWith('image/')}
-						<img
-							src={pdfBlobUrl}
-							alt={document.file_name}
-							class="max-w-full h-auto rounded-lg shadow-lg mx-auto"
-						/>
-					{/if}
-				{:else}
-					<div class="flex flex-col items-center justify-center h-full text-gray-400">
-						<svg class="h-12 w-12 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-						</svg>
-						<p class="text-sm">Preview not available for this file type</p>
-						<p class="text-xs mt-1">{document.file_type}</p>
-					</div>
-				{/if}
+				<DocumentPreviewPane
+					fileName={document.file_name}
+					fileType={document.file_type}
+					documentId={document.id}
+					hasStoragePath={Boolean(document.storage_path)}
+					previewUrl={pdfBlobUrl}
+					loading={loadingPreview}
+					isPdf={document.file_type === 'application/pdf'}
+					isImage={Boolean(document.file_type?.startsWith('image/'))}
+					isTextDocument={false}
+					textPreview=""
+					onLoadPreview={null}
+					loadingLabel="Loading preview..."
+					openLinkLabel="Open PDF"
+					openInNewTab={true}
+					linkDownload={false}
+					noPreviewTitle="Preview not available for this file type"
+					noPreviewDescription={document.file_type}
+					previewHeightClass="h-full"
+				/>
 			</div>
 		</div>
 
@@ -358,4 +349,3 @@ const { session, user } = await getSecureSession();
 		</div>
 	{/snippet}
 </Modal>
-

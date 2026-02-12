@@ -9,9 +9,10 @@
 	import { ArrowLeft } from 'lucide-svelte';
 	import { parseMarkdown } from '$lib/utils/markdown';
 	import type { GapResolutionRefreshRequest, RecommendedLetterType } from '$lib/types';
-	import { onMount } from 'svelte';
+	import { onMount, onDestroy } from 'svelte';
 	import SkippedDocumentsAlert from '$lib/components/SkippedDocumentsAlert.svelte';
 	import DocumentSummaryCard from '$lib/components/DocumentSummaryCard.svelte';
+	import DocumentPreviewPane from '$lib/components/DocumentPreviewPane.svelte';
 	import GapAnalysisPanel from '$lib/components/GapAnalysisPanel.svelte';
 	import FullAnalysisDisplay from '$lib/components/FullAnalysisDisplay.svelte';
 	import { AlertTriangle } from 'lucide-svelte';
@@ -48,6 +49,25 @@
 	let chatMessages = $state<Array<{ user: string; assistant: string }>>([]);
 	let chatInput = $state('');
 	let sendingMessage = $state(false);
+	type ActiveGapAnalysisRequest = {
+		requestId: number;
+		controller: AbortController;
+	};
+	type ActiveChatRequest = {
+		requestId: number;
+		controller: AbortController;
+		messageIndex: number;
+	};
+	type ActiveFindingsRequest = {
+		requestId: number;
+		controller: AbortController;
+	};
+	let activeGapAnalysisRequest: ActiveGapAnalysisRequest | null = null;
+	let gapAnalysisRequestCounter = 0;
+	let activeChatRequest: ActiveChatRequest | null = null;
+	let chatRequestCounter = 0;
+	let activeFindingsRequest: ActiveFindingsRequest | null = null;
+	let findingsRequestCounter = 0;
 	
 	// Derived state (using $derived since results starts as null)
 	let hasMultiStageSupport = $derived(!!results?.multi_stage_result);
@@ -91,12 +111,31 @@
 	// Document viewer for quality report
 	let viewingDocument = $state<any>(null);
 	let pdfBlobUrl = $state<string | null>(null);
+	let previewBlobDocumentId = $state<string | null>(null);
 	let loadingPdf = $state(false);
 	let documentViewerTab = $state<'preview' | 'summary' | 'text'>('preview');
 	let documentSummary = $state<any>(null);
 
 	// Collapsible document analysis state
 	let collapsedDocs = $state<Set<string>>(new Set());
+	let documentById = $derived.by(() => {
+		const lookup = new Map<string, any>();
+		for (const doc of documents || []) {
+			const id = doc?.id;
+			if (!id) continue;
+			lookup.set(String(id), doc);
+		}
+		return lookup;
+	});
+	let documentByName = $derived.by(() => {
+		const lookup = new Map<string, any>();
+		for (const doc of documents || []) {
+			const name = doc?.file_name;
+			if (!name) continue;
+			lookup.set(String(name).toLowerCase(), doc);
+		}
+		return lookup;
+	});
 	let signatureDetectionByDocName = $derived.by(() => {
 		const lookup = new Map<string, Record<string, any>>();
 		for (const doc of documents || []) {
@@ -274,6 +313,15 @@
 		}
 	});
 
+	onDestroy(() => {
+		activeGapAnalysisRequest?.controller.abort();
+		activeGapAnalysisRequest = null;
+		activeFindingsRequest?.controller.abort();
+		activeFindingsRequest = null;
+		activeChatRequest?.controller.abort();
+		activeChatRequest = null;
+	});
+
 	// Demand calculation state
 	let calculatingAmount = $state(false);
 	let calculationReasoning = $state('');
@@ -289,21 +337,56 @@
 		collapsedDocs = newSet;
 	}
 
+	function isPdfDocument(doc: any): boolean {
+		if (!doc) return false;
+		return doc.file_type === 'application/pdf' || String(doc.file_name || '').toLowerCase().endsWith('.pdf');
+	}
+
+	function isImageDocument(doc: any): boolean {
+		if (!doc) return false;
+		return String(doc.file_type || '').toLowerCase().startsWith('image/');
+	}
+
+	async function loadDocumentBinaryPreview(doc: any = viewingDocument) {
+		if (!doc?.storage_path) return;
+
+		if (previewBlobDocumentId === doc.id && pdfBlobUrl) {
+			return;
+		}
+
+		loadingPdf = true;
+
+		try {
+			const { session, user } = await getSecureSession();
+			if (!session || !user) {
+				console.error('Not authenticated');
+				return;
+			}
+
+			const { data, error } = await supabase.storage.from('documents').download(doc.storage_path);
+			if (error) throw error;
+
+			if (pdfBlobUrl) {
+				URL.revokeObjectURL(pdfBlobUrl);
+			}
+			pdfBlobUrl = URL.createObjectURL(data);
+			previewBlobDocumentId = doc.id ?? null;
+		} catch (error: any) {
+			console.error('Failed to load document preview:', error);
+		} finally {
+			loadingPdf = false;
+		}
+	}
+
 	async function viewDocument(documentName: string, documentId?: string) {
 		// Priority 1: Use document_id if available
 		let doc = documentId 
-			? documents.find((d) => d.id === documentId)
+			? documentById.get(documentId)
 			: null;
 		
 		// Priority 2: Exact file_name match
 		if (!doc) {
-			doc = documents.find((d) => d.file_name === documentName);
-		}
-		
-		// Priority 3: Case-insensitive match
-		if (!doc) {
-			const lowerName = documentName.toLowerCase();
-			doc = documents.find((d) => d.file_name.toLowerCase() === lowerName);
+			doc = documentByName.get(documentName.toLowerCase());
 		}
 		
 		// Priority 4: Basename match (partial)
@@ -325,41 +408,19 @@
 		viewingDocument = doc;
 		documentViewerTab = 'preview';
 		documentSummary = findDocumentSummary(documentName);
-		loadingPdf = true;
+		loadingPdf = false;
 
 		// Clean up previous blob URL if it exists
 		if (pdfBlobUrl) {
 			URL.revokeObjectURL(pdfBlobUrl);
 			pdfBlobUrl = null;
+			previewBlobDocumentId = null;
 		}
 
-		try {
-			// Check if it's a PDF or image - need to download as blob
-			const isPdf = doc.file_type === 'application/pdf' || doc.file_name.toLowerCase().endsWith('.pdf');
-			const isImage = doc.file_type?.startsWith('image/');
-
-		if ((isPdf || isImage) && doc.storage_path) {
-			// Download from storage (validate session first)
-			const { session, user } = await getSecureSession();
-
-			if (!session || !user) {
-				console.error('Not authenticated');
-				return;
-			}
-
-				const { data, error } = await supabase.storage
-					.from('documents')
-					.download(doc.storage_path);
-
-				if (error) throw error;
-
-				// Create blob URL for PDF or image
-				pdfBlobUrl = URL.createObjectURL(data);
-			}
-		} catch (error: any) {
-			console.error('Failed to load document preview:', error);
-		} finally {
-			loadingPdf = false;
+		// Images are lightweight enough for immediate preview.
+		// PDFs are loaded lazily via explicit user action to avoid blocking click-path performance.
+		if (isImageDocument(doc)) {
+			await loadDocumentBinaryPreview(doc);
 		}
 	}
 
@@ -367,10 +428,12 @@
 		viewingDocument = null;
 		documentSummary = null;
 		documentViewerTab = 'preview';
+		loadingPdf = false;
 		if (pdfBlobUrl) {
 			URL.revokeObjectURL(pdfBlobUrl);
 			pdfBlobUrl = null;
 		}
+		previewBlobDocumentId = null;
 	}
 
 	/**
@@ -443,7 +506,8 @@
 	async function runGapAnalysisFallback(
 		apiUrl: string,
 		accessToken: string,
-		forceRefresh: boolean
+		forceRefresh: boolean,
+		signal?: AbortSignal
 	): Promise<any> {
 		const response = await fetch(`${apiUrl}/api/analysis/analyze-gaps`, {
 			method: 'POST',
@@ -451,6 +515,7 @@
 				'Content-Type': 'application/json',
 				Authorization: `Bearer ${accessToken}`
 			},
+			signal,
 			body: JSON.stringify({
 				case_id: caseId,
 				force_refresh: forceRefresh || undefined
@@ -466,6 +531,16 @@
 	}
 
 	async function analyzeGaps(forceRefresh: boolean = forceGapRefresh) {
+		const previousRequest = activeGapAnalysisRequest;
+		if (previousRequest) {
+			previousRequest.controller.abort();
+		}
+
+		const controller = new AbortController();
+		const requestId = ++gapAnalysisRequestCounter;
+		activeGapAnalysisRequest = { requestId, controller };
+		const isCurrentRequest = () => activeGapAnalysisRequest?.requestId === requestId;
+
 		analyzingGaps = true;
 		gapAnalysisProgress = 'Starting gap analysis...';
 		streamingGapSummary = ''; // Clear previous streaming content
@@ -476,6 +551,37 @@
 
 			const apiUrl = getApiUrl();
 			let receivedResult = false;
+			let pendingSummaryTokens = '';
+			let summaryFlushTimer: ReturnType<typeof setTimeout> | null = null;
+			let processedEventCount = 0;
+
+			const flushSummaryTokens = () => {
+				if (!isCurrentRequest()) return;
+				if (pendingSummaryTokens) {
+					streamingGapSummary += pendingSummaryTokens;
+					pendingSummaryTokens = '';
+				}
+				if (summaryFlushTimer) {
+					clearTimeout(summaryFlushTimer);
+					summaryFlushTimer = null;
+				}
+			};
+
+			const queueSummaryToken = (token: string) => {
+				if (!isCurrentRequest()) return;
+				pendingSummaryTokens += token;
+				if (summaryFlushTimer) return;
+				summaryFlushTimer = setTimeout(() => {
+					if (!isCurrentRequest()) {
+						pendingSummaryTokens = '';
+						summaryFlushTimer = null;
+						return;
+					}
+					streamingGapSummary += pendingSummaryTokens;
+					pendingSummaryTokens = '';
+					summaryFlushTimer = null;
+				}, 60);
+			};
 
 			try {
 				const response = await fetch(`${apiUrl}/api/analysis/analyze-gaps/stream`, {
@@ -484,6 +590,7 @@
 						'Content-Type': 'application/json',
 						Authorization: `Bearer ${session.access_token}`
 					},
+					signal: controller.signal,
 					body: JSON.stringify({
 						case_id: caseId,
 						force_refresh: forceRefresh || undefined
@@ -502,6 +609,9 @@
 				let buffer = '';
 
 				while (true) {
+					if (!isCurrentRequest()) {
+						throw new DOMException('Gap analysis request superseded', 'AbortError');
+					}
 					const { done, value } = await reader.read();
 					if (done) break;
 
@@ -531,14 +641,21 @@
 								gapAnalysisProgress = `Found ${data.gaps_found} gaps. Generating summary...`;
 							}
 						} else if (data.type === 'token') {
-							streamingGapSummary += data.token;
+							queueSummaryToken(data.token);
 							gapAnalysisProgress = 'Generating attorney summary...';
 						} else if (data.type === 'result') {
+							flushSummaryTokens();
 							applyGapAnalysisResult(data.data);
 							receivedResult = true;
 							toastStore.success(`Gap analysis complete! Found ${data.data.total_gaps} gaps.`);
 						} else if (data.type === 'error') {
 							throw new Error(data.error || 'Gap analysis failed');
+						}
+
+						processedEventCount += 1;
+						// Yield occasionally to keep the main thread responsive on large event bursts.
+						if (processedEventCount % 100 === 0) {
+							await new Promise((resolve) => setTimeout(resolve, 0));
 						}
 					}
 				}
@@ -546,23 +663,40 @@
 				if (!receivedResult) {
 					throw new Error('Gap analysis stream ended before returning results');
 				}
-			} catch (streamErr) {
-				if (receivedResult) {
-					console.warn('[GapAnalysis] Stream interrupted after result payload', streamErr);
-				} else {
-					console.warn('[GapAnalysis] Streaming failed, retrying via non-stream endpoint', streamErr);
-					gapAnalysisProgress = 'Connection interrupted. Retrying...';
-					const gapResult = await runGapAnalysisFallback(apiUrl, session.access_token, forceRefresh);
-					applyGapAnalysisResult(gapResult);
-					toastStore.success(`Gap analysis complete! Found ${gapResult.total_gaps} gaps.`);
+				} catch (streamErr) {
+					flushSummaryTokens();
+					if (controller.signal.aborted || !isCurrentRequest()) {
+						throw streamErr;
+					}
+					if (receivedResult) {
+						console.warn('[GapAnalysis] Stream interrupted after result payload', streamErr);
+					} else {
+						console.warn('[GapAnalysis] Streaming failed, retrying via non-stream endpoint', streamErr);
+						gapAnalysisProgress = 'Connection interrupted. Retrying...';
+						const gapResult = await runGapAnalysisFallback(
+							apiUrl,
+							session.access_token,
+							forceRefresh,
+							controller.signal
+						);
+						if (!isCurrentRequest()) {
+							throw new DOMException('Gap analysis request superseded', 'AbortError');
+						}
+						applyGapAnalysisResult(gapResult);
+						toastStore.success(`Gap analysis complete! Found ${gapResult.total_gaps} gaps.`);
+					}
 				}
-			}
 		} catch (err: any) {
-			toastStore.error(err.message || 'Gap analysis failed');
+			if (err?.name !== 'AbortError') {
+				toastStore.error(err.message || 'Gap analysis failed');
+			}
 		} finally {
-			analyzingGaps = false;
-			gapAnalysisProgress = '';
-			streamingGapSummary = ''; // Clear after complete
+			if (activeGapAnalysisRequest?.requestId === requestId) {
+				activeGapAnalysisRequest = null;
+				analyzingGaps = false;
+				gapAnalysisProgress = '';
+				streamingGapSummary = ''; // Clear after complete
+			}
 		}
 	}
 
@@ -616,29 +750,42 @@
 	}
 
 	async function generateFindingsLetter() {
-		generatingFindings = true;
-	findingsLetter = ''; // Clear existing
-	insufficientDocError = null; // Clear previous error
+		const previousRequest = activeFindingsRequest;
+		if (previousRequest) {
+			previousRequest.controller.abort();
+		}
 
-	try {
-		const { session, user } = await getSecureSession();
-		if (!session || !user) throw new Error('Not authenticated');
+		const controller = new AbortController();
+		const requestId = ++findingsRequestCounter;
+		activeFindingsRequest = { requestId, controller };
+		const isCurrentRequest = () => activeFindingsRequest?.requestId === requestId;
+
+		generatingFindings = true;
+		findingsLetter = ''; // Clear existing
+		insufficientDocError = null; // Clear previous error
+
+		try {
+			const { session, user } = await getSecureSession();
+			if (!session || !user) throw new Error('Not authenticated');
 
 			const apiUrl = getApiUrl();
 			const queryParam = forceGeneration ? '?force_generation=true' : '';
 			const response = await fetch(`${apiUrl}/api/analysis/${results.analysis_id}/letter/stream${queryParam}`, {
-				headers: { Authorization: `Bearer ${session.access_token}` }
+				headers: { Authorization: `Bearer ${session.access_token}` },
+				signal: controller.signal
 			});
 
 			if (!response.ok) {
 				const detail = await response.json().catch(() => ({}));
 				// Handle documentation insufficient error specially
 				if (detail?.detail?.error === 'documentation_insufficient') {
-					insufficientDocError = {
-						completeness_score: detail.detail.completeness_score,
-						critical_gaps: detail.detail.critical_gaps
-					};
-					toastStore.warning('Case documentation is insufficient. Review gaps or enable force override.');
+					if (isCurrentRequest()) {
+						insufficientDocError = {
+							completeness_score: detail.detail.completeness_score,
+							critical_gaps: detail.detail.critical_gaps
+						};
+						toastStore.warning('Case documentation is insufficient. Review gaps or enable force override.');
+					}
 					return;
 				}
 				throw new Error(detail?.detail?.message || detail?.detail || 'Failed to stream findings email');
@@ -649,10 +796,58 @@
 
 			const decoder = new TextDecoder();
 			let markdownBuffer = '';
+			let pendingTokens = '';
+			let flushTimer: ReturnType<typeof setTimeout> | null = null;
+			let processedEventCount = 0;
+
+			const renderFindingsPreview = () => {
+				if (!isCurrentRequest()) return;
+				findingsLetter = `<div class="legal-letter">${parseMarkdown(markdownBuffer)}</div>`;
+			};
+
+			const flushPendingTokens = () => {
+				if (!isCurrentRequest()) return;
+				if (pendingTokens) {
+					markdownBuffer += pendingTokens;
+					pendingTokens = '';
+					renderFindingsPreview();
+				}
+				if (flushTimer) {
+					clearTimeout(flushTimer);
+					flushTimer = null;
+				}
+			};
+
+			const queueToken = (token: string) => {
+				if (!isCurrentRequest()) return;
+				pendingTokens += token;
+				if (flushTimer) return;
+				flushTimer = setTimeout(() => {
+					if (!isCurrentRequest()) {
+						pendingTokens = '';
+						flushTimer = null;
+						return;
+					}
+					if (!pendingTokens) {
+						flushTimer = null;
+						return;
+					}
+					markdownBuffer += pendingTokens;
+					pendingTokens = '';
+					flushTimer = null;
+					renderFindingsPreview();
+				}, 80);
+			};
 
 			while (true) {
+				if (!isCurrentRequest()) {
+					throw new DOMException('Findings request superseded', 'AbortError');
+				}
 				const { done, value } = await reader.read();
-				if (done) break;
+				if (done) {
+					flushPendingTokens();
+					break;
+				}
 
 				const chunk = decoder.decode(value);
 				const lines = chunk.split('\n');
@@ -662,20 +857,33 @@
 						try {
 							const data = JSON.parse(line.slice(6));
 							if (data.token) {
-								markdownBuffer += data.token;
-								// Convert markdown to HTML for preview
-								// Note: Wrap in legal-letter class for styling
-								findingsLetter = `<div class="legal-letter">${parseMarkdown(markdownBuffer)}</div>`;
+								queueToken(data.token);
 							}
-							if (data.done) break;
-						} catch (e) {}
+							if (data.done) {
+								flushPendingTokens();
+								break;
+							}
+						} catch (e) {
+							// Ignore parse errors for incomplete chunks
+						}
+					}
+
+					processedEventCount += 1;
+					if (processedEventCount % 120 === 0) {
+						await new Promise((resolve) => setTimeout(resolve, 0));
 					}
 				}
 			}
+			flushPendingTokens();
 		} catch (err: any) {
-			toastStore.error(err.message || 'Findings email generation failed');
+			if (err?.name !== 'AbortError') {
+				toastStore.error(err.message || 'Findings email generation failed');
+			}
 		} finally {
-			generatingFindings = false;
+			if (activeFindingsRequest?.requestId === requestId) {
+				activeFindingsRequest = null;
+				generatingFindings = false;
+			}
 		}
 	}
 
@@ -835,15 +1043,27 @@ async function generateLetterRequest(body: Record<string, any>) {
 
 		const message = chatInput.trim();
 		chatInput = '';
+
+		const previousRequest = activeChatRequest;
+		if (previousRequest) {
+			previousRequest.controller.abort();
+			chatMessages = chatMessages.filter((_, idx) => idx !== previousRequest.messageIndex);
+			activeChatRequest = null;
+		}
+
 		sendingMessage = true;
 
 		// Add user message and placeholder for assistant
 		const currentMessageIndex = chatMessages.length;
-	chatMessages = [...chatMessages, { user: message, assistant: '' }];
+		chatMessages = [...chatMessages, { user: message, assistant: '' }];
+		const controller = new AbortController();
+		const requestId = ++chatRequestCounter;
+		activeChatRequest = { requestId, controller, messageIndex: currentMessageIndex };
+		const isCurrentRequest = () => activeChatRequest?.requestId === requestId;
 
-	try {
-		const { session, user } = await getSecureSession();
-		if (!session || !user) throw new Error('Not authenticated');
+		try {
+			const { session, user } = await getSecureSession();
+			if (!session || !user) throw new Error('Not authenticated');
 
 			const apiUrl = getApiUrl();
 			const chatPayload = { message };
@@ -853,6 +1073,7 @@ async function generateLetterRequest(body: Record<string, any>) {
 					'Content-Type': 'application/json',
 					Authorization: `Bearer ${session.access_token}`
 				},
+				signal: controller.signal,
 				body: JSON.stringify(chatPayload)
 			});
 
@@ -866,10 +1087,65 @@ async function generateLetterRequest(body: Record<string, any>) {
 
 			const decoder = new TextDecoder();
 			let assistantResponse = '';
+			let pendingAssistantTokens = '';
+			let flushTimer: ReturnType<typeof setTimeout> | null = null;
+			let processedEventCount = 0;
+
+			const updateAssistantMessage = () => {
+				if (!isCurrentRequest()) return;
+				const nextMessages = [...chatMessages];
+				const currentMessage = nextMessages[currentMessageIndex];
+				if (!currentMessage) return;
+				nextMessages[currentMessageIndex] = {
+					...currentMessage,
+					assistant: assistantResponse
+				};
+				chatMessages = nextMessages;
+			};
+
+			const flushAssistantTokens = () => {
+				if (!isCurrentRequest()) return;
+				if (pendingAssistantTokens) {
+					assistantResponse += pendingAssistantTokens;
+					pendingAssistantTokens = '';
+					updateAssistantMessage();
+				}
+				if (flushTimer) {
+					clearTimeout(flushTimer);
+					flushTimer = null;
+				}
+			};
+
+			const queueAssistantToken = (token: string) => {
+				if (!isCurrentRequest()) return;
+				pendingAssistantTokens += token;
+				if (flushTimer) return;
+				flushTimer = setTimeout(() => {
+					if (!isCurrentRequest()) {
+						pendingAssistantTokens = '';
+						flushTimer = null;
+						return;
+					}
+					if (!pendingAssistantTokens) {
+						flushTimer = null;
+						return;
+					}
+					assistantResponse += pendingAssistantTokens;
+					pendingAssistantTokens = '';
+					flushTimer = null;
+					updateAssistantMessage();
+				}, 50);
+			};
 
 			while (true) {
+				if (!isCurrentRequest()) {
+					throw new DOMException('Chat request superseded', 'AbortError');
+				}
 				const { done, value } = await reader.read();
-				if (done) break;
+				if (done) {
+					flushAssistantTokens();
+					break;
+				}
 
 				const chunk = decoder.decode(value);
 				const lines = chunk.split('\n');
@@ -879,25 +1155,36 @@ async function generateLetterRequest(body: Record<string, any>) {
 						try {
 							const data = JSON.parse(line.slice(6));
 							if (data.token) {
-								assistantResponse += data.token;
-								// Update only the last message in real-time
-								chatMessages = chatMessages.map((msg, idx) => 
-									idx === currentMessageIndex ? { ...msg, assistant: assistantResponse } : msg
-								);
+								queueAssistantToken(data.token);
 							}
-							if (data.done) break;
+							if (data.done) {
+								flushAssistantTokens();
+								break;
+							}
 						} catch (e) {
 							// Ignore parse errors for incomplete chunks
 						}
 					}
+
+					processedEventCount += 1;
+					if (processedEventCount % 150 === 0) {
+						await new Promise((resolve) => setTimeout(resolve, 0));
+					}
 				}
 			}
+			flushAssistantTokens();
 		} catch (err: any) {
-			toastStore.error(err.message || 'Chat failed');
-			// Remove the failed message pair
-			chatMessages = chatMessages.slice(0, -1);
+			if (err?.name !== 'AbortError') {
+				toastStore.error(err.message || 'Chat failed');
+				if (isCurrentRequest()) {
+					chatMessages = chatMessages.filter((_, idx) => idx !== currentMessageIndex);
+				}
+			}
 		} finally {
-			sendingMessage = false;
+			if (activeChatRequest?.requestId === requestId) {
+				activeChatRequest = null;
+				sendingMessage = false;
+			}
 		}
 	}
 
@@ -1439,7 +1726,7 @@ async function generateLetterRequest(body: Record<string, any>) {
 									</button>
 								</div>
 								<div class="border border-gray-200 rounded-lg overflow-hidden bg-white shadow-inner">
-									<iframe srcdoc={findingsLetter.replace(/\\n/g, '\n')} title="Findings Email" class="w-full h-[600px] border-0" sandbox="allow-same-origin allow-scripts"></iframe>
+									<iframe srcdoc={findingsLetter.replace(/\\n/g, '\n')} title="Findings Email" class="w-full h-[600px] border-0" sandbox=""></iframe>
 								</div>
 							</div>
 						{:else}
@@ -1596,7 +1883,7 @@ async function generateLetterRequest(body: Record<string, any>) {
 										</div>
 										<div class="p-4">
 											<div class="border border-gray-200 rounded-lg bg-white overflow-hidden shadow-inner">
-												<iframe srcdoc={letterHtml.replace(/\\n/g, '\n')} title={`Demand Letter ${partyName}`} class="w-full h-[400px] border-0" sandbox="allow-same-origin allow-scripts"></iframe>
+												<iframe srcdoc={letterHtml.replace(/\\n/g, '\n')} title={`Demand Letter ${partyName}`} class="w-full h-[400px] border-0" sandbox=""></iframe>
 											</div>
 										</div>
 									</div>
@@ -1623,7 +1910,7 @@ async function generateLetterRequest(body: Record<string, any>) {
 										</div>
 										<div class="p-4">
 											<div class="border border-gray-200 rounded-lg bg-white overflow-hidden shadow-inner">
-												<iframe srcdoc={letterHtml.replace(/\\n/g, '\n')} title={`${letterType} Letter`} class="w-full h-[400px] border-0" sandbox="allow-same-origin allow-scripts"></iframe>
+												<iframe srcdoc={letterHtml.replace(/\\n/g, '\n')} title={`${letterType} Letter`} class="w-full h-[400px] border-0" sandbox=""></iframe>
 											</div>
 										</div>
 									</div>
@@ -1884,78 +2171,36 @@ async function generateLetterRequest(body: Record<string, any>) {
 				</nav>
 			</div>
 
-			<!-- Content -->
-			<div class="flex-1 overflow-y-auto p-6">
-				{#if documentViewerTab === 'preview'}
-					{#if viewingDocument.file_type === 'application/pdf' || viewingDocument.file_name.toLowerCase().endsWith('.pdf')}
-						{#if loadingPdf}
-							<div class="flex items-center justify-center h-64">
-								<div class="text-center">
-									<svg class="mx-auto h-12 w-12 text-gray-400 animate-spin" fill="none" viewBox="0 0 24 24">
-										<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-										<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-									</svg>
-									<p class="mt-2 text-sm text-gray-500">Loading PDF preview...</p>
-								</div>
-							</div>
-						{:else if pdfBlobUrl}
-							<iframe 
-								src={pdfBlobUrl} 
-								title="PDF Viewer" 
-								class="w-full h-[600px] border border-gray-300 rounded-lg"
-							></iframe>
-						{:else}
-							<div class="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-4">
-								<p class="text-amber-800 text-sm">
-									<strong>Preview unavailable:</strong> The original file could not be retrieved from storage. 
-									This usually happens if the file failed to download from Clio.
-								</p>
-							</div>
-							<p class="text-gray-500 text-sm mb-4">You can still try to download the file directly if it exists:</p>
-							<a 
-								href={`/api/documents/${viewingDocument.id}/download`}
-								class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-accent hover:bg-accent-hover"
-								download
-							>
-								Download PDF
-							</a>
-						{/if}
-					{:else if viewingDocument.file_type?.startsWith('image/')}
-						{#if loadingPdf}
-							<div class="flex items-center justify-center h-64">
-								<div class="animate-spin rounded-full h-8 w-8 border-b-2 border-accent"></div>
-							</div>
-						{:else if pdfBlobUrl}
-							<div class="flex items-center justify-center">
-								<img src={pdfBlobUrl} alt={viewingDocument.file_name} class="max-w-full h-auto rounded-lg shadow-lg" />
-							</div>
-						{:else}
-							<p class="text-red-500">Failed to load image preview.</p>
-						{/if}
-					{:else if isTextPreviewableDocument(viewingDocument)}
-						{@const previewText = getDocumentTextPreview(viewingDocument)}
-						{#if previewText}
-							<div class="bg-gray-900 rounded-lg p-4 max-h-[600px] overflow-auto">
-								<pre class="whitespace-pre-wrap font-mono text-xs text-gray-300 leading-relaxed">{previewText}</pre>
-							</div>
-						{:else}
-							<div class="flex flex-col items-center justify-center h-64 text-gray-400">
-								<svg class="h-12 w-12 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-								</svg>
-								<p class="font-medium text-gray-600">No text preview available yet</p>
-								<p class="text-sm mt-2">Run extraction to generate a preview for this text document.</p>
-							</div>
-						{/if}
-					{:else}
-						<div class="flex flex-col items-center justify-center h-64 text-gray-400">
-							<svg class="h-12 w-12 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-							</svg>
-							<p class="font-medium text-gray-600">No file preview available</p>
-							<p class="text-sm mt-2">Use the Summary or Raw Text tabs to view the content.</p>
-						</div>
-					{/if}
+				<!-- Content -->
+				<div class="flex-1 overflow-y-auto p-6">
+					{#if documentViewerTab === 'preview'}
+						<DocumentPreviewPane
+							fileName={viewingDocument.file_name}
+							fileType={viewingDocument.file_type}
+							documentId={viewingDocument.id}
+							hasStoragePath={Boolean(viewingDocument.storage_path)}
+							previewUrl={pdfBlobUrl}
+							loading={loadingPdf}
+							isPdf={isPdfDocument(viewingDocument)}
+							isImage={isImageDocument(viewingDocument)}
+							isTextDocument={isTextPreviewableDocument(viewingDocument)}
+							textPreview={getDocumentTextPreview(viewingDocument)}
+							onLoadPreview={() => loadDocumentBinaryPreview(viewingDocument)}
+							loadingLabel="Loading document preview..."
+							pdfHintMessage="PDF preview is loaded on demand to keep the interface responsive for large files."
+							unavailableStorageMessage="Preview unavailable: the original file could not be retrieved from storage."
+							loadPdfLabel="Load PDF Preview"
+							loadImageLabel="Load Image Preview"
+							openLinkLabel="Download PDF"
+							openInNewTab={false}
+							linkDownload={true}
+							noPreviewTitle="No file preview available"
+							noPreviewDescription="Use the Summary or Raw Text tabs to view the content."
+							textEmptyTitle="No text preview available yet"
+							textEmptyDescription="Run extraction to generate a preview for this text document."
+							textTheme="dark"
+							previewHeightClass="h-[600px]"
+						/>
 				{:else if documentViewerTab === 'summary'}
 					{#if documentSummary}
 						<DocumentSummaryCard 

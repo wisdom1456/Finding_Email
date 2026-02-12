@@ -28,6 +28,7 @@
 	import DocumentCard from './DocumentCard.svelte';
 	import DocumentStatusBanner from './DocumentStatusBanner.svelte';
 	import DocumentSummaryCard from './DocumentSummaryCard.svelte';
+	import DocumentPreviewPane from './DocumentPreviewPane.svelte';
 
 	// Props
 	let {
@@ -49,6 +50,7 @@
 	let showRecoveryModal = $state(false);
 	let viewingDocument = $state<any>(null);
 	let pdfBlobUrl = $state<string | null>(null);
+	let previewBlobDocumentId = $state<string | null>(null);
 	let loadingPreview = $state(false);
 	let documentViewerTab = $state<'preview' | 'summary' | 'text'>('preview');
 	let documentSummary = $state<any>(null);
@@ -385,7 +387,7 @@ const { session, user } = await getSecureSession();
 
 	async function handleView(doc: any) {
 		viewingDocument = doc;
-		loadingPreview = true;
+		loadingPreview = false;
 		documentSummary = null;
 		documentViewerTab = 'preview';
 
@@ -394,25 +396,53 @@ const { session, user } = await getSecureSession();
 			URL.revokeObjectURL(pdfBlobUrl);
 			pdfBlobUrl = null;
 		}
+		previewBlobDocumentId = null;
 		
 		// Load document summary in the background
 		loadDocumentSummary(doc.file_name);
 
+		// Keep click-path light: only prefetch images automatically.
+		if (isImageDocument(doc)) {
+			await loadDocumentBinaryPreview(doc);
+		}
+	}
+
+	function isPdfDocument(doc: any): boolean {
+		if (!doc) return false;
+		const fileType = String(doc.file_type || '').toLowerCase();
+		const fileName = String(doc.file_name || '').toLowerCase();
+		return fileType === 'application/pdf' || fileName.endsWith('.pdf');
+	}
+
+	function isImageDocument(doc: any): boolean {
+		if (!doc) return false;
+		return String(doc.file_type || '').toLowerCase().startsWith('image/');
+	}
+
+	async function loadDocumentBinaryPreview(doc: any = viewingDocument) {
+		if (!doc?.storage_path) return;
+
+		const docId = doc.id ? String(doc.id) : null;
+		if (docId && previewBlobDocumentId === docId && pdfBlobUrl) {
+			return;
+		}
+
+		loadingPreview = true;
 		try {
-			const isPdf = doc.file_type === 'application/pdf' || doc.file_name.toLowerCase().endsWith('.pdf');
-			const isImage = doc.file_type?.startsWith('image/');
+			const { session, user } = await getSecureSession();
+			if (!session || !user) throw new Error('Not authenticated');
 
-			if ((isPdf || isImage) && doc.storage_path) {
-const { session, user } = await getSecureSession();
-		if (!session || !user) throw new Error('Not authenticated');
+			const { data, error } = await supabase.storage
+				.from('documents')
+				.download(doc.storage_path);
 
-				const { data, error } = await supabase.storage
-					.from('documents')
-					.download(doc.storage_path);
+			if (error) throw error;
 
-				if (error) throw error;
-				pdfBlobUrl = URL.createObjectURL(data);
+			if (pdfBlobUrl) {
+				URL.revokeObjectURL(pdfBlobUrl);
 			}
+			pdfBlobUrl = URL.createObjectURL(data);
+			previewBlobDocumentId = docId;
 		} catch (error: any) {
 			console.error('Failed to load document preview:', error);
 			toastStore.error('Failed to load preview');
@@ -425,6 +455,8 @@ const { session, user } = await getSecureSession();
 		viewingDocument = null;
 		documentSummary = null;
 		documentViewerTab = 'preview';
+		loadingPreview = false;
+		previewBlobDocumentId = null;
 		if (pdfBlobUrl) {
 			URL.revokeObjectURL(pdfBlobUrl);
 			pdfBlobUrl = null;
@@ -956,38 +988,32 @@ const { session, user } = await getSecureSession();
 
 		<div class="bg-gray-50 min-h-[400px] rounded-lg overflow-hidden">
 			{#if documentViewerTab === 'preview'}
-				{#if loadingPreview}
-					<div class="flex flex-col items-center justify-center h-full py-12">
-						<RefreshCw class="w-8 h-8 text-accent animate-spin mb-4" />
-						<p class="text-gray-500 font-medium">Loading preview...</p>
-					</div>
-				{:else if pdfBlobUrl}
-					<iframe
-						src={pdfBlobUrl}
-						class="w-full h-full min-h-[600px] border-0 bg-white"
-						title="Document Preview"
-					></iframe>
-				{:else if viewingDocument.extracted_text}
-					<div class="flex flex-col items-center justify-center h-full py-20 text-center">
-						<div class="p-4 rounded-full bg-blue-50 text-blue-500 mb-4">
-							<Info class="w-12 h-12" />
-						</div>
-						<h3 class="text-lg font-bold text-gray-900">No File Preview</h3>
-						<p class="text-gray-500 text-sm mt-1 max-w-xs mx-auto">
-							Use the Summary or Raw Text tabs to view the extracted content.
-						</p>
-					</div>
-				{:else}
-					<div class="flex flex-col items-center justify-center h-full py-20 text-center">
-						<div class="p-4 rounded-full bg-amber-50 text-amber-500 mb-4">
-							<AlertTriangle class="w-12 h-12" />
-						</div>
-						<h3 class="text-lg font-bold text-gray-900">Preview Unavailable</h3>
-						<p class="text-gray-500 text-sm mt-1 max-w-xs mx-auto">
-							This document doesn't have a preview available. You can view the extracted text in the correction modal.
-						</p>
-					</div>
-				{/if}
+				<DocumentPreviewPane
+					fileName={viewingDocument.file_name}
+					fileType={viewingDocument.file_type}
+					documentId={viewingDocument.id}
+					hasStoragePath={Boolean(viewingDocument.storage_path)}
+					previewUrl={pdfBlobUrl}
+					loading={loadingPreview}
+					isPdf={isPdfDocument(viewingDocument)}
+					isImage={isImageDocument(viewingDocument)}
+					isTextDocument={false}
+					textPreview=""
+					onLoadPreview={() => loadDocumentBinaryPreview(viewingDocument)}
+					loadingLabel="Loading preview..."
+					pdfHintMessage="Load inline preview only when needed to keep the viewer responsive."
+					unavailableStorageMessage="The original file could not be loaded from storage."
+					loadPdfLabel="Load PDF Preview"
+					loadImageLabel="Load Image Preview"
+					openLinkLabel="Open in New Tab"
+					openInNewTab={true}
+					linkDownload={false}
+					noPreviewTitle={viewingDocument.extracted_text ? 'No File Preview' : 'Preview Unavailable'}
+					noPreviewDescription={viewingDocument.extracted_text
+						? 'Use the Summary or Raw Text tabs to view the extracted content.'
+						: "This document doesn't have a preview available. You can view the extracted text in the correction modal."}
+					previewHeightClass="min-h-[600px]"
+				/>
 			{:else if documentViewerTab === 'summary'}
 				{#if loadingDocumentSummary}
 					<div class="flex flex-col items-center justify-center h-full py-12">

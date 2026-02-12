@@ -30,9 +30,7 @@
 
 			// Use getApiUrl() to ensure we get the correct runtime value (relative path in Vercel)
 			const apiUrl = getApiUrl();
-			console.log('Checking Clio status with token:', session.access_token?.substring(0, 20) + '...');
 			const endpoint = `${apiUrl}/api/clio/status`;
-			console.log('Using status endpoint:', endpoint);
 
 			const response = await fetch(endpoint, {
 				headers: { Authorization: `Bearer ${session.access_token}` }
@@ -44,7 +42,7 @@
 			}
 		} catch (error: any) {
 			// Silently fail - user can still manually check via modal
-			console.log('Could not check Clio status on load:', error);
+			console.debug('Could not check Clio status on load:', error);
 		}
 	}
 

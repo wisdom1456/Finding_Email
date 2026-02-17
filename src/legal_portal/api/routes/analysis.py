@@ -1827,7 +1827,12 @@ async def stream_findings_letter(
 
                 def _normalize_markdown(text: str, letter_kind: str) -> str:
                     if callable(normalize_markdown):
-                        return normalize_markdown(text, letter_type=letter_kind)
+                        return normalize_markdown(
+                            text,
+                            letter_type=letter_kind,
+                            attorney_name=artifacts.get("attorney_name"),
+                            firm_name=artifacts.get("firm_name"),
+                        )
                     return text
 
                 strategy_object: Optional[Dict[str, Any]] = None
@@ -3532,7 +3537,12 @@ async def generate_letter(
 
         def _normalize_markdown(text: str, letter_kind: str) -> str:
             if callable(normalize_markdown):
-                return normalize_markdown(text, letter_type=letter_kind)
+                return normalize_markdown(
+                    text,
+                    letter_type=letter_kind,
+                    attorney_name=attorney_info.get("name"),
+                    firm_name=attorney_info.get("firm"),
+                )
             return text
 
         if letter_request.letter_type == LetterType.FINDINGS:
@@ -4266,7 +4276,12 @@ async def stream_recommendation_letter(
 
             def _normalize_markdown(text: str, letter_kind: str) -> str:
                 if callable(normalize_markdown):
-                    return normalize_markdown(text, letter_type=letter_kind)
+                    return normalize_markdown(
+                        text,
+                        letter_type=letter_kind,
+                        attorney_name=attorney_info.get("attorney_name"),
+                        firm_name=attorney_info.get("firm_name"),
+                    )
                 return text
 
             metrics["model_calls"] = int(metrics.get("model_calls", 0)) + 1

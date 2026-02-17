@@ -377,13 +377,36 @@ class JsonProcessingService:
     }
     _PRESENTATION_HEADER_REPLACEMENTS = [
         (re.compile(r"(?im)^\s*opening\s+review\s*$"), ""),
+        (re.compile(r"(?im)^\s*opening[_\s]+review\s*$"), ""),
         (re.compile(r"(?im)^\s*facts(?:\s*\([^)]+\))?\s*$"), "Based on the records:"),
+        (re.compile(r"(?im)^\s*factual[_\s]+summary(?:\s*\([^)]+\))?\s*$"), "Based on the records:"),
         (re.compile(r"(?im)^\s*core\s+issue\s*$"), "The core issue is this:"),
+        (
+            re.compile(r"(?im)^\s*core[_\s]+issue(?:\s*[-–]\s*the\s+real\s+question)?\s*$"),
+            "The core issue is this:",
+        ),
         (re.compile(r"(?im)^\s*legal\s+theories(?:\s*\([^)]+\))?\s*$"), "Here are the key points of our analysis:"),
+        (
+            re.compile(r"(?im)^\s*legal[_\s]+theories(?:\s*\([^)]+\))?\s*$"),
+            "Here are the key points of our analysis:",
+        ),
         (re.compile(r"(?im)^\s*timing(?:\s+and)?\s+risk\s*$"), "Timing and risk:"),
+        (re.compile(r"(?im)^\s*timing(?:[_\s]+and)?[_\s]+risk\s*$"), "Timing and risk:"),
         (re.compile(r"(?im)^\s*strategy(?:\s*\([^)]+\))?\s*$"), "Based on the above, we recommend:"),
+        (re.compile(r"(?im)^\s*strategy(?:[_\s]*\([^)]+\))?\s*$"), "Based on the above, we recommend:"),
         (re.compile(r"(?im)^\s*action\s+items(?:\s*\([^)]+\))?\s*$"), "Please provide the following:"),
+        (
+            re.compile(
+                r"(?im)^\s*(?:immediate[_\s]+)?(?:client[_\s]+)?action[_\s]+items(?:\s*\([^)]+\))?\s*$"
+            ),
+            "Please provide the following:",
+        ),
         (re.compile(r"(?im)^\s*next\s+step\s*$"), "Next steps:"),
+        (re.compile(r"(?im)^\s*next[_\s]+steps?\s*$"), "Next steps:"),
+        (
+            re.compile(r"(?im)^\s*recommended\s+immediate\s+client\s+tasks\s*\(summary\)\s*$"),
+            "Please provide the following:",
+        ),
         (re.compile(r"(?im)^\s*summary\s*$"), ""),
     ]
 
@@ -1954,7 +1977,14 @@ Thank you,
         """
         return clean_markdown_response(response_text)
 
-    def normalize_client_letter_markdown(self, markdown_text: str, *, letter_type: str = "findings") -> str:
+    def normalize_client_letter_markdown(
+        self,
+        markdown_text: str,
+        *,
+        letter_type: str = "findings",
+        attorney_name: Optional[str] = None,
+        firm_name: Optional[str] = None,
+    ) -> str:
         """Apply deterministic presentation cleanup for client-facing letter quality."""
         if not (markdown_text or "").strip():
             return markdown_text
@@ -1982,6 +2012,17 @@ Thank you,
             lambda match: self._humanize_document_label(match.group(0)),
             text,
         )
+
+        resolved_attorney = (attorney_name or "").strip() or "Counsel"
+        resolved_firm = (firm_name or "").strip() or "Law Firm"
+        placeholder_replacements = [
+            (re.compile(r"(?i)\[\s*attorney\s+name\s*\]"), resolved_attorney),
+            (re.compile(r"(?i)\[\s*(?:new\s+mexico|florida)\s+law\s+firm\s+name\s*\]"), resolved_firm),
+            (re.compile(r"(?i)\[\s*law\s+firm\s+name\s*\]"), resolved_firm),
+            (re.compile(r"(?i)\[\s*firm\s+name\s*\]"), resolved_firm),
+        ]
+        for pattern, replacement in placeholder_replacements:
+            text = pattern.sub(replacement, text)
 
         text = re.sub(r"[ \t]+\n", "\n", text)
         text = re.sub(r"\n{3,}", "\n\n", text)

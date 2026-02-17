@@ -46,3 +46,40 @@ def test_normalize_client_letter_markdown_cleans_headers_and_file_tokens() -> No
     assert "breachofcontract" not in normalized
     assert "Subscription Agreement EJAJ TX Final 120" in normalized
     assert "Memo Terms For Financing Cuchillo Grow 1 LLC" in normalized
+
+
+def test_normalize_client_letter_markdown_cleans_snake_case_headers_and_placeholders() -> None:
+    service = JsonProcessingService(client=None, config={})  # type: ignore[arg-type]
+    draft = (
+        "Good afternoon Erica and Ron,\n\n"
+        "Opening_review\n"
+        "Summary text.\n\n"
+        "action_items\n"
+        "Do X.\n\n"
+        "core_issue\n"
+        "Main issue text.\n\n"
+        "legal_theories\n"
+        "Theory text.\n\n"
+        "timing_risk\n"
+        "Risk text.\n\n"
+        "Thank you,\n"
+        "[Attorney Name]\n"
+        "[New Mexico Law Firm Name]\n"
+    )
+
+    normalized = service.normalize_client_letter_markdown(
+        draft,
+        letter_type="findings",
+        attorney_name="Franklin Riley",
+        firm_name="Bernhardt Riley, Attorneys at Law",
+    )
+
+    assert "Opening_review" not in normalized
+    assert "action_items" not in normalized
+    assert "core_issue" not in normalized
+    assert "legal_theories" not in normalized
+    assert "timing_risk" not in normalized
+    assert "[Attorney Name]" not in normalized
+    assert "[New Mexico Law Firm Name]" not in normalized
+    assert "Franklin Riley" in normalized
+    assert "Bernhardt Riley, Attorneys at Law" in normalized

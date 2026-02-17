@@ -71,8 +71,8 @@ def test_reconcile_removes_false_missing_executed_gap_when_signed_doc_matches():
     )
 
 
-def test_reconcile_does_not_suppress_party_identity_execution_gap():
-    """Execution gaps that are really standing/entity issues should remain open."""
+def test_reconcile_treats_party_identity_execution_gap_as_non_blocking_when_signed():
+    """Standing/entity execution concerns become non-blocking when signed docs exist."""
     missing_gap = GapItem(
         gap_id="gap-exec-standing",
         category=GapCategory.MISSING_DOCUMENT,
@@ -109,9 +109,15 @@ def test_reconcile_does_not_suppress_party_identity_execution_gap():
     service = GapAnalysisService(openai_client=None)  # type: ignore[arg-type]
     reconciled = service._reconcile_signature_execution_gaps(result, signature_evidence)
 
-    assert reconciled.total_gaps == 1
-    assert reconciled.high_count == 1
-    assert len(reconciled.gaps_by_category[GapCategory.MISSING_DOCUMENT.value]) == 1
+    assert reconciled.total_gaps == 0
+    assert reconciled.high_count == 0
+    assert reconciled.gaps_by_category[GapCategory.MISSING_DOCUMENT.value] == []
+    assert reconciled.gaps_by_category.get(GapCategory.INCOMPLETE_INFO.value, []) == []
+    assert any(
+        "treated 1 party/standing signature-coverage concern(s) as non-blocking"
+        in note
+        for note in reconciled.reconciliation_notes
+    )
 
 
 def test_reconcile_matches_signed_doc_with_uuid_filename_using_instrument_hints():
@@ -334,3 +340,76 @@ def test_reconcile_matches_party_signed_operating_agreement_wording():
     assert reconciled.total_gaps == 0
     assert reconciled.high_count == 0
     assert reconciled.gaps_by_category[GapCategory.MISSING_DOCUMENT.value] == []
+
+
+def test_reconcile_suppresses_missing_complete_executed_operating_agreement_gap():
+    """Signed operating agreements should suppress party-completeness missing-doc wording."""
+    missing_gap = GapItem(
+        gap_id="gap-op-agreement-party-complete",
+        category=GapCategory.MISSING_DOCUMENT,
+        severity=GapSeverity.CRITICAL,
+        title="Missing Complete Executed Operating Agreement",
+        description=(
+            "Multiple operating agreement versions are present, but it is unclear whether any copy "
+            "contains all necessary signatures from required LLC members/managers."
+        ),
+        affected_issue="Breach of Contract / Operating Agreement",
+        related_documents=[
+            "Grow1 Operating Agreement.pdf",
+            "Grow1 Operating Agreement (2).pdf",
+            "Grow1 Operating Agreement (3).pdf",
+        ],
+        recommendations=[
+            "Obtain and review a complete, fully executed version of the Operating Agreement.",
+            "Confirm signatory authority and party alignment.",
+        ],
+        impact_on_case=(
+            "Clients' rights and standing may be challenged without confirmed party alignment."
+        ),
+    )
+    result = GapAnalysisResult(
+        total_gaps=1,
+        critical_count=1,
+        high_count=0,
+        medium_count=0,
+        low_count=0,
+        gaps_by_category={GapCategory.MISSING_DOCUMENT.value: [missing_gap]},
+        overall_completeness_score=58.0,
+        attorney_summary="Execution support is unclear.",
+    )
+    signature_evidence = [
+        {
+            "file_name": "Grow1 Operating Agreement.pdf",
+            "status": "signed",
+            "confidence": "low",
+            "has_digital_signature": False,
+            "instrument_hints": ["operating agreement"],
+        },
+        {
+            "file_name": "Grow1 Operating Agreement (2).pdf",
+            "status": "signed",
+            "confidence": "low",
+            "has_digital_signature": False,
+            "instrument_hints": ["operating agreement"],
+        },
+        {
+            "file_name": "Grow1 Operating Agreement (3).pdf",
+            "status": "signed",
+            "confidence": "low",
+            "has_digital_signature": False,
+            "instrument_hints": ["operating agreement"],
+        },
+    ]
+
+    service = GapAnalysisService(openai_client=None)  # type: ignore[arg-type]
+    reconciled = service._reconcile_signature_execution_gaps(result, signature_evidence)
+
+    assert reconciled.total_gaps == 0
+    assert reconciled.critical_count == 0
+    assert reconciled.gaps_by_category[GapCategory.MISSING_DOCUMENT.value] == []
+    assert reconciled.gaps_by_category.get(GapCategory.INCOMPLETE_INFO.value, []) == []
+    assert any(
+        "treated 1 party/standing signature-coverage concern(s) as non-blocking"
+        in note
+        for note in reconciled.reconciliation_notes
+    )

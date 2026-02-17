@@ -413,8 +413,17 @@ class GapAnalysisService:
             "individual vs",
             "entity",
             "investor identity",
+            "both investors",
             "correct plaintiff",
             "party mismatch",
+            "party alignment",
+            "all relevant parties",
+            "all required parties",
+            "all members",
+            "all signatures",
+            "countersignature",
+            "counter-signature",
+            "signatory authority",
             "assignee",
         )
         text = (blob or "").lower()
@@ -503,7 +512,7 @@ class GapAnalysisService:
         result: GapAnalysisResult,
         signature_evidence: Optional[List[Dict[str, Any]]],
     ) -> GapAnalysisResult:
-        """Suppress false missing-executed gaps when signed evidence is authoritative."""
+        """Suppress execution-related missing-document gaps when signed evidence is present."""
         signed_docs = [
             item
             for item in (signature_evidence or [])
@@ -518,6 +527,7 @@ class GapAnalysisService:
 
         kept: List[GapItem] = []
         removed: List[GapItem] = []
+        non_blocking_identity_hits = 0
         matched_doc_names: List[str] = []
 
         for gap in missing_gaps:
@@ -533,14 +543,12 @@ class GapAnalysisService:
                     " ".join(gap.recommendations or []),
                 ]
             )
-            if self._is_identity_or_party_gap_text(gap_blob):
-                kept.append(gap)
-                continue
-
             matched = self._find_matching_signed_docs(gap, signed_docs)
             if matched:
-                removed.append(gap)
                 matched_doc_names.extend(matched)
+                if self._is_identity_or_party_gap_text(gap_blob):
+                    non_blocking_identity_hits += 1
+                removed.append(gap)
             else:
                 kept.append(gap)
 
@@ -577,9 +585,15 @@ class GapAnalysisService:
         else:
             docs_preview = "signed case documents"
 
+        action_text = f"removed {len(removed)} false missing-executed gap(s)"
+        if non_blocking_identity_hits:
+            action_text += (
+                f" and treated {non_blocking_identity_hits} party/standing signature-coverage concern(s) "
+                "as non-blocking because signed agreements are present"
+            )
         note = (
             f"Execution metadata confirms signed documents ({docs_preview}); "
-            f"removed {len(removed)} false missing-executed gap(s)."
+            f"{action_text}."
         )
         notes = list(getattr(result, "reconciliation_notes", []) or [])
         if note not in notes:
@@ -591,8 +605,9 @@ class GapAnalysisService:
             result.attorney_summary = f"{summary} {note}".strip() if summary else note
 
         logger.info(
-            "[GAP_SERVICE] Suppressed %s execution gap(s) using signature evidence",
+            "[GAP_SERVICE] Signature reconciliation adjusted gaps | removed=%s non_blocking_identity=%s",
             len(removed),
+            non_blocking_identity_hits,
         )
         return result
 

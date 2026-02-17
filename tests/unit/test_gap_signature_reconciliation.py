@@ -267,3 +267,70 @@ def test_reconcile_matches_absence_wording_for_counterparty_executed_gap():
     assert reconciled.total_gaps == 0
     assert reconciled.critical_count == 0
     assert reconciled.gaps_by_category[GapCategory.MISSING_DOCUMENT.value] == []
+
+
+def test_reconcile_matches_party_signed_operating_agreement_wording():
+    """'No ... party-signed ... provided' wording should reconcile when signed docs exist."""
+    missing_gap = GapItem(
+        gap_id="gap-party-signed-op-agreement",
+        category=GapCategory.MISSING_DOCUMENT,
+        severity=GapSeverity.HIGH,
+        title="No Complete Party-signed, Dated Operating Agreement Provided",
+        description=(
+            "While several versions of the operating agreement are present, it is unclear if any "
+            "provided version was executed by all relevant parties."
+        ),
+        affected_issue="Operating agreement enforcement",
+        related_documents=[
+            "Grow1 Operating Agreement.pdf",
+            "Grow1 Operating Agreement (2).pdf",
+            "Grow1 Operating Agreement (3).pdf",
+        ],
+        recommendations=[
+            "Obtain a version of the operating agreement signed by all members.",
+            "Review signature pages for completeness and date conformity.",
+        ],
+        impact_on_case=(
+            "Lack of a definitive, executed operating agreement makes enforcement uncertain."
+        ),
+    )
+    result = GapAnalysisResult(
+        total_gaps=1,
+        critical_count=0,
+        high_count=1,
+        medium_count=0,
+        low_count=0,
+        gaps_by_category={GapCategory.MISSING_DOCUMENT.value: [missing_gap]},
+        overall_completeness_score=68.0,
+        attorney_summary="Execution support is unclear.",
+    )
+    signature_evidence = [
+        {
+            "file_name": "Grow1 Operating Agreement.pdf",
+            "status": "signed",
+            "confidence": "low",
+            "has_digital_signature": False,
+            "instrument_hints": ["operating agreement"],
+        },
+        {
+            "file_name": "Grow1 Operating Agreement (2).pdf",
+            "status": "signed",
+            "confidence": "low",
+            "has_digital_signature": False,
+            "instrument_hints": ["operating agreement"],
+        },
+        {
+            "file_name": "Grow1 Operating Agreement (3).pdf",
+            "status": "signed",
+            "confidence": "low",
+            "has_digital_signature": False,
+            "instrument_hints": ["operating agreement"],
+        },
+    ]
+
+    service = GapAnalysisService(openai_client=None)  # type: ignore[arg-type]
+    reconciled = service._reconcile_signature_execution_gaps(result, signature_evidence)
+
+    assert reconciled.total_gaps == 0
+    assert reconciled.high_count == 0
+    assert reconciled.gaps_by_category[GapCategory.MISSING_DOCUMENT.value] == []

@@ -392,12 +392,16 @@ class GapAnalysisService:
             "unable to confirm",
             "cannot confirm",
         )
+        no_provided_pattern = re.compile(r"\bno\b.{0,45}\bprovided\b")
 
         return (
             gap.category == GapCategory.MISSING_DOCUMENT
             and any(term in blob for term in execution_terms)
             and any(term in blob for term in instrument_terms)
-            and any(term in blob for term in missing_terms)
+            and (
+                any(term in blob for term in missing_terms)
+                or bool(no_provided_pattern.search(blob))
+            )
         )
 
     @staticmethod

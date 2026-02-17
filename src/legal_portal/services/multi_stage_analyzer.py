@@ -365,6 +365,7 @@ Output in clean markdown format."""
         legal_issues: Optional[List[str]] = None,
         jurisdiction: str = "Florida",
         diag_logger: Optional[DiagnosticLogger] = None,
+        signature_evidence: Optional[List[Dict[str, Any]]] = None,
     ) -> MultiStageAnalysisResult:
         """Execute 4-stage analysis pipeline."""
         start_time = time.time()
@@ -571,6 +572,7 @@ Output in clean markdown format."""
                     deep_analysis=deep_analysis,
                     document_summaries=document_summaries,
                     intake_content=intake_content,
+                    signature_evidence=signature_evidence,
                 )
                 logger.info(f"[STAGE:3.5] Gap analysis returned: {gap_analysis is not None}")
                 self.stage_timings["gap_analysis"] = time.time() - stage_start

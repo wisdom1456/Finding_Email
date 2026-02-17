@@ -11,6 +11,7 @@ from legal_portal.api.routes.analysis import (
     _build_resolution_context,
     _build_signature_evidence,
     _build_supporting_document_hash,
+    _derive_signature_detection_for_gap_doc,
     _infer_signature_detection_from_text,
 )
 
@@ -240,6 +241,43 @@ def test_signature_evidence_collects_metadata_and_sorts_by_filename():
     assert [row["file_name"] for row in evidence] == ["A.pdf", "B.pdf"]
     assert evidence[1]["status"] == "signed"
     assert "subscription agreement" in evidence[1]["instrument_hints"]
+
+
+def test_derive_signature_detection_supports_docx_text_fallback():
+    """Text fallback should infer signatures for non-PDF text-like docs (e.g., DOCX)."""
+    doc = {
+        "id": "doc-1",
+        "file_name": "Subscription Agreement.docx",
+        "file_type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "manual_text": "",
+        "extracted_text": (
+            "Subscription Agreement\n"
+            "Counterpart Signature Page\n"
+            "Signed by: Erica Corley\n"
+            "Date Signed: 01/13/2026\n"
+        ),
+        "metadata": {},
+    }
+
+    signature = _derive_signature_detection_for_gap_doc(doc)
+    assert signature is not None
+    assert signature["status"] == "signed"
+    assert signature["signing_date"] == "2026-01-13"
+
+
+def test_derive_signature_detection_skips_image_like_documents():
+    """Image-like files should not run text signature fallback."""
+    doc = {
+        "id": "doc-2",
+        "file_name": "scan.jpg",
+        "file_type": "image/jpeg",
+        "manual_text": "",
+        "extracted_text": "Counterpart Signature Page\nSigned by: Someone",
+        "metadata": {},
+    }
+
+    signature = _derive_signature_detection_for_gap_doc(doc)
+    assert signature is None
 
 
 def test_gap_analysis_input_hash_changes_when_document_state_changes():

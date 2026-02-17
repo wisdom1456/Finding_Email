@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import os
 import re
-from typing import AsyncGenerator, Dict, List, Optional, Tuple
+from typing import Any, AsyncGenerator, Dict, List, Optional, Set, Tuple
 
 import markdown2
 from openai import (
@@ -101,6 +101,205 @@ class JsonProcessingService:
             "guidance_file": "new_mexico_guidance.md",
         },
     }
+
+    _DOCUMENT_INSTRUMENT_HINT_PATTERNS = [
+        ("subscription agreement", re.compile(r"\bsubscription\s+agreement\b", re.IGNORECASE)),
+        ("operating agreement", re.compile(r"\boperating\s+agreement\b", re.IGNORECASE)),
+        ("promissory note", re.compile(r"\bpromissory\s+note\b", re.IGNORECASE)),
+        ("membership certificate", re.compile(r"\bmembership\s+certificate\b", re.IGNORECASE)),
+        ("side letter", re.compile(r"\bside\s+letter\b", re.IGNORECASE)),
+        ("investment agreement", re.compile(r"\binvestment\s+agreement\b", re.IGNORECASE)),
+        ("purchase agreement", re.compile(r"\b(?:unit\s+)?purchase\s+agreement\b", re.IGNORECASE)),
+        ("loan agreement", re.compile(r"\bloan\s+agreement\b", re.IGNORECASE)),
+        ("financing agreement", re.compile(r"\bfinancing\s+agreement\b", re.IGNORECASE)),
+        ("text messages", re.compile(r"\btext\s+messages?\b", re.IGNORECASE)),
+        ("emails", re.compile(r"\bemails?\b", re.IGNORECASE)),
+    ]
+    _DOCUMENT_MATCH_STOPWORDS = {
+        "the",
+        "and",
+        "for",
+        "with",
+        "from",
+        "that",
+        "this",
+        "missing",
+        "document",
+        "documents",
+        "file",
+        "files",
+        "copy",
+        "final",
+        "draft",
+        "provided",
+        "provide",
+        "agreement",
+        "contract",
+        "executed",
+        "signed",
+        "signature",
+        "pdf",
+        "doc",
+        "docx",
+        "txt",
+        "eml",
+    }
+
+    @staticmethod
+    def _gap_get(gap: Any, field: str, default: str = "") -> str:
+        """Read fields from GapItem-like objects or dictionaries."""
+        if isinstance(gap, dict):
+            value = gap.get(field, default)
+        else:
+            value = getattr(gap, field, default)
+        return value if isinstance(value, str) else str(value or default)
+
+    @staticmethod
+    def _normalize_doc_name(value: str) -> str:
+        """Normalize file names/titles for rough matching."""
+        text = (value or "").lower().strip()
+        text = re.sub(r"\.[a-z0-9]{1,8}$", "", text)
+        text = re.sub(r"[^a-z0-9]+", " ", text)
+        return re.sub(r"\s+", " ", text).strip()
+
+    def _extract_document_hints(self, value: str) -> Set[str]:
+        """Extract known instrument/message hints from text."""
+        hints: Set[str] = set()
+        text = value or ""
+        for label, pattern in self._DOCUMENT_INSTRUMENT_HINT_PATTERNS:
+            if pattern.search(text):
+                hints.add(label)
+        return hints
+
+    def _tokenize_for_doc_match(self, value: str) -> Set[str]:
+        """Tokenize text for conservative present-document matching."""
+        normalized = re.sub(r"[^a-z0-9]+", " ", (value or "").lower())
+        return {
+            token
+            for token in normalized.split()
+            if len(token) >= 3 and token not in self._DOCUMENT_MATCH_STOPWORDS
+        }
+
+    @staticmethod
+    def _is_execution_or_signature_gap_text(blob: str) -> bool:
+        """Detect missing-gap text that specifically asks for executed/signed versions."""
+        text = (blob or "").lower()
+        return any(
+            term in text
+            for term in (
+                "executed",
+                "signed",
+                "signature",
+                "execution copy",
+                "counterpart signature",
+                "not signed",
+            )
+        )
+
+    def _build_document_register_context(
+        self,
+        fact_matrix,
+        original_documents: Optional[Dict[str, str]],
+    ) -> Tuple[str, Set[str], Set[str]]:
+        """Build an authoritative list of present documents for prompt grounding."""
+        lines: List[str] = []
+        present_names: Set[str] = set()
+        present_hints: Set[str] = set()
+        seen_names: Set[str] = set()
+
+        key_documents = list(getattr(fact_matrix, "key_documents", []) or [])
+        if key_documents:
+            lines.append("--- DOCUMENT REGISTER (AUTHORITATIVE LIST OF PROVIDED FILES) ---")
+            for doc in key_documents:
+                doc_name = (getattr(doc, "document_name", "") or "").strip()
+                if not doc_name:
+                    continue
+                normalized_name = self._normalize_doc_name(doc_name)
+                if normalized_name in seen_names:
+                    continue
+                seen_names.add(normalized_name)
+                doc_type = (getattr(doc, "document_type", "") or "Unknown").strip()
+                significance = (
+                    getattr(doc, "significance", "") or "Supports core case narrative."
+                ).strip()
+                lines.append(f"- {doc_name} | type={doc_type} | role={significance}")
+                present_names.add(normalized_name)
+                present_hints.update(self._extract_document_hints(doc_name))
+
+        if original_documents:
+            if not lines:
+                lines.append("--- DOCUMENT REGISTER (AUTHORITATIVE LIST OF PROVIDED FILES) ---")
+            for filename, content in original_documents.items():
+                normalized_name = self._normalize_doc_name(filename)
+                if not normalized_name or normalized_name in seen_names:
+                    continue
+                seen_names.add(normalized_name)
+                lines.append(
+                    f"- {filename} | type=Case Document | role=Primary source text included for review."
+                )
+                present_names.add(normalized_name)
+                present_hints.update(self._extract_document_hints(filename))
+                present_hints.update(self._extract_document_hints((content or "")[:5000]))
+
+        if lines:
+            lines.append(
+                "Use the register above as authoritative proof of what is already in the case file."
+            )
+            lines.append(
+                "Do not request a document as 'missing' when that same instrument appears in this register."
+            )
+            return "\n".join(lines) + "\n\n", present_names, present_hints
+
+        return "", present_names, present_hints
+
+    def _gap_refs_present_doc(
+        self,
+        gap: Any,
+        present_names: Set[str],
+        present_hints: Set[str],
+    ) -> bool:
+        """True when a missing-document gap appears to describe docs already present."""
+        if isinstance(gap, dict):
+            related_documents = gap.get("related_documents", [])
+            recommendations = gap.get("recommendations", [])
+        else:
+            related_documents = getattr(gap, "related_documents", [])
+            recommendations = getattr(gap, "recommendations", [])
+
+        gap_blob = " ".join(
+            [
+                self._gap_get(gap, "title"),
+                self._gap_get(gap, "description"),
+                self._gap_get(gap, "impact_on_case"),
+                " ".join(str(item) for item in (related_documents or [])),
+                " ".join(str(item) for item in (recommendations or [])),
+            ]
+        ).lower()
+
+        # Preserve true execution/signature gaps unless upstream reconciliation removed them.
+        if self._is_execution_or_signature_gap_text(gap_blob):
+            return False
+
+        gap_hints = self._extract_document_hints(gap_blob)
+        if gap_hints and gap_hints.intersection(present_hints):
+            return True
+
+        gap_tokens = self._tokenize_for_doc_match(gap_blob)
+        for name in present_names:
+            name_tokens = self._tokenize_for_doc_match(name)
+            if not name_tokens:
+                continue
+            overlap = gap_tokens & name_tokens
+            if len(overlap) >= 2:
+                return True
+            if len(name_tokens) == 1:
+                token = next(iter(name_tokens))
+                if len(token) >= 8 and token in gap_tokens:
+                    return True
+            if len(name) >= 18 and name in gap_blob:
+                return True
+
+        return False
 
     def _load_prompt_template(self, jurisdiction: str = "Florida") -> str:
         """Load the prompt template from a file and inject jurisdiction-specific guidance."""
@@ -695,6 +894,13 @@ class JsonProcessingService:
             f"{json.dumps([f.model_dump() for f in fact_matrix.financial_data], default=str, indent=2)}\n\n"
         )
 
+        register_context, present_doc_names, present_doc_hints = self._build_document_register_context(
+            fact_matrix=fact_matrix,
+            original_documents=original_documents,
+        )
+        if register_context:
+            context += register_context
+
         # Original Documents (Enabled for Quality Debugging)
         if original_documents:
             context += "--- FULL DOCUMENT CONTENT (for precision and citations) ---\n"
@@ -751,9 +957,27 @@ class JsonProcessingService:
             # Missing documents that affect credibility
             missing_docs = gap_analysis.gaps_by_category.get('missing_document', [])
             if missing_docs:
-                context += "\n**MISSING DOCUMENTS (do not assume contents):**\n"
+                actionable_missing_docs = []
+                present_but_flagged = []
                 for gap in missing_docs:
-                    context += f"- {gap.title}\n"
+                    if self._gap_refs_present_doc(gap, present_doc_names, present_doc_hints):
+                        present_but_flagged.append(gap)
+                    else:
+                        actionable_missing_docs.append(gap)
+
+                if actionable_missing_docs:
+                    context += "\n**MISSING DOCUMENTS (do not assume contents):**\n"
+                    for gap in actionable_missing_docs:
+                        context += f"- {self._gap_get(gap, 'title')}\n"
+
+                if present_but_flagged:
+                    context += "\n**DOCUMENTS ALREADY PRESENT (do NOT request again):**\n"
+                    for gap in present_but_flagged:
+                        context += f"- {self._gap_get(gap, 'title')}\n"
+                    context += (
+                        "These items were flagged in gap analysis but appear in the provided document register; "
+                        "treat them as present unless there is a specific execution/signature deficiency.\n"
+                    )
 
             # Unverifiable claims (prevent hallucination)
             unverifiable = gap_analysis.gaps_by_category.get('unverifiable_claim', [])

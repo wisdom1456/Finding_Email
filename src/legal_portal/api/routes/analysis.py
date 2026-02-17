@@ -287,6 +287,44 @@ def _is_pdf_like_document(file_name: Optional[str], file_type: Optional[str]) ->
     return ft in {"application/pdf", "pdf"} or name.endswith(".pdf")
 
 
+def _is_signature_inference_candidate(file_name: Optional[str], file_type: Optional[str]) -> bool:
+    """Return True when text-based signature inference should run for this document."""
+    ft = (file_type or "").lower()
+    name = (file_name or "").lower()
+
+    blocked_mime_prefixes = ("image/", "video/", "audio/")
+    if any(ft.startswith(prefix) for prefix in blocked_mime_prefixes):
+        return False
+
+    blocked_mime_types = {
+        "application/zip",
+        "application/x-zip-compressed",
+        "application/octet-stream",
+    }
+    if ft in blocked_mime_types:
+        return False
+
+    blocked_extensions = (
+        ".zip",
+        ".png",
+        ".jpg",
+        ".jpeg",
+        ".gif",
+        ".bmp",
+        ".tiff",
+        ".mp4",
+        ".mov",
+        ".avi",
+        ".mkv",
+        ".mp3",
+        ".wav",
+        ".aac",
+        ".flac",
+        ".m4a",
+    )
+    return not any(name.endswith(ext) for ext in blocked_extensions)
+
+
 def _sample_text_for_state_hash(raw_text: Optional[str], limit: int = 16000) -> str:
     """Build a compact text sample for deterministic state hashing."""
     text = (raw_text or "").strip()
@@ -1005,13 +1043,13 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
 
             doc_metadata = doc.get("metadata", {}) or {}
             signature_detection = doc_metadata.get("signature_detection")
-            if not signature_detection and _is_pdf_like_document(
+            if not signature_detection and _is_signature_inference_candidate(
                 doc.get("file_name"), doc.get("file_type")
             ):
                 signature_detection = _infer_signature_detection_from_text(text)
                 if signature_detection:
                     logger.info(
-                        "Inferred legacy PDF signature markers for %s (doc_id=%s, confidence=%s)",
+                        "Inferred signature markers from extracted text for %s (doc_id=%s, confidence=%s)",
                         doc_name,
                         doc.get("id"),
                         signature_detection.get("confidence"),
@@ -1323,6 +1361,12 @@ async def stream_findings_letter(
             raise HTTPException(status_code=404, detail="Analysis not found")
 
         analysis_data = response.data[0]
+        await _ensure_fresh_gap_analysis_for_letter_generation(
+            supabase=supabase,
+            analysis_record=analysis_data,
+            user_id=user["id"],
+        )
+
         result_payload = analysis_data.get("result")
         if not result_payload:
             raise HTTPException(status_code=400, detail="Analysis result not yet available")
@@ -1396,9 +1440,13 @@ async def stream_findings_letter(
                 verified_statutes=msr.get("verified_statutes", []),
                 attorney_name=artifacts.get("attorney_name"),
                 firm_name=artifacts.get("firm_name"),
+                confirmed_qa_pairs=artifacts.get("confirmed_qa_pairs", []),
                 contact_phone=artifacts.get("contact_phone"),
                 contact_email=artifacts.get("contact_email"),
+                quality_context=artifacts.get("quality_context", ""),
+                clio_matter_context=artifacts.get("clio_matter_context", ""),
                 jurisdiction=jurisdiction,
+                original_documents=msr.get("original_documents"),
                 gap_analysis=gap_analysis,  # Pass gap analysis for content guardrails
             ):
                 yield f"data: {json.dumps({'token': token})}\n\n"
@@ -2734,6 +2782,11 @@ async def generate_letter(
     """Generate findings or demand letters on-demand."""
     _ensure_case_access(supabase, letter_request.case_id, user["id"])
     analysis_record = _fetch_latest_analysis_result(supabase, letter_request.case_id)
+    await _ensure_fresh_gap_analysis_for_letter_generation(
+        supabase=supabase,
+        analysis_record=analysis_record,
+        user_id=user["id"],
+    )
 
     result_payload = analysis_record["result"]
     processing_result = ProcessingResult(**result_payload)
@@ -3302,12 +3355,12 @@ def _build_supporting_document_hash(
 
 
 def _derive_signature_detection_for_gap_doc(doc: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-    """Derive signature detection for a document row, with text fallback for legacy PDFs."""
+    """Derive signature detection for a document row, with text fallback for text-like docs."""
     sig = (doc.get("metadata") or {}).get("signature_detection")
     if sig:
         return sig
 
-    if not _is_pdf_like_document(doc.get("file_name"), doc.get("file_type")):
+    if not _is_signature_inference_candidate(doc.get("file_name"), doc.get("file_type")):
         return None
 
     text = (doc.get("manual_text") or doc.get("extracted_text") or "").strip()
@@ -3445,6 +3498,106 @@ def _build_gap_analysis_input_hash(
     return _hash_jsonable(canonical)
 
 
+async def _ensure_fresh_gap_analysis_for_letter_generation(
+    *,
+    supabase,
+    analysis_record: Dict[str, Any],
+    user_id: str,
+) -> None:
+    """Refresh cached gap analysis when case documents changed since it was computed."""
+    result_payload = analysis_record.get("result") or {}
+    multi_stage_result = result_payload.get("multi_stage_result") or {}
+    existing_gap_dict = multi_stage_result.get("gap_analysis")
+    if not existing_gap_dict:
+        return
+
+    analysis_id = analysis_record.get("id")
+    case_id = analysis_record.get("case_id")
+    if not analysis_id or not case_id:
+        return
+
+    case_document_rows = _fetch_case_documents_for_gap_context(supabase, case_id)
+    case_document_state_hash = _build_case_document_state_hash(case_document_rows)
+    gap_input_hash = _build_gap_analysis_input_hash(
+        analysis_id=analysis_id,
+        result_payload=result_payload,
+        case_document_state_hash=case_document_state_hash,
+    )
+    existing_gap_state = result_payload.get("gap_analysis_state") or {}
+    if existing_gap_state.get("input_hash") == gap_input_hash:
+        return
+
+    logger.info(
+        "[LETTER] Refreshing stale gap analysis before letter generation for case %s",
+        case_id,
+    )
+
+    try:
+        from legal_portal.core.data_models import DeepAnalysis, FactMatrix, LegalIssueMap
+        from legal_portal.services.gap_analysis_service import GapAnalysisService
+
+        fact_matrix = FactMatrix(**multi_stage_result.get("fact_matrix", {}))
+        issue_map = LegalIssueMap(**multi_stage_result.get("issue_map", {}))
+        deep_analysis_data = multi_stage_result.get("deep_analysis", {})
+        deep_analysis = DeepAnalysis(**deep_analysis_data) if deep_analysis_data else None
+        if not deep_analysis:
+            logger.warning(
+                "[LETTER] Cannot refresh stale gap analysis for case %s: deep analysis missing",
+                case_id,
+            )
+            return
+
+        doc_summaries_list = _parse_gap_document_summaries(result_payload)
+        intake_content = _fetch_gap_intake_content(supabase, case_id, result_payload)
+        signature_evidence = _build_signature_evidence(case_document_rows)
+
+        ai_preferences = await _get_user_ai_preferences(user_id, supabase)
+        openai_client = OpenAIClient(user_preferences=ai_preferences)
+        gap_service = GapAnalysisService(openai_client=openai_client)
+
+        gap_result = await gap_service.analyze_gaps(
+            fact_matrix=fact_matrix,
+            issue_map=issue_map,
+            deep_analysis=deep_analysis,
+            document_summaries=doc_summaries_list,
+            intake_content=intake_content,
+            signature_evidence=signature_evidence,
+        )
+
+        gap_dict = gap_result.model_dump(mode="json")
+        multi_stage_result["gap_analysis"] = gap_dict
+        result_payload["multi_stage_result"] = multi_stage_result
+        result_payload["gap_analysis_state"] = {
+            "input_hash": gap_input_hash,
+            "case_document_state_hash": case_document_state_hash,
+            "signature_record_count": len(signature_evidence),
+            "signed_document_count": sum(
+                1
+                for row in signature_evidence
+                if (row.get("status") or "").lower() == "signed"
+            ),
+            "updated_at": datetime.utcnow().isoformat(),
+        }
+
+        supabase.table("analysis_results").update({"result": result_payload}).eq(
+            "id", analysis_id
+        ).execute()
+        analysis_record["result"] = result_payload
+        logger.info(
+            "[LETTER] Refreshed gap analysis for case %s (score=%.1f, total_gaps=%s)",
+            case_id,
+            gap_result.overall_completeness_score,
+            gap_result.total_gaps,
+        )
+    except Exception as refresh_err:
+        logger.warning(
+            "[LETTER] Failed to refresh stale gap analysis for case %s: %s",
+            case_id,
+            refresh_err,
+            exc_info=True,
+        )
+
+
 def _compute_resolution_document_state_hash(
     supabase,
     case_id: str,
@@ -3544,7 +3697,7 @@ def _collect_resolution_documents(
             text = text[:1200] + "\n... [excerpt omitted] ...\n" + text[-800:]
 
         sig = (doc.get("metadata") or {}).get("signature_detection")
-        if not sig and _is_pdf_like_document(doc.get("file_name"), doc.get("file_type")):
+        if not sig and _is_signature_inference_candidate(doc.get("file_name"), doc.get("file_type")):
             sig = _infer_signature_detection_from_text(text)
         condensed_docs.append(
             {

@@ -24,6 +24,7 @@ from legal_portal.core.data_models import (
 )
 from legal_portal.services.main_processor import (
     _aggregate_quality_results,
+    _build_original_documents_map,
     _build_quality_context,
     _build_summary_prompt,
     _clean_and_parse_json,
@@ -709,6 +710,39 @@ class TestBuildSummaryPrompt:
 
 
 # =============================================================================
+# Tests for _build_original_documents_map
+# =============================================================================
+
+
+class TestBuildOriginalDocumentsMap:
+    """Test collision-safe mapping of raw original documents."""
+
+    def test_preserves_single_filename_without_suffix(self):
+        """Single documents should keep the plain filename key."""
+        doc = make_processed_doc(file_name="Subscription Agreement.pdf", content="Doc content")
+
+        result = _build_original_documents_map([doc])
+
+        assert list(result.keys()) == ["Subscription Agreement.pdf"]
+        assert result["Subscription Agreement.pdf"] == "Doc content"
+
+    def test_disambiguates_duplicate_filenames_with_document_id(self):
+        """Duplicate filenames should not overwrite each other in the map."""
+        doc_one = make_processed_doc(file_name="Agreement.pdf", content="First copy")
+        doc_one.document_id = "doc-1"
+        doc_two = make_processed_doc(file_name="Agreement.pdf", content="Second copy")
+        doc_two.document_id = "doc-2"
+
+        result = _build_original_documents_map([doc_one, doc_two])
+
+        assert len(result) == 2
+        assert "Agreement.pdf" in result
+        assert "Agreement.pdf [id:doc-2]" in result
+        assert result["Agreement.pdf"] == "First copy"
+        assert result["Agreement.pdf [id:doc-2]"] == "Second copy"
+
+
+# =============================================================================
 # Tests for _convert_to_case_analysis_result
 # =============================================================================
 
@@ -800,4 +834,3 @@ class TestConvertToCaseAnalysisResult:
         # This test verifies intake_analysis is created even with long content
         assert result.intake_analysis.client_name == "Client"
         assert result.intake_analysis.case_type == "Legal Matter"
-

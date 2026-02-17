@@ -15,7 +15,15 @@ from typing import AsyncGenerator, Dict, Optional
 
 import pytest
 
-from legal_portal.core.data_models import DeepAnalysis, FactMatrix, LetterStructure
+from legal_portal.core.data_models import (
+    DeepAnalysis,
+    FactMatrix,
+    GapAnalysisResult,
+    GapCategory,
+    GapItem,
+    GapSeverity,
+    LetterStructure,
+)
 from legal_portal.services.demand_letter_service import DemandLetterService
 from legal_portal.services.json_processing_service import JsonProcessingService
 
@@ -132,6 +140,31 @@ def _sample_deep_analysis_dict() -> Dict:
         "viability_reasoning": "Facts and records support actionable claims.",
         "recommend_demand_letter": True,
     }
+
+
+def _sample_missing_doc_gap_analysis(gap_title: str, gap_description: str) -> GapAnalysisResult:
+    """Build a minimal gap-analysis payload for prompt-guardrail tests."""
+    gap = GapItem(
+        gap_id="gap-doc-1",
+        category=GapCategory.MISSING_DOCUMENT,
+        severity=GapSeverity.HIGH,
+        title=gap_title,
+        description=gap_description,
+        affected_issue="Contract formation",
+        related_documents=[],
+        recommendations=["Provide the referenced agreement."],
+        impact_on_case="May weaken proof of agreed terms.",
+    )
+    return GapAnalysisResult(
+        total_gaps=1,
+        critical_count=0,
+        high_count=1,
+        medium_count=0,
+        low_count=0,
+        gaps_by_category={GapCategory.MISSING_DOCUMENT.value: [gap]},
+        overall_completeness_score=72.0,
+        attorney_summary="One missing-document issue remains.",
+    )
 
 
 class FakeLetterOpenAIClient:
@@ -449,6 +482,167 @@ async def test_findings_from_json_prompt_avoids_email_placeholder_when_missing(
 
     from_json_prompt = fake_client.last_response_request["input"]
     assert "[EMAIL PLACEHOLDER]" not in from_json_prompt
+
+
+@pytest.mark.asyncio
+async def test_findings_prompt_marks_present_agreement_gap_as_already_provided(
+    baseline_markdown_fixtures, monkeypatch
+):
+    """Prompt context should avoid treating present agreements as missing docs."""
+    monkeypatch.setattr(
+        "legal_portal.utils.letter_polish.LetterPolisher.polish_letter",
+        lambda self, raw_letter: {
+            "success": True,
+            "polished_letter": raw_letter,
+            "changes_made": [],
+            "original_length": len(raw_letter),
+            "polished_length": len(raw_letter),
+        },
+    )
+
+    fake_client = FakeLetterOpenAIClient(
+        findings_markdown=baseline_markdown_fixtures["findings"],
+        demand_markdown=baseline_markdown_fixtures["demand"],
+    )
+    service = JsonProcessingService(client=fake_client, config={})
+
+    await service.generate_findings_letter_adaptive(
+        intake_content='{"client_name":"Amber Bell"}',
+        fact_matrix=FactMatrix(**_sample_fact_matrix_dict()),
+        legal_analysis=DeepAnalysis(**_sample_deep_analysis_dict()),
+        structure_guidance=LetterStructure(
+            style="natural_flow",
+            intro="Here are the key points of our analysis:",
+            issue_format="flowing_bullet_paragraphs",
+            reasoning="Natural flow preferred for client readability.",
+        ),
+        verified_statutes=[],
+        attorney_name="Franklin Riley",
+        firm_name="Bernhardt Riley, Attorneys at Law",
+        contact_phone="(727) 275-9575",
+        contact_email="counsel@firm.com",
+        jurisdiction="Florida",
+        original_documents={
+            "Subscription Agreement.pdf": "Subscription Agreement terms...",
+            "Operating Agreement.pdf": "Operating Agreement terms...",
+        },
+        gap_analysis=_sample_missing_doc_gap_analysis(
+            gap_title="Missing subscription agreement",
+            gap_description="No subscription agreement was provided.",
+        ),
+    )
+
+    prompt = fake_client.last_response_request["input"]
+    assert "--- DOCUMENT REGISTER (AUTHORITATIVE LIST OF PROVIDED FILES) ---" in prompt
+    assert "Subscription Agreement.pdf | type=Case Document" in prompt
+    assert "**DOCUMENTS ALREADY PRESENT (do NOT request again):**" in prompt
+    assert "- Missing subscription agreement" in prompt
+    assert "\n**MISSING DOCUMENTS (do not assume contents):**\n- Missing subscription agreement\n" not in prompt
+
+
+@pytest.mark.asyncio
+async def test_findings_prompt_keeps_execution_gap_without_signature_proof(
+    baseline_markdown_fixtures, monkeypatch
+):
+    """Execution-specific gaps should remain until signature evidence reconciles them."""
+    monkeypatch.setattr(
+        "legal_portal.utils.letter_polish.LetterPolisher.polish_letter",
+        lambda self, raw_letter: {
+            "success": True,
+            "polished_letter": raw_letter,
+            "changes_made": [],
+            "original_length": len(raw_letter),
+            "polished_length": len(raw_letter),
+        },
+    )
+
+    fake_client = FakeLetterOpenAIClient(
+        findings_markdown=baseline_markdown_fixtures["findings"],
+        demand_markdown=baseline_markdown_fixtures["demand"],
+    )
+    service = JsonProcessingService(client=fake_client, config={})
+
+    await service.generate_findings_letter_adaptive(
+        intake_content='{"client_name":"Amber Bell"}',
+        fact_matrix=FactMatrix(**_sample_fact_matrix_dict()),
+        legal_analysis=DeepAnalysis(**_sample_deep_analysis_dict()),
+        structure_guidance=LetterStructure(
+            style="natural_flow",
+            intro="Here are the key points of our analysis:",
+            issue_format="flowing_bullet_paragraphs",
+            reasoning="Natural flow preferred for client readability.",
+        ),
+        verified_statutes=[],
+        attorney_name="Franklin Riley",
+        firm_name="Bernhardt Riley, Attorneys at Law",
+        contact_phone="(727) 275-9575",
+        contact_email="counsel@firm.com",
+        jurisdiction="Florida",
+        original_documents={
+            "Subscription Agreement.pdf": "Unsigned copy for review",
+        },
+        gap_analysis=_sample_missing_doc_gap_analysis(
+            gap_title="Missing executed subscription agreement",
+            gap_description="No signed subscription agreement was provided.",
+        ),
+    )
+
+    prompt = fake_client.last_response_request["input"]
+    assert "**MISSING DOCUMENTS (do not assume contents):**" in prompt
+    assert "- Missing executed subscription agreement" in prompt
+
+
+@pytest.mark.asyncio
+async def test_findings_prompt_does_not_suppress_missing_gap_from_generic_filename(
+    baseline_markdown_fixtures, monkeypatch
+):
+    """Generic present filenames should not hide unrelated missing document gaps."""
+    monkeypatch.setattr(
+        "legal_portal.utils.letter_polish.LetterPolisher.polish_letter",
+        lambda self, raw_letter: {
+            "success": True,
+            "polished_letter": raw_letter,
+            "changes_made": [],
+            "original_length": len(raw_letter),
+            "polished_length": len(raw_letter),
+        },
+    )
+
+    fake_client = FakeLetterOpenAIClient(
+        findings_markdown=baseline_markdown_fixtures["findings"],
+        demand_markdown=baseline_markdown_fixtures["demand"],
+    )
+    service = JsonProcessingService(client=fake_client, config={})
+
+    await service.generate_findings_letter_adaptive(
+        intake_content='{"client_name":"Amber Bell"}',
+        fact_matrix=FactMatrix(**_sample_fact_matrix_dict()),
+        legal_analysis=DeepAnalysis(**_sample_deep_analysis_dict()),
+        structure_guidance=LetterStructure(
+            style="natural_flow",
+            intro="Here are the key points of our analysis:",
+            issue_format="flowing_bullet_paragraphs",
+            reasoning="Natural flow preferred for client readability.",
+        ),
+        verified_statutes=[],
+        attorney_name="Franklin Riley",
+        firm_name="Bernhardt Riley, Attorneys at Law",
+        contact_phone="(727) 275-9575",
+        contact_email="counsel@firm.com",
+        jurisdiction="Florida",
+        original_documents={
+            "Contract.pdf": "General construction contract text",
+        },
+        gap_analysis=_sample_missing_doc_gap_analysis(
+            gap_title="Missing operating agreement",
+            gap_description="No operating agreement was provided.",
+        ),
+    )
+
+    prompt = fake_client.last_response_request["input"]
+    assert "**MISSING DOCUMENTS (do not assume contents):**" in prompt
+    assert "- Missing operating agreement" in prompt
+    assert "**DOCUMENTS ALREADY PRESENT (do NOT request again):**" not in prompt
 
 
 @pytest.mark.asyncio

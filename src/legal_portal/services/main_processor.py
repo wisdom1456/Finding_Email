@@ -98,6 +98,100 @@ Documents marked with [📷 IMAGE FILE] are images. For these:
 ---
 """
 
+_SIGNATURE_INSTRUMENT_HINT_PATTERNS = [
+    ("subscription agreement", re.compile(r"\bsubscription\s+agreement\b", re.IGNORECASE)),
+    ("investment agreement", re.compile(r"\binvestment\s+agreement\b", re.IGNORECASE)),
+    ("purchase agreement", re.compile(r"\b(?:unit\s+)?purchase\s+agreement\b", re.IGNORECASE)),
+    ("operating agreement", re.compile(r"\boperating\s+agreement\b", re.IGNORECASE)),
+    ("promissory note", re.compile(r"\bpromissory\s+note\b", re.IGNORECASE)),
+    ("convertible note", re.compile(r"\bconvertible\s+note\b", re.IGNORECASE)),
+    ("loan agreement", re.compile(r"\bloan\s+agreement\b", re.IGNORECASE)),
+    ("financing agreement", re.compile(r"\bfinancing\s+agreement\b", re.IGNORECASE)),
+    ("membership units", re.compile(r"\bclass\s+[a-z0-9]+\s+units?\b", re.IGNORECASE)),
+]
+
+
+def _extract_signature_instrument_hints(file_name: str, content: str) -> List[str]:
+    """Extract lightweight instrument hints for gap-analysis reconciliation."""
+    corpus = f"{file_name or ''}\n{(content or '')[:24000]}"
+    hints: List[str] = []
+    seen = set()
+
+    for label, pattern in _SIGNATURE_INSTRUMENT_HINT_PATTERNS:
+        if not pattern.search(corpus):
+            continue
+        key = label.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        hints.append(label)
+        if len(hints) >= 6:
+            break
+
+    return hints
+
+
+def _build_signature_evidence_for_gap_analysis(
+    processed_documents: List[ProcessedDocument],
+) -> List[Dict[str, Any]]:
+    """Build authoritative signature evidence for stage 3.5 gap reconciliation."""
+    evidence: List[Dict[str, Any]] = []
+
+    for doc in processed_documents:
+        signature_detection = doc.signature_detection
+        if not isinstance(signature_detection, dict):
+            continue
+
+        instrument_hints = _extract_signature_instrument_hints(
+            file_name=doc.file_name,
+            content=doc.content,
+        )
+        signer_names = signature_detection.get("signer_names")
+        indicators = signature_detection.get("indicators")
+
+        evidence.append(
+            {
+                "document_id": doc.document_id,
+                "file_name": doc.file_name,
+                "status": signature_detection.get("status"),
+                "confidence": signature_detection.get("confidence"),
+                "has_digital_signature": bool(signature_detection.get("has_digital_signature")),
+                "signing_date": signature_detection.get("signing_date"),
+                "detection_source": signature_detection.get("detection_source"),
+                "signer_names": signer_names if isinstance(signer_names, list) else [],
+                "indicators": indicators if isinstance(indicators, list) else [],
+                "instrument_hints": instrument_hints,
+            }
+        )
+
+    return sorted(evidence, key=lambda row: (row.get("file_name") or "").lower())
+
+
+def _build_original_documents_map(
+    processed_documents: List[ProcessedDocument],
+) -> Dict[str, str]:
+    """Build stable, collision-safe keys for raw document injection context."""
+    doc_map: Dict[str, str] = {}
+    seen_names: Dict[str, int] = {}
+
+    for doc in processed_documents:
+        base_name = (doc.file_name or "Document").strip() or "Document"
+        seen_names[base_name] = seen_names.get(base_name, 0) + 1
+        occurrence = seen_names[base_name]
+
+        if occurrence == 1 and base_name not in doc_map:
+            key = base_name
+        else:
+            suffix = str(doc.document_id or occurrence)
+            key = f"{base_name} [id:{suffix}]"
+            while key in doc_map:
+                occurrence += 1
+                key = f"{base_name} [id:{suffix}-{occurrence}]"
+
+        doc_map[key] = doc.content
+
+    return doc_map
+
 
 def _convert_to_case_analysis_result(
     structured_summaries: List[DocumentSummaryStructured], client_name: str, intake_content: str
@@ -702,6 +796,9 @@ async def process_case_documents(
                 )
 
             multi_stage_start = time.time()
+            signature_evidence = _build_signature_evidence_for_gap_analysis(
+                processed_case_docs + processed_intake
+            )
             multi_stage_result = await multi_stage_analyzer.analyze_case(
                 intake_content=intake_content,
                 document_summaries=structured_summaries,
@@ -709,6 +806,7 @@ async def process_case_documents(
                 case_type=case_analysis_dict.get("practice_area"),
                 jurisdiction=jurisdiction,  # Pass jurisdiction
                 diag_logger=diag_logger,  # Pass diagnostic logger
+                signature_evidence=signature_evidence,
             )
             multi_stage_duration = time.time() - multi_stage_start
 
@@ -717,9 +815,9 @@ async def process_case_documents(
             letter_structure = multi_stage_result.letter_structure
 
             # Attach original documents to multi-stage result for letter generation
-            multi_stage_result.original_documents = {
-                d.file_name: d.content for d in processed_case_docs + processed_intake
-            }
+            multi_stage_result.original_documents = _build_original_documents_map(
+                processed_case_docs + processed_intake
+            )
 
             elapsed = time.time() - start_time
             logger.info(

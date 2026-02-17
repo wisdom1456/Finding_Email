@@ -237,6 +237,14 @@ Add after the opening paragraph:
   - "Subject to verification of..."
 - DO NOT fabricate document contents or assume what missing documents say
 
+### GUARDRAIL 2A: Document Register Precedence (CRITICAL)
+
+If the analysis context includes a **DOCUMENT REGISTER** or a **DOCUMENTS ALREADY PRESENT** section:
+- Treat those documents as present in the file, even if similar items appear in generic missing-document lists.
+- Do NOT ask the client to provide the same document again by category name (for example, "subscription agreement," "operating agreement," "promissory note") when a titled version is already listed.
+- If you need a better version of a present document, request a **more complete/legible copy of the exact listed title**, not "if you have it."
+- In recommendations, focus additional document requests on truly absent items (for example, wire proof, missing attachments, missing full threads, or unknown recipient/payment records).
+
 ### GUARDRAIL 3: Unverifiable Claims (PREVENT HALLUCINATION)
 
 **For items listed under UNVERIFIABLE CLAIMS:**

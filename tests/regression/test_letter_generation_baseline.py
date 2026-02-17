@@ -646,6 +646,65 @@ async def test_findings_prompt_does_not_suppress_missing_gap_from_generic_filena
 
 
 @pytest.mark.asyncio
+async def test_findings_prompt_uses_document_summaries_for_register_context(
+    baseline_markdown_fixtures, monkeypatch
+):
+    """Document register should reflect provided structured summaries and case_place context."""
+    monkeypatch.setattr(
+        "legal_portal.utils.letter_polish.LetterPolisher.polish_letter",
+        lambda self, raw_letter: {
+            "success": True,
+            "polished_letter": raw_letter,
+            "changes_made": [],
+            "original_length": len(raw_letter),
+            "polished_length": len(raw_letter),
+        },
+    )
+
+    fake_client = FakeLetterOpenAIClient(
+        findings_markdown=baseline_markdown_fixtures["findings"],
+        demand_markdown=baseline_markdown_fixtures["demand"],
+    )
+    service = JsonProcessingService(client=fake_client, config={})
+
+    await service.generate_findings_letter_adaptive(
+        intake_content='{"client_name":"Amber Bell"}',
+        fact_matrix=FactMatrix(**_sample_fact_matrix_dict()),
+        legal_analysis=DeepAnalysis(**_sample_deep_analysis_dict()),
+        structure_guidance=LetterStructure(
+            style="natural_flow",
+            intro="Here are the key points of our analysis:",
+            issue_format="flowing_bullet_paragraphs",
+            reasoning="Natural flow preferred for client readability.",
+        ),
+        verified_statutes=[],
+        attorney_name="Franklin Riley",
+        firm_name="Bernhardt Riley, Attorneys at Law",
+        contact_phone="(727) 275-9575",
+        contact_email="counsel@firm.com",
+        jurisdiction="Florida",
+        original_documents=None,
+        document_summaries_for_context=[
+            {
+                "document_name": "Subscription_Agreement_EJAJ-TX_Final120.doc.pdf",
+                "document_type": "Contract",
+                "legal_significance": "Defines investor rights and obligations.",
+            }
+        ],
+        gap_analysis=_sample_missing_doc_gap_analysis(
+            gap_title="Missing subscription agreement",
+            gap_description="No subscription agreement was provided.",
+        ),
+    )
+
+    prompt = fake_client.last_response_request["input"]
+    assert "--- DOCUMENT REGISTER (AUTHORITATIVE LIST OF PROVIDED FILES) ---" in prompt
+    assert "Subscription_Agreement_EJAJ-TX_Final120.doc.pdf | type=Contract" in prompt
+    assert "case_place=Defines investor rights and obligations." in prompt
+    assert "**DOCUMENTS ALREADY PRESENT (do NOT request again):**" in prompt
+
+
+@pytest.mark.asyncio
 async def test_demand_prompt_avoids_na_placeholder_when_amount_missing(baseline_markdown_fixtures):
     """Demand prompt should not inject `N/A` for missing demand amount."""
     fake_client = FakeLetterOpenAIClient(

@@ -162,10 +162,18 @@ class JsonProcessingService:
         text = re.sub(r"[^a-z0-9]+", " ", text)
         return re.sub(r"\s+", " ", text).strip()
 
+    @staticmethod
+    def _truncate(value: str, limit: int) -> str:
+        """Trim long strings for prompt-friendly register lines."""
+        text = (value or "").strip()
+        if len(text) <= limit:
+            return text
+        return text[: max(0, limit - 3)].rstrip() + "..."
+
     def _extract_document_hints(self, value: str) -> Set[str]:
         """Extract known instrument/message hints from text."""
         hints: Set[str] = set()
-        text = value or ""
+        text = re.sub(r"[_\-]+", " ", (value or ""))
         for label, pattern in self._DOCUMENT_INSTRUMENT_HINT_PATTERNS:
             if pattern.search(text):
                 hints.add(label)
@@ -179,6 +187,25 @@ class JsonProcessingService:
             for token in normalized.split()
             if len(token) >= 3 and token not in self._DOCUMENT_MATCH_STOPWORDS
         }
+
+    def _infer_document_role(self, name: str, doc_type: str, narrative: str) -> str:
+        """Infer a case role for a document using generic lexical signals."""
+        blob = " ".join([name or "", doc_type or "", narrative or ""]).lower()
+        role_patterns = [
+            ("deal terms and investor rights", r"\b(subscription|purchase|investment|promissory|note|memo\s+terms|financing)\b"),
+            ("entity governance and control", r"\b(operating\s+agreement|articles|organization|bylaws|member|manager)\b"),
+            ("communications and representations", r"\b(email|correspondence|update|message|communication|clio\s+note)\b"),
+            ("payment and damages evidence", r"\b(payment|wire|receipt|down\s+payment|bank|invoice|amount)\b"),
+            ("financial performance evidence", r"\b(p&l|profit|loss|financial|statement|unaudited)\b"),
+            ("public-facing marketing or offering", r"\b(crowdfunding|listing|offering|investor\s+packet|brochure)\b"),
+            ("regulatory or entity records", r"\b(secretary\s+of\s+state|business\s+search|official|filing)\b"),
+            ("visual evidence", r"\b(jpeg|jpg|png|image|photo|scan)\b"),
+            ("client intake and background", r"\b(intake|questionnaire|client\s+form)\b"),
+        ]
+        for role, pattern in role_patterns:
+            if re.search(pattern, blob, re.IGNORECASE):
+                return role
+        return "general case evidence"
 
     @staticmethod
     def _is_execution_or_signature_gap_text(blob: str) -> bool:
@@ -200,6 +227,7 @@ class JsonProcessingService:
         self,
         fact_matrix,
         original_documents: Optional[Dict[str, str]],
+        document_summaries: Optional[List[Dict[str, Any]]] = None,
     ) -> Tuple[str, Set[str], Set[str]]:
         """Build an authoritative list of present documents for prompt grounding."""
         lines: List[str] = []
@@ -207,35 +235,87 @@ class JsonProcessingService:
         present_hints: Set[str] = set()
         seen_names: Set[str] = set()
 
-        key_documents = list(getattr(fact_matrix, "key_documents", []) or [])
-        if key_documents:
+        has_header = False
+        summary_map: Dict[str, Dict[str, Any]] = {}
+        for entry in document_summaries or []:
+            if not isinstance(entry, dict):
+                continue
+            doc_name = (entry.get("document_name") or "").strip()
+            if not doc_name:
+                continue
+            summary_map[self._normalize_doc_name(doc_name)] = entry
+
+        def _ensure_header() -> None:
+            nonlocal has_header
+            if has_header:
+                return
             lines.append("--- DOCUMENT REGISTER (AUTHORITATIVE LIST OF PROVIDED FILES) ---")
-            for doc in key_documents:
-                doc_name = (getattr(doc, "document_name", "") or "").strip()
-                if not doc_name:
-                    continue
-                normalized_name = self._normalize_doc_name(doc_name)
-                if normalized_name in seen_names:
-                    continue
-                seen_names.add(normalized_name)
-                doc_type = (getattr(doc, "document_type", "") or "Unknown").strip()
-                significance = (
-                    getattr(doc, "significance", "") or "Supports core case narrative."
-                ).strip()
-                lines.append(f"- {doc_name} | type={doc_type} | role={significance}")
-                present_names.add(normalized_name)
-                present_hints.update(self._extract_document_hints(doc_name))
+            has_header = True
+
+        key_documents = list(getattr(fact_matrix, "key_documents", []) or [])
+        for doc in key_documents:
+            doc_name = (getattr(doc, "document_name", "") or "").strip()
+            if not doc_name:
+                continue
+            normalized_name = self._normalize_doc_name(doc_name)
+            if normalized_name in seen_names:
+                continue
+            seen_names.add(normalized_name)
+            _ensure_header()
+
+            summary_entry = summary_map.get(normalized_name, {})
+            doc_type = (
+                (summary_entry.get("document_type") if isinstance(summary_entry, dict) else "")
+                or (getattr(doc, "document_type", "") or "Unknown")
+            ).strip()
+            significance = (
+                (summary_entry.get("legal_significance") if isinstance(summary_entry, dict) else "")
+                or (summary_entry.get("relevance_to_case") if isinstance(summary_entry, dict) else "")
+                or (getattr(doc, "significance", "") or "Supports core case narrative.")
+            ).strip()
+            role = self._infer_document_role(doc_name, doc_type, significance)
+            lines.append(
+                f"- {doc_name} | type={doc_type} | role={role} | case_place={self._truncate(significance, 150)}"
+            )
+            present_names.add(normalized_name)
+            present_hints.update(self._extract_document_hints(doc_name))
+            present_hints.update(self._extract_document_hints(significance))
+
+        for normalized_name, summary_entry in summary_map.items():
+            if normalized_name in seen_names:
+                continue
+            doc_name = (summary_entry.get("document_name") or "").strip()
+            if not doc_name:
+                continue
+            seen_names.add(normalized_name)
+            _ensure_header()
+
+            doc_type = (summary_entry.get("document_type") or "Unknown").strip()
+            significance = (
+                summary_entry.get("legal_significance")
+                or summary_entry.get("relevance_to_case")
+                or summary_entry.get("executive_summary")
+                or "Supports core case narrative."
+            )
+            significance = self._truncate(significance, 150)
+            role = self._infer_document_role(doc_name, doc_type, significance)
+            lines.append(
+                f"- {doc_name} | type={doc_type} | role={role} | case_place={significance}"
+            )
+            present_names.add(normalized_name)
+            present_hints.update(self._extract_document_hints(doc_name))
+            present_hints.update(self._extract_document_hints(significance))
 
         if original_documents:
-            if not lines:
-                lines.append("--- DOCUMENT REGISTER (AUTHORITATIVE LIST OF PROVIDED FILES) ---")
+            _ensure_header()
             for filename, content in original_documents.items():
                 normalized_name = self._normalize_doc_name(filename)
                 if not normalized_name or normalized_name in seen_names:
                     continue
                 seen_names.add(normalized_name)
+                role = self._infer_document_role(filename, "Case Document", "")
                 lines.append(
-                    f"- {filename} | type=Case Document | role=Primary source text included for review."
+                    f"- {filename} | type=Case Document | role={role} | case_place=Primary source text included for review."
                 )
                 present_names.add(normalized_name)
                 present_hints.update(self._extract_document_hints(filename))
@@ -652,6 +732,7 @@ class JsonProcessingService:
         jurisdiction: str = "Florida",  # Added jurisdiction parameter
         diag_logger: Optional[DiagnosticLogger] = None,
         original_documents: Optional[Dict[str, str]] = None,  # Explicit raw content
+        document_summaries_for_context: Optional[List[Dict[str, Any]]] = None,
         gap_analysis=None,  # GapAnalysisResult for guardrails
     ) -> str:
         """Generate findings email using multi-stage analysis results.
@@ -710,6 +791,7 @@ class JsonProcessingService:
         structured_context = self._format_multi_stage_context(
             fact_matrix, legal_analysis, structure_guidance, verified_statutes,
             original_documents=original_documents,
+            document_summaries=document_summaries_for_context,
             gap_analysis=gap_analysis,
         )
 
@@ -813,6 +895,7 @@ class JsonProcessingService:
         clio_matter_context: str = "",
         jurisdiction: str = "Florida",
         original_documents: Optional[Dict[str, str]] = None,
+        document_summaries_for_context: Optional[List[Dict[str, Any]]] = None,
         gap_analysis=None,  # GapAnalysisResult for guardrails
     ) -> AsyncGenerator[str, None]:
         """Stream adaptive findings email generation.
@@ -823,6 +906,7 @@ class JsonProcessingService:
         structured_context = self._format_multi_stage_context(
             fact_matrix, legal_analysis, structure_guidance, verified_statutes,
             original_documents=original_documents,
+            document_summaries=document_summaries_for_context,
             gap_analysis=gap_analysis,
         )
 
@@ -874,6 +958,7 @@ class JsonProcessingService:
     def _format_multi_stage_context(
         self, fact_matrix, legal_analysis, structure_guidance, verified_statutes,
         original_documents: Optional[Dict[str, str]] = None,
+        document_summaries: Optional[List[Dict[str, Any]]] = None,
         gap_analysis=None,  # GapAnalysisResult for guardrails
     ) -> str:
         """Format multi-stage analysis results for letter generation prompt."""
@@ -897,6 +982,7 @@ class JsonProcessingService:
         register_context, present_doc_names, present_doc_hints = self._build_document_register_context(
             fact_matrix=fact_matrix,
             original_documents=original_documents,
+            document_summaries=document_summaries,
         )
         if register_context:
             context += register_context

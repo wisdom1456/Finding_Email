@@ -1429,6 +1429,20 @@ async def stream_findings_letter(
             if msr.get("gap_analysis"):
                 gap_analysis = GapAnalysisResult(**msr["gap_analysis"])
 
+            document_summaries_for_context: List[Dict[str, Any]] = []
+            if processing_result.document_summaries:
+                try:
+                    parsed_summaries = json.loads(processing_result.document_summaries)
+                    if isinstance(parsed_summaries, list):
+                        document_summaries_for_context = [
+                            item for item in parsed_summaries if isinstance(item, dict)
+                        ]
+                except Exception as parse_err:
+                    logger.warning(
+                        "[LETTER] Failed to parse document_summaries for stream context: %s",
+                        parse_err,
+                    )
+
             artifacts = processing_result.artifacts or {}
             jurisdiction = artifacts.get("jurisdiction", "Florida")
 
@@ -1447,6 +1461,7 @@ async def stream_findings_letter(
                 clio_matter_context=artifacts.get("clio_matter_context", ""),
                 jurisdiction=jurisdiction,
                 original_documents=msr.get("original_documents"),
+                document_summaries_for_context=document_summaries_for_context,
                 gap_analysis=gap_analysis,  # Pass gap analysis for content guardrails
             ):
                 yield f"data: {json.dumps({'token': token})}\n\n"
@@ -2841,6 +2856,20 @@ async def generate_letter(
             except Exception as gap_err:
                 logger.warning(f"Could not load gap analysis for guardrails: {gap_err}")
 
+        document_summaries_for_context: List[Dict[str, Any]] = []
+        if processing_result.document_summaries:
+            try:
+                parsed_summaries = json.loads(processing_result.document_summaries)
+                if isinstance(parsed_summaries, list):
+                    document_summaries_for_context = [
+                        item for item in parsed_summaries if isinstance(item, dict)
+                    ]
+            except Exception as parse_err:
+                logger.warning(
+                    "[LETTER] Failed to parse document_summaries for findings context: %s",
+                    parse_err,
+                )
+
         # COMPLETENESS GATE: Block letter generation if documentation is critically insufficient
         if gap_analysis:
             if gap_analysis.overall_completeness_score < 40:
@@ -2884,6 +2913,7 @@ async def generate_letter(
             jurisdiction=jurisdiction,  # Pass jurisdiction
             diag_logger=diag_logger,  # Pass diagnostic logger
             original_documents=msr.get("original_documents"),  # Pass raw content
+            document_summaries_for_context=document_summaries_for_context,
             gap_analysis=gap_analysis,  # Pass gap analysis for guardrails
         )
         letter_key = "findings"

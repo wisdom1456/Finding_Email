@@ -274,6 +274,8 @@ class JsonProcessingService:
             authority = (entry.get("authority_level") or "supporting_evidence").strip()
             execution = (entry.get("execution_status") or "unknown").strip()
             instrument = (entry.get("primary_instrument") or "n/a").strip()
+            signature_expected = bool(entry.get("signature_expected"))
+            signature_review = bool(entry.get("signature_review_recommended"))
             significance = (
                 entry.get("legal_significance")
                 or entry.get("relevance_to_case")
@@ -284,6 +286,7 @@ class JsonProcessingService:
             lines.append(
                 f"- {doc_name} | type={doc_type} | role={role} | "
                 f"authority={authority} | execution={execution} | instrument={instrument} | "
+                f"signature_expected={signature_expected} | signature_review={signature_review} | "
                 f"case_place={significance}"
             )
 

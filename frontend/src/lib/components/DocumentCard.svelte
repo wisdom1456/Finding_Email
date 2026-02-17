@@ -23,6 +23,7 @@
 	let { 
 		doc, 
 		onVerify, 
+		onMarkSigned,
 		onEdit, 
 		onReExtract, 
 		onDelete, 
@@ -35,6 +36,7 @@
 	}: { 
 		doc: any; 
 		onVerify?: (id: string) => void;
+		onMarkSigned?: (id: string) => void;
 		onEdit?: (doc: any) => void;
 		onReExtract?: (id: string) => void;
 		onDelete?: (id: string) => void;
@@ -185,9 +187,28 @@
 		return signatureRequiredKeywords.some((keyword) => normalizedName.includes(keyword));
 	}
 
-	function getSignatureStatus(): 'signed' | 'not_detected' | 'other' | 'none' {
+	function getSignatureVerificationStatus(): 'signed' | 'not_signed' | 'unknown' | 'none' {
+		const verification = doc?.metadata?.signature_verification;
+		if (!verification || typeof verification !== 'object') return 'none';
+		const status = String(verification.status || '').toLowerCase().trim();
+		if (status === 'signed') return 'signed';
+		if (status === 'not_signed' || status === 'unsigned' || status === 'not_detected' || status === 'not detected' || status === 'not signed') {
+			return 'not_signed';
+		}
+		if (status === 'unknown' || status === 'unclear') return 'unknown';
+		return 'none';
+	}
+
+	function getSignatureStatus(): 'signed' | 'not_detected' | 'review_required' | 'other' | 'none' {
+		const verificationStatus = getSignatureVerificationStatus();
+		if (verificationStatus === 'signed') return 'signed';
+		if (verificationStatus === 'not_signed') return 'not_detected';
+		if (verificationStatus === 'unknown') return 'review_required';
+
 		const signatureDetection = doc?.metadata?.signature_detection;
-		if (!signatureDetection || typeof signatureDetection !== 'object') return 'none';
+		if (!signatureDetection || typeof signatureDetection !== 'object') {
+			return requiresSignatureReview(doc?.file_name) ? 'review_required' : 'none';
+		}
 		const status = String(signatureDetection.status || '').toLowerCase();
 		if (status === 'signed') return 'signed';
 		if (status === 'not_detected') return 'not_detected';
@@ -195,14 +216,23 @@
 	}
 
 	function getSignatureLabel(): string {
+		const verificationStatus = getSignatureVerificationStatus();
+		if (verificationStatus === 'signed') return 'Signed (Attorney Verified)';
+		if (verificationStatus === 'not_signed') return 'Not signed (Attorney Verified)';
+		if (verificationStatus === 'unknown') return 'Signature status reviewed (unclear)';
+
 		const signatureDetection = doc?.metadata?.signature_detection;
-		if (!signatureDetection) return '';
+		if (!signatureDetection) {
+			if (requiresSignatureReview(doc?.file_name)) return 'Signature review recommended';
+			return '';
+		}
 		const status = getSignatureStatus();
 		const confidence = signatureDetection?.confidence
 			? ` (${String(signatureDetection.confidence).toUpperCase()})`
 			: '';
 		if (status === 'signed') return `Signed${confidence}`;
 		if (status === 'not_detected') return `No signature detected${confidence}`;
+		if (status === 'review_required') return 'Signature review recommended';
 		return `Signature: ${String(signatureDetection.status || 'unknown')}${confidence}`;
 	}
 
@@ -214,14 +244,14 @@
 		if (status === 'not_detected') {
 			return 'bg-amber-100 text-amber-800 border-amber-300';
 		}
+		if (status === 'review_required') {
+			return 'bg-yellow-100 text-yellow-900 border-yellow-300';
+		}
 		return 'bg-gray-100 text-gray-700 border-gray-300';
 	}
 
 	function shouldShowSignatureBadge(): boolean {
-		const status = getSignatureStatus();
-		if (status === 'none') return false;
-		if (status === 'signed') return true;
-		return requiresSignatureReview(doc?.file_name);
+		return getSignatureStatus() !== 'none';
 	}
 </script>
 
@@ -393,6 +423,16 @@
 					>
 						<CheckCircle2 class="w-3.5 h-3.5 mr-1.5" />
 						Mark Verified
+					</button>
+				{/if}
+
+				{#if onMarkSigned && requiresSignatureReview(doc?.file_name) && getSignatureStatus() !== 'signed'}
+					<button
+						onclick={() => onMarkSigned?.(doc.id)}
+						class="inline-flex items-center px-3 py-1.5 text-xs font-bold rounded-lg bg-emerald-50 border border-emerald-300 text-emerald-700 hover:bg-emerald-100 transition-colors shadow-sm"
+					>
+						<CheckCircle2 class="w-3.5 h-3.5 mr-1.5" />
+						Mark Signed
 					</button>
 				{/if}
 

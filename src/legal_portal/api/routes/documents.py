@@ -2,7 +2,7 @@
 
 import logging
 from datetime import datetime
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from fastapi.responses import JSONResponse
@@ -54,6 +54,10 @@ class VerifyDocumentRequest(BaseModel):
     manual_text: Optional[str] = None
     is_verified: bool = True
     is_flagged_as_junk: bool = False
+    signature_verification: Optional[str] = None
+    signature_verification_notes: Optional[str] = None
+    signature_signing_date: Optional[str] = None
+    signature_signer_names: Optional[List[str]] = None
 
 
 class DocumentResponse(BaseModel):
@@ -850,7 +854,7 @@ async def verify_document(
         # Get document with ownership verification
         response = (
             user_supabase.table("documents")
-            .select("id, extracted_text, manual_text, cases!inner(user_id)")
+            .select("id, extracted_text, manual_text, metadata, cases!inner(user_id)")
             .eq("id", document_id)
             .execute()
         )
@@ -882,6 +886,113 @@ async def verify_document(
         if request.manual_text is not None:
             update_data["manual_text"] = request.manual_text
             update_data["text_edited_at"] = datetime.utcnow().isoformat()
+
+        # Optional attorney override for execution/signature status.
+        metadata: Dict[str, Any] = document.get("metadata") or {}
+        if not isinstance(metadata, dict):
+            metadata = {}
+
+        should_update_signature_meta = (
+            request.signature_verification is not None
+            or request.signature_verification_notes is not None
+            or request.signature_signing_date is not None
+            or request.signature_signer_names is not None
+        )
+        if should_update_signature_meta:
+            raw_status = (request.signature_verification or "").strip().lower()
+            status_aliases = {
+                "signed": "signed",
+                "not_signed": "not_signed",
+                "unsigned": "not_signed",
+                "not signed": "not_signed",
+                "not_detected": "not_signed",
+                "not detected": "not_signed",
+                "unknown": "unknown",
+                "unclear": "unknown",
+            }
+            normalized_status = None
+            if request.signature_verification is not None:
+                normalized_status = status_aliases.get(raw_status)
+                if not normalized_status:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=(
+                            "signature_verification must be one of: "
+                            "signed, not_signed, unknown"
+                        ),
+                    )
+
+            signature_verification = metadata.get("signature_verification")
+            if not isinstance(signature_verification, dict):
+                signature_verification = {}
+
+            if normalized_status is not None:
+                signature_verification["status"] = normalized_status
+
+            if request.signature_verification_notes is not None:
+                notes = (request.signature_verification_notes or "").strip()
+                if notes:
+                    signature_verification["notes"] = notes
+                else:
+                    signature_verification.pop("notes", None)
+
+            if request.signature_signing_date is not None:
+                signing_date = (request.signature_signing_date or "").strip()
+                if signing_date:
+                    signature_verification["signing_date"] = signing_date
+                else:
+                    signature_verification.pop("signing_date", None)
+
+            if request.signature_signer_names is not None:
+                signer_names = [
+                    str(name).strip()
+                    for name in request.signature_signer_names
+                    if str(name).strip()
+                ][:10]
+                if signer_names:
+                    signature_verification["signer_names"] = signer_names
+                else:
+                    signature_verification.pop("signer_names", None)
+
+            signature_verification["verified_at"] = datetime.utcnow().isoformat()
+            signature_verification["verified_by_user_id"] = user["id"]
+            metadata["signature_verification"] = signature_verification
+
+            signature_detection = metadata.get("signature_detection")
+            if not isinstance(signature_detection, dict):
+                signature_detection = {}
+
+            if normalized_status == "signed":
+                signature_detection["status"] = "signed"
+                signature_detection["confidence"] = "verified"
+                signature_detection["detection_source"] = "attorney_verification"
+                signature_detection["has_signature_markers"] = True
+                marker_count = signature_detection.get("signature_marker_count")
+                try:
+                    marker_count_int = int(marker_count)
+                except (TypeError, ValueError):
+                    marker_count_int = 0
+                signature_detection["signature_marker_count"] = max(1, marker_count_int)
+            elif normalized_status == "not_signed":
+                signature_detection["status"] = "not_detected"
+                signature_detection["confidence"] = "verified"
+                signature_detection["detection_source"] = "attorney_verification"
+
+            if normalized_status in {"signed", "not_signed"}:
+                signature_detection["verified_by_attorney"] = True
+                signature_detection["verified_at"] = signature_verification["verified_at"]
+                signature_detection["verified_by_user_id"] = user["id"]
+
+                if signature_verification.get("notes"):
+                    signature_detection["verification_notes"] = signature_verification["notes"]
+                if signature_verification.get("signing_date"):
+                    signature_detection["signing_date"] = signature_verification["signing_date"]
+                if signature_verification.get("signer_names"):
+                    signature_detection["signer_names"] = signature_verification["signer_names"]
+
+                metadata["signature_detection"] = signature_detection
+
+            update_data["metadata"] = metadata
 
         # Update document
         update_response = user_supabase.table("documents").update(update_data).eq("id", document_id).execute()

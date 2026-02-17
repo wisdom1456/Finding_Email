@@ -169,6 +169,32 @@ const { session, user } = await getSecureSession();
 		}
 	}
 
+	async function handleMarkSigned(doc: any) {
+		try {
+const { session, user } = await getSecureSession();
+		if (!session || !user) throw new Error('Not authenticated');
+
+			const response = await fetch(`${getApiUrl()}/api/documents/${doc.id}/verify`, {
+				method: 'PATCH',
+				headers: {
+					'Content-Type': 'application/json',
+					Authorization: `Bearer ${session.access_token}`,
+				},
+				body: JSON.stringify({
+					is_verified: Boolean(doc.is_verified),
+					is_flagged_as_junk: Boolean(doc.is_flagged_as_junk),
+					signature_verification: 'signed'
+				}),
+			});
+
+			if (!response.ok) throw new Error('Failed to mark document as signed');
+			toastStore.success('Marked as signed (attorney verified)');
+			await onDocumentsUpdated();
+		} catch (error: any) {
+			toastStore.error(error.message);
+		}
+	}
+
 	async function handleDelete(docId: string) {
 		confirmDialog = { open: true, type: 'delete', docId };
 	}
@@ -737,6 +763,7 @@ const { session, user } = await getSecureSession();
 							<DocumentCard 
 								{doc}
 								onView={() => handleView(doc)}
+								onMarkSigned={() => handleMarkSigned(doc)}
 								onReplace={() => { recoveryDocument = doc; showRecoveryModal = true; }}
 								onSkip={() => handleSkip(doc.id)}
 								onDelete={() => handleDelete(doc.id)}
@@ -786,6 +813,7 @@ const { session, user } = await getSecureSession();
 								onEdit={() => editingDocument = doc}
 								onReExtract={() => handleReExtract(doc.id)}
 								onVerify={() => handleVerify(doc.id)}
+								onMarkSigned={() => handleMarkSigned(doc)}
 								onSkip={() => handleSkip(doc.id)}
 								onDelete={() => handleDelete(doc.id)}
 								onAlwaysDelete={(name, id) => handleAlwaysDelete(name, id)}
@@ -815,6 +843,7 @@ const { session, user } = await getSecureSession();
 								{doc}
 								onView={() => handleView(doc)}
 								onEdit={() => editingDocument = doc}
+								onMarkSigned={() => handleMarkSigned(doc)}
 								onDelete={() => handleDelete(doc.id)}
 								onAlwaysDelete={(name, id) => handleAlwaysDelete(name, id)}
 								onToggleExclusion={(id, excluded) => handleToggleExclusion(id, excluded)}
@@ -846,6 +875,7 @@ const { session, user } = await getSecureSession();
 								{doc}
 								onView={() => handleView(doc)}
 								onEdit={() => editingDocument = doc}
+								onMarkSigned={() => handleMarkSigned(doc)}
 								onDelete={() => handleDelete(doc.id)}
 								onAlwaysDelete={(name, id) => handleAlwaysDelete(name, id)}
 								onToggleExclusion={(id, excluded) => handleToggleExclusion(id, excluded)}
@@ -879,6 +909,7 @@ const { session, user } = await getSecureSession();
 								{doc}
 								onView={() => handleView(doc)}
 								onEdit={() => editingDocument = doc}
+								onMarkSigned={() => handleMarkSigned(doc)}
 								onDelete={() => handleDelete(doc.id)}
 								onAlwaysDelete={(name, id) => handleAlwaysDelete(name, id)}
 								onToggleExclusion={(id, excluded) => handleToggleExclusion(id, excluded)}
@@ -922,6 +953,7 @@ const { session, user } = await getSecureSession();
 							onReplace={() => { recoveryDocument = doc; showRecoveryModal = true; }}
 							onReExtract={() => handleReExtract(doc.id)}
 							onVerify={() => handleVerify(doc.id)}
+							onMarkSigned={() => handleMarkSigned(doc)}
 							onSkip={() => handleSkip(doc.id)}
 							onDelete={() => handleDelete(doc.id)}
 							onAlwaysDelete={(name, id) => handleAlwaysDelete(name, id)}

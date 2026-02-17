@@ -189,6 +189,113 @@ _SIGNATURE_INSTRUMENT_HINT_PATTERNS = [
     ("membership units", re.compile(r"\bclass\s+[a-z0-9]+\s+units?\b", re.IGNORECASE)),
 ]
 
+_SIGNATURE_VERIFICATION_STATUS_ALIASES = {
+    "signed": "signed",
+    "not_signed": "not_signed",
+    "unsigned": "not_signed",
+    "not signed": "not_signed",
+    "not_detected": "not_signed",
+    "not detected": "not_signed",
+    "unknown": "unknown",
+    "unclear": "unknown",
+}
+
+
+def _normalize_signature_verification_status(raw_status: Any) -> Optional[str]:
+    """Normalize metadata signature-verification status to canonical values."""
+    text = str(raw_status or "").strip().lower()
+    if not text:
+        return None
+    return _SIGNATURE_VERIFICATION_STATUS_ALIASES.get(text)
+
+
+def _extract_signature_verification(doc_metadata: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    """Extract normalized signature-verification metadata, if present."""
+    metadata = doc_metadata if isinstance(doc_metadata, dict) else {}
+    raw = metadata.get("signature_verification")
+    if not isinstance(raw, dict):
+        return None
+
+    normalized_status = _normalize_signature_verification_status(raw.get("status"))
+    if not normalized_status:
+        return None
+
+    signer_names = raw.get("signer_names")
+    if not isinstance(signer_names, list):
+        signer_names = []
+    cleaned_signers = [str(name).strip() for name in signer_names if str(name).strip()][:10]
+
+    notes = str(raw.get("notes") or "").strip() or None
+    signing_date = str(raw.get("signing_date") or "").strip() or None
+
+    return {
+        "status": normalized_status,
+        "notes": notes,
+        "signing_date": signing_date,
+        "signer_names": cleaned_signers,
+        "verified_at": raw.get("verified_at"),
+        "verified_by_user_id": raw.get("verified_by_user_id"),
+    }
+
+
+def _apply_signature_verification_override(
+    signature_detection: Optional[Dict[str, Any]],
+    doc_metadata: Optional[Dict[str, Any]],
+    *,
+    file_name: Optional[str] = None,
+) -> Optional[Dict[str, Any]]:
+    """Apply attorney signature verification override to signature-detection metadata."""
+    verification = _extract_signature_verification(doc_metadata)
+    if not verification:
+        return signature_detection
+
+    status = verification.get("status")
+    base: Dict[str, Any] = dict(signature_detection or {})
+
+    if status == "signed":
+        base["status"] = "signed"
+        base["confidence"] = "verified"
+        base["detection_source"] = "attorney_verification"
+        base["has_signature_markers"] = True
+        marker_count = base.get("signature_marker_count")
+        try:
+            marker_count_int = int(marker_count)
+        except (TypeError, ValueError):
+            marker_count_int = 0
+        base["signature_marker_count"] = max(1, marker_count_int)
+    elif status == "not_signed":
+        base["status"] = "not_detected"
+        base["confidence"] = "verified"
+        base["detection_source"] = "attorney_verification"
+    else:
+        # "unknown" status should not fabricate signature detection if no baseline exists.
+        if not base:
+            return None
+
+    base["verified_by_attorney"] = True
+    if verification.get("verified_at"):
+        base["verified_at"] = verification.get("verified_at")
+    if verification.get("verified_by_user_id"):
+        base["verified_by_user_id"] = verification.get("verified_by_user_id")
+    if verification.get("notes"):
+        base["verification_notes"] = verification.get("notes")
+    if verification.get("signing_date"):
+        base["signing_date"] = _normalize_text_signing_date(verification.get("signing_date"))
+    if verification.get("signer_names"):
+        base["signer_names"] = verification.get("signer_names")
+
+    indicators = base.get("indicators")
+    if not isinstance(indicators, list):
+        indicators = []
+    indicator = f"Attorney verified signature status: {status}"
+    if file_name:
+        indicator += f" ({file_name})"
+    if indicator not in indicators:
+        indicators = indicators + [indicator]
+    base["indicators"] = indicators[:10]
+
+    return base
+
 
 def _normalize_text_signing_date(raw_date: Optional[str]) -> Optional[str]:
     """Normalize common textual signing date formats to ISO-like strings."""
@@ -1054,6 +1161,11 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
                         doc.get("id"),
                         signature_detection.get("confidence"),
                     )
+            signature_detection = _apply_signature_verification_override(
+                signature_detection if isinstance(signature_detection, dict) else None,
+                doc_metadata,
+                file_name=doc.get("file_name"),
+            )
 
             pdoc = ProcessedDocument(
                 file_name=doc["file_name"],
@@ -3367,7 +3479,7 @@ def _build_supporting_document_hash(
     for doc in document_rows or []:
         text = (doc.get("manual_text") or doc.get("extracted_text") or "").strip()
         text_hash = hashlib.sha256(text.encode("utf-8")).hexdigest()
-        sig = (doc.get("metadata") or {}).get("signature_detection")
+        sig = _derive_signature_detection_for_gap_doc(doc)
         sig_status = sig.get("status") if isinstance(sig, dict) else None
         canonical_docs.append(
             {
@@ -3388,7 +3500,16 @@ def _build_supporting_document_hash(
 
 def _derive_signature_detection_for_gap_doc(doc: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     """Derive signature detection for a document row, with text fallback for text-like docs."""
-    sig = (doc.get("metadata") or {}).get("signature_detection")
+    doc_metadata = doc.get("metadata") or {}
+    if not isinstance(doc_metadata, dict):
+        doc_metadata = {}
+
+    sig = doc_metadata.get("signature_detection")
+    sig = _apply_signature_verification_override(
+        sig if isinstance(sig, dict) else None,
+        doc_metadata,
+        file_name=doc.get("file_name"),
+    )
     if sig:
         return sig
 
@@ -3397,9 +3518,18 @@ def _derive_signature_detection_for_gap_doc(doc: Dict[str, Any]) -> Optional[Dic
 
     text = (doc.get("manual_text") or doc.get("extracted_text") or "").strip()
     if not text:
-        return None
+        return _apply_signature_verification_override(
+            None,
+            doc_metadata,
+            file_name=doc.get("file_name"),
+        )
 
-    return _infer_signature_detection_from_text(text)
+    inferred = _infer_signature_detection_from_text(text)
+    return _apply_signature_verification_override(
+        inferred,
+        doc_metadata,
+        file_name=doc.get("file_name"),
+    )
 
 
 def _fetch_case_documents_for_gap_context(
@@ -3822,9 +3952,7 @@ def _collect_resolution_documents(
         if len(text) > 2200:
             text = text[:1200] + "\n... [excerpt omitted] ...\n" + text[-800:]
 
-        sig = (doc.get("metadata") or {}).get("signature_detection")
-        if not sig and _is_signature_inference_candidate(doc.get("file_name"), doc.get("file_type")):
-            sig = _infer_signature_detection_from_text(text)
+        sig = _derive_signature_detection_for_gap_doc(doc)
         condensed_docs.append(
             {
                 "id": doc.get("id"),

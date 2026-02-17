@@ -303,9 +303,12 @@ class GapAnalysisService:
             primary_instrument = row.get("primary_instrument") or "n/a"
             is_key_doc = bool(row.get("is_key_document"))
             role = row.get("role_in_case") or "general case support"
+            signature_expected = bool(row.get("signature_expected"))
+            signature_review = bool(row.get("signature_review_recommended"))
             line = (
                 f"- {file_name}: type={doc_type}, authority={authority}, key_doc={is_key_doc}, "
-                f"execution={execution_status}({execution_confidence}), instrument={primary_instrument}, role={role}"
+                f"execution={execution_status}({execution_confidence}), instrument={primary_instrument}, "
+                f"role={role}, signature_expected={signature_expected}, signature_review={signature_review}"
             )
             if authority_reason:
                 line += f", authority_reason={self._truncate_text(str(authority_reason), 140)}"
@@ -753,6 +756,7 @@ Execution guardrails:
 - Treat the "Document Registry" block as authoritative for document role/authority tier.
 - High-authority documents (controlling instruments and official records) should anchor your gap severity decisions.
 - Do not call a document "missing" if the same or equivalent instrument is present in the registry.
+- If `signature_expected=true` and `signature_review=true`, treat it as a review/verification gap (execution unclear), not a missing-document gap.
 
 Calculate an overall completeness score (0-100):
 - 90-100: Excellent documentation, minor gaps only

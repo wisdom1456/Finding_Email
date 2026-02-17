@@ -280,6 +280,63 @@ def test_derive_signature_detection_skips_image_like_documents():
     assert signature is None
 
 
+def test_derive_signature_detection_honors_attorney_verified_signed_override():
+    """Attorney verification should override weak/negative automatic detection."""
+    doc = {
+        "id": "doc-3",
+        "file_name": "Operating Agreement.pdf",
+        "file_type": "application/pdf",
+        "manual_text": "",
+        "extracted_text": "Operating Agreement\nSignature: _________",
+        "metadata": {
+            "signature_detection": {
+                "status": "not_detected",
+                "confidence": "medium",
+                "detection_source": "ocr_text",
+            },
+            "signature_verification": {
+                "status": "signed",
+                "notes": "Confirmed signed counterpart in reviewed upload.",
+                "verified_by_user_id": "user-1",
+                "verified_at": "2026-02-17T10:00:00Z",
+            },
+        },
+    }
+
+    signature = _derive_signature_detection_for_gap_doc(doc)
+    assert signature is not None
+    assert signature["status"] == "signed"
+    assert signature["confidence"] == "verified"
+    assert signature["detection_source"] == "attorney_verification"
+    assert signature["verified_by_attorney"] is True
+
+
+def test_build_signature_evidence_uses_attorney_signature_override():
+    """Signature evidence rows should reflect attorney verified status when provided."""
+    docs = [
+        {
+            "id": "doc-1",
+            "file_name": "Subscription Agreement.pdf",
+            "file_type": "application/pdf",
+            "manual_text": "",
+            "extracted_text": "Subscription Agreement terms...",
+            "metadata": {
+                "signature_verification": {
+                    "status": "signed",
+                    "verified_at": "2026-02-17T10:00:00Z",
+                    "verified_by_user_id": "user-1",
+                }
+            },
+        }
+    ]
+
+    evidence = _build_signature_evidence(docs)
+    assert len(evidence) == 1
+    assert evidence[0]["status"] == "signed"
+    assert evidence[0]["confidence"] == "verified"
+    assert evidence[0]["detection_source"] == "attorney_verification"
+
+
 def test_gap_analysis_input_hash_changes_when_document_state_changes():
     """Gap-input hash should change when case document state hash changes."""
     payload = {

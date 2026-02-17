@@ -106,6 +106,8 @@ def test_document_registry_assigns_authority_tiers_and_execution():
     assert subscription["execution_status"] == "signed"
     assert subscription["primary_instrument"] == "subscription agreement"
     assert subscription["is_key_document"] is True
+    assert subscription["signature_expected"] is True
+    assert subscription["signature_review_recommended"] is False
 
     business_search = by_name[
         "Cuchillo Greens Grow1 Business Search _ An Official New Mexico Government Website.pdf"
@@ -137,3 +139,5 @@ def test_document_registry_includes_summary_only_entries():
     assert len(registry) == 1
     assert registry[0]["document_name"] == "1_2_MEMO_TERMS_FOR_FINANCING_Cuchillo_Greens_Grow1__LLC.pdf"
     assert registry[0]["authority_level"] == "controlling_instrument"
+    assert registry[0]["signature_expected"] is True
+    assert registry[0]["signature_review_recommended"] is True

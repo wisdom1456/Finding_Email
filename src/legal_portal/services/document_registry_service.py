@@ -92,6 +92,11 @@ class DocumentRegistryService:
                 summary=summary,
                 key_doc=key_doc,
             )
+            signature_expected, signature_expectation_reason = self._infer_signature_expectation(
+                file_name=file_name,
+                doc_type=doc_type,
+                instrument_hints=instrument_hints,
+            )
 
             parties = self._collect_parties(summary)
             dates = self._collect_dates(summary)
@@ -103,6 +108,15 @@ class DocumentRegistryService:
                 reliability_notes.append(f"Extraction quality is {extraction_quality}.")
             if str(signature.get("status") or "").lower() == "not_detected":
                 reliability_notes.append("No signature markers detected in extracted text.")
+            signature_review_recommended = (
+                bool(signature_expected)
+                and str(signature.get("status") or "unknown").lower() not in {"signed"}
+                and str(signature.get("confidence") or "").lower() != "verified"
+            )
+            if signature_review_recommended:
+                reliability_notes.append(
+                    "Document type is typically executed; attorney signature verification recommended."
+                )
 
             registry.append(
                 {
@@ -123,6 +137,9 @@ class DocumentRegistryService:
                     "execution_status": signature.get("status") or "unknown",
                     "execution_confidence": signature.get("confidence") or "none",
                     "execution_source": signature.get("detection_source") or "ingestion",
+                    "signature_expected": signature_expected,
+                    "signature_expectation_reason": signature_expectation_reason,
+                    "signature_review_recommended": signature_review_recommended,
                     "signing_date": signature.get("signing_date"),
                     "signer_names": self._ensure_list(signature.get("signer_names")),
                     "parties_mentioned": parties,
@@ -162,6 +179,12 @@ class DocumentRegistryService:
                 execution_status="unknown",
                 role_in_case=role_in_case,
             )
+            signature_expected, signature_expectation_reason = self._infer_signature_expectation(
+                file_name=file_name,
+                doc_type=doc_type,
+                instrument_hints=instrument_hints,
+            )
+            signature_review_recommended = bool(signature_expected)
             registry.append(
                 {
                     "document_id": None,
@@ -185,6 +208,9 @@ class DocumentRegistryService:
                     "execution_status": "unknown",
                     "execution_confidence": "none",
                     "execution_source": "none",
+                    "signature_expected": signature_expected,
+                    "signature_expectation_reason": signature_expectation_reason,
+                    "signature_review_recommended": signature_review_recommended,
                     "signing_date": None,
                     "signer_names": [],
                     "parties_mentioned": self._collect_parties(summary),
@@ -289,6 +315,52 @@ class DocumentRegistryService:
         if any(term in blob for term in ("intake", "questionnaire")):
             return "client intake and background"
         return "general case support"
+
+    def _infer_signature_expectation(
+        self,
+        *,
+        file_name: str,
+        doc_type: str,
+        instrument_hints: List[str],
+    ) -> tuple[bool, str]:
+        """Infer whether the document is typically expected to be executed/signed."""
+        hint_set = {h.lower() for h in instrument_hints}
+        typically_signed_hints = {
+            "subscription agreement",
+            "operating agreement",
+            "promissory note",
+            "investment agreement",
+            "purchase agreement",
+            "loan agreement",
+            "financing memo",
+            "membership certificate",
+        }
+        if hint_set.intersection(typically_signed_hints):
+            return True, "Instrument type is typically executed by one or more parties."
+
+        blob = " ".join([file_name or "", doc_type or ""]).lower()
+        if any(
+            term in blob
+            for term in (
+                "agreement",
+                "contract",
+                "promissory note",
+                "amendment",
+                "addendum",
+                "release",
+                "consent",
+                "authorization",
+                "affidavit",
+                "declaration",
+                "stipulation",
+                "guaranty",
+                "power of attorney",
+                "poa",
+            )
+        ):
+            return True, "Filename/type indicates a document that is normally signed."
+
+        return False, "Document is not typically executed or signature requirement is unclear."
 
     def _infer_authority(
         self,

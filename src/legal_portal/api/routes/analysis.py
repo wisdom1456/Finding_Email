@@ -1823,6 +1823,13 @@ async def stream_findings_letter(
 
                 openai_client = OpenAIClient(user_preferences=ai_preferences)
                 json_service = JsonProcessingService(client=openai_client, config={})
+                normalize_markdown = getattr(json_service, "normalize_client_letter_markdown", None)
+
+                def _normalize_markdown(text: str, letter_kind: str) -> str:
+                    if callable(normalize_markdown):
+                        return normalize_markdown(text, letter_type=letter_kind)
+                    return text
+
                 strategy_object: Optional[Dict[str, Any]] = None
                 if settings.letter_strategy_enabled:
                     remaining_for_strategy = _remaining_seconds(internal_deadline)
@@ -1962,6 +1969,8 @@ async def stream_findings_letter(
                 if not draft_markdown.strip():
                     raise TimeoutError("Draft generation ended before any content was produced.")
 
+                draft_markdown = _normalize_markdown(draft_markdown, "findings")
+
                 phase_msg = _emit("phase", phase="lint_validation", message="Validating quality")
                 if phase_msg:
                     yield phase_msg
@@ -2026,6 +2035,7 @@ async def stream_findings_letter(
                             model="gpt-5-mini",
                             critic_feedback=critic_feedback,
                         )
+                        repaired = _normalize_markdown(repaired, "findings")
                         post_repair_report = validator.lint_client_letter(
                             repaired,
                             mode=mode,
@@ -2053,6 +2063,7 @@ async def stream_findings_letter(
                 if phase_msg:
                     yield phase_msg
 
+                final_markdown = _normalize_markdown(final_markdown, "findings")
                 final_html = json_service._convert_markdown_to_html(final_markdown)
                 metrics["lint_passed"] = quality_report.get("lint_passed")
                 metrics["lint_score"] = quality_report.get("score")
@@ -3517,6 +3528,12 @@ async def generate_letter(
         fact_matrix = None
         verified_statutes: List[Dict[str, Any]] = []
         json_service = JsonProcessingService(client=openai_client, config={})
+        normalize_markdown = getattr(json_service, "normalize_client_letter_markdown", None)
+
+        def _normalize_markdown(text: str, letter_kind: str) -> str:
+            if callable(normalize_markdown):
+                return normalize_markdown(text, letter_type=letter_kind)
+            return text
 
         if letter_request.letter_type == LetterType.FINDINGS:
             from legal_portal.core.data_models import (
@@ -3734,6 +3751,22 @@ async def generate_letter(
             except Exception as validation_err:
                 logger.warning(f"Letter validation skipped due to error: {validation_err}")
 
+        if draft_markdown_for_repair:
+            normalized_draft = _normalize_markdown(
+                draft_markdown_for_repair,
+                letter_request.letter_type.value,
+            )
+            if normalized_draft.strip() and normalized_draft.strip() != draft_markdown_for_repair.strip():
+                draft_markdown_for_repair = normalized_draft
+                if letter_request.letter_type == LetterType.DEMAND and target_party_name:
+                    normalized_html = json_service._convert_markdown_to_html(draft_markdown_for_repair)
+                    letter_html = DocumentFormatterService.format_demand_letter(
+                        letter_html=normalized_html,
+                        recipient_name=target_party_name,
+                    )
+                else:
+                    letter_html = json_service._convert_markdown_to_html(draft_markdown_for_repair)
+
         lint_input = draft_markdown_for_repair or letter_html
         if settings.letter_quality_lint_enabled:
             try:
@@ -3791,6 +3824,10 @@ async def generate_letter(
                 mode="default",
                 model="gpt-5-mini",
                 critic_feedback=critic_feedback,
+            )
+            repaired_markdown = _normalize_markdown(
+                repaired_markdown,
+                letter_request.letter_type.value,
             )
             post_repair_report = validator.lint_client_letter(
                 repaired_markdown,
@@ -4224,6 +4261,14 @@ async def stream_recommendation_letter(
 
             openai_client = OpenAIClient(user_preferences=ai_preferences)
             rec_service = RecommendationLetterService(openai_client)
+            json_service = JsonProcessingService(client=openai_client, config={})
+            normalize_markdown = getattr(json_service, "normalize_client_letter_markdown", None)
+
+            def _normalize_markdown(text: str, letter_kind: str) -> str:
+                if callable(normalize_markdown):
+                    return normalize_markdown(text, letter_type=letter_kind)
+                return text
+
             metrics["model_calls"] = int(metrics.get("model_calls", 0)) + 1
 
             token_queue: asyncio.Queue = asyncio.Queue()
@@ -4308,6 +4353,8 @@ async def stream_recommendation_letter(
             if not draft_markdown.strip():
                 raise RuntimeError("Recommendation letter generation produced no content.")
 
+            draft_markdown = _normalize_markdown(draft_markdown, "recommendation")
+
             phase_msg = _emit("phase", phase="lint_validation", message="Validating quality")
             if phase_msg:
                 yield phase_msg
@@ -4339,6 +4386,7 @@ async def stream_recommendation_letter(
                         mode=mode,
                         model="gpt-5-mini",
                     )
+                    repaired = _normalize_markdown(repaired, "recommendation")
                     post_report = validator.lint_client_letter(
                         repaired,
                         mode=mode,
@@ -4362,6 +4410,7 @@ async def stream_recommendation_letter(
             if phase_msg:
                 yield phase_msg
 
+            final_markdown = _normalize_markdown(final_markdown, "recommendation")
             final_html = rec_service.render_markdown_to_html(final_markdown, client_name=client_name)
             metrics["lint_passed"] = quality_report.get("lint_passed")
             metrics["lint_score"] = quality_report.get("score")

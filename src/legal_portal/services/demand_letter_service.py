@@ -190,7 +190,7 @@ class DemandLetterService:
         )
         demand_amount_text = self._format_demand_amount_for_prompt(demand_amount)
 
-        return self._load_template().format(
+        base_prompt = self._load_template().format(
             target_party_name=target_party_name,
             party_context=party_context,
             analysis_context=analysis_context,
@@ -408,6 +408,7 @@ class DemandLetterService:
             "- First use of legal terms should include a short plain-language explainer once.\n"
             "- Each major legal paragraph must include at least one factual anchor "
             "(date, amount, document, or communication).\n"
+            "- Use readable document labels, not raw upload filenames or internal file keys.\n"
             "- Do not use internal labels or snake_case legal tokens.\n"
             "- Avoid dense stacked parenthetical citations; integrate support naturally in prose.\n"
             "- Avoid unsupported hard accusations.\n"

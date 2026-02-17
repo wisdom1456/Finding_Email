@@ -176,3 +176,17 @@ def test_strict_quality_flags_parenthetical_citation_overload() -> None:
     report = service.lint_letter(content, mode="strict_quality", letter_type="findings")
 
     assert any(item["rule"] == "citation_parenthetical_overload" for item in report["violations"])
+
+
+def test_strict_quality_flags_raw_filename_exposure() -> None:
+    """Strict findings mode should flag machine-like file tokens in client prose."""
+    service = LetterQualityLintService()
+    content = (
+        "Good afternoon,\n\n"
+        "We reviewed SubscriptionAgreementEJAJ-TXFinal120.pdf and MEMOTERMSFORFINANCINGCuchilloGrow1LLC.pdf.\n\n"
+        + " ".join(["word"] * 700)
+    )
+
+    report = service.lint_letter(content, mode="strict_quality", letter_type="findings")
+
+    assert any(item["rule"] == "raw_filename_exposure" for item in report["violations"])

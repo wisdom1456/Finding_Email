@@ -166,6 +166,15 @@ class LetterQualityLintService:
         re.IGNORECASE,
     )
     _GENERIC_SNAKE_CASE_PATTERN = re.compile(r"\b[a-z]{3,}_[a-z0-9_]{3,}\b")
+    _RAW_FILENAME_PATTERN = re.compile(
+        r"(?<!@)\b[A-Za-z0-9][A-Za-z0-9._/-]{7,}\.(?:pdf|docx?|xlsx?|xls|csv|txt|eml)\b",
+        re.IGNORECASE,
+    )
+    _MACHINE_DOC_TOKEN_PATTERN = re.compile(
+        r"\b(?=[A-Za-z0-9_-]{16,}\b)(?=.*(?:agreement|subscription|operating|memo|packet|ledger|"
+        r"update|cuchillo|grow|financing))[A-Za-z0-9_-]+\b",
+        re.IGNORECASE,
+    )
     _PARENTHETICAL_PATTERN = re.compile(r"\(([^)]{3,180})\)")
     _CITATION_LIKE_MARKER = re.compile(
         r"(\b(?:19|20)\d{2}\b|\$[\d,]+|\b(?:email|update|memo|packet|p&l|ledger|source|document|"
@@ -233,6 +242,29 @@ class LetterQualityLintService:
                     severity="error" if mode == "strict_quality" else "warning",
                     message="Do not include snake_case tokens in client-facing prose.",
                     details={"tokens": generic_snake_case[:10]},
+                )
+            )
+
+        raw_filenames = self._RAW_FILENAME_PATTERN.findall(text)
+        machine_doc_tokens = self._MACHINE_DOC_TOKEN_PATTERN.findall(text)
+        exposed_tokens = []
+        seen_exposed = set()
+        for token in raw_filenames + machine_doc_tokens:
+            lowered = token.lower()
+            if lowered in seen_exposed:
+                continue
+            seen_exposed.add(lowered)
+            exposed_tokens.append(token)
+        if exposed_tokens:
+            violations.append(
+                LintViolation(
+                    rule="raw_filename_exposure",
+                    severity="error" if mode == "strict_quality" else "warning",
+                    message=(
+                        "Use readable document labels in client-facing text. "
+                        "Do not expose raw upload filenames or machine-style file keys."
+                    ),
+                    details={"tokens": exposed_tokens[:10]},
                 )
             )
 

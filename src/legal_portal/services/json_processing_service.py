@@ -341,6 +341,51 @@ class JsonProcessingService:
     _MAX_RAW_DOC_CHARS_PER_DOC = 6000
     _MAX_RAW_DOC_TOTAL_CHARS = 50000
     _MAX_FINDINGS_PROMPT_CHARS = 220000
+    _FILE_REFERENCE_TOKEN_PATTERN = re.compile(
+        r"(?<!@)\b[A-Za-z0-9][A-Za-z0-9._/-]{7,}\.(?:pdf|docx?|xlsx?|xls|csv|txt|eml)\b",
+        re.IGNORECASE,
+    )
+    _MACHINE_DOC_TOKEN_PATTERN = re.compile(
+        r"\b(?=[A-Za-z0-9_-]{16,}\b)(?=.*(?:agreement|subscription|operating|memo|packet|ledger|"
+        r"update|cuchillo|grow|financing))[A-Za-z0-9_-]+\b",
+        re.IGNORECASE,
+    )
+    _SLUG_DOC_SEGMENTS = [
+        "subscription",
+        "agreement",
+        "operating",
+        "memo",
+        "terms",
+        "financing",
+        "investor",
+        "packet",
+        "ledger",
+        "update",
+        "cuchillo",
+        "greens",
+        "grow",
+        "final",
+        "version",
+    ]
+    _COMPACT_LEGAL_TOKEN_FIXUPS = {
+        "breachofcontract": "breach of contract",
+        "promissoryestoppel": "promissory estoppel",
+        "unjustenrichment": "unjust enrichment",
+        "statuteoflimitations": "statute of limitations",
+        "fraudulentinducement": "fraudulent inducement",
+        "veilpiercing": "veil piercing",
+    }
+    _PRESENTATION_HEADER_REPLACEMENTS = [
+        (re.compile(r"(?im)^\s*opening\s+review\s*$"), ""),
+        (re.compile(r"(?im)^\s*facts(?:\s*\([^)]+\))?\s*$"), "Based on the records:"),
+        (re.compile(r"(?im)^\s*core\s+issue\s*$"), "The core issue is this:"),
+        (re.compile(r"(?im)^\s*legal\s+theories(?:\s*\([^)]+\))?\s*$"), "Here are the key points of our analysis:"),
+        (re.compile(r"(?im)^\s*timing(?:\s+and)?\s+risk\s*$"), "Timing and risk:"),
+        (re.compile(r"(?im)^\s*strategy(?:\s*\([^)]+\))?\s*$"), "Based on the above, we recommend:"),
+        (re.compile(r"(?im)^\s*action\s+items(?:\s*\([^)]+\))?\s*$"), "Please provide the following:"),
+        (re.compile(r"(?im)^\s*next\s+step\s*$"), "Next steps:"),
+        (re.compile(r"(?im)^\s*summary\s*$"), ""),
+    ]
 
     @staticmethod
     def _gap_get(gap: Any, field: str, default: str = "") -> str:
@@ -358,6 +403,51 @@ class JsonProcessingService:
         text = re.sub(r"\.[a-z0-9]{1,8}$", "", text)
         text = re.sub(r"[^a-z0-9]+", " ", text)
         return re.sub(r"\s+", " ", text).strip()
+
+    def _humanize_document_label(self, value: str) -> str:
+        """Convert raw file keys into readable, client-safe document labels."""
+        raw = os.path.basename((value or "").strip())
+        if not raw:
+            return "Case document"
+
+        text = re.sub(r"\.[A-Za-z0-9]{1,8}$", "", raw)
+        text = re.sub(r"[_\-]+", " ", text)
+        text = re.sub(r"([A-Z]{2,})([A-Z][a-z])", r"\1 \2", text)
+        text = re.sub(r"([a-z])([A-Z])", r"\1 \2", text)
+        text = re.sub(r"([A-Za-z])(\d)", r"\1 \2", text)
+        text = re.sub(r"(\d)([A-Za-z])", r"\1 \2", text)
+
+        if " " not in text and len(text) >= 14:
+            for segment in self._SLUG_DOC_SEGMENTS:
+                text = re.sub(
+                    fr"(?i){re.escape(segment)}",
+                    f" {segment} ",
+                    text,
+                )
+
+        text = re.sub(r"\s+", " ", text).strip()
+        if not text:
+            return "Case document"
+
+        known_upper = {"llc", "llp", "sos", "nm", "p&l", "pnl", "pdf"}
+        words: List[str] = []
+        for token in text.split():
+            lower = token.lower()
+            if lower in known_upper:
+                words.append(token.upper() if lower != "p&l" else "P&L")
+                continue
+            if re.fullmatch(r"[A-Z]{2,6}", token):
+                words.append(token)
+                continue
+            if re.fullmatch(r"\d+", token):
+                words.append(token)
+                continue
+            words.append(token.capitalize())
+
+        readable = " ".join(words)
+        readable = re.sub(r"\bMemo Terms\b", "Memo Terms", readable)
+        readable = re.sub(r"\bPnl\b", "P&L", readable)
+        return readable
 
     @staticmethod
     def _truncate(value: str, limit: int) -> str:
@@ -456,6 +546,7 @@ class JsonProcessingService:
             doc_name = (entry.get("document_name") or "").strip()
             if not doc_name:
                 continue
+            display_name = self._humanize_document_label(doc_name)
             normalized_name = self._normalize_doc_name(doc_name)
             if normalized_name in seen_names:
                 continue
@@ -477,7 +568,7 @@ class JsonProcessingService:
             )
             significance = self._truncate(str(significance), 150)
             lines.append(
-                f"- {doc_name} | type={doc_type} | role={role} | "
+                f"- {display_name} | type={doc_type} | role={role} | "
                 f"authority={authority} | execution={execution} | instrument={instrument} | "
                 f"signature_expected={signature_expected} | signature_review={signature_review} | "
                 f"case_place={significance}"
@@ -498,6 +589,7 @@ class JsonProcessingService:
             doc_name = (getattr(doc, "document_name", "") or "").strip()
             if not doc_name:
                 continue
+            display_name = self._humanize_document_label(doc_name)
             normalized_name = self._normalize_doc_name(doc_name)
             if normalized_name in seen_names:
                 continue
@@ -516,7 +608,7 @@ class JsonProcessingService:
             ).strip()
             role = self._infer_document_role(doc_name, doc_type, significance)
             lines.append(
-                f"- {doc_name} | type={doc_type} | role={role} | case_place={self._truncate(significance, 150)}"
+                f"- {display_name} | type={doc_type} | role={role} | case_place={self._truncate(significance, 150)}"
             )
             present_names.add(normalized_name)
             present_hints.update(self._extract_document_hints(doc_name))
@@ -528,6 +620,7 @@ class JsonProcessingService:
             doc_name = (summary_entry.get("document_name") or "").strip()
             if not doc_name:
                 continue
+            display_name = self._humanize_document_label(doc_name)
             seen_names.add(normalized_name)
             _ensure_header()
 
@@ -541,7 +634,7 @@ class JsonProcessingService:
             significance = self._truncate(significance, 150)
             role = self._infer_document_role(doc_name, doc_type, significance)
             lines.append(
-                f"- {doc_name} | type={doc_type} | role={role} | case_place={significance}"
+                f"- {display_name} | type={doc_type} | role={role} | case_place={significance}"
             )
             present_names.add(normalized_name)
             present_hints.update(self._extract_document_hints(doc_name))
@@ -554,9 +647,10 @@ class JsonProcessingService:
                 if not normalized_name or normalized_name in seen_names:
                     continue
                 seen_names.add(normalized_name)
+                display_name = self._humanize_document_label(filename)
                 role = self._infer_document_role(filename, "Case Document", "")
                 lines.append(
-                    f"- {filename} | type=Case Document | role={role} | case_place=Primary source text included for review."
+                    f"- {display_name} | type=Case Document | role={role} | case_place=Primary source text included for review."
                 )
                 present_names.add(normalized_name)
                 present_hints.update(self._extract_document_hints(filename))
@@ -1499,7 +1593,7 @@ class JsonProcessingService:
             if selected_docs:
                 context += "--- FULL DOCUMENT CONTENT (for precision and citations) ---\n"
                 for filename, clipped_content, full_len, clip_len in selected_docs:
-                    context += f"\nDOCUMENT: {filename}\n"
+                    context += f"\nDOCUMENT: {self._humanize_document_label(filename)}\n"
                     context += f"{clipped_content}\n"
                     if full_len > clip_len:
                         context += (
@@ -1694,6 +1788,9 @@ Thank you,
             "- First-use legal term micro-explainer: explain each legal term once in plain language.\n"
             "- For each major claim paragraph, include at least one evidence anchor "
             "(date, amount, source document, or communication).\n"
+            "- When referencing documents, use readable labels (for example, "
+            "'signed subscription agreement' or 'February 14, 2023 update email'), "
+            "not raw upload filenames or internal file keys.\n"
             "- Do not use internal labels like 'micro-explainer' or snake_case legal tokens "
             "(for example, unjust_enrichment).\n"
             "- Avoid stacking citation-style parentheticals; keep references readable in prose.\n"
@@ -1781,6 +1878,40 @@ Thank you,
 
         """
         return clean_markdown_response(response_text)
+
+    def normalize_client_letter_markdown(self, markdown_text: str, *, letter_type: str = "findings") -> str:
+        """Apply deterministic presentation cleanup for client-facing letter quality."""
+        if not (markdown_text or "").strip():
+            return markdown_text
+
+        text = self._clean_markdown_response(markdown_text)
+        text = text.replace("\r\n", "\n").replace("\r", "\n")
+
+        if letter_type in {"findings", "demand"}:
+            for pattern, replacement in self._PRESENTATION_HEADER_REPLACEMENTS:
+                text = pattern.sub(replacement, text)
+
+        for compact, expanded in self._COMPACT_LEGAL_TOKEN_FIXUPS.items():
+            text = re.sub(
+                fr"(?i)\b{re.escape(compact)}\b",
+                expanded,
+                text,
+            )
+
+        text = self._FILE_REFERENCE_TOKEN_PATTERN.sub(
+            lambda match: self._humanize_document_label(match.group(0)),
+            text,
+        )
+
+        text = self._MACHINE_DOC_TOKEN_PATTERN.sub(
+            lambda match: self._humanize_document_label(match.group(0)),
+            text,
+        )
+
+        text = re.sub(r"[ \t]+\n", "\n", text)
+        text = re.sub(r"\n{3,}", "\n\n", text)
+        text = re.sub(r"[ \t]{2,}", " ", text)
+        return text.strip()
 
     @retry(
         stop=stop_after_attempt(3),

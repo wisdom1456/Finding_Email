@@ -8,6 +8,7 @@
 	import AsyncButton from '$lib/components/ui/AsyncButton.svelte';
 	import { ArrowLeft } from 'lucide-svelte';
 	import { parseMarkdown } from '$lib/utils/markdown';
+	import { SSEEventParser } from '$lib/utils/sseEventParser';
 	import type { GapResolutionRefreshRequest, RecommendedLetterType } from '$lib/types';
 	import { onMount, onDestroy } from 'svelte';
 	import SkippedDocumentsAlert from '$lib/components/SkippedDocumentsAlert.svelte';
@@ -39,6 +40,23 @@
 	
 	let activeTab = $state<'analysis' | 'gaps' | 'fullAnalysis' | 'documents' | 'letters' | 'chat' | 'quality'>('analysis');
 	let findingsLetter = $state<string | null>(null);
+	type FindingsGenerationState =
+		| 'idle'
+		| 'connecting'
+		| 'context_build'
+		| 'draft_generation'
+		| 'lint_validation'
+		| 'repair'
+		| 'finalizing'
+		| 'complete'
+		| 'error'
+		| 'cancelled';
+	let findingsGenerationState = $state<FindingsGenerationState>('idle');
+	let findingsPhaseMessage = $state('');
+	let findingsQualityReport = $state<Record<string, any> | null>(null);
+	let findingsGenerationMetrics = $state<Record<string, any> | null>(null);
+	let findingsRecoverableError = $state<string | null>(null);
+	let findingsDraftStarted = $state(false);
 	let demandLetters = $state<Record<string, string>>({});
 	let generatingFindings = $state(false);
 	let generatingDemand = $state(false);
@@ -193,6 +211,10 @@
 			if (res.generated_letters) {
 				if (res.generated_letters.findings) {
 					findingsLetter = res.generated_letters.findings;
+				}
+				if (res.generated_letters.findings_meta) {
+					findingsQualityReport = res.generated_letters.findings_meta.quality_report ?? null;
+					findingsGenerationMetrics = res.generated_letters.findings_meta.generation_metrics ?? null;
 				}
 				const demandEntries = Object.entries(res.generated_letters).filter(([key]) =>
 					key.startsWith('demand_')
@@ -761,23 +783,34 @@
 		const isCurrentRequest = () => activeFindingsRequest?.requestId === requestId;
 
 		generatingFindings = true;
-		findingsLetter = ''; // Clear existing
-		insufficientDocError = null; // Clear previous error
+		findingsGenerationState = 'connecting';
+		findingsPhaseMessage = 'Connecting...';
+		findingsRecoverableError = null;
+		findingsDraftStarted = false;
+		insufficientDocError = null;
+		findingsQualityReport = null;
+		findingsGenerationMetrics = null;
 
 		try {
 			const { session, user } = await getSecureSession();
 			if (!session || !user) throw new Error('Not authenticated');
 
 			const apiUrl = getApiUrl();
-			const queryParam = forceGeneration ? '?force_generation=true' : '';
-			const response = await fetch(`${apiUrl}/api/analysis/${results.analysis_id}/letter/stream${queryParam}`, {
+			const params = new URLSearchParams({
+				schema_version: '2',
+				mode: 'strict_quality'
+			});
+			if (forceGeneration) {
+				params.set('force_generation', 'true');
+			}
+
+			const response = await fetch(`${apiUrl}/api/analysis/${results.analysis_id}/letter/stream?${params.toString()}`, {
 				headers: { Authorization: `Bearer ${session.access_token}` },
 				signal: controller.signal
 			});
 
 			if (!response.ok) {
 				const detail = await response.json().catch(() => ({}));
-				// Handle documentation insufficient error specially
 				if (detail?.detail?.error === 'documentation_insufficient') {
 					if (isCurrentRequest()) {
 						insufficientDocError = {
@@ -785,6 +818,8 @@
 							critical_gaps: detail.detail.critical_gaps
 						};
 						toastStore.warning('Case documentation is insufficient. Review gaps or enable force override.');
+						findingsGenerationState = 'idle';
+						findingsPhaseMessage = '';
 					}
 					return;
 				}
@@ -795,10 +830,13 @@
 			if (!reader) throw new Error('No reader available');
 
 			const decoder = new TextDecoder();
+			const parser = new SSEEventParser();
 			let markdownBuffer = '';
 			let pendingTokens = '';
 			let flushTimer: ReturnType<typeof setTimeout> | null = null;
 			let processedEventCount = 0;
+			let streamDone = false;
+			let hadUnrecoverableError = false;
 
 			const renderFindingsPreview = () => {
 				if (!isCurrentRequest()) return;
@@ -820,6 +858,12 @@
 
 			const queueToken = (token: string) => {
 				if (!isCurrentRequest()) return;
+				if (!findingsDraftStarted) {
+					findingsDraftStarted = true;
+					markdownBuffer = '';
+					pendingTokens = '';
+					findingsLetter = '';
+				}
 				pendingTokens += token;
 				if (flushTimer) return;
 				flushTimer = setTimeout(() => {
@@ -839,6 +883,23 @@
 				}, 80);
 			};
 
+			const applyPhase = (phase: string, message?: string) => {
+				if (!isCurrentRequest()) return;
+				const allowed: FindingsGenerationState[] = [
+					'context_build',
+					'draft_generation',
+					'lint_validation',
+					'repair',
+					'finalizing'
+				];
+				if (allowed.includes(phase as FindingsGenerationState)) {
+					findingsGenerationState = phase as FindingsGenerationState;
+				}
+				if (message) {
+					findingsPhaseMessage = message;
+				}
+			};
+
 			while (true) {
 				if (!isCurrentRequest()) {
 					throw new DOMException('Findings request superseded', 'AbortError');
@@ -849,23 +910,59 @@
 					break;
 				}
 
-				const chunk = decoder.decode(value);
-				const lines = chunk.split('\n');
+				const chunk = decoder.decode(value, { stream: true });
+				const events = parser.push(chunk);
 
-				for (const line of lines) {
-					if (line.startsWith('data: ')) {
-						try {
-							const data = JSON.parse(line.slice(6));
-							if (data.token) {
-								queueToken(data.token);
-							}
-							if (data.done) {
-								flushPendingTokens();
-								break;
-							}
-						} catch (e) {
-							// Ignore parse errors for incomplete chunks
+				for (const data of events) {
+					const eventType =
+						(typeof data.event === 'string' && data.event) ||
+						(typeof data.type === 'string' && data.type) ||
+						(data.token ? 'token' : data.done ? 'done' : data.error ? 'error' : '');
+
+					if (eventType === 'phase') {
+						applyPhase(String(data.phase || ''), typeof data.message === 'string' ? data.message : undefined);
+					} else if (eventType === 'token' && typeof data.token === 'string') {
+						findingsGenerationState = 'draft_generation';
+						queueToken(data.token);
+					} else if (eventType === 'quality') {
+						if (data.quality_report && typeof data.quality_report === 'object') {
+							findingsQualityReport = data.quality_report as Record<string, any>;
 						}
+						if (data.generation_metrics && typeof data.generation_metrics === 'object') {
+							findingsGenerationMetrics = data.generation_metrics as Record<string, any>;
+						}
+					} else if (eventType === 'final') {
+						flushPendingTokens();
+						const content = data.content as Record<string, unknown> | undefined;
+						if (content && typeof content.html === 'string') {
+							findingsLetter = content.html;
+						} else if (content && typeof content.markdown === 'string') {
+							findingsLetter = `<div class="legal-letter">${parseMarkdown(content.markdown)}</div>`;
+						}
+						if (data.quality_report && typeof data.quality_report === 'object') {
+							findingsQualityReport = data.quality_report as Record<string, any>;
+						}
+						if (data.generation_metrics && typeof data.generation_metrics === 'object') {
+							findingsGenerationMetrics = data.generation_metrics as Record<string, any>;
+						}
+						findingsGenerationState = 'complete';
+						findingsPhaseMessage = 'Complete';
+					} else if (eventType === 'error') {
+						const message =
+							(typeof data.error === 'string' && data.error) || 'Findings email generation failed';
+						const recoverable = Boolean(data.recoverable);
+						if (recoverable) {
+							findingsRecoverableError = message;
+						} else {
+							findingsGenerationState = 'error';
+							findingsPhaseMessage = message;
+							hadUnrecoverableError = true;
+							throw new Error(message);
+						}
+					} else if (eventType === 'done') {
+						flushPendingTokens();
+						streamDone = true;
+						break;
 					}
 
 					processedEventCount += 1;
@@ -873,16 +970,36 @@
 						await new Promise((resolve) => setTimeout(resolve, 0));
 					}
 				}
+
+				if (streamDone) {
+					break;
+				}
 			}
+
 			flushPendingTokens();
+			if (isCurrentRequest() && !hadUnrecoverableError) {
+				findingsGenerationState = 'complete';
+				findingsPhaseMessage = 'Complete';
+			}
 		} catch (err: any) {
 			if (err?.name !== 'AbortError') {
 				toastStore.error(err.message || 'Findings email generation failed');
+				if (isCurrentRequest()) {
+					findingsGenerationState = 'error';
+					findingsPhaseMessage = err.message || 'Findings email generation failed';
+				}
+			} else if (isCurrentRequest()) {
+				findingsGenerationState = 'cancelled';
+				findingsPhaseMessage = 'Cancelled';
 			}
 		} finally {
 			if (activeFindingsRequest?.requestId === requestId) {
 				activeFindingsRequest = null;
 				generatingFindings = false;
+				if (findingsGenerationState === 'connecting') {
+					findingsGenerationState = 'idle';
+					findingsPhaseMessage = '';
+				}
 			}
 		}
 	}
@@ -1027,6 +1144,10 @@ async function generateLetterRequest(body: Record<string, any>) {
 			const data = await response.json();
 			if (data.letter_type === 'findings') {
 				findingsLetter = data.letter_html;
+				findingsQualityReport = data.quality_report ?? null;
+				findingsGenerationMetrics = data.generation_metrics ?? null;
+				findingsGenerationState = 'complete';
+				findingsPhaseMessage = 'Complete';
 			} else if (data.target_party_name) {
 				demandLetters = {
 					...demandLetters,
@@ -1648,6 +1769,11 @@ async function generateLetterRequest(body: Record<string, any>) {
 							<div>
 								<h3 class="text-xl font-heading font-bold text-contrast">Findings Email</h3>
 								<p class="text-sm text-gray-500 mt-1">Generate a client-ready findings email on demand.</p>
+								{#if findingsGenerationMetrics?.repair_applied}
+									<div class="mt-2 inline-flex items-center px-2.5 py-1 rounded-md text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+										Quality pass applied
+									</div>
+								{/if}
 							</div>
 							<AsyncButton
 								variant="primary"
@@ -1658,6 +1784,19 @@ async function generateLetterRequest(body: Record<string, any>) {
 								Generate Email
 							</AsyncButton>
 						</div>
+
+						{#if generatingFindings || (findingsGenerationState !== 'idle' && findingsGenerationState !== 'complete')}
+							<div class="mb-4 flex items-center gap-2 text-sm text-gray-600">
+								<div class="h-2.5 w-2.5 rounded-full bg-accent animate-pulse"></div>
+								<span>{findingsPhaseMessage || findingsGenerationState.replace(/_/g, ' ')}</span>
+							</div>
+						{/if}
+
+						{#if findingsRecoverableError}
+							<div class="mb-4 p-3 rounded-lg border border-blue-200 bg-blue-50 text-sm text-blue-800">
+								{findingsRecoverableError} You can review the current draft while we finalize output.
+							</div>
+						{/if}
 
 						<!-- Insufficient Documentation Warning -->
 						{#if insufficientDocError}
@@ -1703,12 +1842,22 @@ async function generateLetterRequest(body: Record<string, any>) {
 							</div>
 						{/if}
 
-						{#if generatingFindings && findingsLetter}
+						{#if generatingFindings && !findingsDraftStarted && !findingsLetter}
+							<div class="space-y-4 animate-fade-in-up">
+								<div class="flex items-center gap-2 text-sm text-accent font-medium">
+									<div class="animate-spin rounded-full h-4 w-4 border-2 border-accent border-t-transparent"></div>
+									Preparing draft...
+								</div>
+								<div class="border border-gray-200 rounded-lg overflow-hidden bg-white shadow-inner p-6 h-[600px] flex items-center justify-center text-gray-500">
+									Waiting for first token...
+								</div>
+							</div>
+						{:else if generatingFindings && findingsDraftStarted && findingsLetter && findingsGenerationState !== 'complete'}
 							<!-- Streaming preview - shows text to avoid iframe blinking -->
 							<div class="space-y-4 animate-fade-in-up">
 								<div class="flex items-center gap-2 text-sm text-accent font-medium">
 									<div class="animate-spin rounded-full h-4 w-4 border-2 border-accent border-t-transparent"></div>
-									Generating email...
+									{findingsPhaseMessage || 'Generating email...'}
 								</div>
 								<div class="border border-gray-200 rounded-lg overflow-hidden bg-white shadow-inner p-6 h-[600px] overflow-y-auto prose prose-sm max-w-none">
 									{@html findingsLetter}

@@ -14,7 +14,7 @@ import uuid
 from datetime import datetime
 from email.message import EmailMessage
 from email.utils import formatdate, make_msgid
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 import html2text
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, status
@@ -23,6 +23,7 @@ from pydantic import BaseModel, Field
 
 from legal_portal.api.dependencies import get_current_user, get_supabase_client, get_user_supabase_client
 from legal_portal.api.rate_limiter import limiter
+from legal_portal.config.default import get_settings
 from legal_portal.core.data_models import (
     ChatMessageRequest,
     ChatMessageResponse,
@@ -37,6 +38,7 @@ from legal_portal.core.data_models import (
 from legal_portal.services.case_chat_service import CaseChatService
 from legal_portal.services.demand_letter_service import DemandLetterService
 from legal_portal.services.json_processing_service import JsonProcessingService
+from legal_portal.services.letter_validation_service import LetterValidationService
 from legal_portal.services.main_processor import process_case_documents
 from legal_portal.services.progress_manager import ProgressManager
 from legal_portal.utils.diagnostic_logger import DiagnosticLogger
@@ -48,6 +50,56 @@ logger = logging.getLogger(__name__)
 
 # Cache for database column existence checks
 _DB_COLUMNS_CACHE = {}
+
+
+def _new_generation_metrics(
+    *,
+    analysis_id: str,
+    letter_type: str,
+    streaming: bool,
+) -> Dict[str, Any]:
+    """Create a standard metrics payload for letter generation."""
+    return {
+        "request_id": str(uuid.uuid4()),
+        "analysis_id": analysis_id,
+        "letter_type": letter_type,
+        "streaming": streaming,
+        "ttft_ms": None,
+        "total_latency_ms": None,
+        "model_calls": 0,
+        "repair_attempted": False,
+        "repair_applied": False,
+        "timeout": False,
+        "error_code": None,
+        "lint_passed": None,
+        "lint_score": None,
+    }
+
+
+def _emit_generation_metrics(metrics: Dict[str, Any]) -> None:
+    """Emit request-level generation metrics in a single structured log line."""
+    try:
+        logger.info("[LETTER_METRICS] %s", json.dumps(metrics, default=str))
+    except Exception:
+        logger.info("[LETTER_METRICS] %s", metrics)
+
+
+def _to_sse(payload: Dict[str, Any]) -> str:
+    """Serialize an SSE data payload."""
+    return f"data: {json.dumps(payload)}\n\n"
+
+
+def _quality_report_placeholder(*, mode: str, letter_type: str) -> Dict[str, Any]:
+    """Return a no-op quality report when lint is disabled/unavailable."""
+    return {
+        "mode": mode,
+        "letter_type": letter_type,
+        "lint_passed": True,
+        "score": 100,
+        "violations": [],
+        "word_count": 0,
+        "section_counts": {},
+    }
 
 
 class AnalysisCancelledError(Exception):
@@ -675,6 +727,8 @@ class LetterGenerationResponse(BaseModel):
     letter_html: str
     letter_type: LetterType
     target_party_name: Optional[str] = None
+    quality_report: Optional[Dict[str, Any]] = None
+    generation_metrics: Optional[Dict[str, Any]] = None
 
 
 def _download_and_extract_documents(
@@ -1588,18 +1642,16 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
 async def stream_findings_letter(
     analysis_id: str,
     force_generation: bool = Query(default=False, description="Override completeness gate for weak cases"),
+    schema_version: int = Query(default=2, ge=1, le=2),
+    mode: Literal["default", "strict_quality"] = Query(default="default"),
     user=Depends(get_current_user),
     supabase=Depends(get_user_supabase_client),
 ):
-    """Stream findings email generation token by token.
-
-    Includes gap analysis guardrails:
-    - Completeness < 40%: Blocked unless force_generation=true
-    - Completeness 40-60%: Warning logged, proceeds
-    - Completeness >= 60%: Normal generation
-    """
-    # Verify ownership and get analysis results
+    """Stream findings letter generation with v2 SSE events and legacy compatibility."""
     try:
+        settings = get_settings()
+        effective_schema_version = 2 if (schema_version == 2 and settings.letter_stream_schema_v2) else 1
+
         response = supabase.table("analysis_results").select("*").eq("id", analysis_id).execute()
         if not response.data:
             raise HTTPException(status_code=404, detail="Analysis not found")
@@ -1620,98 +1672,378 @@ async def stream_findings_letter(
             raise HTTPException(status_code=400, detail="Multi-stage analysis results missing")
 
         msr = processing_result.multi_stage_result
-
-        # Gap Analysis Guardrails - Check completeness before streaming
         gap_analysis_data = msr.get("gap_analysis")
         if gap_analysis_data:
             from legal_portal.core.data_models import GapAnalysisResult
-            gap_analysis = GapAnalysisResult(**gap_analysis_data)
 
+            gap_analysis = GapAnalysisResult(**gap_analysis_data)
             if gap_analysis.overall_completeness_score < 40:
                 if not force_generation:
                     raise HTTPException(
                         status_code=status.HTTP_409_CONFLICT,
                         detail={
                             "error": "documentation_insufficient",
-                            "message": "Case documentation is insufficient for letter generation. Please provide the missing documents identified in Gap Analysis before generating a letter.",
+                            "message": (
+                                "Case documentation is insufficient for letter generation. Please "
+                                "provide the missing documents identified in Gap Analysis before "
+                                "generating a letter."
+                            ),
                             "completeness_score": gap_analysis.overall_completeness_score,
                             "critical_gaps": gap_analysis.critical_count,
-                            "recommendation": "Review the Gap Analysis tab to identify which documents are needed.",
+                            "recommendation": (
+                                "Review the Gap Analysis tab to identify which documents are needed."
+                            ),
                             "allow_override": True,
-                        }
+                        },
                     )
-                else:
-                    logger.warning(
-                        f"OVERRIDE: force_generation used for streaming letter with low completeness score "
-                        f"({gap_analysis.overall_completeness_score}%) - analysis_id={analysis_id}, "
-                        f"critical_gaps={gap_analysis.critical_count}"
-                    )
+                logger.warning(
+                    "OVERRIDE: force_generation used for streaming letter with low completeness score "
+                    "(%s%%) - analysis_id=%s, critical_gaps=%s",
+                    gap_analysis.overall_completeness_score,
+                    analysis_id,
+                    gap_analysis.critical_count,
+                )
             elif gap_analysis.overall_completeness_score < 60:
                 logger.warning(
-                    f"Streaming letter with moderate completeness score: {gap_analysis.overall_completeness_score}% "
-                    f"(critical_gaps={gap_analysis.critical_count}, high_gaps={gap_analysis.high_count}) - "
-                    f"analysis_id={analysis_id}"
+                    "Streaming letter with moderate completeness score: %s%% "
+                    "(critical_gaps=%s, high_gaps=%s) - analysis_id=%s",
+                    gap_analysis.overall_completeness_score,
+                    gap_analysis.critical_count,
+                    gap_analysis.high_count,
+                    analysis_id,
                 )
 
+        ai_preferences = await _get_user_ai_preferences(user["id"], supabase)
+
+        def _event_payload(event_name: str, **kwargs: Any) -> Optional[Dict[str, Any]]:
+            """Build schema-v1 or schema-v2 payload for the current stream request."""
+            if effective_schema_version == 1:
+                if event_name == "token":
+                    return {"token": kwargs.get("token", "")}
+                if event_name == "done":
+                    return {"done": True}
+                if event_name == "error":
+                    return {"error": kwargs.get("error", "Stream failed")}
+                return None
+
+            payload: Dict[str, Any] = {
+                "schema_version": 2,
+                "event": event_name,
+                "type": event_name,
+            }
+            payload.update(kwargs)
+            if event_name == "done":
+                payload["done"] = True
+            return payload
+
         async def generate():
-            openai_client = OpenAIClient()
-            json_service = JsonProcessingService(client=openai_client, config={})
-
-            from legal_portal.core.data_models import (
-                DeepAnalysis,
-                FactMatrix,
-                GapAnalysisResult,
-                LetterStructure,
+            request_started = time.monotonic()
+            metrics = _new_generation_metrics(
+                analysis_id=analysis_id,
+                letter_type="findings",
+                streaming=True,
             )
+            quality_report = _quality_report_placeholder(mode=mode, letter_type="findings")
+            recoverable_timeout = False
+            draft_markdown = ""
 
-            fact_matrix = FactMatrix(**msr["fact_matrix"])
-            deep_analysis = DeepAnalysis(**msr["deep_analysis"])
-            letter_structure = LetterStructure(**msr["letter_structure"])
+            def _remaining_seconds(internal_deadline: float) -> float:
+                return internal_deadline - time.monotonic()
 
-            # Load gap analysis for guardrails in generation
-            gap_analysis = None
-            if msr.get("gap_analysis"):
-                gap_analysis = GapAnalysisResult(**msr["gap_analysis"])
+            def _emit(event_name: str, **kwargs: Any) -> Optional[str]:
+                payload = _event_payload(event_name, **kwargs)
+                if payload is None:
+                    return None
+                return _to_sse(payload)
 
-            document_summaries_for_context: List[Dict[str, Any]] = []
-            if processing_result.document_summaries:
+            try:
+                internal_budget = max(30, int(settings.letter_internal_budget_seconds))
+                context_budget = max(1, int(settings.letter_context_budget_seconds))
+                draft_budget = max(5, int(settings.letter_draft_budget_seconds))
+                lint_budget = max(1, int(settings.letter_lint_budget_seconds))
+                repair_budget = max(1, int(settings.letter_repair_budget_seconds))
+                finalize_budget = max(1, int(settings.letter_finalize_budget_seconds))
+                heartbeat_interval = max(1, int(settings.letter_stream_heartbeat_seconds))
+                internal_deadline = request_started + internal_budget
+
+                phase_msg = _emit("phase", phase="context_build", message="Building context")
+                if phase_msg:
+                    yield phase_msg
+
+                context_started = time.monotonic()
+                from legal_portal.core.data_models import (
+                    DeepAnalysis,
+                    FactMatrix,
+                    GapAnalysisResult,
+                    LetterStructure,
+                )
+
+                artifacts = processing_result.artifacts or {}
+                jurisdiction = artifacts.get("jurisdiction", "Florida")
+                fact_matrix = FactMatrix(**msr["fact_matrix"])
+                deep_analysis = DeepAnalysis(**msr["deep_analysis"])
+                letter_structure = LetterStructure(**msr["letter_structure"])
+                stream_gap_analysis = (
+                    GapAnalysisResult(**msr["gap_analysis"]) if msr.get("gap_analysis") else None
+                )
+
+                document_summaries_for_context: List[Dict[str, Any]] = []
+                if processing_result.document_summaries:
+                    try:
+                        parsed_summaries = json.loads(processing_result.document_summaries)
+                        if isinstance(parsed_summaries, list):
+                            document_summaries_for_context = [
+                                item for item in parsed_summaries if isinstance(item, dict)
+                            ]
+                    except Exception as parse_err:
+                        logger.warning(
+                            "[LETTER] Failed to parse document_summaries for stream context: %s",
+                            parse_err,
+                        )
+
+                if (time.monotonic() - context_started) > context_budget:
+                    metrics["timeout"] = True
+                    metrics["error_code"] = "context_budget_exceeded"
+                    raise TimeoutError("Context-build phase exceeded budget.")
+
+                phase_msg = _emit("phase", phase="draft_generation", message="Generating draft")
+                if phase_msg:
+                    yield phase_msg
+
+                openai_client = OpenAIClient(user_preferences=ai_preferences)
+                json_service = JsonProcessingService(client=openai_client, config={})
+                metrics["model_calls"] = int(metrics.get("model_calls", 0)) + 1
+
+                stream_generator = json_service.stream_findings_letter_adaptive(
+                    intake_content=processing_result.intake_content or "",
+                    fact_matrix=fact_matrix,
+                    legal_analysis=deep_analysis,
+                    structure_guidance=letter_structure,
+                    verified_statutes=msr.get("verified_statutes", []),
+                    attorney_name=artifacts.get("attorney_name"),
+                    firm_name=artifacts.get("firm_name"),
+                    confirmed_qa_pairs=artifacts.get("confirmed_qa_pairs", []),
+                    contact_phone=artifacts.get("contact_phone"),
+                    contact_email=artifacts.get("contact_email"),
+                    quality_context=artifacts.get("quality_context", ""),
+                    clio_matter_context=artifacts.get("clio_matter_context", ""),
+                    jurisdiction=jurisdiction,
+                    original_documents=msr.get("original_documents"),
+                    document_summaries_for_context=document_summaries_for_context,
+                    document_registry=msr.get("document_registry"),
+                    gap_analysis=stream_gap_analysis,
+                )
+
+                token_queue: asyncio.Queue = asyncio.Queue()
+
+                async def _collect_tokens() -> None:
+                    try:
+                        async for token in stream_generator:
+                            await token_queue.put(("token", token))
+                    except Exception as stream_err:
+                        await token_queue.put(("error", stream_err))
+                    finally:
+                        await token_queue.put(("done", None))
+
+                collector_task = asyncio.create_task(_collect_tokens())
+                draft_started = time.monotonic()
+                reserved_for_after_draft = lint_budget + finalize_budget
+                draft_deadline = min(
+                    draft_started + draft_budget,
+                    internal_deadline - reserved_for_after_draft,
+                )
+
                 try:
-                    parsed_summaries = json.loads(processing_result.document_summaries)
-                    if isinstance(parsed_summaries, list):
-                        document_summaries_for_context = [
-                            item for item in parsed_summaries if isinstance(item, dict)
-                        ]
-                except Exception as parse_err:
-                    logger.warning(
-                        "[LETTER] Failed to parse document_summaries for stream context: %s",
-                        parse_err,
+                    while True:
+                        if time.monotonic() > draft_deadline:
+                            metrics["timeout"] = True
+                            metrics["error_code"] = "draft_budget_exceeded"
+                            break
+
+                        try:
+                            msg_type, msg_data = await asyncio.wait_for(
+                                token_queue.get(),
+                                timeout=heartbeat_interval,
+                            )
+                        except asyncio.TimeoutError:
+                            heartbeat_msg = _emit(
+                                "heartbeat",
+                                phase="draft_generation",
+                                elapsed_ms=int((time.monotonic() - request_started) * 1000),
+                            )
+                            if heartbeat_msg:
+                                yield heartbeat_msg
+                            continue
+
+                        if msg_type == "token":
+                            token = str(msg_data or "")
+                            if not token:
+                                continue
+                            draft_markdown += token
+                            if metrics["ttft_ms"] is None:
+                                metrics["ttft_ms"] = int((time.monotonic() - request_started) * 1000)
+                            token_msg = _emit("token", token=token)
+                            if token_msg:
+                                yield token_msg
+                            continue
+
+                        if msg_type == "error":
+                            if isinstance(msg_data, Exception):
+                                raise msg_data
+                            raise RuntimeError(str(msg_data))
+
+                        if msg_type == "done":
+                            break
+                finally:
+                    if not collector_task.done():
+                        collector_task.cancel()
+                        try:
+                            await collector_task
+                        except asyncio.CancelledError:
+                            pass
+
+                draft_word_count = len(re.findall(r"\b[\w'-]+\b", draft_markdown))
+                if metrics["timeout"] and draft_word_count >= 80:
+                    recoverable_timeout = True
+                    timeout_msg = _emit(
+                        "error",
+                        error=(
+                            "Draft generation exceeded time budget; finalized the best available draft."
+                        ),
+                        code=metrics.get("error_code"),
+                        recoverable=True,
                     )
+                    if timeout_msg:
+                        yield timeout_msg
 
-            artifacts = processing_result.artifacts or {}
-            jurisdiction = artifacts.get("jurisdiction", "Florida")
+                if not draft_markdown.strip():
+                    raise TimeoutError("Draft generation ended before any content was produced.")
 
-            async for token in json_service.stream_findings_letter_adaptive(
-                intake_content=processing_result.intake_content or "",
-                fact_matrix=fact_matrix,
-                legal_analysis=deep_analysis,
-                structure_guidance=letter_structure,
-                verified_statutes=msr.get("verified_statutes", []),
-                attorney_name=artifacts.get("attorney_name"),
-                firm_name=artifacts.get("firm_name"),
-                confirmed_qa_pairs=artifacts.get("confirmed_qa_pairs", []),
-                contact_phone=artifacts.get("contact_phone"),
-                contact_email=artifacts.get("contact_email"),
-                quality_context=artifacts.get("quality_context", ""),
-                clio_matter_context=artifacts.get("clio_matter_context", ""),
-                jurisdiction=jurisdiction,
-                original_documents=msr.get("original_documents"),
-                document_summaries_for_context=document_summaries_for_context,
-                document_registry=msr.get("document_registry"),
-                gap_analysis=gap_analysis,  # Pass gap analysis for content guardrails
-            ):
-                yield f"data: {json.dumps({'token': token})}\n\n"
+                phase_msg = _emit("phase", phase="lint_validation", message="Validating quality")
+                if phase_msg:
+                    yield phase_msg
 
-            yield f"data: {json.dumps({'done': True})}\n\n"
+                validator = LetterValidationService()
+                if settings.letter_quality_lint_enabled and _remaining_seconds(internal_deadline) > finalize_budget:
+                    lint_started = time.monotonic()
+                    quality_report = validator.lint_client_letter(
+                        draft_markdown,
+                        mode=mode,
+                        letter_type="findings",
+                    )
+                    if (time.monotonic() - lint_started) > lint_budget:
+                        logger.warning("[LETTER] Lint phase exceeded budget but completed.")
+
+                final_markdown = draft_markdown
+                if (
+                    settings.letter_conditional_repair_enabled
+                    and not quality_report.get("lint_passed", True)
+                    and settings.letter_quality_lint_enabled
+                ):
+                    remaining_after_lint = _remaining_seconds(internal_deadline)
+                    if remaining_after_lint >= (repair_budget + finalize_budget):
+                        phase_msg = _emit("phase", phase="repair", message="Repairing quality issues")
+                        if phase_msg:
+                            yield phase_msg
+                        metrics["repair_attempted"] = True
+                        metrics["model_calls"] = int(metrics.get("model_calls", 0)) + 1
+                        repaired = await json_service.repair_letter_constraints(
+                            draft_markdown,
+                            quality_report.get("violations", []),
+                            mode=mode,
+                            model="gpt-5-mini",
+                        )
+                        post_repair_report = validator.lint_client_letter(
+                            repaired,
+                            mode=mode,
+                            letter_type="findings",
+                        )
+                        quality_report = {
+                            **post_repair_report,
+                            "pre_repair": quality_report,
+                            "post_repair": post_repair_report,
+                        }
+                        if repaired.strip() and repaired.strip() != draft_markdown.strip():
+                            final_markdown = repaired
+                            metrics["repair_applied"] = True
+                    else:
+                        quality_report = {
+                            **quality_report,
+                            "repair_skipped": "insufficient_budget",
+                        }
+
+                phase_msg = _emit("phase", phase="finalizing", message="Finalizing letter")
+                if phase_msg:
+                    yield phase_msg
+
+                final_html = json_service._convert_markdown_to_html(final_markdown)
+                metrics["lint_passed"] = quality_report.get("lint_passed")
+                metrics["lint_score"] = quality_report.get("score")
+                metrics["total_latency_ms"] = int((time.monotonic() - request_started) * 1000)
+
+                try:
+                    persisted_result = analysis_data.get("result") or {}
+                    generated_letters = persisted_result.setdefault("generated_letters", {})
+                    generated_letters["findings"] = final_html
+                    generated_letters["findings_meta"] = {
+                        "quality_report": quality_report,
+                        "generation_metrics": metrics,
+                    }
+                    supabase.table("analysis_results").update({"result": persisted_result}).eq(
+                        "id", analysis_id
+                    ).execute()
+                except Exception as persist_err:
+                    logger.warning("[LETTER] Persisting streamed findings failed: %s", persist_err)
+
+                quality_msg = _emit(
+                    "quality",
+                    quality_report=quality_report,
+                    generation_metrics=metrics,
+                )
+                if quality_msg:
+                    yield quality_msg
+
+                final_msg = _emit(
+                    "final",
+                    content={
+                        "format": "html",
+                        "html": final_html,
+                        "markdown": final_markdown,
+                    },
+                    quality_report=quality_report,
+                    generation_metrics=metrics,
+                )
+                if final_msg:
+                    yield final_msg
+
+                done_msg = _emit("done")
+                if done_msg:
+                    yield done_msg
+                _emit_generation_metrics(metrics)
+
+            except Exception as stream_err:
+                if isinstance(stream_err, TimeoutError):
+                    metrics["timeout"] = True
+                    if not metrics.get("error_code"):
+                        metrics["error_code"] = "timeout"
+                elif not metrics.get("error_code"):
+                    metrics["error_code"] = type(stream_err).__name__
+
+                metrics["total_latency_ms"] = int((time.monotonic() - request_started) * 1000)
+                _emit_generation_metrics(metrics)
+
+                error_msg = _emit(
+                    "error",
+                    error=str(stream_err),
+                    code=metrics.get("error_code"),
+                    recoverable=recoverable_timeout,
+                )
+                if error_msg:
+                    yield error_msg
+
+                done_msg = _emit("done")
+                if done_msg:
+                    yield done_msg
 
         return StreamingResponse(
             generate(),
@@ -1720,7 +2052,7 @@ async def stream_findings_letter(
                 "Cache-Control": "no-cache, no-transform",
                 "Connection": "keep-alive",
                 "X-Accel-Buffering": "no",
-            }
+            },
         )
     except HTTPException:
         raise
@@ -3040,210 +3372,273 @@ async def generate_letter(
     supabase=Depends(get_user_supabase_client),  # noqa: B008
 ):
     """Generate findings or demand letters on-demand."""
+    settings = get_settings()
+    started_at = time.monotonic()
+
     _ensure_case_access(supabase, letter_request.case_id, user["id"])
     analysis_record = _fetch_latest_analysis_result(supabase, letter_request.case_id)
-    await _ensure_fresh_gap_analysis_for_letter_generation(
-        supabase=supabase,
-        analysis_record=analysis_record,
-        user_id=user["id"],
+    metrics = _new_generation_metrics(
+        analysis_id=analysis_record["id"],
+        letter_type=letter_request.letter_type.value,
+        streaming=False,
     )
 
-    result_payload = analysis_record["result"]
-    processing_result = ProcessingResult(**result_payload)
-
-    if not processing_result.multi_stage_result:
-        raise HTTPException(
-            status.HTTP_409_CONFLICT,
-            detail="On-demand letters require the latest analysis. Please re-run the case analysis.",
+    try:
+        await _ensure_fresh_gap_analysis_for_letter_generation(
+            supabase=supabase,
+            analysis_record=analysis_record,
+            user_id=user["id"],
         )
 
-    # Fetch user's AI preferences
-    ai_preferences = await _get_user_ai_preferences(user["id"], supabase)
-    openai_client = OpenAIClient(user_preferences=ai_preferences)
-    artifacts = processing_result.artifacts or {}
-    attorney_info = {
-        "name": letter_request.attorney_name or artifacts.get("attorney_name"),
-        "firm": letter_request.firm_name or artifacts.get("firm_name"),
-        "phone": letter_request.contact_phone or artifacts.get("contact_phone"),
-        "email": letter_request.contact_email or artifacts.get("contact_email"),
-    }
+        result_payload = analysis_record["result"]
+        processing_result = ProcessingResult(**result_payload)
 
-    msr = processing_result.multi_stage_result
-    letter_html: str
-    target_party_name: Optional[str] = None
+        if not processing_result.multi_stage_result:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                detail="On-demand letters require the latest analysis. Please re-run the case analysis.",
+            )
 
-    # Extract jurisdiction from artifacts
-    jurisdiction = artifacts.get("jurisdiction", "Florida")
-    logger.info(f"Generating {letter_request.letter_type} letter for {jurisdiction}")
+        ai_preferences = await _get_user_ai_preferences(user["id"], supabase)
+        openai_client = OpenAIClient(user_preferences=ai_preferences)
+        artifacts = processing_result.artifacts or {}
+        attorney_info = {
+            "name": letter_request.attorney_name or artifacts.get("attorney_name"),
+            "firm": letter_request.firm_name or artifacts.get("firm_name"),
+            "phone": letter_request.contact_phone or artifacts.get("contact_phone"),
+            "email": letter_request.contact_email or artifacts.get("contact_email"),
+        }
 
-    # Initialize Diagnostic Logger if enabled
-    diag_logger = None
-    if DiagnosticLogger.get_enabled():
-        diag_logger = DiagnosticLogger(session_id=letter_request.case_id)
+        msr = processing_result.multi_stage_result
+        letter_html: str
+        target_party_name: Optional[str] = None
+        quality_report = _quality_report_placeholder(
+            mode="default",
+            letter_type=letter_request.letter_type.value,
+        )
 
-    # Initialize gap_analysis to None (only populated for FINDINGS letters)
-    gap_analysis = None
+        jurisdiction = artifacts.get("jurisdiction", "Florida")
+        logger.info(f"Generating {letter_request.letter_type} letter for {jurisdiction}")
 
-    if letter_request.letter_type == LetterType.FINDINGS:
-        from legal_portal.core.data_models import DeepAnalysis, FactMatrix, GapAnalysisResult, LetterStructure
+        diag_logger = None
+        if DiagnosticLogger.get_enabled():
+            diag_logger = DiagnosticLogger(session_id=letter_request.case_id)
 
-        fact_matrix = FactMatrix(**msr["fact_matrix"])
-        deep_analysis = DeepAnalysis(**msr["deep_analysis"])
-        letter_structure = LetterStructure(**msr["letter_structure"])
-        verified_statutes = msr.get("verified_statutes", [])
+        gap_analysis = None
+        fact_matrix = None
+        verified_statutes: List[Dict[str, Any]] = []
 
-        # Load gap analysis for guardrails (if available)
-        gap_analysis_data = msr.get("gap_analysis")
-        if gap_analysis_data:
-            try:
-                gap_analysis = GapAnalysisResult(**gap_analysis_data)
-                logger.info(f"Gap analysis loaded: completeness={gap_analysis.overall_completeness_score}, critical_gaps={gap_analysis.critical_count}")
-            except Exception as gap_err:
-                logger.warning(f"Could not load gap analysis for guardrails: {gap_err}")
+        if letter_request.letter_type == LetterType.FINDINGS:
+            from legal_portal.core.data_models import (
+                DeepAnalysis,
+                FactMatrix,
+                GapAnalysisResult,
+                LetterStructure,
+            )
 
-        document_summaries_for_context: List[Dict[str, Any]] = []
-        if processing_result.document_summaries:
-            try:
-                parsed_summaries = json.loads(processing_result.document_summaries)
-                if isinstance(parsed_summaries, list):
-                    document_summaries_for_context = [
-                        item for item in parsed_summaries if isinstance(item, dict)
-                    ]
-            except Exception as parse_err:
-                logger.warning(
-                    "[LETTER] Failed to parse document_summaries for findings context: %s",
-                    parse_err,
+            fact_matrix = FactMatrix(**msr["fact_matrix"])
+            deep_analysis = DeepAnalysis(**msr["deep_analysis"])
+            letter_structure = LetterStructure(**msr["letter_structure"])
+            verified_statutes = msr.get("verified_statutes", [])
+
+            gap_analysis_data = msr.get("gap_analysis")
+            if gap_analysis_data:
+                try:
+                    gap_analysis = GapAnalysisResult(**gap_analysis_data)
+                    logger.info(
+                        "Gap analysis loaded: completeness=%s, critical_gaps=%s",
+                        gap_analysis.overall_completeness_score,
+                        gap_analysis.critical_count,
+                    )
+                except Exception as gap_err:
+                    logger.warning(f"Could not load gap analysis for guardrails: {gap_err}")
+
+            document_summaries_for_context: List[Dict[str, Any]] = []
+            if processing_result.document_summaries:
+                try:
+                    parsed_summaries = json.loads(processing_result.document_summaries)
+                    if isinstance(parsed_summaries, list):
+                        document_summaries_for_context = [
+                            item for item in parsed_summaries if isinstance(item, dict)
+                        ]
+                except Exception as parse_err:
+                    logger.warning(
+                        "[LETTER] Failed to parse document_summaries for findings context: %s",
+                        parse_err,
+                    )
+
+            if gap_analysis:
+                if gap_analysis.overall_completeness_score < 40:
+                    if not letter_request.force_generation:
+                        raise HTTPException(
+                            status_code=status.HTTP_409_CONFLICT,
+                            detail={
+                                "error": "documentation_insufficient",
+                                "message": (
+                                    "Case documentation is insufficient for letter generation. "
+                                    "Please provide the missing documents identified in Gap Analysis "
+                                    "before generating a letter."
+                                ),
+                                "completeness_score": gap_analysis.overall_completeness_score,
+                                "critical_gaps": gap_analysis.critical_count,
+                                "recommendation": (
+                                    "Review the Gap Analysis tab to identify which documents are needed."
+                                ),
+                                "allow_override": True,
+                            },
+                        )
+                    logger.warning(
+                        "OVERRIDE: force_generation used for case %s with low completeness score "
+                        "(%s%%) - critical_gaps=%s",
+                        letter_request.case_id,
+                        gap_analysis.overall_completeness_score,
+                        gap_analysis.critical_count,
+                    )
+                elif gap_analysis.overall_completeness_score < 60:
+                    logger.warning(
+                        "Generating letter with low completeness score: %s%% "
+                        "(critical_gaps=%s, high_gaps=%s)",
+                        gap_analysis.overall_completeness_score,
+                        gap_analysis.critical_count,
+                        gap_analysis.high_count,
+                    )
+
+            json_service = JsonProcessingService(client=openai_client, config={})
+            metrics["model_calls"] = int(metrics.get("model_calls", 0)) + 1
+            letter_html = await json_service.generate_findings_letter_adaptive(
+                intake_content=processing_result.intake_content or "",
+                fact_matrix=fact_matrix,
+                legal_analysis=deep_analysis,
+                structure_guidance=letter_structure,
+                verified_statutes=verified_statutes,
+                attorney_name=attorney_info["name"],
+                firm_name=attorney_info["firm"],
+                confirmed_qa_pairs=artifacts.get("confirmed_qa_pairs", []),
+                contact_phone=attorney_info["phone"],
+                contact_email=attorney_info["email"],
+                quality_context=artifacts.get("quality_context", ""),
+                clio_matter_context=artifacts.get("clio_matter_context", ""),
+                jurisdiction=jurisdiction,
+                diag_logger=diag_logger,
+                original_documents=msr.get("original_documents"),
+                document_summaries_for_context=document_summaries_for_context,
+                document_registry=msr.get("document_registry"),
+                gap_analysis=gap_analysis,
+            )
+            letter_key = "findings"
+        else:
+            if not letter_request.target_party_name:
+                raise HTTPException(
+                    status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail="target_party_name is required for demand letters",
                 )
 
-        # COMPLETENESS GATE: Block letter generation if documentation is critically insufficient
-        if gap_analysis:
-            if gap_analysis.overall_completeness_score < 40:
-                if not letter_request.force_generation:
-                    raise HTTPException(
-                        status_code=status.HTTP_409_CONFLICT,
-                        detail={
-                            "error": "documentation_insufficient",
-                            "message": "Case documentation is insufficient for letter generation. Please provide the missing documents identified in Gap Analysis before generating a letter.",
-                            "completeness_score": gap_analysis.overall_completeness_score,
-                            "critical_gaps": gap_analysis.critical_count,
-                            "recommendation": "Review the Gap Analysis tab to identify which documents are needed.",
-                            "allow_override": True,
-                        }
+            client_name = letter_request.client_name
+            if not client_name:
+                fact_matrix_data = msr.get("fact_matrix", {})
+                parties = fact_matrix_data.get("parties", [])
+                for party in parties:
+                    if party.get("role", "").lower() in ["client", "plaintiff", "claimant"]:
+                        client_name = party.get("name")
+                        break
+
+            if not client_name:
+                client_name = artifacts.get("client_name") or "Client"
+
+            document_summaries = []
+            if processing_result.document_summaries:
+                try:
+                    document_summaries = json.loads(processing_result.document_summaries)
+                except Exception as parse_err:
+                    logger.warning(f"Failed to parse document_summaries: {parse_err}")
+
+            demand_service = DemandLetterService(openai_client)
+            metrics["model_calls"] = int(metrics.get("model_calls", 0)) + 1
+            letter_html = await demand_service.generate_demand_letter(
+                fact_matrix_dict=msr["fact_matrix"],
+                deep_analysis_dict=msr["deep_analysis"],
+                target_party_name=letter_request.target_party_name,
+                demand_amount=letter_request.demand_amount,
+                demand_deadline=letter_request.demand_deadline,
+                specific_demands=letter_request.specific_demands,
+                attorney_info=attorney_info,
+                client_name=client_name,
+                document_summaries=document_summaries,
+                jurisdiction=jurisdiction,
+            )
+            target_party_name = letter_request.target_party_name
+            letter_key = f"demand_{letter_request.target_party_name.replace(' ', '_')}".lower()
+
+        validator = LetterValidationService()
+
+        if gap_analysis and letter_request.letter_type == LetterType.FINDINGS and fact_matrix is not None:
+            try:
+                validation_result = validator.validate_letter(
+                    letter_html=letter_html,
+                    fact_matrix=fact_matrix,
+                    gap_analysis=gap_analysis,
+                    verified_statutes=verified_statutes,
+                )
+                if validation_result.warnings:
+                    warning_summary = "; ".join([w.message for w in validation_result.warnings[:5]])
+                    logger.warning(
+                        "Letter validation warnings (%s total): %s",
+                        len(validation_result.warnings),
+                        warning_summary,
                     )
                 else:
-                    logger.warning(
-                        f"OVERRIDE: force_generation used for case {letter_request.case_id} with low completeness score "
-                        f"({gap_analysis.overall_completeness_score}%) - critical_gaps={gap_analysis.critical_count}"
-                    )
-            elif gap_analysis.overall_completeness_score < 60:
-                logger.warning(
-                    f"Generating letter with low completeness score: {gap_analysis.overall_completeness_score}% "
-                    f"(critical_gaps={gap_analysis.critical_count}, high_gaps={gap_analysis.high_count})"
-                )
+                    logger.info("Letter passed source-of-truth validation with no warnings")
+            except Exception as validation_err:
+                logger.warning(f"Letter validation skipped due to error: {validation_err}")
 
-        json_service = JsonProcessingService(client=openai_client, config={})
-        letter_html = await json_service.generate_findings_letter_adaptive(
-            intake_content=processing_result.intake_content or "",
-            fact_matrix=fact_matrix,
-            legal_analysis=deep_analysis,
-            structure_guidance=letter_structure,
-            verified_statutes=verified_statutes,
-            attorney_name=attorney_info["name"],
-            firm_name=attorney_info["firm"],
-            confirmed_qa_pairs=artifacts.get("confirmed_qa_pairs", []),
-            contact_phone=attorney_info["phone"],
-            contact_email=attorney_info["email"],
-            quality_context=artifacts.get("quality_context", ""),
-            clio_matter_context=artifacts.get("clio_matter_context", ""),
-            jurisdiction=jurisdiction,  # Pass jurisdiction
-            diag_logger=diag_logger,  # Pass diagnostic logger
-            original_documents=msr.get("original_documents"),  # Pass raw content
-            document_summaries_for_context=document_summaries_for_context,
-            document_registry=msr.get("document_registry"),
-            gap_analysis=gap_analysis,  # Pass gap analysis for guardrails
-        )
-        letter_key = "findings"
-    else:
-        if not letter_request.target_party_name:
-            raise HTTPException(
-                status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail="target_party_name is required for demand letters",
-            )
-
-        # Extract client_name from letter_request, fact_matrix, or artifacts
-        client_name = letter_request.client_name
-        if not client_name:
-            # Try to get from fact_matrix parties (find client role)
-            fact_matrix_data = msr.get("fact_matrix", {})
-            parties = fact_matrix_data.get("parties", [])
-            for party in parties:
-                if party.get("role", "").lower() in ["client", "plaintiff", "claimant"]:
-                    client_name = party.get("name")
-                    break
-
-        # Fall back to artifacts or "Client"
-        if not client_name:
-            client_name = artifacts.get("client_name") or "Client"
-
-        # Parse document_summaries from JSON string
-        document_summaries = []
-        if processing_result.document_summaries:
+        if settings.letter_quality_lint_enabled:
             try:
-                import json
-
-                document_summaries = json.loads(processing_result.document_summaries)
-            except Exception as e:
-                logger.warning(f"Failed to parse document_summaries: {e}")
-
-        demand_service = DemandLetterService(openai_client)
-        letter_html = await demand_service.generate_demand_letter(
-            fact_matrix_dict=msr["fact_matrix"],
-            deep_analysis_dict=msr["deep_analysis"],
-            target_party_name=letter_request.target_party_name,
-            demand_amount=letter_request.demand_amount,
-            demand_deadline=letter_request.demand_deadline,
-            specific_demands=letter_request.specific_demands,
-            attorney_info=attorney_info,
-            client_name=client_name,
-            document_summaries=document_summaries,
-            jurisdiction=jurisdiction,  # Pass jurisdiction
-        )
-        target_party_name = letter_request.target_party_name
-        letter_key = f"demand_{letter_request.target_party_name.replace(' ', '_')}".lower()
-
-    # POST-GENERATION VALIDATION: Check letter content against source data
-    if gap_analysis and letter_request.letter_type == LetterType.FINDINGS:
-        try:
-            from legal_portal.services.letter_validation_service import LetterValidationService
-
-            validator = LetterValidationService()
-            validation_result = validator.validate_letter(
-                letter_html=letter_html,
-                fact_matrix=fact_matrix,
-                gap_analysis=gap_analysis,
-                verified_statutes=verified_statutes,
-            )
-
-            if validation_result.warnings:
-                warning_summary = "; ".join([w.message for w in validation_result.warnings[:5]])
-                logger.warning(
-                    f"Letter validation warnings ({len(validation_result.warnings)} total): {warning_summary}"
+                quality_report = validator.lint_client_letter(
+                    letter_html,
+                    mode="default",
+                    letter_type=letter_request.letter_type.value,
                 )
-            else:
-                logger.info("Letter passed validation with no warnings")
-        except Exception as validation_err:
-            logger.warning(f"Letter validation skipped due to error: {validation_err}")
+            except Exception as lint_err:
+                logger.warning(f"Letter lint failed, using placeholder report: {lint_err}")
 
-    result_payload.setdefault("generated_letters", {})[letter_key] = letter_html
-    supabase.table("analysis_results").update({"result": result_payload}).eq(
-        "id", analysis_record["id"]
-    ).execute()
+        metrics["lint_passed"] = quality_report.get("lint_passed")
+        metrics["lint_score"] = quality_report.get("score")
+        metrics["total_latency_ms"] = int((time.monotonic() - started_at) * 1000)
 
-    return LetterGenerationResponse(
-        letter_html=letter_html,
-        letter_type=letter_request.letter_type,
-        target_party_name=target_party_name,
-    )
+        generated_letters = result_payload.setdefault("generated_letters", {})
+        generated_letters[letter_key] = letter_html
+        if letter_request.letter_type == LetterType.FINDINGS:
+            generated_letters["findings_meta"] = {
+                "quality_report": quality_report,
+                "generation_metrics": metrics,
+            }
+
+        supabase.table("analysis_results").update({"result": result_payload}).eq(
+            "id", analysis_record["id"]
+        ).execute()
+
+        _emit_generation_metrics(metrics)
+
+        return LetterGenerationResponse(
+            letter_html=letter_html,
+            letter_type=letter_request.letter_type,
+            target_party_name=target_party_name,
+            quality_report=quality_report,
+            generation_metrics=metrics,
+        )
+    except HTTPException as exc:
+        metrics["total_latency_ms"] = int((time.monotonic() - started_at) * 1000)
+        if isinstance(exc.detail, dict):
+            metrics["error_code"] = exc.detail.get("error") or str(exc.status_code)
+        else:
+            metrics["error_code"] = str(exc.status_code)
+        _emit_generation_metrics(metrics)
+        raise
+    except Exception as exc:
+        metrics["total_latency_ms"] = int((time.monotonic() - started_at) * 1000)
+        metrics["error_code"] = type(exc).__name__
+        _emit_generation_metrics(metrics)
+        raise
 
 
 # =============================================================================
@@ -3271,6 +3666,8 @@ class RecommendationLetterResponse(BaseModel):
     letter_html: str
     letter_type: str
     recommendation_category: Optional[str] = None
+    quality_report: Optional[Dict[str, Any]] = None
+    generation_metrics: Optional[Dict[str, Any]] = None
 
 
 @router.post("/generate-recommendation-letter", response_model=RecommendationLetterResponse)
@@ -3285,26 +3682,189 @@ async def generate_recommendation_letter(
     This endpoint generates letters based on the case recommendation category from gap analysis.
     Unlike findings/demand letters, these are advisory letters about case status.
     """
+    settings = get_settings()
+    started_at = time.monotonic()
     case_id = letter_request.case_id
     logger.info(f"[REC_LETTER_ENDPOINT] Generating {letter_request.letter_type} letter for case {case_id}")
 
-    # Verify case access
     _ensure_case_access(supabase, case_id, user["id"])
-
-    # Fetch latest analysis result
     analysis_record = _fetch_latest_analysis_result(supabase, case_id)
-    result_payload = analysis_record["result"]
-    processing_result = ProcessingResult(**result_payload)
+    metrics = _new_generation_metrics(
+        analysis_id=analysis_record["id"],
+        letter_type=letter_request.letter_type,
+        streaming=False,
+    )
 
-    if not processing_result.multi_stage_result:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Recommendation letter requires a completed multi-stage analysis. Please run case analysis first.",
+    try:
+        result_payload = analysis_record["result"]
+        processing_result = ProcessingResult(**result_payload)
+
+        if not processing_result.multi_stage_result:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    "Recommendation letter requires a completed multi-stage analysis. "
+                    "Please run case analysis first."
+                ),
+            )
+
+        msr = processing_result.multi_stage_result
+
+        from legal_portal.core.data_models import (
+            DeepAnalysis,
+            DocumentSummaryStructured,
+            FactMatrix,
+            GapAnalysisResult,
+            RecommendedLetterType,
         )
+        from legal_portal.services.recommendation_letter_service import RecommendationLetterService
 
-    msr = processing_result.multi_stage_result
+        try:
+            letter_type_enum = RecommendedLetterType(letter_request.letter_type)
+        except ValueError:
+            valid_types = [
+                t.value for t in RecommendedLetterType if t.value not in ["findings", "demand"]
+            ]
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"Invalid letter_type '{letter_request.letter_type}'. Valid types: {valid_types}",
+            )
 
-    # Import required models and service
+        gap_analysis_data = msr.get("gap_analysis")
+        if not gap_analysis_data:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Recommendation letter requires gap analysis. Please run gap analysis first.",
+            )
+
+        gap_analysis = GapAnalysisResult(**gap_analysis_data)
+        fact_matrix = FactMatrix(**msr.get("fact_matrix", {})) if msr.get("fact_matrix") else None
+        deep_analysis = DeepAnalysis(**msr.get("deep_analysis", {})) if msr.get("deep_analysis") else None
+
+        document_summaries = None
+        if processing_result.document_summaries:
+            try:
+                doc_summaries_raw = json.loads(processing_result.document_summaries)
+                document_summaries = [DocumentSummaryStructured(**ds) for ds in doc_summaries_raw]
+            except Exception as parse_err:
+                logger.warning(f"Failed to parse document_summaries: {parse_err}")
+
+        artifacts = processing_result.artifacts or {}
+        jurisdiction = artifacts.get("jurisdiction", "Florida")
+        attorney_info = {
+            "attorney_name": letter_request.attorney_name or artifacts.get("attorney_name"),
+            "firm_name": letter_request.firm_name or artifacts.get("firm_name"),
+            "contact_phone": letter_request.contact_phone or artifacts.get("contact_phone"),
+            "contact_email": letter_request.contact_email or artifacts.get("contact_email"),
+        }
+
+        client_name = letter_request.client_name
+        if not client_name:
+            if fact_matrix:
+                for party in fact_matrix.parties:
+                    if party.role.lower() in ["client", "plaintiff", "claimant"]:
+                        client_name = party.name
+                        break
+            if not client_name:
+                client_name = artifacts.get("client_name") or "Client"
+
+        ai_preferences = await _get_user_ai_preferences(user["id"], supabase)
+        openai_client = OpenAIClient(user_preferences=ai_preferences)
+        rec_letter_service = RecommendationLetterService(openai_client)
+        metrics["model_calls"] = int(metrics.get("model_calls", 0)) + 1
+
+        try:
+            letter_html = await rec_letter_service.generate_recommendation_letter(
+                letter_type=letter_type_enum,
+                gap_analysis=gap_analysis,
+                deep_analysis=deep_analysis,
+                fact_matrix=fact_matrix,
+                document_summaries=document_summaries,
+                attorney_info=attorney_info,
+                client_name=client_name,
+                jurisdiction=jurisdiction,
+            )
+        except Exception as gen_err:
+            logger.error(f"[REC_LETTER_ENDPOINT] Error generating letter: {gen_err}", exc_info=True)
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to generate recommendation letter: {str(gen_err)}",
+            )
+
+        quality_report = _quality_report_placeholder(mode="default", letter_type="recommendation")
+        if settings.letter_quality_lint_enabled:
+            try:
+                validator = LetterValidationService()
+                quality_report = validator.lint_client_letter(
+                    letter_html,
+                    mode="default",
+                    letter_type="recommendation",
+                )
+            except Exception as lint_err:
+                logger.warning(f"[REC_LETTER_ENDPOINT] Lint failed; using placeholder report: {lint_err}")
+
+        metrics["lint_passed"] = quality_report.get("lint_passed")
+        metrics["lint_score"] = quality_report.get("score")
+        metrics["total_latency_ms"] = int((time.monotonic() - started_at) * 1000)
+
+        letter_key = f"recommendation_{letter_request.letter_type}"
+        generated_letters = result_payload.setdefault("generated_letters", {})
+        generated_letters[letter_key] = letter_html
+        generated_letters[f"{letter_key}_meta"] = {
+            "quality_report": quality_report,
+            "generation_metrics": metrics,
+        }
+        service_supabase.table("analysis_results").update({"result": result_payload}).eq(
+            "id", analysis_record["id"]
+        ).execute()
+
+        logger.info(
+            "[REC_LETTER_ENDPOINT] %s letter generated and saved for case %s",
+            letter_request.letter_type,
+            case_id,
+        )
+        _emit_generation_metrics(metrics)
+
+        recommendation_category = None
+        if gap_analysis.recommendation:
+            recommendation_category = gap_analysis.recommendation.category.value
+
+        return RecommendationLetterResponse(
+            letter_html=letter_html,
+            letter_type=letter_request.letter_type,
+            recommendation_category=recommendation_category,
+            quality_report=quality_report,
+            generation_metrics=metrics,
+        )
+    except HTTPException as exc:
+        metrics["total_latency_ms"] = int((time.monotonic() - started_at) * 1000)
+        if isinstance(exc.detail, dict):
+            metrics["error_code"] = exc.detail.get("error") or str(exc.status_code)
+        else:
+            metrics["error_code"] = str(exc.status_code)
+        _emit_generation_metrics(metrics)
+        raise
+    except Exception as exc:
+        metrics["total_latency_ms"] = int((time.monotonic() - started_at) * 1000)
+        metrics["error_code"] = type(exc).__name__
+        _emit_generation_metrics(metrics)
+        raise
+
+
+@router.get("/{analysis_id}/recommendation-letter/stream")
+async def stream_recommendation_letter(
+    analysis_id: str,
+    letter_type: str = Query(...),
+    schema_version: int = Query(default=2, ge=1, le=2),
+    mode: Literal["default", "strict_quality"] = Query(default="default"),
+    user=Depends(get_current_user),
+    supabase=Depends(get_user_supabase_client),
+):
+    """Stream recommendation letter generation with optional v2 SSE schema."""
+    settings = get_settings()
+    if not settings.recommendation_stream_enabled:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Endpoint not enabled")
+
     from legal_portal.core.data_models import (
         DeepAnalysis,
         DocumentSummaryStructured,
@@ -3314,17 +3874,21 @@ async def generate_recommendation_letter(
     )
     from legal_portal.services.recommendation_letter_service import RecommendationLetterService
 
-    # Validate letter type
-    try:
-        letter_type_enum = RecommendedLetterType(letter_request.letter_type)
-    except ValueError:
-        valid_types = [t.value for t in RecommendedLetterType if t.value not in ["findings", "demand"]]
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"Invalid letter_type '{letter_request.letter_type}'. Valid types: {valid_types}",
-        )
+    response = supabase.table("analysis_results").select("*").eq("id", analysis_id).execute()
+    if not response.data:
+        raise HTTPException(status_code=404, detail="Analysis not found")
 
-    # Check that we have gap analysis
+    analysis_data = response.data[0]
+    _ensure_case_access(supabase, analysis_data["case_id"], user["id"])
+    result_payload = analysis_data.get("result")
+    if not result_payload:
+        raise HTTPException(status_code=400, detail="Analysis result not yet available")
+
+    processing_result = ProcessingResult(**result_payload)
+    if not processing_result.multi_stage_result:
+        raise HTTPException(status_code=400, detail="Multi-stage analysis results missing")
+
+    msr = processing_result.multi_stage_result
     gap_analysis_data = msr.get("gap_analysis")
     if not gap_analysis_data:
         raise HTTPException(
@@ -3332,88 +3896,310 @@ async def generate_recommendation_letter(
             detail="Recommendation letter requires gap analysis. Please run gap analysis first.",
         )
 
-    gap_analysis = GapAnalysisResult(**gap_analysis_data)
-
-    # Load other analysis data
-    fact_matrix = FactMatrix(**msr.get("fact_matrix", {})) if msr.get("fact_matrix") else None
-    deep_analysis = DeepAnalysis(**msr.get("deep_analysis", {})) if msr.get("deep_analysis") else None
-
-    # Parse document summaries
-    document_summaries = None
-    if processing_result.document_summaries:
-        try:
-            doc_summaries_raw = json.loads(processing_result.document_summaries)
-            document_summaries = [DocumentSummaryStructured(**ds) for ds in doc_summaries_raw]
-        except Exception as e:
-            logger.warning(f"Failed to parse document_summaries: {e}")
-
-    # Get jurisdiction
-    artifacts = processing_result.artifacts or {}
-    jurisdiction = artifacts.get("jurisdiction", "Florida")
-
-    # Build attorney info
-    attorney_info = {
-        "attorney_name": letter_request.attorney_name or artifacts.get("attorney_name"),
-        "firm_name": letter_request.firm_name or artifacts.get("firm_name"),
-        "contact_phone": letter_request.contact_phone or artifacts.get("contact_phone"),
-        "contact_email": letter_request.contact_email or artifacts.get("contact_email"),
-    }
-
-    # Get client name
-    client_name = letter_request.client_name
-    if not client_name:
-        # Try to extract from fact_matrix
-        if fact_matrix:
-            for party in fact_matrix.parties:
-                if party.role.lower() in ["client", "plaintiff", "claimant"]:
-                    client_name = party.name
-                    break
-        if not client_name:
-            client_name = artifacts.get("client_name") or "Client"
-
-    # Fetch user's AI preferences
-    ai_preferences = await _get_user_ai_preferences(user["id"], supabase)
-    openai_client = OpenAIClient(user_preferences=ai_preferences)
-
-    # Generate the letter
-    rec_letter_service = RecommendationLetterService(openai_client)
-
     try:
-        letter_html = await rec_letter_service.generate_recommendation_letter(
-            letter_type=letter_type_enum,
-            gap_analysis=gap_analysis,
-            deep_analysis=deep_analysis,
-            fact_matrix=fact_matrix,
-            document_summaries=document_summaries,
-            attorney_info=attorney_info,
-            client_name=client_name,
-            jurisdiction=jurisdiction,
-        )
-    except Exception as e:
-        logger.error(f"[REC_LETTER_ENDPOINT] Error generating letter: {e}", exc_info=True)
+        letter_type_enum = RecommendedLetterType(letter_type)
+    except ValueError:
+        valid_types = [t.value for t in RecommendedLetterType if t.value not in ["findings", "demand"]]
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to generate recommendation letter: {str(e)}",
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Invalid letter_type '{letter_type}'. Valid types: {valid_types}",
         )
 
-    # Save to generated_letters
-    letter_key = f"recommendation_{letter_request.letter_type}"
-    result_payload.setdefault("generated_letters", {})[letter_key] = letter_html
-    service_supabase.table("analysis_results").update({"result": result_payload}).eq(
-        "id", analysis_record["id"]
-    ).execute()
+    effective_schema_version = 2 if (schema_version == 2 and settings.letter_stream_schema_v2) else 1
+    ai_preferences = await _get_user_ai_preferences(user["id"], supabase)
 
-    logger.info(f"[REC_LETTER_ENDPOINT] {letter_request.letter_type} letter generated and saved for case {case_id}")
+    def _event_payload(event_name: str, **kwargs: Any) -> Optional[Dict[str, Any]]:
+        if effective_schema_version == 1:
+            if event_name == "token":
+                return {"token": kwargs.get("token", "")}
+            if event_name == "done":
+                return {"done": True}
+            if event_name == "error":
+                return {"error": kwargs.get("error", "Stream failed")}
+            return None
 
-    # Get recommendation category if available
-    recommendation_category = None
-    if gap_analysis.recommendation:
-        recommendation_category = gap_analysis.recommendation.category.value
+        payload: Dict[str, Any] = {
+            "schema_version": 2,
+            "event": event_name,
+            "type": event_name,
+        }
+        payload.update(kwargs)
+        if event_name == "done":
+            payload["done"] = True
+        return payload
 
-    return RecommendationLetterResponse(
-        letter_html=letter_html,
-        letter_type=letter_request.letter_type,
-        recommendation_category=recommendation_category,
+    async def generate():
+        request_started = time.monotonic()
+        metrics = _new_generation_metrics(
+            analysis_id=analysis_id,
+            letter_type=letter_type,
+            streaming=True,
+        )
+        quality_report = _quality_report_placeholder(mode=mode, letter_type="recommendation")
+        draft_markdown = ""
+        recoverable_timeout = False
+        internal_budget = max(30, int(settings.letter_internal_budget_seconds))
+        lint_budget = max(1, int(settings.letter_lint_budget_seconds))
+        repair_budget = max(1, int(settings.letter_repair_budget_seconds))
+        finalize_budget = max(1, int(settings.letter_finalize_budget_seconds))
+        heartbeat_interval = max(1, int(settings.letter_stream_heartbeat_seconds))
+        internal_deadline = request_started + internal_budget
+
+        def _emit(event_name: str, **kwargs: Any) -> Optional[str]:
+            payload = _event_payload(event_name, **kwargs)
+            if payload is None:
+                return None
+            return _to_sse(payload)
+
+        try:
+            phase_msg = _emit("phase", phase="context_build", message="Building context")
+            if phase_msg:
+                yield phase_msg
+
+            gap_analysis = GapAnalysisResult(**gap_analysis_data)
+            fact_matrix = FactMatrix(**msr.get("fact_matrix", {})) if msr.get("fact_matrix") else None
+            deep_analysis = DeepAnalysis(**msr.get("deep_analysis", {})) if msr.get("deep_analysis") else None
+
+            document_summaries = None
+            if processing_result.document_summaries:
+                try:
+                    doc_summaries_raw = json.loads(processing_result.document_summaries)
+                    document_summaries = [DocumentSummaryStructured(**ds) for ds in doc_summaries_raw]
+                except Exception as parse_err:
+                    logger.warning("Failed to parse document_summaries: %s", parse_err)
+
+            artifacts = processing_result.artifacts or {}
+            jurisdiction = artifacts.get("jurisdiction", "Florida")
+            attorney_info = {
+                "attorney_name": artifacts.get("attorney_name"),
+                "firm_name": artifacts.get("firm_name"),
+                "contact_phone": artifacts.get("contact_phone"),
+                "contact_email": artifacts.get("contact_email"),
+            }
+            client_name = artifacts.get("client_name") or "Client"
+            if fact_matrix:
+                for party in fact_matrix.parties:
+                    if party.role.lower() in ["client", "plaintiff", "claimant"]:
+                        client_name = party.name
+                        break
+
+            phase_msg = _emit("phase", phase="draft_generation", message="Generating draft")
+            if phase_msg:
+                yield phase_msg
+
+            openai_client = OpenAIClient(user_preferences=ai_preferences)
+            rec_service = RecommendationLetterService(openai_client)
+            metrics["model_calls"] = int(metrics.get("model_calls", 0)) + 1
+
+            token_queue: asyncio.Queue = asyncio.Queue()
+
+            async def _collect_tokens() -> None:
+                try:
+                    async for token in rec_service.stream_recommendation_letter(
+                        letter_type=letter_type_enum,
+                        gap_analysis=gap_analysis,
+                        deep_analysis=deep_analysis,
+                        fact_matrix=fact_matrix,
+                        document_summaries=document_summaries,
+                        attorney_info=attorney_info,
+                        client_name=client_name,
+                        jurisdiction=jurisdiction,
+                    ):
+                        await token_queue.put(("token", token))
+                except Exception as stream_err:
+                    await token_queue.put(("error", stream_err))
+                finally:
+                    await token_queue.put(("done", None))
+
+            collector_task = asyncio.create_task(_collect_tokens())
+            draft_deadline = internal_deadline - (lint_budget + finalize_budget)
+            try:
+                while True:
+                    if time.monotonic() > draft_deadline:
+                        metrics["timeout"] = True
+                        metrics["error_code"] = "draft_budget_exceeded"
+                        break
+                    try:
+                        msg_type, msg_data = await asyncio.wait_for(
+                            token_queue.get(),
+                            timeout=heartbeat_interval,
+                        )
+                    except asyncio.TimeoutError:
+                        heartbeat_msg = _emit(
+                            "heartbeat",
+                            phase="draft_generation",
+                            elapsed_ms=int((time.monotonic() - request_started) * 1000),
+                        )
+                        if heartbeat_msg:
+                            yield heartbeat_msg
+                        continue
+
+                    if msg_type == "token":
+                        token = str(msg_data or "")
+                        if not token:
+                            continue
+                        draft_markdown += token
+                        if metrics["ttft_ms"] is None:
+                            metrics["ttft_ms"] = int((time.monotonic() - request_started) * 1000)
+                        token_msg = _emit("token", token=token)
+                        if token_msg:
+                            yield token_msg
+                    elif msg_type == "error":
+                        if isinstance(msg_data, Exception):
+                            raise msg_data
+                        raise RuntimeError(str(msg_data))
+                    elif msg_type == "done":
+                        break
+            finally:
+                if not collector_task.done():
+                    collector_task.cancel()
+                    try:
+                        await collector_task
+                    except asyncio.CancelledError:
+                        pass
+
+            draft_word_count = len(re.findall(r"\b[\w'-]+\b", draft_markdown))
+            if metrics["timeout"] and draft_word_count >= 80:
+                recoverable_timeout = True
+                timeout_msg = _emit(
+                    "error",
+                    error="Draft generation exceeded time budget; finalizing best available content.",
+                    code=metrics.get("error_code"),
+                    recoverable=True,
+                )
+                if timeout_msg:
+                    yield timeout_msg
+
+            if not draft_markdown.strip():
+                raise RuntimeError("Recommendation letter generation produced no content.")
+
+            phase_msg = _emit("phase", phase="lint_validation", message="Validating quality")
+            if phase_msg:
+                yield phase_msg
+
+            validator = LetterValidationService()
+            if settings.letter_quality_lint_enabled and (internal_deadline - time.monotonic()) > finalize_budget:
+                quality_report = validator.lint_client_letter(
+                    draft_markdown,
+                    mode=mode,
+                    letter_type="recommendation",
+                )
+
+            final_markdown = draft_markdown
+            if (
+                settings.letter_conditional_repair_enabled
+                and settings.letter_quality_lint_enabled
+                and not quality_report.get("lint_passed", True)
+            ):
+                remaining_seconds = internal_deadline - time.monotonic()
+                if remaining_seconds >= (repair_budget + finalize_budget):
+                    phase_msg = _emit("phase", phase="repair", message="Repairing quality issues")
+                    if phase_msg:
+                        yield phase_msg
+                    metrics["repair_attempted"] = True
+                    metrics["model_calls"] = int(metrics.get("model_calls", 0)) + 1
+                    repaired = await rec_service.repair_recommendation_letter_constraints(
+                        draft_markdown,
+                        quality_report.get("violations", []),
+                        mode=mode,
+                        model="gpt-5-mini",
+                    )
+                    post_report = validator.lint_client_letter(
+                        repaired,
+                        mode=mode,
+                        letter_type="recommendation",
+                    )
+                    quality_report = {
+                        **post_report,
+                        "pre_repair": quality_report,
+                        "post_repair": post_report,
+                    }
+                    if repaired.strip() and repaired.strip() != draft_markdown.strip():
+                        final_markdown = repaired
+                        metrics["repair_applied"] = True
+                else:
+                    quality_report = {
+                        **quality_report,
+                        "repair_skipped": "insufficient_budget",
+                    }
+
+            phase_msg = _emit("phase", phase="finalizing", message="Finalizing letter")
+            if phase_msg:
+                yield phase_msg
+
+            final_html = rec_service.render_markdown_to_html(final_markdown, client_name=client_name)
+            metrics["lint_passed"] = quality_report.get("lint_passed")
+            metrics["lint_score"] = quality_report.get("score")
+            metrics["total_latency_ms"] = int((time.monotonic() - request_started) * 1000)
+
+            persisted_result = analysis_data.get("result") or {}
+            generated_letters = persisted_result.setdefault("generated_letters", {})
+            letter_key = f"recommendation_{letter_type}"
+            generated_letters[letter_key] = final_html
+            generated_letters[f"{letter_key}_meta"] = {
+                "quality_report": quality_report,
+                "generation_metrics": metrics,
+            }
+            supabase.table("analysis_results").update({"result": persisted_result}).eq(
+                "id", analysis_id
+            ).execute()
+
+            quality_msg = _emit(
+                "quality",
+                quality_report=quality_report,
+                generation_metrics=metrics,
+            )
+            if quality_msg:
+                yield quality_msg
+
+            final_msg = _emit(
+                "final",
+                content={
+                    "format": "html",
+                    "html": final_html,
+                    "markdown": final_markdown,
+                },
+                quality_report=quality_report,
+                generation_metrics=metrics,
+            )
+            if final_msg:
+                yield final_msg
+
+            done_msg = _emit("done")
+            if done_msg:
+                yield done_msg
+            _emit_generation_metrics(metrics)
+
+        except Exception as stream_err:
+            if isinstance(stream_err, TimeoutError):
+                metrics["timeout"] = True
+                metrics["error_code"] = "timeout"
+            else:
+                metrics["error_code"] = type(stream_err).__name__
+            metrics["total_latency_ms"] = int((time.monotonic() - request_started) * 1000)
+            _emit_generation_metrics(metrics)
+
+            error_msg = _emit(
+                "error",
+                error=str(stream_err),
+                code=metrics.get("error_code"),
+                recoverable=recoverable_timeout,
+            )
+            if error_msg:
+                yield error_msg
+
+            done_msg = _emit("done")
+            if done_msg:
+                yield done_msg
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache, no-transform",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
     )
 
 

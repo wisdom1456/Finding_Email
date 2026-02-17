@@ -146,6 +146,76 @@ class Settings(BaseSettings):
     )
 
     # ==================================================
+    # LETTER GENERATION FEATURE FLAGS
+    # ==================================================
+
+    letter_stream_schema_v2: bool = Field(
+        True,
+        alias="LETTER_STREAM_SCHEMA_V2",
+        description="Enable v2 SSE schema for letter streaming endpoints.",
+    )
+
+    letter_quality_lint_enabled: bool = Field(
+        True,
+        alias="LETTER_QUALITY_LINT_ENABLED",
+        description="Enable deterministic quality lint checks for generated letters.",
+    )
+
+    letter_conditional_repair_enabled: bool = Field(
+        True,
+        alias="LETTER_CONDITIONAL_REPAIR_ENABLED",
+        description="Enable conditional repair pass when lint validation fails.",
+    )
+
+    recommendation_stream_enabled: bool = Field(
+        False,
+        alias="RECOMMENDATION_STREAM_ENABLED",
+        description="Enable progressive streaming endpoint for recommendation letters.",
+    )
+
+    letter_internal_budget_seconds: int = Field(
+        240,
+        alias="LETTER_INTERNAL_BUDGET_SECONDS",
+        description="Internal end-to-end budget for streaming letter generation.",
+    )
+
+    letter_context_budget_seconds: int = Field(
+        20,
+        alias="LETTER_CONTEXT_BUDGET_SECONDS",
+        description="Context-build phase budget for streaming letter generation.",
+    )
+
+    letter_draft_budget_seconds: int = Field(
+        160,
+        alias="LETTER_DRAFT_BUDGET_SECONDS",
+        description="Draft generation phase budget for streaming letter generation.",
+    )
+
+    letter_lint_budget_seconds: int = Field(
+        20,
+        alias="LETTER_LINT_BUDGET_SECONDS",
+        description="Lint-validation phase budget for streaming letter generation.",
+    )
+
+    letter_repair_budget_seconds: int = Field(
+        30,
+        alias="LETTER_REPAIR_BUDGET_SECONDS",
+        description="Repair phase budget for streaming letter generation.",
+    )
+
+    letter_finalize_budget_seconds: int = Field(
+        10,
+        alias="LETTER_FINALIZE_BUDGET_SECONDS",
+        description="Finalization/persistence phase budget for streaming letter generation.",
+    )
+
+    letter_stream_heartbeat_seconds: int = Field(
+        5,
+        alias="LETTER_STREAM_HEARTBEAT_SECONDS",
+        description="Interval in seconds for SSE heartbeats during silent stream intervals.",
+    )
+
+    # ==================================================
     # DOCUMENT PROCESSING CONFIGURATION
     # ==================================================
 

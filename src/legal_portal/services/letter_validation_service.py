@@ -15,6 +15,7 @@ from legal_portal.core.data_models import (
     LetterValidationResult,
     LetterValidationWarning,
 )
+from legal_portal.services.letter_quality_lint_service import LetterQualityLintService
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +45,26 @@ class LetterValidationService:
         "based on your statement",
         "as you described",
     ]
+
+    def lint_client_letter(
+        self,
+        letter_content: str,
+        *,
+        mode: str = "default",
+        letter_type: str = "findings",
+    ) -> Dict[str, object]:
+        """Run deterministic client-letter lint checks.
+
+        This is a lightweight integration point so existing route code can use a
+        single validation service entrypoint for both source-truth checks and
+        client-facing quality checks.
+        """
+        lint_service = LetterQualityLintService()
+        return lint_service.lint_letter(
+            letter_content,
+            mode=mode,
+            letter_type=letter_type,
+        )
 
     def validate_letter(
         self,

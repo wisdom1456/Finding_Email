@@ -10,7 +10,7 @@ This service generates professional letters for the four recommendation categori
 from __future__ import annotations
 
 from pathlib import Path
-from typing import AsyncGenerator, Dict, List, Optional
+from typing import Any, AsyncGenerator, Dict, List, Optional
 
 import markdown2
 
@@ -56,6 +56,10 @@ class RecommendationLetterService:
         """
         self.client = openai_client
         self.prompts_dir = Path(__file__).parent.parent / "prompts"
+
+    def _get_generation_model(self) -> str:
+        """Resolve preferred model for recommendation letter generation."""
+        return self.client.get_preferred_model("letter_generation", "gpt-5.2")
 
     def _load_prompt_template(self, letter_type: RecommendedLetterType) -> str:
         """Load the prompt template for the given letter type.
@@ -341,19 +345,64 @@ class RecommendationLetterService:
             markdown_content += token
 
         # Convert markdown to HTML
+        formatted_html = self.render_markdown_to_html(markdown_content, client_name=client_name)
+
+        logger.info(f"[REC_LETTER] {letter_display} letter generated successfully")
+        return formatted_html
+
+    def render_markdown_to_html(self, markdown_content: str, *, client_name: Optional[str] = None) -> str:
+        """Convert recommendation markdown into formatted HTML."""
         html = markdown2.markdown(
             markdown_content,
             extras=["tables", "smarty-pants", "fenced-code-blocks", "cuddled-lists"],
         )
-
-        # Apply professional formatting
-        formatted_html = DocumentFormatterService.format_findings_letter(
+        return DocumentFormatterService.format_findings_letter(
             letter_html=html,
             client_name=client_name or "Client",
         )
 
-        logger.info(f"[REC_LETTER] {letter_display} letter generated successfully")
-        return formatted_html
+    async def repair_recommendation_letter_constraints(
+        self,
+        draft_markdown: str,
+        violations: List[Dict[str, Any]],
+        *,
+        mode: str = "default",
+        model: str = "gpt-5-mini",
+    ) -> str:
+        """Apply a constrained repair pass to recommendation letter markdown."""
+        if not draft_markdown.strip() or not violations:
+            return draft_markdown
+
+        lines: List[str] = []
+        for idx, violation in enumerate(violations[:20], start=1):
+            lines.append(
+                f"{idx}. [{violation.get('severity', 'warning')}] "
+                f"{violation.get('rule', 'unknown')}: {violation.get('message', '')}"
+            )
+
+        prompt = (
+            "Revise this recommendation letter to fix only the listed quality issues.\n"
+            "Do not add new facts or legal claims.\n"
+            f"Mode: {mode}\n\n"
+            "Violations:\n"
+            f"{chr(10).join(lines)}\n\n"
+            "Draft letter:\n"
+            f"{draft_markdown}\n"
+        )
+
+        response = await self.client.create_response_async(
+            model=model,
+            input=prompt,
+            instructions=(
+                "You are a legal writing editor. Fix only the listed issues and return "
+                "the revised recommendation letter in markdown."
+            ),
+            reasoning_effort="low",
+            verbosity="low",
+            max_output_tokens=3000,
+        )
+        revised = str(response.get("content") or "").strip()
+        return revised or draft_markdown
 
     async def stream_recommendation_letter(
         self,
@@ -415,7 +464,7 @@ class RecommendationLetterService:
             filled_prompt = prompt_template
 
         # Get model for letter generation
-        model = self.client.get_preferred_model("letter_generation", "gpt-4.1")
+        model = self._get_generation_model()
 
         letter_display = LETTER_TYPE_DISPLAY.get(letter_type, str(letter_type))
         logger.info(

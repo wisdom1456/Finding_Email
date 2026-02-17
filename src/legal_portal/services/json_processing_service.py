@@ -39,6 +39,63 @@ class JsonProcessingService:
         self.client = client
         self.config = config
 
+    def _get_letter_generation_model(self, fallback: str = "gpt-5.2") -> str:
+        """Resolve preferred model for letter generation."""
+        try:
+            return self.client.get_preferred_model("letter_generation", fallback)
+        except Exception:
+            return fallback
+
+    async def repair_letter_constraints(
+        self,
+        draft_markdown: str,
+        violations: List[Dict[str, Any]],
+        *,
+        mode: str = "default",
+        model: str = "gpt-5-mini",
+    ) -> str:
+        """Apply constrained repair only for listed quality violations."""
+        if not draft_markdown.strip():
+            return draft_markdown
+
+        if not violations:
+            return draft_markdown
+
+        violation_lines: List[str] = []
+        for idx, violation in enumerate(violations[:20], start=1):
+            rule = str(violation.get("rule", "unknown"))
+            message = str(violation.get("message", ""))
+            severity = str(violation.get("severity", "warning"))
+            violation_lines.append(f"{idx}. [{severity}] {rule}: {message}")
+
+        prompt = (
+            "Revise the letter using ONLY the required fixes below.\n"
+            "Do not introduce new facts, dates, names, or legal claims.\n"
+            "Do not remove valid factual content.\n"
+            f"Mode: {mode}\n\n"
+            "Violations to fix:\n"
+            f"{chr(10).join(violation_lines)}\n\n"
+            "Letter draft:\n"
+            f"{draft_markdown}\n"
+        )
+
+        loop = asyncio.get_running_loop()
+        repaired = await loop.run_in_executor(
+            None,
+            self._make_openai_request_responses_api,
+            prompt,
+            model,
+            "low",
+            "low",
+            4000,
+            (
+                "You are a legal writing editor. Fix only the listed violations. "
+                "Return the revised letter in markdown with no commentary."
+            ),
+        )
+
+        return (repaired or "").strip() or draft_markdown
+
     async def process_documents_to_json(self, prompt: str) -> Tuple[Optional[str], List[ProcessingError]]:
         """Process a prompt to get a JSON response from OpenAI asynchronously.
 
@@ -1041,12 +1098,13 @@ class JsonProcessingService:
 
         logger.info("Making OpenAI request for adaptive letter generation")
 
+        model = self._get_letter_generation_model("gpt-5.2")
         loop = asyncio.get_running_loop()
         markdown_response = await loop.run_in_executor(
             None,
             self._make_openai_request_responses_api,
             prompt,
-            "gpt-5.2",
+            model,
             "medium",
             "high",
             12000,
@@ -1085,7 +1143,7 @@ class JsonProcessingService:
                 None,
                 self._make_openai_request_responses_api,
                 compact_prompt,
-                "gpt-5.2",
+                model,
                 "medium",
                 "high",
                 12000,
@@ -1205,10 +1263,11 @@ class JsonProcessingService:
         )
 
         logger.info(f"Streaming adaptive findings email for {jurisdiction}")
+        model = self._get_letter_generation_model("gpt-5.2")
         stream_started = False
         try:
             async for token in self.client.create_response_stream(
-                model="gpt-5.2",
+                model=model,
                 instructions=(
                     "You are a senior legal writing assistant. Generate an attorney-quality "
                     "findings email following the adaptive structure guidance provided."
@@ -1248,7 +1307,7 @@ class JsonProcessingService:
                 prefer_compact=True,
             )
             async for token in self.client.create_response_stream(
-                model="gpt-5.2",
+                model=model,
                 instructions=(
                     "You are a senior legal writing assistant. Generate an attorney-quality "
                     "findings email following the adaptive structure guidance provided."

@@ -23,6 +23,7 @@ from legal_portal.api.utils.content_extractor import DocumentProcessor as Conten
 from legal_portal.core.data_models import DocumentStatus
 from legal_portal.core.document_processor import DocumentProcessor, ValidationError
 from legal_portal.services.progress_manager import ProgressManager
+from legal_portal.utils.blacklist import is_name_blacklisted
 from supabase import Client
 
 logger = logging.getLogger(__name__)
@@ -620,17 +621,11 @@ async def import_clio_data(
         # Save communications as document entries
         for idx, comm in enumerate(communications, 1):
             try:
-                # Check blacklist (prefix matching, normalized whitespace)
-                if comm.subject and blacklist:
-                    normalized_subject = ' '.join(comm.subject.lower().split())
-                    is_blacklisted = any(
-                        normalized_subject.startswith(' '.join(bl.lower().split()))
-                        for bl in blacklist
-                    )
-                    if is_blacklisted:
-                        logger.info(f"Skipping blacklisted communication (prefix match): {comm.subject}")
-                        items_processed += 1
-                        continue
+                # Check blacklist before creating records
+                if comm.subject and is_name_blacklisted(comm.subject, blacklist):
+                    logger.info(f"Skipping blacklisted communication: {comm.subject}")
+                    items_processed += 1
+                    continue
 
                 # Create a text document for each communication
                 content = f"Subject: {comm.subject}\n"
@@ -684,17 +679,11 @@ async def import_clio_data(
             try:
                 note_subject = note.get("subject", "No Subject")
 
-                # Check blacklist (prefix matching, normalized whitespace)
-                if blacklist:
-                    normalized_note = ' '.join(note_subject.lower().split())
-                    is_blacklisted = any(
-                        normalized_note.startswith(' '.join(bl.lower().split()))
-                        for bl in blacklist
-                    )
-                    if is_blacklisted:
-                        logger.info(f"Skipping blacklisted note (prefix match): {note_subject}")
-                        items_processed += 1
-                        continue
+                # Check blacklist before creating records
+                if is_name_blacklisted(note_subject, blacklist):
+                    logger.info(f"Skipping blacklisted note: {note_subject}")
+                    items_processed += 1
+                    continue
 
                 note_detail = note.get("detail", "")
                 note_date = note.get("date", "")
@@ -750,18 +739,11 @@ async def import_clio_data(
 
                 logger.debug("Processing Clio document", extra={"doc_name": doc_name, "doc_id": doc_id})
 
-                # Check blacklist BEFORE downloading (prefix matching, case-insensitive, whitespace-normalized)
-                if blacklist:
-                    # Normalize whitespace: replace multiple spaces with single space, trim
-                    normalized_doc_name = ' '.join(doc_name.lower().split())
-                    is_blacklisted = any(
-                        normalized_doc_name.startswith(' '.join(bl.lower().split()))
-                        for bl in blacklist
-                    )
-                    if is_blacklisted:
-                        logger.info(f"SKIPPING blacklisted document (prefix match): '{doc_name}'")
-                        items_processed += 1
-                        continue
+                # Check blacklist BEFORE downloading
+                if is_name_blacklisted(doc_name, blacklist):
+                    logger.info(f"Skipping blacklisted document: '{doc_name}'")
+                    items_processed += 1
+                    continue
 
                 progress_pct = 50 + int((idx / len(documents)) * 40)
                 await publish_and_persist(
@@ -840,6 +822,11 @@ async def import_clio_data(
                         content_type=content_type,
                         blacklist=blacklist,
                     )
+
+                    if doc_record.get("status") == DocumentStatus.SKIPPED:
+                        logger.info(f"Skipping blacklisted document (processor check): '{doc_name}'")
+                        items_processed += 1
+                        continue
 
                     # Track compression statistics if compressed
                     if doc_record.get("metadata", {}).get("compression", {}).get("compressed"):
@@ -1181,6 +1168,12 @@ async def sync_clio_matter(
         )
         existing_docs = docs_result.data if docs_result.data else []
 
+        # Load blacklist rules so sync respects "always delete" preferences
+        blacklist = []
+        profile_response = supabase.table("profiles").select("ai_preferences").eq("id", user["id"]).execute()
+        if profile_response.data and profile_response.data[0].get("ai_preferences"):
+            blacklist = profile_response.data[0]["ai_preferences"].get("blacklisted_documents", [])
+
         # Convert communications to dict format for categorization
         communications_dicts = []
         for comm in communications:
@@ -1231,6 +1224,11 @@ async def sync_clio_matter(
         for item in all_items_to_import:
             item_type = item["type"]
             clio_id = item["id"]
+            item_name = item.get("name", "")
+
+            if item_name and is_name_blacklisted(item_name, blacklist):
+                logger.info(f"Skipping blacklisted {item_type} during sync: {item_name}")
+                continue
 
             if item_type == "communication":
                 # Process communication (similar to import_clio_data)

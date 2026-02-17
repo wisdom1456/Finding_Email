@@ -16,6 +16,7 @@ from legal_portal.services.file_compression_service import get_compression_servi
 
 # Maps file content types to their respective processing functions
 from legal_portal.services.file_processors import PROCESSOR_MAP
+from legal_portal.utils.blacklist import is_name_blacklisted
 from legal_portal.utils.logging_config import get_module_logger
 
 # Import security functions for secure file handling
@@ -117,39 +118,31 @@ class DocumentProcessor:
         temp_files = []
 
         try:
-            # 0. Check blacklist before doing any work (prefix matching, normalized whitespace)
-            if blacklist:
-                # Normalize whitespace: replace multiple spaces with single space, trim
-                normalized_filename = ' '.join(filename.lower().split())
-                normalized_blacklist = [' '.join(name.lower().split()) for name in blacklist]
-                # Use prefix matching: "Attorney Representation Agreement" matches
-                # "Attorney Representation Agreement (Client Name).pdf"
-                is_blacklisted = any(
-                    normalized_filename.startswith(bl) for bl in normalized_blacklist
-                )
-                if is_blacklisted:
-                    logger.info(f"Document '{filename}' matches blacklist prefix, marking as SKIPPED.")
-                    from legal_portal.core.data_models import DocumentStatus
-                    return {
-                        "case_id": case_id,
-                        "file_name": filename,
-                        "file_type": content_type or "unknown",
-                        "file_size": len(file_content),
-                        "storage_path": None,
-                        "status": DocumentStatus.SKIPPED,
-                        "metadata": {
-                            "is_intake_form": is_intake_form,
-                            "original_filename": filename,
-                            "skipped_reason": "Blacklisted by user preference",
-                        },
-                        "extracted_text": None,
-                        "extraction_method": "skipped",
-                        "extraction_quality": "none",
-                        "ocr_provider": None,
-                        "extraction_error": "Document name is in user's blacklist.",
-                        "page_count": None,
-                        "extracted_at": datetime.utcnow().isoformat(),
-                    }
+            # 0. Check blacklist before doing any work
+            if is_name_blacklisted(filename, blacklist):
+                logger.info(f"Document '{filename}' matches blacklist rule, marking as SKIPPED.")
+                from legal_portal.core.data_models import DocumentStatus
+
+                return {
+                    "case_id": case_id,
+                    "file_name": filename,
+                    "file_type": content_type or "unknown",
+                    "file_size": len(file_content),
+                    "storage_path": None,
+                    "status": DocumentStatus.SKIPPED,
+                    "metadata": {
+                        "is_intake_form": is_intake_form,
+                        "original_filename": filename,
+                        "skipped_reason": "Blacklisted by user preference",
+                    },
+                    "extracted_text": None,
+                    "extraction_method": "skipped",
+                    "extraction_quality": "none",
+                    "ocr_provider": None,
+                    "extraction_error": "Document name is in user's blacklist.",
+                    "page_count": None,
+                    "extracted_at": datetime.utcnow().isoformat(),
+                }
 
             # 1. Validate file size
             max_size = settings.max_file_size_mb * 1024 * 1024

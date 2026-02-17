@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import re
 from typing import Any, AsyncGenerator, Dict, List, Optional, Set, Tuple
@@ -16,6 +17,7 @@ from openai import (
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_fixed
 
 from legal_portal.core.data_models import ProcessingError
+from legal_portal.services.letter_strategy_service import LetterStrategyService
 from legal_portal.utils.diagnostic_logger import DiagnosticLogger
 from legal_portal.utils.logging_config import get_module_logger
 from legal_portal.utils.markdown_utils import clean_markdown_response
@@ -53,12 +55,19 @@ class JsonProcessingService:
         *,
         mode: str = "default",
         model: str = "gpt-5-mini",
+        critic_feedback: Optional[Dict[str, Any]] = None,
     ) -> str:
         """Apply constrained repair only for listed quality violations."""
         if not draft_markdown.strip():
             return draft_markdown
 
-        if not violations:
+        critic_sections = []
+        if critic_feedback and isinstance(critic_feedback, dict):
+            failed_sections = critic_feedback.get("failed_sections") or []
+            if isinstance(failed_sections, list):
+                critic_sections = [item for item in failed_sections if isinstance(item, dict)]
+
+        if not violations and not critic_sections:
             return draft_markdown
 
         violation_lines: List[str] = []
@@ -68,13 +77,32 @@ class JsonProcessingService:
             severity = str(violation.get("severity", "warning"))
             violation_lines.append(f"{idx}. [{severity}] {rule}: {message}")
 
+        critic_lines: List[str] = []
+        for idx, section in enumerate(critic_sections[:12], start=1):
+            section_name = str(section.get("section_name", "unknown section"))
+            issue_type = str(section.get("issue_type", "quality_issue"))
+            required_fix = str(section.get("required_fix", ""))
+            do_not_change = str(section.get("do_not_change", "All other sections and facts"))
+            priority = str(section.get("priority", "medium"))
+            critic_lines.append(
+                (
+                    f"{idx}. [{priority}] {section_name} ({issue_type})\n"
+                    f"   required_fix: {required_fix}\n"
+                    f"   do_not_change: {do_not_change}"
+                )
+            )
+
         prompt = (
             "Revise the letter using ONLY the required fixes below.\n"
             "Do not introduce new facts, dates, names, or legal claims.\n"
             "Do not remove valid factual content.\n"
+            "Do not rewrite the full document.\n"
+            "Preserve unchanged sections verbatim as much as possible.\n"
             f"Mode: {mode}\n\n"
             "Violations to fix:\n"
-            f"{chr(10).join(violation_lines)}\n\n"
+            f"{chr(10).join(violation_lines) if violation_lines else 'None'}\n\n"
+            "Critic section fixes:\n"
+            f"{chr(10).join(critic_lines) if critic_lines else 'None'}\n\n"
             "Letter draft:\n"
             f"{draft_markdown}\n"
         )
@@ -95,6 +123,106 @@ class JsonProcessingService:
         )
 
         return (repaired or "").strip() or draft_markdown
+
+    async def build_findings_strategy(
+        self,
+        *,
+        fact_matrix,
+        deep_analysis,
+        gap_analysis=None,
+        timeout_seconds: int = 15,
+        model: str = "gpt-5-mini",
+        allow_model: bool = True,
+    ) -> Dict[str, Any]:
+        """Build strategy object for findings drafting."""
+        strategy_service = LetterStrategyService(self.client)
+        return await strategy_service.build_findings_strategy(
+            fact_matrix=fact_matrix,
+            deep_analysis=deep_analysis,
+            gap_analysis=gap_analysis,
+            allow_model=allow_model,
+            timeout_seconds=timeout_seconds,
+            model=model,
+        )
+
+    async def run_quality_critic(
+        self,
+        *,
+        draft_markdown: str,
+        letter_type: str,
+        lint_violations: List[Dict[str, Any]],
+        quality_report_v2: Optional[Dict[str, Any]] = None,
+        model: str = "gpt-5-mini",
+        timeout_seconds: int = 20,
+    ) -> Dict[str, Any]:
+        """Run section-level quality critic and return machine-readable fixes."""
+        if not draft_markdown.strip():
+            return {"failed_sections": []}
+
+        prompt_name = (
+            "demand_quality_critic_prompt.txt"
+            if letter_type == "demand"
+            else "findings_quality_critic_prompt.txt"
+        )
+        try:
+            template = self._load_prompt_asset(prompt_name)
+        except Exception as exc:
+            logger.warning("Critic prompt missing (%s): %s", prompt_name, exc)
+            return {"failed_sections": []}
+
+        replacements = {
+            "lint_violations_json": json.dumps(lint_violations or [], default=str, indent=2),
+            "quality_v2_json": json.dumps(quality_report_v2 or {}, default=str, indent=2),
+            "draft_markdown": draft_markdown,
+        }
+        prompt = template
+        for key, value in replacements.items():
+            prompt = prompt.replace(f"{{{key}}}", value)
+
+        loop = asyncio.get_running_loop()
+        response = await asyncio.wait_for(
+            loop.run_in_executor(
+                None,
+                self._make_openai_request_responses_api,
+                prompt,
+                model,
+                "low",
+                "low",
+                1800,
+                (
+                    "You are a legal writing quality critic. Return valid JSON only with failed sections "
+                    "and minimal required fixes."
+                ),
+            ),
+            timeout=max(1, int(timeout_seconds)),
+        )
+
+        parsed = self._parse_json_block(response or "")
+        if not parsed or not isinstance(parsed, dict):
+            return {"failed_sections": []}
+        failed_sections = parsed.get("failed_sections")
+        if not isinstance(failed_sections, list):
+            return {"failed_sections": []}
+        parsed["failed_sections"] = [item for item in failed_sections if isinstance(item, dict)]
+        return parsed
+
+    def _load_prompt_asset(self, file_name: str) -> str:
+        """Load prompt template from the prompts directory."""
+        prompt_path = os.path.join(os.path.dirname(__file__), "..", "prompts", file_name)
+        with open(prompt_path, "r", encoding="utf-8") as handle:
+            return handle.read()
+
+    def _parse_json_block(self, text: str) -> Optional[Dict[str, Any]]:
+        """Parse JSON that may be wrapped in markdown fences."""
+        payload = (text or "").strip()
+        if payload.startswith("```"):
+            payload = re.sub(r"^```(?:json)?\s*", "", payload)
+            payload = re.sub(r"\s*```$", "", payload).strip()
+        try:
+            parsed = json.loads(payload)
+            return parsed if isinstance(parsed, dict) else None
+        except Exception:
+            return None
 
     async def process_documents_to_json(self, prompt: str) -> Tuple[Optional[str], List[ProcessingError]]:
         """Process a prompt to get a JSON response from OpenAI asynchronously.
@@ -599,6 +727,7 @@ class JsonProcessingService:
         document_summaries_for_context: Optional[List[Dict[str, Any]]],
         document_registry: Optional[List[Dict[str, Any]]],
         gap_analysis,
+        strategy_object: Optional[Dict[str, Any]] = None,
         prefer_compact: bool = False,
     ) -> Tuple[str, bool]:
         """Build adaptive findings prompt and indicate whether raw docs are included."""
@@ -628,6 +757,7 @@ class JsonProcessingService:
             clio_matter_context=clio_matter_context,
             qa_context=qa_context,
             structure_guidance=structure_guidance,
+            strategy_object=strategy_object,
         )
 
         if include_raw_documents and len(prompt) > self._MAX_FINDINGS_PROMPT_CHARS:
@@ -659,6 +789,7 @@ class JsonProcessingService:
                 clio_matter_context=clio_matter_context,
                 qa_context=qa_context,
                 structure_guidance=structure_guidance,
+                strategy_object=strategy_object,
             )
             include_raw_documents = False
 
@@ -874,6 +1005,7 @@ class JsonProcessingService:
         clio_matter_context: str,
         qa_context: str,
         structure_guidance=None,  # LetterStructure for adaptive generation
+        strategy_object: Optional[Dict[str, Any]] = None,
     ) -> str:
         """Build the findings prompt for JSON, adaptive, and streaming generation."""
         prompt_template = self._load_prompt_template(jurisdiction=jurisdiction)
@@ -894,6 +1026,8 @@ class JsonProcessingService:
         if structure_guidance is not None:
             structure_instruction = self._create_structure_instruction(structure_guidance)
             prompt = f"{prompt}\n\n{structure_instruction}"
+
+        prompt = f"{prompt}\n\n{self._build_balanced_client_strategy_directives(strategy_object)}"
 
         return prompt
 
@@ -1017,6 +1151,7 @@ class JsonProcessingService:
         original_documents: Optional[Dict[str, str]] = None,  # Explicit raw content
         document_summaries_for_context: Optional[List[Dict[str, Any]]] = None,
         document_registry: Optional[List[Dict[str, Any]]] = None,
+        strategy_object: Optional[Dict[str, Any]] = None,
         gap_analysis=None,  # GapAnalysisResult for guardrails
     ) -> str:
         """Generate findings email using multi-stage analysis results.
@@ -1092,6 +1227,7 @@ class JsonProcessingService:
             original_documents=original_documents,
             document_summaries_for_context=document_summaries_for_context,
             document_registry=document_registry,
+            strategy_object=strategy_object,
             gap_analysis=gap_analysis,
             jurisdiction=jurisdiction,
         )
@@ -1135,6 +1271,7 @@ class JsonProcessingService:
                 original_documents=original_documents,
                 document_summaries_for_context=document_summaries_for_context,
                 document_registry=document_registry,
+                strategy_object=strategy_object,
                 gap_analysis=gap_analysis,
                 jurisdiction=jurisdiction,
                 prefer_compact=True,
@@ -1219,6 +1356,7 @@ class JsonProcessingService:
         original_documents: Optional[Dict[str, str]] = None,
         document_summaries_for_context: Optional[List[Dict[str, Any]]] = None,
         document_registry: Optional[List[Dict[str, Any]]] = None,
+        strategy_object: Optional[Dict[str, Any]] = None,
         gap_analysis=None,  # GapAnalysisResult for guardrails
     ) -> AsyncGenerator[str, None]:
         """Stream adaptive findings email generation.
@@ -1258,6 +1396,7 @@ class JsonProcessingService:
             original_documents=original_documents,
             document_summaries_for_context=document_summaries_for_context,
             document_registry=document_registry,
+            strategy_object=strategy_object,
             gap_analysis=gap_analysis,
             jurisdiction=jurisdiction,
         )
@@ -1302,6 +1441,7 @@ class JsonProcessingService:
                 original_documents=original_documents,
                 document_summaries_for_context=document_summaries_for_context,
                 document_registry=document_registry,
+                strategy_object=strategy_object,
                 gap_analysis=gap_analysis,
                 jurisdiction=jurisdiction,
                 prefer_compact=True,
@@ -1531,6 +1671,28 @@ Thank you,
         instructions += f"\n\nAdditional context: {structure_guidance.reasoning}\n"
 
         return instructions
+
+    def _build_balanced_client_strategy_directives(self, strategy_object: Optional[Dict[str, Any]]) -> str:
+        """Append late-binding drafting directives for balanced client strategy style."""
+        strategy_json = json.dumps(strategy_object or {}, default=str, indent=2)
+        return (
+            "BALANCED CLIENT STRATEGY DIRECTIVES (LATEST - OVERRIDE EARLIER CONFLICTS):\n"
+            "- Write for an intelligent client. Keep tone confident, practical, and measured.\n"
+            "- Use concise paragraphs and avoid internal-lawyer phrasing.\n"
+            "- Findings section depth targets:\n"
+            "  facts summary: 120-180 words.\n"
+            "  each core theory paragraph: 70-120 words.\n"
+            "  recommendation strategy section: 100-150 words.\n"
+            "- First-use legal term micro-explainer: explain each legal term once in plain language.\n"
+            "- For each major claim paragraph, include at least one evidence anchor "
+            "(date, amount, source document, or communication).\n"
+            "- Include one practical client-impact sentence in each major section.\n"
+            "- Avoid unsupported hard accusations and avoid overstatement.\n"
+            "- Keep legal doctrine explanations brief and strategic.\n"
+            "- Preserve controlled urgency without hard-coded today-date math.\n\n"
+            "STRATEGY OBJECT (USE AS FACT/CLAIM MAP):\n"
+            f"{strategy_json}\n"
+        )
 
     def _convert_markdown_to_html(self, markdown_content: str) -> str:
         """Convert Markdown content to clean HTML.

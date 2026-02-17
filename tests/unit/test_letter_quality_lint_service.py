@@ -7,7 +7,45 @@ from legal_portal.services.letter_quality_lint_service import LetterQualityLintS
 
 def _strict_mode_sample() -> str:
     """Build a strict-quality findings sample with required sections."""
-    filler = " ".join(["analysis"] * 660)
+    facts = (
+        "Based on the records, the 2022 payment history includes a $47,656.00 Full Bloom Down Payment entry "
+        "and a $3,300.00 transfer tied to project expenses. The February 14, 2023 email update acknowledges "
+        "changed circumstances and limited communication. The file also reflects similarly named Cuchillo entities, "
+        "which is why we must map each promise to the right legal entity and authorized representative. "
+        "This factual sequence matters because recovery depends on proving what was promised, what was paid, and "
+        "what performance did not occur. The subscription agreement materials and operating agreement versions in the "
+        "file provide document anchors for that mapping, and the ledger entries tie the chronology to concrete amounts."
+    )
+    contract = (
+        "Breach of contract (which means enforcing the written deal when one side does not perform) is the primary "
+        "path because signed financing and subscription materials identify the obligations. The payment entries and "
+        "email record give us date and amount anchors to tie non-performance to the agreed terms. The practical "
+        "impact is that we can demand repayment or documented cure based on specific deal language instead of broad claims."
+    )
+    fraud = (
+        "Misrepresentation (meaning a materially false statement used to induce action) is secondary leverage if we "
+        "can tie exact statements to investment decisions. The February 14, 2023 communication and any written repayment "
+        "assurances should be anchored by date and sender. The practical impact is negotiation leverage, but only where "
+        "the proof is specific and document-backed."
+    )
+    securities = (
+        "Securities law theories (rules requiring fair and accurate investor disclosures) can support a negotiated "
+        "resolution if offering materials omitted key facts. We should tie this theory to the investor packet version, "
+        "timing of delivery, and payment timeline. The practical impact is additional pressure for repayment without "
+        "overstating exposure."
+    )
+    liability = (
+        "Individual liability and veil piercing (an exception that can allow personal liability when the LLC form is "
+        "misused) remain conditional. We should preserve this angle but prioritize claims against the entity that signed "
+        "the controlling documents, including the operating agreement and the February 14, 2023 update email chain. "
+        "The practical impact is better collectability planning while avoiding premature allegations."
+    )
+    strategy = (
+        "We recommend a targeted demand letter first because it is efficient and preserves litigation options. The "
+        "letter should identify the investment amounts, controlling documents, repayment failure, and a written response "
+        "deadline, while demanding a full accounting of funds received and used. This approach gives the other side a "
+        "clear path to resolve the matter and builds a cleaner record if litigation becomes necessary."
+    )
     return (
         "Opening - What We Reviewed\n"
         "We reviewed the signed financing memo, operating agreements, subscription packet, "
@@ -15,20 +53,23 @@ def _strict_mode_sample() -> str:
         "Core Issue - The Real Question\n"
         "The core issue is whether there is a legally supportable path to recover funds.\n\n"
         "What the Documents Show\n"
-        "Based on the records, 2022 entries include a full bloom down payment and transfer data.\n\n"
+        f"{facts}\n\n"
         "Legal Theories\n"
-        "Contract is the primary claim. Fraud or misrepresentation can be secondary leverage. "
-        "Securities concerns may support negotiation.\n\n"
+        f"{contract}\n\n"
+        f"{fraud}\n\n"
+        f"{securities}\n\n"
+        f"{liability}\n\n"
         "Timing Risk\n"
-        "The statute of limitations and related deadline tracking remain critical.\n\n"
+        "The statute of limitations (the filing deadline after which a claim can be barred) and related deadline "
+        "tracking remain critical.\n\n"
         "Strategy - What We Recommend\n"
-        "We recommend a demand letter as the first move, with careful party targeting.\n\n"
+        f"{strategy}\n\n"
         "Immediate Client Action Items\n"
         "- Provide proof of payment records.\n"
         "- Provide complete offering materials.\n"
         "- Provide written repayment statements.\n"
         "- Confirm deadline references and authority roles.\n\n"
-        f"{filler}"
+        + " ".join(["record"] * 260)
     )
 
 
@@ -71,3 +112,17 @@ def test_default_mode_reports_internal_language_without_failing_all_content() ->
     assert "score" in report
     assert "violations" in report
     assert any(item["rule"] == "gap_analysis_flagged" for item in report["violations"])
+    assert "quality_report_v2" in report
+    assert "evidence_linkage_score" in report
+
+
+def test_demand_strict_mode_flags_missing_specificity() -> None:
+    """Demand strict mode should flag missing specificity package fields."""
+    service = LetterQualityLintService()
+    content = "Dear Party,\n\nPay now.\n\nRegards."
+
+    report = service.lint_letter(content, mode="strict_quality", letter_type="demand")
+    violations = report["violations"]
+
+    assert any(item["rule"] == "demand_specificity" for item in violations)
+    assert report["quality_report_v2"]["demand_specificity_passed"] is False

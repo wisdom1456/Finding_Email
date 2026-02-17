@@ -1774,6 +1774,21 @@ async function generateLetterRequest(body: Record<string, any>) {
 										Quality pass applied
 									</div>
 								{/if}
+								{#if findingsGenerationMetrics?.critic_applied}
+									<div class="mt-2 ml-2 inline-flex items-center px-2.5 py-1 rounded-md text-xs font-semibold bg-sky-50 text-sky-700 border border-sky-200">
+										Critic-guided repair
+									</div>
+								{/if}
+								{#if findingsQualityReport?.quality_report_v2}
+									<div class="mt-2 flex flex-wrap items-center gap-2 text-xs text-gray-600">
+										<span class="px-2 py-1 rounded border border-gray-200 bg-gray-50">
+											Micro-explainers: {findingsQualityReport.quality_report_v2.term_explainer_passed ? 'Pass' : 'Needs review'}
+										</span>
+										<span class="px-2 py-1 rounded border border-gray-200 bg-gray-50">
+											Evidence linkage: {Math.round((findingsQualityReport.quality_report_v2.evidence_linkage_score ?? 0) * 100)}%
+										</span>
+									</div>
+								{/if}
 							</div>
 							<AsyncButton
 								variant="primary"

@@ -15,6 +15,7 @@ from legal_portal.config.default import get_settings
 from legal_portal.core.data_models import DocumentStatus
 from legal_portal.core.document_processor import DocumentProcessor, ValidationError
 from legal_portal.services.progress_manager import ProgressManager, get_progress_manager
+from legal_portal.utils.blacklist import is_name_blacklisted
 
 # Import classification function from documents module
 from legal_portal.api.routes.documents import classify_document_type
@@ -478,6 +479,23 @@ async def import_clio_documents_helper(
         documents = await run_in_threadpool(clio_client.get_documents, matter_id)
         logger.debug("Found documents", extra={"count": len(documents)})
 
+        # Load user blacklist rules once for this import
+        blacklist: List[str] = []
+        try:
+            profile_response = (
+                supabase.table("profiles").select("ai_preferences").eq("id", user["id"]).execute()
+            )
+            if profile_response.data and profile_response.data[0].get("ai_preferences"):
+                blacklist = (
+                    profile_response.data[0]["ai_preferences"].get("blacklisted_documents", []) or []
+                )
+            logger.info(
+                "Loaded blacklist rules for Clio import",
+                extra={"user_id": user["id"], "count": len(blacklist)},
+            )
+        except Exception as e:
+            logger.warning("Failed to load blacklist rules for Clio import", extra={"error": str(e)})
+
         comm_success = 0
         note_success = 0
         doc_success = 0
@@ -503,6 +521,11 @@ async def import_clio_documents_helper(
                         sub_step=subject[:50],
                         current_doc={"index": idx + 1, "total": total_comms, "name": subject},
                     )
+
+                if is_name_blacklisted(subject, blacklist):
+                    logger.info("Skipping blacklisted communication during Clio import", extra={"subject": subject})
+                    continue
+
                 # Create a text document for each communication
                 content = f"Subject: {comm.subject}\n"
                 content += f"Date: {comm.date}\n"
@@ -551,6 +574,11 @@ async def import_clio_documents_helper(
                         current_doc={"index": idx + 1, "total": total_notes, "name": note_subject},
                     )
                 note_subject = note.get("subject", "No Subject")
+
+                if is_name_blacklisted(note_subject, blacklist):
+                    logger.info("Skipping blacklisted note during Clio import", extra={"subject": note_subject})
+                    continue
+
                 note_detail = note.get("detail", "")
                 note_date = note.get("date", "")
 
@@ -616,6 +644,10 @@ async def import_clio_documents_helper(
                 doc_size = doc.get("size", 0)  # Size in bytes from Clio API
 
                 logger.debug("Processing document", extra={"doc_name": doc_name, "doc_id": doc_id, "size_mb": f"{doc_size / (1024 * 1024):.2f}"})
+
+                if is_name_blacklisted(doc_name, blacklist):
+                    logger.info("Skipping blacklisted document during Clio import", extra={"name": doc_name})
+                    continue
 
                 # Check file size limits before downloading
                 # More restrictive for zips since they could contain videos
@@ -752,9 +784,17 @@ async def import_clio_documents_helper(
                             is_intake_form=is_intake_candidate,
                             content_type=content_type,
                             skip_extraction=True,  # Defer OCR to avoid Vercel timeout
+                            blacklist=blacklist,
                         ),
                         timeout=DOC_TIMEOUT_SECONDS,
                     )
+
+                    if doc_record.get("status") == DocumentStatus.SKIPPED:
+                        logger.info(
+                            "Skipping blacklisted document after processor check",
+                            extra={"name": doc_name},
+                        )
+                        continue
 
                     # Track compression statistics if compressed
                     if doc_record.get("metadata", {}).get("compression", {}).get("compressed"):

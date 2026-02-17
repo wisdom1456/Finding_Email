@@ -1,0 +1,48 @@
+You are generating a structured pre-draft strategy object for a legal demand letter.
+
+Return JSON only. Do not include markdown.
+
+Target party: {target_party_name}
+Demand deadline: {demand_deadline}
+Demand amount input: {demand_amount}
+
+Required JSON schema:
+{
+  "case_summary": "string",
+  "ranked_theories": [
+    {
+      "theory": "string",
+      "priority": 1,
+      "rationale": "string",
+      "supporting_anchors": [
+        {
+          "anchor_type": "document|date|amount|communication|party",
+          "summary": "string",
+          "source_document": "string|null",
+          "source_date": "string|null",
+          "amount": 0.0
+        }
+      ]
+    }
+  ],
+  "timeline_highlights": ["string"],
+  "risk_flags": ["string"],
+  "uncertainty_items": ["string"],
+  "recommended_sequence": ["string"],
+  "demand_spec": {
+    "targets": ["string"],
+    "amount_mode": "fixed|tbd",
+    "deadline": "string",
+    "accounting_request": "string",
+    "cure_ladder": ["string"],
+    "preservation_language": "string"
+  }
+}
+
+Rules:
+- Demand spec must be complete and practical.
+- Use factual anchors for each major theory.
+- Preserve credibility and avoid overstatement.
+
+Case context JSON:
+{context_json}

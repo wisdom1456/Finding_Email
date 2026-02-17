@@ -1,0 +1,38 @@
+You are generating a structured pre-draft strategy object for a client findings letter.
+
+Return JSON only. Do not include markdown.
+
+Required JSON schema:
+{
+  "case_summary": "string",
+  "ranked_theories": [
+    {
+      "theory": "string",
+      "priority": 1,
+      "rationale": "string",
+      "supporting_anchors": [
+        {
+          "anchor_type": "document|date|amount|communication|party",
+          "summary": "string",
+          "source_document": "string|null",
+          "source_date": "string|null",
+          "amount": 0.0
+        }
+      ]
+    }
+  ],
+  "timeline_highlights": ["string"],
+  "risk_flags": ["string"],
+  "uncertainty_items": ["string"],
+  "recommended_sequence": ["string"],
+  "demand_spec": null
+}
+
+Rules:
+- Prioritize strongest claim first.
+- Each ranked theory must include at least one supporting anchor.
+- Timeline highlights should be chronological and concrete.
+- Avoid unsupported accusations.
+
+Case context JSON:
+{context_json}

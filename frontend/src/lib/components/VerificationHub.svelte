@@ -2,6 +2,7 @@
 	import { getApiUrl } from '$lib/config';
 	import { supabase, getSecureSession } from '$lib/supabase';
 	import { toastStore } from '$lib/stores/toastStore';
+	import { deriveBlacklistRule, isNameBlacklisted, toCanonicalBlacklistTerm } from '$lib/utils/blacklist';
 	import { slide, fade } from 'svelte/transition';
 	import { 
 		Search, 
@@ -223,17 +224,20 @@ const { session, user } = await getSecureSession();
 
 	async function handleAlwaysDelete(docName: string, docId?: string) {
 		try {
-const { session, user } = await getSecureSession();
-		if (!session || !user) throw new Error('Not authenticated');
+			const { session, user } = await getSecureSession();
+			if (!session || !user) throw new Error('Not authenticated');
 
 			const apiUrl = getApiUrl();
+			const blacklistRule = deriveBlacklistRule(docName) || docName;
+			let deleteWarning = '';
 
-			// 1. Delete the current document (and any others with same name) - no confirmation needed
+			// 1. Delete the current document and any similar variants in this case
 			if (docId) {
-				// Find all documents with this name and delete them
-				const docsToDelete = documents.filter(d => d.file_name === docName);
-				const docIds = docsToDelete.map(d => d.id);
-				
+				const docsToDelete = documents.filter(
+					(d) => d.file_name === docName || isNameBlacklisted(d.file_name, [blacklistRule])
+				);
+				const docIds = [...new Set(docsToDelete.map((d) => d.id))];
+
 				if (docIds.length > 0) {
 					const deleteResponse = await fetch(`${apiUrl}/api/documents/bulk-delete`, {
 						method: 'POST',
@@ -244,8 +248,13 @@ const { session, user } = await getSecureSession();
 						body: JSON.stringify({ document_ids: docIds }),
 					});
 
-					if (!deleteResponse.ok) {
-						console.warn('Failed to delete documents, continuing with blacklist update');
+					if (!deleteResponse.ok) throw new Error('Failed to delete selected documents');
+
+					const deleteResult = await deleteResponse.json();
+					const failedCount = deleteResult?.failed_ids?.length ?? 0;
+					if (failedCount > 0) {
+						deleteWarning =
+							`Deleted ${deleteResult.deleted_count} documents, but ${failedCount} could not be deleted.`;
 					}
 				}
 			}
@@ -263,9 +272,18 @@ const { session, user } = await getSecureSession();
 
 			// 3. Update blacklist
 			const currentBlacklist = profile.ai_preferences?.blacklisted_documents || [];
-			if (!currentBlacklist.includes(docName)) {
-				const updatedBlacklist = [...currentBlacklist, docName];
-				
+			const hasEquivalentRule = currentBlacklist.some((rule: string) => {
+				const existingCanonical = toCanonicalBlacklistTerm(rule);
+				const incomingCanonical = toCanonicalBlacklistTerm(blacklistRule);
+				return (
+					rule.trim().toLowerCase() === blacklistRule.trim().toLowerCase() ||
+					(existingCanonical && existingCanonical === incomingCanonical)
+				);
+			});
+
+			if (!hasEquivalentRule) {
+				const updatedBlacklist = [...currentBlacklist, blacklistRule];
+
 				const profileData = {
 					ai_preferences: {
 						...profile.ai_preferences,
@@ -286,7 +304,10 @@ const { session, user } = await getSecureSession();
 				if (!updateResponse.ok) throw new Error('Failed to update blacklist');
 			}
 
-			toastStore.success(`"${docName}" will always be excluded from future imports`);
+			toastStore.success(`"${blacklistRule}" will always be excluded from future imports`);
+			if (deleteWarning) {
+				toastStore.warning(deleteWarning);
+			}
 			await onDocumentsUpdated(); // Refresh the document list
 		} catch (error: any) {
 			toastStore.error(`Blacklist error: ${error.message}`);

@@ -37,6 +37,7 @@ from legal_portal.core.data_models import (
 )
 from legal_portal.services.case_chat_service import CaseChatService
 from legal_portal.services.demand_letter_service import DemandLetterService
+from legal_portal.services.document_formatter import DocumentFormatterService
 from legal_portal.services.json_processing_service import JsonProcessingService
 from legal_portal.services.letter_validation_service import LetterValidationService
 from legal_portal.services.main_processor import process_case_documents
@@ -69,6 +70,12 @@ def _new_generation_metrics(
         "model_calls": 0,
         "repair_attempted": False,
         "repair_applied": False,
+        "strategy_used": False,
+        "critic_attempted": False,
+        "critic_applied": False,
+        "critic_skipped_reason": None,
+        "strategy_latency_ms": None,
+        "critic_latency_ms": None,
         "timeout": False,
         "error_code": None,
         "lint_passed": None,
@@ -99,6 +106,12 @@ def _quality_report_placeholder(*, mode: str, letter_type: str) -> Dict[str, Any
         "violations": [],
         "word_count": 0,
         "section_counts": {},
+        "quality_report_v2": {
+            "term_explainer_passed": True,
+            "evidence_linkage_score": 1.0,
+            "section_depth_score": 1.0,
+            "unsupported_assertion_flags": [],
+        },
     }
 
 
@@ -1763,6 +1776,8 @@ async def stream_findings_letter(
                 lint_budget = max(1, int(settings.letter_lint_budget_seconds))
                 repair_budget = max(1, int(settings.letter_repair_budget_seconds))
                 finalize_budget = max(1, int(settings.letter_finalize_budget_seconds))
+                strategy_budget = max(1, int(settings.letter_strategy_budget_seconds))
+                critic_budget = max(1, int(settings.letter_critic_budget_seconds))
                 heartbeat_interval = max(1, int(settings.letter_stream_heartbeat_seconds))
                 internal_deadline = request_started + internal_budget
 
@@ -1806,12 +1821,39 @@ async def stream_findings_letter(
                     metrics["error_code"] = "context_budget_exceeded"
                     raise TimeoutError("Context-build phase exceeded budget.")
 
+                openai_client = OpenAIClient(user_preferences=ai_preferences)
+                json_service = JsonProcessingService(client=openai_client, config={})
+                strategy_object: Optional[Dict[str, Any]] = None
+                if settings.letter_strategy_enabled:
+                    remaining_for_strategy = _remaining_seconds(internal_deadline)
+                    reserve_for_downstream = draft_budget + lint_budget + finalize_budget
+                    if remaining_for_strategy > reserve_for_downstream:
+                        strategy_timeout = int(
+                            min(strategy_budget, max(1, remaining_for_strategy - reserve_for_downstream))
+                        )
+                        strategy_started = time.monotonic()
+                        try:
+                            metrics["model_calls"] = int(metrics.get("model_calls", 0)) + 1
+                            strategy_object = await json_service.build_findings_strategy(
+                                fact_matrix=fact_matrix,
+                                deep_analysis=deep_analysis,
+                                gap_analysis=stream_gap_analysis,
+                                timeout_seconds=strategy_timeout,
+                                allow_model=True,
+                                model="gpt-5-mini",
+                            )
+                            metrics["strategy_used"] = bool(strategy_object)
+                        except Exception as strategy_err:
+                            logger.warning("[LETTER] Strategy step failed for stream: %s", strategy_err)
+                        finally:
+                            metrics["strategy_latency_ms"] = int(
+                                (time.monotonic() - strategy_started) * 1000
+                            )
+
                 phase_msg = _emit("phase", phase="draft_generation", message="Generating draft")
                 if phase_msg:
                     yield phase_msg
 
-                openai_client = OpenAIClient(user_preferences=ai_preferences)
-                json_service = JsonProcessingService(client=openai_client, config={})
                 metrics["model_calls"] = int(metrics.get("model_calls", 0)) + 1
 
                 stream_generator = json_service.stream_findings_letter_adaptive(
@@ -1831,6 +1873,7 @@ async def stream_findings_letter(
                     original_documents=msr.get("original_documents"),
                     document_summaries_for_context=document_summaries_for_context,
                     document_registry=msr.get("document_registry"),
+                    strategy_object=strategy_object,
                     gap_analysis=stream_gap_analysis,
                 )
 
@@ -1935,6 +1978,35 @@ async def stream_findings_letter(
                         logger.warning("[LETTER] Lint phase exceeded budget but completed.")
 
                 final_markdown = draft_markdown
+                critic_feedback: Dict[str, Any] = {"failed_sections": []}
+                if (
+                    settings.letter_quality_critic_enabled
+                    and not quality_report.get("lint_passed", True)
+                    and settings.letter_quality_lint_enabled
+                ):
+                    remaining_before_critic = _remaining_seconds(internal_deadline)
+                    if remaining_before_critic >= (critic_budget + finalize_budget):
+                        metrics["critic_attempted"] = True
+                        critic_started = time.monotonic()
+                        try:
+                            metrics["model_calls"] = int(metrics.get("model_calls", 0)) + 1
+                            critic_feedback = await json_service.run_quality_critic(
+                                draft_markdown=draft_markdown,
+                                letter_type="findings",
+                                lint_violations=quality_report.get("violations", []),
+                                quality_report_v2=quality_report.get("quality_report_v2"),
+                                model="gpt-5-mini",
+                                timeout_seconds=critic_budget,
+                            )
+                        except Exception as critic_err:
+                            logger.warning("[LETTER] Critic step failed: %s", critic_err)
+                            metrics["critic_skipped_reason"] = f"critic_error:{type(critic_err).__name__}"
+                            critic_feedback = {"failed_sections": []}
+                        finally:
+                            metrics["critic_latency_ms"] = int((time.monotonic() - critic_started) * 1000)
+                    else:
+                        metrics["critic_skipped_reason"] = "insufficient_budget"
+
                 if (
                     settings.letter_conditional_repair_enabled
                     and not quality_report.get("lint_passed", True)
@@ -1952,6 +2024,7 @@ async def stream_findings_letter(
                             quality_report.get("violations", []),
                             mode=mode,
                             model="gpt-5-mini",
+                            critic_feedback=critic_feedback,
                         )
                         post_repair_report = validator.lint_client_letter(
                             repaired,
@@ -1962,14 +2035,18 @@ async def stream_findings_letter(
                             **post_repair_report,
                             "pre_repair": quality_report,
                             "post_repair": post_repair_report,
+                            "critic_feedback": critic_feedback,
                         }
                         if repaired.strip() and repaired.strip() != draft_markdown.strip():
                             final_markdown = repaired
                             metrics["repair_applied"] = True
+                            if critic_feedback.get("failed_sections"):
+                                metrics["critic_applied"] = True
                     else:
                         quality_report = {
                             **quality_report,
                             "repair_skipped": "insufficient_budget",
+                            "critic_feedback": critic_feedback,
                         }
 
                 phase_msg = _emit("phase", phase="finalizing", message="Finalizing letter")
@@ -1987,7 +2064,9 @@ async def stream_findings_letter(
                     generated_letters["findings"] = final_html
                     generated_letters["findings_meta"] = {
                         "quality_report": quality_report,
+                        "quality_report_v2": quality_report.get("quality_report_v2"),
                         "generation_metrics": metrics,
+                        "strategy_object": strategy_object,
                     }
                     supabase.table("analysis_results").update({"result": persisted_result}).eq(
                         "id", analysis_id
@@ -3382,6 +3461,14 @@ async def generate_letter(
         letter_type=letter_request.letter_type.value,
         streaming=False,
     )
+    internal_deadline = started_at + max(30, int(settings.letter_internal_budget_seconds))
+    strategy_budget = max(1, int(settings.letter_strategy_budget_seconds))
+    critic_budget = max(1, int(settings.letter_critic_budget_seconds))
+    repair_budget = max(1, int(settings.letter_repair_budget_seconds))
+    finalize_budget = max(1, int(settings.letter_finalize_budget_seconds))
+
+    def _remaining_seconds() -> float:
+        return internal_deadline - time.monotonic()
 
     try:
         await _ensure_fresh_gap_analysis_for_letter_generation(
@@ -3412,6 +3499,8 @@ async def generate_letter(
         msr = processing_result.multi_stage_result
         letter_html: str
         target_party_name: Optional[str] = None
+        strategy_object: Optional[Dict[str, Any]] = None
+        draft_markdown_for_repair: Optional[str] = None
         quality_report = _quality_report_placeholder(
             mode="default",
             letter_type=letter_request.letter_type.value,
@@ -3427,6 +3516,7 @@ async def generate_letter(
         gap_analysis = None
         fact_matrix = None
         verified_statutes: List[Dict[str, Any]] = []
+        json_service = JsonProcessingService(client=openai_client, config={})
 
         if letter_request.letter_type == LetterType.FINDINGS:
             from legal_portal.core.data_models import (
@@ -3503,7 +3593,24 @@ async def generate_letter(
                         gap_analysis.high_count,
                     )
 
-            json_service = JsonProcessingService(client=openai_client, config={})
+            if settings.letter_strategy_enabled and _remaining_seconds() >= (strategy_budget + finalize_budget):
+                strategy_started = time.monotonic()
+                try:
+                    metrics["model_calls"] = int(metrics.get("model_calls", 0)) + 1
+                    strategy_object = await json_service.build_findings_strategy(
+                        fact_matrix=fact_matrix,
+                        deep_analysis=deep_analysis,
+                        gap_analysis=gap_analysis,
+                        timeout_seconds=strategy_budget,
+                        allow_model=True,
+                        model="gpt-5-mini",
+                    )
+                    metrics["strategy_used"] = bool(strategy_object)
+                except Exception as strategy_err:
+                    logger.warning("[LETTER] Findings strategy build failed: %s", strategy_err)
+                finally:
+                    metrics["strategy_latency_ms"] = int((time.monotonic() - strategy_started) * 1000)
+
             metrics["model_calls"] = int(metrics.get("model_calls", 0)) + 1
             letter_html = await json_service.generate_findings_letter_adaptive(
                 intake_content=processing_result.intake_content or "",
@@ -3523,8 +3630,10 @@ async def generate_letter(
                 original_documents=msr.get("original_documents"),
                 document_summaries_for_context=document_summaries_for_context,
                 document_registry=msr.get("document_registry"),
+                strategy_object=strategy_object,
                 gap_analysis=gap_analysis,
             )
+            draft_markdown_for_repair = html2text.html2text(letter_html)
             letter_key = "findings"
         else:
             if not letter_request.target_party_name:
@@ -3553,8 +3662,41 @@ async def generate_letter(
                     logger.warning(f"Failed to parse document_summaries: {parse_err}")
 
             demand_service = DemandLetterService(openai_client)
+            from legal_portal.core.data_models import DeepAnalysis, FactMatrix, GapAnalysisResult
+
+            demand_fact_matrix = FactMatrix(**msr["fact_matrix"])
+            demand_deep_analysis = DeepAnalysis(**msr["deep_analysis"])
+            if not gap_analysis and msr.get("gap_analysis"):
+                try:
+                    gap_analysis = GapAnalysisResult(**msr["gap_analysis"])
+                except Exception:
+                    gap_analysis = None
+
+            if settings.letter_strategy_enabled and _remaining_seconds() >= (strategy_budget + finalize_budget):
+                strategy_started = time.monotonic()
+                try:
+                    metrics["model_calls"] = int(metrics.get("model_calls", 0)) + 1
+                    strategy_object = await demand_service.build_demand_strategy(
+                        fact_matrix=demand_fact_matrix,
+                        deep_analysis=demand_deep_analysis,
+                        target_party_name=letter_request.target_party_name,
+                        demand_amount=letter_request.demand_amount,
+                        demand_deadline=letter_request.demand_deadline,
+                        specific_demands=letter_request.specific_demands,
+                        client_name=client_name,
+                        gap_analysis=gap_analysis,
+                        timeout_seconds=strategy_budget,
+                        allow_model=True,
+                        model="gpt-5-mini",
+                    )
+                    metrics["strategy_used"] = bool(strategy_object)
+                except Exception as strategy_err:
+                    logger.warning("[LETTER] Demand strategy build failed: %s", strategy_err)
+                finally:
+                    metrics["strategy_latency_ms"] = int((time.monotonic() - strategy_started) * 1000)
+
             metrics["model_calls"] = int(metrics.get("model_calls", 0)) + 1
-            letter_html = await demand_service.generate_demand_letter(
+            letter_html, draft_markdown_for_repair = await demand_service.generate_demand_letter_with_markdown(
                 fact_matrix_dict=msr["fact_matrix"],
                 deep_analysis_dict=msr["deep_analysis"],
                 target_party_name=letter_request.target_party_name,
@@ -3565,6 +3707,7 @@ async def generate_letter(
                 client_name=client_name,
                 document_summaries=document_summaries,
                 jurisdiction=jurisdiction,
+                strategy_object=strategy_object,
             )
             target_party_name = letter_request.target_party_name
             letter_key = f"demand_{letter_request.target_party_name.replace(' ', '_')}".lower()
@@ -3591,15 +3734,98 @@ async def generate_letter(
             except Exception as validation_err:
                 logger.warning(f"Letter validation skipped due to error: {validation_err}")
 
+        lint_input = draft_markdown_for_repair or letter_html
         if settings.letter_quality_lint_enabled:
             try:
                 quality_report = validator.lint_client_letter(
-                    letter_html,
+                    lint_input,
                     mode="default",
                     letter_type=letter_request.letter_type.value,
                 )
             except Exception as lint_err:
                 logger.warning(f"Letter lint failed, using placeholder report: {lint_err}")
+
+        critic_feedback: Dict[str, Any] = {"failed_sections": []}
+        if (
+            settings.letter_quality_critic_enabled
+            and settings.letter_quality_lint_enabled
+            and not quality_report.get("lint_passed", True)
+            and _remaining_seconds() >= (critic_budget + finalize_budget)
+        ):
+            metrics["critic_attempted"] = True
+            critic_started = time.monotonic()
+            try:
+                metrics["model_calls"] = int(metrics.get("model_calls", 0)) + 1
+                critic_feedback = await json_service.run_quality_critic(
+                    draft_markdown=lint_input,
+                    letter_type=letter_request.letter_type.value,
+                    lint_violations=quality_report.get("violations", []),
+                    quality_report_v2=quality_report.get("quality_report_v2"),
+                    model="gpt-5-mini",
+                    timeout_seconds=critic_budget,
+                )
+            except Exception as critic_err:
+                logger.warning("[LETTER] Critic step failed: %s", critic_err)
+                metrics["critic_skipped_reason"] = f"critic_error:{type(critic_err).__name__}"
+            finally:
+                metrics["critic_latency_ms"] = int((time.monotonic() - critic_started) * 1000)
+        elif (
+            settings.letter_quality_critic_enabled
+            and settings.letter_quality_lint_enabled
+            and not quality_report.get("lint_passed", True)
+            and _remaining_seconds() < (critic_budget + finalize_budget)
+        ):
+            metrics["critic_skipped_reason"] = "insufficient_budget"
+
+        if (
+            settings.letter_conditional_repair_enabled
+            and settings.letter_quality_lint_enabled
+            and not quality_report.get("lint_passed", True)
+            and _remaining_seconds() >= (repair_budget + finalize_budget)
+        ):
+            metrics["repair_attempted"] = True
+            metrics["model_calls"] = int(metrics.get("model_calls", 0)) + 1
+            repaired_markdown = await json_service.repair_letter_constraints(
+                lint_input,
+                quality_report.get("violations", []),
+                mode="default",
+                model="gpt-5-mini",
+                critic_feedback=critic_feedback,
+            )
+            post_repair_report = validator.lint_client_letter(
+                repaired_markdown,
+                mode="default",
+                letter_type=letter_request.letter_type.value,
+            )
+            quality_report = {
+                **post_repair_report,
+                "pre_repair": quality_report,
+                "post_repair": post_repair_report,
+                "critic_feedback": critic_feedback,
+            }
+            if repaired_markdown.strip() and repaired_markdown.strip() != lint_input.strip():
+                if letter_request.letter_type == LetterType.DEMAND and target_party_name:
+                    repaired_html = json_service._convert_markdown_to_html(repaired_markdown)
+                    letter_html = DocumentFormatterService.format_demand_letter(
+                        letter_html=repaired_html,
+                        recipient_name=target_party_name,
+                    )
+                else:
+                    letter_html = json_service._convert_markdown_to_html(repaired_markdown)
+                draft_markdown_for_repair = repaired_markdown
+                metrics["repair_applied"] = True
+                if critic_feedback.get("failed_sections"):
+                    metrics["critic_applied"] = True
+        elif (
+            settings.letter_conditional_repair_enabled
+            and settings.letter_quality_lint_enabled
+            and not quality_report.get("lint_passed", True)
+        ):
+            quality_report = {
+                **quality_report,
+                "repair_skipped": "insufficient_budget",
+                "critic_feedback": critic_feedback,
+            }
 
         metrics["lint_passed"] = quality_report.get("lint_passed")
         metrics["lint_score"] = quality_report.get("score")
@@ -3610,7 +3836,16 @@ async def generate_letter(
         if letter_request.letter_type == LetterType.FINDINGS:
             generated_letters["findings_meta"] = {
                 "quality_report": quality_report,
+                "quality_report_v2": quality_report.get("quality_report_v2"),
                 "generation_metrics": metrics,
+                "strategy_object": strategy_object,
+            }
+        else:
+            generated_letters[f"{letter_key}_meta"] = {
+                "quality_report": quality_report,
+                "quality_report_v2": quality_report.get("quality_report_v2"),
+                "generation_metrics": metrics,
+                "strategy_object": strategy_object,
             }
 
         supabase.table("analysis_results").update({"result": result_payload}).eq(

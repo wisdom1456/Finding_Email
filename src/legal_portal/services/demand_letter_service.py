@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+import json
 import os
-from typing import AsyncGenerator, Dict, List, Optional
+from typing import Any, AsyncGenerator, Dict, List, Optional, Tuple
 
 import markdown2
 
 from legal_portal.core.data_models import DeepAnalysis, DocumentSummaryStructured, FactMatrix, Party
 from legal_portal.services.document_formatter import DocumentFormatterService
+from legal_portal.services.letter_strategy_service import LetterStrategyService
 from legal_portal.utils.logging_config import get_module_logger
 from legal_portal.utils.markdown_utils import clean_markdown_response
 from legal_portal.utils.openai_client import OpenAIClient
@@ -39,9 +41,39 @@ class DemandLetterService:
         client_name: Optional[str] = None,
         document_summaries: Optional[List[dict]] = None,
         jurisdiction: str = "Florida",  # Added jurisdiction parameter
+        strategy_object: Optional[Dict[str, Any]] = None,
     ) -> str:
         """Generate a formal demand letter for a specific opposing party."""
-        # ... (implementation same as before, but calling sync client)
+        html, _markdown = await self.generate_demand_letter_with_markdown(
+            fact_matrix_dict=fact_matrix_dict,
+            deep_analysis_dict=deep_analysis_dict,
+            target_party_name=target_party_name,
+            demand_amount=demand_amount,
+            demand_deadline=demand_deadline,
+            specific_demands=specific_demands,
+            attorney_info=attorney_info,
+            client_name=client_name,
+            document_summaries=document_summaries,
+            jurisdiction=jurisdiction,
+            strategy_object=strategy_object,
+        )
+        return html
+
+    async def generate_demand_letter_with_markdown(
+        self,
+        fact_matrix_dict: dict,
+        deep_analysis_dict: dict,
+        target_party_name: str,
+        demand_amount: Optional[float],
+        demand_deadline: str,
+        specific_demands: List[str],
+        attorney_info: Dict[str, Optional[str]],
+        client_name: Optional[str] = None,
+        document_summaries: Optional[List[dict]] = None,
+        jurisdiction: str = "Florida",
+        strategy_object: Optional[Dict[str, Any]] = None,
+    ) -> Tuple[str, str]:
+        """Generate demand letter and return (html, markdown) for post-processing."""
         markdown_content = ""
         async for token in self.stream_demand_letter(
             fact_matrix_dict=fact_matrix_dict,
@@ -54,6 +86,7 @@ class DemandLetterService:
             client_name=client_name,
             document_summaries=document_summaries,
             jurisdiction=jurisdiction,
+            strategy_object=strategy_object,
         ):
             markdown_content += token
 
@@ -69,7 +102,7 @@ class DemandLetterService:
             letter_html=html, recipient_name=target_party_name
         )
 
-        return formatted_html
+        return formatted_html, markdown_content
 
     async def stream_demand_letter(
         self,
@@ -83,6 +116,7 @@ class DemandLetterService:
         client_name: Optional[str] = None,
         document_summaries: Optional[List[dict]] = None,
         jurisdiction: str = "Florida",
+        strategy_object: Optional[Dict[str, Any]] = None,
     ) -> AsyncGenerator[str, None]:
         """Stream a formal demand letter for a specific opposing party."""
         fact_matrix = FactMatrix(**fact_matrix_dict)
@@ -113,6 +147,7 @@ class DemandLetterService:
             contact_email=attorney_info.get("email") or "",
             client_name=client_name or "Client",
             jurisdiction_name=jurisdiction,
+            strategy_object=strategy_object,
         )
 
         logger.info(f"Streaming demand letter for {target_party_name} in {jurisdiction}")
@@ -146,6 +181,7 @@ class DemandLetterService:
         contact_email: str,
         client_name: str,
         jurisdiction_name: str,
+        strategy_object: Optional[Dict[str, Any]] = None,
     ) -> str:
         """Build demand-letter prompt using normalized context values."""
         statute_example = self.JURISDICTION_STATUTE_EXAMPLES.get(
@@ -169,6 +205,8 @@ class DemandLetterService:
             jurisdiction_name=jurisdiction_name,
             statute_example=statute_example,
         )
+        directives = self._build_specificity_directives(strategy_object)
+        return f"{base_prompt}\n\n{directives}"
 
     def _format_demand_amount_for_prompt(self, demand_amount: Optional[float]) -> str:
         """Format demand amount and avoid unresolved placeholders in prompts."""
@@ -355,3 +393,51 @@ class DemandLetterService:
         )
         with open(template_path, "r", encoding="utf-8") as template_file:
             return template_file.read()
+
+    def _build_specificity_directives(self, strategy_object: Optional[Dict[str, Any]]) -> str:
+        """Append late-binding specificity requirements for demand letters."""
+        strategy_json = json.dumps(strategy_object or {}, default=str, indent=2)
+        return (
+            "BALANCED CLIENT STRATEGY DIRECTIVES (LATEST - OVERRIDE EARLIER CONFLICTS):\n"
+            "- Keep tone professional and assertive, but not inflammatory.\n"
+            "- Include a clear specificity package: target parties, amount mode, deadline, accounting request, "
+            "cure ladder, and preservation language.\n"
+            "- First use of legal terms should include a short plain-language explainer once.\n"
+            "- Each major legal paragraph must include at least one factual anchor "
+            "(date, amount, document, or communication).\n"
+            "- Avoid unsupported hard accusations.\n"
+            "- If amount mode is TBD, do not invent a number.\n\n"
+            "STRATEGY OBJECT:\n"
+            f"{strategy_json}\n"
+        )
+
+    async def build_demand_strategy(
+        self,
+        *,
+        fact_matrix,
+        deep_analysis,
+        target_party_name: str,
+        demand_amount: Optional[float],
+        demand_deadline: str,
+        specific_demands: Optional[List[str]],
+        client_name: str,
+        gap_analysis=None,
+        timeout_seconds: int = 15,
+        allow_model: bool = True,
+        model: str = "gpt-5-mini",
+    ) -> Dict[str, Any]:
+        """Build a demand strategy object for prompt guidance and metadata."""
+        strategy_service = LetterStrategyService(self.client)
+        return await strategy_service.build_demand_strategy(
+            fact_matrix=fact_matrix,
+            deep_analysis=deep_analysis,
+            target_party_name=target_party_name,
+            demand_amount=demand_amount,
+            demand_deadline=demand_deadline,
+            specific_demands=specific_demands or [],
+            client_name=client_name,
+            gap_analysis=gap_analysis,
+            allow_model=allow_model,
+            timeout_seconds=timeout_seconds,
+            model=model,
+        )

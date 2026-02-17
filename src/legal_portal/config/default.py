@@ -167,6 +167,24 @@ class Settings(BaseSettings):
         description="Enable conditional repair pass when lint validation fails.",
     )
 
+    letter_strategy_enabled: bool = Field(
+        True,
+        alias="LETTER_STRATEGY_ENABLED",
+        description="Enable structured pre-draft strategy layer for findings and demand letters.",
+    )
+
+    letter_quality_critic_enabled: bool = Field(
+        True,
+        alias="LETTER_QUALITY_CRITIC_ENABLED",
+        description="Enable section-level quality critic pass before constrained repair.",
+    )
+
+    letter_term_micro_explainers_enabled: bool = Field(
+        True,
+        alias="LETTER_TERM_MICRO_EXPLAINERS_ENABLED",
+        description="Require first-use legal term micro-explainers in letter quality checks.",
+    )
+
     recommendation_stream_enabled: bool = Field(
         False,
         alias="RECOMMENDATION_STREAM_ENABLED",
@@ -213,6 +231,18 @@ class Settings(BaseSettings):
         5,
         alias="LETTER_STREAM_HEARTBEAT_SECONDS",
         description="Interval in seconds for SSE heartbeats during silent stream intervals.",
+    )
+
+    letter_strategy_budget_seconds: int = Field(
+        15,
+        alias="LETTER_STRATEGY_BUDGET_SECONDS",
+        description="Maximum time budget for strategy generation step.",
+    )
+
+    letter_critic_budget_seconds: int = Field(
+        20,
+        alias="LETTER_CRITIC_BUDGET_SECONDS",
+        description="Maximum time budget for quality critic step.",
     )
 
     # ==================================================

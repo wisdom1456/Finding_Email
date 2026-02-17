@@ -380,7 +380,18 @@ class GapAnalysisService:
             "purchase",
             "note",
         )
-        missing_terms = ("missing", "not provided", "not produced", "unsigned", "no executed")
+        missing_terms = (
+            "missing",
+            "absence",
+            "lack of",
+            "not provided",
+            "not produced",
+            "unsigned",
+            "no executed",
+            "no clear evidence",
+            "unable to confirm",
+            "cannot confirm",
+        )
 
         return (
             gap.category == GapCategory.MISSING_DOCUMENT

@@ -516,11 +516,13 @@ class JsonProcessingService:
         original_documents: Optional[Dict[str, str]],
         document_summaries: Optional[List[Dict[str, Any]]] = None,
         document_registry: Optional[List[Dict[str, Any]]] = None,
-    ) -> Tuple[str, Set[str], Set[str]]:
+    ) -> Tuple[str, Set[str], Set[str], Set[str], Set[str]]:
         """Build an authoritative list of present documents for prompt grounding."""
         lines: List[str] = []
         present_names: Set[str] = set()
         present_hints: Set[str] = set()
+        signed_doc_names: Set[str] = set()
+        signed_doc_hints: Set[str] = set()
         seen_names: Set[str] = set()
 
         has_header = False
@@ -583,6 +585,16 @@ class JsonProcessingService:
             elif raw_hints:
                 present_hints.update(self._extract_document_hints(str(raw_hints)))
             present_hints.update(self._extract_document_hints(significance))
+
+            if execution.lower() == "signed":
+                signed_doc_names.add(normalized_name)
+                signed_doc_hints.update(self._extract_document_hints(doc_name))
+                if isinstance(raw_hints, list):
+                    for hint in raw_hints:
+                        signed_doc_hints.update(self._extract_document_hints(str(hint)))
+                elif raw_hints:
+                    signed_doc_hints.update(self._extract_document_hints(str(raw_hints)))
+                signed_doc_hints.update(self._extract_document_hints(significance))
 
         key_documents = list(getattr(fact_matrix, "key_documents", []) or [])
         for doc in key_documents:
@@ -663,9 +675,61 @@ class JsonProcessingService:
             lines.append(
                 "Do not request a document as 'missing' when that same instrument appears in this register."
             )
-            return "\n".join(lines) + "\n\n", present_names, present_hints
+            return "\n".join(lines) + "\n\n", present_names, present_hints, signed_doc_names, signed_doc_hints
 
-        return "", present_names, present_hints
+        return "", present_names, present_hints, signed_doc_names, signed_doc_hints
+
+    def _gap_refs_signed_execution_docs(
+        self,
+        gap: Any,
+        signed_doc_names: Set[str],
+        signed_doc_hints: Set[str],
+    ) -> bool:
+        """True when an execution gap references documents already marked signed in the registry."""
+        if not signed_doc_names and not signed_doc_hints:
+            return False
+
+        if isinstance(gap, dict):
+            related_documents = gap.get("related_documents", [])
+            recommendations = gap.get("recommendations", [])
+        else:
+            related_documents = getattr(gap, "related_documents", [])
+            recommendations = getattr(gap, "recommendations", [])
+
+        gap_blob = " ".join(
+            [
+                self._gap_get(gap, "title"),
+                self._gap_get(gap, "description"),
+                self._gap_get(gap, "impact_on_case"),
+                " ".join(str(item) for item in (related_documents or [])),
+                " ".join(str(item) for item in (recommendations or [])),
+            ]
+        ).lower()
+        if not self._is_execution_or_signature_gap_text(gap_blob):
+            return False
+
+        normalized_related = [
+            self._normalize_doc_name(str(item))
+            for item in (related_documents or [])
+            if str(item).strip()
+        ]
+        if normalized_related:
+            for rel_name in normalized_related:
+                if rel_name in signed_doc_names:
+                    continue
+                rel_tokens = self._tokenize_for_doc_match(rel_name)
+                token_match = any(
+                    len(rel_tokens & self._tokenize_for_doc_match(name)) >= 2
+                    for name in signed_doc_names
+                    if rel_tokens
+                )
+                hint_match = bool(self._extract_document_hints(rel_name).intersection(signed_doc_hints))
+                if not token_match and not hint_match:
+                    return False
+            return True
+
+        gap_hints = self._extract_document_hints(gap_blob)
+        return bool(gap_hints and gap_hints.intersection(signed_doc_hints))
 
     def _gap_refs_present_doc(
         self,
@@ -1578,7 +1642,7 @@ class JsonProcessingService:
             f"{json.dumps([f.model_dump() for f in fact_matrix.financial_data], default=str, indent=2)}\n\n"
         )
 
-        register_context, present_doc_names, present_doc_hints = self._build_document_register_context(
+        register_context, present_doc_names, present_doc_hints, signed_doc_names, signed_doc_hints = self._build_document_register_context(
             fact_matrix=fact_matrix,
             original_documents=original_documents,
             document_summaries=document_summaries,
@@ -1652,8 +1716,12 @@ class JsonProcessingService:
             if missing_docs:
                 actionable_missing_docs = []
                 present_but_flagged = []
+                execution_gaps_backed_by_signed_docs = 0
                 for gap in missing_docs:
-                    if self._gap_refs_present_doc(gap, present_doc_names, present_doc_hints):
+                    if self._gap_refs_signed_execution_docs(gap, signed_doc_names, signed_doc_hints):
+                        present_but_flagged.append(gap)
+                        execution_gaps_backed_by_signed_docs += 1
+                    elif self._gap_refs_present_doc(gap, present_doc_names, present_doc_hints):
                         present_but_flagged.append(gap)
                     else:
                         actionable_missing_docs.append(gap)
@@ -1667,10 +1735,17 @@ class JsonProcessingService:
                     context += "\n**DOCUMENTS ALREADY PRESENT (do NOT request again):**\n"
                     for gap in present_but_flagged:
                         context += f"- {self._gap_get(gap, 'title')}\n"
-                    context += (
-                        "These items were flagged in gap analysis but appear in the provided document register; "
-                        "treat them as present unless there is a specific execution/signature deficiency.\n"
-                    )
+                    if execution_gaps_backed_by_signed_docs > 0:
+                        context += (
+                            "These items were flagged in gap analysis but appear in the provided document register, "
+                            "including execution/signature items tied to documents marked signed; treat them as present "
+                            "and frame any remaining concern as verification/party-alignment, not missing files.\n"
+                        )
+                    else:
+                        context += (
+                            "These items were flagged in gap analysis but appear in the provided document register; "
+                            "treat them as present unless there is a specific execution/signature deficiency.\n"
+                        )
 
             # Unverifiable claims (prevent hallucination)
             unverifiable = gap_analysis.gaps_by_category.get('unverifiable_claim', [])

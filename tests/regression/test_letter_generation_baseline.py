@@ -593,6 +593,127 @@ async def test_findings_prompt_keeps_execution_gap_without_signature_proof(
 
 
 @pytest.mark.asyncio
+async def test_findings_prompt_treats_signed_execution_gap_docs_as_already_present(
+    baseline_markdown_fixtures, monkeypatch
+):
+    """Execution gaps tied to registry-signed docs should not be requested as missing files."""
+    monkeypatch.setattr(
+        "legal_portal.utils.letter_polish.LetterPolisher.polish_letter",
+        lambda self, raw_letter: {
+            "success": True,
+            "polished_letter": raw_letter,
+            "changes_made": [],
+            "original_length": len(raw_letter),
+            "polished_length": len(raw_letter),
+        },
+    )
+
+    fake_client = FakeLetterOpenAIClient(
+        findings_markdown=baseline_markdown_fixtures["findings"],
+        demand_markdown=baseline_markdown_fixtures["demand"],
+    )
+    service = JsonProcessingService(client=fake_client, config={})
+
+    gap = GapItem(
+        gap_id="gap-counterparty-exec",
+        category=GapCategory.MISSING_DOCUMENT,
+        severity=GapSeverity.CRITICAL,
+        title="Absence of Counterparty-Executed Key Agreements",
+        description=(
+            "There is no clear evidence of fully executed, mutually signed versions of the "
+            "operating agreement and subscription agreements."
+        ),
+        affected_issue="Breach of contract",
+        related_documents=[
+            "Grow1 Operating Agreement (2).pdf",
+            "Grow1 Operating Agreement (3).pdf",
+            "Grow1 Operating Agreement.pdf",
+            "Subscription_Agreement_EJAJ-TX_Final120.doc.pdf",
+        ],
+        recommendations=[
+            "Obtain fully executed copies of all key agreements.",
+            "Review all signature pages for counterparty signatures.",
+        ],
+        impact_on_case="Contract enforceability remains uncertain.",
+    )
+    gap_analysis = GapAnalysisResult(
+        total_gaps=1,
+        critical_count=1,
+        high_count=0,
+        medium_count=0,
+        low_count=0,
+        gaps_by_category={GapCategory.MISSING_DOCUMENT.value: [gap]},
+        overall_completeness_score=62.0,
+        attorney_summary="Execution support is unclear.",
+    )
+
+    await service.generate_findings_letter_adaptive(
+        intake_content='{"client_name":"Amber Bell"}',
+        fact_matrix=FactMatrix(**_sample_fact_matrix_dict()),
+        legal_analysis=DeepAnalysis(**_sample_deep_analysis_dict()),
+        structure_guidance=LetterStructure(
+            style="natural_flow",
+            intro="Here are the key points of our analysis:",
+            issue_format="flowing_bullet_paragraphs",
+            reasoning="Natural flow preferred for client readability.",
+        ),
+        verified_statutes=[],
+        attorney_name="Franklin Riley",
+        firm_name="Bernhardt Riley, Attorneys at Law",
+        contact_phone="(727) 275-9575",
+        contact_email="counsel@firm.com",
+        jurisdiction="Florida",
+        gap_analysis=gap_analysis,
+        document_registry=[
+            {
+                "document_name": "Grow1 Operating Agreement (2).pdf",
+                "document_type": "Contract",
+                "role_in_case": "entity governance and control",
+                "authority_level": "controlling_signed_instrument",
+                "execution_status": "signed",
+                "primary_instrument": "operating agreement",
+                "instrument_hints": ["operating agreement"],
+            },
+            {
+                "document_name": "Grow1 Operating Agreement (3).pdf",
+                "document_type": "Contract",
+                "role_in_case": "entity governance and control",
+                "authority_level": "controlling_signed_instrument",
+                "execution_status": "signed",
+                "primary_instrument": "operating agreement",
+                "instrument_hints": ["operating agreement"],
+            },
+            {
+                "document_name": "Grow1 Operating Agreement.pdf",
+                "document_type": "Contract",
+                "role_in_case": "entity governance and control",
+                "authority_level": "controlling_signed_instrument",
+                "execution_status": "signed",
+                "primary_instrument": "operating agreement",
+                "instrument_hints": ["operating agreement"],
+            },
+            {
+                "document_name": "Subscription_Agreement_EJAJ-TX_Final120.doc.pdf",
+                "document_type": "Contract",
+                "role_in_case": "deal terms and investor rights",
+                "authority_level": "controlling_signed_instrument",
+                "execution_status": "signed",
+                "primary_instrument": "subscription agreement",
+                "instrument_hints": ["subscription agreement", "membership units"],
+            },
+        ],
+    )
+
+    prompt = fake_client.last_response_request["input"]
+    assert "**DOCUMENTS ALREADY PRESENT (do NOT request again):**" in prompt
+    assert "- Absence of Counterparty-Executed Key Agreements" in prompt
+    assert (
+        "\n**MISSING DOCUMENTS (do not assume contents):**\n"
+        "- Absence of Counterparty-Executed Key Agreements\n"
+    ) not in prompt
+
+
+@pytest.mark.asyncio
 async def test_findings_prompt_does_not_suppress_missing_gap_from_generic_filename(
     baseline_markdown_fixtures, monkeypatch
 ):

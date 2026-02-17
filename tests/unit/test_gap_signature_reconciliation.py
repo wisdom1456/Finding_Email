@@ -194,3 +194,76 @@ def test_reconcile_matches_contracts_wording_to_signed_subscription_agreement():
     assert reconciled.total_gaps == 0
     assert reconciled.critical_count == 0
     assert reconciled.gaps_by_category[GapCategory.MISSING_DOCUMENT.value] == []
+
+
+def test_reconcile_matches_absence_wording_for_counterparty_executed_gap():
+    """Absence/no-clear-evidence phrasing should still reconcile against signed docs."""
+    missing_gap = GapItem(
+        gap_id="gap-counterparty-exec",
+        category=GapCategory.MISSING_DOCUMENT,
+        severity=GapSeverity.CRITICAL,
+        title="Absence of Counterparty-Executed Key Agreements",
+        description=(
+            "There is no clear evidence of fully executed, mutually signed versions of the "
+            "operating agreement and subscription agreements."
+        ),
+        affected_issue="Breach of contract",
+        related_documents=[
+            "Grow1 Operating Agreement (2).pdf",
+            "Grow1 Operating Agreement (3).pdf",
+            "Grow1 Operating Agreement.pdf",
+            "Subscription_Agreement_EJAJ-TX_Final120.doc.pdf",
+        ],
+        recommendations=[
+            "Obtain fully executed copies of all key agreements.",
+            "Review all signature pages for counterparty signatures.",
+        ],
+        impact_on_case="Contract enforceability remains uncertain.",
+    )
+    result = GapAnalysisResult(
+        total_gaps=1,
+        critical_count=1,
+        high_count=0,
+        medium_count=0,
+        low_count=0,
+        gaps_by_category={GapCategory.MISSING_DOCUMENT.value: [missing_gap]},
+        overall_completeness_score=62.0,
+        attorney_summary="Execution support is unclear.",
+    )
+    signature_evidence = [
+        {
+            "file_name": "Grow1 Operating Agreement (2).pdf",
+            "status": "signed",
+            "confidence": "low",
+            "has_digital_signature": False,
+            "instrument_hints": ["operating agreement"],
+        },
+        {
+            "file_name": "Grow1 Operating Agreement (3).pdf",
+            "status": "signed",
+            "confidence": "low",
+            "has_digital_signature": False,
+            "instrument_hints": ["operating agreement"],
+        },
+        {
+            "file_name": "Grow1 Operating Agreement.pdf",
+            "status": "signed",
+            "confidence": "low",
+            "has_digital_signature": False,
+            "instrument_hints": ["operating agreement"],
+        },
+        {
+            "file_name": "Subscription_Agreement_EJAJ-TX_Final120.doc.pdf",
+            "status": "signed",
+            "confidence": "high",
+            "has_digital_signature": True,
+            "instrument_hints": ["subscription agreement", "membership units"],
+        },
+    ]
+
+    service = GapAnalysisService(openai_client=None)  # type: ignore[arg-type]
+    reconciled = service._reconcile_signature_execution_gaps(result, signature_evidence)
+
+    assert reconciled.total_gaps == 0
+    assert reconciled.critical_count == 0
+    assert reconciled.gaps_by_category[GapCategory.MISSING_DOCUMENT.value] == []

@@ -5,10 +5,10 @@ balanced chunks of documents based on token counts.
 """
 
 import logging
+import re
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Dict, List, Optional
-from uuid import uuid4
 
 logger = logging.getLogger(__name__)
 
@@ -16,6 +16,64 @@ logger = logging.getLogger(__name__)
 DEFAULT_MAX_TOKENS_PER_CHUNK = 50000
 MIN_TOKENS_PER_CHUNK = 25000
 MAX_TOKENS_PER_CHUNK = 100000
+
+
+def resolve_document_id(document: Any, fallback_index: Optional[int] = None) -> str:
+    """Resolve a stable document identifier for chunk-state tracking."""
+    candidates: List[Any] = []
+    doc_name = "Unknown"
+
+    if isinstance(document, dict):
+        candidates.extend([document.get("document_id"), document.get("id")])
+        doc_name = (
+            document.get("file_name")
+            or document.get("name")
+            or document.get("filename")
+            or doc_name
+        )
+    else:
+        candidates.extend([getattr(document, "document_id", None), getattr(document, "id", None)])
+        doc_name = (
+            getattr(document, "file_name", None)
+            or getattr(document, "name", None)
+            or getattr(document, "filename", None)
+            or doc_name
+        )
+
+    for raw_value in candidates:
+        if raw_value is None:
+            continue
+        value = str(raw_value).strip()
+        if value:
+            return value
+
+    normalized_name = re.sub(r"[^a-zA-Z0-9._-]+", "_", str(doc_name)).strip("_")
+    if normalized_name:
+        if fallback_index is not None:
+            return f"doc_{normalized_name}_{fallback_index}"
+        return f"doc_{normalized_name}"
+
+    if fallback_index is not None:
+        return f"doc_{fallback_index}"
+    return "doc_unknown"
+
+
+def build_document_tracking_ids(documents: List[Any]) -> List[str]:
+    """Build a collision-safe document ID list aligned to document ordering."""
+    tracking_ids: List[str] = []
+    seen_counts: Dict[str, int] = {}
+
+    for idx, doc in enumerate(documents):
+        base_id = resolve_document_id(doc, fallback_index=idx)
+        seen_count = seen_counts.get(base_id, 0)
+        seen_counts[base_id] = seen_count + 1
+
+        if seen_count == 0:
+            tracking_ids.append(base_id)
+        else:
+            tracking_ids.append(f"{base_id}__dup{seen_count + 1}")
+
+    return tracking_ids
 
 
 @dataclass
@@ -121,8 +179,9 @@ class ChunkService:
 
         # Extract document info
         doc_infos = []
-        for doc in documents:
-            doc_id = getattr(doc, 'id', None) or str(uuid4())
+        tracking_ids = build_document_tracking_ids(documents)
+        for idx, doc in enumerate(documents):
+            doc_id = tracking_ids[idx]
             doc_name = getattr(doc, 'file_name', None) or getattr(doc, 'name', 'Unknown')
 
             # Get token count - try attribute first, then dict access
@@ -236,8 +295,9 @@ class ChunkService:
             List of documents in the chunk
 
         """
+        tracking_ids = build_document_tracking_ids(documents)
         doc_map = {
-            (getattr(d, 'id', None) or str(i)): d
+            tracking_ids[i]: d
             for i, d in enumerate(documents)
         }
         return [doc_map[doc_id] for doc_id in chunk.doc_ids if doc_id in doc_map]
@@ -259,11 +319,12 @@ def create_chunk_state(
     """
     service = ChunkService(max_tokens_per_chunk)
     plan = service.create_balanced_chunks(documents)
+    tracking_ids = build_document_tracking_ids(documents)
 
     # Build document status dict
     doc_status = {}
-    for doc in documents:
-        doc_id = getattr(doc, 'id', None) or str(uuid4())
+    for idx, doc in enumerate(documents):
+        doc_id = tracking_ids[idx]
         doc_name = getattr(doc, 'file_name', None) or getattr(doc, 'name', 'Unknown')
         tokens = getattr(doc, 'token_count', 0) or 0
 
@@ -327,4 +388,3 @@ def can_proceed_to_synthesis(chunk_state: Dict[str, Any]) -> bool:
     """Check if all documents are addressed (completed or skipped)."""
     summary = get_chunk_summary(chunk_state)
     return summary["pending"] == 0 and summary["processing"] == 0 and summary["failed"] == 0
-

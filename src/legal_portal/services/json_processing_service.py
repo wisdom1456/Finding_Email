@@ -52,12 +52,20 @@ class JsonProcessingService:
 
         """
         try:
-            loop = asyncio.get_running_loop()
-            # Run the synchronous _make_openai_request in a separate thread
-            response_content = await loop.run_in_executor(
-                None,  # Use the default thread pool executor
-                self._make_openai_request,
-                prompt,
+            model = self.client.get_preferred_model("document_analysis", "gpt-5.2")
+            max_output_tokens = int(self.config.get("openai_max_tokens", 12000)) if isinstance(self.config, dict) else 12000
+
+            response_content = await asyncio.to_thread(
+                self._make_openai_request_responses_api,
+                prompt=prompt,
+                model=model,
+                reasoning_effort="minimal",
+                verbosity="low",
+                max_output_tokens=max_output_tokens,
+                instructions=(
+                    "You are a precise legal document analyst. "
+                    "Return valid JSON only with no markdown, code fences, or explanatory text."
+                ),
             )
 
             if response_content:

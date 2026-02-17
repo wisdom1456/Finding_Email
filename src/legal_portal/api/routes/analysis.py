@@ -26,6 +26,7 @@ from legal_portal.api.rate_limiter import limiter
 from legal_portal.core.data_models import (
     ChatMessageRequest,
     ChatMessageResponse,
+    ClioMatterContext,
     DocumentStatus,
     DocumentType,
     LetterType,
@@ -1203,23 +1204,152 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
         if _analysis_is_cancelled(supabase, analysis_id):
             raise AnalysisCancelledError("Analysis cancelled after preparing documents.")
 
-        # Prepare case_info
+        case_metadata = case.get("metadata") or {}
+        if not isinstance(case_metadata, dict):
+            case_metadata = {}
+
+        clio_matter_data = case.get("clio_matter_data") or {}
+        if not isinstance(clio_matter_data, dict):
+            clio_matter_data = {}
+
+        profile_data: Dict[str, Any] = {}
+        try:
+            user_id = case.get("user_id")
+            if user_id:
+                profile_resp = (
+                    supabase.table("profiles")
+                    .select("full_name,phone,firm_name,email")
+                    .eq("id", user_id)
+                    .limit(1)
+                    .execute()
+                )
+                if profile_resp.data:
+                    profile_data = profile_resp.data[0] or {}
+        except Exception as profile_err:
+            logger.warning("Failed to load profile context for case %s: %s", case_id, profile_err)
+
+        def _first_non_empty(*values: Any) -> Optional[str]:
+            for value in values:
+                if value is None:
+                    continue
+                text = str(value).strip()
+                if text:
+                    return text
+            return None
+
+        def _to_string_list(value: Any) -> List[str]:
+            if not isinstance(value, list):
+                return []
+            return [str(item).strip() for item in value if str(item).strip()]
+
+        practice_areas = _to_string_list(case_metadata.get("practice_areas"))
+        legal_issues = _to_string_list(case_metadata.get("legal_issues"))
+        if not legal_issues and practice_areas:
+            legal_issues = practice_areas[:5]
+
+        clio_practice_area = _first_non_empty(clio_matter_data.get("practice_area"))
+        if not legal_issues and clio_practice_area:
+            legal_issues = [clio_practice_area]
+
+        key_documents = _to_string_list(case_metadata.get("key_documents"))
+        if not key_documents:
+            key_documents = [doc.file_name for doc in processed_case_docs[:8] if doc.file_name]
+
+        confirmed_qa_pairs = case_metadata.get("qa_pairs")
+        if not isinstance(confirmed_qa_pairs, list):
+            confirmed_qa_pairs = []
+
+        clio_context = None
+        clio_context_raw = case_metadata.get("clio_matter_context") or case.get("clio_matter_context")
+        if isinstance(clio_context_raw, ClioMatterContext):
+            clio_context = clio_context_raw
+        elif isinstance(clio_context_raw, dict):
+            try:
+                clio_context = ClioMatterContext(**clio_context_raw)
+            except Exception:
+                logger.warning("Ignoring invalid clio_matter_context payload for case %s", case_id)
+
+        attorney_name = _first_non_empty(
+            case.get("attorney_name"),
+            case.get("attorneyName"),
+            case_metadata.get("attorney_name"),
+            case_metadata.get("attorneyName"),
+            profile_data.get("full_name"),
+        )
+        firm_name = _first_non_empty(
+            case.get("firm_name"),
+            case.get("firmName"),
+            case_metadata.get("firm_name"),
+            case_metadata.get("firmName"),
+            profile_data.get("firm_name"),
+        )
+        contact_phone = _first_non_empty(
+            case.get("contact_phone"),
+            case.get("contactPhone"),
+            case_metadata.get("contact_phone"),
+            case_metadata.get("contactPhone"),
+            profile_data.get("phone"),
+        )
+        contact_email = _first_non_empty(
+            case.get("contact_email"),
+            case.get("contactEmail"),
+            case_metadata.get("contact_email"),
+            case_metadata.get("contactEmail"),
+            profile_data.get("email"),
+        )
+        case_type = _first_non_empty(
+            case.get("case_type"),
+            case.get("caseType"),
+            case_metadata.get("case_type"),
+            case_metadata.get("caseType"),
+            clio_practice_area,
+            practice_areas[0] if practice_areas else None,
+        )
+
+        legal_issue = _first_non_empty(
+            case_metadata.get("legal_issue"),
+            case.get("description"),
+            clio_matter_data.get("description"),
+            "General legal document analysis",
+        )
+
+        # Prepare case_info with extended attorney/firm/contact context.
         case_info = {
             "client_name": case["client_name"],
+            "clientName": case["client_name"],
             "reference_number": case.get("reference_number", ""),
             "description": case.get("description", ""),
             "case_id": case_id,
-            "jurisdiction": jurisdiction,  # Include jurisdiction in case_info
+            "jurisdiction": jurisdiction,
+            "caseType": case_type,
+            "case_type": case_type,
+            "attorneyName": attorney_name,
+            "attorney_name": attorney_name,
+            "firmName": firm_name,
+            "firm_name": firm_name,
+            "contactPhone": contact_phone,
+            "contact_phone": contact_phone,
+            "contactEmail": contact_email,
+            "contact_email": contact_email,
         }
 
-        # Prepare review_data (simplified - can be enhanced via UI later)
+        # Prepare review_data with richer intake and prioritization context.
         review_data = {
-            "legal_issue": case.get("description", "General legal document analysis"),
+            "legal_issue": legal_issue,
+            "legal_issues": legal_issues,
+            "key_documents": key_documents,
+            "confirmed_qa_pairs": confirmed_qa_pairs,
         }
+        if clio_context:
+            review_data["clio_matter_context"] = clio_context
 
         # Track timing and stats for the AI Command Center
         analysis_start_time = time.time()
         total_tokens_used = 0
+        try:
+            progress_model = OpenAIClient().get_preferred_model("document_analysis", "gpt-5.2")
+        except Exception:
+            progress_model = "gpt-5.2"
 
         # Create progress callback that publishes to SSE and stores in DB
         async def progress_callback(
@@ -1257,7 +1387,7 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
             payload["stats"] = {
                 "elapsedSeconds": elapsed,
                 "tokens_used": total_tokens_used,
-                "model": "gpt-5.2",
+                "model": progress_model,
             }
 
             # Cooperative cancellation
@@ -1292,6 +1422,8 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
             progress_callback=progress_callback,
             jurisdiction=jurisdiction,  # Pass jurisdiction to main processor
             skipped_documents=skipped_documents,
+            analysis_id=analysis_id,
+            supabase_client=supabase,
         )
         processor_duration = time.time() - processor_start
         elapsed = time.time() - bg_start_time

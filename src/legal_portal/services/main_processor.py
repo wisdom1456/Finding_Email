@@ -22,6 +22,7 @@ from legal_portal.core.data_models import (
     QualityScore,
     SkippedDocument,
 )
+from legal_portal.services.chunk_service import build_document_tracking_ids
 from legal_portal.services.chunk_state_manager import ChunkStateManager
 from legal_portal.services.corpus_coverage_service import CorpusCoverageService
 from legal_portal.services.document_registry_service import DocumentRegistryService
@@ -110,6 +111,19 @@ _SIGNATURE_INSTRUMENT_HINT_PATTERNS = [
     ("financing agreement", re.compile(r"\bfinancing\s+agreement\b", re.IGNORECASE)),
     ("membership units", re.compile(r"\bclass\s+[a-z0-9]+\s+units?\b", re.IGNORECASE)),
 ]
+
+# Prompt-shaping controls for document summarization.
+# Long documents are chunked into excerpts so batching/token estimates stay stable.
+PROMPT_MAX_DOC_CHARS = 24000
+PROMPT_LONG_DOC_CHUNKS = 3
+PROMPT_MAX_DOCS_PER_BATCH = 10
+PROMPT_MAX_CONCURRENT_BATCHES = 3
+
+# Prompt-shaping controls for case synthesis.
+CASE_SYNTHESIS_MAX_INTAKE_CHARS = 12000
+CASE_SYNTHESIS_MAX_SUMMARIES = 40
+CASE_SYNTHESIS_MAX_SUMMARY_TEXT_CHARS = 2200
+CASE_SYNTHESIS_MAX_TOTAL_SUMMARY_CHARS = 75000
 
 
 def _extract_signature_instrument_hints(file_name: str, content: str) -> List[str]:
@@ -271,6 +285,82 @@ JURISDICTION_CITATION_MAP = {
 }
 
 
+def _truncate_for_prompt(value: Any, max_chars: int) -> str:
+    """Trim long text for prompt safety while preserving beginning and tail context."""
+    text = str(value or "")
+    if len(text) <= max_chars:
+        return text
+
+    if max_chars < 120:
+        return text[:max_chars]
+
+    tail_chars = max(40, max_chars // 3)
+    head_chars = max_chars - tail_chars - len("\n... [truncated] ...\n")
+    if head_chars < 40:
+        return text[:max_chars]
+
+    return f"{text[:head_chars]}\n... [truncated] ...\n{text[-tail_chars:]}"
+
+
+def _build_case_synthesis_payload(
+    intake_content: str,
+    structured_summaries: List[DocumentSummaryStructured],
+) -> Dict[str, Any]:
+    """Build a bounded synthesis payload from intake and document summaries."""
+    summary_pool = structured_summaries[:CASE_SYNTHESIS_MAX_SUMMARIES]
+    omitted_for_count_limit = max(0, len(structured_summaries) - len(summary_pool))
+
+    condensed_summaries: List[Dict[str, Any]] = []
+    total_summary_chars = 0
+    omitted_for_budget = 0
+
+    for idx, summary in enumerate(summary_pool):
+        s = summary.model_dump(mode="json") if hasattr(summary, "model_dump") else summary
+
+        key_content = _truncate_for_prompt(s.get("key_content"), CASE_SYNTHESIS_MAX_SUMMARY_TEXT_CHARS)
+        executive_summary = _truncate_for_prompt(s.get("executive_summary"), 900)
+        legal_significance = _truncate_for_prompt(s.get("legal_significance"), 800)
+        relevance_to_case = _truncate_for_prompt(s.get("relevance_to_case"), 800)
+
+        compact_summary = {
+            "document_name": s.get("document_name"),
+            "document_type": s.get("document_type"),
+            "executive_summary": executive_summary,
+            "key_content": key_content,
+            "legal_significance": legal_significance,
+            "relevance_to_case": relevance_to_case,
+            "parties": (s.get("parties") or [])[:10],
+            "key_quotes": [_truncate_for_prompt(item, 280) for item in (s.get("key_quotes") or [])[:5]],
+            "statute_citations": (s.get("statute_citations") or [])[:8],
+            "important_details": [
+                _truncate_for_prompt(item, 300) for item in (s.get("important_details") or [])[:8]
+            ],
+            "key_dates": (s.get("key_dates") or [])[:8],
+            "key_amounts": (s.get("key_amounts") or [])[:8],
+        }
+
+        estimated_chars = len(executive_summary) + len(key_content) + len(legal_significance) + len(relevance_to_case)
+        if condensed_summaries and (total_summary_chars + estimated_chars > CASE_SYNTHESIS_MAX_TOTAL_SUMMARY_CHARS):
+            omitted_for_budget = len(summary_pool) - idx
+            break
+
+        condensed_summaries.append(compact_summary)
+        total_summary_chars += estimated_chars
+
+    return {
+        "intake_excerpt": _truncate_for_prompt(intake_content, CASE_SYNTHESIS_MAX_INTAKE_CHARS),
+        "document_summaries": condensed_summaries,
+        "source_counts": {
+            "input_document_summaries": len(structured_summaries),
+            "included_document_summaries": len(condensed_summaries),
+            "omitted_for_count_limit": omitted_for_count_limit,
+            "omitted_for_budget_limit": omitted_for_budget,
+            "intake_chars_input": len(intake_content or ""),
+            "summary_chars_included": total_summary_chars,
+        },
+    }
+
+
 def _generate_case_analysis_summary(
     intake_content: str,
     structured_summaries: List[DocumentSummaryStructured],
@@ -295,8 +385,11 @@ def _generate_case_analysis_summary(
         Dictionary with case_summary, practice_area, key_issues, relevant_statutes, additional_details
 
     """
-    # Build prompt with all document summaries
-    summaries_json = json.dumps([s.model_dump() for s in structured_summaries], indent=2)
+    # Build prompt with bounded intake/summaries to avoid context overflow.
+    synthesis_payload = _build_case_synthesis_payload(intake_content, structured_summaries)
+    summaries_json = json.dumps(synthesis_payload["document_summaries"], indent=2)
+    intake_excerpt = synthesis_payload["intake_excerpt"]
+    source_counts = synthesis_payload["source_counts"]
     legal_issue = review_data.get("legal_issue", "") if review_data else ""
 
     # Get jurisdiction-specific config
@@ -307,12 +400,15 @@ def _generate_case_analysis_summary(
 create a high-level case analysis for a matter in {jurisdiction}.
 
 INTAKE INFORMATION:
-{intake_content}
+{intake_excerpt}
 
 {f"IDENTIFIED LEGAL ISSUE: {legal_issue}" if legal_issue else ""}
 
 DOCUMENT SUMMARIES:
 {summaries_json}
+
+SOURCE COVERAGE METADATA:
+{json.dumps(source_counts, indent=2)}
 
 Generate a structured case analysis with:
 1. **case_summary**: 120-200 word executive summary of the case, covering who, what, when, where, why
@@ -404,6 +500,7 @@ async def process_case_documents(
     try:
         # 1. Initialize services
         logger.info(f"[PROCESSOR:INIT] [CASE:{case_id}] Initializing processing services")
+        settings = get_settings()
 
         # Stage 1: Log Raw Extracted Text
         if diag_logger:
@@ -412,7 +509,10 @@ async def process_case_documents(
             diag_logger.log_stage("stage1_raw_text", {"case_docs": raw_docs, "intake_docs": raw_intake})
 
         openai_client_wrapper = OpenAIClient()
-        json_processing_service = JsonProcessingService(client=openai_client_wrapper, config={})
+        json_processing_service = JsonProcessingService(
+            client=openai_client_wrapper,
+            config={"openai_max_tokens": settings.openai_max_tokens},
+        )
 
         logger.info(f"Processing case for jurisdiction: {jurisdiction}")
 
@@ -423,28 +523,16 @@ async def process_case_documents(
         intake_content = processed_intake[0].content
         logger.info(f"Intake form loaded: {len(intake_content)} characters")
 
-        # 3. Combine documents for analysis
-        # Combine case docs and intake (intake is added to the list for summarization)
-        all_processed_docs = []
-        all_processed_docs.extend(processed_case_docs)
-        all_processed_docs.extend(processed_intake)
+        # 3. Collect case documents for summarization analysis.
+        # Intake is passed separately as context and should not be summarized as a case document.
+        all_processed_docs = list(processed_case_docs)
 
         if not all_processed_docs:
             logger.warning("No documents provided for analysis.")
 
-        # Initialize chunk_state for per-document tracking
-        if chunk_state_mgr and all_processed_docs:
-            try:
-                # Get max_tokens setting from user profile or use default
-                max_tokens = 50000  # Default
-                await chunk_state_mgr.initialize_chunk_state(all_processed_docs, max_tokens)
-                logger.info(f"[PROCESSOR] Chunk state initialized for {len(all_processed_docs)} documents")
-            except Exception as e:
-                logger.warning(f"[PROCESSOR] Failed to initialize chunk state: {e}")
-
         if progress_callback:
             await progress_callback(
-                f"Loaded {len(all_processed_docs)} documents for analysis",
+                f"Loaded {len(all_processed_docs)} case documents for analysis",
                 [d.file_name for d in all_processed_docs],
                 "extraction_complete",
                 15,
@@ -460,6 +548,16 @@ async def process_case_documents(
             logger.info(f"After deduplication: {len(all_processed_docs)} unique documents")
 
             await asyncio.to_thread(_detect_near_duplicates, all_processed_docs)
+
+        # Initialize chunk_state after dedupe so tracked IDs align with analyzed documents.
+        if chunk_state_mgr and all_processed_docs:
+            try:
+                await chunk_state_mgr.initialize_chunk_state(
+                    all_processed_docs, settings.max_tokens_per_batch
+                )
+                logger.info(f"[PROCESSOR] Chunk state initialized for {len(all_processed_docs)} documents")
+            except Exception as e:
+                logger.warning(f"[PROCESSOR] Failed to initialize chunk state: {e}")
 
         # 4.5. Quality validation on processed documents
         quality_validator = DocumentQualityValidator()
@@ -485,9 +583,6 @@ async def process_case_documents(
         # Aggregate quality results and create context string
         aggregated_quality_report = _aggregate_quality_results(quality_results)
         quality_context = _format_quality_context(aggregated_quality_report)
-
-        # Load settings early so we can use it for statute recommendations
-        settings = get_settings()
 
         # Pass new context to summary generation
         # Get statute recommendations early so we can use them in document summarization
@@ -517,34 +612,47 @@ async def process_case_documents(
             except Exception as e:
                 logger.warning(f"Failed to generate statute recommendations: {e}", exc_info=True)
 
-        if progress_callback:
-            await progress_callback(
-                "Analyzing extracted content...",
-                [d.file_name for d in all_processed_docs],
-                "document_analysis",
-                15,
-                stage={"id": "doc_summary", "name": "Document Analysis", "status": "active", "progress": 10}
+        structured_summaries: List[DocumentSummaryStructured] = []
+        if all_processed_docs:
+            if progress_callback:
+                await progress_callback(
+                    "Analyzing extracted content...",
+                    [d.file_name for d in all_processed_docs],
+                    "document_analysis",
+                    15,
+                    stage={"id": "doc_summary", "name": "Document Analysis", "status": "active", "progress": 10}
+                )
+            structured_summaries, summary_errors = await _generate_document_summaries(
+                intake_content,
+                all_processed_docs,
+                openai_client_wrapper,
+                json_processing_service,  # Pass the instance here
+                review_data,  # Pass through
+                progress_callback,
+                statute_context,  # NEW: Pass statute context
+                jurisdiction=jurisdiction,  # NEW: Pass jurisdiction
+                chunk_state_mgr=chunk_state_mgr,  # NEW: For per-doc status tracking
             )
-        structured_summaries, errors = await _generate_document_summaries(
-            intake_content,
-            all_processed_docs,
-            openai_client_wrapper,
-            json_processing_service,  # Pass the instance here
-            review_data,  # Pass through
-            progress_callback,
-            statute_context,  # NEW: Pass statute context
-            jurisdiction=jurisdiction,  # NEW: Pass jurisdiction
-            chunk_state_mgr=chunk_state_mgr,  # NEW: For per-doc status tracking
-        )
+            errors.extend(summary_errors)
 
-        if progress_callback:
-            await progress_callback(
-                "Document analysis complete.",
-                [],
-                "document_analysis",
-                20,
-                stage={"id": "doc_summary", "name": "Document Analysis", "status": "completed", "progress": 100}
-            )
+            if progress_callback:
+                await progress_callback(
+                    "Document analysis complete.",
+                    [],
+                    "document_analysis",
+                    20,
+                    stage={"id": "doc_summary", "name": "Document Analysis", "status": "completed", "progress": 100}
+                )
+        else:
+            logger.info("No case documents provided; skipping document summary stage")
+            if progress_callback:
+                await progress_callback(
+                    "No case documents uploaded. Skipping document analysis stage.",
+                    [],
+                    "document_analysis",
+                    20,
+                    stage={"id": "doc_summary", "name": "Document Analysis", "status": "skipped", "progress": 100}
+                )
 
         # Stage 3: Log Per-Document Summaries
         if diag_logger:
@@ -787,9 +895,17 @@ async def process_case_documents(
             multi_stage_analyzer = MultiStageAnalyzer(
                 openai_client=openai_client_wrapper, statute_service=statute_service
             )
+            legal_issues_hint = []
+            if isinstance((review_data or {}).get("legal_issues"), list):
+                legal_issues_hint = [
+                    str(issue).strip() for issue in review_data.get("legal_issues", []) if str(issue).strip()
+                ]
+            if not legal_issues_hint and (review_data or {}).get("legal_issue"):
+                legal_issues_hint = [str(review_data.get("legal_issue")).strip()]
+
             registry_service = DocumentRegistryService()
             document_registry_seed = registry_service.build_registry(
-                processed_documents=processed_case_docs + processed_intake,
+                processed_documents=all_processed_docs + processed_intake,
                 document_summaries=structured_summaries,
                 fact_matrix=None,
             )
@@ -804,13 +920,14 @@ async def process_case_documents(
 
             multi_stage_start = time.time()
             signature_evidence = _build_signature_evidence_for_gap_analysis(
-                processed_case_docs + processed_intake
+                all_processed_docs + processed_intake
             )
             multi_stage_result = await multi_stage_analyzer.analyze_case(
                 intake_content=intake_content,
                 document_summaries=structured_summaries,
                 progress_callback=progress_callback,
                 case_type=case_analysis_dict.get("practice_area"),
+                legal_issues=legal_issues_hint or None,
                 jurisdiction=jurisdiction,  # Pass jurisdiction
                 diag_logger=diag_logger,  # Pass diagnostic logger
                 signature_evidence=signature_evidence,
@@ -824,10 +941,10 @@ async def process_case_documents(
 
             # Attach original documents to multi-stage result for letter generation
             multi_stage_result.original_documents = _build_original_documents_map(
-                processed_case_docs + processed_intake
+                all_processed_docs + processed_intake
             )
             multi_stage_result.document_registry = registry_service.build_registry(
-                processed_documents=processed_case_docs + processed_intake,
+                processed_documents=all_processed_docs + processed_intake,
                 document_summaries=structured_summaries,
                 fact_matrix=fact_matrix,
             )
@@ -913,7 +1030,7 @@ async def process_case_documents(
 
     # Track which models were used for each operation
         models_used = {
-            "document_analysis": openai_client_wrapper.get_preferred_model("document_analysis", "gpt-5-mini"),
+            "document_analysis": openai_client_wrapper.get_preferred_model("document_analysis", "gpt-5.2"),
             "letter_generation": openai_client_wrapper.get_preferred_model("letter_generation", "gpt-5.2"),
             "case_chat": openai_client_wrapper.get_preferred_model("case_chat", "gpt-5-mini"),
             "multi_stage_analysis": openai_client_wrapper.get_preferred_model(
@@ -949,7 +1066,7 @@ async def process_case_documents(
             status="completed",
             processing_time_seconds=processing_time,
             intake_content=intake_content,
-            document_count=len(processed_case_docs),
+            document_count=len(all_processed_docs),
             errors=errors,
             warnings=coverage_warnings,
             citation_summary=None,
@@ -961,7 +1078,7 @@ async def process_case_documents(
             opposing_parties=opposing_parties,
             multi_stage_result=multi_stage_result_dict,
             generated_letters={},
-            processed_documents=processed_case_docs,  # NEW: Return processed documents for persistence
+            processed_documents=all_processed_docs,  # Return analyzed (deduped) case documents
             skipped_documents=skipped_documents or [],  # NEW: Include skipped documents
         )
 
@@ -978,7 +1095,7 @@ async def process_case_documents(
 
         logger.info(
             f"[PROCESSOR:COMPLETE] [CASE:{case_id}] [ELAPSED:{processing_time:.1f}s] "
-            f"Document processing completed | doc_count={len(processed_case_docs)} "
+            f"Document processing completed | doc_count={len(all_processed_docs)} "
             f"summaries={len(structured_summaries)} multi_stage={'SUCCESS' if multi_stage_result else 'FAILED'}"
         )
         return result
@@ -1128,39 +1245,85 @@ def _detect_near_duplicates(documents: List[Any]) -> None:
                 )
 
 
+def _normalize_document_content(content: Any) -> str:
+    """Normalize document content to text for prompt construction."""
+    if content is None:
+        return ""
+    if isinstance(content, bytes):
+        return content.decode("utf-8", errors="ignore")
+    return str(content)
+
+
+def _chunk_document_content_for_prompt(content: str, max_chars: int = PROMPT_MAX_DOC_CHARS) -> str:
+    """Chunk long content into bounded excerpts for prompt stability."""
+    if len(content) <= max_chars:
+        return content
+
+    first_len = max_chars // PROMPT_LONG_DOC_CHUNKS
+    middle_len = max_chars // PROMPT_LONG_DOC_CHUNKS
+    last_len = max_chars - first_len - middle_len
+
+    middle_start = max(0, (len(content) - middle_len) // 2)
+    middle_end = middle_start + middle_len
+
+    first_excerpt = content[:first_len]
+    middle_excerpt = content[middle_start:middle_end]
+    last_excerpt = content[-last_len:]
+
+    excerpt_chars = len(first_excerpt) + len(middle_excerpt) + len(last_excerpt)
+    omitted_chars = max(0, len(content) - excerpt_chars)
+
+    return (
+        f"[TRUNCATED_DOCUMENT total_chars={len(content)} excerpt_chars={excerpt_chars} "
+        f"omitted_chars≈{omitted_chars}]\n"
+        "[EXCERPT 1/3 - BEGINNING]\n"
+        f"{first_excerpt}\n"
+        "[EXCERPT 2/3 - MIDDLE]\n"
+        f"{middle_excerpt}\n"
+        "[EXCERPT 3/3 - END]\n"
+        f"{last_excerpt}"
+    )
+
+
+def _format_single_document_with_metadata(doc: Any, document_index: Optional[int] = None) -> str:
+    """Format a single document block for AI prompt input."""
+    quality_flag = ""
+    extraction_quality = getattr(doc, "extraction_quality", None)
+    if extraction_quality == "low":
+        quality_flag = " [⚠️ LOW QUALITY - may have extraction errors]"
+    elif extraction_quality == "medium":
+        quality_flag = " [⚠️ MEDIUM QUALITY - verify critical facts]"
+
+    doc_type_flag = " [📷 IMAGE FILE]" if _is_image_document(doc) else ""
+
+    signature_flag = ""
+    signature_data = getattr(doc, "signature_detection", None) or {}
+    signature_status = signature_data.get("status")
+    if signature_status:
+        signature_confidence = signature_data.get("confidence", "none")
+        signature_markers = signature_data.get("signature_marker_count", 0)
+        signature_flag = (
+            f" [SIGNATURE_STATUS={signature_status}; "
+            f"confidence={signature_confidence}; markers={signature_markers}]"
+        )
+        signing_date = signature_data.get("signing_date")
+        if signing_date:
+            signature_flag += f" [SIGNING_DATE={signing_date}]"
+
+    content = _normalize_document_content(getattr(doc, "content", ""))
+    content_preview = _chunk_document_content_for_prompt(content)
+    doc_name = getattr(doc, "file_name", "Unknown document")
+    label = f"Document {document_index}" if document_index is not None else "Document"
+
+    return f"\n--- {label}: {doc_name}{quality_flag}{doc_type_flag}{signature_flag} ---\n{content_preview}\n"
+
+
 def _format_documents_with_metadata(case_documents: list) -> str:
     """Format documents with quality flags for AI analysis."""
-    formatted = []
-    for i, doc in enumerate(case_documents, 1):
-        quality_flag = ""
-        if doc.extraction_quality == "low":
-            quality_flag = " [⚠️ LOW QUALITY - may have extraction errors]"
-        elif doc.extraction_quality == "medium":
-            quality_flag = " [⚠️ MEDIUM QUALITY - verify critical facts]"
-
-        # Add image flag for image documents
-        doc_type_flag = " [📷 IMAGE FILE]" if _is_image_document(doc) else ""
-
-        # Add signature flag when available from PDF ingestion
-        signature_flag = ""
-        signature_data = getattr(doc, "signature_detection", None) or {}
-        signature_status = signature_data.get("status")
-        if signature_status:
-            signature_confidence = signature_data.get("confidence", "none")
-            signature_markers = signature_data.get("signature_marker_count", 0)
-            signature_flag = (
-                f" [SIGNATURE_STATUS={signature_status}; "
-                f"confidence={signature_confidence}; markers={signature_markers}]"
-            )
-            signing_date = signature_data.get("signing_date")
-            if signing_date:
-                signature_flag += f" [SIGNING_DATE={signing_date}]"
-
-        content_preview = doc.content  # Send full content, no truncation
-        formatted.append(
-            f"\n--- Document {i}: {doc.file_name}{quality_flag}{doc_type_flag}{signature_flag} ---\n{content_preview}\n"
-        )
-    return "".join(formatted)
+    return "".join(
+        _format_single_document_with_metadata(doc, document_index=i)
+        for i, doc in enumerate(case_documents, start=1)
+    )
 
 
 def _format_quality_context(quality_results: dict) -> str:
@@ -1238,10 +1401,11 @@ def _create_smart_batches(documents: list, max_tokens_per_batch: int | None = No
     batches = []
     current_batch = []
     current_tokens = 0
-    max_docs_per_batch = 10  # Hard limit to prevent API timeouts
+    max_docs_per_batch = PROMPT_MAX_DOCS_PER_BATCH  # Hard limit to prevent API timeouts
 
     for doc in documents:
-        doc_tokens = _estimate_tokens(doc.content)
+        # Estimate based on actual prompt-rendered content, not raw full-text content.
+        doc_tokens = _estimate_tokens(_format_single_document_with_metadata(doc))
 
         # Start new batch if: would exceed token limit OR already have 10 docs
         if (current_tokens + doc_tokens > max_tokens_per_batch and current_batch) or len(
@@ -1255,6 +1419,72 @@ def _create_smart_batches(documents: list, max_tokens_per_batch: int | None = No
             current_tokens += doc_tokens
 
     # Don't forget the last batch
+    if current_batch:
+        batches.append(current_batch)
+
+    return batches
+
+
+def _estimate_summary_prompt_tokens(
+    intake_content: str,
+    documents: List[Any],
+    review_data: dict,
+    statute_context: str,
+    jurisdiction: str,
+    batch_num: int = 1,
+    total_batches: int = 1,
+) -> int:
+    """Estimate tokens for the full summary prompt for a given document batch."""
+    prompt = _build_summary_prompt(
+        intake_content=intake_content,
+        documents=documents,
+        review_data=review_data,
+        is_batch=True,
+        batch_info=(batch_num, total_batches),
+        statute_context=statute_context,
+        jurisdiction=jurisdiction,
+    )
+    return _estimate_tokens(prompt)
+
+
+def _create_prompt_aware_batches(
+    documents: List[Any],
+    intake_content: str,
+    review_data: dict,
+    statute_context: str,
+    jurisdiction: str,
+    max_tokens_per_batch: int,
+) -> List[List[Any]]:
+    """Create batches using full prompt token estimates (includes intake + fixed instructions)."""
+    if not documents:
+        return []
+
+    batches: List[List[Any]] = []
+    current_batch: List[Any] = []
+
+    for doc in documents:
+        candidate_batch = current_batch + [doc]
+        candidate_tokens = _estimate_summary_prompt_tokens(
+            intake_content=intake_content,
+            documents=candidate_batch,
+            review_data=review_data,
+            statute_context=statute_context,
+            jurisdiction=jurisdiction,
+        )
+
+        should_split = (
+            bool(current_batch)
+            and (
+                candidate_tokens > max_tokens_per_batch
+                or len(current_batch) >= PROMPT_MAX_DOCS_PER_BATCH
+            )
+        )
+        if should_split:
+            batches.append(current_batch)
+            current_batch = [doc]
+        else:
+            current_batch = candidate_batch
+
     if current_batch:
         batches.append(current_batch)
 
@@ -1290,9 +1520,9 @@ async def _generate_document_summaries(
         Dictionary with 'summaries' (list of DocumentSummaryStructured) and 'raw_json' (string)
 
     """
-    errors = []  # Initialize the errors list here
+    errors = []
 
-    # Handle case with no documents - analyze intake form only
+    # Handle case with no case documents: request intake-only structured analysis.
     if not case_documents:
         prompt = f"""You are a legal document analyst. \
 Given the client intake information below, provide a structured JSON analysis for a matter in {jurisdiction}.
@@ -1317,269 +1547,288 @@ OUTPUT FORMAT (STRICT JSON):
 
 Return ONLY valid JSON, no markdown code blocks.
 """
-    else:
-        # ========================================================================
-        # PARALLEL BATCH PROCESSING - batch 5 docs per API call, 3 concurrent batches
-        # ========================================================================
-        # Optimized for speed under Vercel 5-min limit:
-        # - Batch 5 documents per API call (reduces API overhead)
-        # - 3 concurrent batches (15 docs processing simultaneously)
-        # - return_exceptions=True: one failure doesn't kill others
-        # - 3-min timeout per batch
-        # ========================================================================
+        response_json, batch_errors = await json_processing_service.process_documents_to_json(prompt)
+        errors.extend(batch_errors)
+        parsed_data = _clean_and_parse_json(response_json) if response_json else None
+        if not parsed_data:
+            return [], errors
 
-        total_docs = len(case_documents)
-        all_summaries = []
-        processed_count = 0
-
-        # Create batches of 5 documents each
-        BATCH_SIZE = 5
-        batches = [case_documents[i:i + BATCH_SIZE] for i in range(0, len(case_documents), BATCH_SIZE)]
-        total_batches = len(batches)
-
-        # Semaphore limits concurrent API calls to 3 batches (15 docs max concurrently)
-        semaphore = asyncio.Semaphore(3)
-
-        logger.info(f"[BATCH-PARALLEL] Starting analysis of {total_docs} documents in {total_batches} batches for {jurisdiction}")
-
-        async def process_batch_with_limit(batch: List[Any], batch_idx: int):
-            """Process a batch of documents with semaphore-controlled concurrency."""
-            nonlocal processed_count
-
-            async with semaphore:
-                batch_num = batch_idx + 1
-                batch_doc_names = [d.file_name for d in batch]
-                batch_doc_count = len(batch)
-
-                logger.info(f"[BATCH {batch_num}/{total_batches}] Starting: {batch_doc_count} docs - {', '.join(batch_doc_names[:3])}...")
-
-                # Update chunk_state: all documents in batch are now processing
-                for doc in batch:
-                    doc_id = getattr(doc, 'document_id', None) or getattr(doc, 'id', None) or f"doc_{doc.file_name}"
-                    if chunk_state_mgr:
-                        await chunk_state_mgr.update_document_status(doc_id, "processing")
-
-                # Update UI: batch is now processing
-                if progress_callback:
-                    await progress_callback(
-                        message=f"Analyzing batch {batch_num}/{total_batches} ({batch_doc_count} documents)...",
-                        phase="document_analysis",
-                        percent=15 + int((processed_count / total_docs) * 60),
-                    )
-
-                try:
-                    # Process batch with 3-minute timeout (more time for multiple docs)
-                    batch_result, batch_errors = await asyncio.wait_for(
-                        _process_document_batch(
-                            batch,  # Full batch of documents
-                            intake_content,
-                            batch_num,
-                            total_batches,
-                            openai_client_wrapper,
-                            json_processing_service,
-                            review_data,
-                            [],
-                            statute_context,
-                            jurisdiction=jurisdiction,
-                        ),
-                        timeout=180.0  # 3 minutes per batch
-                    )
-
-                    processed_count += batch_doc_count
-
-                    if batch_result:
-                        logger.info(f"[BATCH {batch_num}/{total_batches}] Completed: {len(batch_result)} summaries from {batch_doc_count} docs")
-
-                        # Update chunk_state for each document in batch
-                        for doc in batch:
-                            doc_id = getattr(doc, 'document_id', None) or getattr(doc, 'id', None) or f"doc_{doc.file_name}"
-                            # Find matching summary by document name
-                            matching_summary = next(
-                                (s for s in batch_result if s.document_name == doc.file_name),
-                                None
-                            )
-                            if chunk_state_mgr:
-                                if matching_summary:
-                                    summary_data = matching_summary.model_dump() if hasattr(matching_summary, 'model_dump') else matching_summary
-                                    await chunk_state_mgr.update_document_status(doc_id, "completed", summary=summary_data)
-                                else:
-                                    await chunk_state_mgr.update_document_status(doc_id, "completed")
-                    else:
-                        logger.warning(f"[BATCH {batch_num}/{total_batches}] No results from batch")
-                        for doc in batch:
-                            doc_id = getattr(doc, 'document_id', None) or getattr(doc, 'id', None) or f"doc_{doc.file_name}"
-                            if chunk_state_mgr:
-                                await chunk_state_mgr.update_document_status(doc_id, "completed")
-
-                    # Update UI: batch completed
-                    if progress_callback:
-                        await progress_callback(
-                            message=f"Batch {batch_num} complete ({batch_doc_count} docs)",
-                            docs_processed=batch_doc_names,
-                            phase="document_analysis",
-                            percent=15 + int((processed_count / total_docs) * 60),
-                        )
-
-                    return batch_result or [], batch_errors or []
-
-                except asyncio.TimeoutError:
-                    processed_count += batch_doc_count
-                    error_msg = f"Batch {batch_num} timed out after 3 minutes ({batch_doc_count} docs)"
-                    logger.error(f"[BATCH {batch_num}/{total_batches}] TIMEOUT: {', '.join(batch_doc_names)}")
-
-                    # Update chunk_state with failure for all docs in batch
-                    for doc in batch:
-                        doc_id = getattr(doc, 'document_id', None) or getattr(doc, 'id', None) or f"doc_{doc.file_name}"
-                        if chunk_state_mgr:
-                            await chunk_state_mgr.update_document_status(
-                                doc_id, "failed", error=error_msg, error_type="TIMEOUT"
-                            )
-
-                    if progress_callback:
-                        await progress_callback(
-                            message=f"Timeout on batch {batch_num}",
-                            phase="document_analysis",
-                            percent=15 + int((processed_count / total_docs) * 60),
-                        )
-
-                    return [], [ProcessingError(
-                        source=f"batch_{batch_num}",
-                        error_type="TIMEOUT",
-                        error_message=error_msg
-                    )]
-
-                except Exception as e:
-                    processed_count += batch_doc_count
-                    error_msg = str(e)
-                    logger.error(f"[BATCH {batch_num}/{total_batches}] ERROR: {e}", exc_info=True)
-
-                    # Update chunk_state with failure for all docs in batch
-                    for doc in batch:
-                        doc_id = getattr(doc, 'document_id', None) or getattr(doc, 'id', None) or f"doc_{doc.file_name}"
-                        if chunk_state_mgr:
-                            await chunk_state_mgr.update_document_status(
-                                doc_id, "failed", error=error_msg, error_type="PROCESSING_ERROR"
-                            )
-
-                    if progress_callback:
-                        await progress_callback(
-                            message=f"Error in batch {batch_num}",
-                            phase="document_analysis",
-                            percent=15 + int((processed_count / total_docs) * 60),
-                        )
-
-                    return [], [ProcessingError(
-                        source=f"batch_{batch_num}",
-                        error_type="PROCESSING_ERROR",
-                        error_message=error_msg
-                    )]
-
-        # Create tasks for all batches (semaphore controls concurrency)
-        tasks = [process_batch_with_limit(batch, i) for i, batch in enumerate(batches)]
-
-        # Execute all with return_exceptions=True so one failure doesn't kill others
-        results = await asyncio.gather(*tasks, return_exceptions=True)
-
-        # Collect results
-        for i, result in enumerate(results):
-            if isinstance(result, Exception):
-                logger.error(f"[BATCH {i+1}/{total_batches}] Task exception: {result}")
-                errors.append(ProcessingError(
-                    source=f"batch_{i}",
-                    error_type="TASK_ERROR",
-                    error_message=str(result)
-                ))
-            elif result:
-                summaries, batch_errors = result
-                all_summaries.extend(summaries)
-                errors.extend(batch_errors)
-
-        logger.info(
-            f"[BATCH-PARALLEL] Complete: {len(all_summaries)} summaries from {total_docs} documents in {total_batches} batches, "
-            f"{len(errors)} errors"
-        )
-
-        # Emit chunk_complete event with error info if any failures
-        if errors and progress_callback:
-            failed_docs = [
-                {"name": e.source, "error": e.error_message, "error_type": e.error_type}
-                for e in errors
-            ]
-            await progress_callback(
-                message=f"Document analysis complete with {len(errors)} failures",
-                phase="document_analysis",
-                percent=75,
-                chunk_status={
-                    "type": "chunk_complete_with_errors",
-                    "completed": len(all_summaries),
-                    "failed": len(errors),
-                    "failed_docs": failed_docs
-                }
-            )
-
-        return (all_summaries, errors)
-
-        # Note: The code below (single-call path) is now unreachable but kept for reference
-        logger.info(f"Processing {len(case_documents)} documents in single call for {jurisdiction}...")
-
-        # Build the flexible JSON prompt for documents
-        prompt = _build_summary_prompt(
-            intake_content,
-            case_documents,
-            review_data,
-            is_batch=False,
-            statute_context=statute_context,
-            jurisdiction=jurisdiction,
-        )
-
-    # Make the API call
-    model = openai_client_wrapper.get_preferred_model("document_analysis", "gpt-5-mini")
-    response_dict = await asyncio.to_thread(
-        openai_client_wrapper.create_response,
-        model=model,
-        instructions="You are a precise legal document analyst. Always return valid JSON.",
-        input=prompt,
-        max_output_tokens=4000,
-        reasoning_effort="minimal",
-        verbosity="medium",
-    )
-
-    # Parse JSON response
-    raw_response = response_dict["content"].strip()
-
-    # Remove markdown code blocks if present
-    if raw_response.startswith("```"):
-        lines = raw_response.split("\n")
-        # Remove first line (``` or ```json) and last line (```)
-        raw_response = "\n".join(lines[1:-1])
-
-    from legal_portal.core.data_models import DocumentSummaryStructured
-
-    try:
-        parsed_data = json.loads(raw_response)
-
-        # Validate each document summary
         validated_summaries = []
         for doc_data in parsed_data.get("documents", []):
             try:
-                summary = DocumentSummaryStructured(**doc_data)
-                validated_summaries.append(summary)
+                validated_summaries.append(DocumentSummaryStructured(**doc_data))
             except Exception as e:
                 logger.warning(
                     f"Failed to validate document summary for {doc_data.get('document_name', 'unknown')}: {e}"
                 )
-                # Continue without this summary
+        return validated_summaries, errors
 
-        logger.info(f"✅ Successfully parsed {len(validated_summaries)} structured document summaries")
+    total_docs = len(case_documents)
+    all_summaries = []
+    processed_count = 0
+    tracking_ids = build_document_tracking_ids(case_documents)
+    doc_tracking_id_map = {id(doc): tracking_ids[idx] for idx, doc in enumerate(case_documents)}
 
-        # Return both structured data and raw JSON
-        return validated_summaries, []  # Return empty errors for now
+    def tracking_doc_id(doc: Any) -> str:
+        return doc_tracking_id_map.get(id(doc)) or getattr(doc, "document_id", None) or getattr(doc, "id", None) or f"doc_{getattr(doc, 'file_name', 'unknown')}"
 
-    except json.JSONDecodeError as e:
-        logger.error(f"❌ Failed to parse JSON response: {e}")
-        logger.error(f"Raw response: {raw_response[:500]}...")
-        # Return empty result - let calling code handle fallback
-        raise ValueError(f"JSON parsing failed: {e}") from e
+    max_tokens_per_batch = get_settings().max_tokens_per_batch
+    batches = _create_prompt_aware_batches(
+        documents=case_documents,
+        intake_content=intake_content,
+        review_data=review_data,
+        statute_context=statute_context,
+        jurisdiction=jurisdiction,
+        max_tokens_per_batch=max_tokens_per_batch,
+    )
+    total_batches = len(batches)
+    batch_token_estimates = [
+        _estimate_summary_prompt_tokens(
+            intake_content=intake_content,
+            documents=batch,
+            review_data=review_data,
+            statute_context=statute_context,
+            jurisdiction=jurisdiction,
+            batch_num=i + 1,
+            total_batches=total_batches,
+        )
+        for i, batch in enumerate(batches)
+    ]
+
+    semaphore = asyncio.Semaphore(min(PROMPT_MAX_CONCURRENT_BATCHES, max(1, total_batches)))
+
+    logger.info(
+        f"[BATCH-PARALLEL] Starting analysis of {total_docs} documents in "
+        f"{total_batches} token-aware batches for {jurisdiction} "
+        f"(max_tokens_per_batch={max_tokens_per_batch})"
+    )
+
+    async def process_batch_with_limit(batch: List[Any], batch_idx: int):
+        """Process a batch of documents with semaphore-controlled concurrency."""
+        nonlocal processed_count
+
+        async with semaphore:
+            batch_num = batch_idx + 1
+            batch_doc_names = [d.file_name for d in batch]
+            batch_doc_count = len(batch)
+            batch_est_tokens = batch_token_estimates[batch_idx]
+
+            logger.info(
+                f"[BATCH {batch_num}/{total_batches}] Starting: {batch_doc_count} docs "
+                f"(estimated_tokens={batch_est_tokens}) - {', '.join(batch_doc_names[:3])}..."
+            )
+
+            for doc in batch:
+                doc_id = tracking_doc_id(doc)
+                if chunk_state_mgr:
+                    await chunk_state_mgr.update_document_status(doc_id, "processing")
+
+            if progress_callback:
+                await progress_callback(
+                    message=(
+                        f"Analyzing batch {batch_num}/{total_batches} "
+                        f"({batch_doc_count} documents, ~{batch_est_tokens} tokens)..."
+                    ),
+                    phase="document_analysis",
+                    percent=15 + int((processed_count / total_docs) * 60),
+                )
+
+            try:
+                batch_result, batch_errors = await asyncio.wait_for(
+                    _process_document_batch(
+                        batch,
+                        intake_content,
+                        batch_num,
+                        total_batches,
+                        openai_client_wrapper,
+                        json_processing_service,
+                        review_data,
+                        [],
+                        statute_context,
+                        jurisdiction=jurisdiction,
+                    ),
+                    timeout=180.0,
+                )
+
+                processed_count += batch_doc_count
+
+                completed_doc_count = 0
+                if batch_result:
+                    logger.info(
+                        f"[BATCH {batch_num}/{total_batches}] Completed: {len(batch_result)} summaries "
+                        f"from {batch_doc_count} docs"
+                    )
+
+                    summaries_by_name: Dict[str, List[Any]] = {}
+                    for summary in batch_result:
+                        summaries_by_name.setdefault(summary.document_name, []).append(summary)
+
+                    missing_docs: List[str] = []
+                    for doc in batch:
+                        doc_id = tracking_doc_id(doc)
+                        doc_name = getattr(doc, "file_name", "unknown")
+                        candidates = summaries_by_name.get(doc_name, [])
+                        matching_summary = candidates.pop(0) if candidates else None
+                        if chunk_state_mgr:
+                            if matching_summary:
+                                summary_data = (
+                                    matching_summary.model_dump()
+                                    if hasattr(matching_summary, "model_dump")
+                                    else matching_summary
+                                )
+                                await chunk_state_mgr.update_document_status(doc_id, "completed", summary=summary_data)
+                                completed_doc_count += 1
+                            else:
+                                await chunk_state_mgr.update_document_status(
+                                    doc_id,
+                                    "failed",
+                                    error=f"Model did not return summary for {doc_name}",
+                                    error_type="MISSING_SUMMARY",
+                                )
+                                missing_docs.append(doc_name)
+                        elif matching_summary:
+                            completed_doc_count += 1
+
+                    if missing_docs:
+                        missing_error = ProcessingError(
+                            source=f"batch_{batch_num}",
+                            error_type="MISSING_SUMMARY",
+                            error_message=(
+                                f"Model omitted {len(missing_docs)} document summaries in batch {batch_num}: "
+                                + ", ".join(missing_docs[:5])
+                            ),
+                        )
+                        batch_errors = [*(batch_errors or []), missing_error]
+                else:
+                    logger.warning(f"[BATCH {batch_num}/{total_batches}] No results from batch")
+                    primary_error = next(iter(batch_errors or []), None)
+                    if primary_error:
+                        error_msg = primary_error.error_message
+                        error_type = primary_error.error_type
+                    else:
+                        error_msg = (
+                            f"Batch {batch_num} returned no summaries for {batch_doc_count} documents"
+                        )
+                        error_type = "EMPTY_BATCH_RESULT"
+                        batch_errors = [
+                            ProcessingError(
+                                source=f"batch_{batch_num}",
+                                error_type=error_type,
+                                error_message=error_msg,
+                            )
+                        ]
+                    for doc in batch:
+                        doc_id = tracking_doc_id(doc)
+                        if chunk_state_mgr:
+                            await chunk_state_mgr.update_document_status(
+                                doc_id,
+                                "failed",
+                                error=error_msg,
+                                error_type=error_type,
+                            )
+
+                if progress_callback:
+                    await progress_callback(
+                        message=f"Batch {batch_num} complete ({completed_doc_count}/{batch_doc_count} docs summarized)",
+                        docs_processed=batch_doc_names,
+                        phase="document_analysis",
+                        percent=15 + int((processed_count / total_docs) * 60),
+                    )
+
+                return batch_result or [], batch_errors or []
+
+            except asyncio.TimeoutError:
+                processed_count += batch_doc_count
+                error_msg = f"Batch {batch_num} timed out after 3 minutes ({batch_doc_count} docs)"
+                logger.error(f"[BATCH {batch_num}/{total_batches}] TIMEOUT: {', '.join(batch_doc_names)}")
+
+                for doc in batch:
+                    doc_id = tracking_doc_id(doc)
+                    if chunk_state_mgr:
+                        await chunk_state_mgr.update_document_status(
+                            doc_id, "failed", error=error_msg, error_type="TIMEOUT"
+                        )
+
+                if progress_callback:
+                    await progress_callback(
+                        message=f"Timeout on batch {batch_num}",
+                        phase="document_analysis",
+                        percent=15 + int((processed_count / total_docs) * 60),
+                    )
+
+                return [], [
+                    ProcessingError(
+                        source=f"batch_{batch_num}",
+                        error_type="TIMEOUT",
+                        error_message=error_msg,
+                    )
+                ]
+
+            except Exception as e:
+                processed_count += batch_doc_count
+                error_msg = str(e)
+                logger.error(f"[BATCH {batch_num}/{total_batches}] ERROR: {e}", exc_info=True)
+
+                for doc in batch:
+                    doc_id = tracking_doc_id(doc)
+                    if chunk_state_mgr:
+                        await chunk_state_mgr.update_document_status(
+                            doc_id, "failed", error=error_msg, error_type="PROCESSING_ERROR"
+                        )
+
+                if progress_callback:
+                    await progress_callback(
+                        message=f"Error in batch {batch_num}",
+                        phase="document_analysis",
+                        percent=15 + int((processed_count / total_docs) * 60),
+                    )
+
+                return [], [
+                    ProcessingError(
+                        source=f"batch_{batch_num}",
+                        error_type="PROCESSING_ERROR",
+                        error_message=error_msg,
+                    )
+                ]
+
+    tasks = [process_batch_with_limit(batch, i) for i, batch in enumerate(batches)]
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+
+    for i, result in enumerate(results):
+        if isinstance(result, Exception):
+            logger.error(f"[BATCH {i+1}/{total_batches}] Task exception: {result}")
+            errors.append(
+                ProcessingError(
+                    source=f"batch_{i + 1}",
+                    error_type="TASK_ERROR",
+                    error_message=str(result),
+                )
+            )
+        elif result:
+            summaries, batch_errors = result
+            all_summaries.extend(summaries)
+            errors.extend(batch_errors)
+
+    logger.info(
+        f"[BATCH-PARALLEL] Complete: {len(all_summaries)} summaries from {total_docs} documents in {total_batches} batches, "
+        f"{len(errors)} errors"
+    )
+
+    if errors and progress_callback:
+        failed_docs = [{"name": e.source, "error": e.error_message, "error_type": e.error_type} for e in errors]
+        await progress_callback(
+            message=f"Document analysis complete with {len(errors)} failures",
+            phase="document_analysis",
+            percent=75,
+            chunk_status={
+                "type": "chunk_complete_with_errors",
+                "completed": len(all_summaries),
+                "failed": len(errors),
+                "failed_docs": failed_docs,
+            },
+        )
+
+    return all_summaries, errors
 
 
 async def _process_document_batch(
@@ -1613,11 +1862,27 @@ async def _process_document_batch(
 
     response_json, batch_errors = await json_processing_service.process_documents_to_json(prompt)
     errors.extend(batch_errors)
+    if not response_json:
+        errors.append(
+            ProcessingError(
+                source=f"batch_{batch_num}",
+                error_type="EMPTY_RESPONSE",
+                error_message=f"Model returned empty response for batch {batch_num}",
+            )
+        )
+        return [], errors
 
     # Clean and parse the JSON response
     parsed_data = _clean_and_parse_json(response_json, batch_num)
     if not parsed_data:
-        return [], errors  # Return immediately if parsing fails
+        errors.append(
+            ProcessingError(
+                source=f"batch_{batch_num}",
+                error_type="PARSE_ERROR",
+                error_message=f"Failed to parse JSON response for batch {batch_num}",
+            )
+        )
+        return [], errors
 
     from legal_portal.core.data_models import DocumentSummaryStructured
 
@@ -1633,6 +1898,15 @@ async def _process_document_batch(
                     f"Failed to validate document summary for {doc_data.get('document_name', 'unknown')}: {e}"
                 )
                 # Continue without this summary
+
+        if batch_documents and not validated_summaries:
+            errors.append(
+                ProcessingError(
+                    source=f"batch_{batch_num}",
+                    error_type="EMPTY_BATCH_RESULT",
+                    error_message=f"No valid document summaries returned for batch {batch_num}",
+                )
+            )
 
         logger.info(f"✅ Batch {batch_num}/{total_batches} complete: {len(validated_summaries)} summaries")
 
@@ -1740,6 +2014,10 @@ INTAKE INFORMATION (for context):
 
 {batch_header}DOCUMENTS TO ANALYZE:
 {_format_documents_with_metadata(documents)}
+
+If a document includes `[TRUNCATED_DOCUMENT ...]`, only the listed excerpts
+(beginning/middle/end) were provided to fit token limits.
+Do not invent facts from omitted portions.
 
 Your task is to provide a comprehensive analysis of EACH document with FLEXIBILITY.
 Focus on capturing ALL relevant information, not just predefined fields.

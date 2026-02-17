@@ -151,6 +151,7 @@ async def test_full_document_processing_workflow(
 ):
     """Test end-to-end analysis workflow using current processed-document inputs."""
     mock_openai_client.get_preferred_model = lambda _op, fallback: fallback
+    mock_generate_document_summaries = AsyncMock(return_value=(sample_document_summaries, []))
     processed_intake = [
         _make_processed_document(
             file_name="intake_form.txt",
@@ -171,11 +172,16 @@ async def test_full_document_processing_workflow(
     with (
         patch(
             "legal_portal.services.main_processor.get_settings",
-            return_value=SimpleNamespace(suggest_statutes=False, corpus_coverage_warnings=True),
+            return_value=SimpleNamespace(
+                suggest_statutes=False,
+                corpus_coverage_warnings=True,
+                openai_max_tokens=12000,
+                max_tokens_per_batch=50000,
+            ),
         ),
         patch(
             "legal_portal.services.main_processor._generate_document_summaries",
-            new=AsyncMock(return_value=(sample_document_summaries, [])),
+            new=mock_generate_document_summaries,
         ),
         patch("legal_portal.services.main_processor._detect_near_duplicates"),
         patch(
@@ -219,6 +225,77 @@ async def test_full_document_processing_workflow(
     assert result.case_analysis is not None
     assert result.artifacts is not None
     assert result.multi_stage_result is not None
+    assert mock_generate_document_summaries.await_count == 1
+    docs_passed_for_summary = mock_generate_document_summaries.await_args.args[1]
+    assert len(docs_passed_for_summary) == len(processed_case_docs)
+    assert all(doc.document_type == DocumentType.CASE_DOCUMENT for doc in docs_passed_for_summary)
+
+
+@pytest.mark.asyncio
+async def test_workflow_skips_document_summary_when_no_case_documents(
+    mock_openai_client,
+    sample_intake_content,
+    sample_case_info,
+    sample_review_data,
+):
+    """No case docs should skip the document-summary stage entirely."""
+    mock_openai_client.get_preferred_model = lambda _op, fallback: fallback
+    mock_generate_document_summaries = AsyncMock(return_value=([], []))
+
+    processed_intake = [
+        _make_processed_document(
+            file_name="intake_form.txt",
+            content=sample_intake_content,
+            document_type=DocumentType.INTAKE_FORM,
+            file_type=FileType.TXT,
+        )
+    ]
+
+    with (
+        patch(
+            "legal_portal.services.main_processor.get_settings",
+            return_value=SimpleNamespace(
+                suggest_statutes=False,
+                corpus_coverage_warnings=False,
+                openai_max_tokens=12000,
+                max_tokens_per_batch=50000,
+            ),
+        ),
+        patch(
+            "legal_portal.services.main_processor._generate_document_summaries",
+            new=mock_generate_document_summaries,
+        ),
+        patch("legal_portal.services.main_processor._detect_near_duplicates"),
+        patch(
+            "legal_portal.services.main_processor._generate_case_analysis_summary",
+            return_value={
+                "case_summary": "Intake-only analysis",
+                "practice_area": "General Legal Matter",
+                "key_issues": [],
+                "relevant_statutes": [],
+                "additional_details": "",
+            },
+        ),
+        patch("legal_portal.services.main_processor.StatuteRecommendationService"),
+        patch("legal_portal.services.main_processor.MultiStageAnalyzer") as mock_multi_stage,
+        patch(
+            "legal_portal.services.deadline_extraction_service.DeadlineExtractionService"
+        ) as mock_deadline_class,
+    ):
+        mock_multi_stage.return_value.analyze_case = AsyncMock(return_value=_sample_multi_stage_result())
+        mock_deadline_class.return_value.extract_deadlines.return_value = []
+
+        result = await process_case_documents(
+            processed_intake=processed_intake,
+            processed_case_docs=[],
+            case_info=sample_case_info,
+            review_data=sample_review_data,
+        )
+
+    assert isinstance(result, ProcessingResult)
+    assert result.status == "completed"
+    assert result.document_count == 0
+    assert mock_generate_document_summaries.await_count == 0
 
 
 def test_api_contract_serialization(sample_document_summaries):
@@ -303,11 +380,24 @@ async def test_workflow_graceful_failure(
             file_type=FileType.TXT,
         )
     ]
+    processed_case_docs = [
+        _make_processed_document(
+            file_name="supporting_doc.pdf",
+            content="Sample case document content",
+            document_type=DocumentType.CASE_DOCUMENT,
+            file_type=FileType.PDF,
+        )
+    ]
 
     with (
         patch(
             "legal_portal.services.main_processor.get_settings",
-            return_value=SimpleNamespace(suggest_statutes=False, corpus_coverage_warnings=False),
+            return_value=SimpleNamespace(
+                suggest_statutes=False,
+                corpus_coverage_warnings=False,
+                openai_max_tokens=12000,
+                max_tokens_per_batch=50000,
+            ),
         ),
         patch(
             "legal_portal.services.main_processor._generate_document_summaries",
@@ -330,7 +420,7 @@ async def test_workflow_graceful_failure(
         mock_multi_stage.return_value.analyze_case = AsyncMock(return_value=_sample_multi_stage_result())
         result = await process_case_documents(
             processed_intake=processed_intake,
-            processed_case_docs=[],
+            processed_case_docs=processed_case_docs,
             case_info=sample_case_info,
             review_data=sample_review_data,
         )
@@ -432,7 +522,12 @@ async def test_corpus_coverage_warnings_appear_in_result(
     with (
         patch(
             "legal_portal.services.main_processor.get_settings",
-            return_value=SimpleNamespace(suggest_statutes=False, corpus_coverage_warnings=True),
+            return_value=SimpleNamespace(
+                suggest_statutes=False,
+                corpus_coverage_warnings=True,
+                openai_max_tokens=12000,
+                max_tokens_per_batch=50000,
+            ),
         ),
         patch(
             "legal_portal.services.main_processor._generate_document_summaries",
@@ -508,7 +603,12 @@ async def test_cost_tracking_aggregates_correctly(
     with (
         patch(
             "legal_portal.services.main_processor.get_settings",
-            return_value=SimpleNamespace(suggest_statutes=False, corpus_coverage_warnings=False),
+            return_value=SimpleNamespace(
+                suggest_statutes=False,
+                corpus_coverage_warnings=False,
+                openai_max_tokens=12000,
+                max_tokens_per_batch=50000,
+            ),
         ),
         patch(
             "legal_portal.services.main_processor._generate_document_summaries",

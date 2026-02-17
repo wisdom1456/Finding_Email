@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import Any
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -26,9 +26,11 @@ from legal_portal.services.main_processor import (
     _aggregate_quality_results,
     _build_original_documents_map,
     _build_quality_context,
+    _create_prompt_aware_batches,
     _build_summary_prompt,
     _clean_and_parse_json,
     _convert_to_case_analysis_result,
+    _process_document_batch,
     _create_smart_batches,
     _deduplicate_documents,
     _detect_near_duplicates,
@@ -390,6 +392,21 @@ class TestFormatDocumentsWithMetadata:
         assert "Document 2:" in result
         assert "Document 3:" in result
 
+    def test_chunks_long_document_content(self):
+        """Test long content is chunked into bounded excerpts."""
+        long_content = "BEGIN_" + ("A" * 20000) + "_MIDMARK_" + ("B" * 20000) + "_ENDMARK_" + ("C" * 20000)
+        doc = make_processed_doc(file_name="long.txt", content=long_content)
+
+        result = _format_documents_with_metadata([doc])
+
+        assert "[TRUNCATED_DOCUMENT" in result
+        assert "[EXCERPT 1/3 - BEGINNING]" in result
+        assert "[EXCERPT 2/3 - MIDDLE]" in result
+        assert "[EXCERPT 3/3 - END]" in result
+        assert "BEGIN_" in result
+        assert "BBBBBBBBBB" in result
+        assert "CCCCCCCCCC" in result
+
 
 # =============================================================================
 # Tests for _aggregate_quality_results
@@ -547,6 +564,57 @@ class TestCreateSmartBatches:
         batches = _create_smart_batches(docs, max_tokens_per_batch=500)
         assert len(batches) >= 2
 
+    def test_long_documents_use_prompt_excerpt_for_token_estimate(self):
+        """Very long docs should be batched based on excerpted prompt content."""
+        long_content = "L" * 120000
+        docs = [
+            make_processed_doc(file_name="doc1.pdf", content=long_content),
+            make_processed_doc(file_name="doc2.pdf", content=long_content),
+        ]
+
+        batches = _create_smart_batches(docs, max_tokens_per_batch=15000)
+
+        assert len(batches) == 1
+        assert len(batches[0]) == 2
+
+
+class TestCreatePromptAwareBatches:
+    """Test prompt-aware batching that includes intake and prompt overhead."""
+
+    def test_splits_batches_when_full_prompt_would_exceed_limit(self):
+        intake_content = "I" * 40000  # Large intake should consume significant prompt budget
+        docs = [make_processed_doc(file_name=f"doc_{i}.pdf", content="D" * 2500) for i in range(3)]
+        review_data = {"legal_issue": "Contract dispute", "key_documents": []}
+
+        batches = _create_prompt_aware_batches(
+            documents=docs,
+            intake_content=intake_content,
+            review_data=review_data,
+            statute_context="",
+            jurisdiction="Florida",
+            max_tokens_per_batch=12000,
+        )
+
+        assert len(batches) >= 2
+        assert sum(len(batch) for batch in batches) == 3
+
+    def test_respects_max_docs_per_batch_limit(self):
+        docs = [make_processed_doc(file_name=f"doc_{i}.pdf", content="short") for i in range(25)]
+        review_data = {"legal_issue": "Test", "key_documents": []}
+
+        batches = _create_prompt_aware_batches(
+            documents=docs,
+            intake_content="small intake",
+            review_data=review_data,
+            statute_context="",
+            jurisdiction="Florida",
+            max_tokens_per_batch=1000000,
+        )
+
+        assert len(batches) >= 3
+        for batch in batches:
+            assert len(batch) <= 10
+
 
 # =============================================================================
 # Tests for _clean_and_parse_json
@@ -604,6 +672,55 @@ class TestCleanAndParseJson:
         result = _clean_and_parse_json(json_str)
         assert result is not None
         assert len(result["documents"]) == 2
+
+
+# =============================================================================
+# Tests for _process_document_batch
+# =============================================================================
+
+
+class TestProcessDocumentBatch:
+    """Test batch processing error handling."""
+
+    @pytest.mark.asyncio
+    async def test_parse_error_yields_processing_error(self):
+        docs = [make_processed_doc(file_name="doc1.pdf", content="content")]
+        json_service = MagicMock()
+        json_service.process_documents_to_json = AsyncMock(return_value=("not valid json", []))
+
+        summaries, errors = await _process_document_batch(
+            batch_documents=docs,
+            intake_content="Intake",
+            batch_num=1,
+            total_batches=1,
+            openai_client_wrapper=MagicMock(),
+            json_processing_service=json_service,
+            review_data={"legal_issue": "Test", "key_documents": []},
+            errors=[],
+        )
+
+        assert summaries == []
+        assert any(error.error_type == "PARSE_ERROR" for error in errors)
+
+    @pytest.mark.asyncio
+    async def test_empty_documents_array_yields_error(self):
+        docs = [make_processed_doc(file_name="doc1.pdf", content="content")]
+        json_service = MagicMock()
+        json_service.process_documents_to_json = AsyncMock(return_value=('{"documents": []}', []))
+
+        summaries, errors = await _process_document_batch(
+            batch_documents=docs,
+            intake_content="Intake",
+            batch_num=1,
+            total_batches=1,
+            openai_client_wrapper=MagicMock(),
+            json_processing_service=json_service,
+            review_data={"legal_issue": "Test", "key_documents": []},
+            errors=[],
+        )
+
+        assert summaries == []
+        assert any(error.error_type == "EMPTY_BATCH_RESULT" for error in errors)
 
 
 # =============================================================================

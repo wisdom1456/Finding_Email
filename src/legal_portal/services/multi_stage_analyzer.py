@@ -105,6 +105,32 @@ class MultiStageAnalyzer:
         return "\n".join(lines)
 
     @staticmethod
+    def _condense_intake_for_prompt(
+        intake_content: str,
+        max_chars: int,
+        tail_chars: Optional[int] = None,
+    ) -> str:
+        """Condense intake content while retaining both head and tail context."""
+        text = intake_content or ""
+        if len(text) <= max_chars:
+            return text
+
+        if max_chars < 120:
+            return text[:max_chars]
+
+        separator = "\n... [middle omitted for prompt budget] ...\n"
+        tail = tail_chars if tail_chars is not None else max(300, max_chars // 3)
+        if tail >= max_chars:
+            tail = max_chars // 2
+
+        head = max_chars - tail - len(separator)
+        if head < 200:
+            head = max_chars // 2
+            tail = max_chars - head - len(separator)
+
+        return text[:head] + separator + text[-tail:]
+
+    @staticmethod
     def _build_document_registry_context(
         document_registry: Optional[List[Dict[str, Any]]],
         max_docs: int = 40,
@@ -161,7 +187,7 @@ Be specific - use actual names, dates, and dollar amounts from the documents. Ci
 
 ---
 CLIENT INTAKE:
-{intake_content[:4000]}
+{self._condense_intake_for_prompt(intake_content, max_chars=4000)}
 
 ---
 CASE DOCUMENTS:
@@ -690,7 +716,7 @@ Output in clean markdown format."""
         # Run in thread to avoid potential blocking
         verified_statutes_raw = await asyncio.to_thread(
             self.statute_service.recommend_statutes,
-            case_facts=intake_content[:2000],
+            case_facts=self._condense_intake_for_prompt(intake_content, max_chars=2000, tail_chars=600),
             legal_issues=[i.issue_name for i in issue_map.primary_issues],
             case_type=case_type,
             limit=10,
@@ -777,7 +803,7 @@ Output in clean markdown format."""
 Extract ONLY factual information from the case materials. Do NOT perform legal analysis.
 
 INTAKE INFORMATION:
-{intake_content[:5000]}
+{self._condense_intake_for_prompt(intake_content, max_chars=5000)}
 
 DOCUMENT REGISTRY (AUTHORITATIVE CLASSIFICATION/EXECUTION SIGNALS):
 {registry_context}
@@ -996,7 +1022,7 @@ FACTS:
 - Financial: {len(fact_matrix.financial_data)} items
 
         INTAKE SUMMARY:
-{intake_content[:3000]}
+{self._condense_intake_for_prompt(intake_content, max_chars=3000)}
 
 DETAILED FACTS:
 {json.dumps(fact_matrix.model_dump(), indent=2, default=str)[:4000]}

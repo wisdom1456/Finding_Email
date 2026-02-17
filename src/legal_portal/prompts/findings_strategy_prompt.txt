@@ -30,6 +30,7 @@ Required JSON schema:
 
 Rules:
 - Prioritize strongest claim first.
+- Use issue confidence plus risk signals in context (enforceability gaps, proof gaps, timing risks) when ranking.
 - Each ranked theory must include at least one supporting anchor.
 - Timeline highlights should be chronological and concrete.
 - Avoid unsupported accusations.

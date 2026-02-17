@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 
 from legal_portal.core.data_models import (
     CriticalDeadline,
@@ -116,6 +117,80 @@ def _sample_deep_analysis() -> DeepAnalysis:
     )
 
 
+def _sample_deep_analysis_with_contract_enforceability_risk() -> DeepAnalysis:
+    return DeepAnalysis(
+        issue_analyses=[
+            IssueAnalysis(
+                issue_name="Breach of Contract",
+                legal_standard="Existence of contract, breach, and damages.",
+                fact_application=(
+                    "Term sheet appears non-binding except confidentiality, so enforceability is disputed."
+                ),
+                remedies_available=["Damages"],
+                confidence_level="strong",
+                supporting_evidence=[
+                    "Memorandum of terms states only confidentiality is binding.",
+                    "Signed financing memo references anticipated repayment.",
+                ],
+            ),
+            IssueAnalysis(
+                issue_name="Unjust Enrichment / Restitution",
+                legal_standard="Benefit conferred, retention unjust without repayment.",
+                fact_application="Investment funds were received and used despite unresolved repayment.",
+                remedies_available=["Restitution"],
+                confidence_level="moderate",
+                supporting_evidence=[
+                    "Client reports total $120,000 contributed to project accounts.",
+                    "2022-2023 investor packet entries reflect project expense use.",
+                ],
+            ),
+            IssueAnalysis(
+                issue_name="Fraudulent Misrepresentation",
+                legal_standard="False statement, reliance, damages.",
+                fact_application="Record lacks complete statement-level proof at this stage.",
+                remedies_available=["Damages"],
+                confidence_level="moderate",
+                supporting_evidence=["February 14, 2023 update email acknowledges changed circumstances."],
+            ),
+        ],
+        risk_assessment=RiskAssessment(
+            major_risks=[
+                "Contract enforceability risk due to non-binding term sheet language.",
+                "Entity targeting uncertainty.",
+            ],
+            risk_mitigation_steps=["Prioritize restitution theory", "Confirm signatory authority"],
+            evidence_gaps=["Need wire confirmations and proof of payment"],
+        ),
+        deadline_tracking=[
+            CriticalDeadline(
+                deadline_date="2026-03-05",
+                description="Potential limitations trigger",
+                consequence_if_missed="Claims may be time-barred",
+                urgency="critical",
+            )
+        ],
+        evidence_strength=EvidenceAssessment(
+            strong_evidence=["Financing memo", "Investor packet entries"],
+            weak_evidence=["Oral assurances"],
+            missing_evidence=["Payment confirmations"],
+            overall_strength="moderate",
+        ),
+        overall_case_strength="moderate",
+        key_strengths=["Payment history exists"],
+        key_challenges=["Contract enforceability uncertainty"],
+        is_viable=True,
+        recommend_demand_letter=True,
+    )
+
+
+class _FakeClient:
+    def __init__(self, response_payload: dict) -> None:
+        self._response_payload = response_payload
+
+    def create_response(self, **_kwargs):  # noqa: ANN003
+        return {"content": json.dumps(self._response_payload)}
+
+
 def test_build_findings_strategy_fallback_schema() -> None:
     service = LetterStrategyService(client=None)
     strategy_dict = asyncio.run(
@@ -155,3 +230,58 @@ def test_build_demand_strategy_contains_specificity_package() -> None:
     assert strategy.demand_spec.targets == ["Cuchillo Greens Grow 1, LLC"]
     assert strategy.demand_spec.amount_mode == "fixed"
     assert strategy.demand_spec.cure_ladder
+
+
+def test_risk_aware_ranking_prioritizes_restitution_when_contract_is_non_binding() -> None:
+    service = LetterStrategyService(client=None)
+    strategy_dict = asyncio.run(
+        service.build_findings_strategy(
+            fact_matrix=_sample_fact_matrix(),
+            deep_analysis=_sample_deep_analysis_with_contract_enforceability_risk(),
+            gap_analysis=None,
+            allow_model=False,
+        )
+    )
+
+    strategy = LetterStrategyV1(**strategy_dict)
+    assert strategy.ranked_theories[0].theory.lower().startswith("unjust enrichment")
+    assert "contract" in strategy.ranked_theories[1].theory.lower()
+
+
+def test_model_ranking_is_normalized_to_analysis_priority() -> None:
+    fake_response = {
+        "case_summary": "Model summary",
+        "ranked_theories": [
+            {
+                "theory": "Breach of Contract",
+                "priority": 1,
+                "rationale": "Model preferred contract first.",
+                "supporting_anchors": [],
+            },
+            {
+                "theory": "Unjust Enrichment / Restitution",
+                "priority": 2,
+                "rationale": "Model listed restitution second.",
+                "supporting_anchors": [],
+            },
+        ],
+        "timeline_highlights": [],
+        "risk_flags": [],
+        "uncertainty_items": [],
+        "recommended_sequence": [],
+        "demand_spec": None,
+    }
+    service = LetterStrategyService(client=_FakeClient(fake_response))
+    strategy_dict = asyncio.run(
+        service.build_findings_strategy(
+            fact_matrix=_sample_fact_matrix(),
+            deep_analysis=_sample_deep_analysis_with_contract_enforceability_risk(),
+            gap_analysis=None,
+            allow_model=True,
+        )
+    )
+
+    strategy = LetterStrategyV1(**strategy_dict)
+    assert strategy.ranked_theories[0].theory.lower().startswith("unjust enrichment")
+    assert strategy.ranked_theories[0].rationale
+    assert strategy.ranked_theories[0].supporting_anchors

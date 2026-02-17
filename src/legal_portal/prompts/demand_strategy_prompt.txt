@@ -41,6 +41,7 @@ Required JSON schema:
 
 Rules:
 - Demand spec must be complete and practical.
+- Rank theories using issue confidence plus risk signals in context.
 - Use factual anchors for each major theory.
 - Preserve credibility and avoid overstatement.
 

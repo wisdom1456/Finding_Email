@@ -47,24 +47,22 @@ def _strict_mode_sample() -> str:
         "clear path to resolve the matter and builds a cleaner record if litigation becomes necessary."
     )
     return (
-        "Opening - What We Reviewed\n"
+        "Good afternoon Erica and Ron,\n\n"
         "We reviewed the signed financing memo, operating agreements, subscription packet, "
         "and related emails.\n\n"
-        "Core Issue - The Real Question\n"
-        "The core issue is whether there is a legally supportable path to recover funds.\n\n"
-        "What the Documents Show\n"
+        "As discussed, the primary concern is whether there is a legally supportable path to recover funds.\n\n"
+        "Based on the records:\n"
         f"{facts}\n\n"
-        "Legal Theories\n"
+        "Here are the key points of our analysis:\n\n"
         f"{contract}\n\n"
         f"{fraud}\n\n"
         f"{securities}\n\n"
         f"{liability}\n\n"
-        "Timing Risk\n"
         "The statute of limitations (the filing deadline after which a claim can be barred) and related deadline "
         "tracking remain critical.\n\n"
-        "Strategy - What We Recommend\n"
+        "Based on the above, we recommend:\n"
         f"{strategy}\n\n"
-        "Immediate Client Action Items\n"
+        "If you would like us to proceed now, please provide:\n"
         "- Provide proof of payment records.\n"
         "- Provide complete offering materials.\n"
         "- Provide written repayment statements.\n"
@@ -126,3 +124,55 @@ def test_demand_strict_mode_flags_missing_specificity() -> None:
 
     assert any(item["rule"] == "demand_specificity" for item in violations)
     assert report["quality_report_v2"]["demand_specificity_passed"] is False
+
+
+def test_strict_quality_flags_explicit_section_headers() -> None:
+    """Strict findings mode should reject internal section-label styling."""
+    service = LetterQualityLintService()
+    content = (
+        "Opening review\n\n"
+        "Facts (document-backed chronology)\n\n"
+        "Legal theories\n\n"
+        "Strategy (prioritized)\n\n"
+        + " ".join(["word"] * 700)
+    )
+
+    report = service.lint_letter(content, mode="strict_quality", letter_type="findings")
+
+    assert any(item["rule"] == "explicit_section_headers" for item in report["violations"])
+
+
+def test_strict_quality_flags_internal_meta_labels_and_snake_case_tokens() -> None:
+    """Strict findings mode should reject leaked internal labels and tokens."""
+    service = LetterQualityLintService()
+    content = (
+        "Good afternoon,\n\n"
+        "Here are the key points of our analysis: micro-explainer for unjust_enrichment applies.\n\n"
+        + " ".join(["word"] * 700)
+    )
+
+    report = service.lint_letter(content, mode="strict_quality", letter_type="findings")
+    rules = {item["rule"] for item in report["violations"]}
+
+    assert "micro_explainer_label" in rules
+    assert "snake_case_legal_token" in rules
+
+
+def test_strict_quality_flags_parenthetical_citation_overload() -> None:
+    """Strict findings mode should flag over-stacked citation parentheticals."""
+    service = LetterQualityLintService()
+    overloaded_paragraph = (
+        "Based on the records, repayment is still unresolved "
+        "(subscription pkt, 2022) (financing memo, signed) (Feb 14, 2023 update) "
+        "(investor ledger $47,656.00) and you should proceed now."
+    )
+    content = (
+        "Good afternoon,\n\n"
+        + overloaded_paragraph
+        + "\n\n"
+        + " ".join(["word"] * 700)
+    )
+
+    report = service.lint_letter(content, mode="strict_quality", letter_type="findings")
+
+    assert any(item["rule"] == "citation_parenthetical_overload" for item in report["violations"])

@@ -96,6 +96,38 @@ class LetterQualityLintService:
         ("gap_analysis_flagged", r"\bgap analysis flagged\b", "Internal-lawyer language should not appear."),
         ("plain_english_redundancy", r"\bin plain english\b", "Avoid repetitive plain-language scaffolding."),
     ]
+    _META_LANGUAGE_PATTERNS: List[Tuple[str, re.Pattern[str], str]] = [
+        (
+            "micro_explainer_label",
+            re.compile(r"\bmicro-?explainer\b", re.IGNORECASE),
+            "Do not expose internal prompt labels (for example, 'micro-explainer') in client letters.",
+        ),
+        (
+            "snake_case_legal_token",
+            re.compile(
+                r"\b("
+                r"unjust_enrichment|promissory_estoppel|breach_of_contract|"
+                r"statute_of_limitations|veil_piercing|fraudulent_inducement|"
+                r"securities_law"
+                r")\b",
+                re.IGNORECASE,
+            ),
+            "Do not expose internal snake_case legal tokens in client letters.",
+        ),
+    ]
+    _EXPLICIT_SECTION_HEADER_PATTERN = re.compile(
+        (
+            r"(?im)^\s*("
+            r"opening\s+review|"
+            r"facts(?:\s*\([^)]+\))?|"
+            r"core\s+issue|"
+            r"legal\s+theories(?:\s*\([^)]+\))?|"
+            r"timing(?:\s+and)?\s+risk|"
+            r"strategy(?:\s*\([^)]+\))?|"
+            r"action\s+items(?:\s*\([^)]+\))?"
+            r")\s*$"
+        )
+    )
 
     _URGENCY_GUARD = re.compile(r"\b\d+\s+days?\s+from\s+today\b", re.IGNORECASE)
     _ACTION_BULLET_PATTERN = re.compile(r"^\s*(?:[-*•]\s+|\d+\.\s+)", re.MULTILINE)
@@ -131,6 +163,13 @@ class LetterQualityLintService:
     ]
     _EXPLAINER_MARKERS = re.compile(
         r"(\bwhich means\b|\bmeaning\b|\bthis means\b|\bin plain terms\b|\bin other words\b|\(.*?\))",
+        re.IGNORECASE,
+    )
+    _GENERIC_SNAKE_CASE_PATTERN = re.compile(r"\b[a-z]{3,}_[a-z0-9_]{3,}\b")
+    _PARENTHETICAL_PATTERN = re.compile(r"\(([^)]{3,180})\)")
+    _CITATION_LIKE_MARKER = re.compile(
+        r"(\b(?:19|20)\d{2}\b|\$[\d,]+|\b(?:email|update|memo|packet|p&l|ledger|source|document|"
+        r"subscription|operating agreement|financing|sos|stat\.)\b)",
         re.IGNORECASE,
     )
 
@@ -175,6 +214,42 @@ class LetterQualityLintService:
                     )
                 )
 
+        for rule, pattern, guidance in self._META_LANGUAGE_PATTERNS:
+            if pattern.search(text):
+                violations.append(
+                    LintViolation(
+                        rule=rule,
+                        severity="error" if mode == "strict_quality" else "warning",
+                        message=guidance,
+                        details={},
+                    )
+                )
+
+        generic_snake_case = self._find_non_email_snake_case_tokens(text)
+        if generic_snake_case:
+            violations.append(
+                LintViolation(
+                    rule="generic_snake_case_token",
+                    severity="error" if mode == "strict_quality" else "warning",
+                    message="Do not include snake_case tokens in client-facing prose.",
+                    details={"tokens": generic_snake_case[:10]},
+                )
+            )
+
+        header_hits = [match.group(1) for match in self._EXPLICIT_SECTION_HEADER_PATTERN.finditer(text)]
+        if header_hits and letter_type == "findings":
+            violations.append(
+                LintViolation(
+                    rule="explicit_section_headers",
+                    severity="error" if mode == "strict_quality" else "warning",
+                    message=(
+                        "Use natural-flow correspondence style; avoid explicit section labels "
+                        "like 'Opening review' or 'Facts'."
+                    ),
+                    details={"headers_found": header_hits},
+                )
+            )
+
         plain_english_hits = len(re.findall(r"\bwhat this means for you\b", text_lower))
         if plain_english_hits > 1:
             violations.append(
@@ -199,6 +274,20 @@ class LetterQualityLintService:
         if mode == "strict_quality" and letter_type == "findings":
             self._apply_strict_section_checks(section_counts, section_positions, violations)
             self._apply_strict_actionability_checks(text_lower, action_bullet_count, violations)
+
+        parenthetical_density = self._citation_parenthetical_density_check(text)
+        if parenthetical_density["overloaded_paragraphs"]:
+            violations.append(
+                LintViolation(
+                    rule="citation_parenthetical_overload",
+                    severity="error" if mode == "strict_quality" else "warning",
+                    message=(
+                        "Too many citation-style parentheticals in one or more paragraphs. "
+                        "Integrate support into prose and reduce stacking."
+                    ),
+                    details=parenthetical_density,
+                )
+            )
 
         settings = get_settings()
         term_result = self._term_micro_explainer_check(text)
@@ -274,6 +363,7 @@ class LetterQualityLintService:
             "unsupported_assertion_flags": list(evidence_result.get("unsupported_assertion_flags", [])),
             "demand_specificity_passed": bool(demand_specificity["complete"]) if demand_specificity else None,
             "term_micro_explainer_coverage": float(term_result["coverage"]),
+            "citation_parenthetical_density": float(parenthetical_density["density_score"]),
         }
 
         return {
@@ -494,16 +584,45 @@ class LetterQualityLintService:
                 return self._count_words(snippet)
 
             section_patterns = {
-                "facts": [r"\bwhat the documents show\b", r"\bfactual summary\b"],
-                "legal_theories": [r"\blegal theories\b", r"\bkey points of our analysis\b"],
-                "strategy": [r"\bwhat we recommend\b", r"\brecommended next steps\b"],
+                "facts": [
+                    r"\bwhat the documents show\b",
+                    r"\bfactual summary\b",
+                    r"\bbased on (?:the )?records\b",
+                    r"\byou invested\b",
+                ],
+                "legal_theories": [
+                    r"\bkey points of our analysis\b",
+                    r"\bcontract claim\b",
+                    r"\bunjust enrichment\b",
+                ],
+                "strategy": [
+                    r"\bbased on the above\b",
+                    r"\bwe recommend\b",
+                    r"\bnext steps\b",
+                ],
             }
         else:
             section_patterns = {
-                "background": [r"\bbackground\b", r"\bfactual summary\b"],
-                "legal_analysis": [r"\blegal analysis\b", r"\blikely claims\b"],
-                "demand": [r"\bdemand\b", r"\brecommended next steps\b"],
+                "background": [r"\bbackground\b", r"\bon or about\b", r"\bfactual summary\b"],
+                "legal_analysis": [r"\blegal analysis\b", r"\blikely claims\b", r"\bpursuant to\b"],
+                "demand": [r"\bas such, let this correspondence serve as a formal demand\b", r"\brecommended next steps\b", r"\bwe demand\b"],
             }
+
+        paragraph_windows = {
+            "facts": 2,
+            "legal_theories": 4,
+            "strategy": 2,
+            "background": 3,
+            "legal_analysis": 3,
+            "demand": 2,
+        }
+        window_size = paragraph_windows.get(section, 2)
+        paragraphs = [p.strip() for p in re.split(r"\n\s*\n", text) if p.strip()]
+        patterns = section_patterns.get(section, [])
+        for idx, paragraph in enumerate(paragraphs):
+            if any(re.search(pattern, paragraph, re.IGNORECASE) for pattern in patterns):
+                snippet = " ".join(paragraphs[idx: idx + window_size])
+                return self._count_words(snippet)
 
         patterns = section_patterns.get(section, [])
         for pattern in patterns:
@@ -535,6 +654,55 @@ class LetterQualityLintService:
         right = len(text) if right < 0 else right + 1
         sentence = text[left:right].strip()
         return sentence if sentence else text[max(0, index - 120): index + 120]
+
+    def _find_non_email_snake_case_tokens(self, text: str) -> List[str]:
+        """Find snake_case tokens, excluding probable email addresses."""
+        scrubbed = re.sub(r"\b[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}\b", " ", text)
+        tokens = self._GENERIC_SNAKE_CASE_PATTERN.findall(scrubbed)
+        unique = []
+        seen = set()
+        for token in tokens:
+            lowered = token.lower()
+            if lowered in seen:
+                continue
+            seen.add(lowered)
+            unique.append(token)
+        return unique
+
+    def _citation_parenthetical_density_check(self, text: str) -> Dict[str, Any]:
+        """Detect paragraphs overloaded with citation-style parentheticals."""
+        paragraphs = [p.strip() for p in re.split(r"\n\s*\n", text) if p.strip()]
+        overloaded: List[Dict[str, Any]] = []
+        total_citation_like = 0
+        total_parentheticals = 0
+
+        for idx, paragraph in enumerate(paragraphs, start=1):
+            groups = self._PARENTHETICAL_PATTERN.findall(paragraph)
+            if not groups:
+                continue
+            total_parentheticals += len(groups)
+            citation_like = [g for g in groups if self._CITATION_LIKE_MARKER.search(g)]
+            total_citation_like += len(citation_like)
+
+            if len(citation_like) > 2:
+                overloaded.append(
+                    {
+                        "paragraph_index": idx,
+                        "citation_parentheticals": len(citation_like),
+                        "paragraph_preview": paragraph[:180],
+                    }
+                )
+
+        density_score = 1.0
+        if total_parentheticals:
+            density_score = max(0.0, 1.0 - min(1.0, total_citation_like / max(8, total_parentheticals)))
+
+        return {
+            "overloaded_paragraphs": overloaded,
+            "total_parentheticals": total_parentheticals,
+            "total_citation_like_parentheticals": total_citation_like,
+            "density_score": round(density_score, 3),
+        }
 
     def _word_count_bounds(self, *, mode: str, letter_type: str) -> Tuple[int, int]:
         """Return word-count bounds for the current lint profile."""

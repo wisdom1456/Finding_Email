@@ -6,7 +6,7 @@ import asyncio
 import json
 import os
 import re
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 from legal_portal.core.data_models import (
     ClaimPlanV1,
@@ -26,6 +26,37 @@ class LetterStrategyService:
     _MAX_TIMELINE_ITEMS = 6
     _MAX_ANCHORS_PER_THEORY = 4
     _MAX_THEORIES = 4
+    _STOP_TOKENS = {
+        "and",
+        "or",
+        "the",
+        "a",
+        "an",
+        "of",
+        "to",
+        "for",
+        "under",
+        "claim",
+        "based",
+        "recovery",
+        "liability",
+    }
+    _CONFIDENCE_BASE = {
+        "strong": 1.0,
+        "high": 1.0,
+        "moderate": 0.72,
+        "medium": 0.72,
+        "weak": 0.45,
+        "low": 0.45,
+    }
+    _THEORY_CLASS_KEYWORDS = {
+        "contract": ("contract", "breach", "agreement", "promissory note", "promissory"),
+        "restitution": ("unjust enrichment", "restitution", "quantum meruit"),
+        "fraud": ("fraud", "misrepresentation", "fraudulent inducement", "deceptive"),
+        "securities": ("securit", "rescission", "investment contract", "blue sky", "58-13c"),
+        "estoppel": ("estoppel", "detrimental reliance", "reliance"),
+        "veil": ("alter ego", "veil", "pierc", "personal liability"),
+    }
 
     def __init__(self, client: Optional[OpenAIClient] = None) -> None:
         self.client = client
@@ -73,6 +104,13 @@ class LetterStrategyService:
                 return fallback.model_dump(mode="json")
 
             strategy = LetterStrategyV1(**self._merge_dict(parsed, fallback.model_dump(mode="json")))
+            strategy = self._normalize_strategy(
+                strategy=strategy,
+                fallback=fallback,
+                fact_matrix=fact_matrix,
+                deep_analysis=deep_analysis,
+                gap_analysis=gap_analysis,
+            )
             return strategy.model_dump(mode="json")
         except Exception as exc:
             logger.warning("Findings strategy model step failed, falling back: %s", exc)
@@ -135,6 +173,13 @@ class LetterStrategyService:
                 return fallback.model_dump(mode="json")
 
             strategy = LetterStrategyV1(**self._merge_dict(parsed, fallback.model_dump(mode="json")))
+            strategy = self._normalize_strategy(
+                strategy=strategy,
+                fallback=fallback,
+                fact_matrix=fact_matrix,
+                deep_analysis=deep_analysis,
+                gap_analysis=gap_analysis,
+            )
             if strategy.demand_spec is None:
                 strategy.demand_spec = fallback.demand_spec
             return strategy.model_dump(mode="json")
@@ -185,15 +230,20 @@ class LetterStrategyService:
         gap_analysis=None,
     ) -> LetterStrategyV1:
         """Build deterministic findings strategy fallback."""
-        claim_plans = self._build_claim_plans(fact_matrix=fact_matrix, deep_analysis=deep_analysis)
+        claim_plans = self._build_claim_plans(
+            fact_matrix=fact_matrix,
+            deep_analysis=deep_analysis,
+            gap_analysis=gap_analysis,
+        )
         timeline = self._build_timeline_highlights(fact_matrix)
         risk_flags = self._build_risk_flags(deep_analysis=deep_analysis, gap_analysis=gap_analysis)
         uncertainty_items = self._build_uncertainty_items(deep_analysis=deep_analysis, gap_analysis=gap_analysis)
 
         overall_strength = getattr(deep_analysis, "overall_case_strength", "moderate")
+        top_theory = claim_plans[0].theory if claim_plans else "document-backed recovery claims"
         case_summary = (
-            "Primary objective is recovery or documented make-whole performance through the "
-            "strongest contract-based path, with secondary leverage theories preserved."
+            f"Primary objective is recovery through {top_theory.lower()} supported by the clearest "
+            "documentary anchors, while preserving secondary leverage theories."
         )
         if overall_strength == "weak":
             case_summary = (
@@ -318,26 +368,29 @@ class LetterStrategyService:
             "gap_analysis": gap_meta,
         }
 
-    def _build_claim_plans(self, *, fact_matrix, deep_analysis) -> List[ClaimPlanV1]:
-        """Build claim plans ranked by confidence."""
-        confidence_rank = {"strong": 0, "moderate": 1, "weak": 2}
+    def _build_claim_plans(self, *, fact_matrix, deep_analysis, gap_analysis=None) -> List[ClaimPlanV1]:
+        """Build claim plans ranked by deterministic confidence+risk scoring."""
         issue_analyses = list(getattr(deep_analysis, "issue_analyses", []))
-        issue_analyses.sort(
-            key=lambda issue: confidence_rank.get(str(getattr(issue, "confidence_level", "moderate")).lower(), 3)
-        )
-
         timeline = list(getattr(fact_matrix, "timeline", []))
         financial_data = list(getattr(fact_matrix, "financial_data", []))
+        risk_profile = self._extract_risk_profile(deep_analysis=deep_analysis, gap_analysis=gap_analysis)
         claim_plans: List[ClaimPlanV1] = []
+        scored_issues: List[Tuple[float, int, Any]] = []
 
-        for idx, issue in enumerate(issue_analyses[: self._MAX_THEORIES], start=1):
+        for idx, issue in enumerate(issue_analyses):
+            score = self._score_issue_priority(issue=issue, risk_profile=risk_profile)
+            scored_issues.append((score, idx, issue))
+
+        scored_issues.sort(key=lambda row: (-row[0], row[1]))
+
+        for idx, (_score, _orig_idx, issue) in enumerate(scored_issues[: self._MAX_THEORIES], start=1):
             anchors = self._anchors_for_issue(
                 issue_name=getattr(issue, "issue_name", ""),
                 supporting_evidence=list(getattr(issue, "supporting_evidence", [])),
                 timeline=timeline,
                 financial_data=financial_data,
             )
-            rationale = f"Prioritize {getattr(issue, 'issue_name', 'this theory')} based on available documentation."
+            rationale = self._build_claim_rationale(issue=issue, risk_profile=risk_profile)
             claim_plans.append(
                 ClaimPlanV1(
                     theory=getattr(issue, "issue_name", f"Theory {idx}"),
@@ -350,14 +403,310 @@ class LetterStrategyService:
         if not claim_plans:
             claim_plans.append(
                 ClaimPlanV1(
-                    theory="Contract-based recovery",
+                    theory=(
+                        "Unjust Enrichment / Restitution"
+                        if risk_profile.get("contract_enforceability_risk")
+                        else "Contract-based recovery"
+                    ),
                     priority=1,
-                    rationale="Signed deal documents provide the cleanest enforcement path.",
+                    rationale=(
+                        "Recovery should center on restitution where contract enforceability is uncertain."
+                        if risk_profile.get("contract_enforceability_risk")
+                        else "Signed deal documents provide the cleanest enforcement path."
+                    ),
                     supporting_anchors=self._fallback_anchors(timeline=timeline, financial_data=financial_data),
                 )
             )
 
         return claim_plans
+
+    def _normalize_strategy(
+        self,
+        *,
+        strategy: LetterStrategyV1,
+        fallback: LetterStrategyV1,
+        fact_matrix,
+        deep_analysis,
+        gap_analysis=None,
+    ) -> LetterStrategyV1:
+        """Enforce deterministic claim ordering so model output cannot drift from analysis."""
+        deterministic_claims = self._build_claim_plans(
+            fact_matrix=fact_matrix,
+            deep_analysis=deep_analysis,
+            gap_analysis=gap_analysis,
+        )
+        if not deterministic_claims:
+            deterministic_claims = list(fallback.ranked_theories or [])
+
+        model_claims = list(strategy.ranked_theories or [])
+        merged_claims: List[ClaimPlanV1] = []
+        used_indices: Set[int] = set()
+
+        for deterministic in deterministic_claims[: self._MAX_THEORIES]:
+            match_idx = self._find_matching_claim_plan(
+                target=deterministic,
+                candidates=model_claims,
+                used_indices=used_indices,
+            )
+            if match_idx is None:
+                merged_claims.append(deterministic)
+                continue
+
+            used_indices.add(match_idx)
+            model_plan = model_claims[match_idx]
+            merged_claims.append(
+                ClaimPlanV1(
+                    theory=deterministic.theory,
+                    priority=deterministic.priority,
+                    rationale=model_plan.rationale or deterministic.rationale,
+                    supporting_anchors=(
+                        model_plan.supporting_anchors[: self._MAX_ANCHORS_PER_THEORY]
+                        if model_plan.supporting_anchors
+                        else deterministic.supporting_anchors
+                    ),
+                )
+            )
+
+        if len(merged_claims) < self._MAX_THEORIES:
+            existing = [claim.theory for claim in merged_claims]
+            fallback_anchors = self._fallback_anchors(
+                timeline=list(getattr(fact_matrix, "timeline", [])),
+                financial_data=list(getattr(fact_matrix, "financial_data", [])),
+            )
+            for idx, model_plan in enumerate(model_claims):
+                if idx in used_indices:
+                    continue
+                if self._is_duplicate_theory(model_plan.theory, existing):
+                    continue
+                merged_claims.append(
+                    ClaimPlanV1(
+                        theory=model_plan.theory,
+                        priority=len(merged_claims) + 1,
+                        rationale=model_plan.rationale
+                        or "Secondary theory preserved pending additional evidentiary support.",
+                        supporting_anchors=(
+                            model_plan.supporting_anchors[: self._MAX_ANCHORS_PER_THEORY]
+                            if model_plan.supporting_anchors
+                            else fallback_anchors[: self._MAX_ANCHORS_PER_THEORY]
+                        ),
+                    )
+                )
+                existing.append(model_plan.theory)
+                if len(merged_claims) >= self._MAX_THEORIES:
+                    break
+
+        for idx, claim in enumerate(merged_claims, start=1):
+            claim.priority = idx
+
+        strategy.ranked_theories = merged_claims[: self._MAX_THEORIES]
+        if not strategy.timeline_highlights:
+            strategy.timeline_highlights = list(fallback.timeline_highlights or [])
+        if not strategy.risk_flags:
+            strategy.risk_flags = list(fallback.risk_flags or [])
+        if not strategy.uncertainty_items:
+            strategy.uncertainty_items = list(fallback.uncertainty_items or [])
+        if not strategy.recommended_sequence:
+            strategy.recommended_sequence = list(fallback.recommended_sequence or [])
+        return strategy
+
+    def _score_issue_priority(self, *, issue, risk_profile: Dict[str, bool]) -> float:
+        issue_name = str(getattr(issue, "issue_name", "") or "")
+        confidence_key = str(getattr(issue, "confidence_level", "moderate")).lower()
+        base_score = self._CONFIDENCE_BASE.get(confidence_key, 0.6)
+        issue_class = self._classify_theory(issue_name)
+
+        class_weight = {
+            "contract": 0.18,
+            "restitution": 0.15,
+            "fraud": 0.08,
+            "securities": 0.06,
+            "estoppel": 0.05,
+            "veil": -0.02,
+            "other": 0.0,
+        }.get(issue_class, 0.0)
+
+        score = base_score + class_weight
+        evidence = list(getattr(issue, "supporting_evidence", []) or [])
+        if len(evidence) >= 2:
+            score += 0.05
+        elif not evidence:
+            score -= 0.15
+
+        if issue_class == "contract" and risk_profile.get("contract_enforceability_risk"):
+            score -= 0.28
+        if issue_class == "contract" and risk_profile.get("entity_targeting_risk"):
+            score -= 0.05
+        if issue_class == "contract" and risk_profile.get("payment_proof_gap"):
+            score -= 0.08
+
+        if issue_class == "restitution" and risk_profile.get("contract_enforceability_risk"):
+            score += 0.20
+        if issue_class == "restitution" and risk_profile.get("payment_proof_gap"):
+            score -= 0.06
+
+        if issue_class == "fraud" and risk_profile.get("fraud_specificity_gap"):
+            score -= 0.22
+        if issue_class == "fraud" and risk_profile.get("entity_targeting_risk"):
+            score -= 0.06
+
+        if issue_class == "securities" and risk_profile.get("sale_date_uncertainty"):
+            score -= 0.08
+        if issue_class == "securities" and risk_profile.get("contract_enforceability_risk"):
+            score += 0.04
+
+        return round(score, 4)
+
+    def _build_claim_rationale(self, *, issue, risk_profile: Dict[str, bool]) -> str:
+        issue_name = str(getattr(issue, "issue_name", "this theory") or "this theory")
+        issue_class = self._classify_theory(issue_name)
+
+        if issue_class == "contract" and risk_profile.get("contract_enforceability_risk"):
+            return (
+                f"{issue_name} remains important but is secondary until non-binding or enforceability "
+                "language risks are resolved in the signed documents."
+            )
+        if issue_class == "restitution" and risk_profile.get("contract_enforceability_risk"):
+            return (
+                f"{issue_name} is prioritized because restitution can support recovery even if contract "
+                "enforceability is disputed."
+            )
+        if issue_class == "fraud" and risk_profile.get("fraud_specificity_gap"):
+            return (
+                f"{issue_name} is preserved as leverage, but it should be framed carefully until specific "
+                "false statements and reliance evidence are fully documented."
+            )
+        return f"Prioritize {issue_name} based on available documentation and current risk profile."
+
+    def _extract_risk_profile(self, *, deep_analysis, gap_analysis=None) -> Dict[str, bool]:
+        major_risks = list(getattr(getattr(deep_analysis, "risk_assessment", None), "major_risks", []) or [])
+        evidence_gaps = list(getattr(getattr(deep_analysis, "risk_assessment", None), "evidence_gaps", []) or [])
+        key_challenges = list(getattr(deep_analysis, "key_challenges", []) or [])
+        issue_text = " ".join(str(getattr(issue, "fact_application", "") or "") for issue in getattr(
+            deep_analysis, "issue_analyses", []
+        ))
+        risk_text = " ".join(major_risks + evidence_gaps + key_challenges + [issue_text]).lower()
+
+        if gap_analysis is not None:
+            if int(getattr(gap_analysis, "critical_count", 0) or 0) > 0:
+                risk_text = f"{risk_text} critical documentation gaps"
+            if float(getattr(gap_analysis, "overall_completeness_score", 100) or 100) < 70:
+                risk_text = f"{risk_text} incomplete evidence"
+
+        return {
+            "contract_enforceability_risk": any(
+                token in risk_text
+                for token in (
+                    "non-binding",
+                    "nonbinding",
+                    "term sheet",
+                    "term-sheet",
+                    "only confidentiality",
+                    "enforceability",
+                    "disclaim",
+                    "binding effect",
+                )
+            ),
+            "payment_proof_gap": any(
+                token in risk_text
+                for token in (
+                    "payment proof",
+                    "wire",
+                    "bank confirmation",
+                    "proof of payment",
+                    "outgoing transaction",
+                    "fund flow",
+                    "ledger gap",
+                )
+            ),
+            "entity_targeting_risk": any(
+                token in risk_text
+                for token in (
+                    "entity",
+                    "authority",
+                    "wrong party",
+                    "targeting",
+                    "attribution",
+                    "responsible party",
+                )
+            ),
+            "fraud_specificity_gap": any(
+                token in risk_text
+                for token in (
+                    "specific false",
+                    "specific statement",
+                    "intent",
+                    "reliance",
+                    "misrepresentation proof",
+                )
+            ),
+            "sale_date_uncertainty": any(
+                token in risk_text
+                for token in (
+                    "date of sale",
+                    "sale date",
+                    "limitations",
+                    "statute of limitations",
+                    "accrual",
+                )
+            ),
+        }
+
+    def _classify_theory(self, theory_name: str) -> str:
+        text = (theory_name or "").lower()
+        for label, keywords in self._THEORY_CLASS_KEYWORDS.items():
+            if any(keyword in text for keyword in keywords):
+                return label
+        return "other"
+
+    def _normalize_theory_text(self, theory_name: str) -> str:
+        tokens = [token for token in re.findall(r"[a-z0-9]+", (theory_name or "").lower()) if token not in self._STOP_TOKENS]
+        return " ".join(tokens)
+
+    def _find_matching_claim_plan(
+        self,
+        *,
+        target: ClaimPlanV1,
+        candidates: List[ClaimPlanV1],
+        used_indices: Set[int],
+    ) -> Optional[int]:
+        target_class = self._classify_theory(target.theory)
+        target_norm = self._normalize_theory_text(target.theory)
+
+        for idx, candidate in enumerate(candidates):
+            if idx in used_indices:
+                continue
+            if self._normalize_theory_text(candidate.theory) == target_norm:
+                return idx
+
+        for idx, candidate in enumerate(candidates):
+            if idx in used_indices:
+                continue
+            if self._classify_theory(candidate.theory) == target_class and target_class != "other":
+                return idx
+
+        target_tokens = set(target_norm.split())
+        for idx, candidate in enumerate(candidates):
+            if idx in used_indices:
+                continue
+            candidate_tokens = set(self._normalize_theory_text(candidate.theory).split())
+            if not target_tokens or not candidate_tokens:
+                continue
+            overlap = len(target_tokens & candidate_tokens) / max(1, len(target_tokens))
+            if overlap >= 0.5:
+                return idx
+        return None
+
+    def _is_duplicate_theory(self, theory_name: str, existing_theories: List[str]) -> bool:
+        candidate_norm = self._normalize_theory_text(theory_name)
+        if not candidate_norm:
+            return True
+        candidate_class = self._classify_theory(theory_name)
+        for existing in existing_theories:
+            if self._normalize_theory_text(existing) == candidate_norm:
+                return True
+            if candidate_class != "other" and self._classify_theory(existing) == candidate_class:
+                return True
+        return False
 
     def _anchors_for_issue(
         self,

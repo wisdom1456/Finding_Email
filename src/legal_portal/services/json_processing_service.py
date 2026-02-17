@@ -144,6 +144,10 @@ class JsonProcessingService:
         "txt",
         "eml",
     }
+    _MAX_RAW_DOCS_FOR_PROMPT = 12
+    _MAX_RAW_DOC_CHARS_PER_DOC = 6000
+    _MAX_RAW_DOC_TOTAL_CHARS = 50000
+    _MAX_FINDINGS_PROMPT_CHARS = 220000
 
     @staticmethod
     def _gap_get(gap: Any, field: str, default: str = "") -> str:
@@ -228,6 +232,7 @@ class JsonProcessingService:
         fact_matrix,
         original_documents: Optional[Dict[str, str]],
         document_summaries: Optional[List[Dict[str, Any]]] = None,
+        document_registry: Optional[List[Dict[str, Any]]] = None,
     ) -> Tuple[str, Set[str], Set[str]]:
         """Build an authoritative list of present documents for prompt grounding."""
         lines: List[str] = []
@@ -251,6 +256,46 @@ class JsonProcessingService:
                 return
             lines.append("--- DOCUMENT REGISTER (AUTHORITATIVE LIST OF PROVIDED FILES) ---")
             has_header = True
+
+        for entry in document_registry or []:
+            if not isinstance(entry, dict):
+                continue
+            doc_name = (entry.get("document_name") or "").strip()
+            if not doc_name:
+                continue
+            normalized_name = self._normalize_doc_name(doc_name)
+            if normalized_name in seen_names:
+                continue
+            seen_names.add(normalized_name)
+            _ensure_header()
+
+            doc_type = (entry.get("document_type") or "Unknown").strip()
+            role = (entry.get("role_in_case") or "general case evidence").strip()
+            authority = (entry.get("authority_level") or "supporting_evidence").strip()
+            execution = (entry.get("execution_status") or "unknown").strip()
+            instrument = (entry.get("primary_instrument") or "n/a").strip()
+            significance = (
+                entry.get("legal_significance")
+                or entry.get("relevance_to_case")
+                or entry.get("authority_reason")
+                or "Supports core case narrative."
+            )
+            significance = self._truncate(str(significance), 150)
+            lines.append(
+                f"- {doc_name} | type={doc_type} | role={role} | "
+                f"authority={authority} | execution={execution} | instrument={instrument} | "
+                f"case_place={significance}"
+            )
+
+            present_names.add(normalized_name)
+            present_hints.update(self._extract_document_hints(doc_name))
+            raw_hints = entry.get("instrument_hints")
+            if isinstance(raw_hints, list):
+                for hint in raw_hints:
+                    present_hints.update(self._extract_document_hints(str(hint)))
+            elif raw_hints:
+                present_hints.update(self._extract_document_hints(str(raw_hints)))
+            present_hints.update(self._extract_document_hints(significance))
 
         key_documents = list(getattr(fact_matrix, "key_documents", []) or [])
         for doc in key_documents:
@@ -380,6 +425,176 @@ class JsonProcessingService:
                 return True
 
         return False
+
+    def _score_raw_document_for_prompt(self, filename: str, content: str) -> int:
+        """Prioritize high-value legal instruments when prompt space is limited."""
+        blob = " ".join([filename or "", (content or "")[:1500]]).lower()
+        score = 0
+
+        high_value_patterns = (
+            r"\bsubscription\s+agreement\b",
+            r"\boperating\s+agreement\b",
+            r"\bpromissory\s+note\b",
+            r"\bmemo\s+terms\b",
+            r"\bterms\s+for\s+financing\b",
+            r"\binvestment\s+agreement\b",
+            r"\bwire\b",
+            r"\bpayment\b",
+            r"\breceipt\b",
+        )
+        medium_value_patterns = (
+            r"\bcorrespondence\b",
+            r"\bemail\b",
+            r"\bupdate\b",
+            r"\bintake\b",
+            r"\binvestor\s+packet\b",
+            r"\bcrowdfunding\b",
+            r"\bp&l\b",
+            r"\bprofit\b",
+            r"\bloss\b",
+        )
+
+        for pattern in high_value_patterns:
+            if re.search(pattern, blob, re.IGNORECASE):
+                score += 3
+        for pattern in medium_value_patterns:
+            if re.search(pattern, blob, re.IGNORECASE):
+                score += 1
+        return score
+
+    def _select_raw_documents_for_prompt(
+        self,
+        original_documents: Dict[str, str],
+    ) -> Tuple[List[Tuple[str, str, int, int]], int]:
+        """Select a bounded set of raw documents for prompt grounding."""
+        ranked: List[Tuple[int, int, str, str]] = []
+        for index, (filename, content) in enumerate(original_documents.items()):
+            text = content or ""
+            ranked.append(
+                (
+                    self._score_raw_document_for_prompt(filename, text),
+                    index,
+                    filename,
+                    text,
+                )
+            )
+
+        ranked.sort(key=lambda row: (-row[0], row[1]))
+
+        selected: List[Tuple[str, str, int, int]] = []
+        total_chars = 0
+
+        for _score, _index, filename, text in ranked:
+            if len(selected) >= self._MAX_RAW_DOCS_FOR_PROMPT:
+                break
+
+            full_len = len(text)
+            clipped = text[: self._MAX_RAW_DOC_CHARS_PER_DOC]
+            clip_len = len(clipped)
+
+            if clip_len == 0:
+                continue
+
+            projected_total = total_chars + clip_len
+            if projected_total > self._MAX_RAW_DOC_TOTAL_CHARS:
+                if not selected:
+                    clip_len = min(self._MAX_RAW_DOC_TOTAL_CHARS, clip_len)
+                    clipped = clipped[:clip_len]
+                    projected_total = clip_len
+                else:
+                    continue
+
+            selected.append((filename, clipped, full_len, clip_len))
+            total_chars = projected_total
+
+        omitted_count = max(0, len(original_documents) - len(selected))
+        return selected, omitted_count
+
+    def _build_adaptive_findings_prompt(
+        self,
+        *,
+        intake_content: str,
+        fact_matrix,
+        legal_analysis,
+        structure_guidance,
+        verified_statutes: list,
+        quality_context: str,
+        statute_context: str,
+        attorney_name: str,
+        firm_name: str,
+        contact_phone: str,
+        contact_email: str,
+        clio_matter_context: str,
+        qa_context: str,
+        jurisdiction: str,
+        original_documents: Optional[Dict[str, str]],
+        document_summaries_for_context: Optional[List[Dict[str, Any]]],
+        document_registry: Optional[List[Dict[str, Any]]],
+        gap_analysis,
+        prefer_compact: bool = False,
+    ) -> Tuple[str, bool]:
+        """Build adaptive findings prompt and indicate whether raw docs are included."""
+        include_raw_documents = bool(original_documents) and not prefer_compact
+        structured_context = self._format_multi_stage_context(
+            fact_matrix,
+            legal_analysis,
+            structure_guidance,
+            verified_statutes,
+            original_documents=original_documents,
+            document_summaries=document_summaries_for_context,
+            document_registry=document_registry,
+            gap_analysis=gap_analysis,
+            include_raw_documents=include_raw_documents,
+        )
+
+        prompt = self._build_findings_prompt(
+            jurisdiction=jurisdiction,
+            intake_content=intake_content,
+            document_summaries=structured_context,
+            quality_context=quality_context,
+            statute_context=statute_context,
+            attorney_name=attorney_name,
+            firm_name=firm_name,
+            contact_phone=contact_phone,
+            contact_email=contact_email,
+            clio_matter_context=clio_matter_context,
+            qa_context=qa_context,
+            structure_guidance=structure_guidance,
+        )
+
+        if include_raw_documents and len(prompt) > self._MAX_FINDINGS_PROMPT_CHARS:
+            logger.warning(
+                "Findings prompt exceeds size guardrail (%s chars); retrying without raw document text",
+                len(prompt),
+            )
+            structured_context = self._format_multi_stage_context(
+                fact_matrix,
+                legal_analysis,
+                structure_guidance,
+                verified_statutes,
+                original_documents=original_documents,
+                document_summaries=document_summaries_for_context,
+                document_registry=document_registry,
+                gap_analysis=gap_analysis,
+                include_raw_documents=False,
+            )
+            prompt = self._build_findings_prompt(
+                jurisdiction=jurisdiction,
+                intake_content=intake_content,
+                document_summaries=structured_context,
+                quality_context=quality_context,
+                statute_context=statute_context,
+                attorney_name=attorney_name,
+                firm_name=firm_name,
+                contact_phone=contact_phone,
+                contact_email=contact_email,
+                clio_matter_context=clio_matter_context,
+                qa_context=qa_context,
+                structure_guidance=structure_guidance,
+            )
+            include_raw_documents = False
+
+        return prompt, include_raw_documents
 
     def _load_prompt_template(self, jurisdiction: str = "Florida") -> str:
         """Load the prompt template from a file and inject jurisdiction-specific guidance."""
@@ -733,6 +948,7 @@ class JsonProcessingService:
         diag_logger: Optional[DiagnosticLogger] = None,
         original_documents: Optional[Dict[str, str]] = None,  # Explicit raw content
         document_summaries_for_context: Optional[List[Dict[str, Any]]] = None,
+        document_registry: Optional[List[Dict[str, Any]]] = None,
         gap_analysis=None,  # GapAnalysisResult for guardrails
     ) -> str:
         """Generate findings email using multi-stage analysis results.
@@ -787,22 +1003,16 @@ class JsonProcessingService:
             contact_email=contact_email,
         )
 
-        # Format structured analysis for prompt
-        structured_context = self._format_multi_stage_context(
-            fact_matrix, legal_analysis, structure_guidance, verified_statutes,
-            original_documents=original_documents,
-            document_summaries=document_summaries_for_context,
-            gap_analysis=gap_analysis,
-        )
-
         statute_context = self._build_verified_statute_context(
             verified_statutes=verified_statutes,
             jurisdiction=jurisdiction,
         )
-        prompt = self._build_findings_prompt(
-            jurisdiction=jurisdiction,
+        prompt, prompt_includes_raw_docs = self._build_adaptive_findings_prompt(
             intake_content=intake_content,
-            document_summaries=structured_context,
+            fact_matrix=fact_matrix,
+            legal_analysis=legal_analysis,
+            structure_guidance=structure_guidance,
+            verified_statutes=verified_statutes,
             quality_context=quality_context,
             statute_context=statute_context,
             attorney_name=attorney_name,
@@ -811,7 +1021,11 @@ class JsonProcessingService:
             contact_email=contact_email_value,
             clio_matter_context=clio_matter_context,
             qa_context=qa_context,
-            structure_guidance=structure_guidance,
+            original_documents=original_documents,
+            document_summaries_for_context=document_summaries_for_context,
+            document_registry=document_registry,
+            gap_analysis=gap_analysis,
+            jurisdiction=jurisdiction,
         )
 
         logger.info("Making OpenAI request for adaptive letter generation")
@@ -830,6 +1044,45 @@ class JsonProcessingService:
                 "findings email following the adaptive structure guidance provided."
             ),
         )
+
+        if (not markdown_response or not markdown_response.strip()) and prompt_includes_raw_docs:
+            logger.warning(
+                "Adaptive findings generation returned empty response; retrying with compact context"
+            )
+            compact_prompt, _ = self._build_adaptive_findings_prompt(
+                intake_content=intake_content,
+                fact_matrix=fact_matrix,
+                legal_analysis=legal_analysis,
+                structure_guidance=structure_guidance,
+                verified_statutes=verified_statutes,
+                quality_context=quality_context,
+                statute_context=statute_context,
+                attorney_name=attorney_name,
+                firm_name=firm_name,
+                contact_phone=contact_phone,
+                contact_email=contact_email_value,
+                clio_matter_context=clio_matter_context,
+                qa_context=qa_context,
+                original_documents=original_documents,
+                document_summaries_for_context=document_summaries_for_context,
+                document_registry=document_registry,
+                gap_analysis=gap_analysis,
+                jurisdiction=jurisdiction,
+                prefer_compact=True,
+            )
+            markdown_response = await loop.run_in_executor(
+                None,
+                self._make_openai_request_responses_api,
+                compact_prompt,
+                "gpt-5.2",
+                "medium",
+                "high",
+                12000,
+                (
+                    "You are a senior legal writing assistant. Generate an attorney-quality "
+                    "findings email following the adaptive structure guidance provided."
+                ),
+            )
 
         if not markdown_response or not markdown_response.strip():
             raise ValueError("OpenAI returned empty response for adaptive letter generation")
@@ -896,20 +1149,13 @@ class JsonProcessingService:
         jurisdiction: str = "Florida",
         original_documents: Optional[Dict[str, str]] = None,
         document_summaries_for_context: Optional[List[Dict[str, Any]]] = None,
+        document_registry: Optional[List[Dict[str, Any]]] = None,
         gap_analysis=None,  # GapAnalysisResult for guardrails
     ) -> AsyncGenerator[str, None]:
         """Stream adaptive findings email generation.
 
         Note: This bypasses the formatting polish pass for real-time delivery.
         """
-        # Format structured analysis for prompt
-        structured_context = self._format_multi_stage_context(
-            fact_matrix, legal_analysis, structure_guidance, verified_statutes,
-            original_documents=original_documents,
-            document_summaries=document_summaries_for_context,
-            gap_analysis=gap_analysis,
-        )
-
         qa_context, qa_pair_count = self._format_confirmed_qa_context(confirmed_qa_pairs)
         if qa_pair_count > 0:
             logger.info(f"Including {qa_pair_count} confirmed Q&A pairs in streaming generation")
@@ -926,10 +1172,12 @@ class JsonProcessingService:
             verified_statutes=verified_statutes,
             jurisdiction=jurisdiction,
         )
-        prompt = self._build_findings_prompt(
-            jurisdiction=jurisdiction,
+        prompt, prompt_includes_raw_docs = self._build_adaptive_findings_prompt(
             intake_content=intake_content,
-            document_summaries=structured_context,
+            fact_matrix=fact_matrix,
+            legal_analysis=legal_analysis,
+            structure_guidance=structure_guidance,
+            verified_statutes=verified_statutes,
             quality_context=quality_context,
             statute_context=statute_context,
             attorney_name=attorney_name,
@@ -938,28 +1186,75 @@ class JsonProcessingService:
             contact_email=contact_email_value,
             clio_matter_context=clio_matter_context,
             qa_context=qa_context,
-            structure_guidance=structure_guidance,
+            original_documents=original_documents,
+            document_summaries_for_context=document_summaries_for_context,
+            document_registry=document_registry,
+            gap_analysis=gap_analysis,
+            jurisdiction=jurisdiction,
         )
 
         logger.info(f"Streaming adaptive findings email for {jurisdiction}")
+        stream_started = False
+        try:
+            async for token in self.client.create_response_stream(
+                model="gpt-5.2",
+                instructions=(
+                    "You are a senior legal writing assistant. Generate an attorney-quality "
+                    "findings email following the adaptive structure guidance provided."
+                ),
+                input=prompt,
+                reasoning_effort="low",
+                verbosity="high",
+            ):
+                stream_started = True
+                yield token
+        except Exception:
+            if not prompt_includes_raw_docs or stream_started:
+                raise
 
-        async for token in self.client.create_response_stream(
-            model="gpt-5.2",
-            instructions=(
-                "You are a senior legal writing assistant. Generate an attorney-quality "
-                "findings email following the adaptive structure guidance provided."
-            ),
-            input=prompt,
-            reasoning_effort="low",
-            verbosity="high",
-        ):
-            yield token
+            logger.warning(
+                "Streaming findings failed before first token; retrying with compact context"
+            )
+            compact_prompt, _ = self._build_adaptive_findings_prompt(
+                intake_content=intake_content,
+                fact_matrix=fact_matrix,
+                legal_analysis=legal_analysis,
+                structure_guidance=structure_guidance,
+                verified_statutes=verified_statutes,
+                quality_context=quality_context,
+                statute_context=statute_context,
+                attorney_name=attorney_name,
+                firm_name=firm_name or "",
+                contact_phone=contact_phone,
+                contact_email=contact_email_value,
+                clio_matter_context=clio_matter_context,
+                qa_context=qa_context,
+                original_documents=original_documents,
+                document_summaries_for_context=document_summaries_for_context,
+                document_registry=document_registry,
+                gap_analysis=gap_analysis,
+                jurisdiction=jurisdiction,
+                prefer_compact=True,
+            )
+            async for token in self.client.create_response_stream(
+                model="gpt-5.2",
+                instructions=(
+                    "You are a senior legal writing assistant. Generate an attorney-quality "
+                    "findings email following the adaptive structure guidance provided."
+                ),
+                input=compact_prompt,
+                reasoning_effort="low",
+                verbosity="high",
+            ):
+                yield token
 
     def _format_multi_stage_context(
         self, fact_matrix, legal_analysis, structure_guidance, verified_statutes,
         original_documents: Optional[Dict[str, str]] = None,
         document_summaries: Optional[List[Dict[str, Any]]] = None,
+        document_registry: Optional[List[Dict[str, Any]]] = None,
         gap_analysis=None,  # GapAnalysisResult for guardrails
+        include_raw_documents: bool = True,
     ) -> str:
         """Format multi-stage analysis results for letter generation prompt."""
         import json
@@ -983,21 +1278,29 @@ class JsonProcessingService:
             fact_matrix=fact_matrix,
             original_documents=original_documents,
             document_summaries=document_summaries,
+            document_registry=document_registry,
         )
         if register_context:
             context += register_context
 
-        # Original Documents (Enabled for Quality Debugging)
-        if original_documents:
-            context += "--- FULL DOCUMENT CONTENT (for precision and citations) ---\n"
-            for filename, content in original_documents.items():
-                context += f"\nDOCUMENT: {filename}\n"
-                # Limit to first 10k chars to avoid extreme token counts
-                doc_content = content[:10000]
-                if len(content) > 10000:
-                    doc_content += "\n... [truncated for brevity]"
-                context += f"{doc_content}\n"
-            context += "--- END DOCUMENT CONTENT ---\n\n"
+        # Original Documents (bounded to avoid prompt overrun in large case files)
+        if original_documents and include_raw_documents:
+            selected_docs, omitted_count = self._select_raw_documents_for_prompt(original_documents)
+            if selected_docs:
+                context += "--- FULL DOCUMENT CONTENT (for precision and citations) ---\n"
+                for filename, clipped_content, full_len, clip_len in selected_docs:
+                    context += f"\nDOCUMENT: {filename}\n"
+                    context += f"{clipped_content}\n"
+                    if full_len > clip_len:
+                        context += (
+                            f"... [truncated: showing {clip_len} of {full_len} characters]\n"
+                        )
+                if omitted_count > 0:
+                    context += (
+                        f"\n... [{omitted_count} additional document(s) omitted from full text context "
+                        "to preserve model context budget]\n"
+                    )
+                context += "--- END DOCUMENT CONTENT ---\n\n"
 
         # Legal Analysis
         context += "LEGAL ANALYSIS:\n"

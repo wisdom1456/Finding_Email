@@ -24,6 +24,7 @@ from legal_portal.core.data_models import (
 )
 from legal_portal.services.chunk_state_manager import ChunkStateManager
 from legal_portal.services.corpus_coverage_service import CorpusCoverageService
+from legal_portal.services.document_registry_service import DocumentRegistryService
 from legal_portal.services.document_quality_validator import DocumentQualityValidator
 from legal_portal.services.json_processing_service import JsonProcessingService
 from legal_portal.services.multi_stage_analyzer import MultiStageAnalyzer
@@ -786,6 +787,12 @@ async def process_case_documents(
             multi_stage_analyzer = MultiStageAnalyzer(
                 openai_client=openai_client_wrapper, statute_service=statute_service
             )
+            registry_service = DocumentRegistryService()
+            document_registry_seed = registry_service.build_registry(
+                processed_documents=processed_case_docs + processed_intake,
+                document_summaries=structured_summaries,
+                fact_matrix=None,
+            )
 
             if progress_callback:
                 await progress_callback(
@@ -807,6 +814,7 @@ async def process_case_documents(
                 jurisdiction=jurisdiction,  # Pass jurisdiction
                 diag_logger=diag_logger,  # Pass diagnostic logger
                 signature_evidence=signature_evidence,
+                document_registry=document_registry_seed,
             )
             multi_stage_duration = time.time() - multi_stage_start
 
@@ -817,6 +825,11 @@ async def process_case_documents(
             # Attach original documents to multi-stage result for letter generation
             multi_stage_result.original_documents = _build_original_documents_map(
                 processed_case_docs + processed_intake
+            )
+            multi_stage_result.document_registry = registry_service.build_registry(
+                processed_documents=processed_case_docs + processed_intake,
+                document_summaries=structured_summaries,
+                fact_matrix=fact_matrix,
             )
 
             elapsed = time.time() - start_time
@@ -922,6 +935,9 @@ async def process_case_documents(
             "models_used": models_used,
             "jurisdiction": jurisdiction,  # Include jurisdiction in artifacts
             "multi_stage_error": multi_stage_error,  # Include error if multi-stage failed
+            "document_registry_count": len(
+                (multi_stage_result.document_registry if multi_stage_result else []) or []
+            ),
         }
 
         result = ProcessingResult(

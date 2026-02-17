@@ -14,7 +14,7 @@ from __future__ import annotations
 import asyncio
 import json
 import time
-from typing import Any, AsyncGenerator, Callable, List, Optional
+from typing import Any, AsyncGenerator, Callable, Dict, List, Optional
 
 from legal_portal.core.data_models import (
     CriticalDeadline,
@@ -102,6 +102,40 @@ class MultiStageAnalyzer:
                 lines.append(f"    Summary: {exec_summary}")
             lines.append("")
 
+        return "\n".join(lines)
+
+    @staticmethod
+    def _build_document_registry_context(
+        document_registry: Optional[List[Dict[str, Any]]],
+        max_docs: int = 40,
+    ) -> str:
+        """Render compact document-registry context for stage prompts."""
+        rows = [row for row in (document_registry or []) if isinstance(row, dict)]
+        if not rows:
+            return "No authoritative document registry provided."
+
+        sorted_rows = sorted(
+            rows,
+            key=lambda row: (
+                -int(row.get("authority_score") or 0),
+                str(row.get("document_name") or "").lower(),
+            ),
+        )
+        lines: List[str] = []
+        for row in sorted_rows[:max_docs]:
+            name = row.get("document_name") or "Unknown document"
+            doc_type = row.get("document_type") or "Unknown"
+            authority = row.get("authority_level") or "supporting_evidence"
+            execution = row.get("execution_status") or "unknown"
+            instrument = row.get("primary_instrument") or "n/a"
+            is_key = bool(row.get("is_key_document"))
+            role = row.get("role_in_case") or "general case support"
+            lines.append(
+                f"- {name} | type={doc_type} | authority={authority} | "
+                f"execution={execution} | key_doc={is_key} | instrument={instrument} | role={role}"
+            )
+        if len(sorted_rows) > max_docs:
+            lines.append(f"... {len(sorted_rows) - max_docs} additional registry items omitted.")
         return "\n".join(lines)
 
     def _build_streaming_prompt(
@@ -366,6 +400,7 @@ Output in clean markdown format."""
         jurisdiction: str = "Florida",
         diag_logger: Optional[DiagnosticLogger] = None,
         signature_evidence: Optional[List[Dict[str, Any]]] = None,
+        document_registry: Optional[List[Dict[str, Any]]] = None,
     ) -> MultiStageAnalysisResult:
         """Execute 4-stage analysis pipeline."""
         start_time = time.time()
@@ -402,7 +437,9 @@ Output in clean markdown format."""
 
         # Use heartbeat to show progress during long API call
         fact_matrix = await self._run_with_heartbeat(
-            lambda: self._extract_fact_matrix(intake_content, document_summaries, jurisdiction),
+            lambda: self._extract_fact_matrix(
+                intake_content, document_summaries, jurisdiction, document_registry
+            ),
             progress_callback,
             "fact_extraction",
             "Extracting Facts",
@@ -573,6 +610,7 @@ Output in clean markdown format."""
                     document_summaries=document_summaries,
                     intake_content=intake_content,
                     signature_evidence=signature_evidence,
+                    document_registry=document_registry,
                 )
                 logger.info(f"[STAGE:3.5] Gap analysis returned: {gap_analysis is not None}")
                 self.stage_timings["gap_analysis"] = time.time() - stage_start
@@ -686,6 +724,7 @@ Output in clean markdown format."""
             processing_time_seconds=total_time,
             stage_timings=self.stage_timings,
             opposing_parties=opposing_parties,
+            document_registry=document_registry or [],
         )
 
     async def _extract_fact_matrix(
@@ -693,6 +732,7 @@ Output in clean markdown format."""
         intake_content: str,
         document_summaries: List[DocumentSummaryStructured],
         jurisdiction: str,
+        document_registry: Optional[List[Dict[str, Any]]] = None,
     ) -> FactMatrix:
         """Stage 1: Extract structured facts from documents."""
         docs_context = []
@@ -731,11 +771,16 @@ Output in clean markdown format."""
                 }
             )
 
+        registry_context = self._build_document_registry_context(document_registry)
+
         prompt = f"""You are a precise legal fact extractor focusing on a matter in {jurisdiction}.
 Extract ONLY factual information from the case materials. Do NOT perform legal analysis.
 
 INTAKE INFORMATION:
 {intake_content[:5000]}
+
+DOCUMENT REGISTRY (AUTHORITATIVE CLASSIFICATION/EXECUTION SIGNALS):
+{registry_context}
 
 DOCUMENT SUMMARIES:
 {json.dumps(docs_context, indent=2)}

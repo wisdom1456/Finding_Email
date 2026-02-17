@@ -934,6 +934,10 @@ class MultiStageAnalysisResult(BaseModel):
     stage_timings: Dict[str, float] = Field(default_factory=dict)  # Time per stage
     opposing_parties: List[Party] = Field(default_factory=list)
     original_documents: Optional[Dict[str, str]] = None  # NEW: Store raw content for letter generation
+    document_registry: List[Dict[str, Any]] = Field(
+        default_factory=list,
+        description="Authoritative document registry with authority tiers/execution metadata.",
+    )
 
 
 class CompletenessReport(BaseModel):

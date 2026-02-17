@@ -705,6 +705,152 @@ async def test_findings_prompt_uses_document_summaries_for_register_context(
 
 
 @pytest.mark.asyncio
+async def test_findings_prompt_includes_authority_fields_from_document_registry(
+    baseline_markdown_fixtures, monkeypatch
+):
+    """Document registry rows should appear as authoritative context in findings prompts."""
+    monkeypatch.setattr(
+        "legal_portal.utils.letter_polish.LetterPolisher.polish_letter",
+        lambda self, raw_letter: {
+            "success": True,
+            "polished_letter": raw_letter,
+            "changes_made": [],
+            "original_length": len(raw_letter),
+            "polished_length": len(raw_letter),
+        },
+    )
+
+    fake_client = FakeLetterOpenAIClient(
+        findings_markdown=baseline_markdown_fixtures["findings"],
+        demand_markdown=baseline_markdown_fixtures["demand"],
+    )
+    service = JsonProcessingService(client=fake_client, config={})
+
+    await service.generate_findings_letter_adaptive(
+        intake_content='{"client_name":"Amber Bell"}',
+        fact_matrix=FactMatrix(**_sample_fact_matrix_dict()),
+        legal_analysis=DeepAnalysis(**_sample_deep_analysis_dict()),
+        structure_guidance=LetterStructure(
+            style="natural_flow",
+            intro="Here are the key points of our analysis:",
+            issue_format="flowing_bullet_paragraphs",
+            reasoning="Natural flow preferred for client readability.",
+        ),
+        verified_statutes=[],
+        attorney_name="Franklin Riley",
+        firm_name="Bernhardt Riley, Attorneys at Law",
+        contact_phone="(727) 275-9575",
+        contact_email="counsel@firm.com",
+        jurisdiction="Florida",
+        document_registry=[
+            {
+                "document_name": "Subscription Agreement.pdf",
+                "document_type": "Contract",
+                "role_in_case": "deal terms and investor rights",
+                "authority_level": "controlling_signed_instrument",
+                "execution_status": "signed",
+                "primary_instrument": "subscription agreement",
+                "legal_significance": "Defines investor rights and obligations.",
+                "instrument_hints": ["subscription agreement"],
+            }
+        ],
+    )
+
+    prompt = fake_client.last_response_request["input"]
+    assert "authority=controlling_signed_instrument" in prompt
+    assert "execution=signed" in prompt
+    assert "instrument=subscription agreement" in prompt
+
+
+@pytest.mark.asyncio
+async def test_findings_generation_retries_compact_prompt_after_empty_response(
+    baseline_markdown_fixtures, monkeypatch
+):
+    """If the first adaptive call is empty, service should retry with compact context."""
+    monkeypatch.setattr(
+        "legal_portal.utils.letter_polish.LetterPolisher.polish_letter",
+        lambda self, raw_letter: {
+            "success": True,
+            "polished_letter": raw_letter,
+            "changes_made": [],
+            "original_length": len(raw_letter),
+            "polished_length": len(raw_letter),
+        },
+    )
+
+    fake_client = FakeLetterOpenAIClient(
+        findings_markdown=baseline_markdown_fixtures["findings"],
+        demand_markdown=baseline_markdown_fixtures["demand"],
+    )
+    service = JsonProcessingService(client=fake_client, config={})
+
+    prompts = []
+
+    def _flaky_findings_call(prompt, *_args):
+        prompts.append(prompt)
+        if len(prompts) == 1:
+            return ""
+        return baseline_markdown_fixtures["findings"]
+
+    monkeypatch.setattr(service, "_make_openai_request_responses_api", _flaky_findings_call)
+
+    letter_html = await service.generate_findings_letter_adaptive(
+        intake_content='{"client_name":"Amber Bell"}',
+        fact_matrix=FactMatrix(**_sample_fact_matrix_dict()),
+        legal_analysis=DeepAnalysis(**_sample_deep_analysis_dict()),
+        structure_guidance=LetterStructure(
+            style="natural_flow",
+            intro="Here are the key points of our analysis:",
+            issue_format="flowing_bullet_paragraphs",
+            reasoning="Natural flow preferred for client readability.",
+        ),
+        verified_statutes=[],
+        attorney_name="Franklin Riley",
+        firm_name="Bernhardt Riley, Attorneys at Law",
+        contact_phone="(727) 275-9575",
+        contact_email="counsel@firm.com",
+        jurisdiction="Florida",
+        original_documents={
+            "Subscription Agreement.pdf": "A" * 7000,
+            "Operating Agreement.pdf": "B" * 7000,
+        },
+    )
+
+    assert "<html" in letter_html.lower()
+    assert len(prompts) == 2
+    assert "--- FULL DOCUMENT CONTENT (for precision and citations) ---" in prompts[0]
+    assert "--- FULL DOCUMENT CONTENT (for precision and citations) ---" not in prompts[1]
+
+
+def test_format_multi_stage_context_limits_raw_document_budget(baseline_markdown_fixtures):
+    """Raw document context should be bounded for large case files."""
+    fake_client = FakeLetterOpenAIClient(
+        findings_markdown=baseline_markdown_fixtures["findings"],
+        demand_markdown=baseline_markdown_fixtures["demand"],
+    )
+    service = JsonProcessingService(client=fake_client, config={})
+
+    many_docs = {f"Doc-{i}.txt": "Z" * 7000 for i in range(25)}
+    context = service._format_multi_stage_context(
+        fact_matrix=FactMatrix(**_sample_fact_matrix_dict()),
+        legal_analysis=DeepAnalysis(**_sample_deep_analysis_dict()),
+        structure_guidance=LetterStructure(
+            style="natural_flow",
+            intro="Here are the key points of our analysis:",
+            issue_format="flowing_bullet_paragraphs",
+            reasoning="Natural flow preferred for client readability.",
+        ),
+        verified_statutes=[],
+        original_documents=many_docs,
+        document_summaries=None,
+        gap_analysis=None,
+    )
+
+    assert context.count("\nDOCUMENT: ") <= service._MAX_RAW_DOCS_FOR_PROMPT
+    assert "omitted from full text context to preserve model context budget" in context
+
+
+@pytest.mark.asyncio
 async def test_demand_prompt_avoids_na_placeholder_when_amount_missing(baseline_markdown_fixtures):
     """Demand prompt should not inject `N/A` for missing demand amount."""
     fake_client = FakeLetterOpenAIClient(

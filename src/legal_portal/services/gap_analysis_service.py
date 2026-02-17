@@ -54,6 +54,7 @@ class GapAnalysisService:
         resolution_context: Optional[str] = None,
         prior_gap_analysis: Optional[GapAnalysisResult] = None,
         signature_evidence: Optional[List[Dict[str, Any]]] = None,
+        document_registry: Optional[List[Dict[str, Any]]] = None,
     ) -> GapAnalysisResult:
         """Analyze case for gaps, contradictions, and weaknesses.
 
@@ -68,6 +69,7 @@ class GapAnalysisService:
             resolution_context: Optional user-provided resolution context
             prior_gap_analysis: Optional prior gap analysis for selective refresh
             signature_evidence: Optional authoritative signature metadata per case document
+            document_registry: Optional authoritative document registry rows
 
         Returns:
             GapAnalysisResult with identified gaps and completeness assessment
@@ -100,6 +102,7 @@ class GapAnalysisService:
                 resolution_context=resolution_context,
                 prior_gap_analysis=prior_gap_analysis,
                 signature_evidence=signature_evidence,
+                document_registry=document_registry,
             )
 
             # Use GPT-4.1 for gap detection - faster and more reliable for structured JSON
@@ -273,6 +276,47 @@ class GapAnalysisService:
 
         return "\n".join(lines)
 
+    def _build_document_registry_summary(
+        self,
+        document_registry: Optional[List[Dict[str, Any]]],
+    ) -> str:
+        """Format document registry rows for gap-analysis grounding."""
+        rows = [row for row in (document_registry or []) if isinstance(row, dict)]
+        if not rows:
+            return "No document registry was provided."
+
+        sorted_rows = sorted(
+            rows,
+            key=lambda row: (
+                -int(row.get("authority_score") or 0),
+                str(row.get("document_name") or "").lower(),
+            ),
+        )
+        lines: List[str] = []
+        for row in sorted_rows[:50]:
+            file_name = row.get("document_name") or "Unknown document"
+            doc_type = row.get("document_type") or "Unknown"
+            authority = row.get("authority_level") or "supporting_evidence"
+            authority_reason = row.get("authority_reason") or ""
+            execution_status = row.get("execution_status") or "unknown"
+            execution_confidence = row.get("execution_confidence") or "none"
+            primary_instrument = row.get("primary_instrument") or "n/a"
+            is_key_doc = bool(row.get("is_key_document"))
+            role = row.get("role_in_case") or "general case support"
+            line = (
+                f"- {file_name}: type={doc_type}, authority={authority}, key_doc={is_key_doc}, "
+                f"execution={execution_status}({execution_confidence}), instrument={primary_instrument}, role={role}"
+            )
+            if authority_reason:
+                line += f", authority_reason={self._truncate_text(str(authority_reason), 140)}"
+            lines.append(line)
+
+        if len(sorted_rows) > 50:
+            lines.append(
+                f"... {len(sorted_rows) - 50} additional registry records omitted for brevity."
+            )
+        return "\n".join(lines)
+
     @staticmethod
     def _tokenize_for_match(value: str) -> Set[str]:
         """Tokenize text for lightweight fuzzy document-name matching."""
@@ -293,11 +337,24 @@ class GapAnalysisService:
             "pdf",
         }
         normalized = re.sub(r"[^a-z0-9]+", " ", (value or "").lower())
-        return {
-            token
-            for token in normalized.split()
-            if len(token) >= 3 and token not in stopwords
-        }
+        tokens: Set[str] = set()
+        for raw in normalized.split():
+            if len(raw) < 3:
+                continue
+            token = raw
+            if token.endswith("s") and len(token) >= 5 and not token.endswith("ss"):
+                token = token[:-1]
+            if token in stopwords:
+                continue
+            tokens.add(token)
+            # Map common legal-document synonyms so "contract" and "agreement" overlap.
+            if token in {"agreement", "contract"}:
+                tokens.update({"agreement", "contract"})
+            elif token in {"subscription", "investor", "investment"}:
+                tokens.add("investment")
+            elif token in {"unit", "units", "membership"}:
+                tokens.add("membership")
+        return tokens
 
     @staticmethod
     def _is_execution_gap(gap: GapItem) -> bool:
@@ -531,6 +588,7 @@ class GapAnalysisService:
         resolution_context: Optional[str] = None,
         prior_gap_analysis: Optional[GapAnalysisResult] = None,
         signature_evidence: Optional[List[Dict[str, Any]]] = None,
+        document_registry: Optional[List[Dict[str, Any]]] = None,
     ) -> str:
         """Build the AI prompt for gap detection.
 
@@ -543,6 +601,7 @@ class GapAnalysisService:
             resolution_context: Optional user-supplied context to resolve gaps
             prior_gap_analysis: Optional prior gap analysis to reconcile
             signature_evidence: Optional authoritative signature metadata
+            document_registry: Optional authoritative document registry rows
 
         Returns:
             Formatted prompt for GPT-5.2
@@ -552,6 +611,7 @@ class GapAnalysisService:
         doc_list = "\n".join([f"- {doc.document_name}" for doc in document_summaries]) or "None provided"
         doc_evidence_summary = self._build_document_evidence_summary(document_summaries)
         signature_evidence_summary = self._build_signature_evidence_summary(signature_evidence)
+        document_registry_summary = self._build_document_registry_summary(document_registry)
 
         # Prepare parties
         parties_list = "\n".join([f"- {p.name} ({p.role})" for p in fact_matrix.parties])
@@ -598,6 +658,9 @@ CONTEXT:
 
 **Execution/Signature Evidence (Authoritative Metadata):**
 {signature_evidence_summary}
+
+**Document Registry (Authority/Role Classification):**
+{document_registry_summary}
 
 **Parties Involved:**
 {parties_list}
@@ -687,6 +750,9 @@ Execution guardrails:
 - Treat the "Execution/Signature Evidence" block as authoritative metadata.
 - If a document is marked `status=signed`, do NOT claim that same document is missing execution/signature.
 - If signatures exist but party/standing alignment is unclear, classify that as contradiction/incomplete info, not missing executed documents.
+- Treat the "Document Registry" block as authoritative for document role/authority tier.
+- High-authority documents (controlling instruments and official records) should anchor your gap severity decisions.
+- Do not call a document "missing" if the same or equivalent instrument is present in the registry.
 
 Calculate an overall completeness score (0-100):
 - 90-100: Excellent documentation, minor gaps only

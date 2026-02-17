@@ -153,3 +153,44 @@ def test_reconcile_matches_signed_doc_with_uuid_filename_using_instrument_hints(
     assert reconciled.total_gaps == 0
     assert reconciled.high_count == 0
     assert reconciled.gaps_by_category[GapCategory.MISSING_DOCUMENT.value] == []
+
+
+def test_reconcile_matches_contracts_wording_to_signed_subscription_agreement():
+    """Plural contract wording should still match signed subscription agreements."""
+    missing_gap = GapItem(
+        gap_id="gap-contracts",
+        category=GapCategory.MISSING_DOCUMENT,
+        severity=GapSeverity.CRITICAL,
+        title="Missing executed contract(s) between investors and Cuchillo Greens Grow 1 LLC",
+        description="No executed contract documents were produced to confirm investment terms.",
+        affected_issue="Breach of contract",
+        related_documents=[],
+        recommendations=["Provide executed contract(s) for the investment."],
+        impact_on_case="Contract enforceability remains unclear.",
+    )
+    result = GapAnalysisResult(
+        total_gaps=1,
+        critical_count=1,
+        high_count=0,
+        medium_count=0,
+        low_count=0,
+        gaps_by_category={GapCategory.MISSING_DOCUMENT.value: [missing_gap]},
+        overall_completeness_score=66.0,
+        attorney_summary="Executed agreements appear missing.",
+    )
+    signature_evidence = [
+        {
+            "file_name": "Subscription_Agreement_EJAJ-TX_Final120.doc.pdf",
+            "status": "signed",
+            "confidence": "high",
+            "has_digital_signature": True,
+            "instrument_hints": ["subscription agreement", "membership units"],
+        }
+    ]
+
+    service = GapAnalysisService(openai_client=None)  # type: ignore[arg-type]
+    reconciled = service._reconcile_signature_execution_gaps(result, signature_evidence)
+
+    assert reconciled.total_gaps == 0
+    assert reconciled.critical_count == 0
+    assert reconciled.gaps_by_category[GapCategory.MISSING_DOCUMENT.value] == []

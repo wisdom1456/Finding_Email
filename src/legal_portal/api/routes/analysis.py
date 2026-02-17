@@ -1462,6 +1462,7 @@ async def stream_findings_letter(
                 jurisdiction=jurisdiction,
                 original_documents=msr.get("original_documents"),
                 document_summaries_for_context=document_summaries_for_context,
+                document_registry=msr.get("document_registry"),
                 gap_analysis=gap_analysis,  # Pass gap analysis for content guardrails
             ):
                 yield f"data: {json.dumps({'token': token})}\n\n"
@@ -2914,6 +2915,7 @@ async def generate_letter(
             diag_logger=diag_logger,  # Pass diagnostic logger
             original_documents=msr.get("original_documents"),  # Pass raw content
             document_summaries_for_context=document_summaries_for_context,
+            document_registry=msr.get("document_registry"),
             gap_analysis=gap_analysis,  # Pass gap analysis for guardrails
         )
         letter_key = "findings"
@@ -3496,6 +3498,93 @@ def _build_signature_evidence(
     return sorted(evidence, key=lambda row: (row.get("file_name") or "").lower())
 
 
+def _build_document_registry_for_gap_context(
+    document_rows: List[Dict[str, Any]],
+    result_payload: Dict[str, Any],
+    fact_matrix: Optional[Any] = None,
+) -> List[Dict[str, Any]]:
+    """Build authoritative document registry rows from current DB document state."""
+    try:
+        from legal_portal.core.data_models import (
+            DocumentType,
+            FactMatrix,
+            FileMetadata,
+            FileType,
+            ProcessedDocument,
+        )
+        from legal_portal.services.document_registry_service import DocumentRegistryService
+
+        summaries = _parse_gap_document_summaries(result_payload)
+        processed_docs: List[ProcessedDocument] = []
+
+        def _coerce_file_type(raw: Any, file_name: str) -> FileType:
+            text = str(raw or "").lower().strip()
+            if text in {"application/pdf", "pdf"} or (file_name or "").lower().endswith(".pdf"):
+                return FileType.PDF
+            if "wordprocessingml.document" in text or (file_name or "").lower().endswith(".docx"):
+                return FileType.DOCX
+            if text == "application/msword" or (file_name or "").lower().endswith(".doc"):
+                return FileType.DOC
+            if text in {"text/plain", "txt"} or (file_name or "").lower().endswith(".txt"):
+                return FileType.TXT
+            if text in {"text/csv", "csv"} or (file_name or "").lower().endswith(".csv"):
+                return FileType.CSV
+            if text in {"message/rfc822", "eml"} or (file_name or "").lower().endswith(".eml"):
+                return FileType.EML
+            if text.startswith("image/"):
+                if text == "image/png":
+                    return FileType.PNG
+                if text in {"image/jpeg", "image/jpg"}:
+                    return FileType.JPG
+                return FileType.IMAGE
+            return FileType.PDF
+
+        for doc in document_rows or []:
+            file_name = str(doc.get("file_name") or "").strip()
+            text = (doc.get("manual_text") or doc.get("extracted_text") or "").strip()
+            if not file_name or not text:
+                continue
+
+            doc_type = (
+                DocumentType.INTAKE_FORM
+                if bool((doc.get("metadata") or {}).get("is_intake_form"))
+                else DocumentType.CASE_DOCUMENT
+            )
+            file_type = _coerce_file_type(doc.get("file_type"), file_name)
+            metadata = FileMetadata(file_name=file_name, file_type=file_type, file_size=0)
+            signature_detection = _derive_signature_detection_for_gap_doc(doc)
+
+            processed_docs.append(
+                ProcessedDocument(
+                    file_name=file_name,
+                    content=text,
+                    document_type=doc_type,
+                    file_type=file_type,
+                    metadata=metadata,
+                    document_id=doc.get("id"),
+                    extraction_quality="high",
+                    extraction_method="db",
+                    signature_detection=signature_detection,
+                )
+            )
+
+        fact_matrix_model = None
+        if isinstance(fact_matrix, FactMatrix):
+            fact_matrix_model = fact_matrix
+        elif isinstance(fact_matrix, dict):
+            fact_matrix_model = FactMatrix(**fact_matrix)
+
+        registry_service = DocumentRegistryService()
+        return registry_service.build_registry(
+            processed_documents=processed_docs,
+            document_summaries=summaries,
+            fact_matrix=fact_matrix_model,
+        )
+    except Exception as registry_err:
+        logger.warning("[GAP] Failed to build document registry context: %s", registry_err)
+        return []
+
+
 def _hash_jsonable(value: Any) -> str:
     """Compute deterministic hash for JSON-serializable payloads."""
     serialized = json.dumps(value, sort_keys=True, default=str)
@@ -3580,6 +3669,11 @@ async def _ensure_fresh_gap_analysis_for_letter_generation(
         doc_summaries_list = _parse_gap_document_summaries(result_payload)
         intake_content = _fetch_gap_intake_content(supabase, case_id, result_payload)
         signature_evidence = _build_signature_evidence(case_document_rows)
+        document_registry = _build_document_registry_for_gap_context(
+            document_rows=case_document_rows,
+            result_payload=result_payload,
+            fact_matrix=fact_matrix,
+        )
 
         ai_preferences = await _get_user_ai_preferences(user_id, supabase)
         openai_client = OpenAIClient(user_preferences=ai_preferences)
@@ -3592,10 +3686,12 @@ async def _ensure_fresh_gap_analysis_for_letter_generation(
             document_summaries=doc_summaries_list,
             intake_content=intake_content,
             signature_evidence=signature_evidence,
+            document_registry=document_registry,
         )
 
         gap_dict = gap_result.model_dump(mode="json")
         multi_stage_result["gap_analysis"] = gap_dict
+        multi_stage_result["document_registry"] = document_registry
         result_payload["multi_stage_result"] = multi_stage_result
         result_payload["gap_analysis_state"] = {
             "input_hash": gap_input_hash,
@@ -3878,6 +3974,11 @@ async def analyze_gaps_on_demand(
 
         # Fetch intake content
         intake_content = _fetch_gap_intake_content(supabase, case_id, result_payload)
+        document_registry = _build_document_registry_for_gap_context(
+            document_rows=case_document_rows,
+            result_payload=result_payload,
+            fact_matrix=fact_matrix,
+        )
 
         logger.info(f"[GAP_ENDPOINT] Running gap analysis with {len(doc_summaries_list)} documents")
 
@@ -3889,6 +3990,7 @@ async def analyze_gaps_on_demand(
             document_summaries=doc_summaries_list,
             intake_content=intake_content,
             signature_evidence=signature_evidence,
+            document_registry=document_registry,
         )
 
         logger.info(f"[GAP_ENDPOINT] Gap analysis complete: {gap_result.total_gaps} gaps found")
@@ -3896,6 +3998,7 @@ async def analyze_gaps_on_demand(
         # Save gap analysis to database
         gap_dict = gap_result.model_dump(mode="json")
         multi_stage_result["gap_analysis"] = gap_dict
+        multi_stage_result["document_registry"] = document_registry
         result_payload["multi_stage_result"] = multi_stage_result
         result_payload["gap_analysis_state"] = {
             "input_hash": gap_input_hash,
@@ -4025,6 +4128,11 @@ async def resolve_gaps_and_refresh(
         doc_summaries_list = _parse_gap_document_summaries(result_payload)
         intake_content = _fetch_gap_intake_content(supabase, case_id, result_payload)
         existing_gap_model = GapAnalysisResult(**existing_gap_dict)
+        document_registry = _build_document_registry_for_gap_context(
+            document_rows=case_document_rows,
+            result_payload=result_payload,
+            fact_matrix=fact_matrix,
+        )
 
         supporting_docs = _collect_resolution_documents(
             supabase=supabase,
@@ -4052,10 +4160,12 @@ async def resolve_gaps_and_refresh(
             resolution_context=resolution_context,
             prior_gap_analysis=existing_gap_model,
             signature_evidence=signature_evidence,
+            document_registry=document_registry,
         )
 
         gap_dict = gap_result.model_dump(mode="json")
         multi_stage_result["gap_analysis"] = gap_dict
+        multi_stage_result["document_registry"] = document_registry
         result_payload["multi_stage_result"] = multi_stage_result
 
         resolution_state = {
@@ -4196,6 +4306,11 @@ async def analyze_gaps_streaming(
 
             # Fetch intake content
             intake_content = _fetch_gap_intake_content(supabase, case_id, result_payload)
+            document_registry = _build_document_registry_for_gap_context(
+                document_rows=case_document_rows,
+                result_payload=result_payload,
+                fact_matrix=fact_matrix,
+            )
 
             # Phase 2: Analyzing
             yield f"data: {json.dumps({'type': 'phase', 'phase': 'analyzing', 'message': 'AI is analyzing case for gaps...', 'elapsed': time.time() - start_time, 'doc_count': len(doc_summaries_list)})}\n\n"
@@ -4210,6 +4325,7 @@ async def analyze_gaps_streaming(
                 document_summaries=doc_summaries_list,
                 intake_content=intake_content,
                 signature_evidence=signature_evidence,
+                document_registry=document_registry,
             )
 
             logger.info(f"[GAP_STREAM] Gap analysis complete: {gap_result.total_gaps} gaps found")
@@ -4220,6 +4336,7 @@ async def analyze_gaps_streaming(
             # Save gap analysis to database
             gap_dict = gap_result.model_dump(mode="json")
             multi_stage_result["gap_analysis"] = gap_dict
+            multi_stage_result["document_registry"] = document_registry
             result_payload["multi_stage_result"] = multi_stage_result
             result_payload["gap_analysis_state"] = {
                 "input_hash": gap_input_hash,

@@ -4846,7 +4846,7 @@ def _build_gap_resolution_hash(request: GapResolutionRefreshRequest) -> str:
             [
                 {
                     "gap_id": r.gap_id,
-                    "resolution_text": (r.resolution_text or "").strip(),
+                    "resolution_text": (r.resolution_text if isinstance(r.resolution_text, str) else "").strip(),
                     "mark_resolved": bool(r.mark_resolved),
                     "related_document_ids": sorted(r.related_document_ids or []),
                 }
@@ -4854,7 +4854,7 @@ def _build_gap_resolution_hash(request: GapResolutionRefreshRequest) -> str:
             ],
             key=lambda x: x["gap_id"],
         ),
-        "global_resolution_notes": (request.global_resolution_notes or "").strip(),
+        "global_resolution_notes": (request.global_resolution_notes if isinstance(request.global_resolution_notes, str) else "").strip(),
         "attached_document_ids": sorted(request.attached_document_ids or []),
     }
     payload = json.dumps(canonical, sort_keys=True)
@@ -5366,7 +5366,7 @@ def _build_resolution_context(
     lines = []
     lines.append("USER GAP RESOLUTIONS")
     lines.append(f"Total user resolutions: {len(request.resolutions)}")
-    if request.global_resolution_notes:
+    if request.global_resolution_notes and isinstance(request.global_resolution_notes, str):
         lines.append("Global notes:")
         lines.append(request.global_resolution_notes.strip())
 
@@ -5389,7 +5389,8 @@ def _build_resolution_context(
         if resolution.related_document_ids:
             lines.append(f"- related_document_ids: {', '.join(resolution.related_document_ids)}")
         lines.append("- resolution_text:")
-        lines.append((resolution.resolution_text or "").strip())
+        res_text = resolution.resolution_text if isinstance(resolution.resolution_text, str) else ""
+        lines.append(res_text.strip())
 
     if supporting_docs:
         lines.append("")
@@ -5702,7 +5703,7 @@ async def resolve_gaps_and_refresh(
                 for row in signature_evidence
                 if (row.get("status") or "").lower() == "signed"
             ),
-            "global_resolution_notes": (resolution_request.global_resolution_notes or "").strip(),
+            "global_resolution_notes": (resolution_request.global_resolution_notes if isinstance(resolution_request.global_resolution_notes, str) else "").strip(),
         }
         result_payload["gap_resolution_state"] = resolution_state
 

@@ -418,6 +418,11 @@ class JsonProcessingService:
         (re.compile(r"(?im)^\s*supporting documents\s*:\s*"), ""),
         (re.compile(r"(?im)^\s*structural complexity\s*:\s*"), ""),
     ]
+    _FINDINGS_INLINE_LABEL_REWRITES = [
+        (re.compile(r"(?i)\bsupporting documents\s*:\s*"), "Documents include "),
+        (re.compile(r"(?i)\bstructural complexity\s*:\s*"), ""),
+        (re.compile(r"(?i)\bevidence\s*:\s*"), ""),
+    ]
 
     @staticmethod
     def _gap_get(gap: Any, field: str, default: str = "") -> str:
@@ -1442,15 +1447,15 @@ class JsonProcessingService:
 
         logger.info("Making OpenAI request for adaptive letter generation")
 
-        model = self._get_letter_generation_model("gpt-5.2")
+        model = self._get_letter_generation_model("gpt-4o")
         loop = asyncio.get_running_loop()
         markdown_response = await loop.run_in_executor(
             None,
             self._make_openai_request_responses_api,
             prompt,
             model,
-            "medium",
-            "medium",
+            None,  # reasoning_effort - not used with gpt-4o
+            None,  # verbosity - not used with gpt-4o
             12000,
             self._findings_writer_instructions(),
         )
@@ -1486,8 +1491,8 @@ class JsonProcessingService:
                 self._make_openai_request_responses_api,
                 compact_prompt,
                 model,
-                "medium",
-                "medium",
+                None,  # reasoning_effort - not used with gpt-4o
+                None,  # verbosity - not used with gpt-4o
                 12000,
                 self._findings_writer_instructions(),
             )
@@ -1949,6 +1954,8 @@ class JsonProcessingService:
                 text = boilerplate_pattern.sub("", text)
             for pattern, replacement in self._FINDINGS_LABEL_PREFIX_REWRITES:
                 text = pattern.sub(replacement, text)
+            for pattern, replacement in self._FINDINGS_INLINE_LABEL_REWRITES:
+                text = pattern.sub(replacement, text)
             text = self._collapse_list_blocks_to_paragraphs(text)
 
         for compact, expanded in self._COMPACT_LEGAL_TOKEN_FIXUPS.items():
@@ -1998,11 +2005,14 @@ class JsonProcessingService:
                 items: List[str] = []
                 while index < len(lines):
                     candidate = lines[index].strip()
+                    if not candidate:
+                        index += 1
+                        continue
                     if not candidate.startswith(self._LIST_ITEM_SENTINEL.strip()):
                         break
                     item_text = candidate[len(self._LIST_ITEM_SENTINEL.strip()):].strip()
                     item_text = re.sub(r"\s+", " ", item_text)
-                    item_text = item_text.rstrip(";")
+                    item_text = item_text.rstrip(".;:")
                     if item_text and item_text not in items:
                         items.append(item_text)
                     index += 1

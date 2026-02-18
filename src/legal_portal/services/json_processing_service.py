@@ -1098,7 +1098,8 @@ class JsonProcessingService:
 
     def _format_confirmed_qa_context(self, confirmed_qa_pairs: Optional[list]) -> Tuple[str, int]:
         """Format confirmed intake Q&A pairs for prompt insertion."""
-        if not confirmed_qa_pairs:
+        # Handle None, empty, or boolean False
+        if not confirmed_qa_pairs or isinstance(confirmed_qa_pairs, bool):
             return "No user-confirmed Q&A pairs available.", 0
 
         if isinstance(confirmed_qa_pairs, str):
@@ -1108,7 +1109,8 @@ class JsonProcessingService:
             return "No user-confirmed Q&A pairs available.", 0
 
         if not isinstance(confirmed_qa_pairs, list):
-            return str(confirmed_qa_pairs), 0
+            # Convert unexpected types to string safely
+            return "No user-confirmed Q&A pairs available.", 0
 
         formatted_pairs = []
         for i, qa in enumerate(confirmed_qa_pairs, 1):

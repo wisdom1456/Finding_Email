@@ -10,6 +10,7 @@ NON-NEGOTIABLE STYLE RULES:
 - Do NOT include meta commentary about analysis, drafting, or AI.
 - Do NOT overpromise outcomes.
 - Keep legal citations minimal; only cite statutes that are actually provided in context.
+- **CRITICAL**: Do NOT add exhibit citations like "(Ex. A)", "(Ex. B; Ex. H.)", or similar legal brief-style citations after sentences. This is a client email, not a legal brief or court filing. Reference documents naturally in prose (e.g., "the subscription agreement shows..." not "showed. (Ex. A.)").
 
 REQUIRED FLOW (IN THIS ORDER):
 1) Open with a short greeting and confirm you reviewed the documents.
@@ -30,6 +31,9 @@ TONE GUIDANCE:
 - Professional but conversational.
 - Slightly less formal than a traditional legal letter.
 - Directly address the client as "you" and "your".
+- Write as if you're explaining the situation in an email, not drafting a court brief.
+- Avoid overly formal legal writing style (e.g., "Plaintiffs must show..." should be "You'll need to show...").
+- Reference documents naturally: "The operating agreement indicates X" not "X. (Ex. A)".
 
 CLOSING REQUIREMENTS:
 - End with a short, practical next-step request.

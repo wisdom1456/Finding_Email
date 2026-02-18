@@ -510,6 +510,37 @@ class GapAnalysisService:
         signed_docs: List[Dict[str, Any]],
     ) -> List[str]:
         """Match an execution gap to signed docs using name and token overlap."""
+        matched: List[str] = []
+        seen = set()
+
+        # PRIORITY 1: Check if gap.related_documents contains exact file name matches
+        # This is more reliable than fuzzy token matching since the AI already identified the docs
+        related_docs_lower = {(doc or "").lower() for doc in (gap.related_documents or [])}
+
+        if related_docs_lower:
+            for doc in signed_docs:
+                file_name = doc.get("file_name") or ""
+                file_name_lower = file_name.lower()
+
+                # Exact match or base name match (without extension)
+                base_name = file_name_lower.rsplit(".", 1)[0]
+
+                if file_name_lower in related_docs_lower or base_name in related_docs_lower:
+                    key = file_name_lower
+                    if key not in seen:
+                        seen.add(key)
+                        matched.append(file_name)
+                        logger.info(
+                            "[GAP_RECONCILE] Exact match via related_documents | gap_title=%s doc=%s",
+                            gap.title[:50] if gap.title else "No title",
+                            file_name
+                        )
+
+        # If we found exact matches, return them (more reliable than fuzzy matching)
+        if matched:
+            return matched
+
+        # FALLBACK: Use fuzzy token-based matching if no exact matches
         blob = " ".join(
             [
                 gap.title or "",
@@ -520,8 +551,6 @@ class GapAnalysisService:
             ]
         ).lower()
         gap_tokens = self._tokenize_for_match(blob)
-        matched: List[str] = []
-        seen = set()
 
         for doc in signed_docs:
             file_name = doc.get("file_name") or ""
@@ -588,12 +617,26 @@ class GapAnalysisService:
         signature_evidence: Optional[List[Dict[str, Any]]],
     ) -> GapAnalysisResult:
         """Suppress execution/signature follow-up gaps when signed evidence is present."""
+        logger.info(
+            "[GAP_RECONCILE] Starting reconciliation | signature_evidence_count=%s",
+            len(signature_evidence or [])
+        )
         signed_docs = [
             item
             for item in (signature_evidence or [])
             if (item.get("status") or "").lower() == "signed"
         ]
+        logger.info(
+            "[GAP_RECONCILE] Filtered to signed docs | signed_count=%s",
+            len(signed_docs)
+        )
+        if signed_docs:
+            logger.info(
+                "[GAP_RECONCILE] Signed doc examples: %s",
+                [doc.get("file_name") for doc in signed_docs[:3]]
+            )
         if not signed_docs:
+            logger.info("[GAP_RECONCILE] No signed docs found, skipping reconciliation")
             return result
 
         candidate_categories = (
@@ -602,7 +645,15 @@ class GapAnalysisService:
             GapCategory.INCOMPLETE_INFO.value,
         )
         if not any(result.gaps_by_category.get(category) for category in candidate_categories):
+            logger.info("[GAP_RECONCILE] No gaps in candidate categories, skipping")
             return result
+
+        logger.info(
+            "[GAP_RECONCILE] Found gaps in candidate categories | missing_doc=%s timeline=%s incomplete=%s",
+            len(result.gaps_by_category.get(GapCategory.MISSING_DOCUMENT.value, [])),
+            len(result.gaps_by_category.get(GapCategory.TIMELINE_GAP.value, [])),
+            len(result.gaps_by_category.get(GapCategory.INCOMPLETE_INFO.value, []))
+        )
 
         kept_by_category = {
             category: [] for category in candidate_categories
@@ -613,10 +664,31 @@ class GapAnalysisService:
 
         for category in candidate_categories:
             gaps_in_category = list(result.gaps_by_category.get(category, []))
+            logger.info(
+                "[GAP_RECONCILE] Processing %s gaps in category: %s",
+                len(gaps_in_category),
+                category
+            )
             for gap in gaps_in_category:
-                if not (self._is_execution_gap(gap) or self._is_signature_followup_gap(gap)):
+                is_exec = self._is_execution_gap(gap)
+                is_followup = self._is_signature_followup_gap(gap)
+
+                if not (is_exec or is_followup):
+                    logger.info(
+                        "[GAP_RECONCILE] Gap not execution-related, keeping | title=%s is_exec=%s is_followup=%s",
+                        gap.title[:60] if gap.title else "No title",
+                        is_exec,
+                        is_followup
+                    )
                     kept_by_category[category].append(gap)
                     continue
+
+                logger.info(
+                    "[GAP_RECONCILE] Gap IS execution-related | title=%s is_exec=%s is_followup=%s",
+                    gap.title[:60] if gap.title else "No title",
+                    is_exec,
+                    is_followup
+                )
 
                 gap_blob = " ".join(
                     [
@@ -627,16 +699,38 @@ class GapAnalysisService:
                     ]
                 )
                 matched = self._find_matching_signed_docs(gap, signed_docs)
+                logger.info(
+                    "[GAP_RECONCILE] Matching result | gap_title=%s matched_count=%s matched_docs=%s",
+                    gap.title[:60] if gap.title else "No title",
+                    len(matched),
+                    matched[:3] if matched else []
+                )
                 if matched:
                     matched_doc_names.extend(matched)
                     if self._is_identity_or_party_gap_text(gap_blob):
                         non_blocking_identity_hits += 1
+                    logger.info(
+                        "[GAP_RECONCILE] REMOVING gap | title=%s matched_docs=%s",
+                        gap.title[:60] if gap.title else "No title",
+                        matched[:2]
+                    )
                     removed.append(gap)
                 else:
+                    logger.info(
+                        "[GAP_RECONCILE] No matches found, keeping gap | title=%s",
+                        gap.title[:60] if gap.title else "No title"
+                    )
                     kept_by_category[category].append(gap)
 
         if not removed:
+            logger.info("[GAP_RECONCILE] No gaps were removed during reconciliation")
             return result
+
+        logger.info(
+            "[GAP_RECONCILE] Reconciliation complete | removed=%s non_blocking_identity=%s",
+            len(removed),
+            non_blocking_identity_hits
+        )
 
         for category in candidate_categories:
             result.gaps_by_category[category] = kept_by_category[category]

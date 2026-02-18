@@ -1447,15 +1447,15 @@ class JsonProcessingService:
 
         logger.info("Making OpenAI request for adaptive letter generation")
 
-        model = self._get_letter_generation_model("gpt-4o")
+        model = self._get_letter_generation_model("gpt-5.2")
         loop = asyncio.get_running_loop()
         markdown_response = await loop.run_in_executor(
             None,
             self._make_openai_request_responses_api,
             prompt,
             model,
-            None,  # reasoning_effort - not used with gpt-4o
-            None,  # verbosity - not used with gpt-4o
+            "medium",
+            "medium",
             12000,
             self._findings_writer_instructions(),
         )
@@ -1491,8 +1491,8 @@ class JsonProcessingService:
                 self._make_openai_request_responses_api,
                 compact_prompt,
                 model,
-                None,  # reasoning_effort - not used with gpt-4o
-                None,  # verbosity - not used with gpt-4o
+                "medium",
+                "medium",
                 12000,
                 self._findings_writer_instructions(),
             )
@@ -1616,13 +1616,15 @@ class JsonProcessingService:
         )
 
         logger.info(f"Streaming adaptive findings email for {jurisdiction}")
-        model = self._get_letter_generation_model("gpt-4o")
+        model = self._get_letter_generation_model("gpt-5.2")
         stream_started = False
         try:
             async for token in self.client.create_response_stream(
                 model=model,
                 instructions=self._findings_writer_instructions(),
                 input=prompt,
+                reasoning_effort="low",
+                verbosity="medium",
             ):
                 stream_started = True
                 yield token
@@ -1659,6 +1661,8 @@ class JsonProcessingService:
                 model=model,
                 instructions=self._findings_writer_instructions(),
                 input=compact_prompt,
+                reasoning_effort="low",
+                verbosity="medium",
             ):
                 yield token
 
@@ -1957,6 +1961,11 @@ class JsonProcessingService:
             for pattern, replacement in self._FINDINGS_INLINE_LABEL_REWRITES:
                 text = pattern.sub(replacement, text)
             text = self._collapse_list_blocks_to_paragraphs(text)
+            text = re.sub(
+                r"([.!?])\s+([a-z])",
+                lambda match: f"{match.group(1)} {match.group(2).upper()}",
+                text,
+            )
 
         for compact, expanded in self._COMPACT_LEGAL_TOKEN_FIXUPS.items():
             text = re.sub(

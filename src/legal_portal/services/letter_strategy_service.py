@@ -113,7 +113,7 @@ class LetterStrategyService:
             )
             return strategy.model_dump(mode="json")
         except Exception as exc:
-            logger.warning("Findings strategy model step failed, falling back: %s", exc)
+            logger.warning(f"Findings strategy model step failed, falling back: {exc}")
             return fallback.model_dump(mode="json")
 
     async def build_demand_strategy(
@@ -184,7 +184,7 @@ class LetterStrategyService:
                 strategy.demand_spec = fallback.demand_spec
             return strategy.model_dump(mode="json")
         except Exception as exc:
-            logger.warning("Demand strategy model step failed, falling back: %s", exc)
+            logger.warning(f"Demand strategy model step failed, falling back: {exc}")
             return fallback.model_dump(mode="json")
 
     async def _request_strategy_json(

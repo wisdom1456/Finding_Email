@@ -51,6 +51,7 @@ logger = logging.getLogger(__name__)
 
 # Cache for database column existence checks
 _DB_COLUMNS_CACHE = {}
+_GAP_ANALYSIS_INPUT_SCHEMA_VERSION = "2026-02-18-reconciliation-v2"
 
 
 def _new_generation_metrics(
@@ -193,6 +194,145 @@ async def _get_user_ai_preferences(user_id: str, supabase) -> Optional[Dict[str,
     except Exception as e:
         logger.warning(f"Could not fetch user AI preferences: {e}")
     return None
+
+
+def _first_non_empty_text(*values: Any) -> Optional[str]:
+    """Return the first non-empty string-like value."""
+    for value in values:
+        if value is None:
+            continue
+        text = str(value).strip()
+        if text:
+            return text
+    return None
+
+
+def _resolve_letter_identity_context(
+    *,
+    supabase,
+    case_id: str,
+    artifacts: Optional[Dict[str, Any]] = None,
+    overrides: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Optional[str]]:
+    """Resolve attorney/firm/contact/client identity context with robust fallbacks."""
+    artifacts_map = artifacts if isinstance(artifacts, dict) else {}
+    overrides_map = overrides if isinstance(overrides, dict) else {}
+
+    case_data: Dict[str, Any] = {}
+    profile_data: Dict[str, Any] = {}
+
+    try:
+        case_resp = supabase.table("cases").select("*").eq("id", case_id).limit(1).execute()
+        if case_resp.data:
+            case_data = case_resp.data[0] or {}
+    except Exception as case_err:
+        logger.warning("[LETTER] Failed to load case identity context for %s: %s", case_id, case_err)
+
+    case_metadata = case_data.get("metadata")
+    if not isinstance(case_metadata, dict):
+        case_metadata = {}
+
+    clio_matter_data = case_data.get("clio_matter_data")
+    if not isinstance(clio_matter_data, dict):
+        clio_matter_data = {}
+
+    user_id = case_data.get("user_id")
+    if user_id:
+        try:
+            profile_resp = (
+                supabase.table("profiles")
+                .select("full_name,firm_name,phone,email")
+                .eq("id", user_id)
+                .limit(1)
+                .execute()
+            )
+            if profile_resp.data:
+                profile_data = profile_resp.data[0] or {}
+        except Exception as profile_err:
+            logger.warning(
+                "[LETTER] Failed to load profile identity context for %s: %s",
+                case_id,
+                profile_err,
+            )
+
+    attorney_name = _first_non_empty_text(
+        overrides_map.get("attorney_name"),
+        overrides_map.get("attorneyName"),
+        overrides_map.get("name"),
+        artifacts_map.get("attorney_name"),
+        artifacts_map.get("attorneyName"),
+        case_data.get("attorney_name"),
+        case_data.get("attorneyName"),
+        case_metadata.get("attorney_name"),
+        case_metadata.get("attorneyName"),
+        clio_matter_data.get("responsible_attorney"),
+        clio_matter_data.get("responsibleAttorney"),
+        profile_data.get("full_name"),
+    )
+    firm_name = _first_non_empty_text(
+        overrides_map.get("firm_name"),
+        overrides_map.get("firmName"),
+        overrides_map.get("firm"),
+        artifacts_map.get("firm_name"),
+        artifacts_map.get("firmName"),
+        case_data.get("firm_name"),
+        case_data.get("firmName"),
+        case_metadata.get("firm_name"),
+        case_metadata.get("firmName"),
+        clio_matter_data.get("firm_name"),
+        clio_matter_data.get("firmName"),
+        clio_matter_data.get("law_firm_name"),
+        clio_matter_data.get("lawFirmName"),
+        profile_data.get("firm_name"),
+    )
+    contact_phone = _first_non_empty_text(
+        overrides_map.get("contact_phone"),
+        overrides_map.get("contactPhone"),
+        overrides_map.get("phone"),
+        artifacts_map.get("contact_phone"),
+        artifacts_map.get("contactPhone"),
+        case_data.get("contact_phone"),
+        case_data.get("contactPhone"),
+        case_metadata.get("contact_phone"),
+        case_metadata.get("contactPhone"),
+        clio_matter_data.get("contact_phone"),
+        clio_matter_data.get("contactPhone"),
+        profile_data.get("phone"),
+    )
+    contact_email = _first_non_empty_text(
+        overrides_map.get("contact_email"),
+        overrides_map.get("contactEmail"),
+        overrides_map.get("email"),
+        artifacts_map.get("contact_email"),
+        artifacts_map.get("contactEmail"),
+        case_data.get("contact_email"),
+        case_data.get("contactEmail"),
+        case_metadata.get("contact_email"),
+        case_metadata.get("contactEmail"),
+        clio_matter_data.get("contact_email"),
+        clio_matter_data.get("contactEmail"),
+        profile_data.get("email"),
+    )
+    client_name = _first_non_empty_text(
+        overrides_map.get("client_name"),
+        overrides_map.get("clientName"),
+        artifacts_map.get("client_name"),
+        artifacts_map.get("clientName"),
+        case_data.get("client_name"),
+        case_data.get("clientName"),
+        case_metadata.get("client_name"),
+        case_metadata.get("clientName"),
+        clio_matter_data.get("client_name"),
+        clio_matter_data.get("clientName"),
+    )
+
+    return {
+        "attorney_name": attorney_name,
+        "firm_name": firm_name,
+        "contact_phone": contact_phone,
+        "contact_email": contact_email,
+        "client_name": client_name,
+    }
 
 
 _SIGNATURE_TEXT_FALLBACK_PATTERNS = [
@@ -1726,6 +1866,12 @@ async def stream_findings_letter(
                     analysis_id,
                 )
 
+        artifacts = processing_result.artifacts or {}
+        resolved_identity = _resolve_letter_identity_context(
+            supabase=supabase,
+            case_id=analysis_data.get("case_id"),
+            artifacts=artifacts,
+        )
         ai_preferences = await _get_user_ai_preferences(user["id"], supabase)
 
         def _event_payload(event_name: str, **kwargs: Any) -> Optional[Dict[str, Any]]:
@@ -1793,7 +1939,6 @@ async def stream_findings_letter(
                     LetterStructure,
                 )
 
-                artifacts = processing_result.artifacts or {}
                 jurisdiction = artifacts.get("jurisdiction", "Florida")
                 fact_matrix = FactMatrix(**msr["fact_matrix"])
                 deep_analysis = DeepAnalysis(**msr["deep_analysis"])
@@ -1830,8 +1975,8 @@ async def stream_findings_letter(
                         return normalize_markdown(
                             text,
                             letter_type=letter_kind,
-                            attorney_name=artifacts.get("attorney_name"),
-                            firm_name=artifacts.get("firm_name"),
+                            attorney_name=resolved_identity.get("attorney_name"),
+                            firm_name=resolved_identity.get("firm_name"),
                         )
                     return text
 
@@ -1874,11 +2019,11 @@ async def stream_findings_letter(
                     legal_analysis=deep_analysis,
                     structure_guidance=letter_structure,
                     verified_statutes=msr.get("verified_statutes", []),
-                    attorney_name=artifacts.get("attorney_name"),
-                    firm_name=artifacts.get("firm_name"),
+                    attorney_name=resolved_identity.get("attorney_name"),
+                    firm_name=resolved_identity.get("firm_name"),
                     confirmed_qa_pairs=artifacts.get("confirmed_qa_pairs", []),
-                    contact_phone=artifacts.get("contact_phone"),
-                    contact_email=artifacts.get("contact_email"),
+                    contact_phone=resolved_identity.get("contact_phone"),
+                    contact_email=resolved_identity.get("contact_email"),
                     quality_context=artifacts.get("quality_context", ""),
                     clio_matter_context=artifacts.get("clio_matter_context", ""),
                     jurisdiction=jurisdiction,
@@ -3502,14 +3647,26 @@ async def generate_letter(
                 detail="On-demand letters require the latest analysis. Please re-run the case analysis.",
             )
 
+        artifacts = processing_result.artifacts or {}
+        resolved_identity = _resolve_letter_identity_context(
+            supabase=supabase,
+            case_id=letter_request.case_id,
+            artifacts=artifacts,
+            overrides={
+                "attorney_name": letter_request.attorney_name,
+                "firm_name": letter_request.firm_name,
+                "contact_phone": letter_request.contact_phone,
+                "contact_email": letter_request.contact_email,
+                "client_name": letter_request.client_name,
+            },
+        )
         ai_preferences = await _get_user_ai_preferences(user["id"], supabase)
         openai_client = OpenAIClient(user_preferences=ai_preferences)
-        artifacts = processing_result.artifacts or {}
         attorney_info = {
-            "name": letter_request.attorney_name or artifacts.get("attorney_name"),
-            "firm": letter_request.firm_name or artifacts.get("firm_name"),
-            "phone": letter_request.contact_phone or artifacts.get("contact_phone"),
-            "email": letter_request.contact_email or artifacts.get("contact_email"),
+            "name": resolved_identity.get("attorney_name"),
+            "firm": resolved_identity.get("firm_name"),
+            "phone": resolved_identity.get("contact_phone"),
+            "email": resolved_identity.get("contact_email"),
         }
 
         msr = processing_result.multi_stage_result
@@ -3669,7 +3826,7 @@ async def generate_letter(
                     detail="target_party_name is required for demand letters",
                 )
 
-            client_name = letter_request.client_name
+            client_name = resolved_identity.get("client_name")
             if not client_name:
                 fact_matrix_data = msr.get("fact_matrix", {})
                 parties = fact_matrix_data.get("parties", [])
@@ -4032,15 +4189,27 @@ async def generate_recommendation_letter(
                 logger.warning(f"Failed to parse document_summaries: {parse_err}")
 
         artifacts = processing_result.artifacts or {}
+        resolved_identity = _resolve_letter_identity_context(
+            supabase=supabase,
+            case_id=case_id,
+            artifacts=artifacts,
+            overrides={
+                "attorney_name": letter_request.attorney_name,
+                "firm_name": letter_request.firm_name,
+                "contact_phone": letter_request.contact_phone,
+                "contact_email": letter_request.contact_email,
+                "client_name": letter_request.client_name,
+            },
+        )
         jurisdiction = artifacts.get("jurisdiction", "Florida")
         attorney_info = {
-            "attorney_name": letter_request.attorney_name or artifacts.get("attorney_name"),
-            "firm_name": letter_request.firm_name or artifacts.get("firm_name"),
-            "contact_phone": letter_request.contact_phone or artifacts.get("contact_phone"),
-            "contact_email": letter_request.contact_email or artifacts.get("contact_email"),
+            "attorney_name": resolved_identity.get("attorney_name"),
+            "firm_name": resolved_identity.get("firm_name"),
+            "contact_phone": resolved_identity.get("contact_phone"),
+            "contact_email": resolved_identity.get("contact_email"),
         }
 
-        client_name = letter_request.client_name
+        client_name = resolved_identity.get("client_name")
         if not client_name:
             if fact_matrix:
                 for party in fact_matrix.parties:
@@ -4188,6 +4357,12 @@ async def stream_recommendation_letter(
         )
 
     effective_schema_version = 2 if (schema_version == 2 and settings.letter_stream_schema_v2) else 1
+    artifacts = processing_result.artifacts or {}
+    resolved_identity = _resolve_letter_identity_context(
+        supabase=supabase,
+        case_id=analysis_data["case_id"],
+        artifacts=artifacts,
+    )
     ai_preferences = await _get_user_ai_preferences(user["id"], supabase)
 
     def _event_payload(event_name: str, **kwargs: Any) -> Optional[Dict[str, Any]]:
@@ -4250,15 +4425,14 @@ async def stream_recommendation_letter(
                 except Exception as parse_err:
                     logger.warning("Failed to parse document_summaries: %s", parse_err)
 
-            artifacts = processing_result.artifacts or {}
             jurisdiction = artifacts.get("jurisdiction", "Florida")
             attorney_info = {
-                "attorney_name": artifacts.get("attorney_name"),
-                "firm_name": artifacts.get("firm_name"),
-                "contact_phone": artifacts.get("contact_phone"),
-                "contact_email": artifacts.get("contact_email"),
+                "attorney_name": resolved_identity.get("attorney_name"),
+                "firm_name": resolved_identity.get("firm_name"),
+                "contact_phone": resolved_identity.get("contact_phone"),
+                "contact_email": resolved_identity.get("contact_email"),
             }
-            client_name = artifacts.get("client_name") or "Client"
+            client_name = resolved_identity.get("client_name") or artifacts.get("client_name") or "Client"
             if fact_matrix:
                 for party in fact_matrix.parties:
                     if party.role.lower() in ["client", "plaintiff", "claimant"]:
@@ -4955,6 +5129,7 @@ def _build_gap_analysis_input_hash(
     multi_stage = result_payload.get("multi_stage_result") or {}
     canonical = {
         "analysis_id": analysis_id,
+        "analysis_logic_version": _GAP_ANALYSIS_INPUT_SCHEMA_VERSION,
         "fact_matrix_hash": _hash_jsonable(multi_stage.get("fact_matrix", {})),
         "issue_map_hash": _hash_jsonable(multi_stage.get("issue_map", {})),
         "deep_analysis_hash": _hash_jsonable(multi_stage.get("deep_analysis", {})),

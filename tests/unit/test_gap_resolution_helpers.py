@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from legal_portal.api.routes import analysis as analysis_routes
 from legal_portal.api.routes.analysis import (
     GapResolutionItemRequest,
     GapResolutionRefreshRequest,
@@ -360,3 +361,33 @@ def test_gap_analysis_input_hash_changes_when_document_state_changes():
     )
 
     assert hash_a != hash_b
+
+
+def test_gap_analysis_input_hash_changes_when_logic_version_changes(monkeypatch):
+    """Hash should invalidate when reconciliation logic version changes."""
+    payload = {
+        "document_summaries": [{"document_name": "Agreement.pdf"}],
+        "multi_stage_result": {
+            "fact_matrix": {"parties": []},
+            "issue_map": {"primary_issues": []},
+            "deep_analysis": {"overall_case_strength": "moderate"},
+        },
+    }
+    hash_current = analysis_routes._build_gap_analysis_input_hash(
+        analysis_id="analysis-1",
+        result_payload=payload,
+        case_document_state_hash="state-a",
+    )
+
+    monkeypatch.setattr(
+        analysis_routes,
+        "_GAP_ANALYSIS_INPUT_SCHEMA_VERSION",
+        "test-version-v2",
+    )
+    hash_after_bump = analysis_routes._build_gap_analysis_input_hash(
+        analysis_id="analysis-1",
+        result_payload=payload,
+        case_document_state_hash="state-a",
+    )
+
+    assert hash_current != hash_after_bump

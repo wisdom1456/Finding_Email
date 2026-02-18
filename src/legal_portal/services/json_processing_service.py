@@ -1398,6 +1398,20 @@ class JsonProcessingService:
             HTML letter content
 
         """
+        # Defensive type conversion: ensure string parameters are actually strings
+        if attorney_name is not None and not isinstance(attorney_name, str):
+            attorney_name = str(attorney_name) if not isinstance(attorney_name, bool) else None
+        if firm_name is not None and not isinstance(firm_name, str):
+            firm_name = str(firm_name) if not isinstance(firm_name, bool) else None
+        if contact_phone is not None and not isinstance(contact_phone, str):
+            contact_phone = str(contact_phone) if not isinstance(contact_phone, bool) else None
+        if contact_email is not None and not isinstance(contact_email, str):
+            contact_email = str(contact_email) if not isinstance(contact_email, bool) else None
+        if not isinstance(quality_context, str):
+            quality_context = str(quality_context) if not isinstance(quality_context, bool) else ""
+        if not isinstance(clio_matter_context, str):
+            clio_matter_context = str(clio_matter_context) if not isinstance(clio_matter_context, bool) else ""
+
         # All cases now use natural_flow format - no structure override needed
         # The analyzer always returns natural_flow regardless of complexity
         num_issues = len(legal_analysis.issue_analyses)
@@ -1579,6 +1593,20 @@ class JsonProcessingService:
 
         Note: This bypasses the formatting polish pass for real-time delivery.
         """
+        # Defensive type conversion: ensure string parameters are actually strings
+        if attorney_name is not None and not isinstance(attorney_name, str):
+            attorney_name = str(attorney_name) if not isinstance(attorney_name, bool) else None
+        if firm_name is not None and not isinstance(firm_name, str):
+            firm_name = str(firm_name) if not isinstance(firm_name, bool) else None
+        if contact_phone is not None and not isinstance(contact_phone, str):
+            contact_phone = str(contact_phone) if not isinstance(contact_phone, bool) else None
+        if contact_email is not None and not isinstance(contact_email, str):
+            contact_email = str(contact_email) if not isinstance(contact_email, bool) else None
+        if not isinstance(quality_context, str):
+            quality_context = str(quality_context) if not isinstance(quality_context, bool) else ""
+        if not isinstance(clio_matter_context, str):
+            clio_matter_context = str(clio_matter_context) if not isinstance(clio_matter_context, bool) else ""
+
         qa_context, qa_pair_count = self._format_confirmed_qa_context(confirmed_qa_pairs)
         if qa_pair_count > 0:
             logger.info(f"Including {qa_pair_count} confirmed Q&A pairs in streaming generation")

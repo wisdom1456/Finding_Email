@@ -391,6 +391,17 @@ class GapAnalysisService:
             "no clear evidence",
             "unable to confirm",
             "cannot confirm",
+            "low confidence",
+            "low-confidence",
+            "signature review not completed",
+            "review not completed",
+            "countersignature review",
+            "counter-signature review",
+            "non-digital",
+            "manual signatures",
+            "missing signature date",
+            "missing execution date",
+            "date conformity",
         )
         no_provided_pattern = re.compile(r"\bno\b.{0,45}\bprovided\b")
 
@@ -402,6 +413,70 @@ class GapAnalysisService:
                 any(term in blob for term in missing_terms)
                 or bool(no_provided_pattern.search(blob))
             )
+        )
+
+    @staticmethod
+    def _is_signature_followup_gap(gap: GapItem) -> bool:
+        """Detect non-blocking signature-quality/date follow-up concerns tied to signed agreements."""
+        if gap.category not in {
+            GapCategory.MISSING_DOCUMENT,
+            GapCategory.TIMELINE_GAP,
+            GapCategory.INCOMPLETE_INFO,
+        }:
+            return False
+
+        blob = " ".join(
+            [
+                gap.title or "",
+                gap.description or "",
+                gap.impact_on_case or "",
+                " ".join(gap.related_documents or []),
+                " ".join(gap.recommendations or []),
+            ]
+        ).lower()
+
+        signature_terms = (
+            "executed",
+            "signed",
+            "signature",
+            "execution",
+            "counter-signature",
+            "countersignature",
+            "signatory",
+        )
+        instrument_terms = (
+            "operating agreement",
+            "subscription agreement",
+            "investment agreement",
+            "purchase agreement",
+            "financing",
+            "contract",
+            "agreement",
+        )
+        followup_terms = (
+            "low confidence",
+            "low-confidence",
+            "non-digital",
+            "manual signature",
+            "signature review not completed",
+            "review not completed",
+            "missing signature",
+            "missing execution",
+            "signature date",
+            "execution date",
+            "dated",
+            "date conformity",
+            "party-signed",
+            "all members",
+            "all relevant parties",
+            "all required parties",
+            "countersignature review",
+        )
+
+        return (
+            any(term in blob for term in signature_terms)
+            and any(term in blob for term in instrument_terms)
+            and any(term in blob for term in followup_terms)
         )
 
     @staticmethod
@@ -512,7 +587,7 @@ class GapAnalysisService:
         result: GapAnalysisResult,
         signature_evidence: Optional[List[Dict[str, Any]]],
     ) -> GapAnalysisResult:
-        """Suppress execution-related missing-document gaps when signed evidence is present."""
+        """Suppress execution/signature follow-up gaps when signed evidence is present."""
         signed_docs = [
             item
             for item in (signature_evidence or [])
@@ -521,41 +596,50 @@ class GapAnalysisService:
         if not signed_docs:
             return result
 
-        missing_gaps = list(result.gaps_by_category.get(GapCategory.MISSING_DOCUMENT.value, []))
-        if not missing_gaps:
+        candidate_categories = (
+            GapCategory.MISSING_DOCUMENT.value,
+            GapCategory.TIMELINE_GAP.value,
+            GapCategory.INCOMPLETE_INFO.value,
+        )
+        if not any(result.gaps_by_category.get(category) for category in candidate_categories):
             return result
 
-        kept: List[GapItem] = []
+        kept_by_category = {
+            category: [] for category in candidate_categories
+        }
         removed: List[GapItem] = []
         non_blocking_identity_hits = 0
         matched_doc_names: List[str] = []
 
-        for gap in missing_gaps:
-            if not self._is_execution_gap(gap):
-                kept.append(gap)
-                continue
+        for category in candidate_categories:
+            gaps_in_category = list(result.gaps_by_category.get(category, []))
+            for gap in gaps_in_category:
+                if not (self._is_execution_gap(gap) or self._is_signature_followup_gap(gap)):
+                    kept_by_category[category].append(gap)
+                    continue
 
-            gap_blob = " ".join(
-                [
-                    gap.title or "",
-                    gap.description or "",
-                    gap.impact_on_case or "",
-                    " ".join(gap.recommendations or []),
-                ]
-            )
-            matched = self._find_matching_signed_docs(gap, signed_docs)
-            if matched:
-                matched_doc_names.extend(matched)
-                if self._is_identity_or_party_gap_text(gap_blob):
-                    non_blocking_identity_hits += 1
-                removed.append(gap)
-            else:
-                kept.append(gap)
+                gap_blob = " ".join(
+                    [
+                        gap.title or "",
+                        gap.description or "",
+                        gap.impact_on_case or "",
+                        " ".join(gap.recommendations or []),
+                    ]
+                )
+                matched = self._find_matching_signed_docs(gap, signed_docs)
+                if matched:
+                    matched_doc_names.extend(matched)
+                    if self._is_identity_or_party_gap_text(gap_blob):
+                        non_blocking_identity_hits += 1
+                    removed.append(gap)
+                else:
+                    kept_by_category[category].append(gap)
 
         if not removed:
             return result
 
-        result.gaps_by_category[GapCategory.MISSING_DOCUMENT.value] = kept
+        for category in candidate_categories:
+            result.gaps_by_category[category] = kept_by_category[category]
 
         all_gaps = [g for gaps in result.gaps_by_category.values() for g in gaps]
         result.total_gaps = len(all_gaps)
@@ -585,7 +669,7 @@ class GapAnalysisService:
         else:
             docs_preview = "signed case documents"
 
-        action_text = f"removed {len(removed)} false missing-executed gap(s)"
+        action_text = f"removed {len(removed)} execution/signature coverage gap(s) treated as non-blocking"
         if non_blocking_identity_hits:
             action_text += (
                 f" and treated {non_blocking_identity_hits} party/standing signature-coverage concern(s) "

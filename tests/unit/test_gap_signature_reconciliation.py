@@ -413,3 +413,107 @@ def test_reconcile_suppresses_missing_complete_executed_operating_agreement_gap(
         in note
         for note in reconciled.reconciliation_notes
     )
+
+
+def test_reconcile_suppresses_low_confidence_execution_followup_gap_when_signed_docs_present():
+    """Low-confidence execution wording should be non-blocking if signed agreements exist."""
+    missing_gap = GapItem(
+        gap_id="gap-low-confidence-exec",
+        category=GapCategory.MISSING_DOCUMENT,
+        severity=GapSeverity.HIGH,
+        title="Low-confidence execution on key Operating Agreement(s)",
+        description=(
+            "Operating agreements are present but signature confidence is low and signature review "
+            "is not completed."
+        ),
+        affected_issue="Breach of contract / Operating Agreement",
+        related_documents=[
+            "Grow1 Operating Agreement.pdf",
+            "Grow1 Operating Agreement (2).pdf",
+            "Grow1 Operating Agreement (3).pdf",
+        ],
+        recommendations=[
+            "Obtain fully executed copies signed by all required parties.",
+            "Complete signature review.",
+        ],
+        impact_on_case="Contract enforcement could be challenged.",
+    )
+    result = GapAnalysisResult(
+        total_gaps=1,
+        critical_count=0,
+        high_count=1,
+        medium_count=0,
+        low_count=0,
+        gaps_by_category={GapCategory.MISSING_DOCUMENT.value: [missing_gap]},
+        overall_completeness_score=70.0,
+        attorney_summary="Execution quality concern remains.",
+    )
+    signature_evidence = [
+        {
+            "file_name": "Grow1 Operating Agreement.pdf",
+            "status": "signed",
+            "confidence": "low",
+            "has_digital_signature": False,
+            "instrument_hints": ["operating agreement"],
+        }
+    ]
+
+    service = GapAnalysisService(openai_client=None)  # type: ignore[arg-type]
+    reconciled = service._reconcile_signature_execution_gaps(result, signature_evidence)
+
+    assert reconciled.total_gaps == 0
+    assert reconciled.high_count == 0
+    assert reconciled.gaps_by_category[GapCategory.MISSING_DOCUMENT.value] == []
+    assert any(
+        "execution/signature coverage gap(s) treated as non-blocking" in note
+        for note in reconciled.reconciliation_notes
+    )
+
+
+def test_reconcile_suppresses_signature_execution_date_timeline_gap_when_signed_docs_present():
+    """Timeline gaps only about signature/execution dates should be non-blocking when signed docs exist."""
+    timeline_gap = GapItem(
+        gap_id="gap-signature-date-timeline",
+        category=GapCategory.TIMELINE_GAP,
+        severity=GapSeverity.MEDIUM,
+        title="Missing signature/execution dates on Operating Agreement(s)",
+        description=(
+            "Operating agreements appear signed but signature or execution dates are unclear."
+        ),
+        affected_issue="Breach of contract / Operating Agreement",
+        related_documents=[
+            "Grow1 Operating Agreement.pdf",
+            "Grow1 Operating Agreement (2).pdf",
+            "Grow1 Operating Agreement (3).pdf",
+        ],
+        recommendations=[
+            "Confirm date conformity across all operating agreement signatures."
+        ],
+        impact_on_case="Timeline certainty is reduced.",
+    )
+    result = GapAnalysisResult(
+        total_gaps=1,
+        critical_count=0,
+        high_count=0,
+        medium_count=1,
+        low_count=0,
+        gaps_by_category={GapCategory.TIMELINE_GAP.value: [timeline_gap]},
+        overall_completeness_score=74.0,
+        attorney_summary="Timeline remains incomplete.",
+    )
+    signature_evidence = [
+        {
+            "file_name": "Grow1 Operating Agreement (2).pdf",
+            "status": "signed",
+            "confidence": "low",
+            "has_digital_signature": False,
+            "instrument_hints": ["operating agreement"],
+        }
+    ]
+
+    service = GapAnalysisService(openai_client=None)  # type: ignore[arg-type]
+    reconciled = service._reconcile_signature_execution_gaps(result, signature_evidence)
+
+    assert reconciled.total_gaps == 0
+    assert reconciled.medium_count == 0
+    assert reconciled.gaps_by_category[GapCategory.TIMELINE_GAP.value] == []

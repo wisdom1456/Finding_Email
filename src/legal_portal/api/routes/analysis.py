@@ -51,7 +51,7 @@ logger = logging.getLogger(__name__)
 
 # Cache for database column existence checks
 _DB_COLUMNS_CACHE = {}
-_GAP_ANALYSIS_INPUT_SCHEMA_VERSION = "2026-02-18-reconciliation-v2"
+_GAP_ANALYSIS_INPUT_SCHEMA_VERSION = "2026-02-18-reconciliation-v3"
 
 
 def _new_generation_metrics(

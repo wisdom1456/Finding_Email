@@ -19,7 +19,7 @@ from typing import Any, Dict, List, Literal, Optional
 import html2text
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, status
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, validator
 
 from legal_portal.api.dependencies import get_current_user, get_supabase_client, get_user_supabase_client
 from legal_portal.api.rate_limiter import limiter
@@ -4816,6 +4816,13 @@ class GapResolutionItemRequest(BaseModel):
         description="Optional document IDs supporting this resolution",
     )
 
+    @validator("resolution_text", pre=True)
+    def sanitize_resolution_text(cls, v):
+        """Convert boolean to empty string to prevent .strip() errors."""
+        if isinstance(v, bool):
+            return ""
+        return v
+
 
 class GapResolutionRefreshRequest(BaseModel):
     """Request model for applying user resolutions and refreshing gap analysis."""
@@ -4837,6 +4844,13 @@ class GapResolutionRefreshRequest(BaseModel):
         default=False,
         description="If true, re-run even when resolution payload is unchanged",
     )
+
+    @validator("global_resolution_notes", pre=True)
+    def sanitize_global_notes(cls, v):
+        """Convert boolean to None to prevent .strip() errors."""
+        if isinstance(v, bool):
+            return None
+        return v
 
 
 def _build_gap_resolution_hash(request: GapResolutionRefreshRequest) -> str:

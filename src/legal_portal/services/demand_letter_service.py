@@ -151,7 +151,7 @@ class DemandLetterService:
         )
 
         logger.info(f"Streaming demand letter for {target_party_name} in {jurisdiction}")
-        model = self.client.get_preferred_model("letter_generation", "gpt-5.2")
+        model = self.client.get_preferred_model("letter_generation", "gpt-4o")
 
         async for token in self.client.create_response_stream(
             model=model,
@@ -162,8 +162,6 @@ class DemandLetterService:
                 "Use proper HTML-compatible line breaks and structure."
             ),
             input=prompt,
-            reasoning_effort="low",
-            verbosity="high",
         ):
             yield token
 

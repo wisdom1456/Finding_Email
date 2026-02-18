@@ -26,115 +26,34 @@ class LetterPolisher:
     def _load_formatting_prompt(self) -> str:
         """Load the formatting prompt for natural flow style."""
         return """You are a legal document formatting specialist.
-Your ONLY job is to ensure the letter flows naturally while preserving
-ALL legal content.
+Your job is to preserve legal substance while improving client-facing readability.
 
 CRITICAL RULES:
-1. Do NOT change any legal content, analysis, or wording
-2. Do NOT add or remove legal information
-3. ONLY improve natural flow and readability
-4. Preserve all attorney signatures, dates, and case-specific details
+1. Do NOT add new facts, dates, amounts, legal claims, or citations.
+2. Do NOT remove material legal analysis.
+3. Keep names, numbers, and document references accurate.
+4. Improve format and flow only.
 
-TARGET FORMAT - NATURAL FLOW (NOT formal legal memo):
-
-```
-Subject: Legal Review and Recommended Next Steps – [Case Name]
-
-Good afternoon [Client Name],
-
-I hope you are doing well. I wanted to follow up with a summary of our
-findings after reviewing [documents], regarding your property at [address].
-
-As discussed, the primary concern is [plain English statement].
-
-[2-3 paragraphs describing the factual situation - NO formal headers]
-
-Here are the key points of our analysis:
-
-• [Complete paragraph explaining legal concept in plain English. What this means for you: practical impact.]
-
-• [Next complete paragraph - NO bold headers at start of bullets]
-
-• [Additional points as needed]
-
-Based on the above, [recommendations paragraph].
-
-[Protective checklist if applicable]
-
-Please let us know if you would like us to proceed with [action].
-
-Thank you,
-
-[Attorney Name]
-[Title]
-
-[Disclaimer]
-```
+TARGET STYLE:
+- Real attorney email voice.
+- Plain English.
+- Natural paragraphs.
+- No section headers.
+- No bold labels.
+- No bullet lists.
+- No numbered lists.
 
 FORMATTING FIXES TO APPLY:
-
-1. REMOVE FORMAL HEADERS:
-   - If you see "FACTUAL SUMMARY" or "1. FACTUAL SUMMARY" → REMOVE IT, let facts flow naturally
-   - If you see "RECOMMENDED ACTION & NEXT STEPS" → REMOVE IT, start with "Based on the above..."
-   - If you see "Key Findings" → change to "Here are the key points of our analysis:"
-
-2. REMOVE BOLD ISSUE TITLES:
-   - If you see "• **Implied Warranty**:" → change to "• Under state law, there's a protection called..."
-   - Bullets should be flowing paragraphs, NOT formatted headers
-   - Each bullet should read like a conversation, not a legal outline
-
-3. ENSURE PLAIN LANGUAGE:
-   - Every legal term should have an explanation
-   - Look for "What this means for you:" or similar practical impact statements
-   - If missing, the content is fine - don't add, just ensure good flow
-
-4. SPACING:
-   - 1 blank line between paragraphs
-   - 1 blank line after "Here are the key points of our analysis:"
-   - Minimal blank lines between bullet items (0-1)
-   - 1 blank line before closing
-
-5. GREETING:
-   - Prefer "Good afternoon [Name]," or "Good morning [Name],"
-   - "Dear [Name]:" is acceptable but less warm
-
-EXAMPLES OF FIXES:
-
-BEFORE (too formal):
-```
-1. FACTUAL SUMMARY
-
-Based on our review...
-
-Here are the key points of our analysis:
-
-• **Implied Warranty & Construction Defects (Relevant Statute)**:
-  Under state law, an implied warranty exists...
-
-2. RECOMMENDED ACTION & NEXT STEPS
-
-Based on the above...
-```
-
-AFTER (natural flow):
-```
-Based on our review, we understand that...
-
-Here are the key points of our analysis:
-
-• Under state law, there's an important protection called an "implied warranty
-  of workmanlike construction." This means contractors are legally required to
-  do competent work, even if your contract doesn't say so. In your case,
-  [application]. What this means for you: [impact].
-
-Based on the above, a negotiated resolution would likely be your most efficient path forward...
-```
+1. Remove standalone section labels (for example: "Facts", "Legal Theories", "Timing and Risk", "Next Steps").
+2. Convert bullet and numbered list items into paragraph prose while preserving all content.
+3. Smooth transitions so the letter reads as continuous correspondence.
+4. Keep one blank line between paragraphs.
+5. Preserve greeting, signature, and confidentiality language.
 
 OUTPUT INSTRUCTIONS:
-- Return ONLY the formatted letter
-- No commentary, no explanations
-- Preserve ALL legal content exactly
-- Improve natural flow and remove formal headers
+- Return ONLY the formatted letter text.
+- No commentary.
+- Keep markdown-safe paragraph text (no code fences).
 """
 
     def polish_letter(self, raw_letter: str) -> Dict:

@@ -376,39 +376,31 @@ class JsonProcessingService:
         "veilpiercing": "veil piercing",
     }
     _PRESENTATION_HEADER_REPLACEMENTS = [
-        (re.compile(r"(?im)^\s*opening\s+review\s*$"), ""),
-        (re.compile(r"(?im)^\s*opening[_\s]+review\s*$"), ""),
-        (re.compile(r"(?im)^\s*facts(?:\s*\([^)]+\))?\s*$"), "Based on the records:"),
-        (re.compile(r"(?im)^\s*factual[_\s]+summary(?:\s*\([^)]+\))?\s*$"), "Based on the records:"),
-        (re.compile(r"(?im)^\s*core\s+issue\s*$"), "The core issue is this:"),
-        (
-            re.compile(r"(?im)^\s*core[_\s]+issue(?:\s*[-–]\s*the\s+real\s+question)?\s*$"),
-            "The core issue is this:",
-        ),
-        (re.compile(r"(?im)^\s*legal\s+theories(?:\s*\([^)]+\))?\s*$"), "Here are the key points of our analysis:"),
-        (
-            re.compile(r"(?im)^\s*legal[_\s]+theories(?:\s*\([^)]+\))?\s*$"),
-            "Here are the key points of our analysis:",
-        ),
-        (re.compile(r"(?im)^\s*timing(?:\s+and)?\s+risk\s*$"), "Timing and risk:"),
-        (re.compile(r"(?im)^\s*timing(?:[_\s]+and)?[_\s]+risk\s*$"), "Timing and risk:"),
-        (re.compile(r"(?im)^\s*strategy(?:\s*\([^)]+\))?\s*$"), "Based on the above, we recommend:"),
-        (re.compile(r"(?im)^\s*strategy(?:[_\s]*\([^)]+\))?\s*$"), "Based on the above, we recommend:"),
-        (re.compile(r"(?im)^\s*action\s+items(?:\s*\([^)]+\))?\s*$"), "Please provide the following:"),
+        (re.compile(r"(?im)^\s*opening(?:[_\s]+review)?\s*$"), ""),
+        (re.compile(r"(?im)^\s*facts?(?:\s*\([^)]+\))?\s*$"), ""),
+        (re.compile(r"(?im)^\s*factual[_\s]+summary(?:\s*\([^)]+\))?\s*$"), ""),
+        (re.compile(r"(?im)^\s*core[_\s]+issue(?:\s*[-–]\s*the\s+real\s+question)?\s*$"), ""),
+        (re.compile(r"(?im)^\s*legal[_\s]+theories(?:\s*\([^)]+\))?\s*$"), ""),
+        (re.compile(r"(?im)^\s*timing(?:[_\s]+and)?[_\s]+risk\s*:?\s*$"), ""),
+        (re.compile(r"(?im)^\s*strategy(?:\s*\([^)]+\))?\s*:?\s*$"), ""),
+        (re.compile(r"(?im)^\s*action[_\s]+items(?:\s*\([^)]+\))?\s*:?\s*$"), ""),
+        (re.compile(r"(?im)^\s*next[_\s]+steps?\s*:?\s*$"), ""),
+        (re.compile(r"(?im)^\s*summary(?:[_\s]+implications)?\s*:?\s*$"), ""),
+        (re.compile(r"(?im)^\s*recommended\s+two[-\s]*step\s+plan\s*:?\s*$"), ""),
+        (re.compile(r"(?im)^\s*here\s+are\s+the\s+key\s+points\s+of\s+our\s+analysis\s*:?\s*$"), ""),
+        (re.compile(r"(?im)^\s*based\s+on\s+the\s+records\s*:?\s*$"), ""),
+        (re.compile(r"(?im)^\s*the\s+core\s+issue\s+is\s+this\s*:?\s*$"), ""),
+        (re.compile(r"(?im)^\s*please\s+provide\s+the\s+following\s*:?\s*$"), ""),
         (
             re.compile(
-                r"(?im)^\s*(?:immediate[_\s]+)?(?:client[_\s]+)?action[_\s]+items(?:\s*\([^)]+\))?\s*$"
+                r"(?im)^\s*recommended\s+immediate\s+client\s+tasks\s*\(summary\)\s*:?\s*$"
             ),
-            "Please provide the following:",
+            "",
         ),
-        (re.compile(r"(?im)^\s*next\s+step\s*$"), "Next steps:"),
-        (re.compile(r"(?im)^\s*next[_\s]+steps?\s*$"), "Next steps:"),
-        (
-            re.compile(r"(?im)^\s*recommended\s+immediate\s+client\s+tasks\s*\(summary\)\s*$"),
-            "Please provide the following:",
-        ),
-        (re.compile(r"(?im)^\s*summary\s*$"), ""),
     ]
+    _MARKDOWN_HEADER_PREFIX = re.compile(r"(?m)^[ \t]{0,3}#{1,6}[ \t]+")
+    _MARKDOWN_RULE_LINE = re.compile(r"(?m)^[ \t]{0,3}(?:-{3,}|={3,})[ \t]*$")
+    _LIST_ITEM_PREFIX_PATTERN = re.compile(r"(?m)^[ \t]*(?:[-*•][ \t]+|\d+[.)][ \t]+)")
 
     @staticmethod
     def _gap_get(gap: Any, field: str, default: str = "") -> str:
@@ -1212,6 +1204,17 @@ class JsonProcessingService:
 
         return prompt
 
+    def _findings_writer_instructions(self) -> str:
+        """Shared system instructions for findings email generation."""
+        return (
+            "You are a senior attorney drafting a client-facing findings email. "
+            "Write in plain English with a steady, practical tone. "
+            "Use natural paragraphs only and do not use section headers, bold text, "
+            "bullet lists, numbered lists, or memo formatting. "
+            "Be clear about risks, proof needs, and uncertainty without overpromising. "
+            "Close with a short next-step request and a confidentiality statement."
+        )
+
     async def generate_findings_letter_from_json(
         self,
         intake_content: str,
@@ -1294,17 +1297,20 @@ class JsonProcessingService:
             prompt,
             "gpt-5.2",  # model
             "medium",  # reasoning_effort
-            "high",  # verbosity
+            "medium",  # verbosity
             12000,  # max_output_tokens
-            (  # instructions
-                "You are a senior legal writing assistant helping to draft professional "
-                "client findings emails. Follow the template structure exactly and "
-                "provide comprehensive, well-reasoned legal analysis."
-            ),
+            self._findings_writer_instructions(),  # instructions
         )
 
         if not markdown_response or not markdown_response.strip():
             raise ValueError("OpenAI returned empty response for letter generation")
+
+        markdown_response = self.normalize_client_letter_markdown(
+            markdown_response,
+            letter_type="findings",
+            attorney_name=attorney_name,
+            firm_name=firm_name,
+        )
 
         # Convert to HTML
         html_content = self._convert_markdown_to_html(markdown_response)
@@ -1423,12 +1429,9 @@ class JsonProcessingService:
             prompt,
             model,
             "medium",
-            "high",
+            "medium",
             12000,
-            (
-                "You are a senior legal writing assistant. Generate an attorney-quality "
-                "findings email following the adaptive structure guidance provided."
-            ),
+            self._findings_writer_instructions(),
         )
 
         if (not markdown_response or not markdown_response.strip()) and prompt_includes_raw_docs:
@@ -1463,12 +1466,9 @@ class JsonProcessingService:
                 compact_prompt,
                 model,
                 "medium",
-                "high",
+                "medium",
                 12000,
-                (
-                    "You are a senior legal writing assistant. Generate an attorney-quality "
-                    "findings email following the adaptive structure guidance provided."
-                ),
+                self._findings_writer_instructions(),
             )
 
         if not markdown_response or not markdown_response.strip():
@@ -1500,6 +1500,13 @@ class JsonProcessingService:
         except Exception as e:
             logger.warning(f"Formatting polish pass failed: {e}. Using original letter.")
         # --- END POLISH PASS ---
+
+        markdown_response = self.normalize_client_letter_markdown(
+            markdown_response,
+            letter_type="findings",
+            attorney_name=attorney_name,
+            firm_name=firm_name,
+        )
 
         # Convert to HTML
         html_content = self._convert_markdown_to_html(markdown_response)
@@ -1588,13 +1595,10 @@ class JsonProcessingService:
         try:
             async for token in self.client.create_response_stream(
                 model=model,
-                instructions=(
-                    "You are a senior legal writing assistant. Generate an attorney-quality "
-                    "findings email following the adaptive structure guidance provided."
-                ),
+                instructions=self._findings_writer_instructions(),
                 input=prompt,
                 reasoning_effort="low",
-                verbosity="high",
+                verbosity="medium",
             ):
                 stream_started = True
                 yield token
@@ -1629,13 +1633,10 @@ class JsonProcessingService:
             )
             async for token in self.client.create_response_stream(
                 model=model,
-                instructions=(
-                    "You are a senior legal writing assistant. Generate an attorney-quality "
-                    "findings email following the adaptive structure guidance provided."
-                ),
+                instructions=self._findings_writer_instructions(),
                 input=compact_prompt,
                 reasoning_effort="low",
-                verbosity="high",
+                verbosity="medium",
             ):
                 yield token
 
@@ -1788,79 +1789,21 @@ class JsonProcessingService:
 
     def _create_structure_instruction(self, structure_guidance) -> str:
         """Create structure instruction based on letter structure guidance."""
-        instructions = "\n\nSTRUCTURE GUIDANCE:\n\n"
+        instructions = (
+            "\n\nSTRUCTURE GUIDANCE (LATEST - OVERRIDE EARLIER CONFLICTS):\n"
+            "- Write as a client email, not a memo.\n"
+            "- Use natural paragraphs only.\n"
+            "- Do not use section headers, bold labels, bullets, or numbered lists.\n"
+            "- Follow this order: greeting and documents reviewed; key facts; what is missing and why it matters; "
+            "possible legal paths; timing/proof risks; two-step recommendation in prose; closing request for direction.\n"
+            "- If multiple legal paths are discussed, keep them in paragraph form with simple transitions "
+            "(for example: First, Second, Third) rather than list formatting.\n"
+            "- Explain legal concepts in plain English and include practical client impact.\n"
+            "- End with a brief confidentiality statement.\n"
+        )
 
-        # All cases now use natural flow format - no formal section headers
-        instructions += """Use NATURAL FLOW format (REQUIRED):
-
-**CRITICAL - The letter should read like professional correspondence, NOT a legal memo.**
-
-**STRUCTURE:**
-1. Warm greeting: "Good afternoon [Name]," or "Good morning [Name],"
-2. Opening: Documents reviewed + property address + primary concern in plain English
-3. Factual narrative: 2-3 paragraphs describing what happened (NO formal "FACTUAL SUMMARY" header)
-4. Transition: "Here are the key points of our analysis:"
-5. Legal points as flowing bullet paragraphs (each bullet is a complete paragraph, NO bold headers)
-6. Recommendations paragraph: "Based on the above, a negotiated resolution..."
-7. Protective checklist if client needs to take action (with explanations)
-8. Call to action: "Please let us know if you would like us to proceed..."
-9. Signature and disclaimer
-
-**PROHIBITED:**
-- Do NOT use formal section headers like "FACTUAL SUMMARY" or "RECOMMENDED ACTION"
-- Do NOT use bold issue titles in bullets (like "**Implied Warranty**:")
-- Do NOT use "Key Findings" intro
-- Do NOT use numbered sections for legal issues (2., 3., 4.)
-
-**REQUIRED - PLAIN LANGUAGE:**
-- Every legal term must be explained in plain English
-- Use "What this means for you:" or similar to explain practical impact
-- Use analogies clients understand ("like a hold on your property")
-
-**REQUIRED structure example:**
-```
-Good afternoon Mr. Devlin and Ms. Bell,
-
-I hope you are doing well. I wanted to follow up with a summary of our
-findings after reviewing [documents], regarding your property at [address].
-
-As discussed, the primary concern is [plain English statement of issue].
-
-Based on our review, we understand that [2-3 paragraphs of facts without formal headers]...
-
-Here are the key points of our analysis:
-
-- Under Florida law, there's a protection called an "implied warranty" -- this
-means contractors are legally required to do competent work, even if your
-contract doesn't say so. In your case, [application]. What this means for
-you: [practical impact].
-
-- Before you can sue a contractor in Florida, you must follow a process under
-Chapter 558. Think of it as a required 'cool-down period.' [explanation].
-For you, this means [practical impact].
-
-- You received a Notice to Owner -- this is a warning that [explanation in
-plain English]. Here's why this matters: [consequence chain]. This is
-preventable if we act now.
-
-Based on the above, a negotiated resolution would likely be your most
-efficient path forward. [Specific recommendations with timeline].
-
-If you decide to [action], here's what you need to do:
-- [Step with explanation of why]
-- [Step with explanation of why]
-
-Please let us know if you would like us to proceed with [action], or whether
-you would prefer that we first set a phone call to discuss.
-
-Thank you,
-[Signature]
-
-[Disclaimer]
-```
-"""
-
-        instructions += f"\n\nAdditional context: {structure_guidance.reasoning}\n"
+        if getattr(structure_guidance, "reasoning", None):
+            instructions += f"\nCase-specific drafting note: {structure_guidance.reasoning}\n"
 
         return instructions
 
@@ -1869,33 +1812,19 @@ Thank you,
         strategy_json = json.dumps(strategy_object or {}, default=str, indent=2)
         return (
             "BALANCED CLIENT STRATEGY DIRECTIVES (LATEST - OVERRIDE EARLIER CONFLICTS):\n"
-            "- Write for an intelligent client. Keep tone confident, practical, and measured.\n"
-            "- Use concise paragraphs and avoid internal-lawyer phrasing.\n"
-            "- Do not output explicit section labels/headings such as "
-            "'Opening review', 'Facts', 'Core issue', 'Legal theories', 'Timing risk', "
-            "'Strategy', or 'Action items'.\n"
-            "- Use natural transition lines instead (for example: "
-            "'As discussed, the primary concern is ...', 'Based on the records ...', "
-            "'Here are the key points of our analysis:', 'Based on the above, we recommend ...').\n"
-            "- Findings section depth targets:\n"
-            "  facts summary: 120-180 words.\n"
-            "  each core theory paragraph: 70-120 words.\n"
-            "  recommendation strategy section: 100-150 words.\n"
-            "- Follow the exact order in strategy_object.ranked_theories when presenting legal theories.\n"
-            "- Keep the first two theory paragraphs focused on the highest-priority ranked theories.\n"
-            "- First-use legal term micro-explainer: explain each legal term once in plain language.\n"
-            "- For each major claim paragraph, include at least one evidence anchor "
-            "(date, amount, source document, or communication).\n"
-            "- When referencing documents, use readable labels (for example, "
-            "'signed subscription agreement' or 'February 14, 2023 update email'), "
-            "not raw upload filenames or internal file keys.\n"
-            "- Do not use internal labels like 'micro-explainer' or snake_case legal tokens "
-            "(for example, unjust_enrichment).\n"
-            "- Avoid stacking citation-style parentheticals; keep references readable in prose.\n"
-            "- Include one practical client-impact sentence in each major section.\n"
-            "- Avoid unsupported hard accusations and avoid overstatement.\n"
-            "- Keep legal doctrine explanations brief and strategic.\n"
-            "- Preserve controlled urgency without hard-coded today-date math.\n\n"
+            "- Write for a client. Keep tone confident, practical, and measured.\n"
+            "- Use paragraph-only formatting. No headers, bullets, numbered lists, or bold labels.\n"
+            "- Explain legal concepts in plain English, then apply them to the client's facts.\n"
+            "- Present legal theories in the order from strategy_object.ranked_theories, but keep them in prose.\n"
+            "- Use at least one evidence anchor in each major legal paragraph "
+            "(date, amount, document, or communication).\n"
+            "- Mention missing proof directly and explain why it affects leverage or viability.\n"
+            "- Avoid internal labels, snake_case tokens, and raw file names in client-facing text.\n"
+            "- Avoid stacked citation-style parentheticals; keep support readable in sentence form.\n"
+            "- Avoid unsupported accusations or absolute outcomes.\n"
+            "- Include timing, standing, and deadline risks when relevant.\n"
+            "- End with a two-step recommendation in prose and a short proceed question.\n"
+            "- End with preliminary-analysis and confidentiality language.\n\n"
             "STRATEGY OBJECT (USE AS FACT/CLAIM MAP):\n"
             f"{strategy_json}\n"
         )
@@ -1992,9 +1921,13 @@ Thank you,
         text = self._clean_markdown_response(markdown_text)
         text = text.replace("\r\n", "\n").replace("\r", "\n")
 
-        if letter_type in {"findings", "demand"}:
+        if letter_type == "findings":
+            text = self._MARKDOWN_HEADER_PREFIX.sub("", text)
+            text = self._MARKDOWN_RULE_LINE.sub("", text)
             for pattern, replacement in self._PRESENTATION_HEADER_REPLACEMENTS:
                 text = pattern.sub(replacement, text)
+            # Flatten list markup into paragraph form for client-email style.
+            text = self._LIST_ITEM_PREFIX_PATTERN.sub("\n", text)
 
         for compact, expanded in self._COMPACT_LEGAL_TOKEN_FIXUPS.items():
             text = re.sub(

@@ -1986,8 +1986,8 @@ class JsonProcessingService:
             text,
         )
 
-        resolved_attorney = (attorney_name or "").strip() or "Counsel"
-        resolved_firm = (firm_name or "").strip() or "Law Firm"
+        resolved_attorney = (str(attorney_name) if attorney_name and not isinstance(attorney_name, bool) else "").strip() or "Counsel"
+        resolved_firm = (str(firm_name) if firm_name and not isinstance(firm_name, bool) else "").strip() or "Law Firm"
         placeholder_replacements = [
             (re.compile(r"(?i)\[\s*attorney\s+name\s*\]"), resolved_attorney),
             (re.compile(r"(?i)\[\s*(?:new\s+mexico|florida)\s+law\s+firm\s+name\s*\]"), resolved_firm),

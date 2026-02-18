@@ -401,6 +401,23 @@ class JsonProcessingService:
     _MARKDOWN_HEADER_PREFIX = re.compile(r"(?m)^[ \t]{0,3}#{1,6}[ \t]+")
     _MARKDOWN_RULE_LINE = re.compile(r"(?m)^[ \t]{0,3}(?:-{3,}|={3,})[ \t]*$")
     _LIST_ITEM_PREFIX_PATTERN = re.compile(r"(?m)^[ \t]*(?:[-*•][ \t]+|\d+[.)][ \t]+)")
+    _LIST_ITEM_SENTINEL = "__LIST_ITEM__ "
+    _FINDINGS_BOILERPLATE_REMOVALS = [
+        re.compile(
+            r"(?im)^\s*this is a concise legal review based on the documents you provided.*$"
+        ),
+        re.compile(
+            r"(?im)^\s*below are the facts,\s*core issue,\s*plausible legal theories.*$"
+        ),
+        re.compile(
+            r"(?im)^\s*we would typically plead multiple theories together;.*$"
+        ),
+    ]
+    _FINDINGS_LABEL_PREFIX_REWRITES = [
+        (re.compile(r"(?im)^\s*evidence\s*:\s*"), ""),
+        (re.compile(r"(?im)^\s*supporting documents\s*:\s*"), ""),
+        (re.compile(r"(?im)^\s*structural complexity\s*:\s*"), ""),
+    ]
 
     @staticmethod
     def _gap_get(gap: Any, field: str, default: str = "") -> str:
@@ -1211,6 +1228,10 @@ class JsonProcessingService:
             "Write in plain English with a steady, practical tone. "
             "Use natural paragraphs only and do not use section headers, bold text, "
             "bullet lists, numbered lists, or memo formatting. "
+            "Do not write outline-style scaffolding such as "
+            "'Below are the facts/core issue/legal theories/timing/action items'. "
+            "Do not use label-driven drafting like 'Evidence:' or 'Supporting documents:'. "
+            "Integrate support naturally in prose. "
             "Be clear about risks, proof needs, and uncertainty without overpromising. "
             "Close with a short next-step request and a confidentiality statement."
         )
@@ -1590,15 +1611,13 @@ class JsonProcessingService:
         )
 
         logger.info(f"Streaming adaptive findings email for {jurisdiction}")
-        model = self._get_letter_generation_model("gpt-5.2")
+        model = self._get_letter_generation_model("gpt-4o")
         stream_started = False
         try:
             async for token in self.client.create_response_stream(
                 model=model,
                 instructions=self._findings_writer_instructions(),
                 input=prompt,
-                reasoning_effort="low",
-                verbosity="medium",
             ):
                 stream_started = True
                 yield token
@@ -1635,8 +1654,6 @@ class JsonProcessingService:
                 model=model,
                 instructions=self._findings_writer_instructions(),
                 input=compact_prompt,
-                reasoning_effort="low",
-                verbosity="medium",
             ):
                 yield token
 
@@ -1816,11 +1833,12 @@ class JsonProcessingService:
             "- Use paragraph-only formatting. No headers, bullets, numbered lists, or bold labels.\n"
             "- Explain legal concepts in plain English, then apply them to the client's facts.\n"
             "- Present legal theories in the order from strategy_object.ranked_theories, but keep them in prose.\n"
-            "- Use at least one evidence anchor in each major legal paragraph "
-            "(date, amount, document, or communication).\n"
+            "- Use evidence anchors naturally in sentences (date, amount, document, or communication) "
+            "without label phrasing like 'Evidence:' or 'Supporting documents:'.\n"
             "- Mention missing proof directly and explain why it affects leverage or viability.\n"
             "- Avoid internal labels, snake_case tokens, and raw file names in client-facing text.\n"
             "- Avoid stacked citation-style parentheticals; keep support readable in sentence form.\n"
+            "- Avoid prefatory outline statements (for example: 'Below are the facts, core issue, legal theories...').\n"
             "- Avoid unsupported accusations or absolute outcomes.\n"
             "- Include timing, standing, and deadline risks when relevant.\n"
             "- End with a two-step recommendation in prose and a short proceed question.\n"
@@ -1926,8 +1944,12 @@ class JsonProcessingService:
             text = self._MARKDOWN_RULE_LINE.sub("", text)
             for pattern, replacement in self._PRESENTATION_HEADER_REPLACEMENTS:
                 text = pattern.sub(replacement, text)
-            # Flatten list markup into paragraph form for client-email style.
-            text = self._LIST_ITEM_PREFIX_PATTERN.sub("\n", text)
+            text = self._LIST_ITEM_PREFIX_PATTERN.sub(self._LIST_ITEM_SENTINEL, text)
+            for boilerplate_pattern in self._FINDINGS_BOILERPLATE_REMOVALS:
+                text = boilerplate_pattern.sub("", text)
+            for pattern, replacement in self._FINDINGS_LABEL_PREFIX_REWRITES:
+                text = pattern.sub(replacement, text)
+            text = self._collapse_list_blocks_to_paragraphs(text)
 
         for compact, expanded in self._COMPACT_LEGAL_TOKEN_FIXUPS.items():
             text = re.sub(
@@ -1961,6 +1983,42 @@ class JsonProcessingService:
         text = re.sub(r"\n{3,}", "\n\n", text)
         text = re.sub(r"[ \t]{2,}", " ", text)
         return text.strip()
+
+    def _collapse_list_blocks_to_paragraphs(self, text: str) -> str:
+        """Collapse list-item lines into prose paragraphs for findings emails."""
+        lines = text.split("\n")
+        collapsed: List[str] = []
+        index = 0
+
+        while index < len(lines):
+            line = lines[index]
+            stripped = line.strip()
+
+            if stripped.startswith(self._LIST_ITEM_SENTINEL.strip()):
+                items: List[str] = []
+                while index < len(lines):
+                    candidate = lines[index].strip()
+                    if not candidate.startswith(self._LIST_ITEM_SENTINEL.strip()):
+                        break
+                    item_text = candidate[len(self._LIST_ITEM_SENTINEL.strip()):].strip()
+                    item_text = re.sub(r"\s+", " ", item_text)
+                    item_text = item_text.rstrip(";")
+                    if item_text and item_text not in items:
+                        items.append(item_text)
+                    index += 1
+
+                if items:
+                    merged = "; ".join(items)
+                    if not re.search(r"[.!?]$", merged):
+                        merged += "."
+                    collapsed.append(merged)
+                continue
+
+            cleaned_line = line.replace(self._LIST_ITEM_SENTINEL, "").rstrip()
+            collapsed.append(cleaned_line)
+            index += 1
+
+        return "\n".join(collapsed)
 
     @retry(
         stop=stop_after_attempt(3),

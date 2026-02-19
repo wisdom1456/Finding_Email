@@ -28,6 +28,7 @@ from legal_portal.core.data_models import (
     RecommendedLetterType,
 )
 from legal_portal.utils.openai_client import OpenAIClient
+from legal_portal.utils.type_safety import safe_str_required
 
 logger = logging.getLogger(__name__)
 
@@ -148,7 +149,7 @@ class GapAnalysisService:
                 )
                 return fallback
 
-            raw_response = (response_dict.get("content") or "").strip()
+            raw_response = safe_str_required(response_dict.get("content"), "")
 
             if not raw_response:
                 logger.warning("Gap analysis returned empty response")

@@ -45,6 +45,7 @@ from legal_portal.services.progress_manager import ProgressManager
 from legal_portal.utils.diagnostic_logger import DiagnosticLogger
 from legal_portal.utils.openai_client import OpenAIClient
 from legal_portal.utils.security import sanitize_text_for_db
+from legal_portal.utils.type_safety import safe_str, safe_str_required, sanitize_nested_dict
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -197,16 +198,14 @@ async def _get_user_ai_preferences(user_id: str, supabase) -> Optional[Dict[str,
 
 
 def _first_non_empty_text(*values: Any) -> Optional[str]:
-    """Return the first non-empty string-like value, excluding booleans."""
+    """Return the first non-empty string-like value, excluding booleans.
+
+    Delegates to safe_str() for type-safe extraction from untyped data.
+    """
     for value in values:
-        if value is None:
-            continue
-        # Explicitly reject boolean values before conversion
-        if isinstance(value, bool):
-            continue
-        text = str(value).strip()
-        if text:
-            return text
+        result = safe_str(value)
+        if result:
+            return result
     return None
 
 
@@ -234,10 +233,14 @@ def _resolve_letter_identity_context(
     case_metadata = case_data.get("metadata")
     if not isinstance(case_metadata, dict):
         case_metadata = {}
+    else:
+        case_metadata = sanitize_nested_dict(case_metadata)
 
     clio_matter_data = case_data.get("clio_matter_data")
     if not isinstance(clio_matter_data, dict):
         clio_matter_data = {}
+    else:
+        clio_matter_data = sanitize_nested_dict(clio_matter_data)
 
     user_id = case_data.get("user_id")
     if user_id:

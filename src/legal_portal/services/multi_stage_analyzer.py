@@ -40,6 +40,7 @@ from legal_portal.services.statute_recommendation_service import StatuteRecommen
 from legal_portal.utils.diagnostic_logger import DiagnosticLogger
 from legal_portal.utils.logging_config import get_module_logger
 from legal_portal.utils.openai_client import OpenAIClient
+from legal_portal.utils.type_safety import safe_str_required
 
 logger = get_module_logger(__name__)
 
@@ -942,7 +943,7 @@ RULES:
             logger.error(f"[STAGE:1:ERROR] API returned error: {error_msg}")
             raise ValueError(f"GPT API error in fact extraction: {error_msg}")
 
-        raw_response = (response_dict.get("content") or "").strip()
+        raw_response = safe_str_required(response_dict.get("content"), "")
 
         # Handle empty responses with detailed diagnostics
         if not raw_response:
@@ -1093,7 +1094,7 @@ Return JSON:
             logger.error(f"[STAGE:2:ERROR] API returned error: {error_msg}")
             raise ValueError(f"GPT API error in issue mapping: {error_msg}")
 
-        raw_response = (response_dict.get("content") or "").strip()
+        raw_response = safe_str_required(response_dict.get("content"), "")
 
         # Handle empty responses
         if not raw_response:
@@ -1250,7 +1251,7 @@ Return ONLY valid JSON.
             logger.error(f"[STAGE:3:ERROR] API returned error: {error_msg}")
             raise ValueError(f"GPT API error in deep analysis: {error_msg}")
 
-        raw_response = (response_dict.get("content") or "").strip()
+        raw_response = safe_str_required(response_dict.get("content"), "")
 
         # Handle empty responses
         if not raw_response:

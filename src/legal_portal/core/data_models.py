@@ -4,7 +4,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional, Union
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, validator
 
 # ============================================================================
 # Enumerations
@@ -222,6 +222,13 @@ class DocumentSummaryStructured(BaseModel):
     document_name: str
     document_type: str = Field(description="E.g., contract, disclosure, correspondence, evidence")
 
+    @validator("document_name", "document_type", pre=True)
+    def reject_boolean_strings(cls, v):
+        """Reject boolean values in string fields (from LLM JSON output)."""
+        if isinstance(v, bool):
+            return ""
+        return v
+
     # Detailed narrative fields (New Schema)
     executive_summary: Optional[str] = Field(default=None, description="High-level overview of the document")
     key_content: Optional[str] = Field(
@@ -284,6 +291,13 @@ class EnhancedIntakeAnalysis(BaseModel):
     case_summary: Optional[str] = None
     case_type: Optional[str] = None
     urgency_level: Optional[str] = None
+
+    @validator("client_name", "attorney_name", "case_summary", "case_type", "urgency_level", pre=True)
+    def reject_boolean_strings(cls, v):
+        """Reject boolean values in string fields."""
+        if isinstance(v, bool):
+            return None
+        return v
     client_priorities: List[str] = Field(default_factory=list)
     desired_outcomes: List[str] = Field(default_factory=list)
     key_facts: List[str] = Field(default_factory=list)
@@ -402,6 +416,20 @@ class QualityScore(BaseModel):
 
     document: str = Field(description="The name of the document being assessed")
     document_id: Optional[str] = Field(default=None, description="Database ID of the document")
+
+    @validator("document", pre=True)
+    def reject_boolean_document(cls, v):
+        """Reject boolean values in document name (from LLM/JSONB)."""
+        if isinstance(v, bool):
+            return "Unknown Document"
+        return v
+
+    @validator("document_id", pre=True)
+    def reject_boolean_document_id(cls, v):
+        """Reject boolean values in document_id."""
+        if isinstance(v, bool):
+            return None
+        return v
     score: float = Field(ge=0.0, le=10.0, description="Quality score from 0-10")
     has_meaningful_content: bool = Field(description="Text contains actual information vs. noise")
     is_complete: bool = Field(description="Document appears complete (not truncated)")

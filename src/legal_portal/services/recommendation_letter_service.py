@@ -24,6 +24,7 @@ from legal_portal.core.data_models import (
 from legal_portal.services.document_formatter import DocumentFormatterService
 from legal_portal.utils.logging_config import get_module_logger
 from legal_portal.utils.openai_client import OpenAIClient
+from legal_portal.utils.type_safety import safe_str_required
 
 logger = get_module_logger(__name__)
 
@@ -401,7 +402,7 @@ class RecommendationLetterService:
             verbosity="low",
             max_output_tokens=3000,
         )
-        revised = str(response.get("content") or "").strip()
+        revised = safe_str_required(response.get("content"), "")
         return revised or draft_markdown
 
     async def stream_recommendation_letter(

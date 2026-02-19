@@ -17,6 +17,7 @@ from legal_portal.core.data_models import (
 )
 from legal_portal.utils.logging_config import get_module_logger
 from legal_portal.utils.openai_client import OpenAIClient
+from legal_portal.utils.type_safety import safe_str
 
 logger = get_module_logger(__name__)
 
@@ -232,10 +233,7 @@ class LetterStrategyService:
             loop.run_in_executor(None, _run_request),
             timeout=max(1, int(timeout_seconds)),
         )
-        content_raw = (response or {}).get("content")
-        if isinstance(content_raw, bool):
-            content_raw = None
-        content = str(content_raw or "").strip()
+        content = safe_str((response or {}).get("content"), "")
         if not content:
             return None
         return self._parse_json_like(content)
@@ -847,8 +845,7 @@ class LetterStrategyService:
 
     def _parse_json_like(self, text: str) -> Optional[Dict[str, Any]]:
         """Parse JSON output that may be wrapped in code fences."""
-        if not isinstance(text, str):
-            text = str(text) if not isinstance(text, bool) else ""
+        text = safe_str(text, "")
         candidate = text.strip()
         if candidate.startswith("```"):
             candidate = re.sub(r"^```(?:json)?\s*", "", candidate)

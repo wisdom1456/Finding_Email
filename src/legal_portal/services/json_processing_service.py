@@ -22,6 +22,7 @@ from legal_portal.utils.diagnostic_logger import DiagnosticLogger
 from legal_portal.utils.logging_config import get_module_logger
 from legal_portal.utils.markdown_utils import clean_markdown_response
 from legal_portal.utils.openai_client import OpenAIClient
+from legal_portal.utils.type_safety import safe_str_required
 
 logger = get_module_logger(__name__)
 
@@ -567,7 +568,7 @@ class JsonProcessingService:
         for entry in document_summaries or []:
             if not isinstance(entry, dict):
                 continue
-            doc_name = (entry.get("document_name") or "").strip()
+            doc_name = safe_str_required(entry.get("document_name"), "")
             if not doc_name:
                 continue
             summary_map[self._normalize_doc_name(doc_name)] = entry
@@ -582,7 +583,7 @@ class JsonProcessingService:
         for entry in document_registry or []:
             if not isinstance(entry, dict):
                 continue
-            doc_name = (entry.get("document_name") or "").strip()
+            doc_name = safe_str_required(entry.get("document_name"), "")
             if not doc_name:
                 continue
             display_name = self._humanize_document_label(doc_name)
@@ -592,20 +593,11 @@ class JsonProcessingService:
             seen_names.add(normalized_name)
             _ensure_header()
 
-            doc_type_raw = entry.get("document_type")
-            doc_type = (doc_type_raw if isinstance(doc_type_raw, str) else None) or "Unknown"
-
-            role_raw = entry.get("role_in_case")
-            role = (role_raw if isinstance(role_raw, str) else None) or "general case evidence"
-
-            authority_raw = entry.get("authority_level")
-            authority = (authority_raw if isinstance(authority_raw, str) else None) or "supporting_evidence"
-
-            execution_raw = entry.get("execution_status")
-            execution = (execution_raw if isinstance(execution_raw, str) else None) or "unknown"
-
-            instrument_raw = entry.get("primary_instrument")
-            instrument = (instrument_raw if isinstance(instrument_raw, str) else None) or "n/a"
+            doc_type = safe_str_required(entry.get("document_type"), "Unknown")
+            role = safe_str_required(entry.get("role_in_case"), "general case evidence")
+            authority = safe_str_required(entry.get("authority_level"), "supporting_evidence")
+            execution = safe_str_required(entry.get("execution_status"), "unknown")
+            instrument = safe_str_required(entry.get("primary_instrument"), "n/a")
             signature_expected = bool(entry.get("signature_expected"))
             signature_review = bool(entry.get("signature_review_recommended"))
             significance = (
@@ -655,18 +647,17 @@ class JsonProcessingService:
             _ensure_header()
 
             summary_entry = summary_map.get(normalized_name, {})
-            doc_type_raw = (
-                (summary_entry.get("document_type") if isinstance(summary_entry, dict) else "")
-                or (getattr(doc, "document_type", "") or "Unknown")
+            doc_type = safe_str_required(
+                (summary_entry.get("document_type") if isinstance(summary_entry, dict) else None)
+                or getattr(doc, "document_type", None),
+                "Unknown",
             )
-            doc_type = (doc_type_raw if isinstance(doc_type_raw, str) else "Unknown").strip()
-
-            significance_raw = (
-                (summary_entry.get("legal_significance") if isinstance(summary_entry, dict) else "")
-                or (summary_entry.get("relevance_to_case") if isinstance(summary_entry, dict) else "")
-                or (getattr(doc, "significance", "") or "Supports core case narrative.")
+            significance = safe_str_required(
+                (summary_entry.get("legal_significance") if isinstance(summary_entry, dict) else None)
+                or (summary_entry.get("relevance_to_case") if isinstance(summary_entry, dict) else None)
+                or getattr(doc, "significance", None),
+                "Supports core case narrative.",
             )
-            significance = (significance_raw if isinstance(significance_raw, str) else "Supports core case narrative.").strip()
             role = self._infer_document_role(doc_name, doc_type, significance)
             lines.append(
                 f"- {display_name} | type={doc_type} | role={role} | case_place={self._truncate(significance, 150)}"
@@ -678,24 +669,22 @@ class JsonProcessingService:
         for normalized_name, summary_entry in summary_map.items():
             if normalized_name in seen_names:
                 continue
-            doc_name_raw = summary_entry.get("document_name")
-            doc_name = (doc_name_raw if isinstance(doc_name_raw, str) else None) or ""
+            doc_name = safe_str_required(summary_entry.get("document_name"), "")
             if not doc_name:
                 continue
             display_name = self._humanize_document_label(doc_name)
             seen_names.add(normalized_name)
             _ensure_header()
 
-            doc_type_raw = summary_entry.get("document_type")
-            doc_type = (doc_type_raw if isinstance(doc_type_raw, str) else None) or "Unknown"
+            doc_type = safe_str_required(summary_entry.get("document_type"), "Unknown")
 
-            significance_raw = (
+            significance = safe_str_required(
                 summary_entry.get("legal_significance")
                 or summary_entry.get("relevance_to_case")
-                or summary_entry.get("executive_summary")
-                or "Supports core case narrative."
+                or summary_entry.get("executive_summary"),
+                "Supports core case narrative.",
             )
-            significance = self._truncate(str(significance_raw) if not isinstance(significance_raw, bool) else "Supports core case narrative.", 150)
+            significance = self._truncate(significance, 150)
             role = self._infer_document_role(doc_name, doc_type, significance)
             lines.append(
                 f"- {display_name} | type={doc_type} | role={role} | case_place={significance}"

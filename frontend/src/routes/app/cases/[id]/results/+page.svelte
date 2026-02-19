@@ -1012,33 +1012,63 @@
 			if (!session || !user) throw new Error('Not authenticated');
 
 			const apiUrl = getApiUrl();
-			const response = await fetch(`${apiUrl}/api/analysis/generate-recommendation-letter`, {
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json',
-					Authorization: `Bearer ${session.access_token}`
-				},
-				body: JSON.stringify({
-					case_id: caseId,
-					letter_type: letterType,
-					attorney_name: attorneyName,
-					firm_name: firmName,
-					contact_phone: contactPhone,
-					contact_email: contactEmail
-				})
-			});
+			const analysisId = results?.analysis_id;
+			if (!analysisId) throw new Error('No analysis ID available');
+
+			const response = await fetch(
+				`${apiUrl}/api/analysis/${analysisId}/recommendation-letter/stream?letter_type=${letterType}&schema_version=2`,
+				{
+					headers: { Authorization: `Bearer ${session.access_token}` }
+				}
+			);
 
 			if (!response.ok) {
 				const detail = await response.json().catch(() => ({}));
-				throw new Error(detail?.detail || 'Failed to generate recommendation letter');
+				throw new Error(detail?.detail || 'Failed to stream recommendation letter');
 			}
 
-			const result = await response.json();
-			recommendationLetters[letterType] = result.letter_html;
-			
-			// Switch to letters tab to show the result
-			activeTab = 'letters';
-			toastStore.success(`${letterType.replace('_', ' ')} letter generated successfully`);
+			const reader = response.body?.getReader();
+			if (!reader) throw new Error('No reader available');
+
+			const decoder = new TextDecoder();
+			const parser = new SSEEventParser();
+			let markdownBuffer = '';
+
+			while (true) {
+				const { done, value } = await reader.read();
+				if (done) break;
+
+				const chunk = decoder.decode(value, { stream: true });
+				const events = parser.push(chunk);
+
+				for (const data of events) {
+					const eventType =
+						(typeof data.event === 'string' && data.event) ||
+						(typeof data.type === 'string' && data.type) ||
+						(data.token ? 'token' : data.done ? 'done' : data.error ? 'error' : '');
+
+					if (eventType === 'token' && typeof data.token === 'string') {
+						// Accumulate markdown tokens
+						markdownBuffer += data.token;
+					} else if (eventType === 'final') {
+						// Final HTML ready
+						const content = data.content as Record<string, unknown> | undefined;
+						if (content && typeof content.html === 'string') {
+							recommendationLetters[letterType] = content.html;
+						} else if (content && typeof content.markdown === 'string') {
+							recommendationLetters[letterType] = `<div class="legal-letter">${parseMarkdown(content.markdown)}</div>`;
+						}
+						activeTab = 'letters';
+						toastStore.success(`${letterType.replace('_', ' ')} letter generated successfully`);
+					} else if (eventType === 'done') {
+						break;
+					} else if (eventType === 'error') {
+						const message =
+							(typeof data.error === 'string' && data.error) || 'Recommendation letter generation failed';
+						throw new Error(message);
+					}
+				}
+			}
 		} catch (err: any) {
 			toastStore.error(err.message || 'Recommendation letter generation failed');
 		} finally {

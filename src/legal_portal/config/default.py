@@ -186,7 +186,7 @@ class Settings(BaseSettings):
     )
 
     recommendation_stream_enabled: bool = Field(
-        False,
+        True,  # Changed from False to enable streaming and prevent network timeouts
         alias="RECOMMENDATION_STREAM_ENABLED",
         description="Enable progressive streaming endpoint for recommendation letters.",
     )

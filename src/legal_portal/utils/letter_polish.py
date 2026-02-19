@@ -82,7 +82,7 @@ FORMATTED LETTER:"""
 
             # Make the AI call using the OpenAIClient wrapper
             response = self.client.create_chat_completion(
-                model="gpt-4o",
+                model="gpt-5.2",
                 messages=[
                     {
                         "role": "system",

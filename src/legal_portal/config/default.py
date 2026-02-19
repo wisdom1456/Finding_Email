@@ -234,7 +234,7 @@ class Settings(BaseSettings):
     )
 
     letter_strategy_budget_seconds: int = Field(
-        15,
+        30,
         alias="LETTER_STRATEGY_BUDGET_SECONDS",
         description="Maximum time budget for strategy generation step.",
     )

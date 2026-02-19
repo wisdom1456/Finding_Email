@@ -2222,6 +2222,20 @@ async def stream_findings_letter(
                             "critic_feedback": critic_feedback,
                         }
 
+                # Polish pass: second AI call for prose formatting consistency
+                polish_msg = _emit("phase", phase="polishing", message="Polishing letter...")
+                if polish_msg:
+                    yield polish_msg
+                try:
+                    from legal_portal.utils.letter_polish import polish_letter_async
+                    polish_result = await polish_letter_async(openai_client, final_markdown)
+                    if polish_result.get("success") and polish_result.get("polished_letter"):
+                        final_markdown = polish_result["polished_letter"]
+                        metrics["polish_applied"] = True
+                except Exception as polish_err:
+                    logger.warning("[LETTER] Polish pass failed, using raw draft: %s", polish_err)
+                    metrics["polish_applied"] = False
+
                 phase_msg = _emit("phase", phase="finalizing", message="Finalizing letter")
                 if phase_msg:
                     yield phase_msg
@@ -3907,6 +3921,21 @@ async def generate_letter(
                 strategy_object=strategy_object,
             )
             target_party_name = letter_request.target_party_name
+            # Polish pass: second AI call for prose formatting consistency
+            try:
+                from legal_portal.utils.letter_polish import polish_letter_async
+                polish_result = await polish_letter_async(openai_client, draft_markdown_for_repair)
+                if polish_result.get("success") and polish_result.get("polished_letter"):
+                    polished_md = polish_result["polished_letter"]
+                    draft_markdown_for_repair = polished_md
+                    polished_html = json_service._convert_markdown_to_html(polished_md)
+                    letter_html = DocumentFormatterService.format_demand_letter(
+                        letter_html=polished_html,
+                        recipient_name=target_party_name,
+                    )
+                    metrics["polish_applied"] = True
+            except Exception as polish_err:
+                logger.warning("[DEMAND] Polish pass failed, using raw draft: %s", polish_err)
             letter_key = f"demand_{letter_request.target_party_name.replace(' ', '_')}".lower()
 
         validator = LetterValidationService()

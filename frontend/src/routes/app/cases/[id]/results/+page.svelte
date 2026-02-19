@@ -47,6 +47,7 @@
 		| 'draft_generation'
 		| 'lint_validation'
 		| 'repair'
+		| 'polishing'
 		| 'finalizing'
 		| 'complete'
 		| 'error'
@@ -890,6 +891,7 @@
 					'draft_generation',
 					'lint_validation',
 					'repair',
+					'polishing',
 					'finalizing'
 				];
 				if (allowed.includes(phase as FindingsGenerationState)) {
@@ -1904,8 +1906,16 @@ async function generateLetterRequest(body: Record<string, any>) {
 									<div class="animate-spin rounded-full h-4 w-4 border-2 border-accent border-t-transparent"></div>
 									{findingsPhaseMessage || 'Generating email...'}
 								</div>
-								<div class="border border-gray-200 rounded-lg overflow-hidden bg-white shadow-inner p-6 h-[600px] overflow-y-auto prose prose-sm max-w-none">
-									{@html findingsLetter}
+								<div class="relative border border-gray-200 rounded-lg overflow-hidden bg-white shadow-inner">
+									{#if findingsGenerationState === 'polishing'}
+										<div class="absolute inset-0 z-10 flex flex-col items-center justify-center bg-white/80 backdrop-blur-sm rounded-lg">
+											<div class="animate-spin rounded-full h-8 w-8 border-2 border-accent border-t-transparent mb-3"></div>
+											<span class="text-sm font-medium text-accent">Polishing letter...</span>
+										</div>
+									{/if}
+									<div class="p-6 h-[600px] overflow-y-auto prose prose-sm max-w-none">
+										{@html findingsLetter}
+									</div>
 								</div>
 							</div>
 						{:else if findingsLetter}

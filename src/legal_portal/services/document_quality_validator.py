@@ -125,10 +125,16 @@ class DocumentQualityValidator:
         # Ensure score stays in bounds
         score = max(0.0, min(10.0, score))
 
+        # Defensive: ensure file_name is a string, not boolean or None
+        document_name = doc.file_name if isinstance(doc.file_name, str) else str(doc.file_name or "Unknown Document")
+
+        # Defensive: ensure document_id is a string or None, not boolean
+        document_id = doc.document_id if isinstance(doc.document_id, (str, type(None))) else None
+
         logger.info(
-            f"Quality validation for {doc.file_name}: score={score:.1f}, confidence={confidence}",
+            f"Quality validation for {document_name}: score={score:.1f}, confidence={confidence}",
             extra={
-                "document": doc.file_name,
+                "document": document_name,
                 "score": score,
                 "confidence": confidence,
                 "issues_count": len(issues),
@@ -136,8 +142,8 @@ class DocumentQualityValidator:
         )
 
         return QualityScore(
-            document=doc.file_name,
-            document_id=doc.document_id,
+            document=document_name,
+            document_id=document_id,
             score=score,
             has_meaningful_content=has_content and has_words,
             is_complete=is_complete,

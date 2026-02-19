@@ -6,6 +6,7 @@ import asyncio
 import json
 import os
 import re
+import traceback
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 from legal_portal.core.data_models import (
@@ -113,7 +114,14 @@ class LetterStrategyService:
             )
             return strategy.model_dump(mode="json")
         except Exception as exc:
-            logger.warning(f"Findings strategy model step failed, falling back: {exc}")
+            logger.warning(
+                f"Findings strategy model step failed, falling back: {exc}",
+                extra={
+                    "exc_type": type(exc).__name__,
+                    "exc_args": exc.args,
+                    "traceback": traceback.format_exc()
+                }
+            )
             return fallback.model_dump(mode="json")
 
     async def build_demand_strategy(
@@ -184,7 +192,14 @@ class LetterStrategyService:
                 strategy.demand_spec = fallback.demand_spec
             return strategy.model_dump(mode="json")
         except Exception as exc:
-            logger.warning(f"Demand strategy model step failed, falling back: {exc}")
+            logger.warning(
+                f"Demand strategy model step failed, falling back: {exc}",
+                extra={
+                    "exc_type": type(exc).__name__,
+                    "exc_args": exc.args,
+                    "traceback": traceback.format_exc()
+                }
+            )
             return fallback.model_dump(mode="json")
 
     async def _request_strategy_json(
@@ -217,7 +232,10 @@ class LetterStrategyService:
             loop.run_in_executor(None, _run_request),
             timeout=max(1, int(timeout_seconds)),
         )
-        content = str((response or {}).get("content") or "").strip()
+        content_raw = (response or {}).get("content")
+        if isinstance(content_raw, bool):
+            content_raw = None
+        content = str(content_raw or "").strip()
         if not content:
             return None
         return self._parse_json_like(content)
@@ -829,6 +847,8 @@ class LetterStrategyService:
 
     def _parse_json_like(self, text: str) -> Optional[Dict[str, Any]]:
         """Parse JSON output that may be wrapped in code fences."""
+        if not isinstance(text, str):
+            text = str(text) if not isinstance(text, bool) else ""
         candidate = text.strip()
         if candidate.startswith("```"):
             candidate = re.sub(r"^```(?:json)?\s*", "", candidate)

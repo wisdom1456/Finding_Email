@@ -197,9 +197,12 @@ async def _get_user_ai_preferences(user_id: str, supabase) -> Optional[Dict[str,
 
 
 def _first_non_empty_text(*values: Any) -> Optional[str]:
-    """Return the first non-empty string-like value."""
+    """Return the first non-empty string-like value, excluding booleans."""
     for value in values:
         if value is None:
+            continue
+        # Explicitly reject boolean values before conversion
+        if isinstance(value, bool):
             continue
         text = str(value).strip()
         if text:
@@ -872,6 +875,13 @@ class LetterGenerationRequest(BaseModel):
     force_generation: bool = Field(
         default=False, description="Override completeness gate for weak cases"
     )
+
+    @validator("attorney_name", "firm_name", "contact_phone", "contact_email", "client_name", pre=True)
+    def sanitize_string_fields(cls, v):
+        """Convert boolean to None to prevent boolean-to-string conversion."""
+        if isinstance(v, bool):
+            return None
+        return v
 
 
 class LetterGenerationResponse(BaseModel):

@@ -152,6 +152,62 @@ def test_detect_changes_spacing():
     assert any("spacing" in c.lower() for c in changes)
 
 
+def test_polish_prompt_instructs_citation_removal():
+    """The formatting prompt must include the parenthetical citation removal rule."""
+    polisher = LetterPolisher(MagicMock())
+    prompt = polisher.formatting_prompt
+    assert "parenthetical document source citations" in prompt
+    assert "internal pipeline references" in prompt
+
+
+def test_polish_prompt_instructs_internal_language_replacement():
+    """The formatting prompt must address internal pipeline language generically."""
+    polisher = LetterPolisher(MagicMock())
+    prompt = polisher.formatting_prompt
+    assert "client-reported" in prompt
+    assert "pipeline" in prompt
+
+
+def test_polish_prompt_instructs_distancing_language():
+    """The formatting prompt must cover all distancing phrases toward the client."""
+    polisher = LetterPolisher(MagicMock())
+    prompt = polisher.formatting_prompt
+    # All common distancing variants must be addressed
+    for phrase in ("you report", "you state", "you say", "you claim", "you allege"):
+        assert phrase in prompt, f"Missing distancing phrase: '{phrase}'"
+
+
+def test_polish_prompt_instructs_plain_english_jargon():
+    """The formatting prompt must address common legal jargon generically."""
+    polisher = LetterPolisher(MagicMock())
+    prompt = polisher.formatting_prompt
+    assert "plain English" in prompt
+    for term in ("spoliation", "standing", "accrual", "plaintiff", "cause of action"):
+        assert term in prompt, f"Missing jargon term: '{term}'"
+
+
+def test_polish_prompt_instructs_depersonalizing_terms():
+    """The formatting prompt must address abstract terms for people."""
+    polisher = LetterPolisher(MagicMock())
+    prompt = polisher.formatting_prompt
+    assert "actors" in prompt
+    assert "principals" in prompt
+
+
+def test_polish_prompt_instructs_definition_integration():
+    """The formatting prompt must address inline textbook-style definitions."""
+    polisher = LetterPolisher(MagicMock())
+    prompt = polisher.formatting_prompt
+    assert "textbook" in prompt or "dictionary" in prompt
+
+
+def test_polish_prompt_instructs_opening_rewrite():
+    """The formatting prompt must address em-dash sub-header openings."""
+    polisher = LetterPolisher(MagicMock())
+    prompt = polisher.formatting_prompt
+    assert "em-dash" in prompt
+
+
 def test_detect_changes_empty_when_unchanged():
     polisher = LetterPolisher(MagicMock())
     text = "Dear client,\n\nNo changes needed.\n\nSincerely,\nAttorney"

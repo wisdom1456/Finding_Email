@@ -32,23 +32,30 @@ CRITICAL RULES:
 1. Do NOT add new facts, dates, amounts, legal claims, or citations.
 2. Do NOT remove material legal analysis.
 3. Keep names, numbers, and document references accurate.
-4. Improve format and flow only.
+4. Improve format, tone, and flow only.
 
 TARGET STYLE:
-- Real attorney email voice.
-- Plain English.
-- Natural paragraphs.
+- Real attorney email voice — warm, direct, and confident.
+- Plain English a non-lawyer can understand without feeling talked down to.
+- Natural paragraphs that flow as continuous correspondence.
 - No section headers.
 - No bold labels.
-- No bullet lists.
-- No numbered lists.
+- No bullet lists, except for client action items (things the client must do or provide) where a short numbered list genuinely aids clarity.
+- No numbered lists elsewhere.
 
-FORMATTING FIXES TO APPLY:
+FORMATTING AND TONE FIXES TO APPLY:
 1. Remove standalone section labels (for example: "Facts", "Legal Theories", "Timing and Risk", "Next Steps").
-2. Convert bullet and numbered list items into paragraph prose while preserving all content.
+2. Convert bullet and numbered list items into paragraph prose while preserving all content. Exception: if a paragraph lists specific things the client must provide or do, a short numbered list is acceptable.
 3. Smooth transitions so the letter reads as continuous correspondence.
 4. Keep one blank line between paragraphs.
 5. Preserve greeting, signature, and confidentiality language.
+6. Remove all parenthetical document source citations from the body text. These are internal pipeline references, not client-facing prose. Any parenthetical that names a source document, date, or internal reference label should be deleted entirely. The substantive fact already stated in the sentence is sufficient — do not replace the parenthetical with anything.
+7. Replace internal pipeline language with natural attorney voice. Any phrase that reads like a system label — such as "client-reported [X]", "per intake", "flagged in analysis", or similar — should be rewritten as natural first-person correspondence: "the deadline you mentioned", "the date you flagged", "based on what you've shared."
+8. Remove all distancing or doubt-casting phrasing toward the client. Replace phrases like "you report", "you state", "you say", "you claim", "you allege", or "you indicate" — when referring to the client's account of events — with direct, trust-affirming language: "you have", "you invested", "as you described", "based on what you've shared." The attorney should sound like they believe their client.
+9. Replace attorney and litigation shop talk with plain English throughout. This applies to any term a non-lawyer would not immediately understand. Examples: "build leverage" → "put pressure on the other side while protecting your rights"; "spoliation" or "prevent spoliation" → "prevent the other side from destroying records"; "standing" (in the procedural sense) → "your right to bring this claim"; "accrual" or "accrual points" → "when the deadline clock starts on each claim"; "plaintiff" when used in a client-facing letter → use the client's name or "you" / "your side"; "defendant" → use the other party's name or "the other side"; "cause of action" → "legal claim"; "counts" → "claims."
+10. Replace abstract or clinical terms for people with human language. Words like "actors", "principals", "participants", or "entities" — when referring to individual people — should become "individuals", "people", or the person's actual name. Reserve formal terms for document or entity names only.
+11. Integrate inline legal definitions naturally into the prose instead of using a textbook quotation style. Instead of '"Breach of contract" means one side failed to perform...', write something like 'breach of contract — meaning they failed to deliver on the written commitments — is the primary path forward.' Keep the plain-English explanation but make it read like an attorney explaining something, not a dictionary defining a term. This rule applies to every legal term that is formally defined in the letter.
+12. Rewrite any em-dash sub-header opening lines into a warm, natural sentence greeting. For example, "Good afternoon Erica — brief summary and next steps after our review." should become "Good afternoon Erica, I wanted to share where things stand after our review of your file." The tone should feel like a thoughtful attorney reaching out, not a newsletter subject line.
 
 OUTPUT INSTRUCTIONS:
 - Return ONLY the formatted letter text.

@@ -182,7 +182,8 @@ def test_polish_prompt_instructs_plain_english_jargon():
     polisher = LetterPolisher(MagicMock())
     prompt = polisher.formatting_prompt
     assert "plain English" in prompt
-    for term in ("spoliation", "standing", "accrual", "plaintiff", "cause of action"):
+    for term in ("spoliation", "standing", "accrual", "plaintiff", "cause of action",
+                 "filing posture", "limitations purposes"):
         assert term in prompt, f"Missing jargon term: '{term}'"
 
 

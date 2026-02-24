@@ -38,6 +38,7 @@
 	let embeddedResultsData = $state<any | null>(null);
 	let embeddedResultsKey = $state(0);
 	let loadingEmbeddedResults = $state(false);
+	let autoRunGapAnalysis = $state(false);
 	let embeddedResultsError = $state('');
 	
 	// Streaming analysis state
@@ -1508,6 +1509,7 @@
 		showStreamingPanel = false;
 		activeTab = 'analysis';
 		showingEmbeddedResults = true;
+		autoRunGapAnalysis = true;
 		await loadEmbeddedResults(true);
 		persistAnalysisViewToUrl();
 		navigatingToResults = false;
@@ -2567,7 +2569,7 @@
 					<div class={activeTab === 'analysis' ? '' : 'hidden'} aria-hidden={activeTab !== 'analysis'}>
 						<div class="mt-6">
 							{#key embeddedResultsKey}
-								<ResultsWorkspace data={embeddedResultsData} embedded={true} />
+								<ResultsWorkspace data={embeddedResultsData} embedded={true} autoRunGapAnalysis={autoRunGapAnalysis} />
 							{/key}
 						</div>
 					</div>

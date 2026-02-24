@@ -28,7 +28,7 @@
 	};
 
 	// Get SSR data from load function (or embedded usage in /cases/[id])
-	let { data, embedded = false }: { data: ResultsWorkspaceData; embedded?: boolean } = $props();
+	let { data, embedded = false, autoRunGapAnalysis = false }: { data: ResultsWorkspaceData; embedded?: boolean; autoRunGapAnalysis?: boolean } = $props();
 
 	const caseId = $derived(data.caseId);
 	
@@ -165,6 +165,27 @@
 		}
 		return lookup;
 	});
+
+	const SIGNATURE_REVIEW_KEYWORDS = [
+		'agreement', 'contract', 'lease', 'addendum', 'amendment', 'settlement',
+		'release', 'authorization', 'consent', 'affidavit', 'declaration',
+		'stipulation', 'promissory note', 'guaranty', 'power of attorney',
+		'poa', 'signature page', 'executed'
+	];
+
+	function needsSignatureReview(doc: any): boolean {
+		const sigVer = doc?.metadata?.signature_verification;
+		if (sigVer?.status === 'signed' || sigVer?.status === 'not_signed') return false;
+		if (sigVer?.status === 'unknown') return true;
+		const sigDet = doc?.metadata?.signature_detection;
+		if (!sigDet) {
+			const name = String(doc?.file_name || '').toLowerCase();
+			return SIGNATURE_REVIEW_KEYWORDS.some((k) => name.includes(k));
+		}
+		return String(sigDet?.status || '').toLowerCase() === 'review_required';
+	}
+
+	let sigReviewDocs = $derived(documents.filter(needsSignatureReview));
 
 	// Initialize from streamed data
 	onMount(async () => {
@@ -327,8 +348,13 @@
 				});
 			}
 			collapsedDocs = newCollapsed;
-			
+
 			results = res;
+
+			// Auto-run if: explicitly requested (just ran analysis) OR no gap analysis exists yet
+			if (autoRunGapAnalysis || !gapAnalysis) {
+				analyzeGaps();
+			}
 		} catch (err) {
 			console.error('Error processing results:', err);
 		} finally {
@@ -1761,6 +1787,21 @@ async function generateLetterRequest(body: Record<string, any>) {
 				</div>
 			{/if}
 		{:else if activeTab === 'documents'}
+			{#if sigReviewDocs.length > 0}
+				<div class="mb-4 p-4 bg-amber-50 border border-amber-200 rounded-lg flex gap-3">
+					<span class="text-amber-500 mt-0.5">⚠</span>
+					<div>
+						<p class="font-semibold text-amber-800 text-sm">
+							{sigReviewDocs.length} document{sigReviewDocs.length > 1 ? 's' : ''} flagged for signature review
+						</p>
+						<ul class="mt-1 text-xs text-amber-700 space-y-0.5 list-disc list-inside">
+							{#each sigReviewDocs as doc}
+								<li>{doc.file_name}</li>
+							{/each}
+						</ul>
+					</div>
+				</div>
+			{/if}
 			{#if results.document_summaries && results.document_summaries.length > 0}
 				<div class="card-standard">
 					<h2 class="text-2xl font-heading font-bold text-contrast mb-8 border-b border-gray-100 pb-4">Document Analysis</h2>

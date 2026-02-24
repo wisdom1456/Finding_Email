@@ -1303,6 +1303,14 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
         processed_case_docs = []
         skipped_documents = []
 
+        await progress_manager.publish_progress(
+            channel_id=analysis_id,
+            message="Checking document signatures...",
+            phase="preparing",
+            percent=5,
+            timestamp=datetime.utcnow().isoformat(),
+        )
+
         for doc in documents:
             doc_name = doc.get("file_name", "unknown")
             doc_status = doc.get("status")

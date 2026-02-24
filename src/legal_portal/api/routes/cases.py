@@ -646,7 +646,7 @@ async def import_clio_documents_helper(
                 logger.debug("Processing document", extra={"doc_name": doc_name, "doc_id": doc_id, "size_mb": f"{doc_size / (1024 * 1024):.2f}"})
 
                 if is_name_blacklisted(doc_name, blacklist):
-                    logger.info("Skipping blacklisted document during Clio import", extra={"name": doc_name})
+                    logger.info("Skipping blacklisted document during Clio import", extra={"doc_name": doc_name})
                     continue
 
                 # Check file size limits before downloading
@@ -792,7 +792,7 @@ async def import_clio_documents_helper(
                     if doc_record.get("status") == DocumentStatus.SKIPPED:
                         logger.info(
                             "Skipping blacklisted document after processor check",
-                            extra={"name": doc_name},
+                            extra={"doc_name": doc_name},
                         )
                         continue
 

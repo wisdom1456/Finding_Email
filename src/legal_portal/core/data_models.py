@@ -517,7 +517,7 @@ class ProcessingResult(BaseModel):
     )
     opposing_parties: List[Party] = Field(default_factory=list)
     multi_stage_result: Optional[Dict[str, Any]] = None
-    generated_letters: Dict[str, str] = Field(default_factory=dict)
+    generated_letters: Dict[str, Any] = Field(default_factory=dict)
 
     class Config:
         """Pydantic configuration for ProcessingResult."""

@@ -215,13 +215,30 @@ const { session, user } = await getSecureSession();
 		}
 	}
 
-	// Thin wrapper so DocumentCard onMarkSigned callbacks continue to work
+	// Kept independent (not calling handleSetVerdict) to avoid mutating viewingDocument
 	async function handleMarkSigned(doc: any) {
-		const prev = viewingDocument;
-		viewingDocument = doc;
-		await handleSetVerdict('signed');
-		if (!viewingDocument || viewingDocument.id === doc.id) {
-			viewingDocument = prev;
+		try {
+			const { session, user } = await getSecureSession();
+			if (!session || !user) throw new Error('Not authenticated');
+
+			const response = await fetch(`${getApiUrl()}/api/documents/${doc.id}/verify`, {
+				method: 'PATCH',
+				headers: {
+					'Content-Type': 'application/json',
+					Authorization: `Bearer ${session.access_token}`,
+				},
+				body: JSON.stringify({
+					is_verified: Boolean(doc.is_verified),
+					is_flagged_as_junk: Boolean(doc.is_flagged_as_junk),
+					signature_verification: 'signed',
+				}),
+			});
+
+			if (!response.ok) throw new Error('Failed to mark document as signed');
+			toastStore.success('Marked as signed (attorney verified)');
+			await onDocumentsUpdated();
+		} catch (error: any) {
+			toastStore.error(error.message);
 		}
 	}
 

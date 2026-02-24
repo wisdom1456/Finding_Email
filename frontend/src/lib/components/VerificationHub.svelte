@@ -1160,6 +1160,62 @@ const { session, user } = await getSecureSession();
 		</div>
 
 		{#snippet footer()}
+			<!-- Verdict buttons -->
+			{@const currentStatus = viewingDocument?.metadata?.signature_verification?.status}
+			<div class="flex flex-wrap items-center gap-2 flex-1">
+				<button
+					onclick={() => handleSetVerdict('signed')}
+					disabled={verdictSaving}
+					class="btn btn-sm px-3 py-1.5 text-xs font-bold border transition-colors {currentStatus === 'signed'
+						? 'bg-green-600 border-green-600 text-white'
+						: 'bg-white border-green-300 text-green-700 hover:bg-green-50'}"
+				>
+					✓ Signed
+				</button>
+				<button
+					onclick={() => handleSetVerdict('not_signed')}
+					disabled={verdictSaving}
+					class="btn btn-sm px-3 py-1.5 text-xs font-bold border transition-colors {currentStatus === 'not_signed'
+						? 'bg-red-600 border-red-600 text-white'
+						: 'bg-white border-red-300 text-red-700 hover:bg-red-50'}"
+				>
+					✗ Not Signed
+				</button>
+				<button
+					onclick={() => { showNotesInput = !showNotesInput; verdictNotes = viewingDocument?.metadata?.signature_verification?.notes || ''; }}
+					disabled={verdictSaving}
+					class="btn btn-sm px-3 py-1.5 text-xs font-bold border transition-colors {currentStatus === 'unknown'
+						? 'bg-amber-500 border-amber-500 text-white'
+						: 'bg-white border-amber-300 text-amber-700 hover:bg-amber-50'}"
+				>
+					? Unclear…
+				</button>
+
+				{#if showNotesInput}
+					<div class="w-full flex items-center gap-2 mt-1">
+						<input
+							type="text"
+							bind:value={verdictNotes}
+							placeholder="Add notes (optional)…"
+							class="flex-1 text-xs border border-gray-300 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-amber-400"
+						/>
+						<button
+							onclick={() => handleSetVerdict('unknown', verdictNotes)}
+							disabled={verdictSaving}
+							class="btn btn-sm px-3 py-1.5 text-xs font-bold bg-amber-500 text-white border-amber-500 hover:bg-amber-600"
+						>
+							{verdictSaving ? '…' : 'Save'}
+						</button>
+						<button
+							onclick={() => { showNotesInput = false; verdictNotes = ''; }}
+							class="btn btn-sm px-3 py-1.5 text-xs font-bold bg-white text-gray-600 border-gray-300 hover:bg-gray-50"
+						>
+							Cancel
+						</button>
+					</div>
+				{/if}
+			</div>
+
 			<button
 				onclick={closeDocumentViewer}
 				class="btn btn-secondary px-6"

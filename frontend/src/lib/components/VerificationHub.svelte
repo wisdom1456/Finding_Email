@@ -50,6 +50,9 @@
 	let recoveryDocument = $state<any>(null);
 	let showRecoveryModal = $state(false);
 	let viewingDocument = $state<any>(null);
+	let verdictSaving = $state(false);
+	let verdictNotes = $state('');
+	let showNotesInput = $state(false);
 	let pdfBlobUrl = $state<string | null>(null);
 	let previewBlobDocumentId = $state<string | null>(null);
 	let loadingPreview = $state(false);

@@ -173,29 +173,55 @@ const { session, user } = await getSecureSession();
 		}
 	}
 
-	async function handleMarkSigned(doc: any) {
+	async function handleSetVerdict(verdict: 'signed' | 'not_signed' | 'unknown', notes?: string) {
+		if (!viewingDocument) return;
+		verdictSaving = true;
 		try {
-const { session, user } = await getSecureSession();
-		if (!session || !user) throw new Error('Not authenticated');
+			const { session, user } = await getSecureSession();
+			if (!session || !user) throw new Error('Not authenticated');
 
-			const response = await fetch(`${getApiUrl()}/api/documents/${doc.id}/verify`, {
+			const response = await fetch(`${getApiUrl()}/api/documents/${viewingDocument.id}/verify`, {
 				method: 'PATCH',
 				headers: {
 					'Content-Type': 'application/json',
 					Authorization: `Bearer ${session.access_token}`,
 				},
 				body: JSON.stringify({
-					is_verified: Boolean(doc.is_verified),
-					is_flagged_as_junk: Boolean(doc.is_flagged_as_junk),
-					signature_verification: 'signed'
+					is_verified: Boolean(viewingDocument.is_verified),
+					is_flagged_as_junk: Boolean(viewingDocument.is_flagged_as_junk),
+					signature_verification: verdict,
+					...(notes ? { signature_verification_notes: notes } : {}),
 				}),
 			});
 
-			if (!response.ok) throw new Error('Failed to mark document as signed');
-			toastStore.success('Marked as signed (attorney verified)');
+			if (!response.ok) throw new Error('Failed to save signature verdict');
+
+			// Optimistic local update so buttons reflect new state immediately
+			if (!viewingDocument.metadata) viewingDocument.metadata = {};
+			viewingDocument.metadata.signature_verification = {
+				status: verdict,
+				notes: notes || '',
+			};
+			showNotesInput = false;
+			verdictNotes = '';
+
+			const label = verdict === 'signed' ? 'Signed' : verdict === 'not_signed' ? 'Not Signed' : 'Unclear';
+			toastStore.success(`Marked as ${label} (attorney verified)`);
 			await onDocumentsUpdated();
 		} catch (error: any) {
 			toastStore.error(error.message);
+		} finally {
+			verdictSaving = false;
+		}
+	}
+
+	// Thin wrapper so DocumentCard onMarkSigned callbacks continue to work
+	async function handleMarkSigned(doc: any) {
+		const prev = viewingDocument;
+		viewingDocument = doc;
+		await handleSetVerdict('signed');
+		if (!viewingDocument || viewingDocument.id === doc.id) {
+			viewingDocument = prev;
 		}
 	}
 

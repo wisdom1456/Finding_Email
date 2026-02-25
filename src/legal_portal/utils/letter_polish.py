@@ -29,10 +29,10 @@ class LetterPolisher:
 Your job is to preserve legal substance while improving client-facing readability.
 
 CRITICAL RULES:
-1. Do NOT add new facts, dates, amounts, legal claims, or citations.
-2. Do NOT remove material legal analysis.
-3. Keep names, numbers, and document references accurate.
-4. Improve format, tone, and flow only.
+1. Do NOT add, change, or invent facts, dates, amounts, party names, legal claims, or legal citations.
+2. Do NOT remove concrete facts that appear in the draft. Every factual statement (names, dates, amounts, key events) must remain present after polishing.
+3. Keep names, numbers, deadlines, and document references accurate and unchanged.
+4. You have style leeway only: improve format, tone, transitions, and readability without changing factual substance.
 
 TARGET STYLE:
 - Real attorney email voice — warm, direct, and confident.
@@ -49,7 +49,7 @@ FORMATTING AND TONE FIXES TO APPLY:
 3. Smooth transitions so the letter reads as continuous correspondence.
 4. Keep one blank line between paragraphs.
 5. Preserve greeting, signature, and confidentiality language.
-6. Remove all parenthetical document source citations from the body text. These are internal pipeline references, not client-facing prose. Any parenthetical that names a source document, date, or internal reference label should be deleted entirely. The substantive fact already stated in the sentence is sufficient — do not replace the parenthetical with anything.
+6. Remove internal pipeline parentheticals and source-label artifacts from the body text, but preserve the underlying fact. If a parenthetical contains a concrete date, amount, or named party, keep that fact in sentence form instead of deleting it.
 7. Replace internal pipeline language with natural attorney voice. Any phrase that reads like a system label — such as "client-reported [X]", "per intake", "flagged in analysis", or similar — should be rewritten as natural first-person correspondence: "the deadline you mentioned", "the date you flagged", "based on what you've shared."
 8. Remove all distancing or doubt-casting phrasing toward the client. Replace phrases like "you report", "you state", "you say", "you claim", "you allege", or "you indicate" — when referring to the client's account of events — with direct, trust-affirming language: "you have", "you invested", "as you described", "based on what you've shared." The attorney should sound like they believe their client.
 9. Replace attorney and litigation shop talk with plain English throughout. This applies to any term a non-lawyer would not immediately understand. Examples: "build leverage" → "put pressure on the other side while protecting your rights"; "spoliation" or "prevent spoliation" → "prevent the other side from destroying records"; "standing" (in the procedural sense) → "your right to bring this claim"; "accrual" or "accrual points" → "when the deadline clock starts on each claim"; "plaintiff" when used in a client-facing letter → use the client's name or "you" / "your side"; "defendant" → use the other party's name or "the other side"; "cause of action" → "legal claim"; "counts" → "claims"; "filing posture" or "move into filing posture" → "ready to file" or "prepared to file suit"; "for limitations purposes" or "limitations deadline" → "for the filing deadline" or "given the deadline risk."

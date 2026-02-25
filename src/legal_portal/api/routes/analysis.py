@@ -76,6 +76,10 @@ def _new_generation_metrics(
         "critic_attempted": False,
         "critic_applied": False,
         "critic_skipped_reason": None,
+        "polish_applied": False,
+        "polish_reverted": False,
+        "polish_revert_reason": None,
+        "polish_integrity_passed": None,
         "strategy_latency_ms": None,
         "critic_latency_ms": None,
         "timeout": False,
@@ -339,6 +343,43 @@ def _resolve_letter_identity_context(
         "contact_email": contact_email,
         "client_name": client_name,
     }
+
+
+def _resolve_client_name_for_letter(
+    *,
+    resolved_identity: Optional[Dict[str, Any]] = None,
+    artifacts: Optional[Dict[str, Any]] = None,
+    fact_matrix: Optional[Any] = None,
+) -> str:
+    """Resolve client name from identity context with fact-matrix fallback."""
+    client_name = _first_non_empty_text(
+        (resolved_identity or {}).get("client_name"),
+        (artifacts or {}).get("client_name"),
+        (artifacts or {}).get("clientName"),
+    )
+
+    if not client_name and fact_matrix is not None:
+        parties: List[Any] = []
+        if isinstance(fact_matrix, dict):
+            parties = fact_matrix.get("parties", []) or []
+        else:
+            parties = getattr(fact_matrix, "parties", []) or []
+
+        for party in parties:
+            role = ""
+            name = ""
+            if isinstance(party, dict):
+                role = safe_str(party.get("role")) or ""
+                name = safe_str(party.get("name")) or ""
+            else:
+                role = safe_str(getattr(party, "role", None)) or ""
+                name = safe_str(getattr(party, "name", None)) or ""
+
+            if role.lower() in {"client", "plaintiff", "claimant"} and name.strip():
+                client_name = name.strip()
+                break
+
+    return client_name or "Client"
 
 
 _SIGNATURE_TEXT_FALLBACK_PATTERNS = [
@@ -1967,6 +2008,11 @@ async def stream_findings_letter(
                 stream_gap_analysis = (
                     GapAnalysisResult(**msr["gap_analysis"]) if msr.get("gap_analysis") else None
                 )
+                client_name = _resolve_client_name_for_letter(
+                    resolved_identity=resolved_identity,
+                    artifacts=artifacts,
+                    fact_matrix=fact_matrix,
+                )
 
                 document_summaries_for_context: List[Dict[str, Any]] = []
                 if processing_result.document_summaries:
@@ -2236,10 +2282,37 @@ async def stream_findings_letter(
                     yield polish_msg
                 try:
                     from legal_portal.utils.letter_polish import polish_letter_async
-                    polish_result = await polish_letter_async(openai_client, final_markdown)
+
+                    pre_polish_markdown = final_markdown
+                    polish_result = await polish_letter_async(openai_client, pre_polish_markdown)
                     if polish_result.get("success") and polish_result.get("polished_letter"):
-                        final_markdown = polish_result["polished_letter"]
-                        metrics["polish_applied"] = True
+                        polished_candidate = polish_result["polished_letter"]
+                        integrity_report = {"passed": True, "reason": "unsupported"}
+                        if hasattr(validator, "check_polish_fact_integrity"):
+                            integrity_report = validator.check_polish_fact_integrity(
+                                pre_polish_markdown,
+                                polished_candidate,
+                                tracked_entities=[
+                                    client_name,
+                                    resolved_identity.get("attorney_name") or "",
+                                    resolved_identity.get("firm_name") or "",
+                                ],
+                            )
+                        metrics["polish_integrity_passed"] = bool(integrity_report.get("passed", True))
+
+                        if integrity_report.get("passed", True):
+                            final_markdown = polished_candidate
+                            metrics["polish_applied"] = True
+                        else:
+                            metrics["polish_applied"] = False
+                            metrics["polish_reverted"] = True
+                            metrics["polish_revert_reason"] = (
+                                f"fact_integrity:{integrity_report.get('reason', 'unknown')}"
+                            )
+                            logger.warning(
+                                "[LETTER] Polish reverted due to fact integrity drift: %s",
+                                integrity_report,
+                            )
                 except Exception as polish_err:
                     logger.warning("[LETTER] Polish pass failed, using raw draft: %s", polish_err)
                     metrics["polish_applied"] = False
@@ -2250,6 +2323,10 @@ async def stream_findings_letter(
 
                 final_markdown = _normalize_markdown(final_markdown, "findings")
                 final_html = json_service._convert_markdown_to_html(final_markdown)
+                final_html = DocumentFormatterService.format_findings_letter(
+                    letter_html=final_html,
+                    client_name=client_name,
+                )
                 metrics["lint_passed"] = quality_report.get("lint_passed")
                 metrics["lint_score"] = quality_report.get("score")
                 metrics["total_latency_ms"] = int((time.monotonic() - request_started) * 1000)
@@ -3707,6 +3784,11 @@ async def generate_letter(
         msr = processing_result.multi_stage_result
         letter_html: str
         target_party_name: Optional[str] = None
+        client_name = _resolve_client_name_for_letter(
+            resolved_identity=resolved_identity,
+            artifacts=artifacts,
+            fact_matrix=msr.get("fact_matrix"),
+        )
         strategy_object: Optional[Dict[str, Any]] = None
         draft_markdown_for_repair: Optional[str] = None
         quality_report = _quality_report_placeholder(
@@ -3749,6 +3831,11 @@ async def generate_letter(
             deep_analysis = DeepAnalysis(**msr["deep_analysis"])
             letter_structure = LetterStructure(**msr["letter_structure"])
             verified_statutes = msr.get("verified_statutes", [])
+            client_name = _resolve_client_name_for_letter(
+                resolved_identity=resolved_identity,
+                artifacts=artifacts,
+                fact_matrix=fact_matrix,
+            )
 
             gap_analysis_data = msr.get("gap_analysis")
             if gap_analysis_data:
@@ -3831,7 +3918,7 @@ async def generate_letter(
                     metrics["strategy_latency_ms"] = int((time.monotonic() - strategy_started) * 1000)
 
             metrics["model_calls"] = int(metrics.get("model_calls", 0)) + 1
-            letter_html = await json_service.generate_findings_letter_adaptive(
+            raw_findings_html = await json_service.generate_findings_letter_adaptive(
                 intake_content=processing_result.intake_content or "",
                 fact_matrix=fact_matrix,
                 legal_analysis=deep_analysis,
@@ -3852,7 +3939,11 @@ async def generate_letter(
                 strategy_object=strategy_object,
                 gap_analysis=gap_analysis,
             )
-            draft_markdown_for_repair = html2text.html2text(letter_html)
+            draft_markdown_for_repair = html2text.html2text(raw_findings_html)
+            letter_html = DocumentFormatterService.format_findings_letter(
+                letter_html=raw_findings_html,
+                client_name=client_name,
+            )
             letter_key = "findings"
         else:
             if not letter_request.target_party_name:
@@ -3860,18 +3951,11 @@ async def generate_letter(
                     status.HTTP_422_UNPROCESSABLE_ENTITY,
                     detail="target_party_name is required for demand letters",
                 )
-
-            client_name = resolved_identity.get("client_name")
-            if not client_name:
-                fact_matrix_data = msr.get("fact_matrix", {})
-                parties = fact_matrix_data.get("parties", [])
-                for party in parties:
-                    if party.get("role", "").lower() in ["client", "plaintiff", "claimant"]:
-                        client_name = party.get("name")
-                        break
-
-            if not client_name:
-                client_name = artifacts.get("client_name") or "Client"
+            client_name = _resolve_client_name_for_letter(
+                resolved_identity=resolved_identity,
+                artifacts=artifacts,
+                fact_matrix=msr.get("fact_matrix"),
+            )
 
             document_summaries = []
             if processing_result.document_summaries:
@@ -3932,16 +4016,43 @@ async def generate_letter(
             # Polish pass: second AI call for prose formatting consistency
             try:
                 from legal_portal.utils.letter_polish import polish_letter_async
-                polish_result = await polish_letter_async(openai_client, draft_markdown_for_repair)
+
+                pre_polish_markdown = draft_markdown_for_repair
+                polish_result = await polish_letter_async(openai_client, pre_polish_markdown)
                 if polish_result.get("success") and polish_result.get("polished_letter"):
-                    polished_md = polish_result["polished_letter"]
-                    draft_markdown_for_repair = polished_md
-                    polished_html = json_service._convert_markdown_to_html(polished_md)
-                    letter_html = DocumentFormatterService.format_demand_letter(
-                        letter_html=polished_html,
-                        recipient_name=target_party_name,
-                    )
-                    metrics["polish_applied"] = True
+                    polished_candidate = polish_result["polished_letter"]
+                    integrity_report = {"passed": True, "reason": "unsupported"}
+                    if hasattr(LetterValidationService, "check_polish_fact_integrity"):
+                        integrity_report = LetterValidationService().check_polish_fact_integrity(
+                            pre_polish_markdown,
+                            polished_candidate,
+                            tracked_entities=[
+                                client_name,
+                                target_party_name,
+                                attorney_info.get("name") or "",
+                                attorney_info.get("firm") or "",
+                            ],
+                        )
+                    metrics["polish_integrity_passed"] = bool(integrity_report.get("passed", True))
+
+                    if integrity_report.get("passed", True):
+                        draft_markdown_for_repair = polished_candidate
+                        polished_html = json_service._convert_markdown_to_html(polished_candidate)
+                        letter_html = DocumentFormatterService.format_demand_letter(
+                            letter_html=polished_html,
+                            recipient_name=target_party_name,
+                        )
+                        metrics["polish_applied"] = True
+                    else:
+                        metrics["polish_applied"] = False
+                        metrics["polish_reverted"] = True
+                        metrics["polish_revert_reason"] = (
+                            f"fact_integrity:{integrity_report.get('reason', 'unknown')}"
+                        )
+                        logger.warning(
+                            "[DEMAND] Polish reverted due to fact integrity drift: %s",
+                            integrity_report,
+                        )
             except Exception as polish_err:
                 logger.warning("[DEMAND] Polish pass failed, using raw draft: %s", polish_err)
             letter_key = f"demand_{letter_request.target_party_name.replace(' ', '_')}".lower()
@@ -3980,6 +4091,12 @@ async def generate_letter(
                     letter_html = DocumentFormatterService.format_demand_letter(
                         letter_html=normalized_html,
                         recipient_name=target_party_name,
+                    )
+                elif letter_request.letter_type == LetterType.FINDINGS:
+                    normalized_html = json_service._convert_markdown_to_html(draft_markdown_for_repair)
+                    letter_html = DocumentFormatterService.format_findings_letter(
+                        letter_html=normalized_html,
+                        client_name=client_name,
                     )
                 else:
                     letter_html = json_service._convert_markdown_to_html(draft_markdown_for_repair)
@@ -4063,6 +4180,12 @@ async def generate_letter(
                     letter_html = DocumentFormatterService.format_demand_letter(
                         letter_html=repaired_html,
                         recipient_name=target_party_name,
+                    )
+                elif letter_request.letter_type == LetterType.FINDINGS:
+                    repaired_html = json_service._convert_markdown_to_html(repaired_markdown)
+                    letter_html = DocumentFormatterService.format_findings_letter(
+                        letter_html=repaired_html,
+                        client_name=client_name,
                     )
                 else:
                     letter_html = json_service._convert_markdown_to_html(repaired_markdown)
@@ -4259,15 +4382,11 @@ async def generate_recommendation_letter(
             "contact_email": resolved_identity.get("contact_email"),
         }
 
-        client_name = resolved_identity.get("client_name")
-        if not client_name:
-            if fact_matrix:
-                for party in fact_matrix.parties:
-                    if party.role.lower() in ["client", "plaintiff", "claimant"]:
-                        client_name = party.name
-                        break
-            if not client_name:
-                client_name = artifacts.get("client_name") or "Client"
+        client_name = _resolve_client_name_for_letter(
+            resolved_identity=resolved_identity,
+            artifacts=artifacts,
+            fact_matrix=fact_matrix,
+        )
 
         ai_preferences = await _get_user_ai_preferences(user["id"], supabase)
         openai_client = OpenAIClient(user_preferences=ai_preferences)
@@ -4482,12 +4601,11 @@ async def stream_recommendation_letter(
                 "contact_phone": resolved_identity.get("contact_phone"),
                 "contact_email": resolved_identity.get("contact_email"),
             }
-            client_name = resolved_identity.get("client_name") or artifacts.get("client_name") or "Client"
-            if fact_matrix:
-                for party in fact_matrix.parties:
-                    if party.role.lower() in ["client", "plaintiff", "claimant"]:
-                        client_name = party.name
-                        break
+            client_name = _resolve_client_name_for_letter(
+                resolved_identity=resolved_identity,
+                artifacts=artifacts,
+                fact_matrix=fact_matrix,
+            )
 
             phase_msg = _emit("phase", phase="draft_generation", message="Generating draft")
             if phase_msg:
@@ -4650,7 +4768,11 @@ async def stream_recommendation_letter(
                 yield phase_msg
 
             final_markdown = _normalize_markdown(final_markdown, "recommendation")
-            final_html = rec_service.render_markdown_to_html(final_markdown, client_name=client_name)
+            final_html = rec_service.render_markdown_to_html(
+                final_markdown,
+                letter_type=letter_type_enum,
+                client_name=client_name,
+            )
             metrics["lint_passed"] = quality_report.get("lint_passed")
             metrics["lint_score"] = quality_report.get("score")
             metrics["total_latency_ms"] = int((time.monotonic() - request_started) * 1000)

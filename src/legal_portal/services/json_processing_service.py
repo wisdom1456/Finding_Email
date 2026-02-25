@@ -17,6 +17,7 @@ from openai import (
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_fixed
 
 from legal_portal.core.data_models import ProcessingError
+from legal_portal.services.letter_validation_service import LetterValidationService
 from legal_portal.services.letter_strategy_service import LetterStrategyService
 from legal_portal.utils.diagnostic_logger import DiagnosticLogger
 from legal_portal.utils.logging_config import get_module_logger
@@ -1535,14 +1536,27 @@ class JsonProcessingService:
                 from legal_portal.utils.letter_polish import LetterPolisher
 
             polisher = LetterPolisher(self.client)
-            polish_result = polisher.polish_letter(markdown_response)
+            pre_polish_markdown = markdown_response
+            polish_result = polisher.polish_letter(pre_polish_markdown)
 
             if polish_result["success"]:
-                markdown_response = polish_result["polished_letter"]
-                logger.info(
-                    f"Formatting polish applied successfully. Changes: {len(polish_result['changes_made'])}",
-                    extra={"changes": polish_result["changes_made"]},
+                polished_candidate = polish_result["polished_letter"]
+                integrity_report = LetterValidationService().check_polish_fact_integrity(
+                    pre_polish_markdown,
+                    polished_candidate,
+                    tracked_entities=[attorney_name or "", firm_name or ""],
                 )
+                if integrity_report.get("passed"):
+                    markdown_response = polished_candidate
+                    logger.info(
+                        f"Formatting polish applied successfully. Changes: {len(polish_result['changes_made'])}",
+                        extra={"changes": polish_result["changes_made"]},
+                    )
+                else:
+                    logger.warning(
+                        "Formatting polish reverted due to fact integrity drift: %s",
+                        integrity_report,
+                    )
             else:
                 logger.warning(
                     f"Formatting polish failed: {polish_result.get('error', 'Unknown')}. Using original."

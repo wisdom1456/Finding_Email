@@ -346,20 +346,52 @@ class RecommendationLetterService:
             markdown_content += token
 
         # Convert markdown to HTML
-        formatted_html = self.render_markdown_to_html(markdown_content, client_name=client_name)
+        formatted_html = self.render_markdown_to_html(
+            markdown_content,
+            letter_type=letter_type,
+            client_name=client_name,
+        )
 
         logger.info(f"[REC_LETTER] {letter_display} letter generated successfully")
         return formatted_html
 
-    def render_markdown_to_html(self, markdown_content: str, *, client_name: Optional[str] = None) -> str:
+    def render_markdown_to_html(
+        self,
+        markdown_content: str,
+        *,
+        letter_type: RecommendedLetterType,
+        client_name: Optional[str] = None,
+    ) -> str:
         """Convert recommendation markdown into formatted HTML."""
         html = markdown2.markdown(
             markdown_content,
             extras=["tables", "smarty-pants", "fenced-code-blocks", "cuddled-lists"],
         )
-        return DocumentFormatterService.format_findings_letter(
+        return DocumentFormatterService.format_recommendation_letter(
             letter_html=html,
+            letter_type=letter_type.value,
             client_name=client_name or "Client",
+        )
+
+    def _stream_instructions_for_letter_type(
+        self,
+        *,
+        letter_type: RecommendedLetterType,
+        letter_display: str,
+    ) -> str:
+        """Return model instructions tuned to each recommendation letter intent."""
+        if letter_type == RecommendedLetterType.REQUEST_DOCUMENTS:
+            return (
+                "You are drafting a professional client document request letter for a law firm. "
+                "Prioritize plain-language advisory tone, clear action steps, and practical submission guidance. "
+                "Be direct about deadlines and evidence needs without sounding adversarial. "
+                "Output only the letter content in markdown format."
+            )
+
+        return (
+            f"You are drafting a professional {letter_display.lower()} letter for a law firm. "
+            f"Follow the provided template structure exactly. Use formal legal language. "
+            f"Output only the letter content in markdown format."
         )
 
     async def repair_recommendation_letter_constraints(
@@ -477,10 +509,9 @@ class RecommendationLetterService:
         try:
             async for token in self.client.create_response_stream(
                 model=model,
-                instructions=(
-                    f"You are drafting a professional {letter_display.lower()} letter for a law firm. "
-                    f"Follow the provided template structure exactly. Use formal legal language. "
-                    f"Output only the letter content in markdown format."
+                instructions=self._stream_instructions_for_letter_type(
+                    letter_type=letter_type,
+                    letter_display=letter_display,
                 ),
                 input=filled_prompt,
             ):

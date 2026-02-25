@@ -86,25 +86,15 @@ Subject: Legal Review and Recommended Next Steps – [Case]
 
 Good afternoon [Client],
 
-I hope you are doing well. I wanted to follow up with a summary of our findings after reviewing [specific documents], including [list key documents], regarding your property at [address].
+I hope you are doing well. I wanted to follow up with a summary of our findings after reviewing [specific documents], including [list key documents].
 
-As discussed, the primary concern is [state main issue in plain English].
+[2-3 flowing paragraphs describing what happened, where things stand, and the practical legal risk.]
 
-[2-3 paragraphs describing the situation chronologically - what happened, when, and the current status]
+[1-2 paragraphs on strongest legal path first, then secondary options briefly.]
 
-Here are the key points of our analysis:
+[1 paragraph on timing/deadline risk and why it matters now.]
 
-• [Legal concept in plain English—explanation of what it means]. [How it applies to your situation with specific facts]. [What this means for your options].
-
-• [{jurisdiction_name} legal point—plain English explanation]. [Application to facts]. [Practical impact].
-
-• [Additional points as needed, each as a complete paragraph]
-
-Based on the above, a negotiated resolution would likely be your most efficient path forward. [Specific recommendation with timeline]. [Additional steps if needed].
-
-[Protective checklist if client needs to take action]
-
-Please let us know if you would like us to proceed with [specific action], or whether you would prefer that we first set a phone call to discuss.
+[1 paragraph with clear next-step recommendation and what you need from the client.]
 
 Thank you,
 [Signature]
@@ -113,12 +103,11 @@ This analysis is based on the documents provided and represents a preliminary as
 ```
 
 **KEY FORMATTING RULES:**
-- NO formal section headers like "FACTUAL SUMMARY" or "RECOMMENDED ACTION" - let the letter flow naturally
-- Transition line: `Here are the key points of our analysis:` introduces legal analysis
-- Legal issues use bullets `•` - each bullet is a COMPLETE PARAGRAPH (no bold headers)
-- Bullets flow naturally without bolded issue titles
-- 1 blank line between paragraphs
-- NO blank lines between consecutive bullets
+- NO formal section headers like "FACTUAL SUMMARY" or "RECOMMENDED ACTION".
+- NO memo-style labels or outline scaffolding.
+- Default to paragraphs only.
+- A short numbered list is allowed only for concrete client action items when it materially improves clarity.
+- 1 blank line between paragraphs.
 
 ---
 

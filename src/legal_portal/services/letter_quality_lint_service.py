@@ -366,7 +366,7 @@ class LetterQualityLintService:
                 )
             )
 
-        if letter_type == "findings" and section_depth_result["score"] < 0.75:
+        if letter_type == "findings" and section_depth_result["score"] < 0.60:
             violations.append(
                 LintViolation(
                     rule="section_depth",
@@ -419,28 +419,20 @@ class LetterQualityLintService:
         section_positions: Dict[str, int],
         violations: List[LintViolation],
     ) -> None:
-        """Apply strict required-section and ordering checks."""
-        missing = [name for name, count in section_counts.items() if name != "action_item_bullets" and count == 0]
-        if missing:
+        """Apply strict high-level signal checks without requiring memo-style sectioning."""
+        del section_positions  # Natural-flow style is accepted; ordering checks are intentionally disabled.
+        theme_keys = ["opening_review", "facts", "legal_theories", "timing_risk", "strategy", "action_items"]
+        matched = [name for name in theme_keys if section_counts.get(name, 0) > 0]
+        if len(matched) < 3:
             violations.append(
                 LintViolation(
-                    rule="required_sections_missing",
-                    severity="error",
-                    message="One or more required strategy-memo sections are missing.",
-                    details={"missing_sections": missing},
-                )
-            )
-
-        ordered_names = [section[0] for section in self._STRICT_SECTIONS]
-        observed = [name for name in ordered_names if section_positions.get(name, -1) >= 0]
-        position_values = [section_positions[name] for name in observed]
-        if len(position_values) > 1 and position_values != sorted(position_values):
-            violations.append(
-                LintViolation(
-                    rule="section_order",
-                    severity="error",
-                    message="Required sections are out of order.",
-                    details={"observed_order": observed},
+                    rule="theme_signal_coverage",
+                    severity="warning",
+                    message=(
+                        "Letter may be missing one or more key client-advisory themes "
+                        "(facts, legal path, timing risk, or next-step guidance)."
+                    ),
+                    details={"matched_themes": matched, "required_minimum": 3},
                 )
             )
 
@@ -450,24 +442,28 @@ class LetterQualityLintService:
         action_bullet_count: int,
         violations: List[LintViolation],
     ) -> None:
-        """Apply strict actionability checks."""
-        if "demand letter" not in text_lower:
+        """Apply strict actionability checks for natural-flow client correspondence."""
+        if not re.search(
+            r"\b(next steps?|please (?:help us|send|provide|share|forward|let us know)|we recommend|we suggest)\b",
+            text_lower,
+            re.IGNORECASE,
+        ):
             violations.append(
                 LintViolation(
-                    rule="strategy_demand_letter_missing",
+                    rule="strategy_next_step_missing",
                     severity="warning",
-                    message="Strategy section should explicitly recommend a demand letter first move.",
+                    message="Letter should include an explicit client-ready next-step recommendation.",
                     details={},
                 )
             )
 
-        if action_bullet_count < 4 or action_bullet_count > 5:
+        if action_bullet_count > 5:
             violations.append(
                 LintViolation(
                     rule="action_item_bullet_count",
                     severity="warning",
-                    message="Immediate action items should include 4-5 concise bullets.",
-                    details={"actual": action_bullet_count, "target": "4-5"},
+                    message="Too many action bullets can reduce readability; keep action lists concise.",
+                    details={"actual": action_bullet_count, "target_max": 5},
                 )
             )
 
@@ -739,7 +735,7 @@ class LetterQualityLintService:
     def _word_count_bounds(self, *, mode: str, letter_type: str) -> Tuple[int, int]:
         """Return word-count bounds for the current lint profile."""
         if letter_type == "findings" and mode == "strict_quality":
-            return (650, 900)
+            return (550, 1000)
         if letter_type == "recommendation":
             return (300, 900)
         return (450, 1300)

@@ -8,6 +8,7 @@
 	import AsyncButton from '$lib/components/ui/AsyncButton.svelte';
 	import { ArrowLeft } from 'lucide-svelte';
 	import { parseMarkdown } from '$lib/utils/markdown';
+	import { letterHtmlToPlainText, letterHtmlToRichFragment, normalizeLetterHtml } from '$lib/utils/letterCopy';
 	import { SSEEventParser } from '$lib/utils/sseEventParser';
 	import type { GapResolutionRefreshRequest, RecommendedLetterType } from '$lib/types';
 	import { onMount, onDestroy } from 'svelte';
@@ -1373,8 +1374,7 @@ async function generateLetterRequest(body: Record<string, any>) {
 	};
 
 	function downloadLetter(letter: string, filename: string) {
-		// Unescape newline characters for proper HTML formatting
-		const cleanedLetter = letter.replace(/\\n/g, '\n');
+		const cleanedLetter = normalizeLetterHtml(letter);
 		const blob = new Blob([cleanedLetter], { type: 'text/html' });
 		const url = URL.createObjectURL(blob);
 		const link = document.createElement('a');
@@ -1382,6 +1382,39 @@ async function generateLetterRequest(body: Record<string, any>) {
 		link.download = filename;
 		link.click();
 		URL.revokeObjectURL(url);
+	}
+
+	async function copyLetterPlainText(letter: string, label: string) {
+		try {
+			const text = letterHtmlToPlainText(letter);
+			if (!text) throw new Error('No text content available');
+			await navigator.clipboard.writeText(text);
+			toastStore.success(`${label} copied as plain text`);
+		} catch (err: any) {
+			toastStore.error(err?.message || `Failed to copy ${label.toLowerCase()}`);
+		}
+	}
+
+	async function copyLetterRichText(letter: string, label: string) {
+		try {
+			const richHtml = letterHtmlToRichFragment(letter);
+			const plainText = letterHtmlToPlainText(letter);
+			if (!plainText) throw new Error('No text content available');
+
+			if (typeof ClipboardItem !== 'undefined' && navigator.clipboard?.write) {
+				const payload = new ClipboardItem({
+					'text/html': new Blob([richHtml], { type: 'text/html' }),
+					'text/plain': new Blob([plainText], { type: 'text/plain' })
+				});
+				await navigator.clipboard.write([payload]);
+			} else {
+				await navigator.clipboard.writeText(plainText);
+			}
+
+			toastStore.success(`${label} copied`);
+		} catch (err: any) {
+			toastStore.error(err?.message || `Failed to copy ${label.toLowerCase()}`);
+		}
 	}
 </script>
 
@@ -1959,15 +1992,21 @@ async function generateLetterRequest(body: Record<string, any>) {
 									</div>
 								</div>
 							</div>
-						{:else if findingsLetter}
-							<!-- Completed findings email - show in iframe -->
-							<div class="space-y-4 animate-fade-in-up">
-								<div class="flex justify-end">
-									<button
-										class="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-bold rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent transition-all shadow-sm"
-										onclick={() => downloadLetter(findingsLetter!, `findings-email-${caseId}.html`)}
-									>
-										Download HTML
+							{:else if findingsLetter}
+								<!-- Completed findings email - show in iframe -->
+								<div class="space-y-4 animate-fade-in-up">
+									<div class="flex justify-end gap-2">
+										<button
+											class="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-bold rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent transition-all shadow-sm"
+											onclick={() => copyLetterPlainText(findingsLetter!, 'Findings email')}
+										>
+											Copy Plain Text
+										</button>
+										<button
+											class="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-bold rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent transition-all shadow-sm"
+											onclick={() => downloadLetter(findingsLetter!, `findings-email-${caseId}.html`)}
+										>
+											Download HTML
 									</button>
 								</div>
 								<div class="border border-gray-200 rounded-lg overflow-hidden bg-white shadow-inner">
@@ -2115,20 +2154,28 @@ async function generateLetterRequest(body: Record<string, any>) {
 
 						{#if Object.keys(demandLetters).length > 0}
 							<div class="mt-8 space-y-6">
-								{#each Object.entries(demandLetters) as [partyName, letterHtml]}
-									<div class="border border-gray-200 rounded-xl overflow-hidden bg-gray-50 shadow-sm animate-fade-in-up">
-										<div class="flex items-center justify-between p-4 bg-white border-b border-gray-200">
-											<h4 class="font-bold text-contrast">Demand Letter: {partyName}</h4>
-											<button
-												class="inline-flex items-center px-3 py-1.5 border border-gray-300 text-xs font-bold rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent transition-all"
-												onclick={() => downloadLetter(letterHtml, `demand-letter-${partyName}.html`)}
-											>
-												Download
-											</button>
-										</div>
-										<div class="p-4">
-											<div class="border border-gray-200 rounded-lg bg-white overflow-hidden shadow-inner">
-												<iframe srcdoc={letterHtml.replace(/\\n/g, '\n')} title={`Demand Letter ${partyName}`} class="w-full h-[400px] border-0" sandbox=""></iframe>
+									{#each Object.entries(demandLetters) as [partyName, letterHtml]}
+										<div class="border border-gray-200 rounded-xl overflow-hidden bg-gray-50 shadow-sm animate-fade-in-up">
+											<div class="flex items-center justify-between p-4 bg-white border-b border-gray-200">
+												<h4 class="font-bold text-contrast">Demand Letter: {partyName}</h4>
+												<div class="flex items-center gap-2">
+													<button
+														class="inline-flex items-center px-3 py-1.5 border border-gray-300 text-xs font-bold rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent transition-all"
+														onclick={() => copyLetterRichText(letterHtml, `Demand letter for ${partyName}`)}
+													>
+														Copy Rich Text
+													</button>
+													<button
+														class="inline-flex items-center px-3 py-1.5 border border-gray-300 text-xs font-bold rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent transition-all"
+														onclick={() => downloadLetter(letterHtml, `demand-letter-${partyName}.html`)}
+													>
+														Download HTML
+													</button>
+												</div>
+											</div>
+											<div class="p-4">
+												<div class="border border-gray-200 rounded-lg bg-white overflow-hidden shadow-inner">
+													<iframe srcdoc={letterHtml.replace(/\\n/g, '\n')} title={`Demand Letter ${partyName}`} class="w-full h-[400px] border-0" sandbox=""></iframe>
 											</div>
 										</div>
 									</div>
@@ -2142,17 +2189,27 @@ async function generateLetterRequest(body: Record<string, any>) {
 						<section class="card-standard">
 							<h3 class="text-xl font-heading font-bold text-contrast mb-6">Advisory Letters</h3>
 							<div class="space-y-6">
-								{#each Object.entries(recommendationLetters) as [letterType, letterHtml]}
-									<div class="border border-gray-200 rounded-xl overflow-hidden bg-gray-50 shadow-sm animate-fade-in-up">
-										<div class="flex items-center justify-between p-4 bg-white border-b border-gray-200">
-											<h4 class="font-bold text-contrast capitalize">{letterType.replace(/_/g, ' ')} Letter</h4>
-											<button
-												class="inline-flex items-center px-3 py-1.5 border border-gray-300 text-xs font-bold rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent transition-all"
-												onclick={() => downloadLetter(letterHtml, `${letterType}-letter-${caseId}.html`)}
-											>
-												Download
-											</button>
-										</div>
+									{#each Object.entries(recommendationLetters) as [letterType, letterHtml]}
+										<div class="border border-gray-200 rounded-xl overflow-hidden bg-gray-50 shadow-sm animate-fade-in-up">
+											<div class="flex items-center justify-between p-4 bg-white border-b border-gray-200">
+												<h4 class="font-bold text-contrast capitalize">{letterType.replace(/_/g, ' ')} Letter</h4>
+												<div class="flex items-center gap-2">
+													{#if letterType === 'request_documents'}
+														<button
+															class="inline-flex items-center px-3 py-1.5 border border-gray-300 text-xs font-bold rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent transition-all"
+															onclick={() => copyLetterPlainText(letterHtml, 'Request documents letter')}
+														>
+															Copy Plain Text
+														</button>
+													{/if}
+													<button
+														class="inline-flex items-center px-3 py-1.5 border border-gray-300 text-xs font-bold rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent transition-all"
+														onclick={() => downloadLetter(letterHtml, `${letterType}-letter-${caseId}.html`)}
+													>
+														Download HTML
+													</button>
+												</div>
+											</div>
 										<div class="p-4">
 											<div class="border border-gray-200 rounded-lg bg-white overflow-hidden shadow-inner">
 												<iframe srcdoc={letterHtml.replace(/\\n/g, '\n')} title={`${letterType} Letter`} class="w-full h-[400px] border-0" sandbox=""></iframe>

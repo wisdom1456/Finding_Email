@@ -7,7 +7,7 @@ verified statutes to detect potential hallucinations or unsupported claims.
 import logging
 import re
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from legal_portal.core.data_models import (
     FactMatrix,
@@ -32,6 +32,20 @@ class LetterValidationService:
         re.compile(r"\b\d{1,2}/\d{1,2}/\d{2,4}\b"),
         re.compile(r"\b\d{4}-\d{2}-\d{2}\b"),
     ]
+    _MONTH_NAMES = {
+        "january",
+        "february",
+        "march",
+        "april",
+        "may",
+        "june",
+        "july",
+        "august",
+        "september",
+        "october",
+        "november",
+        "december",
+    }
 
     # Hedging phrases that indicate uncertainty
     HEDGING_PHRASES = [
@@ -139,6 +153,56 @@ class LetterValidationService:
             claims_checked=claims_checked,
         )
 
+    def check_polish_fact_integrity(
+        self,
+        original_content: str,
+        polished_content: str,
+        *,
+        tracked_entities: Optional[List[str]] = None,
+    ) -> Dict[str, Any]:
+        """Compare pre/post polish text and flag factual drift in amounts, dates, and entities."""
+        original_text = self._normalize_text(original_content)
+        polished_text = self._normalize_text(polished_content)
+
+        original_amounts = {f"{amount:.2f}" for amount in self._extract_amounts(original_text)}
+        polished_amounts = {f"{amount:.2f}" for amount in self._extract_amounts(polished_text)}
+        introduced_amounts = sorted(polished_amounts - original_amounts)
+        removed_amounts = sorted(original_amounts - polished_amounts)
+
+        original_dates = {self._normalize_date_token(token) for token in self._extract_dates(original_text)}
+        polished_dates = {self._normalize_date_token(token) for token in self._extract_dates(polished_text)}
+        original_dates.discard("")
+        polished_dates.discard("")
+        introduced_dates = sorted(polished_dates - original_dates)
+        removed_dates = sorted(original_dates - polished_dates)
+
+        normalized_entities = self._normalize_entity_candidates(tracked_entities or [])
+        original_entities = self._extract_tracked_entities_present(original_text, normalized_entities)
+        polished_entities = self._extract_tracked_entities_present(polished_text, normalized_entities)
+        introduced_entities = sorted(polished_entities - original_entities)
+        removed_entities = sorted(original_entities - polished_entities)
+
+        violations: List[str] = []
+        if introduced_amounts or removed_amounts:
+            violations.append("amount_drift")
+        if introduced_dates or removed_dates:
+            violations.append("date_drift")
+        if introduced_entities or removed_entities:
+            violations.append("entity_drift")
+
+        passed = not violations
+        reason = "ok" if passed else ",".join(violations)
+        return {
+            "passed": passed,
+            "reason": reason,
+            "introduced_amounts": introduced_amounts,
+            "removed_amounts": removed_amounts,
+            "introduced_dates": introduced_dates,
+            "removed_dates": removed_dates,
+            "introduced_entities": introduced_entities,
+            "removed_entities": removed_entities,
+        }
+
     def _strip_html(self, html: str) -> str:
         """Remove HTML tags from text for analysis."""
         # Simple HTML stripping
@@ -146,6 +210,63 @@ class LetterValidationService:
         # Normalize whitespace
         clean = re.sub(r"\s+", " ", clean)
         return clean.lower()
+
+    def _normalize_text(self, content: str) -> str:
+        """Remove HTML tags while preserving case for deterministic fact extraction."""
+        clean = re.sub(r"<[^>]+>", " ", content or "")
+        return re.sub(r"\s+", " ", clean).strip()
+
+    def _normalize_date_token(self, raw_date: str) -> str:
+        """Normalize raw date token to reduce format-related false positives."""
+        token = re.sub(r"\s+", " ", (raw_date or "").strip())
+        if not token:
+            return ""
+
+        iso_match = re.fullmatch(r"\d{4}-\d{2}-\d{2}", token)
+        if iso_match:
+            return token
+
+        month_match = re.fullmatch(
+            r"([A-Za-z]+)\s+(\d{1,2}),?\s+(\d{4})",
+            token,
+        )
+        if month_match:
+            month, day, year = month_match.groups()
+            month_name = month.lower()
+            if month_name in self._MONTH_NAMES:
+                return f"{month_name} {int(day):02d} {year}"
+
+        numeric_match = re.fullmatch(r"(\d{1,2})/(\d{1,2})/(\d{2,4})", token)
+        if numeric_match:
+            month, day, year = numeric_match.groups()
+            normalized_year = year if len(year) == 4 else f"20{year}"
+            return f"{int(month):02d}/{int(day):02d}/{normalized_year}"
+
+        return token.lower()
+
+    def _normalize_entity_candidates(self, entities: List[str]) -> List[str]:
+        """Normalize tracked entity names for matching."""
+        normalized: List[str] = []
+        seen = set()
+        for entity in entities:
+            candidate = re.sub(r"\s+", " ", str(entity or "").strip())
+            if len(candidate) < 3:
+                continue
+            lowered = candidate.lower()
+            if lowered in seen:
+                continue
+            seen.add(lowered)
+            normalized.append(candidate)
+        return normalized
+
+    def _extract_tracked_entities_present(self, text: str, tracked_entities: List[str]) -> set[str]:
+        """Return tracked entities that are present in text."""
+        lowered_text = text.lower()
+        found = set()
+        for entity in tracked_entities:
+            if entity.lower() in lowered_text:
+                found.add(entity)
+        return found
 
     def _validate_amounts(
         self, letter_text: str, fact_matrix: FactMatrix

@@ -15,6 +15,13 @@ logger = get_module_logger(__name__)
 class DocumentFormatterService:
     """Formats JSON data into user-friendly HTML documents for display and download."""
 
+    _RECOMMENDATION_TITLE_PREFIX = {
+        "request_documents": "Document Request Letter",
+        "proceed": "Engagement Letter",
+        "settlement_advisory": "Settlement Advisory Letter",
+        "declination": "Declination Letter",
+    }
+
     @staticmethod
     def format_document_review(document_summaries_json: str, client_name: str = "Client") -> str:
         """Format document summaries JSON into a readable HTML document review.
@@ -997,39 +1004,26 @@ class DocumentFormatterService:
             return f"<html><head><title>Demand Letter</title></head><body>{letter_html}</body></html>"
 
     @staticmethod
-    def format_findings_letter(letter_html: str, client_name: str = "Client") -> str:
-        """Format findings email HTML with professional legal document styling.
+    def _clean_letter_html(letter_html: str) -> str:
+        """Strip container markup so formatter profiles can safely re-wrap content."""
+        cleaned_content = letter_html
+        cleaned_content = re.sub(r"<!DOCTYPE[^>]*>", "", cleaned_content, flags=re.IGNORECASE)
+        cleaned_content = re.sub(r"<html[^>]*>|</html>", "", cleaned_content, flags=re.IGNORECASE)
+        cleaned_content = re.sub(r"<head>.*?</head>", "", cleaned_content, flags=re.IGNORECASE | re.DOTALL)
+        cleaned_content = re.sub(r"<body[^>]*>|</body>", "", cleaned_content, flags=re.IGNORECASE)
+        return cleaned_content.strip()
 
-        Args:
-        ----
-            letter_html: AI-generated letter HTML content
-            client_name: Client name for the header
-
-        Returns:
-        -------
-            Fully-formatted HTML with professional styling
-
-        """
-        logger.info(f"Formatting findings email for client: '{client_name}'")
-        try:
-            # Clean the input HTML - remove any existing html/body tags
-            cleaned_content = letter_html
-            cleaned_content = re.sub(r"<!DOCTYPE[^>]*>", "", cleaned_content, flags=re.IGNORECASE)
-            cleaned_content = re.sub(r"<html[^>]*>|</html>", "", cleaned_content, flags=re.IGNORECASE)
-            cleaned_content = re.sub(
-                r"<head>.*?</head>", "", cleaned_content, flags=re.IGNORECASE | re.DOTALL
-            )
-            cleaned_content = re.sub(r"<body[^>]*>|</body>", "", cleaned_content, flags=re.IGNORECASE)
-            cleaned_content = cleaned_content.strip()
-
-            # Build the professionally formatted letter
-            formatted_html = f"""
+    @staticmethod
+    def _format_client_correspondence(letter_html: str, *, document_title: str) -> str:
+        """Format client-facing correspondence (findings + advisory letters)."""
+        cleaned_content = DocumentFormatterService._clean_letter_html(letter_html)
+        return f"""
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Findings Email - {client_name}</title>
+    <title>{document_title}</title>
     <style>
         html, body {{
             background-color: #ffffff !important;
@@ -1284,6 +1278,43 @@ class DocumentFormatterService:
 </html>
 """
 
+    @staticmethod
+    def format_recommendation_letter(
+        letter_html: str,
+        *,
+        letter_type: str,
+        client_name: str = "Client",
+    ) -> str:
+        """Format recommendation/advisory letters with intent-aware document metadata."""
+        title_prefix = DocumentFormatterService._RECOMMENDATION_TITLE_PREFIX.get(
+            (letter_type or "").strip().lower(),
+            "Client Advisory Letter",
+        )
+        return DocumentFormatterService._format_client_correspondence(
+            letter_html=letter_html,
+            document_title=f"{title_prefix} - {client_name}",
+        )
+
+    @staticmethod
+    def format_findings_letter(letter_html: str, client_name: str = "Client") -> str:
+        """Format findings email HTML with professional legal document styling.
+
+        Args:
+        ----
+            letter_html: AI-generated letter HTML content
+            client_name: Client name for the header
+
+        Returns:
+        -------
+            Fully-formatted HTML with professional styling
+
+        """
+        logger.info(f"Formatting findings email for client: '{client_name}'")
+        try:
+            formatted_html = DocumentFormatterService._format_client_correspondence(
+                letter_html=letter_html,
+                document_title=f"Findings Email - {client_name}",
+            )
             logger.info("Successfully formatted findings email with professional styling")
             return formatted_html
 

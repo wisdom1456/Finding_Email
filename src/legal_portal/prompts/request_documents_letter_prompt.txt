@@ -1,4 +1,8 @@
-You are drafting a FORMAL DOCUMENT REQUEST LETTER on behalf of a {jurisdiction_name} law firm. This letter requests specific missing documents from the client to strengthen their case.
+You are drafting a CLIENT DOCUMENT REQUEST LETTER for a {jurisdiction_name} law firm.
+This letter is for the client, not the opposing side.
+
+Write in plain-language, professional attorney voice.
+Be direct and practical, but do not sound adversarial or threatening.
 
 ---
 
@@ -12,7 +16,6 @@ MISSING DOCUMENTS AND GAPS:
 {missing_documents}
 
 CURRENT COMPLETENESS SCORE: {completeness_score}%
-
 CRITICAL GAPS: {critical_count}
 HIGH-PRIORITY GAPS: {high_count}
 
@@ -26,95 +29,76 @@ Email: {contact_email}
 
 REQUIRED LETTER STRUCTURE:
 
-1. **Header Section**:
-   - Date: [Current date in format: Month DD, YYYY]
-   - Blank line
-   - Client name and address (from client context)
-   - Blank line
-   - "**RE: Document Request - [Brief Case Description]**"
-   - "**Response Required By: [Date 14 business days from today]**"
-   - Blank line
+1) Header
+- Date: [Current date in format: Month DD, YYYY]
+- Client name and mailing address if available
+- Subject line: `RE: Documents Needed to Move Your Matter Forward`
+- Deadline line: `Requested by: [Date 14 business days from today]`
 
-2. **Salutation**: 
-   - `Dear {client_name}:`
-   - Blank line
+2) Salutation
+- `Dear {client_name},`
 
-3. **Introduction Paragraph**:
-   - Thank the client for engaging the firm
-   - Explain that after initial review, additional documentation is needed
-   - Emphasize the importance of these documents to case success
-   - Note that gathering these materials is a normal part of the process
+3) Opening
+- Thank the client for their work so far.
+- Explain that review is underway and a few key documents are still needed.
+- Clarify that this request is routine and helps the firm act faster and with stronger support.
 
-4. **Documents Needed** (detailed list):
-   - Use heading: "## Documents Requested"
-   - Opening: "To build the strongest possible case, we need the following:"
-   - Blank line
-   - For EACH missing document or gap, create a numbered entry with:
-     - **Document Name/Type**: Clear description
-     - **Why It Matters**: 1-2 sentences on legal importance
-     - **What to Provide**: Specific format or details needed
-   - Example format:
-     ```
-     1. **Contract or Agreement Documents**
-        - *Why It Matters*: The original contract establishes the terms that may have been breached and defines the parties' obligations.
-        - *What to Provide*: Original signed contract, any amendments, and related correspondence about contract terms.
-     ```
-   - Group similar documents together
-   - Prioritize critical gaps first, then high-priority
+4) Documents Needed
+- Use heading: `## Documents Requested`
+- Brief lead-in sentence in plain language.
+- Provide a numbered list.
+- For each item include:
+  - `What we need`
+  - `Why it matters to your case`
+  - `What to send (specific format/details)`
+- Prioritize critical and high-priority gaps first.
+- Group duplicates/similar requests so the list is clean and not repetitive.
 
-5. **How to Provide Documents**:
-   - Use heading: "## How to Submit"
-   - List multiple options:
-     - Email: {contact_email} (preferred for electronic copies)
-     - Mail: [Firm address]
-     - Client Portal: [If applicable]
-   - Note acceptable formats (PDF preferred, original documents for key items)
-   - Mention that the firm can arrange pickup for physical documents if needed
+5) How to Send
+- Use heading: `## How to Submit`
+- Include practical submission options:
+  - Email to {contact_email}
+  - Portal upload (if available)
+  - Physical copy delivery/mail for originals
+- State preferred formats (PDF for scans, clear photos if no scanner).
 
-6. **Timeline and Importance**:
-   - Use heading: "## Timeline"
-   - Emphasize the 14 business day deadline
-   - Explain why timing matters:
-     - Statute of limitations considerations
-     - Building case momentum
-     - Preparing demand letter or legal action
-   - Offer to discuss extensions if circumstances require
+6) Timing
+- Use heading: `## Timeline`
+- State the request deadline clearly (14 business days).
+- Explain in client terms why timing matters:
+  - keeps the case moving,
+  - helps preserve leverage,
+  - reduces delays before next legal step.
+- Offer a path if client needs more time: ask them to contact the office before the deadline.
 
-7. **What Happens Next**:
-   - Brief paragraph on next steps once documents received
-   - Note that the firm will review and may request clarification
-   - Mention that this moves the case toward action (demand letter, filing, etc.)
+7) Next Step After Receipt
+- Use heading: `## What Happens Next`
+- Explain that once documents are received, counsel will complete review and provide the next recommendation.
 
-8. **Questions or Difficulties**:
-   - Acknowledge client may have trouble locating some items
-   - Encourage reaching out if any document is unavailable
-   - Offer to discuss alternatives or workarounds
+8) Supportive Close
+- Acknowledge that some records may be hard to locate.
+- Invite the client to call/email if anything is unavailable so alternatives can be discussed.
+- Reinforce that the firm is ready to help them collect what is needed.
 
-9. **Closing Paragraph**:
-   - Blank line
-   - Reiterate importance of prompt response
-   - Express commitment to the client's case
-   - Provide direct contact information
-   - Blank line
-
-10. **Signature Block**:
-    - "Sincerely,"
-    - Blank line
-    - "/s/ {attorney_name}"
-    - "{attorney_name}, Esq."
-    - "{firm_name}"
-    - "Attorney for {client_name}"
+9) Signature
+- `Sincerely,`
+- `/s/ {attorney_name}`
+- `{attorney_name}, Esq.`
+- `{firm_name}`
+- `Attorney for {client_name}`
+- Contact line with phone/email.
 
 ---
 
-TONE GUIDELINES:
-- Professional but approachable
-- Urgent but not alarming
-- Helpful and solution-oriented
-- Clear about what's needed and why
+TONE + STYLE RULES:
+- Client-first, plain English, practical.
+- Professional and time-conscious.
+- No legal threat language.
+- No accusatory framing.
+- Avoid dense legal jargon unless necessary; explain any legal term briefly.
+- Keep paragraphs and list items concise.
 
-FORMAT NOTES:
-- Use markdown formatting (## for headings, - for bullets, numbered lists)
-- Make document list scannable with bold headings
-- Keep explanations concise but informative
-- Use formatting to highlight the deadline
+OUTPUT RULES:
+- Return only the letter content in markdown.
+- No code fences.
+- No meta commentary.

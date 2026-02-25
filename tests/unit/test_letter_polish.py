@@ -156,8 +156,8 @@ def test_polish_prompt_instructs_citation_removal():
     """The formatting prompt must include the parenthetical citation removal rule."""
     polisher = LetterPolisher(MagicMock())
     prompt = polisher.formatting_prompt
-    assert "parenthetical document source citations" in prompt
-    assert "internal pipeline references" in prompt
+    assert "internal pipeline parentheticals" in prompt
+    assert "preserve the underlying fact" in prompt
 
 
 def test_polish_prompt_instructs_internal_language_replacement():

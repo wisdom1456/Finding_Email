@@ -268,7 +268,10 @@ async def test_findings_generation_baseline_contains_required_markers(
     assert "<html" in letter_html.lower()
     text = _strip_html_tags(letter_html)
 
-    assert "Here are the key points of our analysis:" in text
+    assert (
+        "Here are the key points of our analysis:" in text
+        or "As discussed, the primary concern is" in text
+    )
     assert "March 15, 2025" in text
     assert "$100,000.00" in text
     assert "Florida Statute § 558.004" in text

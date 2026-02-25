@@ -364,8 +364,14 @@ async def test_findings_stream_event_order_with_strategy_critic_and_repair(monke
 
     final_event = next(event for event in events if event.get("event") == "final")
     assert "Repaired draft includes February 14, 2023 email" in final_event["content"]["html"]
+    assert "<!DOCTYPE html>" in final_event["content"]["html"]
+    assert "<head>" in final_event["content"]["html"]
+    assert "<style>" in final_event["content"]["html"]
 
     assert supabase.last_update_payload is not None
+    persisted_findings = supabase.last_update_payload["result"]["generated_letters"]["findings"]
+    assert "<!DOCTYPE html>" in persisted_findings
+    assert "<style>" in persisted_findings
     findings_meta = supabase.last_update_payload["result"]["generated_letters"]["findings_meta"]
     assert findings_meta["strategy_object"] is not None
     assert findings_meta["quality_report_v2"] is not None
@@ -522,3 +528,87 @@ async def test_findings_stream_emits_recoverable_timeout_and_finishes(monkeypatc
 
     assert any(event.get("event") == "final" for event in events)
     assert any(event.get("event") == "done" for event in events)
+
+
+@pytest.mark.asyncio
+async def test_findings_stream_reverts_polish_when_fact_integrity_fails(monkeypatch):
+    """If polish introduces drift, stream should keep pre-polish draft and mark revert reason."""
+    record = _build_analysis_record("analysis-polish-integrity")
+    supabase = _FakeSupabase(record)
+    settings = _SettingsStub(
+        letter_quality_lint_enabled=False,
+        letter_conditional_repair_enabled=False,
+        letter_strategy_enabled=False,
+    )
+
+    class _FakeJsonProcessingService:
+        def __init__(self, *args, **kwargs):  # noqa: ANN002, ANN003
+            self.args = args
+            self.kwargs = kwargs
+
+        async def stream_findings_letter_adaptive(self, **_kwargs):
+            yield "Original draft cites $47,656.00 paid on February 14, 2023."
+
+        def _convert_markdown_to_html(self, markdown_content: str) -> str:
+            return f"<html><body>{markdown_content}</body></html>"
+
+    class _FakeLetterValidationService:
+        def lint_client_letter(self, _content, *, mode="default", letter_type="findings"):
+            return {
+                "mode": mode,
+                "letter_type": letter_type,
+                "lint_passed": True,
+                "score": 100,
+                "violations": [],
+                "quality_report_v2": {
+                    "term_explainer_passed": True,
+                    "evidence_linkage_score": 1.0,
+                    "section_depth_score": 1.0,
+                    "unsupported_assertion_flags": [],
+                },
+            }
+
+        def check_polish_fact_integrity(self, _original, _polished, *, tracked_entities=None):
+            return {
+                "passed": False,
+                "reason": "amount_drift,date_drift",
+                "introduced_amounts": ["57656.00"],
+                "removed_amounts": ["47656.00"],
+                "introduced_dates": ["february 28 2023"],
+                "removed_dates": ["february 14 2023"],
+                "introduced_entities": [],
+                "removed_entities": [],
+            }
+
+    async def _fake_polish(_openai_client, _raw_letter):
+        return {
+            "success": True,
+            "polished_letter": "Polished text changed to $57,656.00 on February 28, 2023.",
+        }
+
+    monkeypatch.setattr(analysis_routes, "get_settings", lambda: settings)
+    monkeypatch.setattr(analysis_routes, "_ensure_fresh_gap_analysis_for_letter_generation", _no_op_ensure_gap)
+    monkeypatch.setattr(analysis_routes, "_get_user_ai_preferences", _fake_ai_preferences)
+    monkeypatch.setattr(analysis_routes, "OpenAIClient", _FakeOpenAIClient)
+    monkeypatch.setattr(analysis_routes, "JsonProcessingService", _FakeJsonProcessingService)
+    monkeypatch.setattr(analysis_routes, "LetterValidationService", _FakeLetterValidationService)
+    monkeypatch.setattr("legal_portal.utils.letter_polish.polish_letter_async", _fake_polish)
+    monkeypatch.setattr(analysis_routes, "_emit_generation_metrics", lambda _metrics: None)
+
+    response = await analysis_routes.stream_findings_letter(
+        analysis_id=record["id"],
+        schema_version=2,
+        mode="strict_quality",
+        user={"id": "user-1"},
+        supabase=supabase,
+    )
+    events = await _collect_sse_events(response)
+
+    final_event = next(event for event in events if event.get("event") == "final")
+    quality_event = next(event for event in events if event.get("event") == "quality")
+
+    # Must keep pre-polish facts because integrity gate failed.
+    assert "$47,656.00" in final_event["content"]["html"]
+    assert "$57,656.00" not in final_event["content"]["html"]
+    assert quality_event["generation_metrics"]["polish_reverted"] is True
+    assert quality_event["generation_metrics"]["polish_revert_reason"].startswith("fact_integrity:")

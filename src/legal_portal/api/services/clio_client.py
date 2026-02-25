@@ -294,12 +294,17 @@ class ClioClient:
             params["created_since"] = since_date.isoformat()
 
         all_communications = []
-        page = 1
+        seen_next_urls: set[str] = set()
+        seen_legacy_pages: set[tuple[int, Any, Any]] = set()
 
         try:
+            next_endpoint: str = "communications.json"
+            next_params: Optional[Dict[str, Any]] = dict(params)
+            if next_params is not None:
+                next_params["page"] = 1
+
             while True:
-                params["page"] = page
-                response = self._make_request("GET", "communications.json", params=params)
+                response = self._make_request("GET", next_endpoint, params=next_params)
 
                 communications_data = response.get("data", [])
                 if not communications_data:
@@ -356,11 +361,29 @@ class ClioClient:
                         # Skip individual communication parsing errors
                         continue
 
-                # Check if there are more pages
-                if len(communications_data) < params["limit"]:
-                    break
+                # Clio cursor pagination: follow meta.paging.next when present.
+                next_url = ((response.get("meta") or {}).get("paging") or {}).get("next")
+                if next_url:
+                    if next_url in seen_next_urls:
+                        raise ClioAPIError("Detected repeated communication pagination URL from Clio")
+                    seen_next_urls.add(next_url)
+                    next_endpoint = next_url
+                    next_params = None
+                    continue
 
-                page += 1
+                # Legacy page-based fallback for mocked/older integrations.
+                if next_params is not None:
+                    page_size = int(next_params.get("limit", 0) or 0)
+                    if page_size > 0 and len(communications_data) >= page_size:
+                        first_id = communications_data[0].get("id") if communications_data else None
+                        last_id = communications_data[-1].get("id") if communications_data else None
+                        page_signature = (len(communications_data), first_id, last_id)
+                        if page_signature in seen_legacy_pages:
+                            raise ClioAPIError("Detected repeated communication page while paginating")
+                        seen_legacy_pages.add(page_signature)
+                        next_params["page"] = int(next_params.get("page", 1)) + 1
+                        continue
+                break
 
             return all_communications
 
@@ -389,12 +412,17 @@ class ClioClient:
         }
 
         all_notes = []
-        page = 1
+        seen_next_urls: set[str] = set()
+        seen_legacy_pages: set[tuple[int, Any, Any]] = set()
 
         try:
+            next_endpoint: str = "notes.json"
+            next_params: Optional[Dict[str, Any]] = dict(params)
+            if next_params is not None:
+                next_params["page"] = 1
+
             while True:
-                params["page"] = page
-                response = self._make_request("GET", "notes.json", params=params)
+                response = self._make_request("GET", next_endpoint, params=next_params)
 
                 notes_data = response.get("data", [])
                 if not notes_data:
@@ -409,11 +437,29 @@ class ClioClient:
                     }
                     all_notes.append(note)
 
-                # Check if there are more pages
-                if len(notes_data) < params["limit"]:
-                    break
+                # Clio cursor pagination: follow meta.paging.next when present.
+                next_url = ((response.get("meta") or {}).get("paging") or {}).get("next")
+                if next_url:
+                    if next_url in seen_next_urls:
+                        raise ClioAPIError("Detected repeated notes pagination URL from Clio")
+                    seen_next_urls.add(next_url)
+                    next_endpoint = next_url
+                    next_params = None
+                    continue
 
-                page += 1
+                # Legacy page-based fallback for mocked/older integrations.
+                if next_params is not None:
+                    page_size = int(next_params.get("limit", 0) or 0)
+                    if page_size > 0 and len(notes_data) >= page_size:
+                        first_id = notes_data[0].get("id") if notes_data else None
+                        last_id = notes_data[-1].get("id") if notes_data else None
+                        page_signature = (len(notes_data), first_id, last_id)
+                        if page_signature in seen_legacy_pages:
+                            raise ClioAPIError("Detected repeated notes page while paginating")
+                        seen_legacy_pages.add(page_signature)
+                        next_params["page"] = int(next_params.get("page", 1)) + 1
+                        continue
+                break
 
             return all_notes
 

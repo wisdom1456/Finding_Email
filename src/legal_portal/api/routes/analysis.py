@@ -1499,9 +1499,7 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
 
         def _first_non_empty(*values: Any) -> Optional[str]:
             for value in values:
-                if value is None:
-                    continue
-                text = str(value).strip()
+                text = safe_str(value)
                 if text:
                     return text
             return None
@@ -2277,45 +2275,48 @@ async def stream_findings_letter(
                         }
 
                 # Polish pass: second AI call for prose formatting consistency
-                polish_msg = _emit("phase", phase="polishing", message="Polishing letter...")
-                if polish_msg:
-                    yield polish_msg
-                try:
-                    from legal_portal.utils.letter_polish import polish_letter_async
+                if getattr(settings, "letter_polish_enabled", True):
+                    polish_msg = _emit("phase", phase="polishing", message="Polishing letter...")
+                    if polish_msg:
+                        yield polish_msg
+                    try:
+                        from legal_portal.utils.letter_polish import polish_letter_async
 
-                    pre_polish_markdown = final_markdown
-                    polish_result = await polish_letter_async(openai_client, pre_polish_markdown)
-                    if polish_result.get("success") and polish_result.get("polished_letter"):
-                        polished_candidate = polish_result["polished_letter"]
-                        integrity_report = {"passed": True, "reason": "unsupported"}
-                        if hasattr(validator, "check_polish_fact_integrity"):
-                            integrity_report = validator.check_polish_fact_integrity(
-                                pre_polish_markdown,
-                                polished_candidate,
-                                tracked_entities=[
-                                    client_name,
-                                    resolved_identity.get("attorney_name") or "",
-                                    resolved_identity.get("firm_name") or "",
-                                ],
-                            )
-                        metrics["polish_integrity_passed"] = bool(integrity_report.get("passed", True))
+                        pre_polish_markdown = final_markdown
+                        polish_result = await polish_letter_async(openai_client, pre_polish_markdown)
+                        if polish_result.get("success") and polish_result.get("polished_letter"):
+                            polished_candidate = polish_result["polished_letter"]
+                            integrity_report = {"passed": True, "reason": "unsupported"}
+                            if hasattr(validator, "check_polish_fact_integrity"):
+                                integrity_report = validator.check_polish_fact_integrity(
+                                    pre_polish_markdown,
+                                    polished_candidate,
+                                    tracked_entities=[
+                                        client_name,
+                                        resolved_identity.get("attorney_name") or "",
+                                        resolved_identity.get("firm_name") or "",
+                                    ],
+                                )
+                            metrics["polish_integrity_passed"] = bool(integrity_report.get("passed", True))
 
-                        if integrity_report.get("passed", True):
-                            final_markdown = polished_candidate
-                            metrics["polish_applied"] = True
-                        else:
-                            metrics["polish_applied"] = False
-                            metrics["polish_reverted"] = True
-                            metrics["polish_revert_reason"] = (
-                                f"fact_integrity:{integrity_report.get('reason', 'unknown')}"
-                            )
-                            logger.warning(
-                                "[LETTER] Polish reverted due to fact integrity drift: %s",
-                                integrity_report,
-                            )
-                except Exception as polish_err:
-                    logger.warning("[LETTER] Polish pass failed, using raw draft: %s", polish_err)
-                    metrics["polish_applied"] = False
+                            if integrity_report.get("passed", True):
+                                final_markdown = polished_candidate
+                                metrics["polish_applied"] = True
+                            else:
+                                metrics["polish_applied"] = False
+                                metrics["polish_reverted"] = True
+                                metrics["polish_revert_reason"] = (
+                                    f"fact_integrity:{integrity_report.get('reason', 'unknown')}"
+                                )
+                                logger.warning(
+                                    "[LETTER] Polish reverted due to fact integrity drift: %s",
+                                    integrity_report,
+                                )
+                    except Exception as polish_err:
+                        logger.warning("[LETTER] Polish pass failed, using raw draft: %s", polish_err)
+                        metrics["polish_applied"] = False
+                else:
+                    logger.info("[LETTER] Polish pass disabled by configuration")
 
                 phase_msg = _emit("phase", phase="finalizing", message="Finalizing letter")
                 if phase_msg:
@@ -4014,47 +4015,50 @@ async def generate_letter(
             )
             target_party_name = letter_request.target_party_name
             # Polish pass: second AI call for prose formatting consistency
-            try:
-                from legal_portal.utils.letter_polish import polish_letter_async
+            if getattr(settings, "letter_polish_enabled", True):
+                try:
+                    from legal_portal.utils.letter_polish import polish_letter_async
 
-                pre_polish_markdown = draft_markdown_for_repair
-                polish_result = await polish_letter_async(openai_client, pre_polish_markdown)
-                if polish_result.get("success") and polish_result.get("polished_letter"):
-                    polished_candidate = polish_result["polished_letter"]
-                    integrity_report = {"passed": True, "reason": "unsupported"}
-                    if hasattr(LetterValidationService, "check_polish_fact_integrity"):
-                        integrity_report = LetterValidationService().check_polish_fact_integrity(
-                            pre_polish_markdown,
-                            polished_candidate,
-                            tracked_entities=[
-                                client_name,
-                                target_party_name,
-                                attorney_info.get("name") or "",
-                                attorney_info.get("firm") or "",
-                            ],
-                        )
-                    metrics["polish_integrity_passed"] = bool(integrity_report.get("passed", True))
+                    pre_polish_markdown = draft_markdown_for_repair
+                    polish_result = await polish_letter_async(openai_client, pre_polish_markdown)
+                    if polish_result.get("success") and polish_result.get("polished_letter"):
+                        polished_candidate = polish_result["polished_letter"]
+                        integrity_report = {"passed": True, "reason": "unsupported"}
+                        if hasattr(LetterValidationService, "check_polish_fact_integrity"):
+                            integrity_report = LetterValidationService().check_polish_fact_integrity(
+                                pre_polish_markdown,
+                                polished_candidate,
+                                tracked_entities=[
+                                    client_name,
+                                    target_party_name,
+                                    attorney_info.get("name") or "",
+                                    attorney_info.get("firm") or "",
+                                ],
+                            )
+                        metrics["polish_integrity_passed"] = bool(integrity_report.get("passed", True))
 
-                    if integrity_report.get("passed", True):
-                        draft_markdown_for_repair = polished_candidate
-                        polished_html = json_service._convert_markdown_to_html(polished_candidate)
-                        letter_html = DocumentFormatterService.format_demand_letter(
-                            letter_html=polished_html,
-                            recipient_name=target_party_name,
-                        )
-                        metrics["polish_applied"] = True
-                    else:
-                        metrics["polish_applied"] = False
-                        metrics["polish_reverted"] = True
-                        metrics["polish_revert_reason"] = (
-                            f"fact_integrity:{integrity_report.get('reason', 'unknown')}"
-                        )
-                        logger.warning(
-                            "[DEMAND] Polish reverted due to fact integrity drift: %s",
-                            integrity_report,
-                        )
-            except Exception as polish_err:
-                logger.warning("[DEMAND] Polish pass failed, using raw draft: %s", polish_err)
+                        if integrity_report.get("passed", True):
+                            draft_markdown_for_repair = polished_candidate
+                            polished_html = json_service._convert_markdown_to_html(polished_candidate)
+                            letter_html = DocumentFormatterService.format_demand_letter(
+                                letter_html=polished_html,
+                                recipient_name=target_party_name,
+                            )
+                            metrics["polish_applied"] = True
+                        else:
+                            metrics["polish_applied"] = False
+                            metrics["polish_reverted"] = True
+                            metrics["polish_revert_reason"] = (
+                                f"fact_integrity:{integrity_report.get('reason', 'unknown')}"
+                            )
+                            logger.warning(
+                                "[DEMAND] Polish reverted due to fact integrity drift: %s",
+                                integrity_report,
+                            )
+                except Exception as polish_err:
+                    logger.warning("[DEMAND] Polish pass failed, using raw draft: %s", polish_err)
+            else:
+                logger.info("[DEMAND] Polish pass disabled by configuration")
             letter_key = f"demand_{letter_request.target_party_name.replace(' ', '_')}".lower()
 
         validator = LetterValidationService()

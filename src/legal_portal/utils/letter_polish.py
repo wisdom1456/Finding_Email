@@ -3,6 +3,7 @@
 Takes a generated letter and ensures perfect formatting, spacing, and layout.
 """
 
+import asyncio
 import logging
 from typing import Dict
 
@@ -189,7 +190,7 @@ async def polish_letter_async(openai_client, raw_letter: str) -> Dict:
 
     """
     polisher = LetterPolisher(openai_client)
-    return polisher.polish_letter(raw_letter)
+    return await asyncio.to_thread(polisher.polish_letter, raw_letter)
 
 
 def polish_letter_sync(openai_client, raw_letter: str) -> Dict:

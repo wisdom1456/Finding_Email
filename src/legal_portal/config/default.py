@@ -179,6 +179,12 @@ class Settings(BaseSettings):
         description="Enable section-level quality critic pass before constrained repair.",
     )
 
+    letter_polish_enabled: bool = Field(
+        True,
+        alias="LETTER_POLISH_ENABLED",
+        description="Enable final polish pass for generated letters.",
+    )
+
     letter_term_micro_explainers_enabled: bool = Field(
         True,
         alias="LETTER_TERM_MICRO_EXPLAINERS_ENABLED",

@@ -4,7 +4,7 @@ import pytest
 from unittest.mock import Mock, patch, call
 from datetime import datetime
 
-from legal_portal.api.services.clio_client import ClioClient, ClioAPIError
+from legal_portal.api.services.clio_client import ClioClient, ClioAPIError, ClioRateLimitError
 
 
 class TestClioPagination:
@@ -287,3 +287,57 @@ class TestClioClientRateLimiting:
 
             # Should still work correctly
             assert len(documents) == 50
+
+    def test_retries_on_429_then_succeeds(self, clio_client):
+        """Retry transient Clio 429 responses and succeed when the API recovers."""
+        with patch.object(clio_client.session, 'request') as mock_request, \
+             patch('legal_portal.api.services.clio_client.time.sleep'):
+            rate_limited = Mock()
+            rate_limited.status_code = 429
+            rate_limited.headers = {}
+            rate_limited.text = "Too Many Requests"
+
+            success = Mock()
+            success.status_code = 200
+            success.json.return_value = {"data": []}
+
+            mock_request.side_effect = [rate_limited, rate_limited, success]
+
+            documents = clio_client.get_documents(matter_id=123)
+
+            assert documents == []
+            assert mock_request.call_count == 3
+
+    def test_uses_retry_after_header_on_429(self, clio_client):
+        """Honor Retry-After when Clio returns explicit backoff guidance."""
+        with patch.object(clio_client.session, 'request') as mock_request, \
+             patch('legal_portal.api.services.clio_client.time.sleep') as mock_sleep:
+            rate_limited = Mock()
+            rate_limited.status_code = 429
+            rate_limited.headers = {"Retry-After": "7"}
+            rate_limited.text = "Too Many Requests"
+
+            success = Mock()
+            success.status_code = 200
+            success.json.return_value = {"data": []}
+
+            mock_request.side_effect = [rate_limited, success]
+
+            clio_client.get_documents(matter_id=123)
+
+            sleep_args = [args[0] for args, _ in mock_sleep.call_args_list if args]
+            assert any(wait >= 7 for wait in sleep_args)
+
+    def test_raises_after_exhausting_429_retries(self, clio_client):
+        """Raise ClioRateLimitError once all configured retries are consumed."""
+        with patch.object(clio_client.session, 'request') as mock_request, \
+             patch('legal_portal.api.services.clio_client.time.sleep'):
+            rate_limited = Mock()
+            rate_limited.status_code = 429
+            rate_limited.headers = {}
+            rate_limited.text = "Too Many Requests"
+
+            mock_request.side_effect = [rate_limited] * 5
+
+            with pytest.raises(ClioRateLimitError, match="Rate limit exceeded"):
+                clio_client.get_documents(matter_id=123)

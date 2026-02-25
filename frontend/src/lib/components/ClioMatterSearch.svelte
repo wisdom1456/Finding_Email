@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onDestroy } from 'svelte';
+	import { get } from 'svelte/store';
 	import { getApiUrl } from '$lib/config';
 	import { getSecureSession } from '$lib/supabase';
 	import { progressStore } from '$lib/stores/progressStore';
@@ -151,13 +152,28 @@
 				progressStore.connect(
 					sseUrl, 
 					(data: any) => {
-						// On completion, update UI with stats
-						importPhase = 'complete';
-						importSuccess = true;
-						
 						if (data && data.import_status) {
 							importResult = data.import_status;
 						}
+
+						const finalProgress = get(progressStore);
+						const importFailed =
+							finalProgress.status === 'error' || data?.import_status?.success === false;
+
+						if (importFailed) {
+							importPhase = 'error';
+							importSuccess = false;
+							importError =
+								data?.import_status?.error ||
+								finalProgress.error ||
+								'Clio import failed before any documents could be saved.';
+							errorMessage = importError;
+							return;
+						}
+
+						// On successful completion, update UI with stats
+						importPhase = 'complete';
+						importSuccess = true;
 					},
 					statusUrl,  // Polling fallback URL
 					session.access_token  // Auth token
@@ -258,8 +274,22 @@
 
 				progressStore.connect(
 					sseUrl, 
-					() => {
-						// On completion
+					(data: any) => {
+						const finalProgress = get(progressStore);
+						const importFailed =
+							finalProgress.status === 'error' || data?.import_status?.success === false;
+
+						if (importFailed) {
+							importSuccess = false;
+							errorMessage =
+								data?.import_status?.error ||
+								finalProgress.error ||
+								'Clio import failed before any documents could be saved.';
+							importingMatterId = null;
+							return;
+						}
+
+						// On successful completion
 						importSuccess = true;
 						selectedMatterId = matterId;
 						importingMatterId = null;

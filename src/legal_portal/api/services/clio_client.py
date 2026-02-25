@@ -6,6 +6,7 @@ Adapted for FastAPI/Vercel deployment.
 
 from __future__ import annotations
 
+import random
 import time
 from datetime import datetime
 from typing import Any, Dict, List, Optional
@@ -92,7 +93,7 @@ class ClioClient:
         )
 
         # Rate limiting: CLIO allows 30 requests per 10 seconds
-        self.rate_limit_delay = 0.34  # ~3 requests per second to stay safe
+        self.rate_limit_delay = 0.4  # ~2.5 requests/sec to stay under shared account bursts
         self.last_request_time = 0
 
     def _wait_for_rate_limit(self):
@@ -103,7 +104,7 @@ class ClioClient:
         self.last_request_time = time.time()
 
     def _make_request(
-        self, method: str, endpoint: str, params: Dict = None, data: Dict = None, max_retries: int = 3
+        self, method: str, endpoint: str, params: Dict = None, data: Dict = None, max_retries: int = 5
     ) -> Dict[str, Any]:
         """Make HTTP request to CLIO API with error handling.
 
@@ -137,11 +138,20 @@ class ClioClient:
                 # Handle rate limiting with exponential backoff
                 if response.status_code == 429:
                     if attempt < max_retries - 1:
-                        wait_time = 2**attempt  # 1s, 2s, 4s
+                        retry_after_header = (response.headers or {}).get("Retry-After")
+                        wait_time: float
+                        if retry_after_header:
+                            try:
+                                wait_time = max(float(retry_after_header), 1.0)
+                            except (TypeError, ValueError):
+                                wait_time = float(min(2 ** (attempt + 1), 20))
+                        else:
+                            # 2s, 4s, 8s, 16s (+ jitter) gives Clio enough recovery window.
+                            wait_time = float(min(2 ** (attempt + 1), 20)) + random.uniform(0, 0.5)
                         time.sleep(wait_time)
                         continue
                     else:
-                        raise ClioRateLimitError("Rate limit exceeded after retries")
+                        raise ClioRateLimitError(f"Rate limit exceeded after {max_retries} retries")
 
                 # Handle authentication errors
                 if response.status_code == 401:

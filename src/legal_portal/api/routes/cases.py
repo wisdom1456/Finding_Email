@@ -1185,6 +1185,30 @@ async def process_clio_import_background(
             .execute()
         )
 
+        fatal_import_error = import_result.get("error")
+        if fatal_import_error:
+            progress_data = {
+                "type": "error",
+                "message": f"Import failed: {fatal_import_error}",
+                "phase": "error",
+                "percent": 40,
+                "status": "error",
+                "error": str(fatal_import_error),
+                "data": {"import_status": import_result, "success": False},
+            }
+            await progress_manager.publish_progress(
+                channel_id=import_id,
+                message=f"Import failed: {fatal_import_error}",
+                phase="error",
+                percent=40,
+                status="error",
+                error=str(fatal_import_error),
+                data={"import_status": import_result, "success": False},
+            )
+            await save_progress_to_db(progress_data)
+            _debug_log_bg("bg_task_error", {"import_id": import_id, "error": str(fatal_import_error)}, "H4")
+            return
+
         # 4. Analyze intake candidates
         progress_data = {"type": "progress", "message": "Analyzing intake documents...", "phase": "analyze_intake", "percent": 90}
         await progress_manager.publish_progress(
@@ -1209,7 +1233,11 @@ async def process_clio_import_background(
             percent=100,
             sub_step="done",
             status="completed",
-            data={"import_status": import_result, "intake_analysis": intake_analysis, "success": True},
+            data={
+                "import_status": import_result,
+                "intake_analysis": intake_analysis,
+                "success": bool(import_result.get("success", True)),
+            },
         )
         await save_progress_to_db(progress_data)
         # #region agent log

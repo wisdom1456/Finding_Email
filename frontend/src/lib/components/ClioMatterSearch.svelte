@@ -167,7 +167,7 @@
 								data?.import_status?.error ||
 								finalProgress.error ||
 								'Clio import failed before any documents could be saved.';
-							errorMessage = importError;
+							errorMessage = importError ?? 'Clio import failed before any documents could be saved.';
 							return;
 						}
 

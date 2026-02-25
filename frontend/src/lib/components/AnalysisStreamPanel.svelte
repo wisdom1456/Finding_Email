@@ -39,6 +39,8 @@
   let elapsedTime = $state(0);
   let thinkingTime = $state(0);  // Time spent in thinking phase
   let timerInterval: ReturnType<typeof setInterval> | null = null;
+  let copyResetTimer: ReturnType<typeof setTimeout> | null = null;
+  let hasEmittedComplete = $state(false);
 
   // Rendered HTML from markdown
   let renderedHtml = $derived.by(() => {
@@ -56,6 +58,7 @@
     
     content = '';
     status = 'thinking';  // Start in thinking phase
+    hasEmittedComplete = false;
     errorMessage = '';
     startTime = Date.now();
     elapsedTime = 0;
@@ -109,10 +112,7 @@
         if (done) {
           // Stream ended - check if we got completion signal
           if (status === 'streaming') {
-            status = 'complete';
-            stopTimer();
-            saveAnalysis(content);
-            onComplete?.(content);
+            emitComplete(content);
           }
           break;
         }
@@ -166,10 +166,7 @@
               }
               
               if (data.done) {
-                status = 'complete';
-                stopTimer();
-                saveAnalysis(content);
-                onComplete?.(content);
+                emitComplete(content);
               }
               
               if (data.error) {
@@ -204,6 +201,15 @@
     }
   }
 
+  function emitComplete(analysisContent: string) {
+    if (hasEmittedComplete) return;
+    hasEmittedComplete = true;
+    status = 'complete';
+    stopTimer();
+    void saveAnalysis(analysisContent);
+    onComplete?.(analysisContent);
+  }
+
   function stopTimer() {
     if (timerInterval) {
       clearInterval(timerInterval);
@@ -226,7 +232,10 @@
     try {
       await navigator.clipboard.writeText(content);
       copySuccess = true;
-      setTimeout(() => copySuccess = false, 2000);
+      if (copyResetTimer) clearTimeout(copyResetTimer);
+      copyResetTimer = setTimeout(() => {
+        copySuccess = false;
+      }, 2000);
     } catch (e) {
       console.error('Failed to copy:', e);
     }
@@ -283,6 +292,10 @@
         abortController.abort();
       }
       stopTimer();
+      if (copyResetTimer) {
+        clearTimeout(copyResetTimer);
+        copyResetTimer = null;
+      }
     };
   });
 </script>
@@ -698,4 +711,3 @@
     50% { opacity: 0.5; }
   }
 </style>
-

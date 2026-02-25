@@ -47,6 +47,7 @@
 
   let modalElement = $state<HTMLDivElement | null>(null);
   let previouslyFocusedElement = $state<HTMLElement | null>(null);
+  let focusTimer: ReturnType<typeof setTimeout> | null = null;
 
   // Focus trap implementation
   function handleKeydown(event: KeyboardEvent) {
@@ -95,12 +96,17 @@
 
   // Focus management effect
   $effect(() => {
+    if (focusTimer) {
+      clearTimeout(focusTimer);
+      focusTimer = null;
+    }
+
     if (open) {
       // Store previously focused element
       previouslyFocusedElement = document.activeElement as HTMLElement;
 
       // Focus first focusable element in modal after a brief delay
-      setTimeout(() => {
+      focusTimer = setTimeout(() => {
         if (modalElement) {
           const focusableElements = modalElement.querySelectorAll(
             'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
@@ -118,6 +124,13 @@
         previouslyFocusedElement = null;
       }
     }
+
+    return () => {
+      if (focusTimer) {
+        clearTimeout(focusTimer);
+        focusTimer = null;
+      }
+    };
   });
 </script>
 
@@ -179,4 +192,3 @@
     </div>
   </div>
 {/if}
-

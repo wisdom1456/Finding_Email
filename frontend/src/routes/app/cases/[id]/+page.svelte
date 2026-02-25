@@ -199,6 +199,7 @@
 	
 	// Tab state
 	let activeTab = $state('overview');
+	let componentActive = true;
 
 	function applyViewFromUrl() {
 		if (typeof window === 'undefined') return;
@@ -227,6 +228,7 @@
 	}
 
 	async function loadEmbeddedResults(force = false) {
+		if (!componentActive) return;
 		if (loadingEmbeddedResults) return;
 		if (!force && embeddedResultsData) {
 			showingEmbeddedResults = true;
@@ -305,6 +307,7 @@
 	});
 
 	onDestroy(() => {
+		componentActive = false;
 		// Clean up SSE connection if active
 		progressStore.disconnect();
 	});
@@ -1465,6 +1468,7 @@
 
 	// Start streaming analysis (fast single-pass)
 	async function startStreamingAnalysis(skipMissingTextCheck = false) {
+		if (!componentActive) return;
 		// Refresh documents from database first to get latest state
 		await loadDocuments();
 
@@ -1493,15 +1497,18 @@
 		showStreamingPanel = true;
 		// Wait for component to mount, then start streaming
 		await new Promise(resolve => setTimeout(resolve, 100));
+		if (!componentActive || !showStreamingPanel) return;
 		streamingAnalysisRef?.startStreaming();
 	}
 
 	async function handleStreamingComplete(content: string) {
+		if (!componentActive) return;
 		streamedContent = content;
 		toastStore.success('Analysis complete! Loading results workspace...');
 		
 		// Wait a moment for the save to complete.
 		await new Promise(resolve => setTimeout(resolve, 1500));
+		if (!componentActive) return;
 		
 		// Reload analysis status to get the new result
 		await loadAnalysisStatus();

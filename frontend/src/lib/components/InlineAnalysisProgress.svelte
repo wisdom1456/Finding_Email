@@ -21,10 +21,14 @@
 	
 	// Track previous status to detect transition to completed/error
 	let prevStatus = '';
+	let completionTimeout: ReturnType<typeof setTimeout> | null = null;
 
 	$effect(() => {
 		if (state.status === 'completed' && prevStatus !== 'completed') {
-			setTimeout(() => onComplete?.(), 1500);
+			if (completionTimeout) clearTimeout(completionTimeout);
+			completionTimeout = setTimeout(() => {
+				onComplete?.();
+			}, 1500);
 		}
 		if (state.status === 'error' && prevStatus !== 'error') {
 			onError?.(state.message || 'An unknown error occurred during analysis');
@@ -38,6 +42,10 @@
 	});
 
 	onDestroy(() => {
+		if (completionTimeout) {
+			clearTimeout(completionTimeout);
+			completionTimeout = null;
+		}
 		progressStore.stopListening();
 	});
 
@@ -147,4 +155,3 @@
 		<span>Model: {state.stats.model}</span>
 	</div>
 </div>
-

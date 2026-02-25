@@ -554,6 +554,8 @@ const { session, user } = await getSecureSession();
 			URL.revokeObjectURL(pdfBlobUrl);
 			pdfBlobUrl = null;
 		}
+		showNotesInput = false;
+		verdictNotes = '';
 	}
 
 	async function loadDocumentSummariesFromAnalysis() {

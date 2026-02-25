@@ -54,31 +54,61 @@ class TestClioPagination:
 
     def test_get_documents_multiple_pages(self, clio_client, mock_session):
         """Test get_documents with more than 100 documents (pagination)."""
-        # Mock API responses: page 1 (100 docs), page 2 (100 docs), page 3 (25 docs)
-        def mock_api_call(*args, **kwargs):
-            page = kwargs.get('params', {}).get('page', 1)
+        next_url_page_2 = "https://app.clio.com/api/v4/documents.json?page_token=abc123"
+        next_url_page_3 = "https://app.clio.com/api/v4/documents.json?page_token=def456"
 
-            if page == 1:
-                data = [{"id": i, "name": f"Doc_{i}.pdf", "content_type": "application/pdf",
-                        "size": 1000, "created_at": "2024-01-01T00:00:00Z",
-                        "latest_document_version": None} for i in range(100)]
-            elif page == 2:
-                data = [{"id": i, "name": f"Doc_{i}.pdf", "content_type": "application/pdf",
-                        "size": 1000, "created_at": "2024-01-01T00:00:00Z",
-                        "latest_document_version": None} for i in range(100, 200)]
-            elif page == 3:
-                data = [{"id": i, "name": f"Doc_{i}.pdf", "content_type": "application/pdf",
-                        "size": 1000, "created_at": "2024-01-01T00:00:00Z",
-                        "latest_document_version": None} for i in range(200, 225)]
-            else:
-                data = []
+        response_page_1 = Mock()
+        response_page_1.status_code = 200
+        response_page_1.json.return_value = {
+            "data": [
+                {
+                    "id": i,
+                    "name": f"Doc_{i}.pdf",
+                    "content_type": "application/pdf",
+                    "size": 1000,
+                    "created_at": "2024-01-01T00:00:00Z",
+                    "latest_document_version": None,
+                }
+                for i in range(100)
+            ],
+            "meta": {"paging": {"next": next_url_page_2}},
+        }
 
-            response = Mock()
-            response.status_code = 200
-            response.json.return_value = {"data": data}
-            return response
+        response_page_2 = Mock()
+        response_page_2.status_code = 200
+        response_page_2.json.return_value = {
+            "data": [
+                {
+                    "id": i,
+                    "name": f"Doc_{i}.pdf",
+                    "content_type": "application/pdf",
+                    "size": 1000,
+                    "created_at": "2024-01-01T00:00:00Z",
+                    "latest_document_version": None,
+                }
+                for i in range(100, 200)
+            ],
+            "meta": {"paging": {"next": next_url_page_3}},
+        }
 
-        mock_session.request.side_effect = mock_api_call
+        response_page_3 = Mock()
+        response_page_3.status_code = 200
+        response_page_3.json.return_value = {
+            "data": [
+                {
+                    "id": i,
+                    "name": f"Doc_{i}.pdf",
+                    "content_type": "application/pdf",
+                    "size": 1000,
+                    "created_at": "2024-01-01T00:00:00Z",
+                    "latest_document_version": None,
+                }
+                for i in range(200, 225)
+            ],
+            "meta": {"paging": {}},
+        }
+
+        mock_session.request.side_effect = [response_page_1, response_page_2, response_page_3]
 
         # Execute
         documents = clio_client.get_documents(matter_id=123)
@@ -90,6 +120,18 @@ class TestClioPagination:
 
         # Should call API 3 times (3 pages)
         assert mock_session.request.call_count == 3
+
+        first_call = mock_session.request.call_args_list[0].kwargs
+        second_call = mock_session.request.call_args_list[1].kwargs
+        third_call = mock_session.request.call_args_list[2].kwargs
+
+        assert first_call["url"] == "https://app.clio.com/api/v4/documents.json"
+        assert first_call["params"]["matter_id"] == 123
+        assert first_call["params"]["limit"] == 100
+        assert second_call["url"] == next_url_page_2
+        assert second_call["params"] is None
+        assert third_call["url"] == next_url_page_3
+        assert third_call["params"] is None
 
     def test_get_documents_empty_response(self, clio_client, mock_session):
         """Test get_documents with no documents."""
@@ -221,38 +263,117 @@ class TestClioPagination:
         with pytest.raises(ClioAPIError, match="API error 500"):
             clio_client.get_documents(matter_id=123)
 
-    def test_pagination_increments_correctly(self, clio_client, mock_session):
-        """Test that page parameter increments correctly across calls."""
-        call_count = 0
-        captured_pages = []
+    def test_pagination_follows_next_urls(self, clio_client, mock_session):
+        """Test document pagination follows Clio's meta.paging.next URLs."""
+        next_url_page_2 = "https://app.clio.com/api/v4/documents.json?page_token=abc123"
+        next_url_page_3 = "https://app.clio.com/api/v4/documents.json?page_token=def456"
+        captured_urls = []
+        captured_params = []
 
         def mock_api_call(*args, **kwargs):
-            nonlocal call_count
-            page = kwargs.get('params', {}).get('page', 1)
-            captured_pages.append(page)
+            captured_urls.append(kwargs.get("url"))
+            captured_params.append(kwargs.get("params"))
 
-            # Return full pages for first 2 calls, partial for 3rd
-            if call_count < 2:
-                data = [{"id": i, "name": f"Doc_{i}", "content_type": "application/pdf",
-                        "size": 1000, "created_at": "2024-01-01",
-                        "latest_document_version": None} for i in range(100)]
+            if len(captured_urls) == 1:
+                data = [
+                    {
+                        "id": i,
+                        "name": f"Doc_{i}",
+                        "content_type": "application/pdf",
+                        "size": 1000,
+                        "created_at": "2024-01-01",
+                        "latest_document_version": None,
+                    }
+                    for i in range(100)
+                ]
+                meta = {"paging": {"next": next_url_page_2}}
+            elif len(captured_urls) == 2:
+                data = [
+                    {
+                        "id": i,
+                        "name": f"Doc_{i}",
+                        "content_type": "application/pdf",
+                        "size": 1000,
+                        "created_at": "2024-01-01",
+                        "latest_document_version": None,
+                    }
+                    for i in range(100, 200)
+                ]
+                meta = {"paging": {"next": next_url_page_3}}
             else:
-                data = [{"id": i, "name": f"Doc_{i}", "content_type": "application/pdf",
-                        "size": 1000, "created_at": "2024-01-01",
-                        "latest_document_version": None} for i in range(30)]
+                data = [
+                    {
+                        "id": i,
+                        "name": f"Doc_{i}",
+                        "content_type": "application/pdf",
+                        "size": 1000,
+                        "created_at": "2024-01-01",
+                        "latest_document_version": None,
+                    }
+                    for i in range(200, 230)
+                ]
+                meta = {"paging": {}}
 
-            call_count += 1
             response = Mock()
             response.status_code = 200
-            response.json.return_value = {"data": data}
+            response.json.return_value = {"data": data, "meta": meta}
             return response
 
         mock_session.request.side_effect = mock_api_call
 
         clio_client.get_documents(matter_id=123)
 
-        # Verify pages were requested in order: 1, 2, 3
-        assert captured_pages == [1, 2, 3]
+        assert captured_urls == [
+            "https://app.clio.com/api/v4/documents.json",
+            next_url_page_2,
+            next_url_page_3,
+        ]
+        assert captured_params[0]["matter_id"] == 123
+        assert captured_params[1] is None
+        assert captured_params[2] is None
+
+    def test_pagination_detects_repeated_next_url(self, clio_client, mock_session):
+        """Fail fast if Clio returns a repeated cursor URL to avoid infinite loops."""
+        repeated_next_url = "https://app.clio.com/api/v4/documents.json?page_token=repeat123"
+
+        response_page_1 = Mock()
+        response_page_1.status_code = 200
+        response_page_1.json.return_value = {
+            "data": [
+                {
+                    "id": i,
+                    "name": f"Doc_{i}.pdf",
+                    "content_type": "application/pdf",
+                    "size": 1000,
+                    "created_at": "2024-01-01T00:00:00Z",
+                    "latest_document_version": None,
+                }
+                for i in range(100)
+            ],
+            "meta": {"paging": {"next": repeated_next_url}},
+        }
+
+        response_page_2 = Mock()
+        response_page_2.status_code = 200
+        response_page_2.json.return_value = {
+            "data": [
+                {
+                    "id": i,
+                    "name": f"Doc_{i}.pdf",
+                    "content_type": "application/pdf",
+                    "size": 1000,
+                    "created_at": "2024-01-01T00:00:00Z",
+                    "latest_document_version": None,
+                }
+                for i in range(100, 200)
+            ],
+            "meta": {"paging": {"next": repeated_next_url}},
+        }
+
+        mock_session.request.side_effect = [response_page_1, response_page_2]
+
+        with pytest.raises(ClioAPIError, match="repeated document pagination URL"):
+            clio_client.get_documents(matter_id=123)
 
 
 class TestClioClientRateLimiting:

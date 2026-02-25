@@ -129,7 +129,11 @@ class ClioClient:
         """
         self._wait_for_rate_limit()
 
-        url = f"{self.base_url}/{endpoint}"
+        # Allow either relative endpoints (e.g. "documents.json") or absolute next-page URLs from Clio.
+        if isinstance(endpoint, str) and endpoint.startswith("http"):
+            url = endpoint
+        else:
+            url = f"{self.base_url}/{endpoint}"
 
         for attempt in range(max_retries):
             try:
@@ -430,19 +434,21 @@ class ClioClient:
             List of document metadata dictionaries with latest_document_version
 
         """
-        params = {
+        base_params = {
             "matter_id": matter_id,
             "fields": "id,name,content_type,size,created_at,latest_document_version",
             "limit": 100,
         }
 
         all_documents = []
-        page = 1
+        seen_next_urls: set[str] = set()
 
         try:
+            next_endpoint: str = "documents.json"
+            next_params: Optional[Dict[str, Any]] = dict(base_params)
+
             while True:
-                params["page"] = page
-                response = self._make_request("GET", "documents.json", params=params)
+                response = self._make_request("GET", next_endpoint, params=next_params)
 
                 documents_data = response.get("data", [])
                 if not documents_data:
@@ -459,11 +465,17 @@ class ClioClient:
                     }
                     all_documents.append(document)
 
-                # Check if there are more pages
-                if len(documents_data) < params["limit"]:
-                    break
-
-                page += 1
+                # Clio uses page_token pagination via meta.paging.next for documents.
+                # If present, follow that exact URL; otherwise stop.
+                next_url = ((response.get("meta") or {}).get("paging") or {}).get("next")
+                if next_url:
+                    if next_url in seen_next_urls:
+                        raise ClioAPIError("Detected repeated document pagination URL from Clio")
+                    seen_next_urls.add(next_url)
+                    next_endpoint = next_url
+                    next_params = None
+                    continue
+                break
 
             return all_documents
 

@@ -13,6 +13,7 @@
 	let loading = $state(true);
 	let errorMessage = $state('');
 	let showOnlyClioCases = $state(false);
+	let timeRange = $state<3 | 6 | 12>(12);
 	let cancellingCaseId = $state<string | null>(null);
 	let deletingCaseId = $state<string | null>(null);
 
@@ -25,11 +26,13 @@
 	}>({ open: false, type: 'delete', caseId: '', caseName: '' });
 
 	$effect(() => {
+		const cutoff = new Date();
+		cutoff.setMonth(cutoff.getMonth() - timeRange);
+		let result = cases.filter(c => new Date(c.created_at) >= cutoff);
 		if (showOnlyClioCases) {
-			filteredCases = cases.filter(c => c.clio_matter_id);
-		} else {
-			filteredCases = cases;
+			result = result.filter(c => c.clio_matter_id);
 		}
+		filteredCases = result;
 	});
 
 	onMount(async () => {
@@ -166,7 +169,7 @@
 	<!-- Header -->
 	<PageHeader
 		title="All Cases"
-		subtitle="{cases.length} total case{cases.length !== 1 ? 's' : ''}{clioCount > 0 ? ` · ${clioCount} linked to Clio` : ''}"
+		subtitle="{filteredCases.length} case{filteredCases.length !== 1 ? 's' : ''} · last {timeRange} months{clioCount > 0 ? ` · ${clioCount} linked to Clio` : ''}"
 		breadcrumbs={[
 			{ label: 'Dashboard', href: '/app' },
 			{ label: 'Cases' }
@@ -183,25 +186,32 @@
 		{/snippet}
 	</PageHeader>
 
-	<!-- Filter Toggle -->
-	{#if clioCount > 0}
-		<div class="flex items-center space-x-3 bg-white px-6 py-4 rounded-card shadow-card border border-gray-100">
-			<Filter class="h-4 w-4 text-gray-400" />
+	<!-- Filters -->
+	<div class="flex flex-wrap items-center gap-3 bg-white px-6 py-4 rounded-card shadow-card border border-gray-100">
+		<Filter class="h-4 w-4 text-gray-400 flex-shrink-0" />
+		<!-- Time range buttons -->
+		<div class="flex items-center gap-1 rounded-lg border border-gray-200 p-1 bg-gray-50">
+			{#each ([3, 6, 12] as const) as months}
+				<button
+					onclick={() => (timeRange = months)}
+					class="px-3 py-1 text-sm font-medium rounded-md transition-colors {timeRange === months ? 'bg-white text-accent shadow-sm border border-gray-200' : 'text-gray-500 hover:text-contrast'}"
+				>
+					{months}mo
+				</button>
+			{/each}
+		</div>
+		{#if clioCount > 0}
+			<div class="w-px h-4 bg-gray-200"></div>
 			<label class="flex items-center cursor-pointer">
 				<input
 					type="checkbox"
 					bind:checked={showOnlyClioCases}
 					class="h-4 w-4 text-accent focus:ring-accent border-gray-300 rounded transition-colors"
 				/>
-				<span class="ml-2 text-sm font-medium text-contrast">Show only Clio cases</span>
+				<span class="ml-2 text-sm font-medium text-contrast">Clio only</span>
 			</label>
-			{#if showOnlyClioCases}
-				<Badge variant="neutral" size="xs">
-					{filteredCases.length} of {cases.length}
-				</Badge>
-			{/if}
-		</div>
-	{/if}
+		{/if}
+	</div>
 
 	<!-- Cases List -->
 	<div class="card-standard !p-0 overflow-hidden animate-fade-in-up">
@@ -216,14 +226,14 @@
 			</div>
 		{:else if filteredCases.length === 0}
 			<div class="p-8 text-center">
-				{#if showOnlyClioCases && cases.length > 0}
-					<Link2 class="mx-auto h-12 w-12 text-gray-300" />
-					<p class="mt-3 text-sm text-gray-500">No Clio cases found.</p>
+				{#if cases.length > 0}
+					<FileText class="mx-auto h-12 w-12 text-gray-300" />
+					<p class="mt-3 text-sm text-gray-500">No cases in the last {timeRange} months.</p>
 					<button
-						onclick={() => (showOnlyClioCases = false)}
+						onclick={() => (timeRange = 12)}
 						class="mt-4 text-sm font-medium text-accent hover:text-accent-hover transition-colors"
 					>
-						Show all cases
+						Show last 12 months
 					</button>
 				{:else}
 					<FileText class="mx-auto h-12 w-12 text-gray-300" />

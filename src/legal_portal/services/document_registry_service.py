@@ -62,6 +62,7 @@ class DocumentRegistryService:
             summary = summary_by_name.get(normalized_name, {})
             key_doc = key_docs_by_name.get(normalized_name, {})
             signature = pdoc.signature_detection or {}
+            enrichment = pdoc.attorney_enrichment or {}
             doc_blob = self._compose_instrument_corpus(
                 file_name=file_name,
                 summary=summary,
@@ -149,6 +150,11 @@ class DocumentRegistryService:
                     "relevance_to_case": summary.get("relevance_to_case"),
                     "important_details": self._ensure_list(summary.get("important_details"))[:6],
                     "reliability_notes": reliability_notes,
+                    "document_type_override": enrichment.get("document_type_override"),
+                    "relevance_level": enrichment.get("relevance_level"),
+                    "key_facts": enrichment.get("key_facts"),
+                    "attorney_notes": enrichment.get("attorney_notes"),
+                    "document_relationships": enrichment.get("document_relationships"),
                 }
             )
 

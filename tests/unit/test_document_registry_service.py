@@ -118,6 +118,72 @@ def test_document_registry_assigns_authority_tiers_and_execution():
     assert email_update["authority_level"] == "party_communication"
 
 
+def test_registry_includes_attorney_enrichment():
+    """Test that registry rows include attorney enrichment data when present on the document."""
+    service = DocumentRegistryService()
+
+    doc = ProcessedDocument(
+        file_name="Sample_Contract.pdf",
+        content="Sample contract content...",
+        document_type=DocumentType.CASE_DOCUMENT,
+        file_type=FileType.PDF,
+        metadata=FileMetadata(
+            file_name="Sample_Contract.pdf",
+            file_type=FileType.PDF,
+            file_size=1024,
+        ),
+        attorney_enrichment={
+            "document_type_override": "purchase_agreement",
+            "relevance_level": "critical",
+            "key_facts": {"date": "2024-03-15", "amount": "$425,000"},
+            "attorney_notes": "Key disclosure doc",
+            "document_relationships": [{"related_doc_id": "doc-456", "relationship_type": "modifies"}],
+        },
+        extraction_quality="high",
+        extraction_method="test",
+    )
+
+    registry = service.build_registry([doc], [])
+
+    assert len(registry) == 1
+    row = registry[0]
+    assert row["document_type_override"] == "purchase_agreement"
+    assert row["relevance_level"] == "critical"
+    assert row["key_facts"] == {"date": "2024-03-15", "amount": "$425,000"}
+    assert row["attorney_notes"] == "Key disclosure doc"
+    assert len(row["document_relationships"]) == 1
+    assert row["document_relationships"][0]["related_doc_id"] == "doc-456"
+
+
+def test_registry_enrichment_fields_default_to_none_when_absent():
+    """Test that registry rows include enrichment keys with None values when no enrichment is present."""
+    service = DocumentRegistryService()
+
+    doc = ProcessedDocument(
+        file_name="Plain_Document.pdf",
+        content="Plain document with no enrichment.",
+        document_type=DocumentType.CASE_DOCUMENT,
+        file_type=FileType.PDF,
+        metadata=FileMetadata(
+            file_name="Plain_Document.pdf",
+            file_type=FileType.PDF,
+            file_size=512,
+        ),
+        extraction_quality="high",
+        extraction_method="test",
+    )
+
+    registry = service.build_registry([doc], [])
+
+    assert len(registry) == 1
+    row = registry[0]
+    assert row["document_type_override"] is None
+    assert row["relevance_level"] is None
+    assert row["key_facts"] is None
+    assert row["attorney_notes"] is None
+    assert row["document_relationships"] is None
+
+
 def test_document_registry_includes_summary_only_entries():
     service = DocumentRegistryService()
 

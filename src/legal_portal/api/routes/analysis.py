@@ -1453,6 +1453,7 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
                 ocr_provider=doc.get("ocr_provider"),
                 document_id=doc["id"],
                 signature_detection=signature_detection,
+                attorney_enrichment=doc_metadata.get("attorney_enrichment") or None,
             )
 
             if pdoc.document_type == DocumentType.INTAKE_FORM:

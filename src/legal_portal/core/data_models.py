@@ -118,6 +118,7 @@ class ProcessedDocument(BaseModel):
     extraction_error: Optional[str] = None  # NEW: Record extraction errors
     ocr_provider: Optional[str] = None  # NEW: Record which OCR provider was used
     signature_detection: Optional[Dict[str, Any]] = None  # Signature detection metadata (if available)
+    attorney_enrichment: Optional[Dict[str, Any]] = None  # Attorney-verified enrichment data (if available)
     extracted_at: datetime = Field(default_factory=datetime.now)
     status: DocumentStatus = DocumentStatus.READY
 

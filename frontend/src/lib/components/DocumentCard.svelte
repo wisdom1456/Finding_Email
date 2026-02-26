@@ -1,9 +1,9 @@
 <script lang="ts">
-	import { 
-		CheckCircle2, 
-		AlertTriangle, 
-		XCircle, 
-		FileQuestion, 
+	import {
+		CheckCircle2,
+		AlertTriangle,
+		XCircle,
+		FileQuestion,
 		AlertCircle,
 		FileText,
 		RefreshCw,
@@ -19,22 +19,36 @@
 	} from 'lucide-svelte';
 	import { slide } from 'svelte/transition';
 	import Badge from './ui/Badge.svelte';
+	import KeyFactsChips from './KeyFactsChips.svelte';
+	import DocumentRelationships from './DocumentRelationships.svelte';
+	import { getAttentionNeeds } from '$lib/utils/documentSorting';
 
-	let { 
-		doc, 
-		onVerify, 
+	let {
+		doc,
+		onVerify,
 		onMarkSigned,
-		onEdit, 
-		onReExtract, 
-		onDelete, 
+		onEdit,
+		onReExtract,
+		onDelete,
 		onAlwaysDelete, // Now expects (name: string, id: string) => void
 		onReplace,
 		onSkip,
 		onView,
 		onToggleExclusion,
-		isProcessing = false
-	}: { 
-		doc: any; 
+		isProcessing = false,
+		onTypeOverride,
+		onRelevanceChange,
+		onNotesUpdate,
+		onFactUpdate,
+		onFactConfirm,
+		onRelationshipAdd,
+		onRelationshipRemove,
+		onSignatureReview,
+		availableDocuments,
+		isExpanded = false,
+		onToggleExpand
+	}: {
+		doc: any;
 		onVerify?: (id: string) => void;
 		onMarkSigned?: (id: string) => void;
 		onEdit?: (doc: any) => void;
@@ -46,6 +60,17 @@
 		onView?: (doc: any) => void;
 		onToggleExclusion?: (id: string, excluded: boolean) => void;
 		isProcessing?: boolean;
+		onTypeOverride?: (id: string, type: string) => void;
+		onRelevanceChange?: (id: string, level: string) => void;
+		onNotesUpdate?: (id: string, notes: string) => void;
+		onFactUpdate?: (id: string, key: string, value: string) => void;
+		onFactConfirm?: (id: string, key: string) => void;
+		onRelationshipAdd?: (id: string, relatedId: string, type: string) => void;
+		onRelationshipRemove?: (id: string, relatedId: string) => void;
+		onSignatureReview?: (doc: any) => void;
+		availableDocuments?: Array<{ id: string; name: string }>;
+		isExpanded?: boolean;
+		onToggleExpand?: (id: string) => void;
 	} = $props();
 
 	let showMenu = $state(false);
@@ -109,7 +134,7 @@
 			textColor: 'text-purple-700'
 		}
 	};
-	
+
 	// Check if this is a duplicate document
 	const isDuplicate = $derived(doc.metadata?.is_duplicate === true);
 	const isExcluded = $derived(doc.metadata?.excluded === true);
@@ -253,9 +278,21 @@
 	function shouldShowSignatureBadge(): boolean {
 		return getSignatureStatus() !== 'none';
 	}
+
+	// Format flat key_facts object into the structured shape KeyFactsChips expects
+	function formatKeyFacts(facts: Record<string, string> | null | undefined): Record<string, { value: string; confirmed: boolean }> {
+		if (!facts) return {};
+		return Object.fromEntries(
+			Object.entries(facts).map(([k, v]) => [k, { value: String(v), confirmed: false }])
+		);
+	}
+
+	// Derived attention needs and relevance (avoids {@const} in invalid positions)
+	const attentionNeeds = $derived(getAttentionNeeds(doc));
+	const relevanceLevel = $derived(doc.metadata?.attorney_enrichment?.relevance_level as string | undefined);
 </script>
 
-<div 
+<div
 	class={`group relative border rounded-xl overflow-hidden transition-all duration-200 ${config.bgColor} ${config.borderColor} hover:shadow-md ${isProcessing ? 'animate-pulse' : ''}`}
 >
 	<div class="p-4 sm:p-5 flex items-start gap-4">
@@ -271,10 +308,74 @@
 		<!-- Content -->
 		<div class="flex-1 min-w-0">
 			<div class="flex items-start justify-between gap-4">
-				<div class="min-w-0">
-					<h4 class={`text-sm font-bold truncate ${config.textColor}`}>
-						{doc.file_name}
-					</h4>
+				<div class="min-w-0 flex-1">
+					<!-- Header row: filename + inline attorney actions -->
+					<div class="flex items-center gap-2 flex-wrap">
+						<h4 class={`text-sm font-bold truncate ${config.textColor}`}>
+							{doc.file_name}
+						</h4>
+
+						<!-- Attention needs label -->
+						{#if attentionNeeds.length > 0}
+						<span class="text-xs text-gray-400 italic ml-1">Needs: {attentionNeeds.join(', ')}</span>
+						{/if}
+
+						<!-- Type Override Dropdown -->
+						{#if onTypeOverride}
+						<select
+							class="text-xs font-semibold px-2 py-0.5 rounded border
+								   {doc.metadata?.attorney_enrichment?.document_type_override
+									   ? 'bg-blue-50 border-blue-300 text-blue-700'
+									   : 'bg-gray-100 border-gray-300 text-gray-600'}
+								   cursor-pointer focus:ring-1 focus:ring-accent"
+							value={doc.metadata?.attorney_enrichment?.document_type_override || doc.metadata?.document_type_label || ''}
+							onchange={(e) => onTypeOverride!(doc.id, (e.target as HTMLSelectElement).value)}
+							title="Document type (click to change)"
+						>
+							<option value="">Auto-detect</option>
+							<option value="contract">Contract</option>
+							<option value="addendum">Addendum</option>
+							<option value="inspection_report">Inspection Report</option>
+							<option value="disclosure">Disclosure</option>
+							<option value="correspondence">Correspondence</option>
+							<option value="invoice_receipt">Invoice/Receipt</option>
+							<option value="photo_media">Photo/Media</option>
+							<option value="legal_filing">Legal Filing</option>
+							<option value="other">Other</option>
+						</select>
+						{/if}
+
+						<!-- Relevance Star Button -->
+						{#if onRelevanceChange}
+						<button
+							class="p-0.5 rounded transition-colors"
+							onclick={() => {
+								const next = relevanceLevel === 'critical' ? 'supporting' :
+											  relevanceLevel === 'supporting' ? 'background' : 'critical';
+								onRelevanceChange!(doc.id, next);
+							}}
+							title={relevanceLevel ? `Relevance: ${relevanceLevel} (click to change)` : 'Set relevance'}
+						>
+							<!-- Star icon: filled gold for critical, gray for supporting, outline for background/none -->
+							<svg class="w-4 h-4 {relevanceLevel === 'critical' ? 'text-amber-500 fill-current' : relevanceLevel === 'supporting' ? 'text-gray-400 fill-current' : 'text-gray-300'}" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" fill="none">
+								<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+							</svg>
+						</button>
+						{/if}
+
+						<!-- Expand/Collapse Button -->
+						<button
+							data-expand-btn
+							class="p-1 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-all ml-auto flex-shrink-0"
+							onclick={() => onToggleExpand?.(doc.id)}
+							title={isExpanded ? 'Collapse' : 'Expand details'}
+						>
+							<svg class="w-4 h-4 transition-transform duration-200 {isExpanded ? 'rotate-180' : ''}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+								<polyline points="6 9 12 15 18 9"/>
+							</svg>
+						</button>
+					</div>
+
 					<div class="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1">
 						<span class="text-xs text-gray-500">{doc.file_type?.split('/')[1]?.toUpperCase() || 'FILE'}</span>
 						<span class="text-xs text-gray-400">•</span>
@@ -309,8 +410,8 @@
 			<!-- Quality Score Alert for documents needing attention -->
 			{#if (doc.status === 'needs_review' || doc.status === 'extraction_failed' || (doc.status === 'ready' && !doc.is_verified))}
 				<div class="mt-3 flex items-center gap-3">
-					<Badge 
-						variant={calculatedQuality.score === 0 ? 'error' : calculatedQuality.level === 'low' ? 'error' : calculatedQuality.level === 'medium' ? 'needs_review' : 'ready'} 
+					<Badge
+						variant={calculatedQuality.score === 0 ? 'error' : calculatedQuality.level === 'low' ? 'error' : calculatedQuality.level === 'medium' ? 'needs_review' : 'ready'}
 						class="font-bold py-1 px-3"
 					>
 						{calculatedQuality.score.toFixed(1)}/10
@@ -321,7 +422,7 @@
 						{/if}
 					</Badge>
 					{#if calculatedQuality.score === 0}
-						<span class="text-xs font-medium text-red-600">⚠️ Needs text extraction or manual input</span>
+						<span class="text-xs font-medium text-red-600">Needs text extraction or manual input</span>
 					{/if}
 				</div>
 			{/if}
@@ -362,11 +463,11 @@
 			<div class="mt-4 flex flex-wrap items-center gap-2">
 				{#if isDuplicate}
 					<!-- Duplicate toggle button -->
-					<button 
+					<button
 						onclick={() => onToggleExclusion?.(doc.id, !isExcluded)}
 						class={`btn text-xs font-bold shadow-sm ${
-							isExcluded 
-								? 'btn-success px-3 py-1.5' 
+							isExcluded
+								? 'btn-success px-3 py-1.5'
 								: 'bg-purple-100 border border-purple-300 text-purple-700 hover:bg-purple-200 px-3 py-1.5'
 						}`}
 					>
@@ -379,9 +480,9 @@
 						{/if}
 					</button>
 				{/if}
-				
+
 				{#if doc.status === 'ready' || doc.status === 'needs_review' || doc.status === 'extraction_failed' || doc.status === 'duplicate'}
-					<button 
+					<button
 						onclick={() => onEdit?.(doc)}
 						class="inline-flex items-center px-3 py-1.5 text-xs font-bold rounded-lg bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 hover:border-gray-300 transition-colors shadow-sm"
 					>
@@ -391,7 +492,7 @@
 				{/if}
 
 				{#if doc.status === 'extraction_failed'}
-					<button 
+					<button
 						onclick={() => onReExtract?.(doc.id)}
 						class="btn btn-primary px-3 py-1.5 text-xs font-bold shadow-sm"
 					>
@@ -401,7 +502,7 @@
 				{/if}
 
 				{#if doc.status === 'download_failed' || doc.status === 'corrupted'}
-					<button 
+					<button
 						onclick={() => onReplace?.(doc.id)}
 						class="btn btn-primary px-3 py-1.5 text-xs font-bold shadow-sm"
 					>
@@ -411,7 +512,7 @@
 				{/if}
 
 				{#if doc.status === 'needs_review' && !doc.is_verified}
-					<button 
+					<button
 						onclick={() => onVerify?.(doc.id)}
 						disabled={!doc.extracted_text && !doc.manual_text}
 						title={!doc.extracted_text && !doc.manual_text ? "Run OCR first to verify this document" : "Mark as ready for analysis"}
@@ -437,16 +538,16 @@
 				{/if}
 
 				{#if doc.status !== 'ready' && doc.status !== 'skipped'}
-					<button 
+					<button
 						onclick={() => onSkip?.(doc.id)}
 						class="btn btn-secondary px-3 py-1.5 text-xs font-bold text-gray-500"
 					>
 						Skip
 					</button>
 				{/if}
-				
+
 				{#if doc.storage_path}
-					<button 
+					<button
 						onclick={() => onView?.(doc)}
 						class="btn btn-secondary px-3 py-1.5 text-xs font-bold"
 					>
@@ -455,11 +556,57 @@
 					</button>
 				{/if}
 			</div>
+
+			<!-- Expanded panel: key facts, notes, relationships -->
+			{#if isExpanded}
+			<div class="mt-3 pt-3 border-t border-gray-100 space-y-3" transition:slide={{ duration: 200 }}>
+				<!-- Key Facts -->
+				{#if doc.metadata?.attorney_enrichment?.key_facts || Object.keys(doc.metadata?.attorney_enrichment || {}).some((k: string) => ['date','amount','parties','property'].includes(k))}
+				<div>
+					<div class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Key Facts</div>
+					<KeyFactsChips
+						facts={doc.metadata?.attorney_enrichment?.key_facts_structured || formatKeyFacts(doc.metadata?.attorney_enrichment?.key_facts)}
+						onFactUpdate={(key, value) => onFactUpdate?.(doc.id, key, value)}
+						onFactConfirm={(key) => onFactConfirm?.(doc.id, key)}
+					/>
+				</div>
+				{/if}
+
+				<!-- Attorney Notes -->
+				<div>
+					<div class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Notes</div>
+					<textarea
+						class="w-full text-sm border border-gray-200 rounded-lg p-2 resize-none focus:ring-1 focus:ring-accent focus:border-transparent bg-gray-50"
+						rows="2"
+						placeholder="Add notes about this document..."
+						value={doc.metadata?.attorney_enrichment?.attorney_notes || ''}
+						onblur={(e) => {
+							const val = (e.target as HTMLTextAreaElement).value;
+							if (val !== (doc.metadata?.attorney_enrichment?.attorney_notes || '')) {
+								onNotesUpdate?.(doc.id, val);
+							}
+						}}
+					></textarea>
+				</div>
+
+				<!-- Document Relationships -->
+				<div>
+					<div class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Related Documents</div>
+					<DocumentRelationships
+						documentId={doc.id}
+						relationships={doc.metadata?.attorney_enrichment?.document_relationships || []}
+						availableDocuments={availableDocuments || []}
+						onAddRelationship={(relId, type) => onRelationshipAdd?.(doc.id, relId, type)}
+						onRemoveRelationship={(relId) => onRelationshipRemove?.(doc.id, relId)}
+					/>
+				</div>
+			</div>
+			{/if}
 		</div>
 
 		<!-- Menu Toggle -->
 		<div class="relative">
-			<button 
+			<button
 				onclick={() => showMenu = !showMenu}
 				class="p-1 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-black/5 transition-colors"
 			>
@@ -467,11 +614,11 @@
 			</button>
 
 			{#if showMenu}
-				<div 
+				<div
 					transition:slide={{ duration: 100 }}
 					class="absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-xl shadow-xl z-10 py-1"
 				>
-					<button 
+					<button
 						onclick={() => { onDelete?.(doc.id); showMenu = false; }}
 						class="w-full px-4 py-2 text-left text-sm font-medium text-red-600 hover:bg-red-50 flex items-center"
 					>
@@ -479,7 +626,7 @@
 						Delete Document
 					</button>
 
-					<button 
+					<button
 						onclick={() => { onAlwaysDelete?.(doc.file_name, doc.id); showMenu = false; }}
 						class="w-full px-4 py-2 text-left text-sm font-medium text-red-700 hover:bg-red-50 flex items-center"
 					>

@@ -188,3 +188,25 @@ async def test_upload_multiple_documents(app_client: AsyncClient):
 
     # Assert
     assert response.status_code in [200, 201, 404, 207]  # Multi-status if partial success
+
+
+def test_verify_document_request_accepts_enrichment_fields():
+    """Test that VerifyDocumentRequest accepts new attorney enrichment fields."""
+    from src.legal_portal.api.routes.documents import VerifyDocumentRequest
+    payload = {
+        "is_verified": True,
+        "document_type_override": "contract",
+        "relevance_level": "critical",
+        "key_facts": {"date": "2024-03-15", "amount": "$425,000"},
+        "attorney_notes": "Key disclosure document - seller signed page 4",
+        "document_relationships": [
+            {"related_doc_id": "doc-456", "relationship_type": "modifies"}
+        ],
+    }
+    req = VerifyDocumentRequest(**payload)
+    assert req.document_type_override == "contract"
+    assert req.relevance_level == "critical"
+    assert req.key_facts == {"date": "2024-03-15", "amount": "$425,000"}
+    assert req.attorney_notes == "Key disclosure document - seller signed page 4"
+    assert len(req.document_relationships) == 1
+    assert req.document_relationships[0]["relationship_type"] == "modifies"

@@ -58,6 +58,12 @@ class VerifyDocumentRequest(BaseModel):
     signature_verification_notes: Optional[str] = None
     signature_signing_date: Optional[str] = None
     signature_signer_names: Optional[List[str]] = None
+    # Enrichment fields for attorney input
+    document_type_override: Optional[str] = None
+    relevance_level: Optional[str] = None  # "critical" | "supporting" | "background"
+    key_facts: Optional[Dict[str, Any]] = None
+    attorney_notes: Optional[str] = None
+    document_relationships: Optional[List[Dict[str, str]]] = None
 
 
 class DocumentResponse(BaseModel):

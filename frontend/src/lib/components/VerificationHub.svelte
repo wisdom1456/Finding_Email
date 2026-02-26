@@ -45,6 +45,10 @@
 		onDocumentsUpdated: () => Promise<void>;
 	} = $props();
 
+	// Local shadow of the documents prop for optimistic updates (Svelte 5 reactivity)
+	let localDocuments = $state<any[]>([]);
+	$effect(() => { localDocuments = [...documents]; });
+
 	// State
 	let selectedDocIds = $state<Set<string>>(new Set());
 	let bulkActionLoading = $state(false);
@@ -83,7 +87,7 @@
 		count?: number;
 	}>({ open: false, type: 'delete' });
 
-	// Triage Groups
+	// Triage Groups — sourced from displayDocuments so chip filters take effect
 	let triageGroups = $derived.by(() => {
 		const groups = {
 			critical: [] as any[], // download_failed, corrupted
@@ -93,7 +97,7 @@
 			excluded: [] as any[] // documents manually excluded from analysis
 		};
 
-		for (const doc of documents) {
+		for (const doc of displayDocuments) {
 			const status = doc.status;
 			const isDuplicate = doc.metadata?.is_duplicate === true || status === 'duplicate';
 			const isExcluded = doc.metadata?.excluded === true;
@@ -129,10 +133,10 @@
 
 	// Filtered list for "All" view
 	let filteredDocs = $derived.by(() => {
-		if (!filterQuery) return documents;
+		if (!filterQuery) return localDocuments;
 		const query = filterQuery.toLowerCase();
-		return documents.filter(doc => 
-			doc.file_name.toLowerCase().includes(query) || 
+		return localDocuments.filter(doc =>
+			doc.file_name.toLowerCase().includes(query) ||
 			doc.status.toLowerCase().includes(query)
 		);
 	});
@@ -150,8 +154,8 @@
 
 	// Compute filtered documents for display (used when filters are active)
 	let displayDocuments = $derived((() => {
-		if (activeFilters.size === 0) return documents;
-		return documents.filter(d => {
+		if (activeFilters.size === 0) return localDocuments;
+		return localDocuments.filter(d => {
 			const sig = d.metadata?.signature_detection || {};
 			const enrichment = d.metadata?.attorney_enrichment || {};
 			const quality = d.metadata?.quality_score ?? 10;
@@ -182,10 +186,10 @@
 	}
 
 	function toggleAll() {
-		if (selectedDocIds.size === documents.length) {
+		if (selectedDocIds.size === localDocuments.length) {
 			selectedDocIds = new Set();
 		} else {
-			selectedDocIds = new Set(documents.map(d => d.id));
+			selectedDocIds = new Set(localDocuments.map(d => d.id));
 		}
 	}
 
@@ -318,7 +322,7 @@ const { session, user } = await getSecureSession();
 
 			// 1. Delete the current document and any similar variants in this case
 			if (docId) {
-				const docsToDelete = documents.filter(
+				const docsToDelete = localDocuments.filter(
 					(d) => d.file_name === docName || isNameBlacklisted(d.file_name, [blacklistRule])
 				);
 				const docIds = [...new Set(docsToDelete.map((d) => d.id))];
@@ -480,8 +484,8 @@ const { session, user } = await getSecureSession();
 			let failedCount = 0;
 
 			for (const doc of docsToProcess) {
-				processingDocIds.add(doc.id);
-				
+				processingDocIds = new Set([...processingDocIds, doc.id]);
+
 				try {
 					const response = await fetch(`${getApiUrl()}/api/documents/${doc.id}/extract`, {
 						method: 'POST',
@@ -496,7 +500,7 @@ const { session, user } = await getSecureSession();
 					console.error(`Failed to extract ${doc.file_name}:`, err);
 					failedCount++;
 				} finally {
-					processingDocIds.delete(doc.id);
+					const next = new Set(processingDocIds); next.delete(doc.id); processingDocIds = next;
 					remainingOcrCount--;
 					// Update UI as each document completes
 					await onDocumentsUpdated();
@@ -513,7 +517,7 @@ const { session, user } = await getSecureSession();
 		} finally {
 			bulkActionLoading = false;
 			remainingOcrCount = 0;
-			processingDocIds.clear();
+			processingDocIds = new Set();
 		}
 	}
 
@@ -720,7 +724,7 @@ const { session, user } = await getSecureSession();
 
 	// Signature Review Panel handlers
 	function handleSignatureReviewFromCard(doc: any) {
-		const needsSig = documents.filter(d => {
+		const needsSig = localDocuments.filter(d => {
 			const sig = d.metadata?.signature_detection || {};
 			const enrichment = d.metadata?.attorney_enrichment || {};
 			return sig.signature_expected && sig.status !== 'signed' && enrichment.signature_verification !== 'signed';
@@ -737,14 +741,14 @@ const { session, user } = await getSecureSession();
 	}
 
 	function handleSignatureVerdictFromPanel(docId: string, verdict: string) {
-		const idx = documents.findIndex(d => d.id === docId);
+		const idx = localDocuments.findIndex(d => d.id === docId);
 		if (idx >= 0) {
-			documents[idx] = {
-				...documents[idx],
+			localDocuments[idx] = {
+				...localDocuments[idx],
 				metadata: {
-					...documents[idx].metadata,
+					...localDocuments[idx].metadata,
 					signature_detection: {
-						...(documents[idx].metadata?.signature_detection || {}),
+						...(localDocuments[idx].metadata?.signature_detection || {}),
 						status: verdict === 'signed' ? 'signed' : verdict === 'not_signed' ? 'not_detected' : 'unknown',
 						verified_by_attorney: true
 					}
@@ -766,126 +770,135 @@ const { session, user } = await getSecureSession();
 
 	// Enrichment API handlers
 	async function handleTypeOverride(docId: string, type: string) {
-		const idx = documents.findIndex(d => d.id === docId);
-		if (idx >= 0) {
-			const doc = documents[idx];
-			documents[idx] = {
-				...doc,
-				metadata: {
-					...doc.metadata,
-					attorney_enrichment: {
-						...(doc.metadata?.attorney_enrichment || {}),
-						document_type_override: type
-					}
-				}
-			};
-		}
 		try {
-			const { data: { session } } = await supabase.auth.getSession();
+			const idx = localDocuments.findIndex(d => d.id === docId);
+			if (idx >= 0) {
+				const doc = localDocuments[idx];
+				localDocuments[idx] = {
+					...doc,
+					metadata: {
+						...doc.metadata,
+						attorney_enrichment: {
+							...(doc.metadata?.attorney_enrichment || {}),
+							document_type_override: type
+						}
+					}
+				};
+			}
+			const { session, user } = await getSecureSession();
+			if (!session || !user) throw new Error('Not authenticated');
 			const apiUrl = getApiUrl();
-			await fetch(`${apiUrl}/api/documents/${docId}/verify`, {
+			const response = await fetch(`${apiUrl}/api/documents/${docId}/verify`, {
 				method: 'PATCH',
 				headers: {
 					'Content-Type': 'application/json',
-					'Authorization': `Bearer ${session?.access_token}`
+					'Authorization': `Bearer ${session.access_token}`
 				},
 				body: JSON.stringify({ document_type_override: type })
 			});
+			if (!response.ok) throw new Error('Failed to save changes');
 		} catch (e) {
 			toastStore.error('Failed to save document type');
 		}
 	}
 
 	async function handleRelevanceChange(docId: string, level: string) {
-		const idx = documents.findIndex(d => d.id === docId);
-		if (idx >= 0) {
-			const doc = documents[idx];
-			documents[idx] = {
-				...doc,
-				metadata: {
-					...doc.metadata,
-					attorney_enrichment: { ...(doc.metadata?.attorney_enrichment || {}), relevance_level: level }
-				}
-			};
-		}
 		try {
-			const { data: { session } } = await supabase.auth.getSession();
+			const idx = localDocuments.findIndex(d => d.id === docId);
+			if (idx >= 0) {
+				const doc = localDocuments[idx];
+				localDocuments[idx] = {
+					...doc,
+					metadata: {
+						...doc.metadata,
+						attorney_enrichment: { ...(doc.metadata?.attorney_enrichment || {}), relevance_level: level }
+					}
+				};
+			}
+			const { session, user } = await getSecureSession();
+			if (!session || !user) throw new Error('Not authenticated');
 			const apiUrl = getApiUrl();
-			await fetch(`${apiUrl}/api/documents/${docId}/verify`, {
+			const response = await fetch(`${apiUrl}/api/documents/${docId}/verify`, {
 				method: 'PATCH',
-				headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
+				headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
 				body: JSON.stringify({ relevance_level: level })
 			});
+			if (!response.ok) throw new Error('Failed to save changes');
 		} catch (e) {
 			toastStore.error('Failed to save relevance');
 		}
 	}
 
 	async function handleNotesUpdate(docId: string, notes: string) {
-		const idx = documents.findIndex(d => d.id === docId);
-		if (idx >= 0) {
-			const doc = documents[idx];
-			documents[idx] = {
-				...doc,
-				metadata: {
-					...doc.metadata,
-					attorney_enrichment: { ...(doc.metadata?.attorney_enrichment || {}), attorney_notes: notes }
-				}
-			};
-		}
 		try {
-			const { data: { session } } = await supabase.auth.getSession();
+			const idx = localDocuments.findIndex(d => d.id === docId);
+			if (idx >= 0) {
+				const doc = localDocuments[idx];
+				localDocuments[idx] = {
+					...doc,
+					metadata: {
+						...doc.metadata,
+						attorney_enrichment: { ...(doc.metadata?.attorney_enrichment || {}), attorney_notes: notes }
+					}
+				};
+			}
+			const { session, user } = await getSecureSession();
+			if (!session || !user) throw new Error('Not authenticated');
 			const apiUrl = getApiUrl();
-			await fetch(`${apiUrl}/api/documents/${docId}/verify`, {
+			const response = await fetch(`${apiUrl}/api/documents/${docId}/verify`, {
 				method: 'PATCH',
-				headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
+				headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
 				body: JSON.stringify({ attorney_notes: notes })
 			});
+			if (!response.ok) throw new Error('Failed to save changes');
 		} catch (e) {
 			toastStore.error('Failed to save notes');
 		}
 	}
 
 	async function handleFactUpdate(docId: string, factKey: string, newValue: string) {
-		const idx = documents.findIndex(d => d.id === docId);
-		if (idx >= 0) {
-			const doc = documents[idx];
-			const existingFacts = doc.metadata?.attorney_enrichment?.key_facts || {};
-			documents[idx] = {
-				...doc,
-				metadata: {
-					...doc.metadata,
-					attorney_enrichment: {
-						...(doc.metadata?.attorney_enrichment || {}),
-						key_facts: {
-							...existingFacts,
-							[factKey]: { value: newValue, confirmed: false }
+		try {
+			const idx = localDocuments.findIndex(d => d.id === docId);
+			if (idx >= 0) {
+				const doc = localDocuments[idx];
+				const existingFacts = doc.metadata?.attorney_enrichment?.key_facts || {};
+				localDocuments[idx] = {
+					...doc,
+					metadata: {
+						...doc.metadata,
+						attorney_enrichment: {
+							...(doc.metadata?.attorney_enrichment || {}),
+							key_facts: {
+								...existingFacts,
+								[factKey]: { value: newValue, confirmed: false }
+							}
 						}
 					}
-				}
-			};
-		}
-		try {
-			const { data: { session } } = await supabase.auth.getSession();
+				};
+			}
+			const { session, user } = await getSecureSession();
+			if (!session || !user) throw new Error('Not authenticated');
 			const apiUrl = getApiUrl();
-			await fetch(`${apiUrl}/api/documents/${docId}/verify`, {
+			const response = await fetch(`${apiUrl}/api/documents/${docId}/verify`, {
 				method: 'PATCH',
-				headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
+				headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
 				body: JSON.stringify({ key_facts: { [factKey]: { value: newValue, confirmed: false } } })
 			});
+			if (!response.ok) throw new Error('Failed to save changes');
 		} catch (e) {
 			toastStore.error('Failed to save fact');
 		}
 	}
 
 	async function handleFactConfirm(docId: string, factKey: string) {
-		const idx = documents.findIndex(d => d.id === docId);
-		if (idx >= 0) {
-			const doc = documents[idx];
+		try {
+			const idx = localDocuments.findIndex(d => d.id === docId);
+			if (idx < 0) return;
+			const doc = localDocuments[idx];
 			const existingFacts = doc.metadata?.attorney_enrichment?.key_facts || {};
 			const existingFact = existingFacts[factKey] || {};
 			const confirmedFact = { ...existingFact, confirmed: true };
-			documents[idx] = {
+			localDocuments[idx] = {
 				...doc,
 				metadata: {
 					...doc.metadata,
@@ -898,73 +911,77 @@ const { session, user } = await getSecureSession();
 					}
 				}
 			};
-			try {
-				const { data: { session } } = await supabase.auth.getSession();
-				const apiUrl = getApiUrl();
-				await fetch(`${apiUrl}/api/documents/${docId}/verify`, {
-					method: 'PATCH',
-					headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
-					body: JSON.stringify({ key_facts: { [factKey]: { ...existingFact, confirmed: true } } })
-				});
-			} catch (e) {
-				toastStore.error('Failed to confirm fact');
-			}
+			const { session, user } = await getSecureSession();
+			if (!session || !user) throw new Error('Not authenticated');
+			const apiUrl = getApiUrl();
+			const response = await fetch(`${apiUrl}/api/documents/${docId}/verify`, {
+				method: 'PATCH',
+				headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+				body: JSON.stringify({ key_facts: { [factKey]: { ...existingFact, confirmed: true } } })
+			});
+			if (!response.ok) throw new Error('Failed to save changes');
+		} catch (e) {
+			toastStore.error('Failed to confirm fact');
 		}
 	}
 
 	async function handleRelationshipAdd(docId: string, relatedDocId: string, type: string) {
-		const idx = documents.findIndex(d => d.id === docId);
-		if (idx >= 0) {
-			const doc = documents[idx];
-			const existing = doc.metadata?.attorney_enrichment?.document_relationships || [];
-			const relatedDoc = documents.find(d => d.id === relatedDocId);
-			const newRelationship = { related_doc_id: relatedDocId, relationship_type: type, related_doc_name: relatedDoc?.file_name };
-			const updated = [...existing, newRelationship];
-			documents[idx] = {
-				...doc,
-				metadata: {
-					...doc.metadata,
-					attorney_enrichment: { ...(doc.metadata?.attorney_enrichment || {}), document_relationships: updated }
-				}
-			};
-			try {
-				const { data: { session } } = await supabase.auth.getSession();
+		try {
+			const idx = localDocuments.findIndex(d => d.id === docId);
+			if (idx >= 0) {
+				const doc = localDocuments[idx];
+				const existing = doc.metadata?.attorney_enrichment?.document_relationships || [];
+				const relatedDoc = localDocuments.find(d => d.id === relatedDocId);
+				const newRelationship = { related_doc_id: relatedDocId, relationship_type: type, related_doc_name: relatedDoc?.file_name };
+				const updated = [...existing, newRelationship];
+				localDocuments[idx] = {
+					...doc,
+					metadata: {
+						...doc.metadata,
+						attorney_enrichment: { ...(doc.metadata?.attorney_enrichment || {}), document_relationships: updated }
+					}
+				};
+				const { session, user } = await getSecureSession();
+				if (!session || !user) throw new Error('Not authenticated');
 				const apiUrl = getApiUrl();
-				await fetch(`${apiUrl}/api/documents/${docId}/verify`, {
+				const response = await fetch(`${apiUrl}/api/documents/${docId}/verify`, {
 					method: 'PATCH',
-					headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
+					headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
 					body: JSON.stringify({ document_relationships: updated })
 				});
-			} catch (e) {
-				toastStore.error('Failed to save relationship');
+				if (!response.ok) throw new Error('Failed to save changes');
 			}
+		} catch (e) {
+			toastStore.error('Failed to save relationship');
 		}
 	}
 
 	async function handleRelationshipRemove(docId: string, relatedDocId: string) {
-		const idx = documents.findIndex(d => d.id === docId);
-		if (idx >= 0) {
-			const doc = documents[idx];
-			const existing = doc.metadata?.attorney_enrichment?.document_relationships || [];
-			const updated = existing.filter((r: any) => r.related_doc_id !== relatedDocId);
-			documents[idx] = {
-				...doc,
-				metadata: {
-					...doc.metadata,
-					attorney_enrichment: { ...(doc.metadata?.attorney_enrichment || {}), document_relationships: updated }
-				}
-			};
-			try {
-				const { data: { session } } = await supabase.auth.getSession();
+		try {
+			const idx = localDocuments.findIndex(d => d.id === docId);
+			if (idx >= 0) {
+				const doc = localDocuments[idx];
+				const existing = doc.metadata?.attorney_enrichment?.document_relationships || [];
+				const updated = existing.filter((r: any) => r.related_doc_id !== relatedDocId);
+				localDocuments[idx] = {
+					...doc,
+					metadata: {
+						...doc.metadata,
+						attorney_enrichment: { ...(doc.metadata?.attorney_enrichment || {}), document_relationships: updated }
+					}
+				};
+				const { session, user } = await getSecureSession();
+				if (!session || !user) throw new Error('Not authenticated');
 				const apiUrl = getApiUrl();
-				await fetch(`${apiUrl}/api/documents/${docId}/verify`, {
+				const response = await fetch(`${apiUrl}/api/documents/${docId}/verify`, {
 					method: 'PATCH',
-					headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
+					headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
 					body: JSON.stringify({ document_relationships: updated })
 				});
-			} catch (e) {
-				toastStore.error('Failed to remove relationship');
+				if (!response.ok) throw new Error('Failed to save changes');
 			}
+		} catch (e) {
+			toastStore.error('Failed to remove relationship');
 		}
 	}
 </script>
@@ -980,7 +997,7 @@ const { session, user } = await getSecureSession();
 				Verification Hub
 			</h2>
 			<p class="mt-2 text-gray-500 font-medium text-lg max-w-2xl">
-				Review and confirm extracted data from {documents.length} documents before running the final legal analysis.
+				Review and confirm extracted data from {localDocuments.length} documents before running the final legal analysis.
 			</p>
 			<button 
 				onclick={() => showInstructions = !showInstructions}
@@ -1060,7 +1077,7 @@ const { session, user } = await getSecureSession();
 
 	<!-- Triage Dashboard (replaces DocumentStatusBanner) -->
 	<TriageDashboard
-		{documents}
+		documents={localDocuments}
 		{activeFilters}
 		onFilterToggle={handleFilterToggle}
 	/>
@@ -1145,7 +1162,7 @@ const { session, user } = await getSecureSession();
 								onRelationshipAdd={handleRelationshipAdd}
 								onRelationshipRemove={handleRelationshipRemove}
 								onSignatureReview={handleSignatureReviewFromCard}
-								availableDocuments={documents.map(d => ({ id: d.id, name: d.file_name }))}
+								availableDocuments={localDocuments.map(d => ({ id: d.id, name: d.file_name }))}
 								isExpanded={expandedCardIds.has(doc.id)}
 								onToggleExpand={handleToggleExpand}
 							/>
@@ -1205,7 +1222,7 @@ const { session, user } = await getSecureSession();
 								onRelationshipAdd={handleRelationshipAdd}
 								onRelationshipRemove={handleRelationshipRemove}
 								onSignatureReview={handleSignatureReviewFromCard}
-								availableDocuments={documents.map(d => ({ id: d.id, name: d.file_name }))}
+								availableDocuments={localDocuments.map(d => ({ id: d.id, name: d.file_name }))}
 								isExpanded={expandedCardIds.has(doc.id)}
 								onToggleExpand={handleToggleExpand}
 							/>
@@ -1245,7 +1262,7 @@ const { session, user } = await getSecureSession();
 								onRelationshipAdd={handleRelationshipAdd}
 								onRelationshipRemove={handleRelationshipRemove}
 								onSignatureReview={handleSignatureReviewFromCard}
-								availableDocuments={documents.map(d => ({ id: d.id, name: d.file_name }))}
+								availableDocuments={localDocuments.map(d => ({ id: d.id, name: d.file_name }))}
 								isExpanded={expandedCardIds.has(doc.id)}
 								onToggleExpand={handleToggleExpand}
 							/>
@@ -1288,7 +1305,7 @@ const { session, user } = await getSecureSession();
 								onRelationshipAdd={handleRelationshipAdd}
 								onRelationshipRemove={handleRelationshipRemove}
 								onSignatureReview={handleSignatureReviewFromCard}
-								availableDocuments={documents.map(d => ({ id: d.id, name: d.file_name }))}
+								availableDocuments={localDocuments.map(d => ({ id: d.id, name: d.file_name }))}
 								isExpanded={expandedCardIds.has(doc.id)}
 								onToggleExpand={handleToggleExpand}
 							/>
@@ -1333,7 +1350,7 @@ const { session, user } = await getSecureSession();
 								onRelationshipAdd={handleRelationshipAdd}
 								onRelationshipRemove={handleRelationshipRemove}
 								onSignatureReview={handleSignatureReviewFromCard}
-								availableDocuments={documents.map(d => ({ id: d.id, name: d.file_name }))}
+								availableDocuments={localDocuments.map(d => ({ id: d.id, name: d.file_name }))}
 								isExpanded={expandedCardIds.has(doc.id)}
 								onToggleExpand={handleToggleExpand}
 							/>
@@ -1342,7 +1359,7 @@ const { session, user } = await getSecureSession();
 				</section>
 			{/if}
 
-			{#if documents.length === 0}
+			{#if localDocuments.length === 0}
 				<div class="flex flex-col items-center justify-center py-20 bg-gray-50 rounded-3xl border border-dashed border-gray-200">
 					<div class="p-4 rounded-full bg-white shadow-sm text-gray-300 mb-4">
 						<Inbox class="w-12 h-12" />
@@ -1389,7 +1406,7 @@ const { session, user } = await getSecureSession();
 							onRelationshipAdd={handleRelationshipAdd}
 							onRelationshipRemove={handleRelationshipRemove}
 							onSignatureReview={handleSignatureReviewFromCard}
-							availableDocuments={documents.map(d => ({ id: d.id, name: d.file_name }))}
+							availableDocuments={localDocuments.map(d => ({ id: d.id, name: d.file_name }))}
 							isExpanded={expandedCardIds.has(doc.id)}
 							onToggleExpand={handleToggleExpand}
 						/>

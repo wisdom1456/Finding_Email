@@ -1988,7 +1988,10 @@ async def stream_findings_letter(
                 heartbeat_interval = max(1, int(settings.letter_stream_heartbeat_seconds))
                 internal_deadline = request_started + internal_budget
 
-                phase_msg = _emit("phase", phase="context_build", message="Building context")
+                phase_msg = _emit("phase", phase="strategy", message="Preparing letter strategy...", percent=3)
+                if phase_msg:
+                    yield phase_msg
+                phase_msg = _emit("phase", phase="context_build", message="Building context", percent=8)
                 if phase_msg:
                     yield phase_msg
 
@@ -2118,6 +2121,8 @@ async def stream_findings_letter(
                     draft_started + draft_budget,
                     internal_deadline - reserved_for_after_draft,
                 )
+                _draft_token_count = 0
+                _last_wc_emit_token = 0
 
                 try:
                     while True:
@@ -2146,11 +2151,19 @@ async def stream_findings_letter(
                             if not token:
                                 continue
                             draft_markdown += token
+                            _draft_token_count += 1
                             if metrics["ttft_ms"] is None:
                                 metrics["ttft_ms"] = int((time.monotonic() - request_started) * 1000)
                             token_msg = _emit("token", token=token)
                             if token_msg:
                                 yield token_msg
+                            if _draft_token_count - _last_wc_emit_token >= 200:
+                                _last_wc_emit_token = _draft_token_count
+                                _wc = len(re.findall(r"\b[\w'-]+\b", draft_markdown))
+                                _pct = min(88, 10 + _wc * 78 // 1000)
+                                wc_msg = _emit("phase", phase="draft_generation", message=f"Drafting letter... ({_wc:,} words)", percent=_pct)
+                                if wc_msg:
+                                    yield wc_msg
                             continue
 
                         if msg_type == "error":
@@ -2284,7 +2297,12 @@ async def stream_findings_letter(
                         from legal_portal.utils.letter_polish import polish_letter_async
 
                         pre_polish_markdown = final_markdown
-                        polish_result = await polish_letter_async(openai_client, pre_polish_markdown)
+                        _polish_timeout = getattr(settings, "letter_polish_timeout_seconds", 55)
+                        polish_result = await polish_letter_async(
+                            openai_client,
+                            pre_polish_markdown,
+                            timeout_seconds=float(_polish_timeout),
+                        )
                         if polish_result.get("success") and polish_result.get("polished_letter"):
                             polished_candidate = polish_result["polished_letter"]
                             integrity_report = {"passed": True, "reason": "unsupported"}
@@ -4021,7 +4039,12 @@ async def generate_letter(
                     from legal_portal.utils.letter_polish import polish_letter_async
 
                     pre_polish_markdown = draft_markdown_for_repair
-                    polish_result = await polish_letter_async(openai_client, pre_polish_markdown)
+                    _polish_timeout = getattr(settings, "letter_polish_timeout_seconds", 55)
+                    polish_result = await polish_letter_async(
+                        openai_client,
+                        pre_polish_markdown,
+                        timeout_seconds=float(_polish_timeout),
+                    )
                     if polish_result.get("success") and polish_result.get("polished_letter"):
                         polished_candidate = polish_result["polished_letter"]
                         integrity_report = {"passed": True, "reason": "unsupported"}
@@ -4583,7 +4606,7 @@ async def stream_recommendation_letter(
             return _to_sse(payload)
 
         try:
-            phase_msg = _emit("phase", phase="context_build", message="Building context")
+            phase_msg = _emit("phase", phase="context_build", message="Building context", percent=8)
             if phase_msg:
                 yield phase_msg
 
@@ -4655,6 +4678,8 @@ async def stream_recommendation_letter(
 
             collector_task = asyncio.create_task(_collect_tokens())
             draft_deadline = internal_deadline - (lint_budget + finalize_budget)
+            _draft_token_count = 0
+            _last_wc_emit_token = 0
             try:
                 while True:
                     if time.monotonic() > draft_deadline:
@@ -4681,11 +4706,19 @@ async def stream_recommendation_letter(
                         if not token:
                             continue
                         draft_markdown += token
+                        _draft_token_count += 1
                         if metrics["ttft_ms"] is None:
                             metrics["ttft_ms"] = int((time.monotonic() - request_started) * 1000)
                         token_msg = _emit("token", token=token)
                         if token_msg:
                             yield token_msg
+                        if _draft_token_count - _last_wc_emit_token >= 200:
+                            _last_wc_emit_token = _draft_token_count
+                            _wc = len(re.findall(r"\b[\w'-]+\b", draft_markdown))
+                            _pct = min(88, 10 + _wc * 78 // 1000)
+                            wc_msg = _emit("phase", phase="draft_generation", message=f"Drafting letter... ({_wc:,} words)", percent=_pct)
+                            if wc_msg:
+                                yield wc_msg
                     elif msg_type == "error":
                         if isinstance(msg_data, Exception):
                             raise msg_data

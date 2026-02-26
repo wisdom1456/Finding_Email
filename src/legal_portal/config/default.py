@@ -251,6 +251,12 @@ class Settings(BaseSettings):
         description="Maximum time budget for quality critic step.",
     )
 
+    letter_polish_timeout_seconds: int = Field(
+        55,
+        alias="LETTER_POLISH_TIMEOUT_SECONDS",
+        description="Hard timeout for the polish pass. Inference always attempted; falls back to draft on timeout.",
+    )
+
     # ==================================================
     # DOCUMENT PROCESSING CONFIGURATION
     # ==================================================

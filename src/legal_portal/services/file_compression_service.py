@@ -300,7 +300,7 @@ class FileCompressionService:
 
         """
         try:
-            from PyPDF2 import PdfReader, PdfWriter
+            from pypdf import PdfReader, PdfWriter
 
             # Read PDF
             pdf_reader = PdfReader(io.BytesIO(pdf_data))

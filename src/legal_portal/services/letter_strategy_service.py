@@ -226,7 +226,7 @@ class LetterStrategyService:
                 input=prompt,
                 reasoning_effort="low",
                 verbosity="low",
-                max_output_tokens=2800,  # Increased from 1800 to accommodate typical strategy JSON (1900-2500 tokens)
+                max_output_tokens=4096,  # Increased from 2800 — complex cases produce 2500-3500 token strategy JSON
             )
 
         response = await asyncio.wait_for(

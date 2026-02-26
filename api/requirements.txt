@@ -37,15 +37,15 @@ PyYAML==6.0.1
 
 # Document processing - Lightweight alternatives
 # PyMuPDF - 60 MB (removed, too large)
-# Pillow - 20 MB (removed, use client-side or Supabase)
 # PyPDF2 - 10 MB (removed, replaced with pypdf)
 # python-docx - 5 MB (removed, use Supabase Storage extraction)
 
 # Lightweight PDF extraction (pure Python, ~2MB)
 pypdf>=4.0.0
 
+# Image compression for document processing (re-enabled on Pro plan)
+Pillow>=10.0.0
+
 # Lightweight text processing
 html2text==2020.1.16
 markdown2>=2.4.0
-
-# Pillow/python-docx are optional. Startup paths now degrade gracefully when absent.

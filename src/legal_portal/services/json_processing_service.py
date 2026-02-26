@@ -1553,7 +1553,11 @@ class JsonProcessingService:
 
             polisher = LetterPolisher(self.client)
             pre_polish_markdown = markdown_response
-            polish_result = polisher.polish_letter(pre_polish_markdown)
+            loop = asyncio.get_event_loop()
+            polish_result = await asyncio.wait_for(
+                loop.run_in_executor(None, lambda: polisher.polish_letter(pre_polish_markdown, timeout=50.0)),
+                timeout=55.0,
+            )
 
             if polish_result["success"]:
                 polished_candidate = polish_result["polished_letter"]

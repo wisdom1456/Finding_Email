@@ -67,12 +67,13 @@ OUTPUT INSTRUCTIONS:
 - Keep markdown-safe paragraph text (no code fences).
 """
 
-    def polish_letter(self, raw_letter: str) -> Dict:
+    def polish_letter(self, raw_letter: str, timeout: float | None = None) -> Dict:
         """Polish a generated letter for consistent formatting.
 
         Args:
         ----
             raw_letter: The unpolished letter text
+            timeout: Optional HTTP timeout in seconds for the OpenAI call
 
         Returns:
         -------
@@ -106,6 +107,7 @@ FORMATTED LETTER:"""
                 ],
                 temperature=0.1,  # Very low for consistency
                 max_tokens=4000,
+                timeout=timeout,
             )
 
             polished_letter = response["content"].strip()
@@ -173,13 +175,16 @@ FORMATTED LETTER:"""
         return changes
 
 
-async def polish_letter_async(openai_client, raw_letter: str) -> Dict:
+async def polish_letter_async(openai_client, raw_letter: str, timeout_seconds: float = 55.0) -> Dict:
     """Async wrapper for letter polishing.
+
+    Always attempts polish. Hard-bounded at timeout_seconds. Falls back to original on timeout.
 
     Args:
     ----
         openai_client: OpenAI client instance
         raw_letter: The unpolished letter text
+        timeout_seconds: Hard asyncio timeout; falls back to pre-polish draft on expiry
 
     Returns:
     -------
@@ -187,7 +192,14 @@ async def polish_letter_async(openai_client, raw_letter: str) -> Dict:
 
     """
     polisher = LetterPolisher(openai_client)
-    return await asyncio.to_thread(polisher.polish_letter, raw_letter)
+    try:
+        return await asyncio.wait_for(
+            asyncio.to_thread(polisher.polish_letter, raw_letter, timeout=timeout_seconds - 5),
+            timeout=timeout_seconds,
+        )
+    except asyncio.TimeoutError:
+        logger.warning("[POLISH] Timed out after %.1fs — using pre-polish draft", timeout_seconds)
+        return {"success": False, "polished_letter": raw_letter, "changes_made": [], "error": "timeout"}
 
 
 def polish_letter_sync(openai_client, raw_letter: str) -> Dict:

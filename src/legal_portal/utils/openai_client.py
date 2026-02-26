@@ -305,6 +305,7 @@ class OpenAIClient:
         temperature: float = 0.3,
         max_tokens: Optional[int] = None,
         response_format: Optional[Dict[str, str]] = None,
+        timeout: Optional[float] = None,
     ) -> Dict[str, Any]:
         """Provide standard interface for chat completions across all services.
 
@@ -363,6 +364,8 @@ class OpenAIClient:
                 request_params["response_format"] = response_format
 
             # Make the API call
+            if timeout is not None:
+                request_params["timeout"] = timeout
             response = self.client.chat.completions.create(**request_params)
 
             content = response.choices[0].message.content

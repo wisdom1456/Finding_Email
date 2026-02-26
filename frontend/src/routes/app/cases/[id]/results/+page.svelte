@@ -44,6 +44,7 @@
 	type FindingsGenerationState =
 		| 'idle'
 		| 'connecting'
+		| 'strategy'
 		| 'context_build'
 		| 'draft_generation'
 		| 'lint_validation'
@@ -55,6 +56,20 @@
 		| 'cancelled';
 	let findingsGenerationState = $state<FindingsGenerationState>('idle');
 	let findingsPhaseMessage = $state('');
+	let findingsGenerationPercent = $state(0);
+
+	const FINDINGS_PHASE_ORDER: FindingsGenerationState[] = [
+		'strategy', 'context_build', 'draft_generation',
+		'lint_validation', 'polishing', 'finalizing'
+	];
+	const FINDINGS_PHASE_LABELS: Record<string, string> = {
+		strategy: 'Preparing strategy',
+		context_build: 'Gathering documents',
+		draft_generation: 'Drafting letter',
+		lint_validation: 'Quality check',
+		polishing: 'Polishing',
+		finalizing: 'Saving'
+	};
 	let findingsQualityReport = $state<Record<string, any> | null>(null);
 	let findingsGenerationMetrics = $state<Record<string, any> | null>(null);
 	let findingsRecoverableError = $state<string | null>(null);
@@ -792,6 +807,7 @@
 		generatingFindings = true;
 		findingsGenerationState = 'connecting';
 		findingsPhaseMessage = 'Connecting...';
+		findingsGenerationPercent = 0;
 		findingsRecoverableError = null;
 		findingsDraftStarted = false;
 		insufficientDocError = null;
@@ -890,9 +906,10 @@
 				}, 80);
 			};
 
-			const applyPhase = (phase: string, message?: string) => {
+			const applyPhase = (phase: string, message?: string, percent?: number) => {
 				if (!isCurrentRequest()) return;
 				const allowed: FindingsGenerationState[] = [
+					'strategy',
 					'context_build',
 					'draft_generation',
 					'lint_validation',
@@ -905,6 +922,9 @@
 				}
 				if (message) {
 					findingsPhaseMessage = message;
+				}
+				if (typeof percent === 'number' && percent > findingsGenerationPercent) {
+					findingsGenerationPercent = percent;
 				}
 			};
 
@@ -928,7 +948,7 @@
 						(data.token ? 'token' : data.done ? 'done' : data.error ? 'error' : '');
 
 					if (eventType === 'phase') {
-						applyPhase(String(data.phase || ''), typeof data.message === 'string' ? data.message : undefined);
+						applyPhase(String(data.phase || ''), typeof data.message === 'string' ? data.message : undefined, typeof data.percent === 'number' ? data.percent : undefined);
 					} else if (eventType === 'token' && typeof data.token === 'string') {
 						findingsGenerationState = 'draft_generation';
 						queueToken(data.token);
@@ -1930,9 +1950,36 @@ async function generateLetterRequest(body: Record<string, any>) {
 
 						{#if generatingFindings && !findingsDraftStarted && !findingsLetter}
 							<div class="space-y-4 animate-fade-in-up">
-								<div class="flex items-center gap-2 text-sm text-accent font-medium">
-									<div class="animate-spin rounded-full h-4 w-4 border-2 border-accent border-t-transparent"></div>
-									Preparing draft...
+								<!-- Progress bar -->
+								<div class="h-1.5 w-full bg-gray-100 rounded-full overflow-hidden">
+									<div
+										class="h-full bg-accent rounded-full transition-all duration-700 ease-out"
+										style="width: {findingsGenerationPercent}%"
+									></div>
+								</div>
+								<!-- Phase step list -->
+								<div class="flex flex-col gap-2 py-2">
+									{#each FINDINGS_PHASE_ORDER as phase}
+										{@const phaseIdx = FINDINGS_PHASE_ORDER.indexOf(phase)}
+										{@const activeIdx = FINDINGS_PHASE_ORDER.indexOf(findingsGenerationState as any)}
+										{@const isDone = activeIdx > phaseIdx}
+										{@const isActive = activeIdx === phaseIdx}
+										{@const label = isActive && findingsPhaseMessage && phase === 'draft_generation'
+											? findingsPhaseMessage
+											: FINDINGS_PHASE_LABELS[phase]}
+										<div class="flex items-center gap-2.5 text-sm {isActive ? 'text-accent font-medium' : isDone ? 'text-green-600' : 'text-gray-400'}">
+											{#if isDone}
+												<svg class="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+													<path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+												</svg>
+											{:else if isActive}
+												<div class="h-4 w-4 flex-shrink-0 animate-spin rounded-full border-2 border-accent border-t-transparent"></div>
+											{:else}
+												<div class="h-4 w-4 flex-shrink-0 rounded-full border-2 border-gray-200"></div>
+											{/if}
+											<span>{label}</span>
+										</div>
+									{/each}
 								</div>
 								<div class="border border-gray-200 rounded-lg overflow-hidden bg-white shadow-inner p-6 h-[600px] flex items-center justify-center text-gray-500">
 									Waiting for first token...
@@ -1941,6 +1988,13 @@ async function generateLetterRequest(body: Record<string, any>) {
 						{:else if generatingFindings && findingsDraftStarted && findingsLetter && findingsGenerationState !== 'complete'}
 							<!-- Streaming preview - shows text to avoid iframe blinking -->
 							<div class="space-y-4 animate-fade-in-up">
+								<!-- Progress bar -->
+								<div class="h-1.5 w-full bg-gray-100 rounded-full overflow-hidden">
+									<div
+										class="h-full bg-accent rounded-full transition-all duration-700 ease-out"
+										style="width: {findingsGenerationPercent}%"
+									></div>
+								</div>
 								<div class="flex items-center gap-2 text-sm text-accent font-medium">
 									<div class="animate-spin rounded-full h-4 w-4 border-2 border-accent border-t-transparent"></div>
 									{findingsPhaseMessage || 'Generating email...'}

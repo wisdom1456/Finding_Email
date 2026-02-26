@@ -348,7 +348,7 @@ async def test_findings_stream_event_order_with_strategy_critic_and_repair(monke
     event_names = [event.get("event") for event in events if isinstance(event.get("event"), str)]
     phase_names = [event.get("phase") for event in events if event.get("event") == "phase"]
 
-    assert phase_names[:3] == ["context_build", "draft_generation", "lint_validation"]
+    assert phase_names[:4] == ["strategy", "context_build", "draft_generation", "lint_validation"]
     assert "repair" in phase_names
     assert phase_names[-1] == "finalizing"
     assert "quality" in event_names
@@ -580,7 +580,7 @@ async def test_findings_stream_reverts_polish_when_fact_integrity_fails(monkeypa
                 "removed_entities": [],
             }
 
-    async def _fake_polish(_openai_client, _raw_letter):
+    async def _fake_polish(_openai_client, _raw_letter, timeout_seconds=55.0):
         return {
             "success": True,
             "polished_letter": "Polished text changed to $57,656.00 on February 28, 2023.",

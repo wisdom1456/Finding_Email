@@ -846,6 +846,72 @@ const { session, user } = await getSecureSession();
 		}
 	}
 
+	async function handleFactUpdate(docId: string, factKey: string, newValue: string) {
+		const idx = documents.findIndex(d => d.id === docId);
+		if (idx >= 0) {
+			const doc = documents[idx];
+			const existingFacts = doc.metadata?.attorney_enrichment?.key_facts || {};
+			documents[idx] = {
+				...doc,
+				metadata: {
+					...doc.metadata,
+					attorney_enrichment: {
+						...(doc.metadata?.attorney_enrichment || {}),
+						key_facts: {
+							...existingFacts,
+							[factKey]: { value: newValue, confirmed: false }
+						}
+					}
+				}
+			};
+		}
+		try {
+			const { data: { session } } = await supabase.auth.getSession();
+			const apiUrl = getApiUrl();
+			await fetch(`${apiUrl}/api/documents/${docId}/verify`, {
+				method: 'PATCH',
+				headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
+				body: JSON.stringify({ key_facts: { [factKey]: { value: newValue, confirmed: false } } })
+			});
+		} catch (e) {
+			toastStore.error('Failed to save fact');
+		}
+	}
+
+	async function handleFactConfirm(docId: string, factKey: string) {
+		const idx = documents.findIndex(d => d.id === docId);
+		if (idx >= 0) {
+			const doc = documents[idx];
+			const existingFacts = doc.metadata?.attorney_enrichment?.key_facts || {};
+			const existingFact = existingFacts[factKey] || {};
+			const confirmedFact = { ...existingFact, confirmed: true };
+			documents[idx] = {
+				...doc,
+				metadata: {
+					...doc.metadata,
+					attorney_enrichment: {
+						...(doc.metadata?.attorney_enrichment || {}),
+						key_facts: {
+							...existingFacts,
+							[factKey]: confirmedFact
+						}
+					}
+				}
+			};
+			try {
+				const { data: { session } } = await supabase.auth.getSession();
+				const apiUrl = getApiUrl();
+				await fetch(`${apiUrl}/api/documents/${docId}/verify`, {
+					method: 'PATCH',
+					headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
+					body: JSON.stringify({ key_facts: { [factKey]: { ...existingFact, confirmed: true } } })
+				});
+			} catch (e) {
+				toastStore.error('Failed to confirm fact');
+			}
+		}
+	}
+
 	async function handleRelationshipAdd(docId: string, relatedDocId: string, type: string) {
 		const idx = documents.findIndex(d => d.id === docId);
 		if (idx >= 0) {
@@ -1074,6 +1140,8 @@ const { session, user } = await getSecureSession();
 								onTypeOverride={handleTypeOverride}
 								onRelevanceChange={handleRelevanceChange}
 								onNotesUpdate={handleNotesUpdate}
+								onFactUpdate={handleFactUpdate}
+								onFactConfirm={handleFactConfirm}
 								onRelationshipAdd={handleRelationshipAdd}
 								onRelationshipRemove={handleRelationshipRemove}
 								onSignatureReview={handleSignatureReviewFromCard}
@@ -1132,6 +1200,8 @@ const { session, user } = await getSecureSession();
 								onTypeOverride={handleTypeOverride}
 								onRelevanceChange={handleRelevanceChange}
 								onNotesUpdate={handleNotesUpdate}
+								onFactUpdate={handleFactUpdate}
+								onFactConfirm={handleFactConfirm}
 								onRelationshipAdd={handleRelationshipAdd}
 								onRelationshipRemove={handleRelationshipRemove}
 								onSignatureReview={handleSignatureReviewFromCard}
@@ -1170,6 +1240,8 @@ const { session, user } = await getSecureSession();
 								onTypeOverride={handleTypeOverride}
 								onRelevanceChange={handleRelevanceChange}
 								onNotesUpdate={handleNotesUpdate}
+								onFactUpdate={handleFactUpdate}
+								onFactConfirm={handleFactConfirm}
 								onRelationshipAdd={handleRelationshipAdd}
 								onRelationshipRemove={handleRelationshipRemove}
 								onSignatureReview={handleSignatureReviewFromCard}
@@ -1211,6 +1283,8 @@ const { session, user } = await getSecureSession();
 								onTypeOverride={handleTypeOverride}
 								onRelevanceChange={handleRelevanceChange}
 								onNotesUpdate={handleNotesUpdate}
+								onFactUpdate={handleFactUpdate}
+								onFactConfirm={handleFactConfirm}
 								onRelationshipAdd={handleRelationshipAdd}
 								onRelationshipRemove={handleRelationshipRemove}
 								onSignatureReview={handleSignatureReviewFromCard}
@@ -1254,6 +1328,8 @@ const { session, user } = await getSecureSession();
 								onTypeOverride={handleTypeOverride}
 								onRelevanceChange={handleRelevanceChange}
 								onNotesUpdate={handleNotesUpdate}
+								onFactUpdate={handleFactUpdate}
+								onFactConfirm={handleFactConfirm}
 								onRelationshipAdd={handleRelationshipAdd}
 								onRelationshipRemove={handleRelationshipRemove}
 								onSignatureReview={handleSignatureReviewFromCard}
@@ -1308,6 +1384,8 @@ const { session, user } = await getSecureSession();
 							onTypeOverride={handleTypeOverride}
 							onRelevanceChange={handleRelevanceChange}
 							onNotesUpdate={handleNotesUpdate}
+							onFactUpdate={handleFactUpdate}
+							onFactConfirm={handleFactConfirm}
 							onRelationshipAdd={handleRelationshipAdd}
 							onRelationshipRemove={handleRelationshipRemove}
 							onSignatureReview={handleSignatureReviewFromCard}

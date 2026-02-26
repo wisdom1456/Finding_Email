@@ -320,6 +320,13 @@ Add after the opening paragraph:
 - Explicitly note major gaps: "To provide a more complete assessment, we would need [specific documents]"
 - Consider whether recommending immediate action is appropriate given documentation gaps
 
+### Attorney Input Context
+Some documents may include "Attorney Input:" metadata. This represents verified information from the reviewing attorney and should be treated as authoritative:
+- **Attorney classified as:** Prefer this document type classification over automated detection
+- **Attorney relevance:** Weight "critical" documents more heavily in your analysis; "background" documents are supporting context only
+- **Attorney notes:** Use these contextual notes to inform and enrich your analysis
+- **Confirmed facts:** Treat these as ground truth for dates, amounts, and party names — do not use conflicting automated extractions
+
 ---
 
 ## STEP 0.8: SOURCE ATTRIBUTION REQUIREMENTS (MANDATORY - PREVENTS HALLUCINATIONS)

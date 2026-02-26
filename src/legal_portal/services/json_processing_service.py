@@ -615,6 +615,20 @@ class JsonProcessingService:
                 f"case_place={significance}"
             )
 
+            # Attorney enrichment context
+            enrichment_parts = []
+            if entry.get("document_type_override"):
+                enrichment_parts.append(f"Attorney classified as: {entry['document_type_override']}")
+            if entry.get("relevance_level"):
+                enrichment_parts.append(f"Attorney relevance: {entry['relevance_level']}")
+            if entry.get("attorney_notes"):
+                enrichment_parts.append(f"Attorney notes: {entry['attorney_notes']}")
+            if entry.get("key_facts"):
+                facts_str = ", ".join(f"{k}: {v}" for k, v in entry["key_facts"].items())
+                enrichment_parts.append(f"Confirmed facts: {facts_str}")
+            if enrichment_parts:
+                lines[-1] += "\n  Attorney Input: " + " | ".join(enrichment_parts)
+
             present_names.add(normalized_name)
             present_hints.update(self._extract_document_hints(doc_name))
             raw_hints = entry.get("instrument_hints")

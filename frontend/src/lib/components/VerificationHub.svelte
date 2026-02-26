@@ -27,9 +27,12 @@
 	import CorrectionModal from './CorrectionModal.svelte';
 	import RecoveryModal from './RecoveryModal.svelte';
 	import DocumentCard from './DocumentCard.svelte';
-	import DocumentStatusBanner from './DocumentStatusBanner.svelte';
 	import DocumentSummaryCard from './DocumentSummaryCard.svelte';
 	import DocumentPreviewPane from './DocumentPreviewPane.svelte';
+	import TriageDashboard from './TriageDashboard.svelte';
+	import SignatureReviewPanel from './SignatureReviewPanel.svelte';
+	import DocumentReviewPanel from './DocumentReviewPanel.svelte';
+	import { sortByAttention } from '$lib/utils/documentSorting';
 
 	// Props
 	let {
@@ -64,6 +67,13 @@
 	let showInstructions = $state(false);
 	let processingDocIds = $state<Set<string>>(new Set());
 	let remainingOcrCount = $state(0);
+	let activeFilters = $state<Set<string>>(new Set());
+	let signatureReviewOpen = $state(false);
+	let signatureReviewQueue = $state<any[]>([]);
+	let signatureReviewIndex = $state(0);
+	let documentReviewOpen = $state(false);
+	let documentReviewDoc = $state<any>(null);
+	let expandedCardIds = $state<Set<string>>(new Set());
 
 	// Confirmation dialog state
 	let confirmDialog = $state<{
@@ -87,7 +97,7 @@
 			const status = doc.status;
 			const isDuplicate = doc.metadata?.is_duplicate === true || status === 'duplicate';
 			const isExcluded = doc.metadata?.excluded === true;
-			
+
 			if (isExcluded) {
 				groups.excluded.push(doc);
 			} else if (isDuplicate) {
@@ -107,6 +117,13 @@
 			}
 		}
 
+		// Apply smart sorting within each group
+		groups.critical = sortByAttention(groups.critical);
+		groups.needs_attention = sortByAttention(groups.needs_attention);
+		groups.ready = sortByAttention(groups.ready);
+		groups.duplicates = sortByAttention(groups.duplicates);
+		groups.excluded = sortByAttention(groups.excluded);
+
 		return groups;
 	});
 
@@ -120,19 +137,41 @@
 		);
 	});
 
-	// Stats for Banner
-	let stats = $derived.by(() => {
-		const counts = { ready: 0, review: 0, failed: 0, missing: 0, duplicates: 0 };
-		for (const doc of documents) {
-			const isDuplicate = doc.metadata?.is_duplicate === true || doc.status === 'duplicate';
-			if (isDuplicate) counts.duplicates++;
-			else if (doc.status === 'ready') counts.ready++;
-			else if (doc.status === 'needs_review' || doc.status === 'pending') counts.review++;
-			else if (doc.status === 'extraction_failed') counts.failed++;
-			else if (doc.status === 'download_failed' || doc.status === 'corrupted') counts.missing++;
+	// Filter logic for TriageDashboard chips
+	function handleFilterToggle(filter: string) {
+		const newFilters = new Set(activeFilters);
+		if (newFilters.has(filter)) {
+			newFilters.delete(filter);
+		} else {
+			newFilters.add(filter);
 		}
-		return counts;
-	});
+		activeFilters = newFilters;
+	}
+
+	// Compute filtered documents for display (used when filters are active)
+	let displayDocuments = $derived((() => {
+		if (activeFilters.size === 0) return documents;
+		return documents.filter(d => {
+			const sig = d.metadata?.signature_detection || {};
+			const enrichment = d.metadata?.attorney_enrichment || {};
+			const quality = d.metadata?.quality_score ?? 10;
+
+			if (activeFilters.has('missing-signatures')) {
+				if (sig.signature_expected && sig.status !== 'signed' &&
+					enrichment.signature_verification !== 'signed') return true;
+			}
+			if (activeFilters.has('low-ocr')) {
+				if (quality < 5) return true;
+			}
+			if (activeFilters.has('needs-type')) {
+				if (!d.metadata?.document_type_label && !enrichment.document_type_override) return true;
+			}
+			if (activeFilters.has('ready')) {
+				if (d.status === 'ready') return true;
+			}
+			return false;
+		});
+	})());
 
 	// Selection Handlers
 	function toggleSelection(docId: string) {
@@ -479,6 +518,11 @@ const { session, user } = await getSecureSession();
 	}
 
 	async function handleView(doc: any) {
+		// Open the new DocumentReviewPanel
+		documentReviewDoc = doc;
+		documentReviewOpen = true;
+
+		// Also keep legacy modal state in sync (for backward compatibility)
 		viewingDocument = doc;
 		loadingPreview = false;
 		documentSummary = null;
@@ -490,7 +534,7 @@ const { session, user } = await getSecureSession();
 			pdfBlobUrl = null;
 		}
 		previewBlobDocumentId = null;
-		
+
 		// Load document summary in the background
 		loadDocumentSummary(doc.file_name);
 
@@ -673,6 +717,190 @@ const { session, user } = await getSecureSession();
 			await performBulkDelete();
 		}
 	}
+
+	// Signature Review Panel handlers
+	function handleSignatureReviewFromCard(doc: any) {
+		const needsSig = documents.filter(d => {
+			const sig = d.metadata?.signature_detection || {};
+			const enrichment = d.metadata?.attorney_enrichment || {};
+			return sig.signature_expected && sig.status !== 'signed' && enrichment.signature_verification !== 'signed';
+		});
+		const clickedIdx = needsSig.findIndex(d => d.id === doc.id);
+		if (clickedIdx >= 0) {
+			signatureReviewQueue = needsSig;
+			signatureReviewIndex = clickedIdx;
+		} else {
+			signatureReviewQueue = [doc, ...needsSig];
+			signatureReviewIndex = 0;
+		}
+		signatureReviewOpen = true;
+	}
+
+	function handleSignatureVerdictFromPanel(docId: string, verdict: string) {
+		const idx = documents.findIndex(d => d.id === docId);
+		if (idx >= 0) {
+			documents[idx] = {
+				...documents[idx],
+				metadata: {
+					...documents[idx].metadata,
+					signature_detection: {
+						...(documents[idx].metadata?.signature_detection || {}),
+						status: verdict === 'signed' ? 'signed' : verdict === 'not_signed' ? 'not_detected' : 'unknown',
+						verified_by_attorney: true
+					}
+				}
+			};
+		}
+		onDocumentsUpdated?.();
+	}
+
+	function handleToggleExpand(docId: string) {
+		const newSet = new Set(expandedCardIds);
+		if (newSet.has(docId)) {
+			newSet.delete(docId);
+		} else {
+			newSet.add(docId);
+		}
+		expandedCardIds = newSet;
+	}
+
+	// Enrichment API handlers
+	async function handleTypeOverride(docId: string, type: string) {
+		const idx = documents.findIndex(d => d.id === docId);
+		if (idx >= 0) {
+			const doc = documents[idx];
+			documents[idx] = {
+				...doc,
+				metadata: {
+					...doc.metadata,
+					attorney_enrichment: {
+						...(doc.metadata?.attorney_enrichment || {}),
+						document_type_override: type
+					}
+				}
+			};
+		}
+		try {
+			const { data: { session } } = await supabase.auth.getSession();
+			const apiUrl = getApiUrl();
+			await fetch(`${apiUrl}/api/documents/${docId}/verify`, {
+				method: 'PATCH',
+				headers: {
+					'Content-Type': 'application/json',
+					'Authorization': `Bearer ${session?.access_token}`
+				},
+				body: JSON.stringify({ document_type_override: type })
+			});
+		} catch (e) {
+			toastStore.error('Failed to save document type');
+		}
+	}
+
+	async function handleRelevanceChange(docId: string, level: string) {
+		const idx = documents.findIndex(d => d.id === docId);
+		if (idx >= 0) {
+			const doc = documents[idx];
+			documents[idx] = {
+				...doc,
+				metadata: {
+					...doc.metadata,
+					attorney_enrichment: { ...(doc.metadata?.attorney_enrichment || {}), relevance_level: level }
+				}
+			};
+		}
+		try {
+			const { data: { session } } = await supabase.auth.getSession();
+			const apiUrl = getApiUrl();
+			await fetch(`${apiUrl}/api/documents/${docId}/verify`, {
+				method: 'PATCH',
+				headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
+				body: JSON.stringify({ relevance_level: level })
+			});
+		} catch (e) {
+			toastStore.error('Failed to save relevance');
+		}
+	}
+
+	async function handleNotesUpdate(docId: string, notes: string) {
+		const idx = documents.findIndex(d => d.id === docId);
+		if (idx >= 0) {
+			const doc = documents[idx];
+			documents[idx] = {
+				...doc,
+				metadata: {
+					...doc.metadata,
+					attorney_enrichment: { ...(doc.metadata?.attorney_enrichment || {}), attorney_notes: notes }
+				}
+			};
+		}
+		try {
+			const { data: { session } } = await supabase.auth.getSession();
+			const apiUrl = getApiUrl();
+			await fetch(`${apiUrl}/api/documents/${docId}/verify`, {
+				method: 'PATCH',
+				headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
+				body: JSON.stringify({ attorney_notes: notes })
+			});
+		} catch (e) {
+			toastStore.error('Failed to save notes');
+		}
+	}
+
+	async function handleRelationshipAdd(docId: string, relatedDocId: string, type: string) {
+		const idx = documents.findIndex(d => d.id === docId);
+		if (idx >= 0) {
+			const doc = documents[idx];
+			const existing = doc.metadata?.attorney_enrichment?.document_relationships || [];
+			const relatedDoc = documents.find(d => d.id === relatedDocId);
+			const newRelationship = { related_doc_id: relatedDocId, relationship_type: type, related_doc_name: relatedDoc?.file_name };
+			const updated = [...existing, newRelationship];
+			documents[idx] = {
+				...doc,
+				metadata: {
+					...doc.metadata,
+					attorney_enrichment: { ...(doc.metadata?.attorney_enrichment || {}), document_relationships: updated }
+				}
+			};
+			try {
+				const { data: { session } } = await supabase.auth.getSession();
+				const apiUrl = getApiUrl();
+				await fetch(`${apiUrl}/api/documents/${docId}/verify`, {
+					method: 'PATCH',
+					headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
+					body: JSON.stringify({ document_relationships: updated })
+				});
+			} catch (e) {
+				toastStore.error('Failed to save relationship');
+			}
+		}
+	}
+
+	async function handleRelationshipRemove(docId: string, relatedDocId: string) {
+		const idx = documents.findIndex(d => d.id === docId);
+		if (idx >= 0) {
+			const doc = documents[idx];
+			const existing = doc.metadata?.attorney_enrichment?.document_relationships || [];
+			const updated = existing.filter((r: any) => r.related_doc_id !== relatedDocId);
+			documents[idx] = {
+				...doc,
+				metadata: {
+					...doc.metadata,
+					attorney_enrichment: { ...(doc.metadata?.attorney_enrichment || {}), document_relationships: updated }
+				}
+			};
+			try {
+				const { data: { session } } = await supabase.auth.getSession();
+				const apiUrl = getApiUrl();
+				await fetch(`${apiUrl}/api/documents/${docId}/verify`, {
+					method: 'PATCH',
+					headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
+					body: JSON.stringify({ document_relationships: updated })
+				});
+			} catch (e) {
+				toastStore.error('Failed to remove relationship');
+			}
+		}
+	}
 </script>
 
 <div class="space-y-8" id="verification">
@@ -764,8 +992,12 @@ const { session, user } = await getSecureSession();
 		</div>
 	{/if}
 
-	<!-- Status Banner -->
-	<DocumentStatusBanner {stats} />
+	<!-- Triage Dashboard (replaces DocumentStatusBanner) -->
+	<TriageDashboard
+		{documents}
+		{activeFilters}
+		onFilterToggle={handleFilterToggle}
+	/>
 
 	<!-- Search & Bulk Actions -->
 	<div class="sticky top-4 z-30 flex flex-col md:flex-row items-center gap-4 bg-white/80 backdrop-blur-md p-4 rounded-2xl border border-gray-200 shadow-xl shadow-black/5">
@@ -828,8 +1060,8 @@ const { session, user } = await getSecureSession();
 						</span>
 					</div>
 					<div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-						{#each triageGroups.critical as doc (doc.id)}
-							<DocumentCard 
+											{#each triageGroups.critical as doc (doc.id)}
+							<DocumentCard
 								{doc}
 								onView={() => handleView(doc)}
 								onMarkSigned={() => handleMarkSigned(doc)}
@@ -839,6 +1071,15 @@ const { session, user } = await getSecureSession();
 								onAlwaysDelete={(name, id) => handleAlwaysDelete(name, id)}
 								onToggleExclusion={(id, excluded) => handleToggleExclusion(id, excluded)}
 								isProcessing={processingDocIds.has(doc.id)}
+								onTypeOverride={handleTypeOverride}
+								onRelevanceChange={handleRelevanceChange}
+								onNotesUpdate={handleNotesUpdate}
+								onRelationshipAdd={handleRelationshipAdd}
+								onRelationshipRemove={handleRelationshipRemove}
+								onSignatureReview={handleSignatureReviewFromCard}
+								availableDocuments={documents.map(d => ({ id: d.id, name: d.file_name }))}
+								isExpanded={expandedCardIds.has(doc.id)}
+								onToggleExpand={handleToggleExpand}
 							/>
 						{/each}
 					</div>
@@ -875,8 +1116,8 @@ const { session, user } = await getSecureSession();
 						</span>
 					</div>
 					<div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-						{#each triageGroups.needs_attention as doc (doc.id)}
-							<DocumentCard 
+											{#each triageGroups.needs_attention as doc (doc.id)}
+							<DocumentCard
 								{doc}
 								onView={() => handleView(doc)}
 								onEdit={() => editingDocument = doc}
@@ -888,6 +1129,15 @@ const { session, user } = await getSecureSession();
 								onAlwaysDelete={(name, id) => handleAlwaysDelete(name, id)}
 								onToggleExclusion={(id, excluded) => handleToggleExclusion(id, excluded)}
 								isProcessing={processingDocIds.has(doc.id)}
+								onTypeOverride={handleTypeOverride}
+								onRelevanceChange={handleRelevanceChange}
+								onNotesUpdate={handleNotesUpdate}
+								onRelationshipAdd={handleRelationshipAdd}
+								onRelationshipRemove={handleRelationshipRemove}
+								onSignatureReview={handleSignatureReviewFromCard}
+								availableDocuments={documents.map(d => ({ id: d.id, name: d.file_name }))}
+								isExpanded={expandedCardIds.has(doc.id)}
+								onToggleExpand={handleToggleExpand}
 							/>
 						{/each}
 					</div>
@@ -907,8 +1157,8 @@ const { session, user } = await getSecureSession();
 						</span>
 					</div>
 					<div class="grid grid-cols-1 lg:grid-cols-2 gap-4 opacity-60 grayscale-[0.5] hover:opacity-100 hover:grayscale-0 transition-all">
-						{#each triageGroups.ready as doc (doc.id)}
-							<DocumentCard 
+											{#each triageGroups.ready as doc (doc.id)}
+							<DocumentCard
 								{doc}
 								onView={() => handleView(doc)}
 								onEdit={() => editingDocument = doc}
@@ -917,6 +1167,15 @@ const { session, user } = await getSecureSession();
 								onAlwaysDelete={(name, id) => handleAlwaysDelete(name, id)}
 								onToggleExclusion={(id, excluded) => handleToggleExclusion(id, excluded)}
 								isProcessing={processingDocIds.has(doc.id)}
+								onTypeOverride={handleTypeOverride}
+								onRelevanceChange={handleRelevanceChange}
+								onNotesUpdate={handleNotesUpdate}
+								onRelationshipAdd={handleRelationshipAdd}
+								onRelationshipRemove={handleRelationshipRemove}
+								onSignatureReview={handleSignatureReviewFromCard}
+								availableDocuments={documents.map(d => ({ id: d.id, name: d.file_name }))}
+								isExpanded={expandedCardIds.has(doc.id)}
+								onToggleExpand={handleToggleExpand}
 							/>
 						{/each}
 					</div>
@@ -939,8 +1198,8 @@ const { session, user } = await getSecureSession();
 						</span>
 					</div>
 					<div class="grid grid-cols-1 lg:grid-cols-2 gap-4 opacity-60 grayscale hover:opacity-100 hover:grayscale-0 transition-all">
-						{#each triageGroups.excluded as doc (doc.id)}
-							<DocumentCard 
+											{#each triageGroups.excluded as doc (doc.id)}
+							<DocumentCard
 								{doc}
 								onView={() => handleView(doc)}
 								onEdit={() => editingDocument = doc}
@@ -949,6 +1208,15 @@ const { session, user } = await getSecureSession();
 								onAlwaysDelete={(name, id) => handleAlwaysDelete(name, id)}
 								onToggleExclusion={(id, excluded) => handleToggleExclusion(id, excluded)}
 								isProcessing={processingDocIds.has(doc.id)}
+								onTypeOverride={handleTypeOverride}
+								onRelevanceChange={handleRelevanceChange}
+								onNotesUpdate={handleNotesUpdate}
+								onRelationshipAdd={handleRelationshipAdd}
+								onRelationshipRemove={handleRelationshipRemove}
+								onSignatureReview={handleSignatureReviewFromCard}
+								availableDocuments={documents.map(d => ({ id: d.id, name: d.file_name }))}
+								isExpanded={expandedCardIds.has(doc.id)}
+								onToggleExpand={handleToggleExpand}
 							/>
 						{/each}
 					</div>
@@ -973,8 +1241,8 @@ const { session, user } = await getSecureSession();
 						</span>
 					</div>
 					<div class="grid grid-cols-1 lg:grid-cols-2 gap-4 opacity-70 hover:opacity-100 transition-opacity">
-						{#each triageGroups.duplicates as doc (doc.id)}
-							<DocumentCard 
+											{#each triageGroups.duplicates as doc (doc.id)}
+							<DocumentCard
 								{doc}
 								onView={() => handleView(doc)}
 								onEdit={() => editingDocument = doc}
@@ -983,6 +1251,15 @@ const { session, user } = await getSecureSession();
 								onAlwaysDelete={(name, id) => handleAlwaysDelete(name, id)}
 								onToggleExclusion={(id, excluded) => handleToggleExclusion(id, excluded)}
 								isProcessing={processingDocIds.has(doc.id)}
+								onTypeOverride={handleTypeOverride}
+								onRelevanceChange={handleRelevanceChange}
+								onNotesUpdate={handleNotesUpdate}
+								onRelationshipAdd={handleRelationshipAdd}
+								onRelationshipRemove={handleRelationshipRemove}
+								onSignatureReview={handleSignatureReviewFromCard}
+								availableDocuments={documents.map(d => ({ id: d.id, name: d.file_name }))}
+								isExpanded={expandedCardIds.has(doc.id)}
+								onToggleExpand={handleToggleExpand}
 							/>
 						{/each}
 					</div>
@@ -1002,9 +1279,9 @@ const { session, user } = await getSecureSession();
 	{:else}
 		<!-- All Documents List View -->
 		<div class="space-y-3">
-			{#each filteredDocs as doc (doc.id)}
+						{#each filteredDocs as doc (doc.id)}
 				<div class="flex items-center gap-4 group">
-					<button 
+					<button
 						onclick={() => toggleSelection(doc.id)}
 						class={`p-1.5 rounded-lg transition-colors ${selectedDocIds.has(doc.id) ? 'bg-accent/10 text-accent' : 'text-gray-300 hover:text-gray-400'}`}
 					>
@@ -1015,7 +1292,7 @@ const { session, user } = await getSecureSession();
 						{/if}
 					</button>
 					<div class="flex-1">
-						<DocumentCard 
+						<DocumentCard
 							{doc}
 							onView={() => handleView(doc)}
 							onEdit={() => editingDocument = doc}
@@ -1028,6 +1305,15 @@ const { session, user } = await getSecureSession();
 							onAlwaysDelete={(name, id) => handleAlwaysDelete(name, id)}
 							onToggleExclusion={(id, excluded) => handleToggleExclusion(id, excluded)}
 							isProcessing={processingDocIds.has(doc.id)}
+							onTypeOverride={handleTypeOverride}
+							onRelevanceChange={handleRelevanceChange}
+							onNotesUpdate={handleNotesUpdate}
+							onRelationshipAdd={handleRelationshipAdd}
+							onRelationshipRemove={handleRelationshipRemove}
+							onSignatureReview={handleSignatureReviewFromCard}
+							availableDocuments={documents.map(d => ({ id: d.id, name: d.file_name }))}
+							isExpanded={expandedCardIds.has(doc.id)}
+							onToggleExpand={handleToggleExpand}
 						/>
 					</div>
 				</div>
@@ -1227,6 +1513,28 @@ const { session, user } = await getSecureSession();
 		{/snippet}
 	</Modal>
 {/if}
+
+<!-- Document Review Panel (side-by-side PDF + text) -->
+<DocumentReviewPanel
+	open={documentReviewOpen}
+	document={documentReviewDoc}
+	{caseId}
+	onClose={() => { documentReviewOpen = false; documentReviewDoc = null; }}
+	onVerify={handleVerify}
+	onReExtract={handleReExtract}
+	onTextEdit={(doc) => editingDocument = doc}
+/>
+
+<!-- Signature Review Panel -->
+<SignatureReviewPanel
+	open={signatureReviewOpen}
+	documents={signatureReviewQueue}
+	currentIndex={signatureReviewIndex}
+	{caseId}
+	onClose={() => signatureReviewOpen = false}
+	onVerdictSaved={handleSignatureVerdictFromPanel}
+	onNavigate={(i) => signatureReviewIndex = i}
+/>
 
 <!-- Confirmation Dialog -->
 <ConfirmDialog

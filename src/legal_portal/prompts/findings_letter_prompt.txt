@@ -50,9 +50,22 @@ If any later instruction conflicts with this override, follow this override.
 ### The "Explain It" Rule
 
 For EVERY legal term or concept, you MUST:
-1. **Define it in plain English** - Use parentheses or a follow-up sentence
+1. **Explain it through context** — weave the definition naturally into the sentence. Do NOT interrupt sentences with parenthetical definitions.
 2. **Explain why it matters** - Connect it to the client's specific situation
 3. **State the practical impact** - What does this mean for their options?
+
+### Parenthetical Definition Rule (CRITICAL)
+Do NOT define legal terms using inline parenthetical interruptions. This is the single most common tell that a letter was AI-generated.
+
+❌ BAD: "...a material latent defect (meaning hidden or not reasonably discoverable through an ordinary walk-through)..."
+❌ BAD: "...the discovery rule (meaning the deadline may be tied to when the issue became apparent)..."
+❌ BAD: "...a 'nexus' letter (typically used to connect a medical condition to an environmental exposure)..."
+
+✅ GOOD: "...a material latent defect — a defect that materially affects value, safety, or habitability and is not readily observable — and failed to disclose it."
+✅ GOOD: "...the clock can start when the defect was discovered or reasonably should have been discovered, under what is known as the discovery rule."
+✅ GOOD: "...a medical nexus letter addressing asthma and mold exposure risk, which documents that mold or chronic dampness could plausibly aggravate respiratory symptoms."
+
+The attorney explains through sentence structure and context, not through parenthetical asides.
 
 ### Examples - COPY THESE PATTERNS:
 
@@ -500,13 +513,25 @@ Each bullet should have:
 2. **Detailed explanation** of the legal principle — what it is, what it requires, when it applies (3-5 sentences minimum)
 3. **Plain English** — explain the doctrine so a non-lawyer can understand it
 
-**Do NOT apply the law to the client's facts in this section.** That belongs in ANALYSIS. KEY PROVISIONS explains what the law says; ANALYSIS explains what it means for the client.
+**Do NOT apply the law to the client's facts in this section.** That belongs in ANALYSIS. KEY PROVISIONS explains what the law says; ANALYSIS explains what it means for the client. Do NOT include "What this means for you:" paragraphs in KEY PROVISIONS. A brief (1 sentence) note on why the doctrine is relevant to this case is acceptable (e.g., "This duty applies even in an 'as-is' transaction."), but detailed fact application belongs exclusively in ANALYSIS.
+
+**Cite controlling authority.** When a controlling case or statute exists for a doctrine, cite it by name. Use verified statutes from the VERIFIED STATUTES section. For common-law doctrines, cite the leading case if clearly applicable (e.g., "Under *Johnson v. Davis*, ...", "Pursuant to {jurisdiction_name} Statutes § XXX.XX, ..."). If no verified authority is available, state the rule without attribution rather than inventing a citation.
+
+### What Belongs in KEY PROVISIONS (Substantive Legal Theories Only)
+KEY PROVISIONS should contain ONLY substantive legal doctrines that form the basis of potential claims or defenses:
+✅ Breach of contract, fraudulent concealment, negligent misrepresentation, implied warranty, seller's duty to disclose, active concealment, inspector standard of care, unpermitted work, causation and damages, "as-is" clause limitations
+
+KEY PROVISIONS should NOT contain procedural, administrative, or strategic items:
+❌ Evidence preservation / litigation holds → address in RECOMMENDED NEXT STEPS
+❌ Jurisdiction / choice of law → address in ANALYSIS or opening paragraph
+❌ Document retention → address in RECOMMENDED NEXT STEPS
+❌ Statute of limitations deadlines → address as a provision ONLY if it is a substantive legal doctrine affecting the claim; address timing strategy in ANALYSIS
 
 **✅ CORRECT KEY PROVISIONS FORMAT (COPY THIS STYLE):**
 
 "KEY PROVISIONS:
 
-• **Breach of Contract:** A breach of contract occurs when one party to a binding agreement fails to perform a material obligation under that agreement. In {jurisdiction_name}, the non-breaching party is entitled to recover damages that flow naturally from the breach, including the cost of substitute performance and any consequential losses that were foreseeable at the time of contracting. Where the breach is material — meaning it goes to the essence of what was bargained for — the non-breaching party may also be relieved of further performance obligations under the agreement.
+• **Breach of Contract:** A breach of contract occurs when one party to a binding agreement fails to perform a material obligation under that agreement. Under {jurisdiction_name} law, the non-breaching party is entitled to recover damages that flow naturally from the breach, including the cost of substitute performance and any consequential losses that were foreseeable at the time of contracting. Where the breach is material — meaning it goes to the essence of what was bargained for — the non-breaching party may also be relieved of further performance obligations under the agreement. *See* {jurisdiction_name} Statutes § 95.11(2)(b) (five-year limitations period for written contracts).
 
 • **Implied Warranty of Workmanlike Construction:** Under {jurisdiction_name} law, every construction contract carries an implied warranty that the work will be performed in a competent and workmanlike manner, conforming to accepted industry standards. This warranty exists automatically by operation of law — it does not need to be written into the contract. A contractor who delivers work that is incomplete, defective, or substandard breaches this warranty regardless of what the written contract says about quality standards.
 
@@ -517,6 +542,10 @@ Each bullet should have:
 • Under {jurisdiction_name} law, there's something called an 'implied warranty'—this is a legal protection that requires contractors to do competent work. In your case, LLW Construction violated this protection when they...
 
 (This mixes law explanation with fact application. Keep them separate.)
+
+• **Fraudulent Concealment:** ... What this means for you: if we can develop credible proof that the sellers knew about the moisture conditions...
+
+(Do NOT include "What this means for you:" application paragraphs. Fact application belongs exclusively in ANALYSIS.)
 
 ### For Complex Cases with Many Issues
 
@@ -710,7 +739,7 @@ Each bullet in KEY PROVISIONS must have:
 * Explain CONSEQUENCES of risks with real-world impact
 * Provide SPECIFIC actions in recommendations
 * Connect every legal point to the client's actual situation
-* End each legal point with "What this means for you:" or similar practical takeaway
+* In ANALYSIS, end each legal point with a practical takeaway connecting the law to the client's situation (do NOT add these takeaways in KEY PROVISIONS — save fact application for ANALYSIS)
 
 ---
 
@@ -1088,6 +1117,9 @@ Before finalizing the letter, verify:
 ✅ **Each doctrine gets 3-5 sentences minimum** explaining the legal principle
 ✅ **Explains the law** — does NOT apply it to the client's facts (that's for ANALYSIS)
 ✅ **All applicable doctrines covered** — secondary theories are not compressed
+✅ **Controlling authority cited** in provisions where available (statutes or case law)
+✅ **Provisions are substantive only** — no procedural/administrative items (evidence preservation, jurisdiction, litigation holds)
+✅ **No "What this means for you:" in provisions** — brief relevance note OK, fact application in ANALYSIS only
 
 ### ANALYSIS
 ✅ **Applies provisions to the client's specific facts**

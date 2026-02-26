@@ -26,6 +26,9 @@ Expected structure:
 - Target word count: 2,500-4,000 words total.
 - No parenthetical source citations (e.g., "[Source: Contract.pdf]", "(intake packet)").
 - Professional, measured tone throughout — not casual or overly warm.
+- Key Provisions should cite controlling authority (case law or statutes) where available.
+- Key Provisions should contain only substantive legal theories, not procedural/administrative items like evidence preservation or jurisdiction.
+- Key Provisions should NOT contain "What this means for you:" application paragraphs — fact application belongs in Analysis.
 
 Lint violations:
 {lint_violations_json}

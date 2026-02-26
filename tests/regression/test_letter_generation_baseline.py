@@ -537,7 +537,7 @@ async def test_findings_prompt_marks_present_agreement_gap_as_already_provided(
 
     prompt = fake_client.last_response_request["input"]
     assert "--- DOCUMENT REGISTER (AUTHORITATIVE LIST OF PROVIDED FILES) ---" in prompt
-    assert "Subscription Agreement.pdf | type=Case Document" in prompt
+    assert "Subscription Agreement | type=Case Document" in prompt
     assert "**DOCUMENTS ALREADY PRESENT (do NOT request again):**" in prompt
     assert "- Missing subscription agreement" in prompt
     assert "\n**MISSING DOCUMENTS (do not assume contents):**\n- Missing subscription agreement\n" not in prompt
@@ -823,7 +823,7 @@ async def test_findings_prompt_uses_document_summaries_for_register_context(
 
     prompt = fake_client.last_response_request["input"]
     assert "--- DOCUMENT REGISTER (AUTHORITATIVE LIST OF PROVIDED FILES) ---" in prompt
-    assert "Subscription_Agreement_EJAJ-TX_Final120.doc.pdf | type=Contract" in prompt
+    assert "Subscription Agreement EJAJ TX Final 120.doc | type=Contract" in prompt
     assert "case_place=Defines investor rights and obligations." in prompt
     assert "**DOCUMENTS ALREADY PRESENT (do NOT request again):**" in prompt
 

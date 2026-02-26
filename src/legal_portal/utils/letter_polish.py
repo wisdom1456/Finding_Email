@@ -31,14 +31,15 @@ Your job is to preserve legal substance while improving professional readability
 
 CRITICAL RULES:
 1. Do NOT add, change, or invent facts, dates, amounts, party names, legal claims, or legal citations.
-2. Do NOT remove concrete facts from the draft.
+2. Do NOT remove concrete facts that appear in the draft. Every factual statement (names, dates, amounts, key events) must remain present after polishing.
 3. Keep names, numbers, deadlines, and document references accurate and unchanged.
-4. You have style leeway only: improve format, tone, transitions, and readability.
+4. You have style leeway only: improve format, tone, transitions, and readability without changing factual substance.
 
 TARGET STYLE:
 - Professional attorney correspondence — measured, thorough, and confident.
-- Language that a non-lawyer can follow without being talked down to.
+- Plain English a non-lawyer can understand without feeling talked down to.
 - Clear paragraph structure within each section.
+- Natural paragraphs that flow as continuous correspondence.
 
 SECTION STRUCTURE (PRESERVE):
 - The letter should have four labeled sections: Background & Issue, Key Provisions, Analysis, Recommended Next Steps.
@@ -47,13 +48,18 @@ SECTION STRUCTURE (PRESERVE):
 - Within Key Provisions, each doctrine should have a bold title followed by detailed explanation.
 
 FORMATTING FIXES TO APPLY:
-1. Remove any pipeline parenthetical artifacts (e.g., "(intake packet 01-11-2026)", "(photos, file)") — preserve the underlying fact in natural prose.
+1. Remove internal pipeline parentheticals and source-label artifacts from the body text (e.g., "(intake packet 01-11-2026)", "(photos, file)") — preserve the underlying fact in natural prose.
 2. Replace any internal pipeline language ("client-reported", "per intake", "flagged in analysis") with natural attorney voice.
 3. Smooth transitions between paragraphs within each section.
 4. Keep one blank line between paragraphs.
 5. Preserve greeting, signature, and confidentiality language.
 6. Ensure consistent formatting of doctrine titles in Key Provisions (bold, followed by colon).
 7. Ensure document references read naturally ("per the contract", "the inspection report documents") without citation-style parentheticals.
+8. Remove all distancing or doubt-casting phrasing toward the client. Replace phrases like "you report", "you state", "you say", "you claim", "you allege", or "you indicate" — when referring to the client's account of events — with direct, trust-affirming language: "you have", "you invested", "as you described", "based on what you've shared."
+9. Replace attorney and litigation shop talk with plain English throughout. This applies to any term a non-lawyer would not immediately understand. Examples: "spoliation" → "prevent the other side from destroying records"; "standing" → "your right to bring this claim"; "accrual" → "when the deadline clock starts"; "plaintiff" → use the client's name or "you"; "cause of action" → "legal claim"; "filing posture" → "ready to file"; "for limitations purposes" → "for the filing deadline."
+10. Replace abstract or clinical terms for people with human language. Words like "actors", "principals", "participants", or "entities" — when referring to individual people — should become "individuals", "people", or the person's actual name.
+11. Integrate inline legal definitions naturally into prose instead of using a textbook or dictionary quotation style. Instead of '"Breach of contract" means one side failed to perform...', write it as 'breach of contract — meaning they failed to deliver on the written commitments — is the primary path forward.'
+12. Rewrite any em-dash sub-header opening lines into a warm, natural sentence greeting. For example, "Good afternoon — brief summary after review." should become "Good afternoon, I wanted to share where things stand after our review."
 
 OUTPUT INSTRUCTIONS:
 - Return ONLY the formatted letter text.
@@ -151,12 +157,17 @@ FORMATTED LETTER:"""
                 f"Fixed {original_triple_newlines - polished_triple_newlines} excessive spacing issues"
             )
 
-        # Check for doctrine title formatting consistency
+        # Check for bold bullet formatting changes
         original_bold_bullets = original.count("• **")
         polished_bold_bullets = polished.count("• **")
         if polished_bold_bullets > original_bold_bullets:
             changes.append(
                 f"Standardized {polished_bold_bullets - original_bold_bullets} doctrine title format(s)"
+            )
+        elif original_bold_bullets > polished_bold_bullets:
+            removed = original_bold_bullets - polished_bold_bullets
+            changes.append(
+                f"Converted {removed} bold bullet(s) to prose format"
             )
 
         return changes

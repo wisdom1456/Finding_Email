@@ -107,7 +107,7 @@ def test_citation_tracking_service():
 
     # Test citation map creation
     print("📝 Creating citation map...")
-    citation_map = citation_service.create_citation_map(case_analysis, letter_content)
+    citation_map = citation_service.create_citation_map_legacy(case_analysis, letter_content)
 
     # Validate citation map structure
     assert citation_map is not None, "Citation map should be created"

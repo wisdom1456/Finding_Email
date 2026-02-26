@@ -538,10 +538,10 @@ class LetterQualityLintService:
         targets: Dict[str, Tuple[int, int]] = {}
         if letter_type == "findings":
             targets = {
-                "background_issue": (300, 800),
-                "key_provisions": (600, 1500),
-                "analysis": (400, 1200),
-                "next_steps": (150, 400),
+                "background_issue": (100, 800),
+                "key_provisions": (200, 1500),
+                "analysis": (80, 1200),
+                "next_steps": (80, 400),
             }
         elif letter_type == "demand":
             targets = {
@@ -769,9 +769,9 @@ class LetterQualityLintService:
     def _word_count_bounds(self, *, mode: str, letter_type: str) -> Tuple[int, int]:
         """Return word-count bounds for the current lint profile."""
         if letter_type == "findings" and mode == "strict_quality":
-            return (2000, 4500)
+            return (550, 4500)
         if letter_type == "findings":
-            return (1800, 5000)
+            return (450, 5000)
         if letter_type == "recommendation":
             return (300, 900)
         return (450, 1300)

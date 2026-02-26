@@ -35,6 +35,10 @@ class CostCalculator:
             "input_tokens": Decimal("0.15") / Decimal("1000000"),  # $0.15 per 1M tokens
             "output_tokens": Decimal("0.60") / Decimal("1000000"),  # $0.60 per 1M tokens
         },
+        "openai_gpt5_2": {
+            "input_tokens": Decimal("10.00") / Decimal("1000000"),  # $10.00 per 1M tokens
+            "output_tokens": Decimal("30.00") / Decimal("1000000"),  # $30.00 per 1M tokens
+        },
         "openai_whisper": {
             "per_minute": Decimal("0.006")  # $0.006 per minute
         },
@@ -98,6 +102,9 @@ class CostCalculator:
             if "gpt-4o-mini" in model_used.lower():
                 model_key = "openai_gpt4o_mini"
                 model_name = "OpenAI GPT-4o-mini"
+            elif "gpt-5.2" in model_used.lower() or "gpt5.2" in model_used.lower():
+                model_key = "openai_gpt5_2"
+                model_name = "OpenAI GPT-5.2"
             else:
                 model_key = "openai_gpt4o"
                 model_name = "OpenAI GPT-4o"

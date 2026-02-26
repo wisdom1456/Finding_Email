@@ -1000,6 +1000,25 @@ async def verify_document(
 
             update_data["metadata"] = metadata
 
+        # --- Attorney enrichment fields ---
+        if request.document_type_override is not None:
+            metadata.setdefault("attorney_enrichment", {})
+            metadata["attorney_enrichment"]["document_type_override"] = request.document_type_override
+        if request.relevance_level is not None:
+            metadata.setdefault("attorney_enrichment", {})
+            metadata["attorney_enrichment"]["relevance_level"] = request.relevance_level
+        if request.key_facts is not None:
+            metadata.setdefault("attorney_enrichment", {})
+            metadata["attorney_enrichment"]["key_facts"] = request.key_facts
+        if request.attorney_notes is not None:
+            metadata.setdefault("attorney_enrichment", {})
+            metadata["attorney_enrichment"]["attorney_notes"] = request.attorney_notes
+        if request.document_relationships is not None:
+            metadata.setdefault("attorney_enrichment", {})
+            metadata["attorney_enrichment"]["document_relationships"] = request.document_relationships
+        if "attorney_enrichment" in metadata:
+            update_data["metadata"] = metadata
+
         # Update document
         update_response = user_supabase.table("documents").update(update_data).eq("id", document_id).execute()
 

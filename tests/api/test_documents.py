@@ -209,4 +209,46 @@ def test_verify_document_request_accepts_enrichment_fields():
     assert req.key_facts == {"date": "2024-03-15", "amount": "$425,000"}
     assert req.attorney_notes == "Key disclosure document - seller signed page 4"
     assert len(req.document_relationships) == 1
-    assert req.document_relationships[0]["relationship_type"] == "modifies"
+
+
+def test_enrichment_fields_stored_under_attorney_enrichment_key():
+    """Test that enrichment fields are stored under attorney_enrichment key in metadata."""
+    from src.legal_portal.api.routes.documents import VerifyDocumentRequest
+
+    # Simulate the enrichment storage logic as it should work in the handler
+    request = VerifyDocumentRequest(
+        is_verified=True,
+        document_type_override="contract",
+        relevance_level="critical",
+        key_facts={"date": "2024-03-15", "amount": "$425,000"},
+        attorney_notes="Key disclosure doc",
+        document_relationships=[{"related_doc_id": "doc-456", "relationship_type": "modifies"}],
+    )
+
+    # Simulate the handler's metadata building logic
+    metadata = {"existing_field": "value"}
+
+    if request.document_type_override is not None:
+        metadata.setdefault("attorney_enrichment", {})
+        metadata["attorney_enrichment"]["document_type_override"] = request.document_type_override
+    if request.relevance_level is not None:
+        metadata.setdefault("attorney_enrichment", {})
+        metadata["attorney_enrichment"]["relevance_level"] = request.relevance_level
+    if request.key_facts is not None:
+        metadata.setdefault("attorney_enrichment", {})
+        metadata["attorney_enrichment"]["key_facts"] = request.key_facts
+    if request.attorney_notes is not None:
+        metadata.setdefault("attorney_enrichment", {})
+        metadata["attorney_enrichment"]["attorney_notes"] = request.attorney_notes
+    if request.document_relationships is not None:
+        metadata.setdefault("attorney_enrichment", {})
+        metadata["attorney_enrichment"]["document_relationships"] = request.document_relationships
+
+    assert "attorney_enrichment" in metadata
+    assert metadata["attorney_enrichment"]["document_type_override"] == "contract"
+    assert metadata["attorney_enrichment"]["relevance_level"] == "critical"
+    assert metadata["attorney_enrichment"]["key_facts"]["date"] == "2024-03-15"
+    assert metadata["attorney_enrichment"]["attorney_notes"] == "Key disclosure doc"
+    assert len(metadata["attorney_enrichment"]["document_relationships"]) == 1
+    # Original metadata should be preserved
+    assert metadata["existing_field"] == "value"

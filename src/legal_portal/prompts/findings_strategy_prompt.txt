@@ -34,6 +34,7 @@ Rules:
 - Each ranked theory must include at least one supporting anchor.
 - Timeline highlights should be chronological and concrete.
 - Avoid unsupported accusations.
+- Do not limit the treatment of secondary theories — all applicable theories should be ranked and given substantive rationale. The letter will give each theory its own bold-titled provision in the KEY PROVISIONS section.
 
 Case context JSON:
 {context_json}

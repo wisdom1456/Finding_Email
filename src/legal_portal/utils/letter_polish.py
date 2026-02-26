@@ -25,42 +25,35 @@ class LetterPolisher:
         self.formatting_prompt = self._load_formatting_prompt()
 
     def _load_formatting_prompt(self) -> str:
-        """Load the formatting prompt for natural flow style."""
+        """Load the formatting prompt for structured professional style."""
         return """You are a legal document formatting specialist.
-Your job is to preserve legal substance while improving client-facing readability.
+Your job is to preserve legal substance while improving professional readability.
 
 CRITICAL RULES:
 1. Do NOT add, change, or invent facts, dates, amounts, party names, legal claims, or legal citations.
-2. Do NOT remove concrete facts that appear in the draft. Every factual statement (names, dates, amounts, key events) must remain present after polishing.
+2. Do NOT remove concrete facts from the draft.
 3. Keep names, numbers, deadlines, and document references accurate and unchanged.
-4. You have style leeway only: improve format, tone, transitions, and readability without changing factual substance.
+4. You have style leeway only: improve format, tone, transitions, and readability.
 
 TARGET STYLE:
-- Real attorney email voice — warm, direct, and confident.
-- Plain English a non-lawyer can understand without feeling talked down to.
-- Natural paragraphs that flow as continuous correspondence.
-- No section headers.
-- No bold labels.
-- No bullet lists, except for client action items (things the client must do or provide) where a short numbered list genuinely aids clarity.
-- No numbered lists elsewhere.
+- Professional attorney correspondence — measured, thorough, and confident.
+- Language that a non-lawyer can follow without being talked down to.
+- Clear paragraph structure within each section.
 
-FORMATTING AND TONE FIXES TO APPLY:
-1. Remove standalone section labels (for example: "Facts", "Legal Theories", "Timing and Risk", "Next Steps").
-2. Convert bullet and numbered list items into paragraph prose while preserving all content. Exception: if a paragraph lists specific things the client must provide or do, a short numbered list is acceptable.
-3. Smooth transitions so the letter reads as continuous correspondence.
+SECTION STRUCTURE (PRESERVE):
+- The letter should have four labeled sections: Background & Issue, Key Provisions, Analysis, Recommended Next Steps.
+- Do NOT remove or rename these section headers.
+- Do NOT merge sections.
+- Within Key Provisions, each doctrine should have a bold title followed by detailed explanation.
+
+FORMATTING FIXES TO APPLY:
+1. Remove any pipeline parenthetical artifacts (e.g., "(intake packet 01-11-2026)", "(photos, file)") — preserve the underlying fact in natural prose.
+2. Replace any internal pipeline language ("client-reported", "per intake", "flagged in analysis") with natural attorney voice.
+3. Smooth transitions between paragraphs within each section.
 4. Keep one blank line between paragraphs.
 5. Preserve greeting, signature, and confidentiality language.
-6. Remove internal pipeline parentheticals and source-label artifacts from the body text, but preserve the underlying fact. If a parenthetical contains a concrete date, amount, or named party, keep that fact in sentence form instead of deleting it.
-7. Replace internal pipeline language with natural attorney voice. Any phrase that reads like a system label — such as "client-reported [X]", "per intake", "flagged in analysis", or similar — should be rewritten as natural first-person correspondence: "the deadline you mentioned", "the date you flagged", "based on what you've shared."
-8. Remove all distancing or doubt-casting phrasing toward the client. Replace phrases like "you report", "you state", "you say", "you claim", "you allege", or "you indicate" — when referring to the client's account of events — with direct, trust-affirming language: "you have", "you invested", "as you described", "based on what you've shared." The attorney should sound like they believe their client.
-9. Replace attorney and litigation shop talk with plain English throughout. This applies to any term a non-lawyer would not immediately understand. Examples: "build leverage" → "put pressure on the other side while protecting your rights"; "spoliation" or "prevent spoliation" → "prevent the other side from destroying records"; "standing" (in the procedural sense) → "your right to bring this claim"; "accrual" or "accrual points" → "when the deadline clock starts on each claim"; "plaintiff" when used in a client-facing letter → use the client's name or "you" / "your side"; "defendant" → use the other party's name or "the other side"; "cause of action" → "legal claim"; "counts" → "claims"; "filing posture" or "move into filing posture" → "ready to file" or "prepared to file suit"; "for limitations purposes" or "limitations deadline" → "for the filing deadline" or "given the deadline risk."
-10. Replace abstract or clinical terms for people with human language. Words like "actors", "principals", "participants", or "entities" — when referring to individual people — should become "individuals", "people", or the person's actual name. Reserve formal terms for document or entity names only.
-11. Integrate inline legal definitions naturally into the prose instead of using a textbook quotation style. Instead of '"Breach of contract" means one side failed to perform...', write something like 'breach of contract — meaning they failed to deliver on the written commitments — is the primary path forward.' Keep the plain-English explanation but make it read like an attorney explaining something, not a dictionary defining a term. This rule applies to every legal term that is formally defined in the letter.
-12. Rewrite any em-dash sub-header opening lines into a warm, natural sentence greeting. For example, "Good afternoon Erica — brief summary and next steps after our review." should become "Good afternoon Erica, I wanted to share where things stand after our review of your file." The tone should feel like a thoughtful attorney reaching out, not a newsletter subject line.
-13. If the letter contains a paragraph that defines a legal theory in one or more sentences and then separately explains how it applies to the client's situation, merge them into a single sentence or thought that states the theory and its practical meaning together. Do not separate "what the law says" from "what it means for you" — combine them.
-14. If the letter has a paragraph that starts with or contains "To prevail", "To establish", "To succeed on this claim", or "The elements of" — rewrite it to lead with what the client needs to know practically, removing the element-listing structure entirely. Replace with a direct statement of the claim and why it applies.
-15. If secondary legal theories each get their own full paragraph with definition + application, compress them into a combined paragraph that briefly mentions each in one sentence. Only the primary/strongest theory should get a full paragraph.
-16. If there is a standalone paragraph that defines legal terms in sequence (like a glossary), remove it entirely — the terms should already be defined inline where they first appear in the letter.
+6. Ensure consistent formatting of doctrine titles in Key Provisions (bold, followed by colon).
+7. Ensure document references read naturally ("per the contract", "the inspection report documents") without citation-style parentheticals.
 
 OUTPUT INSTRUCTIONS:
 - Return ONLY the formatted letter text.
@@ -137,28 +130,17 @@ FORMATTED LETTER:"""
         """Detect what formatting changes were made."""
         changes = []
 
-        # Check for Key Findings → Here are the key points
-        if "Key Findings" in original and "Here are the key points" in polished:
-            changes.append("Changed 'Key Findings' to 'Here are the key points of our analysis:'")
+        # Check for pipeline artifact removal
+        import re
+        original_parens = len(re.findall(r"\([^)]*(?:intake|packet|photos|file|per intake|flagged)[^)]*\)", original, re.IGNORECASE))
+        polished_parens = len(re.findall(r"\([^)]*(?:intake|packet|photos|file|per intake|flagged)[^)]*\)", polished, re.IGNORECASE))
+        if original_parens > polished_parens:
+            changes.append(f"Removed {original_parens - polished_parens} pipeline parenthetical artifact(s)")
 
-        # Check for formal headers removed
-        if "FACTUAL SUMMARY" in original and "FACTUAL SUMMARY" not in polished:
-            changes.append("Removed formal 'FACTUAL SUMMARY' header for natural flow")
-
-        if "RECOMMENDED ACTION" in original and "RECOMMENDED ACTION" not in polished:
-            changes.append("Removed formal 'RECOMMENDED ACTION' header for natural flow")
-
-        # Check for bold issue titles removed
-        original_bold_bullets = original.count("• **")
-        polished_bold_bullets = polished.count("• **")
-
-        if original_bold_bullets > polished_bold_bullets:
-            changes.append(
-                (
-                    f"Converted {original_bold_bullets - polished_bold_bullets} "
-                    f"bold bullet headers to flowing paragraphs"
-                )
-            )
+        # Check for non-standard headers removed
+        for header in ["FACTUAL SUMMARY", "LEGAL THEORIES", "TIMING RISK", "ACTION ITEMS"]:
+            if header in original and header not in polished:
+                changes.append(f"Removed non-standard header '{header}'")
 
         # Check for spacing improvements
         original_triple_newlines = original.count("\n\n\n")
@@ -169,9 +151,13 @@ FORMATTED LETTER:"""
                 f"Fixed {original_triple_newlines - polished_triple_newlines} excessive spacing issues"
             )
 
-        # Check for greeting improvement
-        if "Dear " in original and ("Good afternoon" in polished or "Good morning" in polished):
-            changes.append("Updated greeting to warmer time-of-day style")
+        # Check for doctrine title formatting consistency
+        original_bold_bullets = original.count("• **")
+        polished_bold_bullets = polished.count("• **")
+        if polished_bold_bullets > original_bold_bullets:
+            changes.append(
+                f"Standardized {polished_bold_bullets - original_bold_bullets} doctrine title format(s)"
+            )
 
         return changes
 

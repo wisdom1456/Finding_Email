@@ -1290,12 +1290,12 @@ Return ONLY valid JSON.
         num_primary_issues = len(issue_map.primary_issues)
 
         return LetterStructure(
-            style="natural_flow",
-            intro="Here are the key points of our analysis:",
-            issue_format="flowing_bullet_paragraphs",
+            style="structured_professional",
+            intro="",
+            issue_format="bold_titled_bullet_provisions",
             reasoning=(
-                f"Natural flow format with {num_primary_issues} issue(s). "
-                f"Plain language explanations without formal headers."
+                f"Structured professional format with {num_primary_issues} issue(s). "
+                f"Four sections: Background & Issue, Key Provisions, Analysis, Recommended Next Steps."
             ),
         )
 

@@ -18,6 +18,15 @@ Rules:
 - Focus on concrete, minimal fixes.
 - Do not request full document rewrites.
 
+Expected structure:
+- The letter should have four labeled sections: Background & Issue, Key Provisions, Analysis, Recommended Next Steps.
+- Each Key Provision should have a bold doctrine title (e.g., "**Breach of Contract:**").
+- Analysis should apply provisions to facts and include defense anticipation paragraphs.
+- Recommended Next Steps should include an engagement scope paragraph clarifying what the firm will and will not do.
+- Target word count: 2,500-4,000 words total.
+- No parenthetical source citations (e.g., "[Source: Contract.pdf]", "(intake packet)").
+- Professional, measured tone throughout — not casual or overly warm.
+
 Lint violations:
 {lint_violations_json}
 

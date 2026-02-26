@@ -1237,19 +1237,19 @@ class JsonProcessingService:
         """Shared system instructions for findings email generation."""
         return (
             "You are a senior attorney drafting a client-facing findings email. "
-            "Write as a strategic advisor, not a legal educator. "
-            "Lead with risk and action, not doctrine. "
-            "Write in plain English with a steady, practical tone. "
-            "Use natural paragraphs only and do not use section headers, bold text, "
-            "bullet lists, numbered lists, or memo formatting. "
-            "Do not write outline-style scaffolding such as "
-            "'Below are the facts/core issue/legal theories/timing/action items'. "
-            "Do not use label-driven drafting like 'Evidence:' or 'Supporting documents:'. "
-            "Never write 'to prevail you must show' or list the elements of a claim. "
-            "Present the strongest path forward first, then mention secondary options briefly. "
-            "Integrate support naturally in prose. "
-            "Be clear about risks, proof needs, and uncertainty without overpromising. "
-            "Close with a short next-step request and a confidentiality statement."
+            "Write in a professional, measured, and thorough tone. "
+            "Structure the letter with four clearly labeled sections: "
+            "BACKGROUND & ISSUE, KEY PROVISIONS, ANALYSIS, and RECOMMENDED NEXT STEPS. "
+            "In BACKGROUND & ISSUE, formally restate the client's account and findings from document review. "
+            "In KEY PROVISIONS, present each applicable legal doctrine as a bold-titled bullet point "
+            "with detailed explanation of the principle, its elements, and when it applies. "
+            "In ANALYSIS, apply the provisions to the client's specific facts, assess evidence strength, "
+            "and explicitly anticipate likely defenses the opposing side will raise. "
+            "In RECOMMENDED NEXT STEPS, state the recommended course of action and include "
+            "a scope-of-engagement paragraph clarifying what the firm will and will not do. "
+            "Reference documents naturally in prose without parenthetical citation labels. "
+            "Be thorough — cover all applicable legal theories with substance. "
+            "Close with a call to action and confidentiality statement."
         )
 
     async def generate_findings_letter_from_json(
@@ -1421,12 +1421,11 @@ class JsonProcessingService:
         if not isinstance(clio_matter_context, str):
             clio_matter_context = str(clio_matter_context) if not isinstance(clio_matter_context, bool) else ""
 
-        # All cases now use natural_flow format - no structure override needed
-        # The analyzer always returns natural_flow regardless of complexity
+        # All cases use structured_professional format
         num_issues = len(legal_analysis.issue_analyses)
         logger.info(
-            f"Generating natural flow letter for {jurisdiction} with {num_issues} issues",
-            extra={"structure": "natural_flow", "issues": num_issues, "jurisdiction": jurisdiction},
+            f"Generating structured professional letter for {jurisdiction} with {num_issues} issues",
+            extra={"structure": "structured_professional", "issues": num_issues, "jurisdiction": jurisdiction},
         )
 
         qa_context, qa_pair_count = self._format_confirmed_qa_context(confirmed_qa_pairs)
@@ -1584,8 +1583,8 @@ class JsonProcessingService:
             })
 
         logger.info(
-            "Successfully generated natural flow letter",
-            extra={"html_length": len(html_content), "structure": "natural_flow"},
+            "Successfully generated structured professional letter",
+            extra={"html_length": len(html_content), "structure": "structured_professional"},
         )
 
         return html_content
@@ -1869,20 +1868,18 @@ class JsonProcessingService:
         """Create structure instruction based on letter structure guidance."""
         instructions = (
             "\n\nSTRUCTURE GUIDANCE (LATEST - OVERRIDE EARLIER CONFLICTS):\n"
-            "- Write as a client email, not a memo.\n"
-            "- Use natural paragraphs only.\n"
-            "- Do not use section headers, bold labels, bullets, or numbered lists.\n"
-            "- Follow this order: greeting and documents reviewed; situation summary; "
-            "immediate risks and deadlines; strongest legal path with brief mention of supporting theories; "
-            "what is needed from the client and why; recommended next steps; "
-            "closing request for direction.\n"
-            "- Lead with risk and practical consequence before explaining legal basis.\n"
-            "- Present the strongest legal path first in a full paragraph, then compress secondary "
-            "theories to 1-2 sentences each—do not give each theory its own section.\n"
-            "- If multiple legal paths are discussed, keep them in paragraph form with simple transitions "
-            "(for example: First, Second, Third) rather than list formatting.\n"
-            "- Explain legal concepts in plain English and include practical client impact.\n"
-            "- End with a brief confidentiality statement.\n"
+            "- Structure the letter with four clearly labeled sections.\n"
+            "- Use these section headers in this order:\n"
+            "  1. BACKGROUND & ISSUE (formally restate client's account and document findings)\n"
+            "  2. KEY PROVISIONS (bold-titled bullet for each applicable doctrine with detailed explanation)\n"
+            "  3. ANALYSIS (apply provisions to facts, assess evidence, anticipate defenses)\n"
+            "  4. RECOMMENDED NEXT STEPS (recommendations + engagement scope paragraph)\n"
+            "- Open with a professional greeting and brief statement of documents reviewed.\n"
+            "- In KEY PROVISIONS, give each doctrine its own bold-titled bullet — do not compress.\n"
+            "- In ANALYSIS, discuss the strongest theories fully and anticipate opposing defenses.\n"
+            "- In RECOMMENDED NEXT STEPS, always include a scope-of-engagement paragraph.\n"
+            "- Reference documents naturally in prose — no parenthetical source labels.\n"
+            "- End with a call to action and confidentiality statement.\n"
         )
 
         if getattr(structure_guidance, "reasoning", None):
@@ -1895,26 +1892,22 @@ class JsonProcessingService:
         strategy_json = json.dumps(strategy_object or {}, default=str, indent=2)
         return (
             "BALANCED CLIENT STRATEGY DIRECTIVES (LATEST - OVERRIDE EARLIER CONFLICTS):\n"
-            "- Write for a client. Keep tone confident, practical, and measured.\n"
-            "- Use paragraph-only formatting. No headers, bullets, numbered lists, or bold labels.\n"
-            "- Explain legal concepts in plain English, then apply them to the client's facts.\n"
-            "- Present legal theories in the order from strategy_object.ranked_theories, but keep them in prose.\n"
-            "- Do not explain the elements or prerequisites of each legal theory. Instead, state the theory, "
-            "say one sentence about why it applies to this case, and move on.\n"
-            "- Do not write a separate paragraph defining each legal term. Weave definitions into the advice naturally.\n"
-            "- After presenting the primary theory (ranked_theories[0]) in a full paragraph, cover secondary "
-            "theories in at most 1-2 sentences each. Do not give each theory its own definition-application-impact paragraph.\n"
-            "- Structure the letter around what the client should do and why, not what the law says.\n"
-            "- Lead every section with practical consequence or risk before explaining the legal basis.\n"
+            "- Write for a client. Keep tone professional, measured, and thorough.\n"
+            "- Use the four-section structure: BACKGROUND & ISSUE, KEY PROVISIONS, ANALYSIS, RECOMMENDED NEXT STEPS.\n"
+            "- In KEY PROVISIONS, present theories from strategy_object.ranked_theories as bold-titled bullets.\n"
+            "- Give each applicable doctrine substantive treatment — do not compress secondary theories.\n"
+            "- In ANALYSIS, apply the provisions to the client's facts. Discuss the primary theory "
+            "(ranked_theories[0]) most thoroughly, but give secondary theories substantive analysis too.\n"
+            "- Anticipate likely defenses in the ANALYSIS section with dedicated paragraphs.\n"
             "- Use evidence anchors naturally in sentences (date, amount, document, or communication) "
             "without label phrasing like 'Evidence:' or 'Supporting documents:'.\n"
             "- Mention missing proof directly and explain why it affects leverage or viability.\n"
             "- Avoid internal labels, snake_case tokens, and raw file names in client-facing text.\n"
-            "- Avoid stacked citation-style parentheticals; keep support readable in sentence form.\n"
+            "- Avoid stacked citation-style parentheticals; reference documents naturally in prose.\n"
             "- Avoid prefatory outline statements (for example: 'Below are the facts, core issue, legal theories...').\n"
             "- Avoid unsupported accusations or absolute outcomes.\n"
-            "- Include timing, standing, and deadline risks when relevant.\n"
-            "- End with a two-step recommendation in prose and a short proceed question.\n"
+            "- Include timing, standing, and deadline risks in the ANALYSIS section when relevant.\n"
+            "- In RECOMMENDED NEXT STEPS, include engagement scope and a call to action.\n"
             "- End with preliminary-analysis and confidentiality language.\n\n"
             "STRATEGY OBJECT (USE AS FACT/CLAIM MAP):\n"
             f"{strategy_json}\n"

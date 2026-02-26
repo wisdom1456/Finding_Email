@@ -992,9 +992,9 @@ class DeepAnalysis(BaseModel):
 class LetterStructure(BaseModel):
     """Guidance for how to structure the findings email."""
 
-    style: str  # "simple_bullets" | "numbered_findings" | "hybrid"
-    intro: str  # "Here are the key points of our analysis:" OR "Key Findings"
-    issue_format: str  # "bullet_paragraphs" | "numbered_sections_with_headers" | "bullets_with_subheadings"
+    style: str  # "structured_professional"
+    intro: str  # Section headers serve as intros; can be empty string
+    issue_format: str  # "bold_titled_bullet_provisions"
     reasoning: Optional[str] = None  # Why this structure was chosen
 
 

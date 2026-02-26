@@ -28,66 +28,43 @@ class LetterQualityLintService:
 
     _STRICT_SECTIONS: List[Tuple[str, str, List[re.Pattern[str]]]] = [
         (
-            "opening_review",
-            "Opening - What We Reviewed",
+            "background_issue",
+            "Background & Issue",
             [
-                re.compile(r"\bwhat we reviewed\b", re.IGNORECASE),
+                re.compile(r"\bBACKGROUND\s*(?:&|AND)\s*ISSUE\b", re.IGNORECASE),
+                re.compile(r"\byou report\b", re.IGNORECASE),
                 re.compile(r"\bafter reviewing\b", re.IGNORECASE),
-                re.compile(r"\bwe reviewed\b", re.IGNORECASE),
-            ],
-        ),
-        (
-            "core_issue",
-            "Core Issue - The Real Question",
-            [
-                re.compile(r"\bcore issue\b", re.IGNORECASE),
-                re.compile(r"\breal question\b", re.IGNORECASE),
-                re.compile(r"\bprimary concern\b", re.IGNORECASE),
-            ],
-        ),
-        (
-            "facts",
-            "What the Documents Show",
-            [
-                re.compile(r"\bwhat the documents show\b", re.IGNORECASE),
                 re.compile(r"\bbased on (?:the )?records\b", re.IGNORECASE),
-                re.compile(r"\b2022\b"),
             ],
         ),
         (
-            "legal_theories",
-            "Legal Theories",
+            "key_provisions",
+            "Key Provisions",
             [
+                re.compile(r"\bKEY\s*PROVISIONS?\b", re.IGNORECASE),
                 re.compile(r"\bcontract\b", re.IGNORECASE),
                 re.compile(r"\bfraud|misrepresentation\b", re.IGNORECASE),
                 re.compile(r"\bsecurities\b", re.IGNORECASE),
             ],
         ),
         (
-            "timing_risk",
-            "Timing Risk",
+            "analysis",
+            "Analysis",
             [
-                re.compile(r"\btiming risk\b", re.IGNORECASE),
+                re.compile(r"\bANALYSIS\b", re.IGNORECASE),
                 re.compile(r"\bstatute of limitations\b", re.IGNORECASE),
-                re.compile(r"\bdeadline\b", re.IGNORECASE),
+                re.compile(r"\bdefense\b", re.IGNORECASE),
+                re.compile(r"\bevidence\b", re.IGNORECASE),
             ],
         ),
         (
-            "strategy",
-            "Strategy - What We Recommend",
+            "next_steps",
+            "Recommended Next Steps",
             [
-                re.compile(r"\bwhat we recommend\b", re.IGNORECASE),
+                re.compile(r"\bRECOMMENDED\s*NEXT\s*STEPS?\b", re.IGNORECASE),
                 re.compile(r"\bwe recommend\b", re.IGNORECASE),
-                re.compile(r"\bdemand letter\b", re.IGNORECASE),
-            ],
-        ),
-        (
-            "action_items",
-            "Immediate Client Action Items",
-            [
-                re.compile(r"\bimmediate (?:client )?action items\b", re.IGNORECASE),
-                re.compile(r"\bplease (?:help us|send|provide)\b", re.IGNORECASE),
-                re.compile(r"\bproof of payment\b", re.IGNORECASE),
+                re.compile(r"\bscope of\s*(?:our\s*)?(?:engagement|representation)\b", re.IGNORECASE),
+                re.compile(r"\bplease (?:help us|send|provide|let us know)\b", re.IGNORECASE),
             ],
         ),
     ]
@@ -119,14 +96,29 @@ class LetterQualityLintService:
         (
             r"(?im)^\s*("
             r"opening\s+review|"
-            r"facts(?:\s*\([^)]+\))?|"
+            r"factual\s+summary|"
             r"core\s+issue|"
             r"legal\s+theories(?:\s*\([^)]+\))?|"
+            r"legal\s+claims?\s+analysis|"
             r"timing(?:\s+and)?\s+risk|"
             r"strategy(?:\s*\([^)]+\))?|"
-            r"action\s+items(?:\s*\([^)]+\))?"
+            r"action\s+items(?:\s*\([^)]+\))?|"
+            r"case\s+assessment|"
+            r"procedural\s+requirements"
             r")\s*$"
         )
+    )
+    _REQUIRED_SECTION_HEADERS = re.compile(
+        r"(?im)^\s*("
+        r"BACKGROUND\s*(?:&|AND)\s*ISSUE|"
+        r"Background\s*(?:&|and)\s*Issue|"
+        r"KEY\s*PROVISIONS?|"
+        r"Key\s*Provisions?|"
+        r"ANALYSIS|"
+        r"Analysis|"
+        r"RECOMMENDED\s*NEXT\s*STEPS?|"
+        r"Recommended\s*Next\s*Steps?"
+        r")\s*:?\s*$"
     )
 
     _URGENCY_GUARD = re.compile(r"\b\d+\s+days?\s+from\s+today\b", re.IGNORECASE)
@@ -275,12 +267,40 @@ class LetterQualityLintService:
                     rule="explicit_section_headers",
                     severity="error" if mode == "strict_quality" else "warning",
                     message=(
-                        "Use natural-flow correspondence style; avoid explicit section labels "
-                        "like 'Opening review' or 'Facts'."
+                        "Non-standard section headers detected. Use only: "
+                        "Background & Issue, Key Provisions, Analysis, Recommended Next Steps."
                     ),
                     details={"headers_found": header_hits},
                 )
             )
+
+        if letter_type == "findings" and mode == "strict_quality":
+            required_headers = [match.group(1) for match in self._REQUIRED_SECTION_HEADERS.finditer(text)]
+            required_labels = {"background", "provisions", "analysis", "next steps"}
+            found_labels = set()
+            for h in required_headers:
+                h_lower = h.lower()
+                if "background" in h_lower:
+                    found_labels.add("background")
+                elif "provision" in h_lower:
+                    found_labels.add("provisions")
+                elif "analysis" in h_lower:
+                    found_labels.add("analysis")
+                elif "next step" in h_lower:
+                    found_labels.add("next steps")
+            missing = required_labels - found_labels
+            if missing:
+                violations.append(
+                    LintViolation(
+                        rule="missing_required_section_headers",
+                        severity="warning",
+                        message=(
+                            "Letter is missing one or more required section headers: "
+                            f"{', '.join(sorted(missing))}."
+                        ),
+                        details={"missing_sections": sorted(missing), "found_headers": required_headers},
+                    )
+                )
 
         plain_english_hits = len(re.findall(r"\bwhat this means for you\b", text_lower))
         if plain_english_hits > 1:
@@ -419,9 +439,9 @@ class LetterQualityLintService:
         section_positions: Dict[str, int],
         violations: List[LintViolation],
     ) -> None:
-        """Apply strict high-level signal checks without requiring memo-style sectioning."""
-        del section_positions  # Natural-flow style is accepted; ordering checks are intentionally disabled.
-        theme_keys = ["opening_review", "facts", "legal_theories", "timing_risk", "strategy", "action_items"]
+        """Apply strict section checks for structured professional format."""
+        del section_positions
+        theme_keys = ["background_issue", "key_provisions", "analysis", "next_steps"]
         matched = [name for name in theme_keys if section_counts.get(name, 0) > 0]
         if len(matched) < 3:
             violations.append(
@@ -429,8 +449,8 @@ class LetterQualityLintService:
                     rule="theme_signal_coverage",
                     severity="warning",
                     message=(
-                        "Letter may be missing one or more key client-advisory themes "
-                        "(facts, legal path, timing risk, or next-step guidance)."
+                        "Letter may be missing one or more required sections "
+                        "(Background & Issue, Key Provisions, Analysis, Recommended Next Steps)."
                     ),
                     details={"matched_themes": matched, "required_minimum": 3},
                 )
@@ -442,7 +462,7 @@ class LetterQualityLintService:
         action_bullet_count: int,
         violations: List[LintViolation],
     ) -> None:
-        """Apply strict actionability checks for natural-flow client correspondence."""
+        """Apply strict actionability checks for structured professional correspondence."""
         if not re.search(
             r"\b(next steps?|please (?:help us|send|provide|share|forward|let us know)|we recommend|we suggest)\b",
             text_lower,
@@ -518,9 +538,10 @@ class LetterQualityLintService:
         targets: Dict[str, Tuple[int, int]] = {}
         if letter_type == "findings":
             targets = {
-                "facts": (120, 180),
-                "legal_theories": (240, 520),
-                "strategy": (100, 150),
+                "background_issue": (300, 800),
+                "key_provisions": (600, 1500),
+                "analysis": (400, 1200),
+                "next_steps": (150, 400),
             }
         elif letter_type == "demand":
             targets = {
@@ -583,13 +604,18 @@ class LetterQualityLintService:
         """Estimate section word count by heading heuristics."""
         if letter_type == "findings":
             heading_map = {
-                "opening_review": [r"(?im)^opening\s*-\s*what we reviewed\s*$"],
-                "core_issue": [r"(?im)^core issue\s*-\s*the real question\s*$"],
-                "facts": [r"(?im)^what the documents show\s*$", r"(?im)^factual summary\s*$"],
-                "legal_theories": [r"(?im)^legal theories\s*$", r"(?im)^key points of our analysis\s*$"],
-                "timing_risk": [r"(?im)^timing risk\s*$"],
-                "strategy": [r"(?im)^strategy\s*-\s*what we recommend\s*$", r"(?im)^recommended next steps\s*$"],
-                "action_items": [r"(?im)^immediate client action items\s*$"],
+                "background_issue": [
+                    r"(?im)^(?:BACKGROUND\s*(?:&|AND)\s*ISSUE|Background\s*(?:&|and)\s*Issue)\s*:?\s*$",
+                ],
+                "key_provisions": [
+                    r"(?im)^(?:KEY\s*PROVISIONS?|Key\s*Provisions?)\s*:?\s*$",
+                ],
+                "analysis": [
+                    r"(?im)^(?:ANALYSIS|Analysis)\s*:?\s*$",
+                ],
+                "next_steps": [
+                    r"(?im)^(?:RECOMMENDED\s*NEXT\s*STEPS?|Recommended\s*Next\s*Steps?)\s*:?\s*$",
+                ],
             }
             target_patterns = heading_map.get(section, [])
             all_heading_patterns = [pattern for patterns in heading_map.values() for pattern in patterns]
@@ -612,21 +638,28 @@ class LetterQualityLintService:
                 return self._count_words(snippet)
 
             section_patterns = {
-                "facts": [
-                    r"\bwhat the documents show\b",
-                    r"\bfactual summary\b",
+                "background_issue": [
+                    r"\byou report\b",
+                    r"\bafter reviewing\b",
                     r"\bbased on (?:the )?records\b",
                     r"\byou invested\b",
                 ],
-                "legal_theories": [
-                    r"\bkey points of our analysis\b",
+                "key_provisions": [
+                    r"\bkey provisions\b",
                     r"\bcontract claim\b",
                     r"\bunjust enrichment\b",
+                    r"\bbreach of contract\b",
                 ],
-                "strategy": [
+                "analysis": [
+                    r"\bapplying (?:these|the) provisions\b",
+                    r"\bthe evidence\b",
+                    r"\bdefense\b",
+                ],
+                "next_steps": [
                     r"\bbased on the above\b",
                     r"\bwe recommend\b",
                     r"\bnext steps\b",
+                    r"\bscope of (?:our )?(?:engagement|representation)\b",
                 ],
             }
         else:
@@ -637,9 +670,10 @@ class LetterQualityLintService:
             }
 
         paragraph_windows = {
-            "facts": 2,
-            "legal_theories": 4,
-            "strategy": 2,
+            "background_issue": 4,
+            "key_provisions": 5,
+            "analysis": 4,
+            "next_steps": 3,
             "background": 3,
             "legal_analysis": 3,
             "demand": 2,
@@ -735,7 +769,9 @@ class LetterQualityLintService:
     def _word_count_bounds(self, *, mode: str, letter_type: str) -> Tuple[int, int]:
         """Return word-count bounds for the current lint profile."""
         if letter_type == "findings" and mode == "strict_quality":
-            return (550, 1000)
+            return (2000, 4500)
+        if letter_type == "findings":
+            return (1800, 5000)
         if letter_type == "recommendation":
             return (300, 900)
         return (450, 1300)

@@ -305,13 +305,13 @@ Comprehensive compliance recommendations will follow.
         """
         sections = []
 
-        # Natural flow format - no formal section headers
-        # Warm greeting
+        # Structured professional format
         sections.append("Good afternoon,")
         sections.append("")
         sections.append(
-            "I hope you are doing well. I wanted to follow up with a summary "
-            "of our findings after reviewing the documents you submitted."
+            "Thank you for providing the documents related to this matter. "
+            "After reviewing the materials you submitted, I am writing to share "
+            "our preliminary findings and recommendations."
         )
         sections.append("")
 
@@ -319,31 +319,43 @@ Comprehensive compliance recommendations will follow.
             sections.append(f"[Note: This is preliminary content - {error_context}]")
             sections.append("")
 
-        # Factual background (natural flow, no header)
+        # Background & Issue section
+        sections.append("BACKGROUND & ISSUE:")
+        sections.append("")
         sections.append(self.generate_fallback_factual_summary(case_data))
         sections.append("")
 
-        # Legal analysis with transition
-        sections.append("Here are the key points of our analysis:")
+        # Key Provisions section
+        sections.append("KEY PROVISIONS:")
         sections.append("")
         sections.append(self.generate_fallback_legal_analysis(case_data))
         sections.append("")
 
-        # Evidence context
+        # Analysis section
+        sections.append("ANALYSIS:")
+        sections.append("")
         sections.append(self.generate_fallback_evidence_review(case_data))
         sections.append("")
 
-        # Recommendations (natural flow)
-        sections.append("Based on the above, " + self.generate_fallback_recommendations(case_data))
+        # Recommended Next Steps section
+        sections.append("RECOMMENDED NEXT STEPS:")
+        sections.append("")
+        sections.append(self.generate_fallback_recommendations(case_data))
+        sections.append("")
+        sections.append(
+            "Please note that our representation in this matter is currently limited to "
+            "this preliminary review and findings letter. Should you wish for our firm to "
+            "proceed further, we would be happy to discuss continued representation."
+        )
         sections.append("")
 
         # Call to action
         sections.append(
             "Please let us know if you would like us to proceed with next steps, "
-            "or whether you would prefer that we first set a phone call to discuss."
+            "or whether you would prefer to schedule a call to discuss our findings."
         )
         sections.append("")
-        sections.append("Thank you,")
+        sections.append("Sincerely,")
         sections.append("")
         sections.append(
             "This analysis is based on the documents provided and represents a preliminary assessment."

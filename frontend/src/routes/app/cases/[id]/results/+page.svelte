@@ -11,7 +11,7 @@
 	import { letterHtmlToPlainText, letterHtmlToRichFragment, normalizeLetterHtml } from '$lib/utils/letterCopy';
 	import { SSEEventParser } from '$lib/utils/sseEventParser';
 	import type { GapResolutionRefreshRequest, RecommendedLetterType } from '$lib/types';
-	import { onMount, onDestroy } from 'svelte';
+	import { onMount, onDestroy, tick } from 'svelte';
 	import SkippedDocumentsAlert from '$lib/components/SkippedDocumentsAlert.svelte';
 	import DocumentSummaryCard from '$lib/components/DocumentSummaryCard.svelte';
 	import DocumentPreviewPane from '$lib/components/DocumentPreviewPane.svelte';
@@ -1034,6 +1034,7 @@
 
 	async function generateRecommendationLetter(letterType: string) {
 		generatingRecommendationLetter = true;
+		let shouldSwitchToLetters = false;
 
 		try {
 			const { session, user } = await getSecureSession();
@@ -1086,7 +1087,9 @@
 						} else if (content && typeof content.markdown === 'string') {
 							recommendationLetters[letterType] = `<div class="legal-letter">${parseMarkdown(content.markdown)}</div>`;
 						}
-						activeTab = 'letters';
+						// Flag the tab switch; defer until after loading state resets to avoid
+						// unmounting CaseRecommendationCard while its button disabled state is still updating.
+						shouldSwitchToLetters = true;
 						toastStore.success(`${letterType.replace('_', ' ')} letter generated successfully`);
 					} else if (eventType === 'done') {
 						break;
@@ -1100,7 +1103,13 @@
 		} catch (err: any) {
 			toastStore.error(err.message || 'Recommendation letter generation failed');
 		} finally {
+			// Reset loading state first so Svelte can update the button's disabled prop
+			// while the CaseRecommendationCard is still mounted, before we switch tabs and unmount it.
 			generatingRecommendationLetter = false;
+			if (shouldSwitchToLetters) {
+				await tick();
+				activeTab = 'letters';
+			}
 		}
 	}
 

@@ -1434,7 +1434,7 @@ async def trigger_extraction(
                 detail="Failed to download document from storage",
             )
         # #region agent log
-        _dbg("storage_download_ok", {"bytes_len": len(file_bytes), "file_type": file_type, "file_name": file_name}, "H-A,H-C")
+        _dbg("storage_download_ok", {"bytes_len": len(file_bytes), "file_type": document.get("file_type"), "file_name": document.get("file_name")}, "H-A,H-C")
         # #endregion
 
         # Determine file type and process

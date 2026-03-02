@@ -45,10 +45,18 @@ async def test_step_by_step(snapshot_path: str):
         extracted_text = doc.get("extracted_text", "") or ""
         
         if extracted_text:
+            # Derive doc_type from metadata or file_type
+            metadata = doc.get("metadata") or {}
+            doc_type = (
+                metadata.get("classification")
+                or metadata.get("attorney_enrichment", {}).get("document_type_override")
+                or doc.get("file_type", "document")
+            )
+            
             # Create DocumentSummaryStructured object
             doc_summary = DocumentSummaryStructured(
                 document_name=file_name,
-                document_type=doc.get("doc_type", "document"),
+                document_type=doc_type,
                 executive_summary=extracted_text[:500],
                 key_content=extracted_text[:5000],  # First 5000 chars
             )
@@ -64,7 +72,7 @@ async def test_step_by_step(snapshot_path: str):
     if not intake_content:
         print("\n  WARNING: No intake form found, using first document")
         if doc_summaries:
-            intake_content = doc_summaries[0]["content"]
+            intake_content = doc_summaries[0].key_content or ""
     
     # Determine jurisdiction from case data
     jurisdiction = case.get("jurisdiction", "New Mexico")

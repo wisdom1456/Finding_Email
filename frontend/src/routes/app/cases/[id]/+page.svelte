@@ -64,8 +64,7 @@
 	let docsWithoutText = $derived(
 		documents.filter(doc => 
 			doc.status === 'ready' && 
-			!doc.extracted_text && 
-			!doc.manual_text &&
+			!doc.extracted_at && 
 			!doc.is_flagged_as_junk
 		)
 	);
@@ -412,7 +411,7 @@
 		try {
 			const { data, error } = await supabase
 				.from('documents')
-				.select('*')
+				.select('id, case_id, file_name, file_type, file_size, storage_path, status, extraction_method, extraction_quality, extracted_at, page_count, ocr_provider, extraction_error, is_verified, is_flagged_as_junk, text_edited_at, metadata, created_at, updated_at')
 				.eq('case_id', caseId as string)
 				.order('created_at', { ascending: true })
 				.limit(10000); // Explicit limit to handle cases with many documents (Supabase default is 1000)
@@ -692,9 +691,20 @@
 				return;
 			}
 
-			if (doc.extracted_text) {
-				documentViewerContent = doc.extracted_text;
-				return;
+			// If document has text extracted (indicated by extracted_at), fetch it on demand
+			// as it is no longer loaded in the initial documents list to prevent timeouts.
+			if (doc.extracted_at) {
+				const { data: textData, error: textError } = await supabase
+					.from('documents')
+					.select('extracted_text')
+					.eq('id', doc.id)
+					.single();
+				
+				const typedData = textData as any;
+				if (!textError && typedData?.extracted_text) {
+					documentViewerContent = typedData.extracted_text;
+					return;
+				}
 			}
 
 			if (!isTextLikeDocument(doc)) {
@@ -2850,7 +2860,7 @@
 					{:else if documentSummary}
 						<DocumentSummaryCard 
 							summary={documentSummary}
-							rawText={viewingDocument?.extracted_text || extractedTextData?.extracted_text || ''}
+							rawText={documentViewerContent || extractedTextData?.extracted_text || ''}
 							signatureDetection={viewingDocument?.metadata?.signature_detection || null}
 							collapsible={false}
 							showHeader={false}
@@ -3016,8 +3026,15 @@
 									✓ Comprehensive case overview - best for analysis context
 								</p>
 							{/if}
-							{#if doc.extracted_text}
-								<p class="text-xs text-gray-600 mt-1 line-clamp-2">{doc.extracted_text.substring(0, 150)}...</p>
+							{#if doc.extracted_at}
+								<p class="text-xs text-gray-600 mt-1 italic">
+									<span class="inline-block w-2 h-2 rounded-full bg-green-500 mr-1"></span>
+									Text extracted and ready
+								</p>
+							{:else}
+								<p class="text-xs text-amber-600 mt-1 italic">
+									No text extracted yet
+								</p>
 							{/if}
 						</div>
 					</label>

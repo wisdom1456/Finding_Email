@@ -3587,7 +3587,7 @@ async def stream_case_analysis(
         # many large email documents.
         case_response = (
             supabase.table("cases")
-            .select("*, documents(id,file_name,file_type,doc_type,status,metadata)")
+            .select("*, documents(id,file_name,file_type,status,metadata)")
             .eq("id", case_id)
             .eq("user_id", user["id"])
             .execute()
@@ -3631,7 +3631,14 @@ async def stream_case_analysis(
         for doc in documents:
             extracted_text = doc.get("extracted_text", "") or ""
             file_name = doc.get("file_name", "unknown")
-            doc_type = doc.get("doc_type", "document")
+            
+            # Derive doc_type from metadata or file_type since it's not a DB column
+            metadata = doc.get("metadata") or {}
+            doc_type = (
+                metadata.get("classification")
+                or metadata.get("attorney_enrichment", {}).get("document_type_override")
+                or doc.get("file_type", "document")
+            )
 
             if extracted_text:
                 # Find intake form

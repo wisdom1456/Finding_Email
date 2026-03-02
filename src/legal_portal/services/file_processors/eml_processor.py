@@ -152,6 +152,18 @@ async def process_eml(
             f"\n{body}"
         )
 
+        # Hard cap on stored text — email archives can be arbitrarily large but
+        # only the first portion is useful for AI analysis.  Storing 30+ MB of
+        # email thread history causes Supabase query timeouts when multiple such
+        # documents are fetched together.
+        MAX_EXTRACTED_CHARS = 200_000
+        if len(full_text) > MAX_EXTRACTED_CHARS:
+            full_text = full_text[:MAX_EXTRACTED_CHARS]
+            logger.info(
+                f"Truncated EML extracted text for {original_filename} to "
+                f"{MAX_EXTRACTED_CHARS} chars (original body was larger)"
+            )
+
         # Determine extraction quality based on content length
         content_length = len(full_text.strip())
         if content_length == 0:

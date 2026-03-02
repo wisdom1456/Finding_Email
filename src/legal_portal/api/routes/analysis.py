@@ -3574,11 +3574,20 @@ async def stream_case_analysis(
     from legal_portal.core.data_models import DocumentSummaryStructured
     from legal_portal.services.multi_stage_analyzer import MultiStageAnalyzer
 
+    # Maximum characters of extracted_text to load per document.  Email
+    # archives imported from Clio can contain 30+ MB of thread history — loading
+    # them all in a single Supabase response causes an httpx ReadTimeout.  Only
+    # the first MAX_DOC_CHARS are useful for LLM analysis anyway.
+    MAX_DOC_CHARS = 200_000
+
     try:
-        # 1. Verify case ownership
+        # 1. Verify case ownership — fetch case metadata and document stubs only.
+        # extracted_text is intentionally excluded from the nested relation to
+        # avoid a single HTTP response that could exceed 100+ MB for cases with
+        # many large email documents.
         case_response = (
             supabase.table("cases")
-            .select("*, documents(*)")
+            .select("*, documents(id,file_name,file_type,doc_type,status,metadata)")
             .eq("id", case_id)
             .eq("user_id", user["id"])
             .execute()
@@ -3588,10 +3597,32 @@ async def stream_case_analysis(
             raise HTTPException(status_code=404, detail="Case not found")
 
         case_data = case_response.data[0]
-        documents = case_data.get("documents", [])
+        doc_stubs = case_data.get("documents", [])
 
-        if not documents:
+        if not doc_stubs:
             raise HTTPException(status_code=400, detail="No documents found for this case")
+
+        # 1b. Fetch extracted_text per document individually and truncate.
+        # Individual per-document queries are slow but bounded — each response
+        # is at most one document's text rather than the full case payload.
+        documents = []
+        for stub in doc_stubs:
+            doc = dict(stub)
+            try:
+                text_resp = (
+                    supabase.table("documents")
+                    .select("extracted_text")
+                    .eq("id", stub["id"])
+                    .execute()
+                )
+                raw = (text_resp.data[0].get("extracted_text") or "") if text_resp.data else ""
+                doc["extracted_text"] = raw[:MAX_DOC_CHARS]
+            except Exception as text_err:
+                logger.warning(
+                    f"[STREAM] Could not fetch extracted_text for doc {stub['id']}: {text_err}"
+                )
+                doc["extracted_text"] = ""
+            documents.append(doc)
 
         # 2. Build document summaries from extracted text
         doc_summaries = []

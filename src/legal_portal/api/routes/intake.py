@@ -10,7 +10,7 @@ from typing import Any, Dict, List
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from pydantic import BaseModel
 
-from legal_portal.api.dependencies import get_current_user
+from legal_portal.api.dependencies import get_current_user, get_supabase_client
 from legal_portal.core.document_processor import DocumentProcessor
 from legal_portal.utils.helpers import (
     build_structured_display_from_qa,
@@ -159,6 +159,7 @@ class IntakeConfirmRequest(BaseModel):
 async def confirm_intake_data(
     request: IntakeConfirmRequest,
     user=Depends(get_current_user),
+    supabase=Depends(get_supabase_client),
 ):
     """Save confirmed intake data to case and prepare for analysis.
 
@@ -166,15 +167,6 @@ async def confirm_intake_data(
     saves it to the database.
     """
     try:
-        from supabase import create_client
-
-        supabase_url = os.getenv("SUPABASE_URL")
-        supabase_key = os.getenv("SUPABASE_SERVICE_KEY")
-
-        if not supabase_url or not supabase_key:
-            raise HTTPException(status_code=500, detail="Database not configured")
-
-        supabase = create_client(supabase_url, supabase_key)
 
         # Verify case belongs to user
         case_result = (

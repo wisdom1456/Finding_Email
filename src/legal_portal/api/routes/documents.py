@@ -1247,11 +1247,11 @@ def classify_document_type(file_name: str, file_type: str) -> str:
 async def get_case_context(case_id: str, supabase_client) -> dict:
     """Get case context for image analysis."""
     try:
-        response = supabase_client.table("cases").select("case_name, client_name, description").eq("id", case_id).execute()
+        response = supabase_client.table("cases").select("client_name, description").eq("id", case_id).execute()
         if response.data and len(response.data) > 0:
             case = response.data[0]
             return {
-                "case_name": case.get("case_name", "Unknown Case"),
+                "case_name": case.get("client_name", "Unknown Case"),
                 "client_name": case.get("client_name", "Unknown Client"),
                 "description": case.get("description", ""),
             }
@@ -1367,8 +1367,24 @@ async def trigger_extraction(
     from legal_portal.core.data_models import DocumentType
     from legal_portal.services.file_processors.pdf_processor import process_pdf
 
+    import json as _json
+    import time as _time
+
+    def _dbg(msg: str, data: dict, hyp: str = "") -> None:
+        """Write a debug log line to both Vercel stdout and the local debug file."""
+        payload = {"sessionId": "0e46b7", "ts": _time.time(), "msg": msg, "hyp": hyp, **data}
+        logger.error("[DBG-0e46b7] %s", _json.dumps(payload))
+        try:
+            with open("/Users/BRFlorida/Projects/Work/Finding_Emails/.cursor/debug-0e46b7.log", "a") as _f:
+                _f.write(_json.dumps(payload) + "\n")
+        except Exception:
+            pass
+
     try:
         logger.info(f"Trigger extraction: doc_id={document_id}, user={user['id']}")
+        # #region agent log
+        _dbg("trigger_extraction_entry", {"document_id": document_id, "force_method": str(force_method)}, "H-A,H-B,H-C")
+        # #endregion
 
         # Get document with ownership verification
         response = (
@@ -1376,6 +1392,9 @@ async def trigger_extraction(
         )
 
         if not response.data:
+            # #region agent log
+            _dbg("doc_not_found", {"document_id": document_id}, "H-A")
+            # #endregion
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
 
         document = response.data[0]
@@ -1400,14 +1419,23 @@ async def trigger_extraction(
         # Download file from storage
         storage_path = document["storage_path"]
         logger.debug(f"Downloading file from storage: {storage_path}")
+        # #region agent log
+        _dbg("before_storage_download", {"file_name": document.get("file_name"), "file_type": document.get("file_type"), "storage_path": storage_path}, "H-A")
+        # #endregion
 
         file_bytes = service_supabase.storage.from_("documents").download(storage_path)
 
         if not file_bytes:
+            # #region agent log
+            _dbg("storage_download_empty", {"storage_path": storage_path}, "H-A")
+            # #endregion
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Failed to download document from storage",
             )
+        # #region agent log
+        _dbg("storage_download_ok", {"bytes_len": len(file_bytes), "file_type": file_type, "file_name": file_name}, "H-A,H-C")
+        # #endregion
 
         # Determine file type and process
         file_name = document["file_name"]
@@ -1775,11 +1803,20 @@ async def trigger_extraction(
             document_metadata["signature_detection"] = signature_detection
             update_data["metadata"] = document_metadata
 
+        # #region agent log
+        _dbg("before_db_update", {"extraction_method": extraction_method, "text_len": len(extracted_text or ""), "status": str(update_data.get("status"))}, "H-B,H-C,H-E")
+        # #endregion
         update_result = user_supabase.table("documents").update(update_data).eq("id", document_id).execute()
+        # #region agent log
+        _dbg("after_db_update", {"has_data": bool(update_result.data), "data_len": len(update_result.data or [])}, "H-B,H-E")
+        # #endregion
 
         # CRITICAL: Verify the update actually saved to the database
         if not update_result.data:
             logger.error(f"Failed to save extracted text for document {document_id} - update returned no data")
+            # #region agent log
+            _dbg("update_no_data_500", {"document_id": document_id}, "H-B,H-E")
+            # #endregion
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Failed to save extraction results to database. Please try again.",
@@ -1805,6 +1842,9 @@ async def trigger_extraction(
         raise
     except Exception as e:
         logger.error(f"Error in trigger_extraction: {str(e)}")
+        # #region agent log
+        _dbg("unhandled_exception", {"exc_type": type(e).__name__, "exc_msg": str(e)[:300]}, "H-D")
+        # #endregion
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error extracting text: {str(e)}",

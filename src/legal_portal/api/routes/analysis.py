@@ -3602,26 +3602,28 @@ async def stream_case_analysis(
         if not doc_stubs:
             raise HTTPException(status_code=400, detail="No documents found for this case")
 
-        # 1b. Fetch extracted_text per document individually and truncate.
-        # Individual per-document queries are slow but bounded — each response
-        # is at most one document's text rather than the full case payload.
+        # 1b. Fetch extracted_text for all documents in a single batch query.
+        # Using .in_() avoids N+1 round trips (one per document) which was the
+        # primary cause of connection count and CPU exhaustion on Supabase.
+        doc_ids = [stub["id"] for stub in doc_stubs]
+        text_by_id: dict = {}
+        try:
+            text_resp = (
+                supabase.table("documents")
+                .select("id, extracted_text")
+                .in_("id", doc_ids)
+                .execute()
+            )
+            for row in text_resp.data or []:
+                raw = row.get("extracted_text") or ""
+                text_by_id[row["id"]] = raw[:MAX_DOC_CHARS]
+        except Exception as text_err:
+            logger.warning(f"[STREAM] Could not batch-fetch extracted_text: {text_err}")
+
         documents = []
         for stub in doc_stubs:
             doc = dict(stub)
-            try:
-                text_resp = (
-                    supabase.table("documents")
-                    .select("extracted_text")
-                    .eq("id", stub["id"])
-                    .execute()
-                )
-                raw = (text_resp.data[0].get("extracted_text") or "") if text_resp.data else ""
-                doc["extracted_text"] = raw[:MAX_DOC_CHARS]
-            except Exception as text_err:
-                logger.warning(
-                    f"[STREAM] Could not fetch extracted_text for doc {stub['id']}: {text_err}"
-                )
-                doc["extracted_text"] = ""
+            doc["extracted_text"] = text_by_id.get(stub["id"], "")
             documents.append(doc)
 
         # 2. Build document summaries from extracted text

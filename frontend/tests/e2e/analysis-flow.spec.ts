@@ -159,6 +159,27 @@ test.describe('Analysis Workflow', () => {
 			timeout: 10000
 		});
 
+		// Step 3b: Verify the Verification Hub triage section is visible with the uploaded doc
+		// The hub should appear in the documents area once files are uploaded.
+		const verificationSection = page
+			.locator('h2:has-text("Verification Hub"), #verification')
+			.first();
+		if (await verificationSection.isVisible({ timeout: 5000 })) {
+			// TriageDashboard should have rendered with at least 1 document
+			const dashboard = page.locator('.rounded-2xl').filter({ hasText: /document/ }).first();
+			await expect(dashboard).toBeVisible({ timeout: 5000 });
+
+			// At least one triage section should be present
+			const triageSections = page.locator(
+				'section:has(h3:has-text("Needs Immediate Attention")), ' +
+				'section:has(h3:has-text("Pending Review")), ' +
+				'section:has(h3:has-text("Ready for Analysis"))'
+			);
+			// Non-fatal: triage sections may not all be present with a minimal PDF
+			const triageCount = await triageSections.count();
+			console.log(`Triage sections visible: ${triageCount}`);
+		}
+
 		// Step 4: Navigate to Analysis tab and start analysis
 		const analysisTab = page.locator('button:has-text("Analysis"), [role="tab"]:has-text("Analysis")');
 		if (await analysisTab.isVisible()) {

@@ -99,6 +99,7 @@ npm run test:ui
 - ✅ Case creation workflow (manual and Clio-based)
 - ✅ Cases list and filtering
 - ✅ Clio integration UI flows
+- ✅ Verification Hub — triage dashboard, signature review, document enrichment, OCR review
 - ✅ Multi-browser support (Chromium, Firefox, WebKit)
 - ✅ Mobile viewport testing
 
@@ -108,6 +109,8 @@ npm run test:ui
 - `frontend/tests/e2e/case-creation.spec.ts` - Case creation flows
 - `frontend/tests/e2e/case-list.spec.ts` - List filtering and navigation
 - `frontend/tests/e2e/clio-integration.spec.ts` - Clio OAuth and import
+- `frontend/tests/e2e/verification-hub.spec.ts` - Verification Hub redesign (requires `RUN_FULL_E2E=true`)
+- `frontend/tests/e2e/analysis-flow.spec.ts` - Full analysis flow with verification step
 
 **Run Commands:**
 ```bash
@@ -134,6 +137,17 @@ npx playwright test --project=chromium
 **Known Issues:**
 - Some tests skip by default (e.g., Clio import requires valid credentials)
 - Auth setup may need adjustment based on actual login flow
+- Firefox and WebKit browser binaries are not installed locally. Run `npx playwright install firefox webkit` to enable cross-browser testing. Chromium is the primary local browser.
+- When `CI=1` is set in the environment (common in Cursor), the test runner uses 2 retries — Firefox/WebKit tests will show failures until those browsers are installed. This is pre-existing.
+
+**Running Verification Hub E2E tests:**
+```bash
+cd frontend
+# Ensure both servers are running (see Makefile: make debug + make frontend)
+RUN_FULL_E2E=true TEST_USER_EMAIL=you@example.com TEST_USER_PASSWORD=pass \
+  TEST_CASE_ID=<existing-case-uuid> \
+  npx playwright test tests/e2e/verification-hub.spec.ts --project=chromium
+```
 
 ### 4. CI/CD Integration (GitHub Actions)
 

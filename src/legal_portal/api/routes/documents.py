@@ -1423,15 +1423,38 @@ async def trigger_extraction(
         _dbg("before_storage_download", {"file_name": document.get("file_name"), "file_type": document.get("file_type"), "storage_path": storage_path}, "H-A")
         # #endregion
 
-        file_bytes = service_supabase.storage.from_("documents").download(storage_path)
+        try:
+            file_bytes = service_supabase.storage.from_("documents").download(storage_path)
+        except Exception as download_err:
+            # File not found in storage (common for Clio-imported docs whose files
+            # were recorded in DB but never uploaded to Supabase storage).
+            err_msg = f"File not found in storage (path: {storage_path})"
+            logger.error(f"Storage download failed for {document_id}: {download_err}")
+            # #region agent log
+            _dbg("storage_download_error", {"storage_path": storage_path, "err": str(download_err)[:200]}, "H-A")
+            # #endregion
+            user_supabase.table("documents").update({
+                "status": DocumentStatus.DOWNLOAD_FAILED,
+                "extraction_error": err_msg,
+                "updated_at": datetime.utcnow().isoformat(),
+            }).eq("id", document_id).execute()
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Document file not found in storage. The source file may need to be re-imported.",
+            )
 
         if not file_bytes:
             # #region agent log
             _dbg("storage_download_empty", {"storage_path": storage_path}, "H-A")
             # #endregion
+            user_supabase.table("documents").update({
+                "status": DocumentStatus.DOWNLOAD_FAILED,
+                "extraction_error": "Storage returned empty file",
+                "updated_at": datetime.utcnow().isoformat(),
+            }).eq("id", document_id).execute()
             raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to download document from storage",
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Document file not found in storage. The source file may need to be re-imported.",
             )
         # #region agent log
         _dbg("storage_download_ok", {"bytes_len": len(file_bytes), "file_type": document.get("file_type"), "file_name": document.get("file_name")}, "H-A,H-C")

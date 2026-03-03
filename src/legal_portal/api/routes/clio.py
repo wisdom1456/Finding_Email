@@ -637,12 +637,22 @@ async def import_clio_data(
                 # Check if this is an intake form
                 is_intake = "intake" in comm.subject.lower() if comm.subject else False
 
+                storage_path = f"clio/{case_id}/comm_{comm.id}.txt"
+                try:
+                    supabase.storage.from_("documents").upload(
+                        storage_path,
+                        content.encode("utf-8"),
+                        {"content-type": "text/plain"},
+                    )
+                except Exception as upload_err:
+                    logger.warning(f"Failed to upload communication to storage: {upload_err}")
+
                 doc_data = {
                     "case_id": case_id,
                     "file_name": f"Clio Communication - {comm.subject[:50]}.txt",
                     "file_type": "text/plain",
                     "file_size": len(content.encode("utf-8")),
-                    "storage_path": f"clio/{case_id}/comm_{comm.id}.txt",
+                    "storage_path": storage_path,
                     "status": DocumentStatus.READY,
                     "extracted_text": content,
                     "metadata": {
@@ -691,12 +701,23 @@ async def import_clio_data(
                 # Check if this is an intake form
                 is_intake = "intake" in note_subject.lower()
 
+                note_storage_path = f"clio/{case_id}/note_{note['id']}.txt"
+                note_content = note_detail or ""
+                try:
+                    supabase.storage.from_("documents").upload(
+                        note_storage_path,
+                        note_content.encode("utf-8"),
+                        {"content-type": "text/plain"},
+                    )
+                except Exception as upload_err:
+                    logger.warning(f"Failed to upload note to storage: {upload_err}")
+
                 doc_data = {
                     "case_id": case_id,
                     "file_name": f"Clio Note - {note_subject[:50]}.txt",
                     "file_type": "text/plain",
-                    "file_size": len(note_detail.encode("utf-8")) if note_detail else 0,
-                    "storage_path": f"clio/{case_id}/note_{note['id']}.txt",
+                    "file_size": len(note_content.encode("utf-8")),
+                    "storage_path": note_storage_path,
                     "status": DocumentStatus.READY,
                     "extracted_text": note_detail,
                     "metadata": {

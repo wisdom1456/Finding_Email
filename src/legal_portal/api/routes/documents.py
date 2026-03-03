@@ -1367,24 +1367,8 @@ async def trigger_extraction(
     from legal_portal.core.data_models import DocumentType
     from legal_portal.services.file_processors.pdf_processor import process_pdf
 
-    import json as _json
-    import time as _time
-
-    def _dbg(msg: str, data: dict, hyp: str = "") -> None:
-        """Write a debug log line to both Vercel stdout and the local debug file."""
-        payload = {"sessionId": "0e46b7", "ts": _time.time(), "msg": msg, "hyp": hyp, **data}
-        logger.error("[DBG-0e46b7] %s", _json.dumps(payload))
-        try:
-            with open("/Users/BRFlorida/Projects/Work/Finding_Emails/.cursor/debug-0e46b7.log", "a") as _f:
-                _f.write(_json.dumps(payload) + "\n")
-        except Exception:
-            pass
-
     try:
         logger.info(f"Trigger extraction: doc_id={document_id}, user={user['id']}")
-        # #region agent log
-        _dbg("trigger_extraction_entry", {"document_id": document_id, "force_method": str(force_method)}, "H-A,H-B,H-C")
-        # #endregion
 
         # Get document with ownership verification
         response = (
@@ -1392,9 +1376,6 @@ async def trigger_extraction(
         )
 
         if not response.data:
-            # #region agent log
-            _dbg("doc_not_found", {"document_id": document_id}, "H-A")
-            # #endregion
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
 
         document = response.data[0]
@@ -1416,49 +1397,46 @@ async def trigger_extraction(
             use_vision_analysis = True
             logger.info(f"Using vision analysis based on classification (IMAGE)")
 
-        # Download file from storage
+        # Download file from storage, or use extracted_text for Clio import-only docs.
+        # Clio import records store content in extracted_text but may not have a real
+        # storage file (legacy imports pre-dating the storage upload step, or cases where
+        # the upload failed). Use the existing text as file_bytes so re-extract works.
         storage_path = document["storage_path"]
-        logger.debug(f"Downloading file from storage: {storage_path}")
-        # #region agent log
-        _dbg("before_storage_download", {"file_name": document.get("file_name"), "file_type": document.get("file_type"), "storage_path": storage_path}, "H-A")
-        # #endregion
+        is_clio_text_doc = bool(
+            document.get("extracted_text")
+            and document.get("metadata", {}).get("clio_source")
+        )
 
-        try:
-            file_bytes = service_supabase.storage.from_("documents").download(storage_path)
-        except Exception as download_err:
-            # File not found in storage (common for Clio-imported docs whose files
-            # were recorded in DB but never uploaded to Supabase storage).
-            err_msg = f"File not found in storage (path: {storage_path})"
-            logger.error(f"Storage download failed for {document_id}: {download_err}")
-            # #region agent log
-            _dbg("storage_download_error", {"storage_path": storage_path, "err": str(download_err)[:200]}, "H-A")
-            # #endregion
-            user_supabase.table("documents").update({
-                "status": DocumentStatus.DOWNLOAD_FAILED,
-                "extraction_error": err_msg,
-                "updated_at": datetime.utcnow().isoformat(),
-            }).eq("id", document_id).execute()
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Document file not found in storage. The source file may need to be re-imported.",
-            )
+        if is_clio_text_doc:
+            logger.debug(f"Using extracted_text as file content for Clio document {document_id}")
+            file_bytes = document["extracted_text"].encode("utf-8")
+        else:
+            logger.debug(f"Downloading file from storage: {storage_path}")
+            try:
+                file_bytes = service_supabase.storage.from_("documents").download(storage_path)
+            except Exception as download_err:
+                err_msg = f"File not found in storage (path: {storage_path})"
+                logger.error(f"Storage download failed for {document_id}: {download_err}")
+                user_supabase.table("documents").update({
+                    "status": DocumentStatus.DOWNLOAD_FAILED,
+                    "extraction_error": err_msg,
+                    "updated_at": datetime.utcnow().isoformat(),
+                }).eq("id", document_id).execute()
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Document file not found in storage. The source file may need to be re-imported.",
+                )
 
-        if not file_bytes:
-            # #region agent log
-            _dbg("storage_download_empty", {"storage_path": storage_path}, "H-A")
-            # #endregion
-            user_supabase.table("documents").update({
-                "status": DocumentStatus.DOWNLOAD_FAILED,
-                "extraction_error": "Storage returned empty file",
-                "updated_at": datetime.utcnow().isoformat(),
-            }).eq("id", document_id).execute()
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Document file not found in storage. The source file may need to be re-imported.",
-            )
-        # #region agent log
-        _dbg("storage_download_ok", {"bytes_len": len(file_bytes), "file_type": document.get("file_type"), "file_name": document.get("file_name")}, "H-A,H-C")
-        # #endregion
+            if not file_bytes:
+                user_supabase.table("documents").update({
+                    "status": DocumentStatus.DOWNLOAD_FAILED,
+                    "extraction_error": "Storage returned empty file",
+                    "updated_at": datetime.utcnow().isoformat(),
+                }).eq("id", document_id).execute()
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Document file not found in storage. The source file may need to be re-imported.",
+                )
 
         # Determine file type and process
         file_name = document["file_name"]
@@ -1826,20 +1804,11 @@ async def trigger_extraction(
             document_metadata["signature_detection"] = signature_detection
             update_data["metadata"] = document_metadata
 
-        # #region agent log
-        _dbg("before_db_update", {"extraction_method": extraction_method, "text_len": len(extracted_text or ""), "status": str(update_data.get("status"))}, "H-B,H-C,H-E")
-        # #endregion
         update_result = user_supabase.table("documents").update(update_data).eq("id", document_id).execute()
-        # #region agent log
-        _dbg("after_db_update", {"has_data": bool(update_result.data), "data_len": len(update_result.data or [])}, "H-B,H-E")
-        # #endregion
 
         # CRITICAL: Verify the update actually saved to the database
         if not update_result.data:
             logger.error(f"Failed to save extracted text for document {document_id} - update returned no data")
-            # #region agent log
-            _dbg("update_no_data_500", {"document_id": document_id}, "H-B,H-E")
-            # #endregion
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Failed to save extraction results to database. Please try again.",
@@ -1865,9 +1834,6 @@ async def trigger_extraction(
         raise
     except Exception as e:
         logger.error(f"Error in trigger_extraction: {str(e)}")
-        # #region agent log
-        _dbg("unhandled_exception", {"exc_type": type(e).__name__, "exc_msg": str(e)[:300]}, "H-D")
-        # #endregion
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error extracting text: {str(e)}",

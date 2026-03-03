@@ -145,29 +145,37 @@
 	// Calculate quality score from text content (same logic as CorrectionModal)
 	let calculatedQuality = $derived.by(() => {
 		const text = (doc.manual_text || doc.extracted_text || '').trim();
-		if (!text || text.length === 0) return { score: 0, level: 'low' as const, hasText: false };
 
-		let score = 10;
+		// If the full text is available in memory, compute quality from content.
+		if (text.length > 0) {
+			let score = 10;
+			if (text.length < 50) score -= 5;
+			else if (text.length < 200) score -= 2;
+			const wordCount = text.split(/\s+/).filter((w: string) => w.length > 0).length;
+			if (wordCount < 10) score -= 3;
+			const wordChars = text.replace(/[^a-zA-Z0-9]/g, '').length;
+			const gibberishRatio = 1 - (wordChars / text.length);
+			if (gibberishRatio > 0.5) score -= 2;
+			const finalScore = Math.max(0, Math.min(10, score));
+			return {
+				score: finalScore,
+				level: finalScore >= 8 ? 'high' as const : finalScore >= 5 ? 'medium' as const : 'low' as const,
+				hasText: true
+			};
+		}
 
-		// Check content length
-		if (text.length < 50) score -= 5;
-		else if (text.length < 200) score -= 2;
+		// extracted_text is not loaded in the list view (excluded to avoid oversized responses).
+		// Use extraction_quality + extracted_at as a reliable proxy for whether text exists.
+		if (doc.extracted_at) {
+			const q = doc.extraction_quality as string | undefined;
+			if (q === 'high') return { score: 9, level: 'high' as const, hasText: true };
+			if (q === 'medium') return { score: 6, level: 'medium' as const, hasText: true };
+			if (q === 'low') return { score: 3, level: 'low' as const, hasText: true };
+			// extracted_at is set but quality string is unknown — treat as medium
+			return { score: 6, level: 'medium' as const, hasText: true };
+		}
 
-		// Check word count
-		const wordCount = text.split(/\s+/).filter((w: string) => w.length > 0).length;
-		if (wordCount < 10) score -= 3;
-
-		// Check for gibberish
-		const wordChars = text.replace(/[^a-zA-Z0-9]/g, '').length;
-		const gibberishRatio = 1 - (wordChars / text.length);
-		if (gibberishRatio > 0.5) score -= 2;
-
-		const finalScore = Math.max(0, Math.min(10, score));
-		return {
-			score: finalScore,
-			level: finalScore >= 8 ? 'high' as const : finalScore >= 5 ? 'medium' as const : 'low' as const,
-			hasText: true
-		};
+		return { score: 0, level: 'low' as const, hasText: false };
 	});
 
 	// Get quality score color

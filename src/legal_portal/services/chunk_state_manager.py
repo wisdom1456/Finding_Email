@@ -16,17 +16,21 @@ logger = logging.getLogger(__name__)
 class ChunkStateManager:
     """Manages chunk_state persistence in the database."""
 
-    def __init__(self, supabase: Client, analysis_id: str):
+    def __init__(self, supabase: Client, analysis_id: str, batch_size: int = 5):
         """Initialize chunk state manager.
         
         Args:
             supabase: Supabase client instance
             analysis_id: The analysis ID to manage state for
+            batch_size: Number of updates to batch before writing to DB
 
         """
         self.supabase = supabase
         self.analysis_id = analysis_id
         self._instance_id = str(uuid4())[:8]  # Short unique ID for this instance
+        self._pending_updates = []
+        self._batch_size = batch_size
+        self._dirty_state = None
 
     async def initialize_chunk_state(
         self,
@@ -176,16 +180,23 @@ class ChunkStateManager:
             elif status == "skipped":
                 doc_info["skipped_at"] = datetime.utcnow().isoformat()
 
-            # Update in database
-            current_state["documents"] = documents
-            current_state["summaries"] = summaries
+        # Update in-memory state
+        current_state["documents"] = documents
+        current_state["summaries"] = summaries
+        self._dirty_state = current_state
+        self._pending_updates.append(doc_id)
 
-            self.supabase.table("analysis_results").update({
-                "chunk_state": current_state
-            }).eq("id", self.analysis_id).execute()
+        # Batch writes: only write to DB every N updates or on completion
+        should_flush = (
+            len(self._pending_updates) >= self._batch_size or
+            status in ["completed", "failed"]  # Always flush on terminal states
+        )
 
-        except Exception as e:
-            logger.error(f"[CHUNK_STATE] Failed to update document status: {e}")
+        if should_flush:
+            await self._flush_updates()
+
+    except Exception as e:
+        logger.error(f"[CHUNK_STATE] Failed to update document status: {e}")
 
     async def update_chunk_status(
         self,
@@ -210,9 +221,13 @@ class ChunkStateManager:
                 current_state["chunks"] = chunks
                 current_state["current_chunk"] = chunk_index
 
-                self.supabase.table("analysis_results").update({
-                    "chunk_state": current_state
-                }).eq("id", self.analysis_id).execute()
+                # Batch this update too
+                self._dirty_state = current_state
+                self._pending_updates.append(f"chunk_{chunk_index}")
+
+                # Flush on chunk completion
+                if status in ["completed", "partial_failure"]:
+                    await self._flush_updates()
 
         except Exception as e:
             logger.error(f"[CHUNK_STATE] Failed to update chunk status: {e}")
@@ -231,6 +246,7 @@ class ChunkStateManager:
 
             current_state["phase"] = phase
 
+            # Always flush phase changes immediately (they're rare and important)
             self.supabase.table("analysis_results").update({
                 "chunk_state": current_state
             }).eq("id", self.analysis_id).execute()
@@ -335,6 +351,32 @@ class ChunkStateManager:
 
         summaries = state.get("summaries", {})
         return list(summaries.values())
+
+    async def finalize(self) -> None:
+        """Flush any pending updates before closing. Call this at the end of processing."""
+        if self._pending_updates:
+            logger.info(f"[CHUNK_STATE] Finalizing with {len(self._pending_updates)} pending updates")
+            await self._flush_updates()
+
+    async def _flush_updates(self) -> None:
+        """Flush pending updates to database."""
+        if not self._dirty_state:
+            return
+
+        try:
+            self.supabase.table("analysis_results").update({
+                "chunk_state": self._dirty_state
+            }).eq("id", self.analysis_id).execute()
+
+            logger.info(
+                f"[CHUNK_STATE] Flushed {len(self._pending_updates)} updates to DB"
+            )
+            self._pending_updates.clear()
+            self._dirty_state = None
+
+        except Exception as e:
+            logger.error(f"[CHUNK_STATE] Failed to flush updates: {e}")
+            raise
 
     async def save_summary(self, doc_id: str, summary: Dict[str, Any]) -> None:
         """Save a document summary to chunk_state.

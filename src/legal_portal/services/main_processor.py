@@ -1085,6 +1085,14 @@ async def process_case_documents(
         # ========================================================================
         # ANALYSIS COMPLETE (100%)
         # ========================================================================
+        
+        # Flush any pending chunk state updates
+        if chunk_state_mgr:
+            try:
+                await chunk_state_mgr.finalize()
+            except Exception as e:
+                logger.warning(f"[PROCESSOR] Failed to finalize chunk state: {e}")
+        
         if progress_callback:
             await progress_callback(
                 "Analysis complete!",
@@ -1111,6 +1119,13 @@ async def process_case_documents(
             error_message=str(e),
         )
         errors.append(error)
+        
+        # Flush any pending chunk state updates
+        if chunk_state_mgr:
+            try:
+                await chunk_state_mgr.finalize()
+            except Exception as flush_error:
+                logger.warning(f"[PROCESSOR] Failed to finalize chunk state on error: {flush_error}")
 
         # Emit error progress so frontend knows
         if progress_callback:
@@ -1150,6 +1165,13 @@ async def process_case_documents(
             error_message=str(e),
         )
         errors.append(error)
+        
+        # Flush any pending chunk state updates
+        if chunk_state_mgr:
+            try:
+                await chunk_state_mgr.finalize()
+            except Exception as flush_error:
+                logger.warning(f"[PROCESSOR] Failed to finalize chunk state on error: {flush_error}")
 
         # Emit error progress so frontend knows
         if progress_callback:

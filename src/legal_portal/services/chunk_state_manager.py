@@ -180,23 +180,23 @@ class ChunkStateManager:
             elif status == "skipped":
                 doc_info["skipped_at"] = datetime.utcnow().isoformat()
 
-        # Update in-memory state
-        current_state["documents"] = documents
-        current_state["summaries"] = summaries
-        self._dirty_state = current_state
-        self._pending_updates.append(doc_id)
+            # Update in-memory state
+            current_state["documents"] = documents
+            current_state["summaries"] = summaries
+            self._dirty_state = current_state
+            self._pending_updates.append(doc_id)
 
-        # Batch writes: only write to DB every N updates or on completion
-        should_flush = (
-            len(self._pending_updates) >= self._batch_size or
-            status in ["completed", "failed"]  # Always flush on terminal states
-        )
+            # Batch writes: only write to DB every N updates or on completion
+            should_flush = (
+                len(self._pending_updates) >= self._batch_size or
+                status in ["completed", "failed"]  # Always flush on terminal states
+            )
 
-        if should_flush:
-            await self._flush_updates()
+            if should_flush:
+                await self._flush_updates()
 
-    except Exception as e:
-        logger.error(f"[CHUNK_STATE] Failed to update document status: {e}")
+        except Exception as e:
+            logger.error(f"[CHUNK_STATE] Failed to update document status: {e}")
 
     async def update_chunk_status(
         self,

@@ -31,6 +31,12 @@ help:
 	@echo "  make test-api    - Test OpenAI API directly"
 	@echo "  make clean-test  - Clean test snapshots and debug output"
 	@echo ""
+	@echo "Supabase & Integration:"
+	@echo "  make supabase-start   - Start local Supabase + reset DB"
+	@echo "  make supabase-stop    - Stop local Supabase"
+	@echo "  make test-integration - Run integration tests (Supabase required)"
+	@echo "  make test-unit        - Run unit tests only (no Supabase needed)"
+	@echo ""
 
 # Run the main application
 run:
@@ -104,3 +110,25 @@ verify:
 # Full pre-push check: verify + test API
 pre-push: verify test-api
 	@echo "\n✓ All checks passed - safe to push"
+
+# === SUPABASE LOCAL DEVELOPMENT ===
+
+# Start local Supabase and reset DB with latest schema + seed data
+supabase-start:
+	@echo "Starting local Supabase..."
+	@supabase start && supabase db reset
+
+# Stop local Supabase
+supabase-stop:
+	@echo "Stopping local Supabase..."
+	@supabase stop
+
+# Run integration tests (requires local Supabase running)
+test-integration:
+	@echo "Running integration tests..."
+	@PYTHONPATH=. pytest tests/integration/ -m integration -v
+
+# Run unit tests only (excludes integration tests)
+test-unit:
+	@echo "Running unit tests..."
+	@PYTHONPATH=. pytest tests/ -m "not integration" -v

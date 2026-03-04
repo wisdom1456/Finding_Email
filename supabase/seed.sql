@@ -1,0 +1,3 @@
+-- Seed data for integration tests
+-- Test users are created programmatically via the Admin API in conftest.py
+-- This file is intentionally minimal; add non-auth seed data here if needed.

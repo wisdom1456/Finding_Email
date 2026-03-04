@@ -44,6 +44,9 @@
   // Scope counts surfaced from the done event — non-zero docs_omitted triggers a warning banner
   let docsInScope = $state(0);
   let docsOmitted = $state(0);
+  // Track save failures so the user can retry
+  let saveError = $state(false);
+  let savePendingContent = $state('');
 
   // Rendered HTML from markdown
   let renderedHtml = $derived.by(() => {
@@ -251,10 +254,13 @@
 
   // Save the analysis result to the database
   async function saveAnalysis(analysisContent: string) {
+    saveError = false;
+    savePendingContent = analysisContent;
     try {
       const { session, user } = await getSecureSession();
       if (!session || !user) {
         console.error('No session for saving analysis');
+        saveError = true;
         return;
       }
 
@@ -270,11 +276,21 @@
 
       if (!response.ok) {
         console.error('Failed to save analysis:', await response.text());
+        saveError = true;
       } else {
         console.log('Streaming analysis saved successfully');
+        savePendingContent = '';
       }
     } catch (e) {
       console.error('Error saving analysis:', e);
+      saveError = true;
+    }
+  }
+
+  // Retry saving analysis after a failure
+  function retrySave() {
+    if (savePendingContent) {
+      void saveAnalysis(savePendingContent);
     }
   }
 
@@ -423,6 +439,15 @@
         {docsInScope} of {docsInScope + docsOmitted} documents were included in this analysis.
         Large cases may not include all documents in the AI summary.
       </span>
+    </div>
+  {/if}
+
+  <!-- Save error banner -->
+  {#if saveError && status === 'complete'}
+    <div class="save-error-banner">
+      <AlertCircle class="h-4 w-4" />
+      <span>Analysis completed but couldn't be saved.</span>
+      <button class="save-retry-btn" onclick={retrySave}>Retry Save</button>
     </div>
   {/if}
 
@@ -740,6 +765,33 @@
   .scope-warning-icon {
     flex-shrink: 0;
     font-size: 14px;
+  }
+
+  .save-error-banner {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    background: #fef2f2;
+    border-top: 1px solid #fecaca;
+    font-size: 13px;
+    color: #991b1b;
+  }
+
+  .save-retry-btn {
+    margin-left: auto;
+    padding: 4px 12px;
+    background: #991b1b;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    font-size: 12px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  .save-retry-btn:hover {
+    background: #7f1d1d;
   }
 
   @keyframes pulse {

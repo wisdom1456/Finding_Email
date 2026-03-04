@@ -1,8 +1,9 @@
 <script lang="ts">
-	import { onMount, onDestroy } from 'svelte';
+	import { onMount, onDestroy, tick } from 'svelte';
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { supabase, getSecureSession } from '$lib/supabase';
+	import { withRetry } from '$lib/utils/supabaseRetry';
 	import { getApiUrl } from '$lib/config';
 	import ClioMatterSearch from '$lib/components/ClioMatterSearch.svelte';
 	import ClioLinkedMatter from '$lib/components/ClioLinkedMatter.svelte';
@@ -379,11 +380,13 @@
 
 	async function loadCase() {
 		try {
-			const { data, error } = await supabase
-				.from('cases')
-				.select('*')
-				.eq('id', caseId)
-				.single();
+			const { data, error } = await withRetry(() =>
+				supabase
+					.from('cases')
+					.select('*')
+					.eq('id', caseId)
+					.single()
+			);
 
 			if (error) throw error;
 			
@@ -409,12 +412,14 @@
 
 	async function loadDocuments() {
 		try {
-			const { data, error } = await supabase
-				.from('documents')
-				.select('id, case_id, file_name, file_type, file_size, storage_path, status, extraction_method, extraction_quality, extracted_at, page_count, ocr_provider, extraction_error, is_verified, is_flagged_as_junk, text_edited_at, metadata, created_at, updated_at')
-				.eq('case_id', caseId as string)
-				.order('created_at', { ascending: true })
-				.limit(10000); // Explicit limit to handle cases with many documents (Supabase default is 1000)
+			const { data, error } = await withRetry(() =>
+				supabase
+					.from('documents')
+					.select('id, case_id, file_name, file_type, file_size, storage_path, status, extraction_method, extraction_quality, extracted_at, page_count, ocr_provider, extraction_error, is_verified, is_flagged_as_junk, text_edited_at, metadata, created_at, updated_at')
+					.eq('case_id', caseId as string)
+					.order('created_at', { ascending: true })
+					.limit(10000)
+			);
 
 			if (error) throw error;
 			// Create new object references to ensure Svelte 5 reactivity propagates to child components
@@ -429,13 +434,15 @@
 			// Fetch status fields only — the full result JSONB can be large (up to 40MB
 			// for cases with many documents). The complete result is loaded separately
 			// via the /api/analysis/results/{caseId} backend endpoint when needed.
-			const { data, error } = await supabase
-				.from('analysis_results')
-				.select('id, status, created_at, completed_at')
-				.eq('case_id', caseId as string)
-				.order('created_at', { ascending: false })
-				.limit(1)
-				.maybeSingle();
+			const { data, error } = await withRetry(() =>
+				supabase
+					.from('analysis_results')
+					.select('id, status, created_at, completed_at')
+					.eq('case_id', caseId as string)
+					.order('created_at', { ascending: false })
+					.limit(1)
+					.maybeSingle()
+			);
 
 			if (error) throw error;
 			analysisStatus = data;
@@ -1500,10 +1507,8 @@
 	// Start streaming analysis (fast single-pass)
 	async function startStreamingAnalysis(skipMissingTextCheck = false) {
 		if (!componentActive) return;
-		// Refresh documents from database first to get latest state
-		await loadDocuments();
 
-		// Pre-flight check: Warn if any documents are missing text
+		// Pre-flight check using already-loaded documents (avoids blocking the click handler)
 		if (!skipMissingTextCheck && docsWithoutText.length > 0) {
 			showMissingTextWarning = true;
 			return;
@@ -1511,23 +1516,21 @@
 
 		// Check for multiple intake candidates before starting
 		if (intakeCandidates.length > 1) {
-			// Find if one is already marked
 			const markedIntake = intakeCandidates.find(doc => doc.metadata?.is_intake_form);
 			if (!markedIntake) {
-				// No document is marked, user must choose
 				startAnalysisAfterIntakeSelection = true;
 				showIntakeDocumentSelector = true;
 				return;
 			}
-			// If one is already marked, proceed with that one
 		} else if (intakeCandidates.length === 1 && !intakeCandidates[0].metadata?.is_intake_form) {
-			// Auto-select the only candidate
 			await promoteToIntakeForm(intakeCandidates[0].id);
 		}
 
+		// Show panel immediately (optimistic UI), then start streaming after mount
 		showStreamingPanel = true;
-		// Wait for component to mount, then start streaming
-		await new Promise(resolve => setTimeout(resolve, 100));
+		// Refresh documents in background (the backend re-fetches anyway for the analysis)
+		loadDocuments();
+		await tick();
 		if (!componentActive || !showStreamingPanel) return;
 		streamingAnalysisRef?.startStreaming();
 	}

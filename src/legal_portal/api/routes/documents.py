@@ -1802,6 +1802,7 @@ async def _trigger_extraction_inner(
 
         elif file_type in ["message/rfc822", "eml"] or file_name.lower().endswith(".eml"):
             # Email file (.eml)
+            tmp_path = None
             try:
                 import tempfile
 
@@ -1810,32 +1811,31 @@ async def _trigger_extraction_inner(
                     tmp.write(file_bytes)
                     tmp_path = tmp.name
 
-                try:
-                    # Process eml file asynchronously
-                    result = await process_eml(
-                        file_path=tmp_path,
-                        document_type=DocumentType.CORRESPONDENCE,
-                        original_filename=file_name,
-                    )
+                # Process eml file asynchronously
+                result = await process_eml(
+                    file_path=tmp_path,
+                    document_type=DocumentType.CORRESPONDENCE,
+                    original_filename=file_name,
+                )
 
-                    extracted_text = result.content
-                    extraction_method = result.extraction_method or "email_parser"
-                    extraction_quality = result.extraction_quality or "high"
-                    extraction_error = result.extraction_error
+                extracted_text = result.content
+                extraction_method = result.extraction_method or "email_parser"
+                extraction_quality = result.extraction_quality or "high"
+                extraction_error = result.extraction_error
 
-                    logger.info(f"Successfully extracted email content from {file_name}: {len(extracted_text)} chars")
-                finally:
-                    # Clean up temp file
+                logger.info(f"Successfully extracted email content from {file_name}: {len(extracted_text)} chars")
+            except Exception as e:
+                extraction_error = f"Email extraction failed: {str(e)}"
+                extraction_method = "failed"
+                extraction_quality = "low"
+                logger.error(f"Email extraction error for {file_name}: {e}", exc_info=True)
+            finally:
+                if tmp_path:
                     import os
                     try:
                         os.unlink(tmp_path)
                     except Exception:
                         pass
-            except Exception as e:
-                extraction_error = f"Email extraction failed: {str(e)}"
-                extraction_method = "failed"
-                extraction_quality = "low"
-                logger.error(f"Email extraction error for {file_name}: {e}")
 
         else:
             # Unsupported type
@@ -1877,11 +1877,10 @@ async def _trigger_extraction_inner(
             document_metadata["signature_detection"] = signature_detection
             update_data["metadata"] = document_metadata
 
-        update_result = user_supabase.table("documents").update(update_data).eq("id", document_id).execute()
-
-        # CRITICAL: Verify the update actually saved to the database
-        if not update_result.data:
-            logger.error(f"Failed to save extracted text for document {document_id} - update returned no data")
+        try:
+            update_result = user_supabase.table("documents").update(update_data).eq("id", document_id).execute()
+        except Exception as db_err:
+            logger.error(f"Database update failed for document {document_id}: {db_err}", exc_info=True)
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Failed to save extraction results to database. Please try again.",

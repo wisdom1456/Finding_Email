@@ -3260,7 +3260,7 @@ async def save_streaming_analysis(
         # Include extracted_text since it's used for summaries and quality assessment
         docs_response = (
             service_supabase.table("documents")
-            .select("id, file_name, file_type, document_type, extracted_text, quality_score, status, metadata")
+            .select("id, file_name, file_type, extracted_text, extraction_quality, status, metadata")
             .eq("case_id", case_id)
             .execute()
         )
@@ -3292,20 +3292,14 @@ async def save_streaming_analysis(
         for doc in filtered_documents:
             # Handle None values explicitly - dict.get() only uses default if key is missing, not if value is None
             extracted_text = doc.get("extracted_text") or ""
-            doc_quality = doc.get("quality_score") or 0
+            extraction_quality = doc.get("extraction_quality") or "low"
             file_type = doc.get("file_type") or ""
             file_name = doc.get("file_name") or "Document"
 
-            # Determine extraction quality based on text length and quality score
-            if doc_quality >= 8 or len(extracted_text) > 500:
-                extraction_quality = "high"
-            elif doc_quality >= 5 or len(extracted_text) > 100:
-                extraction_quality = "medium"
-            else:
-                extraction_quality = "low"
-
-            # Determine document type
-            doc_type = doc.get("document_type")
+            # Determine document type from metadata enrichment or file_type fallback
+            metadata = doc.get("metadata") or {}
+            enrichment = metadata.get("attorney_enrichment") or metadata.get("enrichment") or {}
+            doc_type = enrichment.get("document_type_override") or enrichment.get("document_type")
             if not doc_type and file_type:
                 doc_type = file_type.split("/")[-1].upper()
             doc_type = doc_type or "Unknown"
@@ -3334,7 +3328,7 @@ async def save_streaming_analysis(
             quality_report.append({
                 "document": file_name,
                 "document_id": doc.get("id") or "",
-                "score": doc_quality if doc_quality > 0 else (8 if extraction_quality == "high" else 6 if extraction_quality == "medium" else 3),
+                "score": 8 if extraction_quality == "high" else 6 if extraction_quality == "medium" else 3,
                 "confidence_level": extraction_quality,
                 "issues": quality_issues,
             })

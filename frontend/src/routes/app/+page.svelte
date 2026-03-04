@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { supabase } from '$lib/supabase';
+	import { withRetry } from '$lib/utils/supabaseRetry';
 	import Badge from '$lib/components/ui/Badge.svelte';
 	import { FileText, Clock, CheckCircle, Plus } from 'lucide-svelte';
 	import type { PageData } from './$types';
@@ -20,11 +21,13 @@
 		errorMessage = '';
 
 		try {
-			const { data: casesData, error } = await supabase
-				.from('cases')
-				.select('*')
-				.order('created_at', { ascending: false })
-				.limit(5);
+			const { data: casesData, error } = await withRetry(() =>
+				supabase
+					.from('cases')
+					.select('*')
+					.order('created_at', { ascending: false })
+					.limit(5)
+			);
 
 			if (error) throw error;
 

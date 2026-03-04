@@ -55,6 +55,52 @@ logger = logging.getLogger(__name__)
 _DB_COLUMNS_CACHE = {}
 _GAP_ANALYSIS_INPUT_SCHEMA_VERSION = "2026-02-18-reconciliation-v3"
 
+_TRANSIENT_CODES = {"502", "503", "57014"}
+_TRANSIENT_MESSAGES = ("bad gateway", "service unavailable", "schema cache", "statement timeout")
+
+
+def _is_transient_error(err: Exception) -> bool:
+    """Check if a Supabase/PostgREST error is transient and worth retrying."""
+    code = str(getattr(err, "code", ""))
+    message = str(getattr(err, "message", str(err))).lower()
+    if code in _TRANSIENT_CODES:
+        return True
+    return any(msg in message for msg in _TRANSIENT_MESSAGES)
+
+
+def _upsert_with_retry(supabase_client, table: str, data: dict, context_id: str, max_attempts: int = 3):
+    """Upsert a row with retry on transient Supabase errors."""
+    for attempt in range(max_attempts):
+        try:
+            return supabase_client.table(table).upsert(data).execute()
+        except Exception as db_err:
+            if _is_transient_error(db_err) and attempt < max_attempts - 1:
+                delay = 2 ** attempt
+                logger.warning(
+                    f"Transient DB error on {table} upsert for {context_id} "
+                    f"(attempt {attempt + 1}/{max_attempts}), retrying in {delay}s: {db_err}"
+                )
+                time.sleep(delay)
+                continue
+            raise
+
+
+def _update_case_with_retry(supabase_client, case_id: str, update_data: dict, max_attempts: int = 3):
+    """Update a case row with retry on transient Supabase errors."""
+    for attempt in range(max_attempts):
+        try:
+            return supabase_client.table("cases").update(update_data).eq("id", case_id).execute()
+        except Exception as db_err:
+            if _is_transient_error(db_err) and attempt < max_attempts - 1:
+                delay = 2 ** attempt
+                logger.warning(
+                    f"Transient DB error updating case {case_id} "
+                    f"(attempt {attempt + 1}/{max_attempts}), retrying in {delay}s: {db_err}"
+                )
+                time.sleep(delay)
+                continue
+            raise
+
 
 def _new_generation_metrics(
     *,
@@ -3456,13 +3502,17 @@ async def save_streaming_analysis(
                 )
 
             logger.info(f"[STREAM] Case {case_id} confirmed, saving analysis results...")
-            service_supabase.table("analysis_results").upsert({
-                "id": analysis_id,
-                "case_id": case_id,
-                "status": "completed",
-                "result": streaming_result,
-                "created_at": datetime.utcnow().isoformat(),
-            }).execute()
+            _upsert_with_retry(
+                service_supabase, "analysis_results",
+                {
+                    "id": analysis_id,
+                    "case_id": case_id,
+                    "status": "completed",
+                    "result": streaming_result,
+                    "created_at": datetime.utcnow().isoformat(),
+                },
+                case_id,
+            )
         except HTTPException:
             raise
         except Exception as db_err:
@@ -3481,10 +3531,10 @@ async def save_streaming_analysis(
             raise
 
         # Update case status - must use valid status from constraint: pending, processing, completed, error, cancelled
-        supabase.table("cases").update({
-            "status": "completed",
-            "updated_at": datetime.utcnow().isoformat(),
-        }).eq("id", case_id).execute()
+        _update_case_with_retry(
+            supabase, case_id,
+            {"status": "completed", "updated_at": datetime.utcnow().isoformat()},
+        )
 
         logger.info(f"[STREAM] Saved streaming analysis for case {case_id} | structured_data={'yes' if structured_data else 'no'}")
 

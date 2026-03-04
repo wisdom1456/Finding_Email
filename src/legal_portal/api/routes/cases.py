@@ -949,7 +949,7 @@ async def import_clio_documents_helper(
         logger.debug("Prioritizing intake forms")
         intake_docs = (
             supabase.table("documents")
-            .select("id, file_name, file_type, metadata, status")
+            .select("id, file_name, file_type, file_size, metadata, status")
             .eq("case_id", case_id)
             .execute()
         )
@@ -969,7 +969,7 @@ async def import_clio_documents_helper(
                     scored.append((doc, score))
                     logger.debug(
                         "Scored intake candidate",
-                        extra={"file_name": doc["file_name"], "score": score, "size": doc["file_size"]},
+                        extra={"file_name": doc["file_name"], "score": score, "size": doc.get("file_size", 0)},
                     )
 
                 # Sort by score (highest first)

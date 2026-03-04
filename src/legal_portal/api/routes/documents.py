@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import time
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
@@ -23,6 +24,52 @@ logger = logging.getLogger(__name__)
 # Caps concurrent Supabase load from extraction to 3 simultaneous calls regardless
 # of how many tabs or users are triggering extractions at once.
 EXTRACTION_SEMAPHORE = asyncio.Semaphore(3)
+
+_TRANSIENT_CODES = {"502", "503"}
+_TRANSIENT_MESSAGES = ("bad gateway", "service unavailable", "schema cache")
+
+
+def _is_transient_supabase_error(err: Exception) -> bool:
+    """Check if a Supabase/PostgREST error is transient and worth retrying."""
+    code = str(getattr(err, "code", ""))
+    message = str(getattr(err, "message", str(err))).lower()
+    if code in _TRANSIENT_CODES:
+        return True
+    return any(msg in message for msg in _TRANSIENT_MESSAGES)
+
+
+def _update_document_with_retry(
+    user_supabase, document_id: str, update_data: dict, max_attempts: int = 3
+):
+    """Update a document row with retry on transient Supabase errors.
+
+    Uses exponential backoff: 1s, 2s between attempts.
+    """
+    for attempt in range(max_attempts):
+        try:
+            return (
+                user_supabase.table("documents")
+                .update(update_data)
+                .eq("id", document_id)
+                .execute()
+            )
+        except Exception as db_err:
+            if _is_transient_supabase_error(db_err) and attempt < max_attempts - 1:
+                delay = 2**attempt  # 1s, 2s
+                logger.warning(
+                    f"Transient DB error for document {document_id} "
+                    f"(attempt {attempt + 1}/{max_attempts}), retrying in {delay}s: {db_err}"
+                )
+                time.sleep(delay)
+                continue
+            logger.error(
+                f"Database update failed for document {document_id}: {db_err}",
+                exc_info=True,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to save extraction results to database. Please try again.",
+            )
 
 
 class BulkDeleteRequest(BaseModel):
@@ -1877,14 +1924,7 @@ async def _trigger_extraction_inner(
             document_metadata["signature_detection"] = signature_detection
             update_data["metadata"] = document_metadata
 
-        try:
-            update_result = user_supabase.table("documents").update(update_data).eq("id", document_id).execute()
-        except Exception as db_err:
-            logger.error(f"Database update failed for document {document_id}: {db_err}", exc_info=True)
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to save extraction results to database. Please try again.",
-            )
+        update_result = _update_document_with_retry(user_supabase, document_id, update_data)
 
         logger.info(
             f"Extraction complete for {document_id}: method={extraction_method}, "

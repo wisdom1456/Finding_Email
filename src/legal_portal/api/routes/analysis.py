@@ -2956,9 +2956,7 @@ async def get_analysis_results(
         )
 
         if not response.data:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail="No analysis found for this case"
-            )
+            return {"status": "pending", "message": "Analysis results not yet available"}
 
         analysis = response.data[0]
         # Include status in the response so frontend can handle it

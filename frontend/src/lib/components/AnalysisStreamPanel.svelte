@@ -212,12 +212,12 @@
     }
   }
 
-  function emitComplete(analysisContent: string) {
+  async function emitComplete(analysisContent: string) {
     if (hasEmittedComplete) return;
     hasEmittedComplete = true;
     status = 'complete';
     stopTimer();
-    void saveAnalysis(analysisContent);
+    await saveAnalysis(analysisContent);
     onComplete?.(analysisContent);
   }
 

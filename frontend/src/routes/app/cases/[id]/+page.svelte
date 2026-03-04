@@ -1539,12 +1539,9 @@
 		if (!componentActive) return;
 		streamedContent = content;
 		toastStore.success('Analysis complete! Loading results workspace...');
-		
-		// Wait a moment for the save to complete.
-		await new Promise(resolve => setTimeout(resolve, 1500));
 		if (!componentActive) return;
-		
-		// Reload analysis status to get the new result
+
+		// Save is now awaited in AnalysisStreamPanel.emitComplete, no delay needed
 		await loadAnalysisStatus();
 		navigatingToResults = true;
 		showStreamingPanel = false;

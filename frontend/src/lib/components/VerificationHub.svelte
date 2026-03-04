@@ -127,8 +127,7 @@
 			} else if (
 				status === 'extraction_failed' ||
 				status === 'needs_review' ||
-				status === 'pending' ||
-				(status === 'ready' && !doc.is_verified)
+				status === 'pending'
 			) {
 				groups.needs_attention.push(doc);
 			} else {

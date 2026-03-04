@@ -426,9 +426,12 @@
 
 	async function loadAnalysisStatus() {
 		try {
+			// Fetch status fields only — the full result JSONB can be large (up to 40MB
+			// for cases with many documents). The complete result is loaded separately
+			// via the /api/analysis/results/{caseId} backend endpoint when needed.
 			const { data, error } = await supabase
 				.from('analysis_results')
-				.select('*')
+				.select('id, status, created_at, completed_at')
 				.eq('case_id', caseId as string)
 				.order('created_at', { ascending: false })
 				.limit(1)
@@ -1284,22 +1287,40 @@
 			const { session, user } = await getSecureSession();
 			if (!session || !user) throw new Error('Not authenticated');
 
-			const response = await fetch(`${getApiUrl()}/api/documents/bulk-extract`, {
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json',
-					Authorization: `Bearer ${session.access_token}`
-				},
-				body: JSON.stringify({ case_id: caseId })
-			});
+			// Paginated bulk-extract: process 20 docs per Vercel invocation to avoid the
+			// 800s function timeout on large cases (200 docs × 45s = 9000s without pagination).
+			let offset = 0;
+			let hasMore = true;
+			let totalExtracted = 0;
+			let batchNum = 0;
 
-			if (!response.ok) throw new Error('Bulk extraction failed');
+			while (hasMore) {
+				batchNum++;
+				const response = await fetch(`${getApiUrl()}/api/documents/bulk-extract`, {
+					method: 'POST',
+					headers: {
+						'Content-Type': 'application/json',
+						Authorization: `Bearer ${session.access_token}`
+					},
+					body: JSON.stringify({ case_id: caseId, batch_size: 20, offset })
+				});
 
-			const result = await response.json();
-			toastStore.success(`Extracted ${result.extracted_count} document(s)`);
+				if (!response.ok) throw new Error(`Bulk extraction failed on batch ${batchNum}`);
 
-			// Refresh documents and close warning
-			await loadDocuments();
+				const result = await response.json();
+				totalExtracted += result.extracted_count ?? 0;
+				hasMore = result.has_more ?? false;
+				offset = result.next_offset ?? offset;
+
+				// Refresh document list after each batch so user sees incremental progress
+				await loadDocuments();
+
+				if (hasMore) {
+					toastStore.info(`Extracted ${totalExtracted} so far, continuing...`);
+				}
+			}
+
+			toastStore.success(`Extracted ${totalExtracted} document(s)`);
 
 			// Force UI update by resetting the state flag before final checks
 			runningBulkOcr = false;

@@ -1,5 +1,6 @@
 """Document management endpoints."""
 
+import asyncio
 import logging
 from datetime import datetime
 from typing import Any, Dict, List, Optional
@@ -18,6 +19,10 @@ from legal_portal.utils.security import sanitize_text_for_db
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+# Caps concurrent Supabase load from extraction to 3 simultaneous calls regardless
+# of how many tabs or users are triggering extractions at once.
+EXTRACTION_SEMAPHORE = asyncio.Semaphore(3)
 
 
 class BulkDeleteRequest(BaseModel):
@@ -38,6 +43,8 @@ class BulkExtractRequest(BaseModel):
     """Request model for bulk extraction operation."""
 
     case_id: str
+    batch_size: int = 20   # Max documents to process per invocation (prevents Vercel timeout)
+    offset: int = 0        # Start index for pagination across calls
 
 
 class BulkExtractResponse(BaseModel):
@@ -46,6 +53,9 @@ class BulkExtractResponse(BaseModel):
     extracted_count: int
     failed_count: int
     errors: List[str]
+    has_more: bool = False    # True if more documents remain beyond this batch
+    next_offset: int = 0      # Offset to pass in the next call when has_more is True
+    total_queued: int = 0     # Total documents found before applying offset/batch_size
 
 
 class VerifyDocumentRequest(BaseModel):
@@ -745,30 +755,47 @@ async def bulk_extract_documents(
     user_supabase=Depends(get_user_supabase_client),
     service_supabase=Depends(get_supabase_client),
 ):
-    """Extract text from all documents in a case that don't have text yet."""
-    import asyncio
+    """Extract text from documents in a case that don't have text yet.
 
-    # Timeout per document to prevent Vercel 300s timeout
+    Paginated: processes at most request.batch_size documents per call starting at
+    request.offset. Returns has_more=True and next_offset when more remain, so the
+    frontend can call again to process the next batch. This prevents Vercel function
+    timeout on cases with many documents (200 docs × 45s would exceed 800s maxDuration).
+    """
+    # Timeout per document to prevent Vercel 800s maxDuration being hit in one call
     DOC_TIMEOUT = 45  # seconds per document
     # Skip PDFs larger than this (likely to timeout on OCR)
     MAX_PDF_SIZE_FOR_BULK = 10 * 1024 * 1024  # 10MB
+    # Hard cap: never process more than 20 docs per invocation regardless of request
+    MAX_BATCH_SIZE = 20
+    batch_size = min(request.batch_size, MAX_BATCH_SIZE)
+    offset = max(request.offset, 0)
 
     try:
-        logger.info(f"Bulk extraction requested for case {request.case_id} by user {user['id']}")
+        logger.info(
+            f"Bulk extraction requested for case {request.case_id} by user {user['id']} "
+            f"| batch_size={batch_size} offset={offset}"
+        )
 
-        # Get all documents for this case that need extraction
-        # We look for documents where extracted_text is null or empty, AND status is not skipped
+        # Get all documents for this case that need extraction (no extracted_text yet)
         response = (
             user_supabase.table("documents")
             .select("id, file_name, file_type, storage_path, file_size")
             .eq("case_id", request.case_id)
             .neq("status", DocumentStatus.SKIPPED)
             .or_("extracted_text.is.null,extracted_text.eq.''")
+            .order("created_at", desc=False)
             .execute()
         )
 
-        documents_to_process = response.data or []
-        logger.info(f"Found {len(documents_to_process)} documents to process")
+        all_pending = response.data or []
+        total_queued = len(all_pending)
+        logger.info(f"Found {total_queued} total documents pending extraction")
+
+        # Apply pagination window
+        documents_to_process = all_pending[offset: offset + batch_size]
+        next_offset = offset + len(documents_to_process)
+        has_more = next_offset < total_queued
 
         extracted_count = 0
         failed_count = 0
@@ -790,10 +817,11 @@ async def bulk_extract_documents(
                 continue
 
             try:
-                # Call trigger_extraction with timeout
+                # Call inner extraction directly (semaphore already handled inside trigger_extraction)
                 result = await asyncio.wait_for(
-                    trigger_extraction(
+                    _trigger_extraction_inner(
                         document_id=doc["id"],
+                        force_method=None,
                         user=user,
                         user_supabase=user_supabase,
                         service_supabase=service_supabase,
@@ -801,9 +829,10 @@ async def bulk_extract_documents(
                     timeout=DOC_TIMEOUT,
                 )
 
-                if result.get("content_length", 0) > 0:
+                extracted_text = result.get("extracted_text") or ""
+                if extracted_text:
                     extracted_count += 1
-                    logger.info(f"Extracted {file_name}: {result['content_length']} chars")
+                    logger.info(f"Extracted {file_name}: {len(extracted_text)} chars")
                 else:
                     failed_count += 1
                     error_msg = f"No text extracted from {file_name} ({result.get('extraction_error', 'unsupported format')})"
@@ -824,6 +853,9 @@ async def bulk_extract_documents(
             extracted_count=extracted_count,
             failed_count=failed_count + skipped_count,
             errors=errors,
+            has_more=has_more,
+            next_offset=next_offset,
+            total_queued=total_queued,
         )
 
     except Exception as e:
@@ -1361,6 +1393,30 @@ async def trigger_extraction(
         Extraction result with extracted text and metadata
 
     """
+    import os
+    import tempfile
+
+    from legal_portal.core.data_models import DocumentType
+    from legal_portal.services.file_processors.pdf_processor import process_pdf
+
+    async with EXTRACTION_SEMAPHORE:
+        return await _trigger_extraction_inner(
+            document_id=document_id,
+            force_method=force_method,
+            user=user,
+            user_supabase=user_supabase,
+            service_supabase=service_supabase,
+        )
+
+
+async def _trigger_extraction_inner(
+    document_id: str,
+    force_method: Optional[str],
+    user,
+    user_supabase,
+    service_supabase,
+):
+    """Inner implementation of trigger_extraction, called under EXTRACTION_SEMAPHORE."""
     import os
     import tempfile
 

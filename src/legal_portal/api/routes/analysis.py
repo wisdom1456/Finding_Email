@@ -1324,9 +1324,26 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
         case = case_response.data[0]
         jurisdiction = case.get("jurisdiction", "Florida")  # Get jurisdiction from case
 
-        # Get all documents for the case
-        docs_response = supabase.table("documents").select("*").eq("case_id", case_id).execute()
+        # Get all documents for the case — explicit column list prevents pulling extracted_text
+        # for columns not needed here; text is capped per-doc below in the processing loop.
+        _fetch_start = time.time()
+        docs_response = (
+            supabase.table("documents")
+            .select(
+                "id, file_name, file_type, storage_path, file_size, metadata, "
+                "extracted_text, manual_text, status, extraction_quality, "
+                "extraction_method, extracted_at, page_count, ocr_provider, "
+                "is_flagged_as_junk"
+            )
+            .eq("case_id", case_id)
+            .execute()
+        )
         documents = docs_response.data
+        _fetch_elapsed = time.time() - _fetch_start
+        logger.info(
+            f"[BACKGROUND:FETCH] [CASE:{case_id}] docs_fetch rows={len(documents or [])} "
+            f"elapsed={_fetch_elapsed:.2f}s"
+        )
 
         if not documents:
             raise ValueError("No documents found for case")
@@ -1394,8 +1411,11 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
                 logger.warning(f"SKIPPING '{doc_name}': flagged as junk")
                 continue
 
-            # Get text from manual_text (priority) or extracted_text
+            # Get text from manual_text (priority) or extracted_text, capped at 200K chars
+            _MAX_DOC_CHARS = 200_000
             text = doc.get("manual_text") or doc.get("extracted_text")
+            if text:
+                text = text[:_MAX_DOC_CHARS]
             if not text:
                 logger.warning(f"SKIPPING '{doc_name}': no text found (manual={has_manual}, extracted={has_extracted})")
                 skipped_documents.append(
@@ -1751,8 +1771,23 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
         if artifacts_meta:
             result.artifacts = artifacts_meta
 
+        # Strip document content before JSONB save — already persisted to documents table above.
+        # Reduces analysis_results.result from ~40MB to <1MB for large cases.
+        # Downstream consumers (chat, letters, gap analysis) re-fetch text from documents table.
+        # Gate: set STRIP_PROCESSED_DOC_CONTENT=false in env to disable.
+        if os.getenv("STRIP_PROCESSED_DOC_CONTENT", "true").lower() != "false":
+            for _pdoc in result.processed_documents:
+                _pdoc.content = ""
+
         # Convert result to dict for storage (with mode='json' to serialize datetime)
         result_dict = result.model_dump(mode="json")
+
+        # Size instrumentation — confirms JSONB payload is bounded
+        _result_size = len(__import__("json").dumps(result_dict))
+        logger.info(
+            f"[BACKGROUND:PERSIST] [CASE:{case_id}] result_dict size={_result_size:,} bytes "
+            f"| processed_docs={len(result.processed_documents)}"
+        )
 
         # Update analysis record with results
         supabase.table("analysis_results").update(
@@ -3661,9 +3696,16 @@ async def stream_case_analysis(
         # 3. Determine jurisdiction
         jurisdiction = case_data.get("jurisdiction", "Florida")
 
+        # Compute scope counts before the stream so they're available in the done event.
+        # _build_condensed_context caps at max_docs=20 for token budget reasons.
+        _STREAM_MAX_DOCS = 20
+        _docs_in_scope = min(len(doc_summaries), _STREAM_MAX_DOCS)
+        _docs_omitted = max(0, len(doc_summaries) - _STREAM_MAX_DOCS)
+
         logger.info(
             f"[STREAM] Starting streaming analysis for case {case_id} | "
-            f"docs={len(doc_summaries)} jurisdiction={jurisdiction}"
+            f"docs={len(doc_summaries)} in_scope={_docs_in_scope} omitted={_docs_omitted} "
+            f"jurisdiction={jurisdiction}"
         )
 
         # 4. Stream the analysis with thinking heartbeats
@@ -3724,9 +3766,12 @@ async def stream_case_analysis(
                                 yield f"data: {json.dumps({'token': msg_data})}\n\n"
 
                             elif msg_type == 'done':
-                                # Signal completion
-                                yield f"data: {json.dumps({'done': True, 'content': full_content})}\n\n"
-                                logger.info(f"[STREAM] Completed streaming for case {case_id}")
+                                # Signal completion — include scope counts for UI warning
+                                yield f"data: {json.dumps({'done': True, 'content': full_content, 'docs_in_scope': _docs_in_scope, 'docs_omitted': _docs_omitted})}\n\n"
+                                logger.info(
+                                    f"[STREAM] Completed streaming for case {case_id} | "
+                                    f"docs_in_scope={_docs_in_scope} docs_omitted={_docs_omitted}"
+                                )
                                 break
 
                             elif msg_type == 'error':
@@ -5187,12 +5232,22 @@ def _derive_signature_detection_for_gap_doc(doc: Dict[str, Any]) -> Optional[Dic
     )
 
 
+_GAP_CONTEXT_MAX_DOCS = 50
+_GAP_CONTEXT_MAX_CHARS = 200_000
+
+
 def _fetch_case_documents_for_gap_context(
     supabase,
     case_id: str,
 ) -> List[Dict[str, Any]]:
-    """Fetch case documents used to build signature evidence and cache invalidation hashes."""
+    """Fetch case documents used to build signature evidence and cache invalidation hashes.
+
+    Capped at _GAP_CONTEXT_MAX_DOCS rows ordered by most recently updated to prevent
+    40MB+ network payloads for large cases. Per-doc text is also capped at
+    _GAP_CONTEXT_MAX_CHARS characters as a secondary guard.
+    """
     try:
+        _fetch_start = __import__("time").time()
         docs_resp = (
             supabase.table("documents")
             .select(
@@ -5200,9 +5255,32 @@ def _fetch_case_documents_for_gap_context(
                 "manual_text, metadata"
             )
             .eq("case_id", case_id)
+            .order("updated_at", desc=True)
+            .limit(_GAP_CONTEXT_MAX_DOCS)
             .execute()
         )
-        return docs_resp.data or []
+        rows = docs_resp.data or []
+        _elapsed = __import__("time").time() - _fetch_start
+        logger.info(
+            f"[GAP:FETCH] case_id={case_id} rows={len(rows)} elapsed={_elapsed:.2f}s "
+            f"(limit={_GAP_CONTEXT_MAX_DOCS})"
+        )
+
+        # Warn when the case has more documents than we fetched
+        # (count is not available without a separate query, so warn whenever we hit the cap)
+        if len(rows) == _GAP_CONTEXT_MAX_DOCS:
+            logger.warning(
+                f"[GAP:TRUNCATED] case_id={case_id} gap context capped at {_GAP_CONTEXT_MAX_DOCS} docs. "
+                f"Documents beyond the cap are excluded from gap analysis, letters, and demand calc."
+            )
+
+        # Per-doc character cap as secondary guard against individual oversized documents
+        for doc in rows:
+            for field in ("extracted_text", "manual_text"):
+                if doc.get(field) and len(doc[field]) > _GAP_CONTEXT_MAX_CHARS:
+                    doc[field] = doc[field][:_GAP_CONTEXT_MAX_CHARS]
+
+        return rows
     except Exception as doc_err:
         logger.warning(f"[GAP] Failed to load case documents for context: {doc_err}")
         return []

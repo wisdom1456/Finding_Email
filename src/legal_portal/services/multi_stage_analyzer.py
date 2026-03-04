@@ -82,18 +82,29 @@ class MultiStageAnalyzer:
         max_docs: int = 20,
     ) -> str:
         """Build token-efficient context from document summaries.
-        
+
         Args:
             document_summaries: List of document summaries
             max_docs: Maximum number of documents to include
-            
+
         Returns:
             Condensed string representation of documents
 
+        Note:
+            When document_summaries exceeds max_docs, the excess documents are excluded
+            from the analysis prompt. A warning is logged and the caller should surface
+            docs_in_scope / docs_omitted to the user.
         """
+        total = len(document_summaries)
+        if total > max_docs:
+            logger.warning(
+                f"[ANALYSIS:TRUNCATED] _build_condensed_context capped at {max_docs} of {total} docs. "
+                f"{total - max_docs} documents excluded from analysis prompt. "
+                "Consider Option C (RAG architecture) for full coverage."
+            )
+
         lines = []
         for i, summary in enumerate(document_summaries[:max_docs]):
-            # Get the most important content from each document
             doc_name = summary.document_name
             exec_summary = (summary.executive_summary or "")[:300]
             doc_type = summary.document_type or "document"
@@ -162,7 +173,12 @@ class MultiStageAnalyzer:
                 f"execution={execution} | key_doc={is_key} | instrument={instrument} | role={role}"
             )
         if len(sorted_rows) > max_docs:
-            lines.append(f"... {len(sorted_rows) - max_docs} additional registry items omitted.")
+            omitted = len(sorted_rows) - max_docs
+            lines.append(f"... {omitted} additional registry items omitted.")
+            logger.warning(
+                f"[REGISTRY:TRUNCATED] _build_document_registry_context capped at {max_docs} of "
+                f"{len(sorted_rows)} docs. {omitted} documents excluded from registry context."
+            )
         return "\n".join(lines)
 
     def _build_streaming_prompt(

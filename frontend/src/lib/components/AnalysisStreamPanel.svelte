@@ -41,6 +41,9 @@
   let timerInterval: ReturnType<typeof setInterval> | null = null;
   let copyResetTimer: ReturnType<typeof setTimeout> | null = null;
   let hasEmittedComplete = $state(false);
+  // Scope counts surfaced from the done event — non-zero docs_omitted triggers a warning banner
+  let docsInScope = $state(0);
+  let docsOmitted = $state(0);
 
   // Rendered HTML from markdown
   let renderedHtml = $derived.by(() => {
@@ -63,6 +66,8 @@
     startTime = Date.now();
     elapsedTime = 0;
     thinkingTime = 0;
+    docsInScope = 0;
+    docsOmitted = 0;
     
     // Start elapsed time counter
     timerInterval = setInterval(() => {
@@ -166,6 +171,9 @@
               }
               
               if (data.done) {
+                // Capture scope counts before emitting complete
+                if (data.docs_in_scope !== undefined) docsInScope = data.docs_in_scope;
+                if (data.docs_omitted !== undefined) docsOmitted = data.docs_omitted;
                 emitComplete(content);
               }
               
@@ -406,6 +414,17 @@
       </div>
     {/if}
   </div>
+
+  <!-- Scope warning — shown when the AI analyzed fewer docs than the case contains -->
+  {#if status === 'complete' && docsOmitted > 0}
+    <div class="scope-warning">
+      <span class="scope-warning-icon">⚠</span>
+      <span>
+        {docsInScope} of {docsInScope + docsOmitted} documents were included in this analysis.
+        Large cases may not include all documents in the AI summary.
+      </span>
+    </div>
+  {/if}
 
   <!-- Status bar -->
   {#if status === 'thinking'}
@@ -704,6 +723,23 @@
 
   .status-indicator.complete {
     background: #22c55e;
+  }
+
+  .scope-warning {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 8px 16px;
+    background: #fffbeb;
+    border-top: 1px solid #fde68a;
+    font-size: 13px;
+    color: #92400e;
+    line-height: 1.4;
+  }
+
+  .scope-warning-icon {
+    flex-shrink: 0;
+    font-size: 14px;
   }
 
   @keyframes pulse {

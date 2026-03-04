@@ -79,6 +79,21 @@
 	let documentReviewDoc = $state<any>(null);
 	let expandedCardIds = $state<Set<string>>(new Set());
 
+	// Pagination: caps DOM nodes rendered per triage group (all filtering/sorting still
+	// runs over the full array — only DOM rendering is capped at INITIAL_VISIBLE docs).
+	const INITIAL_VISIBLE = 30;
+	let visibleCounts = $state({
+		critical: INITIAL_VISIBLE,
+		needs_attention: INITIAL_VISIBLE,
+		ready: INITIAL_VISIBLE,
+		duplicates: INITIAL_VISIBLE,
+		excluded: INITIAL_VISIBLE,
+	});
+
+	function showAllDocs(group: keyof typeof visibleCounts) {
+		visibleCounts[group] = Infinity;
+	}
+
 	// Confirmation dialog state
 	let confirmDialog = $state<{
 		open: boolean;
@@ -472,41 +487,63 @@ const { session, user } = await getSecureSession();
 		const docsToProcess = triageGroups.needs_attention.filter(d => !d.extracted_text || d.status === 'pending');
 		if (docsToProcess.length === 0) return;
 
-		toastStore.info(`Running sequential extraction on ${docsToProcess.length} documents...`);
+		// Process in batches of 3 concurrent requests with a pause between batches.
+		// This keeps Supabase compute load bounded (3 × 4-9 DB calls = 12-27 concurrent
+		// connections) while being ~3x faster than fully sequential processing.
+		const BATCH_SIZE = 3;
+		const BATCH_DELAY_MS = 1500;
+
+		toastStore.info(`Extracting ${docsToProcess.length} documents (${BATCH_SIZE} at a time)...`);
 		bulkActionLoading = true;
 		remainingOcrCount = docsToProcess.length;
-		
+
 		try {
-const { session, user } = await getSecureSession();
-		if (!session || !user) throw new Error('Not authenticated');
+			const { session, user } = await getSecureSession();
+			if (!session || !user) throw new Error('Not authenticated');
 
 			let extractedCount = 0;
 			let failedCount = 0;
 
-			for (const doc of docsToProcess) {
-				processingDocIds = new Set([...processingDocIds, doc.id]);
+			for (let i = 0; i < docsToProcess.length; i += BATCH_SIZE) {
+				const batch = docsToProcess.slice(i, i + BATCH_SIZE);
 
-				try {
-					const response = await fetch(`${getApiUrl()}/api/documents/${doc.id}/extract`, {
-						method: 'POST',
-						headers: {
-							Authorization: `Bearer ${session.access_token}`,
-						}
-					});
+				// Mark all docs in this batch as processing
+				processingDocIds = new Set([...processingDocIds, ...batch.map((d: any) => d.id)]);
 
-					if (!response.ok) throw new Error('Extraction failed');
-					extractedCount++;
-				} catch (err) {
-					console.error(`Failed to extract ${doc.file_name}:`, err);
-					failedCount++;
-				} finally {
-					const next = new Set(processingDocIds); next.delete(doc.id); processingDocIds = next;
+				const results = await Promise.allSettled(
+					batch.map((doc: any) =>
+						fetch(`${getApiUrl()}/api/documents/${doc.id}/extract`, {
+							method: 'POST',
+							headers: { Authorization: `Bearer ${session.access_token}` },
+						})
+					)
+				);
+
+				// Tally results and clear processing state for this batch
+				for (let j = 0; j < results.length; j++) {
+					const r = results[j];
+					const docId = batch[j].id;
+					if (r.status === 'fulfilled' && r.value.ok) {
+						extractedCount++;
+					} else {
+						console.error(`Failed to extract ${batch[j].file_name}:`, r.status === 'rejected' ? r.reason : r.value.status);
+						failedCount++;
+					}
+					const next = new Set(processingDocIds);
+					next.delete(docId);
+					processingDocIds = next;
 					remainingOcrCount--;
-					// Update UI as each document completes
-					await onDocumentsUpdated();
+				}
+
+				// Refresh UI after each batch completes
+				await onDocumentsUpdated();
+
+				// Pause between batches to let Supabase compute recover
+				if (i + BATCH_SIZE < docsToProcess.length) {
+					await new Promise(resolve => setTimeout(resolve, BATCH_DELAY_MS));
 				}
 			}
-			
+
 			if (failedCount > 0) {
 				toastStore.warning(`Extracted ${extractedCount} docs, but ${failedCount} failed.`);
 			} else {
@@ -1142,36 +1179,46 @@ const { session, user } = await getSecureSession();
 							{triageGroups.critical.length} Critical
 						</span>
 					</div>
-					<div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-											{#each triageGroups.critical as doc (doc.id)}
-							<DocumentCard
-								{doc}
-								onView={() => handleView(doc)}
-								onMarkSigned={() => handleMarkSigned(doc)}
-								onReplace={() => { recoveryDocument = doc; showRecoveryModal = true; }}
-								onSkip={() => handleSkip(doc.id)}
-								onDelete={() => handleDelete(doc.id)}
-								onAlwaysDelete={(name, id) => handleAlwaysDelete(name, id)}
-								onToggleExclusion={(id, excluded) => handleToggleExclusion(id, excluded)}
-								isProcessing={processingDocIds.has(doc.id)}
-								onTypeOverride={handleTypeOverride}
-								onRelevanceChange={handleRelevanceChange}
-								onNotesUpdate={handleNotesUpdate}
-								onFactUpdate={handleFactUpdate}
-								onFactConfirm={handleFactConfirm}
-								onRelationshipAdd={handleRelationshipAdd}
-								onRelationshipRemove={handleRelationshipRemove}
-								onSignatureReview={handleSignatureReviewFromCard}
-								availableDocuments={localDocuments.map(d => ({ id: d.id, name: d.file_name }))}
-								isExpanded={expandedCardIds.has(doc.id)}
-								onToggleExpand={handleToggleExpand}
-							/>
-						{/each}
+				<div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+										{#each triageGroups.critical.slice(0, visibleCounts.critical) as doc (doc.id)}
+						<DocumentCard
+							{doc}
+							onView={() => handleView(doc)}
+							onMarkSigned={() => handleMarkSigned(doc)}
+							onReplace={() => { recoveryDocument = doc; showRecoveryModal = true; }}
+							onSkip={() => handleSkip(doc.id)}
+							onDelete={() => handleDelete(doc.id)}
+							onAlwaysDelete={(name, id) => handleAlwaysDelete(name, id)}
+							onToggleExclusion={(id, excluded) => handleToggleExclusion(id, excluded)}
+							isProcessing={processingDocIds.has(doc.id)}
+							onTypeOverride={handleTypeOverride}
+							onRelevanceChange={handleRelevanceChange}
+							onNotesUpdate={handleNotesUpdate}
+							onFactUpdate={handleFactUpdate}
+							onFactConfirm={handleFactConfirm}
+							onRelationshipAdd={handleRelationshipAdd}
+							onRelationshipRemove={handleRelationshipRemove}
+							onSignatureReview={handleSignatureReviewFromCard}
+							availableDocuments={localDocuments.map(d => ({ id: d.id, name: d.file_name }))}
+							isExpanded={expandedCardIds.has(doc.id)}
+							onToggleExpand={handleToggleExpand}
+						/>
+					{/each}
+				</div>
+				{#if triageGroups.critical.length > visibleCounts.critical}
+					<div class="mt-4 text-center">
+						<button
+							class="text-sm text-gray-500 hover:text-gray-700 underline"
+							onclick={() => showAllDocs('critical')}
+						>
+							Show all {triageGroups.critical.length} documents
+						</button>
 					</div>
-				</section>
-			{/if}
+				{/if}
+			</section>
+		{/if}
 
-			<!-- Needs Attention (Extraction failed, low quality) -->
+		<!-- Needs Attention (Extraction failed, low quality) -->
 			{#if triageGroups.needs_attention.length > 0}
 				<section>
 					<div class="flex items-center gap-3 mb-6">
@@ -1200,38 +1247,48 @@ const { session, user } = await getSecureSession();
 							{triageGroups.needs_attention.length} Pending
 						</span>
 					</div>
-					<div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-											{#each triageGroups.needs_attention as doc (doc.id)}
-							<DocumentCard
-								{doc}
-								onView={() => handleView(doc)}
-								onEdit={() => editingDocument = doc}
-								onReExtract={() => handleReExtract(doc.id)}
-								onVerify={() => handleVerify(doc.id)}
-								onMarkSigned={() => handleMarkSigned(doc)}
-								onSkip={() => handleSkip(doc.id)}
-								onDelete={() => handleDelete(doc.id)}
-								onAlwaysDelete={(name, id) => handleAlwaysDelete(name, id)}
-								onToggleExclusion={(id, excluded) => handleToggleExclusion(id, excluded)}
-								isProcessing={processingDocIds.has(doc.id)}
-								onTypeOverride={handleTypeOverride}
-								onRelevanceChange={handleRelevanceChange}
-								onNotesUpdate={handleNotesUpdate}
-								onFactUpdate={handleFactUpdate}
-								onFactConfirm={handleFactConfirm}
-								onRelationshipAdd={handleRelationshipAdd}
-								onRelationshipRemove={handleRelationshipRemove}
-								onSignatureReview={handleSignatureReviewFromCard}
-								availableDocuments={localDocuments.map(d => ({ id: d.id, name: d.file_name }))}
-								isExpanded={expandedCardIds.has(doc.id)}
-								onToggleExpand={handleToggleExpand}
-							/>
-						{/each}
+				<div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+										{#each triageGroups.needs_attention.slice(0, visibleCounts.needs_attention) as doc (doc.id)}
+						<DocumentCard
+							{doc}
+							onView={() => handleView(doc)}
+							onEdit={() => editingDocument = doc}
+							onReExtract={() => handleReExtract(doc.id)}
+							onVerify={() => handleVerify(doc.id)}
+							onMarkSigned={() => handleMarkSigned(doc)}
+							onSkip={() => handleSkip(doc.id)}
+							onDelete={() => handleDelete(doc.id)}
+							onAlwaysDelete={(name, id) => handleAlwaysDelete(name, id)}
+							onToggleExclusion={(id, excluded) => handleToggleExclusion(id, excluded)}
+							isProcessing={processingDocIds.has(doc.id)}
+							onTypeOverride={handleTypeOverride}
+							onRelevanceChange={handleRelevanceChange}
+							onNotesUpdate={handleNotesUpdate}
+							onFactUpdate={handleFactUpdate}
+							onFactConfirm={handleFactConfirm}
+							onRelationshipAdd={handleRelationshipAdd}
+							onRelationshipRemove={handleRelationshipRemove}
+							onSignatureReview={handleSignatureReviewFromCard}
+							availableDocuments={localDocuments.map(d => ({ id: d.id, name: d.file_name }))}
+							isExpanded={expandedCardIds.has(doc.id)}
+							onToggleExpand={handleToggleExpand}
+						/>
+					{/each}
+				</div>
+				{#if triageGroups.needs_attention.length > visibleCounts.needs_attention}
+					<div class="mt-4 text-center">
+						<button
+							class="text-sm text-gray-500 hover:text-gray-700 underline"
+							onclick={() => showAllDocs('needs_attention')}
+						>
+							Show all {triageGroups.needs_attention.length} documents
+						</button>
 					</div>
-				</section>
-			{/if}
+				{/if}
+			</section>
+		{/if}
 
-			<!-- Ready for Analysis -->
+		<!-- Ready for Analysis -->
 			{#if triageGroups.ready.length > 0}
 				<section>
 					<div class="flex items-center gap-3 mb-6">
@@ -1243,8 +1300,8 @@ const { session, user } = await getSecureSession();
 							{triageGroups.ready.length} Ready
 						</span>
 					</div>
-					<div class="grid grid-cols-1 lg:grid-cols-2 gap-4 opacity-60 grayscale-[0.5] hover:opacity-100 hover:grayscale-0 transition-all">
-											{#each triageGroups.ready as doc (doc.id)}
+				<div class="grid grid-cols-1 lg:grid-cols-2 gap-4 opacity-60 grayscale-[0.5] hover:opacity-100 hover:grayscale-0 transition-all">
+										{#each triageGroups.ready.slice(0, visibleCounts.ready) as doc (doc.id)}
 							<DocumentCard
 								{doc}
 								onView={() => handleView(doc)}
@@ -1262,16 +1319,26 @@ const { session, user } = await getSecureSession();
 								onRelationshipAdd={handleRelationshipAdd}
 								onRelationshipRemove={handleRelationshipRemove}
 								onSignatureReview={handleSignatureReviewFromCard}
-								availableDocuments={localDocuments.map(d => ({ id: d.id, name: d.file_name }))}
-								isExpanded={expandedCardIds.has(doc.id)}
-								onToggleExpand={handleToggleExpand}
-							/>
-						{/each}
+							availableDocuments={localDocuments.map(d => ({ id: d.id, name: d.file_name }))}
+							isExpanded={expandedCardIds.has(doc.id)}
+							onToggleExpand={handleToggleExpand}
+						/>
+					{/each}
+				</div>
+				{#if triageGroups.ready.length > visibleCounts.ready}
+					<div class="mt-4 text-center">
+						<button
+							class="text-sm text-gray-500 hover:text-gray-700 underline"
+							onclick={() => showAllDocs('ready')}
+						>
+							Show all {triageGroups.ready.length} documents
+						</button>
 					</div>
-				</section>
-			{/if}
+				{/if}
+			</section>
+		{/if}
 
-			<!-- Excluded Documents Section (above duplicates) -->
+		<!-- Excluded Documents Section (above duplicates) -->
 			{#if triageGroups.excluded.length > 0}
 				<section class="mt-8 pt-8 border-t border-gray-200">
 					<div class="flex items-center gap-3 mb-6">
@@ -1286,35 +1353,45 @@ const { session, user } = await getSecureSession();
 							{triageGroups.excluded.length} Excluded
 						</span>
 					</div>
-					<div class="grid grid-cols-1 lg:grid-cols-2 gap-4 opacity-60 grayscale hover:opacity-100 hover:grayscale-0 transition-all">
-											{#each triageGroups.excluded as doc (doc.id)}
-							<DocumentCard
-								{doc}
-								onView={() => handleView(doc)}
-								onEdit={() => editingDocument = doc}
-								onMarkSigned={() => handleMarkSigned(doc)}
-								onDelete={() => handleDelete(doc.id)}
-								onAlwaysDelete={(name, id) => handleAlwaysDelete(name, id)}
-								onToggleExclusion={(id, excluded) => handleToggleExclusion(id, excluded)}
-								isProcessing={processingDocIds.has(doc.id)}
-								onTypeOverride={handleTypeOverride}
-								onRelevanceChange={handleRelevanceChange}
-								onNotesUpdate={handleNotesUpdate}
-								onFactUpdate={handleFactUpdate}
-								onFactConfirm={handleFactConfirm}
-								onRelationshipAdd={handleRelationshipAdd}
-								onRelationshipRemove={handleRelationshipRemove}
-								onSignatureReview={handleSignatureReviewFromCard}
-								availableDocuments={localDocuments.map(d => ({ id: d.id, name: d.file_name }))}
-								isExpanded={expandedCardIds.has(doc.id)}
-								onToggleExpand={handleToggleExpand}
-							/>
-						{/each}
+				<div class="grid grid-cols-1 lg:grid-cols-2 gap-4 opacity-60 grayscale hover:opacity-100 hover:grayscale-0 transition-all">
+										{#each triageGroups.excluded.slice(0, visibleCounts.excluded) as doc (doc.id)}
+						<DocumentCard
+							{doc}
+							onView={() => handleView(doc)}
+							onEdit={() => editingDocument = doc}
+							onMarkSigned={() => handleMarkSigned(doc)}
+							onDelete={() => handleDelete(doc.id)}
+							onAlwaysDelete={(name, id) => handleAlwaysDelete(name, id)}
+							onToggleExclusion={(id, excluded) => handleToggleExclusion(id, excluded)}
+							isProcessing={processingDocIds.has(doc.id)}
+							onTypeOverride={handleTypeOverride}
+							onRelevanceChange={handleRelevanceChange}
+							onNotesUpdate={handleNotesUpdate}
+							onFactUpdate={handleFactUpdate}
+							onFactConfirm={handleFactConfirm}
+							onRelationshipAdd={handleRelationshipAdd}
+							onRelationshipRemove={handleRelationshipRemove}
+							onSignatureReview={handleSignatureReviewFromCard}
+							availableDocuments={localDocuments.map(d => ({ id: d.id, name: d.file_name }))}
+							isExpanded={expandedCardIds.has(doc.id)}
+							onToggleExpand={handleToggleExpand}
+						/>
+					{/each}
+				</div>
+				{#if triageGroups.excluded.length > visibleCounts.excluded}
+					<div class="mt-4 text-center">
+						<button
+							class="text-sm text-gray-500 hover:text-gray-700 underline"
+							onclick={() => showAllDocs('excluded')}
+						>
+							Show all {triageGroups.excluded.length} documents
+						</button>
 					</div>
-				</section>
-			{/if}
+				{/if}
+			</section>
+		{/if}
 
-			<!-- Duplicates Section (at bottom) -->
+		<!-- Duplicates Section (at bottom) -->
 			{#if triageGroups.duplicates.length > 0}
 				<section class="mt-8 pt-8 border-t border-purple-200">
 					<div class="flex items-center gap-3 mb-6">
@@ -1331,33 +1408,43 @@ const { session, user } = await getSecureSession();
 							{triageGroups.duplicates.length} {triageGroups.duplicates.length === 1 ? 'Duplicate' : 'Duplicates'}
 						</span>
 					</div>
-					<div class="grid grid-cols-1 lg:grid-cols-2 gap-4 opacity-70 hover:opacity-100 transition-opacity">
-											{#each triageGroups.duplicates as doc (doc.id)}
-							<DocumentCard
-								{doc}
-								onView={() => handleView(doc)}
-								onEdit={() => editingDocument = doc}
-								onMarkSigned={() => handleMarkSigned(doc)}
-								onDelete={() => handleDelete(doc.id)}
-								onAlwaysDelete={(name, id) => handleAlwaysDelete(name, id)}
-								onToggleExclusion={(id, excluded) => handleToggleExclusion(id, excluded)}
-								isProcessing={processingDocIds.has(doc.id)}
-								onTypeOverride={handleTypeOverride}
-								onRelevanceChange={handleRelevanceChange}
-								onNotesUpdate={handleNotesUpdate}
-								onFactUpdate={handleFactUpdate}
-								onFactConfirm={handleFactConfirm}
-								onRelationshipAdd={handleRelationshipAdd}
-								onRelationshipRemove={handleRelationshipRemove}
-								onSignatureReview={handleSignatureReviewFromCard}
-								availableDocuments={localDocuments.map(d => ({ id: d.id, name: d.file_name }))}
-								isExpanded={expandedCardIds.has(doc.id)}
-								onToggleExpand={handleToggleExpand}
-							/>
-						{/each}
+				<div class="grid grid-cols-1 lg:grid-cols-2 gap-4 opacity-70 hover:opacity-100 transition-opacity">
+										{#each triageGroups.duplicates.slice(0, visibleCounts.duplicates) as doc (doc.id)}
+						<DocumentCard
+							{doc}
+							onView={() => handleView(doc)}
+							onEdit={() => editingDocument = doc}
+							onMarkSigned={() => handleMarkSigned(doc)}
+							onDelete={() => handleDelete(doc.id)}
+							onAlwaysDelete={(name, id) => handleAlwaysDelete(name, id)}
+							onToggleExclusion={(id, excluded) => handleToggleExclusion(id, excluded)}
+							isProcessing={processingDocIds.has(doc.id)}
+							onTypeOverride={handleTypeOverride}
+							onRelevanceChange={handleRelevanceChange}
+							onNotesUpdate={handleNotesUpdate}
+							onFactUpdate={handleFactUpdate}
+							onFactConfirm={handleFactConfirm}
+							onRelationshipAdd={handleRelationshipAdd}
+							onRelationshipRemove={handleRelationshipRemove}
+							onSignatureReview={handleSignatureReviewFromCard}
+							availableDocuments={localDocuments.map(d => ({ id: d.id, name: d.file_name }))}
+							isExpanded={expandedCardIds.has(doc.id)}
+							onToggleExpand={handleToggleExpand}
+						/>
+					{/each}
+				</div>
+				{#if triageGroups.duplicates.length > visibleCounts.duplicates}
+					<div class="mt-4 text-center">
+						<button
+							class="text-sm text-gray-500 hover:text-gray-700 underline"
+							onclick={() => showAllDocs('duplicates')}
+						>
+							Show all {triageGroups.duplicates.length} documents
+						</button>
 					</div>
-				</section>
-			{/if}
+				{/if}
+			</section>
+		{/if}
 
 			{#if localDocuments.length === 0}
 				<div class="flex flex-col items-center justify-center py-20 bg-gray-50 rounded-3xl border border-dashed border-gray-200">

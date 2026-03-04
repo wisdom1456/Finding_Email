@@ -932,7 +932,12 @@ async def import_clio_documents_helper(
 
         # Post-processing: Prioritize intake forms
         logger.debug("Prioritizing intake forms")
-        intake_docs = supabase.table("documents").select("*").eq("case_id", case_id).execute()
+        intake_docs = (
+            supabase.table("documents")
+            .select("id, file_name, file_type, metadata, status")
+            .eq("case_id", case_id)
+            .execute()
+        )
 
         if intake_docs.data:
             intake_candidates = [
@@ -1066,8 +1071,13 @@ def analyze_intake_documents(case_id: str, supabase) -> Dict[str, Any]:
     Returns analysis with intake document info.
     """
     try:
-        # Get all documents for the case
-        docs_result = supabase.table("documents").select("*").eq("case_id", case_id).execute()
+        # Get all documents for the case — metadata only, no extracted_text needed here
+        docs_result = (
+            supabase.table("documents")
+            .select("id, file_name, file_type, metadata, status")
+            .eq("case_id", case_id)
+            .execute()
+        )
 
         documents = docs_result.data
 

@@ -3257,9 +3257,10 @@ async def save_streaming_analysis(
                     multi_stage_result["verified_statutes"] = []
 
         # Fetch documents for this case (they're in a separate table, not embedded in case_data)
+        # Include extracted_text since it's used for summaries and quality assessment
         docs_response = (
             service_supabase.table("documents")
-            .select("*")
+            .select("id, file_name, file_type, document_type, extracted_text, quality_score, status, metadata")
             .eq("case_id", case_id)
             .execute()
         )

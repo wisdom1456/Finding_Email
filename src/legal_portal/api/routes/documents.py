@@ -501,10 +501,15 @@ async def list_documents_for_case(
         if not case_response.data:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Case not found")
 
-        # Get documents
+        # Get documents (exclude extracted_text/manual_text to avoid multi-MB payloads)
         response = (
             supabase.table("documents")
-            .select("*")
+            .select(
+                "id, case_id, file_name, file_type, file_size, storage_path, status, "
+                "extraction_method, extraction_quality, extracted_at, page_count, "
+                "ocr_provider, extraction_error, is_verified, is_flagged_as_junk, "
+                "text_edited_at, metadata, created_at, updated_at"
+            )
             .eq("case_id", case_id)
             .order("created_at", desc=False)
             .execute()
@@ -537,9 +542,18 @@ async def get_document(
 
     """
     try:
-        # Get document with case join to verify ownership
+        # Get document with case join to verify ownership (exclude large text fields)
         response = (
-            supabase.table("documents").select("*, cases!inner(user_id)").eq("id", document_id).execute()
+            supabase.table("documents")
+            .select(
+                "id, case_id, file_name, file_type, file_size, storage_path, status, "
+                "extraction_method, extraction_quality, extracted_at, page_count, "
+                "ocr_provider, extraction_error, is_verified, is_flagged_as_junk, "
+                "text_edited_at, metadata, created_at, updated_at, "
+                "cases!inner(user_id)"
+            )
+            .eq("id", document_id)
+            .execute()
         )
 
         if not response.data:
@@ -1426,9 +1440,12 @@ async def _trigger_extraction_inner(
     try:
         logger.info(f"Trigger extraction: doc_id={document_id}, user={user['id']}")
 
-        # Get document with ownership verification
+        # Get document with ownership verification (include extracted_text for Clio text doc check)
         response = (
-            user_supabase.table("documents").select("*, cases!inner(user_id)").eq("id", document_id).execute()
+            user_supabase.table("documents")
+            .select("id, file_name, file_type, storage_path, case_id, extracted_text, metadata, cases!inner(user_id)")
+            .eq("id", document_id)
+            .execute()
         )
 
         if not response.data:

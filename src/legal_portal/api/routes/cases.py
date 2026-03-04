@@ -1557,8 +1557,8 @@ async def set_intake_form(
         if not case_result.data:
             raise HTTPException(status_code=404, detail="Case not found")
 
-        # 2. Get all documents for this case
-        docs_result = supabase.table("documents").select("*").eq("case_id", case_id).execute()
+        # 2. Get all documents for this case (only fields needed for intake update)
+        docs_result = supabase.table("documents").select("id, file_name, metadata").eq("case_id", case_id).execute()
 
         if not docs_result.data:
             raise HTTPException(status_code=404, detail="No documents found")

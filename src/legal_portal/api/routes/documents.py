@@ -294,10 +294,7 @@ async def upload_document(
                     if file_name.lower().endswith(".eml"):
                         # Route .eml files to email parser even if file_type is text/plain
                         try:
-                            import asyncio
                             import tempfile
-
-                            from starlette.concurrency import run_in_threadpool
 
                             with tempfile.NamedTemporaryFile(suffix=".eml", delete=False) as tmp:
                                 tmp.write(file_content)
@@ -1015,7 +1012,9 @@ async def verify_document(
         update_data = {
             "is_verified": request.is_verified,
             "is_flagged_as_junk": request.is_flagged_as_junk,
-            "status": DocumentStatus.READY if request.is_verified else DocumentStatus.NEEDS_REVIEW,
+            "status": DocumentStatus.SKIPPED if request.is_flagged_as_junk else (
+                DocumentStatus.READY if request.is_verified else DocumentStatus.NEEDS_REVIEW
+            ),
             "updated_at": datetime.utcnow().isoformat(),
         }
 

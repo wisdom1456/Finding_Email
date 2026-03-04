@@ -127,7 +127,8 @@
 			} else if (
 				status === 'extraction_failed' ||
 				status === 'needs_review' ||
-				status === 'pending'
+				status === 'pending' ||
+				(status === 'ready' && !doc.extracted_at)
 			) {
 				groups.needs_attention.push(doc);
 			} else {
@@ -144,6 +145,10 @@
 
 		return groups;
 	});
+
+	let docsNeedingExtraction = $derived(
+		triageGroups.needs_attention.filter(d => !d.extracted_at)
+	);
 
 	// Filtered list for "All" view
 	let filteredDocs = $derived.by(() => {
@@ -483,7 +488,7 @@ const { session, user } = await getSecureSession();
 	}
 
 	async function handleBulkExtract() {
-		const docsToProcess = triageGroups.needs_attention.filter(d => !d.extracted_at || d.status === 'pending');
+		const docsToProcess = docsNeedingExtraction;
 		if (docsToProcess.length === 0) return;
 
 		// Process in batches of 3 concurrent requests with a pause between batches.
@@ -1227,7 +1232,7 @@ const { session, user } = await getSecureSession();
 						<h3 class="text-xl font-black text-gray-900 uppercase tracking-tight">Pending Review</h3>
 						
 						<!-- Bulk Extraction Action -->
-						{#if triageGroups.needs_attention.filter(d => !d.extracted_at || d.status === 'pending').length > 0}
+						{#if docsNeedingExtraction.length > 0}
 							<button 
 								onclick={handleBulkExtract}
 								disabled={bulkActionLoading}
@@ -1237,7 +1242,7 @@ const { session, user } = await getSecureSession();
 								{#if bulkActionLoading}
 									Processing {remainingOcrCount} Doc{remainingOcrCount === 1 ? '' : 's'}...
 								{:else}
-									Run OCR on {triageGroups.needs_attention.filter(d => !d.extracted_at || d.status === 'pending').length} Doc{triageGroups.needs_attention.filter(d => !d.extracted_at || d.status === 'pending').length === 1 ? '' : 's'}
+									Run OCR on {docsNeedingExtraction.length} Doc{docsNeedingExtraction.length === 1 ? '' : 's'}
 								{/if}
 							</button>
 						{/if}

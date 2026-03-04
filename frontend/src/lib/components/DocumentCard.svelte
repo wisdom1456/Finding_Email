@@ -416,7 +416,7 @@
 			</div>
 
 			<!-- Quality Score Alert for documents needing attention -->
-			{#if (doc.status === 'needs_review' || doc.status === 'extraction_failed' || (doc.status === 'ready' && !doc.is_verified))}
+			{#if (doc.status === 'needs_review' || doc.status === 'extraction_failed' || (doc.status === 'ready' && !doc.extracted_at))}
 				<div class="mt-3 flex items-center gap-3">
 					<Badge
 						variant={calculatedQuality.score === 0 ? 'error' : calculatedQuality.level === 'low' ? 'error' : calculatedQuality.level === 'medium' ? 'needs_review' : 'ready'}

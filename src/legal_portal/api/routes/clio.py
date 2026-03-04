@@ -655,6 +655,9 @@ async def import_clio_data(
                     "storage_path": storage_path,
                     "status": DocumentStatus.READY,
                     "extracted_text": content,
+                    "extracted_at": datetime.utcnow().isoformat(),
+                    "extraction_quality": "high",
+                    "extraction_method": "direct_text",
                     "metadata": {
                         "clio_source": True,
                         "clio_type": "communication",
@@ -720,6 +723,9 @@ async def import_clio_data(
                     "storage_path": note_storage_path,
                     "status": DocumentStatus.READY,
                     "extracted_text": note_detail,
+                    "extracted_at": datetime.utcnow().isoformat(),
+                    "extraction_quality": "high",
+                    "extraction_method": "direct_text",
                     "metadata": {
                         "clio_source": True,
                         "clio_type": "note",
@@ -1283,6 +1289,9 @@ async def sync_clio_matter(
                     "storage_path": storage_path,
                     "status": DocumentStatus.READY,
                     "extracted_text": content,
+                    "extracted_at": datetime.utcnow().isoformat(),
+                    "extraction_quality": "high",
+                    "extraction_method": "direct_text",
                     "metadata": {
                         "clio_source": True,
                         "clio_type": "communication",
@@ -1323,6 +1332,9 @@ async def sync_clio_matter(
                     "storage_path": storage_path,
                     "status": DocumentStatus.READY,
                     "extracted_text": content,
+                    "extracted_at": datetime.utcnow().isoformat(),
+                    "extraction_quality": "high",
+                    "extraction_method": "direct_text",
                     "metadata": {
                         "clio_source": True,
                         "clio_type": "note",

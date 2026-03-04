@@ -36,8 +36,9 @@ class TestDetectImageMime:
         """HEIC bytes with .jpg extension should detect as HEIC, not JPEG."""
         from legal_portal.api.routes.documents import _detect_image_mime
 
-        # Mock magic.from_buffer to return image/heic for HEIC bytes
-        with patch("legal_portal.api.routes.documents.magic.from_buffer", return_value="image/heic"):
+        mock_magic = MagicMock()
+        mock_magic.from_buffer.return_value = "image/heic"
+        with patch.dict("sys.modules", {"magic": mock_magic}):
             result = _detect_image_mime(HEIC_MAGIC, "IMG_0001.jpg")
         assert result == "image/heic"
 
@@ -45,7 +46,9 @@ class TestDetectImageMime:
         """Unknown bytes with .jpeg extension falls back to image/jpeg."""
         from legal_portal.api.routes.documents import _detect_image_mime
 
-        with patch("legal_portal.api.routes.documents.magic.from_buffer", return_value="application/octet-stream"):
+        mock_magic = MagicMock()
+        mock_magic.from_buffer.return_value = "application/octet-stream"
+        with patch.dict("sys.modules", {"magic": mock_magic}):
             result = _detect_image_mime(b"\x00\x00\x00\x00", "file.jpeg")
         assert result == "image/jpeg"
 
@@ -53,7 +56,9 @@ class TestDetectImageMime:
         """Unknown bytes with .png extension falls back to image/png."""
         from legal_portal.api.routes.documents import _detect_image_mime
 
-        with patch("legal_portal.api.routes.documents.magic.from_buffer", return_value="application/octet-stream"):
+        mock_magic = MagicMock()
+        mock_magic.from_buffer.return_value = "application/octet-stream"
+        with patch.dict("sys.modules", {"magic": mock_magic}):
             result = _detect_image_mime(b"\x00\x00\x00\x00", "file.png")
         assert result == "image/png"
 
@@ -61,7 +66,9 @@ class TestDetectImageMime:
         """Unknown bytes with unknown extension defaults to image/png."""
         from legal_portal.api.routes.documents import _detect_image_mime
 
-        with patch("legal_portal.api.routes.documents.magic.from_buffer", return_value="application/octet-stream"):
+        mock_magic = MagicMock()
+        mock_magic.from_buffer.return_value = "application/octet-stream"
+        with patch.dict("sys.modules", {"magic": mock_magic}):
             result = _detect_image_mime(b"\x00\x00\x00\x00", "file.xyz")
         assert result == "image/png"
 
@@ -69,7 +76,17 @@ class TestDetectImageMime:
         """If magic.from_buffer raises, fall back to extension."""
         from legal_portal.api.routes.documents import _detect_image_mime
 
-        with patch("legal_portal.api.routes.documents.magic.from_buffer", side_effect=Exception("magic error")):
+        mock_magic = MagicMock()
+        mock_magic.from_buffer.side_effect = Exception("magic error")
+        with patch.dict("sys.modules", {"magic": mock_magic}):
+            result = _detect_image_mime(b"\x00", "photo.jpg")
+        assert result == "image/jpeg"
+
+    def test_magic_import_fails_falls_back(self):
+        """If magic module not available, fall back to extension."""
+        from legal_portal.api.routes.documents import _detect_image_mime
+
+        with patch.dict("sys.modules", {"magic": None}):
             result = _detect_image_mime(b"\x00", "photo.jpg")
         assert result == "image/jpeg"
 

@@ -17,7 +17,6 @@ from legal_portal.core.document_processor import DocumentProcessor, ValidationEr
 from legal_portal.services.file_processors.eml_processor import process_eml
 from legal_portal.utils.google_vision_client import GoogleVisionClient
 from legal_portal.utils.security import sanitize_text_for_db
-import magic
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -1358,6 +1357,7 @@ async def get_case_context(case_id: str, supabase_client) -> dict:
 def _detect_image_mime(file_bytes: bytes, file_name: str) -> str:
     """Detect actual MIME type from file bytes, falling back to extension."""
     try:
+        import magic
         detected = magic.from_buffer(file_bytes[:2048], mime=True)
         if detected in ("image/jpeg", "image/png", "image/gif", "image/webp", "image/heic", "image/heif"):
             return detected

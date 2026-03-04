@@ -25,6 +25,8 @@
 	let triggeringExtraction = $state(false);
 	let pdfBlobUrl = $state<string | null>(null);
 	let loadingPreview = $state(true);
+	let loadingText = $state(true);
+	let originalText = $state(document?.manual_text || document?.extracted_text || '');
 
 	// When modal closes, call parent's onClose
 	$effect(() => {
@@ -79,19 +81,43 @@
 	});
 
 	// Derived: Has changes
-	let hasChanges = $derived(
-		editedText !== (document?.manual_text || document?.extracted_text || '')
-	);
+	let hasChanges = $derived(editedText !== originalText);
 
-	// Load PDF preview on mount
+	// Load PDF preview and document text on mount
 	$effect(() => {
 		loadPreview();
+		fetchDocumentText();
 		return () => {
 			if (pdfBlobUrl) {
 				URL.revokeObjectURL(pdfBlobUrl);
 			}
 		};
 	});
+
+	async function fetchDocumentText() {
+		if (!document?.id) {
+			loadingText = false;
+			return;
+		}
+		try {
+			const { data, error } = await supabase
+				.from('documents')
+				.select('extracted_text, manual_text')
+				.eq('id', document.id)
+				.single<{ extracted_text: string | null; manual_text: string | null }>();
+
+			if (error) throw error;
+			if (data) {
+				const text = data.manual_text || data.extracted_text || '';
+				editedText = text;
+				originalText = text;
+			}
+		} catch (err) {
+			console.error('Failed to fetch document text:', err);
+		} finally {
+			loadingText = false;
+		}
+	}
 
 	async function loadPreview() {
 		if (!document) return;
@@ -294,11 +320,17 @@ const { session, user } = await getSecureSession();
 				</div>
 			</div>
 			<div class="flex-1 p-4">
-				<textarea
-					bind:value={editedText}
-					class="w-full h-full resize-none p-4 font-mono text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-accent focus:border-transparent"
-					placeholder="Paste or type the document text here..."
-				></textarea>
+				{#if loadingText}
+					<div class="w-full h-full flex items-center justify-center text-gray-400 text-sm">
+						Loading document text...
+					</div>
+				{:else}
+					<textarea
+						bind:value={editedText}
+						class="w-full h-full resize-none p-4 font-mono text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-accent focus:border-transparent"
+						placeholder="Paste or type the document text here..."
+					></textarea>
+				{/if}
 			</div>
 
 			<!-- Quality Issues -->

@@ -291,15 +291,52 @@ async def upload_document(
                         os.unlink(tmp_path)
 
                 elif file_type in ["text/plain", "txt"] or file_name.lower().endswith(".txt"):
-                    # Plain text file
-                    try:
-                        extracted_text = file_content.decode("utf-8", errors="replace")
-                        extraction_method = "direct_text"
-                        extraction_quality = "high"
-                    except Exception as e:
-                        extraction_error = f"Failed to decode text: {e}"
-                        extraction_method = "failed"
-                        extraction_quality = "low"
+                    if file_name.lower().endswith(".eml"):
+                        # Route .eml files to email parser even if file_type is text/plain
+                        try:
+                            import asyncio
+                            import tempfile
+
+                            from starlette.concurrency import run_in_threadpool
+
+                            with tempfile.NamedTemporaryFile(suffix=".eml", delete=False) as tmp:
+                                tmp.write(file_content)
+                                tmp_path = tmp.name
+
+                            try:
+                                result = await process_eml(
+                                    file_path=tmp_path,
+                                    document_type=DocumentType.CORRESPONDENCE,
+                                    original_filename=file_name,
+                                )
+
+                                extracted_text = result.content
+                                extraction_method = result.extraction_method or "email_parser"
+                                extraction_quality = result.extraction_quality or "high"
+                                extraction_error = result.extraction_error
+
+                                logger.info(f"Successfully extracted email content from {file_name}: {len(extracted_text)} chars")
+                            finally:
+                                import os
+                                try:
+                                    os.unlink(tmp_path)
+                                except Exception:
+                                    pass
+                        except Exception as e:
+                            extraction_error = f"Email extraction failed: {str(e)}"
+                            extraction_method = "failed"
+                            extraction_quality = "low"
+                            logger.error(f"Email extraction error for {file_name}: {e}")
+                    else:
+                        # Plain text file
+                        try:
+                            extracted_text = file_content.decode("utf-8", errors="replace")
+                            extraction_method = "direct_text"
+                            extraction_quality = "high"
+                        except Exception as e:
+                            extraction_error = f"Failed to decode text: {e}"
+                            extraction_method = "failed"
+                            extraction_quality = "low"
 
                 elif file_type in [
                     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -1677,10 +1714,45 @@ async def _trigger_extraction_inner(
                 os.unlink(tmp_path)
 
         elif file_type in ["text/plain", "txt"]:
-            # Plain text file
-            extracted_text = file_bytes.decode("utf-8", errors="replace")
-            extraction_method = "direct_text"
-            extraction_quality = "high"
+            if file_name.lower().endswith(".eml"):
+                # Route .eml files to email parser even if file_type is text/plain
+                tmp_path = None
+                try:
+                    import tempfile
+
+                    with tempfile.NamedTemporaryFile(suffix=".eml", delete=False) as tmp:
+                        tmp.write(file_bytes)
+                        tmp_path = tmp.name
+
+                    result = await process_eml(
+                        file_path=tmp_path,
+                        document_type=DocumentType.CORRESPONDENCE,
+                        original_filename=file_name,
+                    )
+
+                    extracted_text = result.content
+                    extraction_method = result.extraction_method or "email_parser"
+                    extraction_quality = result.extraction_quality or "high"
+                    extraction_error = result.extraction_error
+
+                    logger.info(f"Successfully extracted email content from {file_name}: {len(extracted_text)} chars")
+                except Exception as e:
+                    extraction_error = f"Email extraction failed: {str(e)}"
+                    extraction_method = "failed"
+                    extraction_quality = "low"
+                    logger.error(f"Email extraction error for {file_name}: {e}", exc_info=True)
+                finally:
+                    if tmp_path:
+                        import os
+                        try:
+                            os.unlink(tmp_path)
+                        except Exception:
+                            pass
+            else:
+                # Plain text file
+                extracted_text = file_bytes.decode("utf-8", errors="replace")
+                extraction_method = "direct_text"
+                extraction_quality = "high"
 
         elif file_type in [
             "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -2075,14 +2147,48 @@ async def replace_document_file(
             finally:
                 os.unlink(tmp_path)
         elif file_type in ["text/plain", "txt"] or file_name.lower().endswith(".txt"):
-            try:
-                extracted_text = file_content.decode("utf-8", errors="replace")
-                extraction_method = "direct_text"
-                extraction_quality = "high"
-            except Exception as e:
-                extraction_error = f"Failed to decode text: {e}"
-                extraction_method = "failed"
-                extraction_quality = "low"
+            if file_name.lower().endswith(".eml"):
+                # Route .eml files to email parser even if file_type is text/plain
+                try:
+                    import tempfile
+
+                    with tempfile.NamedTemporaryFile(suffix=".eml", delete=False) as tmp:
+                        tmp.write(file_content)
+                        tmp_path = tmp.name
+
+                    try:
+                        result = await process_eml(
+                            file_path=tmp_path,
+                            document_type=DocumentType.CORRESPONDENCE,
+                            original_filename=file_name,
+                        )
+
+                        extracted_text = result.content
+                        extraction_method = result.extraction_method or "email_parser"
+                        extraction_quality = result.extraction_quality or "high"
+                        extraction_error = result.extraction_error
+
+                        logger.info(f"Successfully extracted email content from {file_name}: {len(extracted_text)} chars")
+                    finally:
+                        import os
+                        try:
+                            os.unlink(tmp_path)
+                        except Exception:
+                            pass
+                except Exception as e:
+                    extraction_error = f"Email extraction failed: {str(e)}"
+                    extraction_method = "failed"
+                    extraction_quality = "low"
+                    logger.error(f"Email extraction error for {file_name}: {e}")
+            else:
+                try:
+                    extracted_text = file_content.decode("utf-8", errors="replace")
+                    extraction_method = "direct_text"
+                    extraction_quality = "high"
+                except Exception as e:
+                    extraction_error = f"Failed to decode text: {e}"
+                    extraction_method = "failed"
+                    extraction_quality = "low"
         elif file_type in [
             "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
             "application/msword",

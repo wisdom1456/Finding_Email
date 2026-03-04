@@ -8,6 +8,7 @@ and secure filename sanitization.
 from __future__ import annotations
 
 import hashlib
+import logging
 import mimetypes
 import os
 import re
@@ -27,6 +28,11 @@ except ImportError:
 
 # Maximum file size: 100MB
 MAX_FILE_SIZE = 100 * 1024 * 1024  # 100MB
+
+# Maximum extracted text size for database storage (~500 KB)
+MAX_EXTRACTED_TEXT_CHARS = 500_000
+
+logger = logging.getLogger(__name__)
 
 # Magic number signatures for file type detection when python-magic is unavailable
 # Format: {extension: [(signature_bytes, offset, mime_type)]}
@@ -476,6 +482,13 @@ def sanitize_text_for_db(text: Optional[str]) -> Optional[str]:
     # This regex removes control chars U+0001-U+0008, U+000B-U+000C, U+000E-U+001F
     sanitized = re.sub(r'[\x01-\x08\x0b\x0c\x0e-\x1f]', '', sanitized)
 
+    # Truncate text exceeding the maximum size to prevent database bloat
+    if len(sanitized) > MAX_EXTRACTED_TEXT_CHARS:
+        logger.warning(
+            f"Truncating extracted text from {len(sanitized):,} to {MAX_EXTRACTED_TEXT_CHARS:,} chars"
+        )
+        sanitized = sanitized[:MAX_EXTRACTED_TEXT_CHARS]
+
     return sanitized
 
 
@@ -483,6 +496,7 @@ def sanitize_text_for_db(text: Optional[str]) -> Optional[str]:
 __all__ = [
     "ALLOWED_EXTENSIONS",
     "ALLOWED_MIME_TYPES",
+    "MAX_EXTRACTED_TEXT_CHARS",
     "MAX_FILE_SIZE",
     "create_secure_temp_file",
     "get_safe_upload_path",

@@ -133,3 +133,59 @@ class TestAnalysisResultsPending:
         assert result["status"] == "completed"
         assert result["analysis_id"] == "analysis-001"
         assert result["summary"] == "Test analysis"
+
+
+class TestFetchGapIntakeContent:
+    """Test _fetch_gap_intake_content uses result_payload instead of intakes table."""
+
+    def test_fetch_gap_intake_uses_result_payload(self):
+        """Should return intake_content from result_payload without querying Supabase."""
+        from legal_portal.api.routes.analysis import _fetch_gap_intake_content
+
+        mock_supabase = MagicMock()
+        result_payload = {
+            "intake_content": "Client intake details here",
+            "streaming_analysis": "Streaming fallback text",
+        }
+
+        result = _fetch_gap_intake_content(mock_supabase, "case-001", result_payload)
+
+        assert result == "Client intake details here"
+        # Should NOT query Supabase at all
+        mock_supabase.table.assert_not_called()
+
+    def test_fetch_gap_intake_falls_back_to_streaming(self):
+        """No intake_content key → falls back to streaming_analysis."""
+        from legal_portal.api.routes.analysis import _fetch_gap_intake_content
+
+        mock_supabase = MagicMock()
+        result_payload = {
+            "streaming_analysis": "Streaming summary of case analysis",
+        }
+
+        result = _fetch_gap_intake_content(mock_supabase, "case-001", result_payload)
+
+        assert result == "Streaming summary of case analysis"
+        mock_supabase.table.assert_not_called()
+
+    def test_fetch_gap_intake_empty_payload(self):
+        """Empty result_payload → returns empty string."""
+        from legal_portal.api.routes.analysis import _fetch_gap_intake_content
+
+        mock_supabase = MagicMock()
+        result = _fetch_gap_intake_content(mock_supabase, "case-001", {})
+
+        assert result == ""
+        mock_supabase.table.assert_not_called()
+
+    def test_fetch_gap_intake_truncates_streaming(self):
+        """streaming_analysis should be truncated to 5000 chars."""
+        from legal_portal.api.routes.analysis import _fetch_gap_intake_content
+
+        mock_supabase = MagicMock()
+        long_text = "x" * 10000
+        result_payload = {"streaming_analysis": long_text}
+
+        result = _fetch_gap_intake_content(mock_supabase, "case-001", result_payload)
+
+        assert len(result) == 5000

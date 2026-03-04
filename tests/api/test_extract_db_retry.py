@@ -61,6 +61,18 @@ class TestIsTransientSupabaseError:
         err = FakeAPIError("permission denied", code="403")
         assert _is_transient_supabase_error(err) is False
 
+    def test_57014_statement_timeout_is_transient(self):
+        from legal_portal.api.routes.documents import _is_transient_supabase_error
+
+        err = FakeAPIError("canceling statement due to statement timeout", code="57014")
+        assert _is_transient_supabase_error(err) is True
+
+    def test_statement_timeout_message_is_transient(self):
+        from legal_portal.api.routes.documents import _is_transient_supabase_error
+
+        err = FakeAPIError("statement timeout", code="")
+        assert _is_transient_supabase_error(err) is True
+
 
 class TestExtractionDbRetry:
     """Test retry behavior in the document extraction DB update."""
@@ -176,3 +188,22 @@ class TestExtractionDbRetry:
         assert mock_sleep.call_count == 2
         mock_sleep.assert_any_call(1)
         mock_sleep.assert_any_call(2)
+
+    def test_retries_on_57014_and_succeeds(self):
+        """Mock .execute() to raise 57014 once, then succeed. Verify retry works."""
+        from legal_portal.api.routes.documents import _update_document_with_retry
+
+        mock_supabase, mock_table = self._make_mock_chain(
+            [
+                FakeAPIError("canceling statement due to statement timeout", code="57014"),
+                MagicMock(data=[{"id": "doc-006"}]),
+            ]
+        )
+
+        with patch("legal_portal.api.routes.documents.time.sleep"):
+            result = _update_document_with_retry(
+                mock_supabase, "doc-006", {"status": "ready"}
+            )
+
+        assert result.data == [{"id": "doc-006"}]
+        assert mock_table.execute.call_count == 2

@@ -3307,7 +3307,7 @@ async def save_streaming_analysis(
                 "document_name": file_name,
                 "document_type": doc_type,
                 "extraction_quality": extraction_quality,
-                "relevance_to_case": bool(extracted_text),
+                "relevance_to_case": "Contains extracted text" if extracted_text else "No text extracted",
                 "executive_summary": (extracted_text[:300] + "...") if len(extracted_text) > 300 else (extracted_text or "No summary available"),
                 "key_content": extracted_text[:1000] if extracted_text else "No text extracted",
                 "key_amounts": [],
@@ -5659,13 +5659,11 @@ def _parse_gap_document_summaries(result_payload: Dict[str, Any]):
 
 
 def _fetch_gap_intake_content(supabase, case_id: str, result_payload: Dict[str, Any]) -> Optional[str]:
-    """Fetch intake content for gap analysis, with fallback to streaming summary."""
-    try:
-        intake_response = supabase.table("intakes").select("content").eq("case_id", case_id).limit(1).execute()
-        return intake_response.data[0]["content"] if intake_response.data else None
-    except Exception as intake_err:
-        logger.warning(f"[GAP] Could not fetch intake content: {intake_err}")
-        return result_payload.get("streaming_analysis", "")[:5000]
+    """Get intake content from result payload, falling back to streaming summary."""
+    intake = result_payload.get("intake_content")
+    if intake:
+        return intake
+    return result_payload.get("streaming_analysis", "")[:5000]
 
 
 def _collect_resolution_documents(

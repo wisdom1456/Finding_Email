@@ -17,6 +17,7 @@ from legal_portal.core.document_processor import DocumentProcessor, ValidationEr
 from legal_portal.services.file_processors.eml_processor import process_eml
 from legal_portal.utils.google_vision_client import GoogleVisionClient
 from legal_portal.utils.security import sanitize_text_for_db
+import magic
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -25,8 +26,8 @@ logger = logging.getLogger(__name__)
 # of how many tabs or users are triggering extractions at once.
 EXTRACTION_SEMAPHORE = asyncio.Semaphore(3)
 
-_TRANSIENT_CODES = {"502", "503"}
-_TRANSIENT_MESSAGES = ("bad gateway", "service unavailable", "schema cache")
+_TRANSIENT_CODES = {"502", "503", "57014"}
+_TRANSIENT_MESSAGES = ("bad gateway", "service unavailable", "schema cache", "statement timeout")
 
 
 def _is_transient_supabase_error(err: Exception) -> bool:
@@ -1354,6 +1355,39 @@ async def get_case_context(case_id: str, supabase_client) -> dict:
     return {"case_name": "Legal Case", "client_name": "", "description": ""}
 
 
+def _detect_image_mime(file_bytes: bytes, file_name: str) -> str:
+    """Detect actual MIME type from file bytes, falling back to extension."""
+    try:
+        detected = magic.from_buffer(file_bytes[:2048], mime=True)
+        if detected in ("image/jpeg", "image/png", "image/gif", "image/webp", "image/heic", "image/heif"):
+            return detected
+    except Exception:
+        pass
+    # Fallback to extension
+    lower = file_name.lower()
+    if lower.endswith((".jpg", ".jpeg")):
+        return "image/jpeg"
+    elif lower.endswith(".png"):
+        return "image/png"
+    return "image/png"
+
+
+def _ensure_vision_compatible(file_bytes: bytes, mime_type: str) -> tuple:
+    """Convert unsupported image formats to JPEG for GPT-4o Vision."""
+    SUPPORTED = {"image/jpeg", "image/png", "image/gif", "image/webp"}
+    if mime_type in SUPPORTED:
+        return file_bytes, mime_type
+    try:
+        from PIL import Image
+        from io import BytesIO
+        img = Image.open(BytesIO(file_bytes))
+        buf = BytesIO()
+        img.convert("RGB").save(buf, format="JPEG", quality=90)
+        return buf.getvalue(), "image/jpeg"
+    except Exception:
+        return file_bytes, "image/jpeg"  # best-effort fallback
+
+
 async def analyze_image_with_vision(file_bytes: bytes, file_name: str, case_context: dict) -> tuple[str, str]:
     """
     Analyze an image using vision AI with case context.
@@ -1370,8 +1404,9 @@ async def analyze_image_with_vision(file_bytes: bytes, file_name: str, case_cont
         openai_client = OpenAIClient()
         client = openai_client.client
         
-        # Determine MIME type
-        mime_type = "image/jpeg" if file_name.lower().endswith((".jpg", ".jpeg")) else "image/png"
+        # Determine MIME type from actual file content
+        mime_type = _detect_image_mime(file_bytes, file_name)
+        file_bytes, mime_type = _ensure_vision_compatible(file_bytes, mime_type)
         base64_image = base64.b64encode(file_bytes).decode("utf-8")
         
         # Build context-aware prompt
@@ -1752,12 +1787,9 @@ async def _trigger_extraction_inner(
                     openai_client = OpenAIClient()
                     client = openai_client.client
 
-                    # Determine MIME type
-                    if file_type in ["image/jpeg", "image/jpg"] or file_name.lower().endswith((".jpg", ".jpeg")):
-                        mime_type = "image/jpeg"
-                    else:
-                        mime_type = "image/png"
-
+                    # Determine MIME type from actual file content
+                    mime_type = _detect_image_mime(file_bytes, file_name)
+                    file_bytes, mime_type = _ensure_vision_compatible(file_bytes, mime_type)
                     base64_image = base64.b64encode(file_bytes).decode("utf-8")
                     prompt = (
                         f"Extract ALL text from this legal document image. "

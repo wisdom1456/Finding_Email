@@ -658,6 +658,19 @@ async def import_clio_documents_helper(
         import_batch_keys = set()
         duplicates_count = 0
 
+        # Cache Clio access token once (instead of fetching per document)
+        _clio_access_token = None
+        if documents:
+            integration = (
+                supabase.table("integrations_clio")
+                .select("access_token")
+                .eq("user_id", user["id"])
+                .execute()
+            )
+            if not integration.data:
+                raise Exception("Clio integration not found")
+            _clio_access_token = integration.data[0]["access_token"]
+
         for idx, doc in enumerate(documents):
             try:
                 doc_name = doc.get("name", "Untitled Document")
@@ -725,18 +738,7 @@ async def import_clio_documents_helper(
                 # Format: /api/v4/documents/{id}/download.json
                 doc_url = f"https://app.clio.com/api/v4/documents/{doc_id}/download.json"
 
-                # Get Clio access token for download
-                integration = (
-                    supabase.table("integrations_clio")
-                    .select("access_token")
-                    .eq("user_id", user["id"])
-                    .execute()
-                )
-
-                if not integration.data:
-                    raise Exception("Clio integration not found")
-
-                access_token = integration.data[0]["access_token"]
+                access_token = _clio_access_token
 
                 # Download file from Clio with timeout (60s per document to prevent Vercel timeout)
                 # Run blocking download in threadpool with asyncio timeout

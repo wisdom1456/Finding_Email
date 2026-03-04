@@ -16,6 +16,7 @@ from legal_portal.core.data_models import DocumentStatus
 from legal_portal.core.document_processor import DocumentProcessor, ValidationError
 from legal_portal.services.progress_manager import ProgressManager, get_progress_manager
 from legal_portal.utils.blacklist import is_name_blacklisted
+from legal_portal.utils.throttled_db_writer import ThrottledDBWriter
 
 # Import classification function from documents module
 from legal_portal.api.routes.documents import classify_document_type
@@ -430,9 +431,19 @@ async def import_clio_documents_helper(
         import_id: Unique ID for this import operation (for SSE tracking)
 
     """
+    # Throttle DB progress writes to reduce disk I/O (SSE remains real-time)
+    async def _write_import_progress(progress_payload):
+        """Actual DB write for import progress."""
+        supabase.table("cases").update({"import_progress": progress_payload}).eq("id", case_id).execute()
+
+    _import_db_writer = ThrottledDBWriter(
+        write_fn=_write_import_progress,
+        min_interval_seconds=3.0,
+    )
+
     # Helper to persist progress to DB for cross-instance Vercel polling
     async def persist_progress(message: str, phase: str, percent: int, **kwargs):
-        """Publish progress to in-memory manager AND persist to database."""
+        """Publish progress to in-memory manager AND persist (throttled) to database."""
         if progress_manager and import_id:
             await progress_manager.publish_progress(
                 channel_id=import_id,
@@ -441,10 +452,9 @@ async def import_clio_documents_helper(
                 percent=percent,
                 **kwargs,
             )
-        # Always persist to DB if we have case_id and import_id
+        # Persist to DB (throttled) if we have case_id and import_id
         if case_id and import_id:
             try:
-                from datetime import datetime, timezone
                 progress_data = {
                     "type": kwargs.get("status", "progress"),
                     "message": message,
@@ -456,7 +466,7 @@ async def import_clio_documents_helper(
                     "progress": progress_data,
                     "updated_at": datetime.now(timezone.utc).isoformat(),
                 }
-                supabase.table("cases").update({"import_progress": import_progress}).eq("id", case_id).execute()
+                await _import_db_writer.maybe_write(import_progress)
             except Exception as e:
                 logger.warning(f"Failed to persist progress to DB: {e}")
 
@@ -892,6 +902,9 @@ async def import_clio_documents_helper(
                 error_msg = f"Document {doc.get('id', 'unknown')} ({doc.get('name', 'unknown')}): {str(e)}"
                 errors.append(error_msg)
                 logger.warning("Error importing document", extra={"doc_id": doc.get("id"), "error": str(e)})
+
+        # Flush any remaining throttled progress before returning
+        await _import_db_writer.flush()
 
         result = {
             "success": len(errors) == 0,

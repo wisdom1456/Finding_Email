@@ -234,12 +234,16 @@ class ChunkStateManager:
 
     async def update_phase(self, phase: str) -> None:
         """Update the processing phase.
-        
+
         Args:
             phase: New phase (document_analysis, synthesis, multi_stage, completed, failed)
 
         """
         try:
+            # Flush any pending batched updates first to avoid stale overwrites
+            if self._pending_updates:
+                await self._flush_updates()
+
             current_state = await self.get_chunk_state()
             if not current_state:
                 return
@@ -250,6 +254,10 @@ class ChunkStateManager:
             self.supabase.table("analysis_results").update({
                 "chunk_state": current_state
             }).eq("id", self.analysis_id).execute()
+
+            # Clear dirty state so subsequent flushes don't overwrite this
+            self._dirty_state = None
+            self._pending_updates.clear()
 
             logger.info(f"[CHUNK_STATE] Phase updated to: {phase}")
 
@@ -380,13 +388,17 @@ class ChunkStateManager:
 
     async def save_summary(self, doc_id: str, summary: Dict[str, Any]) -> None:
         """Save a document summary to chunk_state.
-        
+
         Args:
             doc_id: Document ID
             summary: Summary data
 
         """
         try:
+            # Flush any pending batched updates first to avoid stale overwrites
+            if self._pending_updates:
+                await self._flush_updates()
+
             current_state = await self.get_chunk_state()
             if not current_state:
                 return
@@ -406,6 +418,10 @@ class ChunkStateManager:
             self.supabase.table("analysis_results").update({
                 "chunk_state": current_state
             }).eq("id", self.analysis_id).execute()
+
+            # Clear dirty state so subsequent flushes don't overwrite this
+            self._dirty_state = None
+            self._pending_updates.clear()
 
         except Exception as e:
             logger.error(f"[CHUNK_STATE] Failed to save summary: {e}")

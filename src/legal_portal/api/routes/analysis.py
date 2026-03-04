@@ -45,6 +45,7 @@ from legal_portal.services.progress_manager import ProgressManager
 from legal_portal.utils.diagnostic_logger import DiagnosticLogger
 from legal_portal.utils.openai_client import OpenAIClient
 from legal_portal.utils.security import sanitize_text_for_db
+from legal_portal.utils.throttled_db_writer import ThrottledDBWriter
 from legal_portal.utils.type_safety import safe_str, safe_str_required, sanitize_nested_dict
 
 router = APIRouter()
@@ -1639,6 +1640,12 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
         except Exception:
             progress_model = "gpt-5.2"
 
+        # Throttle DB progress writes to reduce disk I/O (SSE remains real-time)
+        _progress_db_writer = ThrottledDBWriter(
+            write_fn=lambda payload: _update_analysis_progress(supabase, analysis_id, payload),
+            min_interval_seconds=5.0,
+        )
+
         # Create progress callback that publishes to SSE and stores in DB
         async def progress_callback(
             message: str,
@@ -1682,9 +1689,9 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
             if _analysis_is_cancelled(supabase, analysis_id):
                 raise AnalysisCancelledError("Analysis cancelled by user.")
 
-            # Publish
+            # Publish SSE (always real-time) and throttled DB write
             await progress_manager.publish_progress(channel_id=analysis_id, **payload)
-            await _update_analysis_progress(supabase, analysis_id, payload)
+            await _progress_db_writer.maybe_write(payload)
 
         # NEW: Initial emission of all documents in pending state so they appear in UI
         for doc in processed_intake + processed_case_docs:
@@ -1727,7 +1734,7 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
                 f"[BACKGROUND:PERSIST] [CASE:{case_id}] [ELAPSED:{elapsed:.1f}s] "
                 f"Persisting extraction results | docs={len(result.processed_documents)}"
             )
-            for doc in result.processed_documents:
+            for _doc_idx, doc in enumerate(result.processed_documents):
                 if doc.document_id:
                     try:
                         # Sanitize content to remove NULL characters that PostgreSQL can't store
@@ -1749,6 +1756,10 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
                             ),
                         }
                         supabase.table("documents").update(update_data).eq("id", doc.document_id).execute()
+
+                        # Pace writes: yield every 5 docs to avoid I/O spikes
+                        if _doc_idx % 5 == 4:
+                            await asyncio.sleep(0.1)
                     except Exception as db_err:
                         logger.warning(
                             f"Failed to persist extraction results for document {doc.document_id}: {db_err}"
@@ -1803,6 +1814,9 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
             f"Analysis complete | total_duration={elapsed:.1f}s"
         )
 
+        # Flush any throttled progress before completion
+        await _progress_db_writer.flush()
+
         # Publish completion event
         completion_payload = {
             "message": "Analysis completed successfully!",
@@ -1853,6 +1867,9 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
         }
 
         await progress_manager.publish_progress(channel_id=analysis_id, **error_payload)
+
+        # Flush any throttled progress before writing error state
+        await _progress_db_writer.flush()
 
         try:
             supabase.table("analysis_results").update(

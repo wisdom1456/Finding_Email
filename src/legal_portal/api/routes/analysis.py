@@ -1315,15 +1315,6 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
         provider: AI provider to use
 
     """
-    # #region agent log
-    _DEBUG_LOG_PATH = "/tmp/cursor_debug.log" if __import__('os').getenv("VERCEL") else "/Users/BRFlorida/Projects/Work/Finding_Emails/.cursor/debug.log"
-    def _dbg_log(hyp: str, msg: str, data: dict = None):
-        try:
-            import json as _j; import time as _t; open(_DEBUG_LOG_PATH, "a").write(_j.dumps({"hypothesisId": hyp, "location": "analysis.py:process_case_background", "message": msg, "data": data or {}, "timestamp": _t.time(), "sessionId": "debug-session"}) + "\n")
-        except: pass
-    _dbg_log("H2", "BACKGROUND TASK STARTED", {"case_id": case_id, "analysis_id": analysis_id, "provider": provider})
-    # #endregion agent log
-
     bg_start_time = time.time()
 
     logger.info(
@@ -1334,10 +1325,6 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
     # Initialize progress manager
     progress_manager = ProgressManager.get_instance()
     await progress_manager.create_channel(analysis_id)
-
-    # #region agent log
-    _dbg_log("H2,H4", "Channel created, publishing first progress", {"analysis_id": analysis_id})
-    # #endregion agent log
 
     # Create temp directory before try block so it's available in finally
     temp_dir = tempfile.mkdtemp(prefix=f"case_{case_id}_")
@@ -1887,15 +1874,6 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
         error_message = str(e)
         error_traceback = traceback.format_exc()
         elapsed = time.time() - bg_start_time
-
-        # #region agent log
-        _DEBUG_LOG_PATH = "/tmp/cursor_debug.log" if __import__('os').getenv("VERCEL") else "/Users/BRFlorida/Projects/Work/Finding_Emails/.cursor/debug.log"
-        def _dbg_log(hyp: str, msg: str, data: dict = None):
-            try:
-                import json as _j; import time as _t; open(_DEBUG_LOG_PATH, "a").write(_j.dumps({"hypothesisId": hyp, "location": "analysis.py:process_case_background:except", "message": msg, "data": data or {}, "timestamp": _t.time(), "sessionId": "debug-session"}) + "\n")
-            except: pass
-        _dbg_log("H3", "BACKGROUND TASK EXCEPTION", {"case_id": case_id, "analysis_id": analysis_id, "error": error_message, "error_type": type(e).__name__, "elapsed": elapsed})
-        # #endregion agent log
 
         logger.error(
             f"[BACKGROUND:ERROR] [CASE:{case_id}] [ELAPSED:{elapsed:.1f}s] "
@@ -2643,14 +2621,6 @@ async def start_analysis(
     import os
     is_vercel = os.getenv("VERCEL") is not None
 
-    # #region agent log
-    _DEBUG_LOG_PATH = "/tmp/cursor_debug.log" if is_vercel else "/Users/BRFlorida/Projects/Work/Finding_Emails/.cursor/debug.log"
-    def _dbg_log(hyp: str, msg: str, data: dict = None):
-        try:
-            import json as _j; import time as _t; open(_DEBUG_LOG_PATH, "a").write(_j.dumps({"hypothesisId": hyp, "location": "analysis.py:start_analysis", "message": msg, "data": data or {}, "timestamp": _t.time(), "sessionId": "debug-session"}) + "\n")
-        except: pass
-    # #endregion agent log
-
     try:
         # Verify case ownership using user client (respects RLS)
         case_response = (
@@ -2696,13 +2666,10 @@ async def start_analysis(
             "id", analysis_request.case_id
         ).execute()
 
-        _dbg_log("H6", "start_analysis called", {"case_id": analysis_request.case_id, "analysis_id": analysis["id"], "is_vercel": is_vercel})
-
         if is_vercel:
             # On Vercel: Return SSE stream that runs analysis inline
             # This keeps the connection alive and prevents function termination
             logger.info(f"[VERCEL] Starting SSE stream for analysis {analysis['id']}")
-            _dbg_log("H6", "Starting SSE stream analysis on Vercel", {"analysis_id": analysis["id"]})
 
             async def analysis_stream():
                 """Generator that runs analysis and yields progress events with heartbeats."""

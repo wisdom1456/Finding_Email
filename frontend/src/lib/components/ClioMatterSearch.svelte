@@ -143,8 +143,8 @@
 			
 			// Start SSE for import progress if import_id is returned
 			if (result.import_id) {
-				const sseUrl = `${apiUrl}/api/progress/clio-import/${result.import_id}?token=${session.access_token}`;
-				const statusUrl = `${apiUrl}/api/progress/clio-import/${result.import_id}/status`;
+				const sseUrl = `${apiUrl}/api/progress/clio-import/${result.import_id}?token=${encodeURIComponent(session.access_token)}`;
+				const statusUrl = `${apiUrl}/api/progress/clio-import/${result.import_id}/status?token=${encodeURIComponent(session.access_token)}`;
 				
 				// Keep phase as 'creating' or 'importing' until SSE starts
 				importPhase = 'importing';
@@ -269,8 +269,8 @@
 			
 			// If import_id is returned, connect to SSE stream
 			if (result.import_id) {
-				const sseUrl = `${apiUrl}/api/progress/clio-import/${result.import_id}?token=${session.access_token}`;
-				const statusUrl = `${apiUrl}/api/progress/clio-import/${result.import_id}/status`;
+				const sseUrl = `${apiUrl}/api/progress/clio-import/${result.import_id}?token=${encodeURIComponent(session.access_token)}`;
+				const statusUrl = `${apiUrl}/api/progress/clio-import/${result.import_id}/status?token=${encodeURIComponent(session.access_token)}`;
 
 				progressStore.connect(
 					sseUrl, 

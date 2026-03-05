@@ -3,6 +3,7 @@
 Handles OAuth flow, matter search, and data import from Clio.
 """
 
+import asyncio
 import logging
 import uuid
 from datetime import datetime, timezone
@@ -819,7 +820,11 @@ async def import_clio_data(
 
                 # Download file from Clio (just download, no processing yet)
                 logger.debug("Downloading from Clio", extra={"doc_id": doc_id})
-                file_content, content_type = ContentExtractor.download_file(doc_url, access_token)
+                from starlette.concurrency import run_in_threadpool
+                file_content, content_type = await asyncio.wait_for(
+                    run_in_threadpool(ContentExtractor.download_file, doc_url, access_token),
+                    timeout=60.0,
+                )
                 original_size = len(file_content)
                 logger.debug("Downloaded file", extra={"size_mb": f"{original_size / (1024 * 1024):.2f}"})
 

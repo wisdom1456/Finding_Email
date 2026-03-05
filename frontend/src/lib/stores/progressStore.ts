@@ -353,8 +353,8 @@ function createProgressStore() {
 
 			const apiUrl = getApiUrl();
 			// FIX: Corrected URL paths - backend has /progress/analysis/{id} not /analysis/progress/{id}
-			const streamUrl = `${apiUrl}/api/progress/analysis/${analysisId}`;
-			const statusUrl = `${apiUrl}/api/progress/analysis/${analysisId}/status`;
+			const streamUrl = `${apiUrl}/api/progress/analysis/${analysisId}?token=${encodeURIComponent(session.access_token)}`;
+			const statusUrl = `${apiUrl}/api/progress/analysis/${analysisId}/status?token=${encodeURIComponent(session.access_token)}`;
 			console.log('[progressStore] URLs:', { streamUrl, statusUrl });
 
 			// FIX: Use internal connect function, not createProgressStore()

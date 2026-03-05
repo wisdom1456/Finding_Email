@@ -4,7 +4,7 @@ import logging
 from datetime import datetime
 from typing import AsyncGenerator
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status as http_status
 from sse_starlette.sse import EventSourceResponse
 
 from legal_portal.api.dependencies import get_supabase_client
@@ -12,6 +12,40 @@ from legal_portal.services.progress_manager import ProgressManager
 
 router = APIRouter(prefix="/progress", tags=["progress"])
 logger = logging.getLogger(__name__)
+
+
+async def _authenticate_from_token(token: str) -> dict:
+    """Validate a Bearer token passed as query parameter (for SSE/EventSource)."""
+    if not token:
+        raise HTTPException(status_code=http_status.HTTP_401_UNAUTHORIZED, detail="Token required")
+    supabase = get_supabase_client()
+    try:
+        response = supabase.auth.get_user(token)
+        if not response or not response.user:
+            raise HTTPException(status_code=http_status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+        return {"id": response.user.id, "email": response.user.email}
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=http_status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+
+
+async def _verify_analysis_ownership(supabase, analysis_id: str, user_id: str):
+    """Verify the user owns the case associated with an analysis."""
+    try:
+        response = (
+            supabase.table("analysis_results")
+            .select("case_id, cases!inner(user_id)")
+            .eq("id", analysis_id)
+            .single()
+            .execute()
+        )
+        if not response.data or response.data.get("cases", {}).get("user_id") != user_id:
+            raise HTTPException(status_code=http_status.HTTP_403_FORBIDDEN, detail="Not authorized")
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=http_status.HTTP_403_FORBIDDEN, detail="Not authorized")
 
 
 async def poll_database_for_progress(
@@ -99,22 +133,16 @@ async def poll_database_for_progress(
 async def stream_analysis_progress(
     request: Request,
     analysis_id: str,
-    token: str = Query(None, description="Access token for authentication"),
+    token: str = Query(..., description="Access token for authentication"),
     supabase=Depends(get_supabase_client),
 ):
     """Stream analysis progress updates via SSE.
-    
+
     Uses database polling instead of in-memory pub/sub to work across
     Vercel serverless function instances.
     """
-    # #region agent log
-    _DEBUG_LOG_PATH = "/tmp/cursor_debug.log" if __import__('os').getenv("VERCEL") else "/Users/BRFlorida/Projects/Work/Finding_Emails/.cursor/debug.log"
-    def _dbg_log(hyp: str, msg: str, data: dict = None):
-        try:
-            import json as _j; import time as _t; open(_DEBUG_LOG_PATH, "a").write(_j.dumps({"hypothesisId": hyp, "location": "progress.py:stream_analysis_progress", "message": msg, "data": data or {}, "timestamp": _t.time(), "sessionId": "debug-session"}) + "\n")
-        except: pass
-    _dbg_log("H1", "SSE endpoint called (DB polling mode)", {"analysis_id": analysis_id, "has_token": token is not None})
-    # #endregion agent log
+    user = await _authenticate_from_token(token)
+    await _verify_analysis_ownership(supabase, analysis_id, user["id"])
 
     # Use database polling for cross-instance compatibility on Vercel
     return EventSourceResponse(
@@ -128,9 +156,10 @@ async def stream_analysis_progress(
 async def stream_clio_import_progress(
     request: Request,
     import_id: str,
-    token: str = Query(None),
+    token: str = Query(..., description="Access token for authentication"),
 ):
     """Stream Clio import progress updates via SSE."""
+    await _authenticate_from_token(token)
     progress_manager = ProgressManager.get_instance()
 
     return EventSourceResponse(progress_manager.subscribe(import_id), ping=15, media_type="text/event-stream")
@@ -140,18 +169,12 @@ async def stream_clio_import_progress(
 async def get_analysis_status(
     request: Request,
     analysis_id: str,
-    token: str = Query(None),
+    token: str = Query(..., description="Access token for authentication"),
     supabase=Depends(get_supabase_client),
 ):
     """Get current analysis progress status (polling endpoint with DB fallback)."""
-    # #region agent log
-    _DEBUG_LOG_PATH = "/tmp/cursor_debug.log" if __import__('os').getenv("VERCEL") else "/Users/BRFlorida/Projects/Work/Finding_Emails/.cursor/debug.log"
-    def _dbg_log(hyp: str, msg: str, data: dict = None):
-        try:
-            import json as _j; import time as _t; open(_DEBUG_LOG_PATH, "a").write(_j.dumps({"hypothesisId": hyp, "location": "progress.py:get_analysis_status", "message": msg, "data": data or {}, "timestamp": _t.time(), "sessionId": "debug-session"}) + "\n")
-        except: pass
-    _dbg_log("H4", "Status endpoint called", {"analysis_id": analysis_id})
-    # #endregion agent log
+    user = await _authenticate_from_token(token)
+    await _verify_analysis_ownership(supabase, analysis_id, user["id"])
 
     progress_manager = ProgressManager.get_instance()
 
@@ -204,25 +227,15 @@ async def get_analysis_status(
 async def get_clio_import_status(
     request: Request,
     import_id: str,
-    token: str = Query(None),
+    token: str = Query(..., description="Access token for authentication"),
     supabase=Depends(get_supabase_client),
 ):
     """Get current Clio import progress status (polling endpoint with DB fallback)."""
+    await _authenticate_from_token(token)
     progress_manager = ProgressManager.get_instance()
-
-    # #region agent log
-    import json
-    def _debug_log(msg, data, hyp):
-        logger.info(f"[DEBUG] {msg} | hyp={hyp} | data={json.dumps(data)}")
-    _debug_log("polling_entry", {"import_id": import_id}, "H2")
-    # #endregion
 
     # Try memory first
     status = await progress_manager.get_latest_status(import_id)
-
-    # #region agent log
-    _debug_log("memory_check", {"found_in_memory": status is not None, "status_type": type(status).__name__ if status else None}, "H2")
-    # #endregion
 
     if not status:
         # Fallback to database for cross-instance support on Vercel
@@ -237,16 +250,9 @@ async def get_clio_import_status(
                 .execute()
             )
 
-            # #region agent log
-            _debug_log("db_query_result", {"response_data": response.data if response else None, "data_len": len(response.data) if response and response.data else 0}, "H1,H3")
-            # #endregion
-
             if response.data and len(response.data) > 0:
                 case_data = response.data[0]
                 import_progress = case_data.get("import_progress", {})
-                # #region agent log
-                _debug_log("import_progress_from_db", {"import_progress": import_progress, "case_status": case_data.get("status")}, "H2,H3")
-                # #endregion
                 if import_progress and import_progress.get("progress"):
                     status = import_progress["progress"]
                     logger.info(f"Retrieved import progress from DB for {import_id}")
@@ -259,9 +265,6 @@ async def get_clio_import_status(
                         "percent": 100,
                     }
         except Exception as e:
-            # #region agent log
-            _debug_log("db_query_error", {"error": str(e), "error_type": type(e).__name__}, "H1")
-            # #endregion
             logger.warning(f"Failed to fetch import progress from DB for {import_id}: {e}")
 
     if not status:

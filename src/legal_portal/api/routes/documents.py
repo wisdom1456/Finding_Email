@@ -2,7 +2,6 @@
 
 import asyncio
 import logging
-import time
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
@@ -38,7 +37,7 @@ def _is_transient_supabase_error(err: Exception) -> bool:
     return any(msg in message for msg in _TRANSIENT_MESSAGES)
 
 
-def _update_document_with_retry(
+async def _update_document_with_retry(
     user_supabase, document_id: str, update_data: dict, max_attempts: int = 3
 ):
     """Update a document row with retry on transient Supabase errors.
@@ -60,7 +59,7 @@ def _update_document_with_retry(
                     f"Transient DB error for document {document_id} "
                     f"(attempt {attempt + 1}/{max_attempts}), retrying in {delay}s: {db_err}"
                 )
-                time.sleep(delay)
+                await asyncio.sleep(delay)
                 continue
             logger.error(
                 f"Database update failed for document {document_id}: {db_err}",
@@ -2027,7 +2026,7 @@ async def _trigger_extraction_inner(
             document_metadata["signature_detection"] = signature_detection
             update_data["metadata"] = document_metadata
 
-        update_result = _update_document_with_retry(user_supabase, document_id, update_data)
+        update_result = await _update_document_with_retry(user_supabase, document_id, update_data)
 
         logger.info(
             f"Extraction complete for {document_id}: method={extraction_method}, "

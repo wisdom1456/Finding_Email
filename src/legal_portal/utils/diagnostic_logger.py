@@ -7,14 +7,6 @@ from legal_portal.utils.logging_config import get_module_logger
 
 logger = get_module_logger(__name__)
 
-# #region agent log
-_DEBUG_LOG_PATH = "/tmp/cursor_debug.log" if os.getenv("VERCEL") else "/Users/BRFlorida/Projects/Work/Finding_Emails/.cursor/debug.log"
-def _dbg_log(hyp: str, msg: str, data: dict = None):
-    try:
-        import json as _j; open(_DEBUG_LOG_PATH, "a").write(_j.dumps({"hypothesisId": hyp, "location": "diagnostic_logger.py", "message": msg, "data": data or {}, "timestamp": time.time(), "sessionId": "debug-session"}) + "\n")
-    except: pass
-# #endregion agent log
-
 def _is_serverless_environment() -> bool:
     """Detect if running in a serverless environment (Vercel, AWS Lambda, etc.)."""
     return bool(os.getenv("VERCEL") or os.getenv("AWS_LAMBDA_FUNCTION_NAME") or os.getenv("FUNCTION_NAME"))
@@ -32,27 +24,13 @@ class DiagnosticLogger:
     def __init__(self, session_id: str = None):
         self.session_id = session_id or f"diag_{int(time.time())}"
         self._enabled = True  # Track if file logging is working
-        # #region agent log
-        _dbg_log("H1", "DiagnosticLogger.__init__ called", {"session_id": session_id, "cwd": os.getcwd()})
-        _dbg_log("H2", "Checking DIAGNOSTIC_MODE env", {"DIAGNOSTIC_MODE": os.getenv("DIAGNOSTIC_MODE"), "enabled": self.get_enabled()})
-        _dbg_log("H3", "Checking serverless env vars", {"VERCEL": os.getenv("VERCEL"), "AWS_LAMBDA_FUNCTION_NAME": os.getenv("AWS_LAMBDA_FUNCTION_NAME"), "is_serverless": _is_serverless_environment()})
-        # #endregion agent log
 
         base_dir = _get_writable_base_dir()
         self.base_path = os.path.join(base_dir, "sessions", self.session_id)
-        # #region agent log
-        _dbg_log("H1", "Attempting makedirs with serverless-aware path", {"base_path": self.base_path, "abs_path": os.path.abspath(self.base_path), "base_dir": base_dir})
-        # #endregion agent log
         try:
             os.makedirs(self.base_path, exist_ok=True)
-            # #region agent log
-            _dbg_log("H4", "makedirs succeeded", {"base_path": self.base_path})
-            # #endregion agent log
             logger.info(f"DIAGNOSTIC LOGGER: Initialized for session {self.session_id} at {self.base_path}")
         except OSError as e:
-            # #region agent log
-            _dbg_log("H4", "makedirs FAILED - disabling file logging gracefully", {"error": str(e), "errno": e.errno, "base_path": self.base_path})
-            # #endregion agent log
             # Gracefully disable file logging instead of crashing
             self._enabled = False
             logger.warning(f"DIAGNOSTIC LOGGER: Could not create output directory ({e}). File logging disabled for session {self.session_id}")

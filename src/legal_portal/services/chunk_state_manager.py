@@ -3,6 +3,7 @@
 Handles persistence of chunk_state to Supabase for recovery and status tracking.
 """
 
+import asyncio
 import logging
 from datetime import datetime
 from typing import Any, Dict, List, Optional
@@ -31,6 +32,7 @@ class ChunkStateManager:
         self._pending_updates = []
         self._batch_size = batch_size
         self._dirty_state = None
+        self._lock = asyncio.Lock()
 
     async def initialize_chunk_state(
         self,
@@ -146,57 +148,58 @@ class ChunkStateManager:
             summary: Summary data if completed
 
         """
-        try:
-            # Get current state
-            current_state = await self.get_chunk_state()
-            if not current_state:
-                logger.warning(f"[CHUNK_STATE] No state found for {self.analysis_id}")
-                return
+        async with self._lock:
+            try:
+                # Get current state
+                current_state = await self.get_chunk_state()
+                if not current_state:
+                    logger.warning(f"[CHUNK_STATE] No state found for {self.analysis_id}")
+                    return
 
-            documents = current_state.get("documents", {})
-            summaries = current_state.get("summaries", {})
+                documents = current_state.get("documents", {})
+                summaries = current_state.get("summaries", {})
 
-            if doc_id not in documents:
-                logger.warning(f"[CHUNK_STATE] Document {doc_id} not found in state")
-                return
+                if doc_id not in documents:
+                    logger.warning(f"[CHUNK_STATE] Document {doc_id} not found in state")
+                    return
 
-            # Update document status
-            doc_info = documents[doc_id]
-            doc_info["status"] = status
+                # Update document status
+                doc_info = documents[doc_id]
+                doc_info["status"] = status
 
-            if status == "completed":
-                doc_info["completed_at"] = datetime.utcnow().isoformat()
-                if summary:
-                    summary_key = f"sum_{doc_id}"
-                    summaries[summary_key] = summary
-                    doc_info["summary_key"] = summary_key
-            elif status == "failed":
-                doc_info["failed_at"] = datetime.utcnow().isoformat()
-                doc_info["error"] = error or "Unknown error"
-                doc_info["error_type"] = error_type or "UNKNOWN"
-                doc_info["retry_count"] = doc_info.get("retry_count", 0) + 1
-            elif status == "processing":
-                doc_info["started_at"] = datetime.utcnow().isoformat()
-            elif status == "skipped":
-                doc_info["skipped_at"] = datetime.utcnow().isoformat()
+                if status == "completed":
+                    doc_info["completed_at"] = datetime.utcnow().isoformat()
+                    if summary:
+                        summary_key = f"sum_{doc_id}"
+                        summaries[summary_key] = summary
+                        doc_info["summary_key"] = summary_key
+                elif status == "failed":
+                    doc_info["failed_at"] = datetime.utcnow().isoformat()
+                    doc_info["error"] = error or "Unknown error"
+                    doc_info["error_type"] = error_type or "UNKNOWN"
+                    doc_info["retry_count"] = doc_info.get("retry_count", 0) + 1
+                elif status == "processing":
+                    doc_info["started_at"] = datetime.utcnow().isoformat()
+                elif status == "skipped":
+                    doc_info["skipped_at"] = datetime.utcnow().isoformat()
 
-            # Update in-memory state
-            current_state["documents"] = documents
-            current_state["summaries"] = summaries
-            self._dirty_state = current_state
-            self._pending_updates.append(doc_id)
+                # Update in-memory state
+                current_state["documents"] = documents
+                current_state["summaries"] = summaries
+                self._dirty_state = current_state
+                self._pending_updates.append(doc_id)
 
-            # Batch writes: only write to DB every N updates or on completion
-            should_flush = (
-                len(self._pending_updates) >= self._batch_size or
-                status in ["completed", "failed"]  # Always flush on terminal states
-            )
+                # Batch writes: only write to DB every N updates or on completion
+                should_flush = (
+                    len(self._pending_updates) >= self._batch_size or
+                    status in ["completed", "failed"]  # Always flush on terminal states
+                )
 
-            if should_flush:
-                await self._flush_updates()
+                if should_flush:
+                    await self._flush_updates()
 
-        except Exception as e:
-            logger.error(f"[CHUNK_STATE] Failed to update document status: {e}")
+            except Exception as e:
+                logger.error(f"[CHUNK_STATE] Failed to update document status: {e}")
 
     async def update_chunk_status(
         self,
@@ -210,27 +213,28 @@ class ChunkStateManager:
             status: New status (pending, processing, completed, partial_failure)
 
         """
-        try:
-            current_state = await self.get_chunk_state()
-            if not current_state:
-                return
+        async with self._lock:
+            try:
+                current_state = await self.get_chunk_state()
+                if not current_state:
+                    return
 
-            chunks = current_state.get("chunks", [])
-            if chunk_index < len(chunks):
-                chunks[chunk_index]["status"] = status
-                current_state["chunks"] = chunks
-                current_state["current_chunk"] = chunk_index
+                chunks = current_state.get("chunks", [])
+                if chunk_index < len(chunks):
+                    chunks[chunk_index]["status"] = status
+                    current_state["chunks"] = chunks
+                    current_state["current_chunk"] = chunk_index
 
-                # Batch this update too
-                self._dirty_state = current_state
-                self._pending_updates.append(f"chunk_{chunk_index}")
+                    # Batch this update too
+                    self._dirty_state = current_state
+                    self._pending_updates.append(f"chunk_{chunk_index}")
 
-                # Flush on chunk completion
-                if status in ["completed", "partial_failure"]:
-                    await self._flush_updates()
+                    # Flush on chunk completion
+                    if status in ["completed", "partial_failure"]:
+                        await self._flush_updates()
 
-        except Exception as e:
-            logger.error(f"[CHUNK_STATE] Failed to update chunk status: {e}")
+            except Exception as e:
+                logger.error(f"[CHUNK_STATE] Failed to update chunk status: {e}")
 
     async def update_phase(self, phase: str) -> None:
         """Update the processing phase.
@@ -239,30 +243,31 @@ class ChunkStateManager:
             phase: New phase (document_analysis, synthesis, multi_stage, completed, failed)
 
         """
-        try:
-            # Flush any pending batched updates first to avoid stale overwrites
-            if self._pending_updates:
-                await self._flush_updates()
+        async with self._lock:
+            try:
+                # Flush any pending batched updates first to avoid stale overwrites
+                if self._pending_updates:
+                    await self._flush_updates()
 
-            current_state = await self.get_chunk_state()
-            if not current_state:
-                return
+                current_state = await self.get_chunk_state()
+                if not current_state:
+                    return
 
-            current_state["phase"] = phase
+                current_state["phase"] = phase
 
-            # Always flush phase changes immediately (they're rare and important)
-            self.supabase.table("analysis_results").update({
-                "chunk_state": current_state
-            }).eq("id", self.analysis_id).execute()
+                # Always flush phase changes immediately (they're rare and important)
+                self.supabase.table("analysis_results").update({
+                    "chunk_state": current_state
+                }).eq("id", self.analysis_id).execute()
 
-            # Clear dirty state so subsequent flushes don't overwrite this
-            self._dirty_state = None
-            self._pending_updates.clear()
+                # Clear dirty state so subsequent flushes don't overwrite this
+                self._dirty_state = None
+                self._pending_updates.clear()
 
-            logger.info(f"[CHUNK_STATE] Phase updated to: {phase}")
+                logger.info(f"[CHUNK_STATE] Phase updated to: {phase}")
 
-        except Exception as e:
-            logger.error(f"[CHUNK_STATE] Failed to update phase: {e}")
+            except Exception as e:
+                logger.error(f"[CHUNK_STATE] Failed to update phase: {e}")
 
     async def get_failed_documents(self) -> List[Dict[str, Any]]:
         """Get list of failed documents with error info."""
@@ -325,31 +330,32 @@ class ChunkStateManager:
             Number of documents reset
 
         """
-        try:
-            current_state = await self.get_chunk_state()
-            if not current_state:
+        async with self._lock:
+            try:
+                current_state = await self.get_chunk_state()
+                if not current_state:
+                    return 0
+
+                documents = current_state.get("documents", {})
+                count = 0
+
+                for doc_id in doc_ids:
+                    if doc_id in documents:
+                        documents[doc_id]["status"] = "pending"
+                        documents[doc_id]["error"] = None
+                        documents[doc_id]["error_type"] = None
+                        count += 1
+
+                current_state["documents"] = documents
+
+                self.supabase.table("analysis_results").update({
+                    "chunk_state": current_state
+                }).eq("id", self.analysis_id).execute()
+
+                return count
+            except Exception as e:
+                logger.error(f"[CHUNK_STATE] Failed to reset documents: {e}")
                 return 0
-
-            documents = current_state.get("documents", {})
-            count = 0
-
-            for doc_id in doc_ids:
-                if doc_id in documents:
-                    documents[doc_id]["status"] = "pending"
-                    documents[doc_id]["error"] = None
-                    documents[doc_id]["error_type"] = None
-                    count += 1
-
-            current_state["documents"] = documents
-
-            self.supabase.table("analysis_results").update({
-                "chunk_state": current_state
-            }).eq("id", self.analysis_id).execute()
-
-            return count
-        except Exception as e:
-            logger.error(f"[CHUNK_STATE] Failed to reset documents: {e}")
-            return 0
 
     async def get_all_summaries(self) -> List[Dict[str, Any]]:
         """Get all completed document summaries."""
@@ -362,9 +368,10 @@ class ChunkStateManager:
 
     async def finalize(self) -> None:
         """Flush any pending updates before closing. Call this at the end of processing."""
-        if self._pending_updates:
-            logger.info(f"[CHUNK_STATE] Finalizing with {len(self._pending_updates)} pending updates")
-            await self._flush_updates()
+        async with self._lock:
+            if self._pending_updates:
+                logger.info(f"[CHUNK_STATE] Finalizing with {len(self._pending_updates)} pending updates")
+                await self._flush_updates()
 
     async def _flush_updates(self) -> None:
         """Flush pending updates to database."""
@@ -394,35 +401,36 @@ class ChunkStateManager:
             summary: Summary data
 
         """
-        try:
-            # Flush any pending batched updates first to avoid stale overwrites
-            if self._pending_updates:
-                await self._flush_updates()
+        async with self._lock:
+            try:
+                # Flush any pending batched updates first to avoid stale overwrites
+                if self._pending_updates:
+                    await self._flush_updates()
 
-            current_state = await self.get_chunk_state()
-            if not current_state:
-                return
+                current_state = await self.get_chunk_state()
+                if not current_state:
+                    return
 
-            summaries = current_state.get("summaries", {})
-            summary_key = f"sum_{doc_id}"
-            summaries[summary_key] = summary
+                summaries = current_state.get("summaries", {})
+                summary_key = f"sum_{doc_id}"
+                summaries[summary_key] = summary
 
-            # Also update the document record
-            documents = current_state.get("documents", {})
-            if doc_id in documents:
-                documents[doc_id]["summary_key"] = summary_key
+                # Also update the document record
+                documents = current_state.get("documents", {})
+                if doc_id in documents:
+                    documents[doc_id]["summary_key"] = summary_key
 
-            current_state["summaries"] = summaries
-            current_state["documents"] = documents
+                current_state["summaries"] = summaries
+                current_state["documents"] = documents
 
-            self.supabase.table("analysis_results").update({
-                "chunk_state": current_state
-            }).eq("id", self.analysis_id).execute()
+                self.supabase.table("analysis_results").update({
+                    "chunk_state": current_state
+                }).eq("id", self.analysis_id).execute()
 
-            # Clear dirty state so subsequent flushes don't overwrite this
-            self._dirty_state = None
-            self._pending_updates.clear()
+                # Clear dirty state so subsequent flushes don't overwrite this
+                self._dirty_state = None
+                self._pending_updates.clear()
 
-        except Exception as e:
-            logger.error(f"[CHUNK_STATE] Failed to save summary: {e}")
+            except Exception as e:
+                logger.error(f"[CHUNK_STATE] Failed to save summary: {e}")
 

@@ -22,6 +22,25 @@ user_id_var: ContextVar[str] = ContextVar("user_id", default="")
 session_id_var: ContextVar[str] = ContextVar("session_id", default="")
 
 
+def resolve_environment() -> str:
+    """Determine the runtime environment from platform-provided variables.
+
+    Priority: VERCEL_ENV > ENVIRONMENT > infer from VERCEL flag > default.
+    Returns one of: 'production', 'preview', 'development'.
+    """
+    # Explicit override
+    env = os.getenv("VERCEL_ENV")  # Vercel sets this automatically
+    if env:
+        return env
+    env = os.getenv("ENVIRONMENT")
+    if env:
+        return env
+    # If VERCEL flag is set but VERCEL_ENV is missing (shouldn't happen, safety net)
+    if os.getenv("VERCEL"):
+        return "production"
+    return "development"
+
+
 class LogLevel(Enum):
     """Log levels with numeric values."""
 
@@ -74,7 +93,7 @@ class StructuredLogger:
             "request_id": request_id_var.get(),
             "user_id": user_id_var.get(),
             "session_id": session_id_var.get(),
-            "environment": os.getenv("ENVIRONMENT", "development"),
+            "environment": resolve_environment(),
             "service": "legal-document-portal",
             "version": os.getenv("APP_VERSION", "1.0.0"),
             "host": os.getenv("HOSTNAME", "localhost"),

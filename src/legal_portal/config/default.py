@@ -441,8 +441,9 @@ def get_settings() -> Settings:
 
 # Convenience functions for common configuration checks
 def is_production() -> bool:
-    """Check if running in production environment (Railway)."""
-    return settings.railway_static_url is not None
+    """Check if running in production environment (Vercel or Railway)."""
+    import os
+    return os.getenv("VERCEL_ENV") == "production" or settings.railway_static_url is not None
 
 
 def get_openai_api_key() -> str:

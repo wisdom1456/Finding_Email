@@ -779,7 +779,7 @@ try:
 except (ImportError, OSError) as e:
     WEASYPRINT_AVAILABLE = False
     HTML = None
-    logger.warning(f"WeasyPrint not available: {e}. PDF generation will be disabled.")
+    logger.info(f"WeasyPrint not available (optional — requires system libs): {e}. PDF export disabled; HTML export still works.")
 
 ARTIFACT_BUCKET = os.getenv("SUPABASE_ARTIFACT_BUCKET", "documents")
 ARTIFACT_PREFIX = os.getenv("ANALYSIS_ARTIFACT_PREFIX", "analysis_artifacts")

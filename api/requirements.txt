@@ -38,10 +38,12 @@ PyYAML==6.0.1
 # Document processing - Lightweight alternatives
 # PyMuPDF - 60 MB (removed, too large)
 # PyPDF2 - 10 MB (removed, replaced with pypdf)
-# python-docx - 5 MB (removed, use Supabase Storage extraction)
 
 # Lightweight PDF extraction (pure Python, ~2MB)
 pypdf>=4.0.0
+
+# DOCX extraction (required — DOCX uploads are a supported document type)
+python-docx>=1.1.0,<2.0
 
 # Image compression for document processing (re-enabled on Pro plan)
 Pillow>=10.0.0

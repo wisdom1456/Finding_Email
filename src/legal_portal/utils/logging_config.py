@@ -8,7 +8,7 @@ from pathlib import Path
 
 from legal_portal.utils.audit_logger import audit_logger
 from legal_portal.utils.metrics import MetricsCollector
-from legal_portal.utils.structured_logger import StructuredLogger
+from legal_portal.utils.structured_logger import StructuredLogger, resolve_environment
 
 
 def setup_logging(app_name: str = "legal-portal", level: str = None):
@@ -64,7 +64,7 @@ def setup_logging(app_name: str = "legal-portal", level: str = None):
         "Application logging initialized",
         app_name=app_name,
         log_level=log_level,
-        environment=os.getenv("ENVIRONMENT", "development"),
+        environment=resolve_environment(),
         version=os.getenv("APP_VERSION", "1.0.0"),
     )
 
@@ -267,6 +267,7 @@ __all__ = [
     "log_performance_metric",
     "log_security_event",
     "performance_logger",
+    "resolve_environment",
     "security_logger",
     "setup_logging",
 ]

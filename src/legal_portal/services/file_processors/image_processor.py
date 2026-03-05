@@ -24,7 +24,7 @@ try:
     HAS_OCR = True
 except ImportError:
     HAS_OCR = False
-    logger.warning("pytesseract not available - OCR functionality disabled")
+    logger.info("pytesseract not available (optional — requires Tesseract binary). OCR disabled; GPT-4o Vision fallback used.")
 
 
 async def process_image(

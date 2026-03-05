@@ -1,5 +1,9 @@
 # Vercel-Optimized Requirements - MINIMAL for 250 MB limit
 # This file is specifically for the /api serverless function
+#
+# After editing, regenerate the lock file:
+#   pip-compile --output-file=api/constraints.txt --strip-extras --no-header --allow-unsafe api/requirements.txt
+# Verify: bash scripts/check_constraints.sh
 
 # Core FastAPI (Essential)
 fastapi==0.109.0

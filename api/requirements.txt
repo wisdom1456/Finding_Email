@@ -9,8 +9,8 @@ python-multipart==0.0.9
 PyJWT==2.8.0
 
 # Supabase Client (Essential)
-supabase>=2.0.0
-# httpx version is managed by supabase dependency
+# Pinned to avoid pip backtracking — tested compatible with pydantic 2.5.x
+supabase==2.16.0
 
 # OpenAI (Essential for AI features)
 # v1.70.0+ required for GPT-5 parameters (reasoning_effort, max_completion_tokens)

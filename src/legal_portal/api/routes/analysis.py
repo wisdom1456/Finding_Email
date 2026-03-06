@@ -200,6 +200,79 @@ async def _extract_deferred_documents(
             supabase.table("documents").update(update_data).eq("id", doc_id).execute()
             results[doc_id] = update_data
 
+            # Upload PDF attachments from EML files
+            if lower_name.endswith(".eml") and 'processed' in dir():
+                pdf_attachments = getattr(getattr(processed, 'metadata', None), 'attachments', None) or []
+                if pdf_attachments and doc.get("case_id") and doc.get("user_id"):
+                    case_id = doc["case_id"]
+                    user_id = doc["user_id"]
+
+                    # Fetch existing content hashes for this case
+                    existing_docs = (
+                        supabase.table("documents")
+                        .select("id, metadata")
+                        .eq("case_id", case_id)
+                        .execute()
+                    )
+                    existing_hashes = set()
+                    for ed in (existing_docs.data or []):
+                        meta = ed.get("metadata") or {}
+                        if isinstance(meta, dict) and meta.get("content_hash"):
+                            existing_hashes.add(meta["content_hash"])
+
+                    for att in pdf_attachments:
+                        att_hash = att["content_hash"]
+                        att_filename = att["filename"]
+
+                        if att_hash in existing_hashes:
+                            logger.info(
+                                f"[DEFERRED] Skipping duplicate attachment "
+                                f"{att_filename} (hash={att_hash[:12]}...)"
+                            )
+                            continue
+
+                        # Upload attachment bytes to storage
+                        att_storage_path = f"{user_id}/{case_id}/{att_filename}"
+                        try:
+                            supabase.storage.from_("documents").upload(
+                                att_storage_path, att["bytes"],
+                            )
+                        except Exception as upload_err:
+                            logger.warning(
+                                f"[DEFERRED] Storage upload failed for {att_filename}: {upload_err}"
+                            )
+                            continue
+
+                        # Insert new document record
+                        att_record = {
+                            "id": str(uuid.uuid4()),
+                            "case_id": case_id,
+                            "user_id": user_id,
+                            "file_name": att_filename,
+                            "file_type": "application/pdf",
+                            "file_size": len(att["bytes"]),
+                            "storage_path": att_storage_path,
+                            "extraction_method": "eml_attachment",
+                            "status": DocumentStatus.PENDING,
+                            "metadata": {
+                                "parent_email_id": doc_id,
+                                "content_hash": att_hash,
+                            },
+                            "created_at": datetime.utcnow().isoformat(),
+                            "updated_at": datetime.utcnow().isoformat(),
+                        }
+                        try:
+                            supabase.table("documents").insert(att_record).execute()
+                            existing_hashes.add(att_hash)
+                            logger.info(
+                                f"[DEFERRED] Created document for EML attachment: "
+                                f"{att_filename} (parent={doc_name})"
+                            )
+                        except Exception as insert_err:
+                            logger.error(
+                                f"[DEFERRED] Failed to insert attachment {att_filename}: {insert_err}"
+                            )
+
             logger.info(
                 f"[DEFERRED] Extracted {doc_name}: "
                 f"{text_len} chars, method={extraction_method}, quality={extraction_quality}"

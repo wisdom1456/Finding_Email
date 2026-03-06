@@ -774,6 +774,7 @@ async def enrich_cross_document_for_case(
         processed_docs: list[ProcessedDocument] = []
         doc_id_by_name: dict[str, str] = {}
         needs_enrichment = False
+        registries_built = 0
 
         for doc in docs:
             metadata = doc.get("metadata") or {}
@@ -799,7 +800,8 @@ async def enrich_cross_document_for_case(
                     )
                     registry = registry_service.build_initial_registry(pdoc_tmp)
                     registry_service.persist_to_document(doc["id"], registry, service_supabase)
-                    logger.info(f"Auto-built registry for {doc.get('file_name', doc['id'])}")
+                    registries_built += 1
+                    logger.info(f"Auto-built registry for {doc.get('file_name', doc['id'])}: type={registry.get('document_type')}")
                 except Exception as e:
                     logger.warning(f"Failed to auto-build registry for {doc['id']}: {e}")
                     continue
@@ -843,7 +845,7 @@ async def enrich_cross_document_for_case(
             doc_id_by_name[doc.get("file_name", "")] = doc["id"]
 
         if not needs_enrichment:
-            return {"enriched": 0, "total": len(docs)}
+            return {"enriched": 0, "registries_built": registries_built, "total": len(docs)}
 
         # Run cross-document enrichment
         enriched = registry_service.enrich_cross_document(registries, processed_docs)
@@ -859,7 +861,7 @@ async def enrich_cross_document_for_case(
                 registry_service.persist_to_document(doc_id, reg, service_supabase)
                 persisted += 1
 
-        return {"enriched": persisted, "total": len(docs)}
+        return {"enriched": persisted, "registries_built": registries_built, "total": len(docs)}
 
     except HTTPException:
         raise

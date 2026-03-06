@@ -453,7 +453,7 @@
 		if (crossDocEnriched || !caseId || documents.length === 0) return;
 		crossDocEnriched = true;
 		try {
-			const session = await getSecureSession();
+			const { session } = await getSecureSession();
 			if (!session?.access_token) return;
 			const resp = await fetch(`${getApiUrl()}/documents/case/${caseId}/enrich-cross-document`, {
 				method: 'POST',
@@ -464,8 +464,8 @@
 			});
 			if (!resp.ok) return;
 			const result = await resp.json();
-			if (result.enriched > 0) {
-				// Reload documents to pick up new suggested_relationships
+			if (result.enriched > 0 || result.registries_built > 0) {
+				// Reload documents to pick up new registries and suggested_relationships
 				await loadDocuments();
 			}
 		} catch (e) {

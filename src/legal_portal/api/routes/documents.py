@@ -617,20 +617,20 @@ async def upload_document(
                 )
 
                 # Build and persist initial document registry (Stage 1)
-                if extracted_text:
-                    try:
-                        _build_and_persist_registry(
-                            document_id=document_id,
-                            file_name=file_name,
-                            file_type=file_type,
-                            extracted_text=extracted_text,
-                            extraction_quality=extraction_quality,
-                            extraction_method=extraction_method,
-                            signature_detection=signature_detection,
-                            supabase_client=user_supabase,
-                        )
-                    except Exception as reg_err:
-                        logger.warning(f"Registry build failed for {document_id}: {reg_err}")
+                # Always build — filename alone provides type + signature classification
+                try:
+                    _build_and_persist_registry(
+                        document_id=document_id,
+                        file_name=file_name,
+                        file_type=file_type,
+                        extracted_text=extracted_text or "",
+                        extraction_quality=extraction_quality,
+                        extraction_method=extraction_method,
+                        signature_detection=signature_detection,
+                        supabase_client=user_supabase,
+                    )
+                except Exception as reg_err:
+                    logger.warning(f"Registry build failed for {document_id}: {reg_err}")
 
             except Exception as extract_err:
                 # Log but don't fail the upload if extraction fails
@@ -645,6 +645,21 @@ async def upload_document(
                         "updated_at": datetime.utcnow().isoformat(),
                     }
                 ).eq("id", document_id).execute()
+
+                # Still build registry from filename alone
+                try:
+                    _build_and_persist_registry(
+                        document_id=document_id,
+                        file_name=file_name,
+                        file_type=file_type,
+                        extracted_text="",
+                        extraction_quality="low",
+                        extraction_method="failed",
+                        signature_detection=None,
+                        supabase_client=user_supabase,
+                    )
+                except Exception:
+                    pass
 
         return created_doc
 
@@ -763,8 +778,31 @@ async def enrich_cross_document_for_case(
         for doc in docs:
             metadata = doc.get("metadata") or {}
             registry = metadata.get("registry")
+
+            # Build registry on-the-fly for docs that don't have one yet
+            # (e.g. Clio imports, uploads from before registry code was added)
             if not registry:
-                continue
+                try:
+                    ft = _MIME_TO_FILETYPE.get(doc.get("file_type", ""), FileType.PDF)
+                    pdoc_tmp = ProcessedDocument(
+                        file_name=doc.get("file_name", ""),
+                        content=(doc.get("extracted_text") or "")[:200_000],
+                        document_type=DocumentType.CASE_DOCUMENT,
+                        file_type=ft,
+                        metadata=FileMetadata(
+                            file_name=doc.get("file_name", ""),
+                            file_type=ft,
+                            file_size=doc.get("file_size", 0),
+                        ),
+                        document_id=doc["id"],
+                        extraction_quality=doc.get("extraction_quality", "unknown"),
+                    )
+                    registry = registry_service.build_initial_registry(pdoc_tmp)
+                    registry_service.persist_to_document(doc["id"], registry, service_supabase)
+                    logger.info(f"Auto-built registry for {doc.get('file_name', doc['id'])}")
+                except Exception as e:
+                    logger.warning(f"Failed to auto-build registry for {doc['id']}: {e}")
+                    continue
 
             # Skip docs already enriched beyond extraction
             stage = registry.get("enrichment_stage", "none")
@@ -2365,20 +2403,20 @@ async def _trigger_extraction_inner(
         )
 
         # Build and persist initial document registry (Stage 1) for deferred extraction
-        if extracted_text and extracted_text.strip():
-            try:
-                _build_and_persist_registry(
-                    document_id=document_id,
-                    file_name=file_name,
-                    file_type=file_type,
-                    extracted_text=extracted_text,
-                    extraction_quality=extraction_quality,
-                    extraction_method=extraction_method,
-                    signature_detection=signature_detection,
-                    supabase_client=user_supabase,
-                )
-            except Exception as reg_err:
-                logger.warning(f"Registry build failed for {document_id}: {reg_err}")
+        # Always build — filename alone provides type + signature classification
+        try:
+            _build_and_persist_registry(
+                document_id=document_id,
+                file_name=file_name,
+                file_type=file_type,
+                extracted_text=extracted_text or "",
+                extraction_quality=extraction_quality,
+                extraction_method=extraction_method,
+                signature_detection=signature_detection,
+                supabase_client=user_supabase,
+            )
+        except Exception as reg_err:
+            logger.warning(f"Registry build failed for {document_id}: {reg_err}")
 
         return {
             "document_id": document_id,

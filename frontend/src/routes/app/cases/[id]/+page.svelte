@@ -427,7 +427,7 @@
 			const { data, error } = await withRetry(() =>
 				supabase
 					.from('documents')
-					.select('id, case_id, file_name, file_type, file_size, storage_path, status, extraction_method, extraction_quality, extracted_at, page_count, ocr_provider, extraction_error, is_verified, is_flagged_as_junk, text_edited_at, metadata, created_at, updated_at, document_type_label, document_type_confidence, signed_status, signature_expected, system_summary, enrichment_stage')
+					.select('id, case_id, file_name, file_type, file_size, storage_path, status, extraction_method, extraction_quality, extracted_at, page_count, ocr_provider, extraction_error, is_verified, is_flagged_as_junk, text_edited_at, metadata, created_at, updated_at')
 					.eq('case_id', caseId as string)
 					.order('created_at', { ascending: true })
 					.limit(10000)

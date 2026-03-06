@@ -491,8 +491,6 @@ class DocumentRegistryService:
         in the same transaction and uses resolve_denormalized_columns() to keep
         the denormalized columns in sync.
         """
-        update_payload = DocumentRegistryService.resolve_denormalized_columns(registry)
-
         # Fetch current metadata to merge registry into it
         result = (
             supabase_client.table("documents")
@@ -503,9 +501,22 @@ class DocumentRegistryService:
         )
         metadata = (result.data or {}).get("metadata") or {}
         metadata["registry"] = registry
+
+        # Try with denormalized columns; fall back to metadata-only if columns
+        # don't exist yet (migration pending).
+        update_payload = DocumentRegistryService.resolve_denormalized_columns(registry)
         update_payload["metadata"] = metadata
 
-        supabase_client.table("documents").update(update_payload).eq("id", document_id).execute()
+        try:
+            supabase_client.table("documents").update(update_payload).eq("id", document_id).execute()
+        except Exception:
+            import logging
+            logging.getLogger(__name__).warning(
+                "persist_to_document: denormalized columns not available, writing metadata only"
+            )
+            supabase_client.table("documents").update(
+                {"metadata": metadata}
+            ).eq("id", document_id).execute()
 
     # ------------------------------------------------------------------ #
     #  Diagnostic

@@ -699,9 +699,7 @@ async def list_documents_for_case(
                 "id, case_id, file_name, file_type, file_size, storage_path, status, "
                 "extraction_method, extraction_quality, extracted_at, page_count, "
                 "ocr_provider, extraction_error, is_verified, is_flagged_as_junk, "
-                "text_edited_at, metadata, created_at, updated_at, "
-                "document_type_label, document_type_confidence, signed_status, "
-                "signature_expected, system_summary, enrichment_stage"
+                "text_edited_at, metadata, created_at, updated_at"
             )
             .eq("case_id", case_id)
             .order("created_at", desc=False)
@@ -748,8 +746,7 @@ async def enrich_cross_document_for_case(
         # Load documents with extracted_text (needed for email subject extraction)
         docs_response = (
             service_supabase.table("documents")
-            .select("id, file_name, file_type, file_size, extracted_text, metadata, "
-                    "enrichment_stage")
+            .select("id, file_name, file_type, file_size, extracted_text, metadata")
             .eq("case_id", case_id)
             .execute()
         )
@@ -1379,10 +1376,13 @@ async def verify_document(
         if "attorney_enrichment" in metadata:
             update_data["metadata"] = metadata
 
-        # --- Sync denormalized columns via registry service ---
+        # --- Sync registry + denormalized columns ---
         # All registry-backed column writes go through resolve_denormalized_columns()
         # to maintain a single source of truth for column computation.
+        # If denormalized columns don't exist yet (migration pending), the write
+        # falls back to metadata-only.
         registry = metadata.get("registry") or {}
+        denorm_columns: Dict[str, Any] = {}
 
         # Update registry dict to reflect attorney changes
         if registry:
@@ -1406,25 +1406,32 @@ async def verify_document(
                     registry["execution_status"] = "unknown"
 
             # Compute denormalized columns from updated registry
-            column_values = DocumentRegistryService.resolve_denormalized_columns(registry)
-            update_data.update(column_values)
+            denorm_columns = DocumentRegistryService.resolve_denormalized_columns(registry)
             metadata["registry"] = registry
             update_data["metadata"] = metadata
         else:
             # No registry yet — still sync what we can from attorney enrichment
-            enrichment = metadata.get("attorney_enrichment") or {}
             if request.document_type_override is not None:
-                update_data["document_type_label"] = request.document_type_override
+                denorm_columns["document_type_label"] = request.document_type_override
             if should_update_signature_meta and normalized_status:
                 if normalized_status == "signed":
-                    update_data["signed_status"] = "signed"
+                    denorm_columns["signed_status"] = "signed"
                 elif normalized_status == "not_signed":
-                    update_data["signed_status"] = "not_detected"
+                    denorm_columns["signed_status"] = "not_detected"
                 else:
-                    update_data["signed_status"] = "unknown"
+                    denorm_columns["signed_status"] = "unknown"
 
-        # Update document
-        update_response = user_supabase.table("documents").update(update_data).eq("id", document_id).execute()
+        # Update document — try with denormalized columns, fall back to without
+        # if the migration hasn't been run yet.
+        full_update = {**update_data, **denorm_columns}
+        try:
+            update_response = user_supabase.table("documents").update(full_update).eq("id", document_id).execute()
+        except Exception:
+            if denorm_columns:
+                logger.warning("verify_document: denormalized columns not available, writing metadata only")
+                update_response = user_supabase.table("documents").update(update_data).eq("id", document_id).execute()
+            else:
+                raise
 
         if not update_response.data:
             raise HTTPException(

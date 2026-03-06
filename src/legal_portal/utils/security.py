@@ -41,14 +41,10 @@ MAGIC_SIGNATURES = {
     ".pdf": [(b"%PDF", 0, "application/pdf")],
     ".png": [(b"\x89PNG\r\n\x1a\n", 0, "image/png")],
     ".jpg": [
-        (b"\xff\xd8\xff\xe0", 0, "image/jpeg"),  # JFIF
-        (b"\xff\xd8\xff\xe1", 0, "image/jpeg"),  # Exif
-        (b"\xff\xd8\xff\xdb", 0, "image/jpeg"),  # Raw JPEG
+        (b"\xff\xd8", 0, "image/jpeg"),  # All JPEGs start with SOI marker
     ],
     ".jpeg": [
-        (b"\xff\xd8\xff\xe0", 0, "image/jpeg"),
-        (b"\xff\xd8\xff\xe1", 0, "image/jpeg"),
-        (b"\xff\xd8\xff\xdb", 0, "image/jpeg"),
+        (b"\xff\xd8", 0, "image/jpeg"),  # All JPEGs start with SOI marker
     ],
     ".docx": [(b"PK\x03\x04", 0, "application/vnd.openxmlformats-officedocument.wordprocessingml.document")],
     ".doc": [(b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1", 0, "application/msword")],
@@ -250,12 +246,24 @@ def validate_file_content(file_data: bytes, filename: str) -> Tuple[str, str]:
                         mime_type = expected_mime
                         break
 
-            # If extension requires a signature but none matched, reject the file
+            # If extension requires a signature but none matched
             if mime_type is None:
-                raise ValueError(
-                    f"File content does not match expected format for '{ext}'. "
-                    f"The file may be corrupted or disguised as a different type."
-                )
+                # Check if it's actually a text file with a wrong extension
+                # (e.g., plain text saved as .doc — common in Clio imports)
+                try:
+                    file_data[:512].decode("utf-8")
+                    # It's valid UTF-8 text — treat as text/plain
+                    mime_type = "text/plain"
+                    ext = ".txt"  # Override extension so downstream checks pass
+                    logger.warning(
+                        f"File '{filename}' has claimed extension but contains plain text. "
+                        f"Processing as text/plain."
+                    )
+                except (UnicodeDecodeError, ValueError):
+                    raise ValueError(
+                        f"File content does not match expected format for '{ext}'. "
+                        f"The file may be corrupted or disguised as a different type."
+                    )
         else:
             # For text-based formats (txt, csv, eml), use mimetypes.guess_type
             # These don't have reliable magic numbers
@@ -288,10 +296,18 @@ def validate_file_content(file_data: bytes, filename: str) -> Tuple[str, str]:
     # Verify that the extension matches the detected content type
     expected_extensions = MIME_EXTENSION_MAP.get(mime_type, [])
     if ext not in expected_extensions:
-        raise ValueError(
-            f"File extension '{ext}' does not match detected content type '{mime_type}'. "
-            f"Expected extensions for this content type: {', '.join(expected_extensions)}"
-        )
+        # Allow text content with mismatched extensions (e.g., .doc files that are plain text)
+        if mime_type == "text/plain" and ext in ALLOWED_EXTENSIONS:
+            logger.warning(
+                f"File '{filename}' has extension '{ext}' but contains plain text. "
+                f"Processing as text/plain."
+            )
+            ext = ".txt"
+        else:
+            raise ValueError(
+                f"File extension '{ext}' does not match detected content type '{mime_type}'. "
+                f"Expected extensions for this content type: {', '.join(expected_extensions)}"
+            )
 
     return mime_type, ext
 

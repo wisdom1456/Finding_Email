@@ -147,7 +147,9 @@
 	});
 
 	let docsNeedingExtraction = $derived(
-		triageGroups.needs_attention.filter(d => !d.extracted_at)
+		triageGroups.needs_attention.filter(d =>
+			!d.extracted_at || d.extraction_method === 'deferred' || (d.status === 'pending' && !d.extracted_text)
+		)
 	);
 
 	// Filtered list for "All" view

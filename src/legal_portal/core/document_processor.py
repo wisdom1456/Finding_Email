@@ -342,7 +342,7 @@ class DocumentProcessor:
                 "ocr_provider": ocr_provider,
                 "extraction_error": extraction_error,
                 "page_count": page_count,
-                "extracted_at": datetime.utcnow().isoformat(),
+                "extracted_at": datetime.utcnow().isoformat() if extraction_method != "deferred" else None,
             }
 
             logger.info(f"Document processed successfully: {original_name} (status: {status})")

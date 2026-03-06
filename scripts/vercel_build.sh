@@ -41,6 +41,11 @@ sys.path.insert(0, ".")
 module = importlib.import_module("api.index")
 assert hasattr(module, "app"), "api.index did not expose app"
 
+# Verify Google Cloud Vision SDK is importable
+from google.cloud import vision
+from google.oauth2 import service_account
+print("✅ Google Cloud Vision SDK importable")
+
 print("✅ API runtime import smoke check passed")
 PY
 

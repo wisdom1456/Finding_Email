@@ -1602,23 +1602,74 @@ async def process_pdf(
                 needs_vision = True
 
             if needs_vision:
-                # Try Google Cloud Vision first (faster and cheaper) - using bytes
-                vision_text = await _extract_text_via_google_ocr_bytes(
-                    pdf_bytes, original_filename, progress_callback
-                )
-                if vision_text:
-                    text_content = vision_text
-                    extraction_method = "Google Cloud Vision"
-                    ocr_provider = "Google"
+                from legal_portal.config.default import get_settings
+                _settings = get_settings()
+
+                if _settings.ocr_remote_enabled:
+                    # Route OCR to Cloud Run service (Google Vision only)
+                    try:
+                        from legal_portal.utils.ocr_service_client import (
+                            get_ocr_client, OCRServiceError,
+                        )
+                        ocr_client = get_ocr_client()
+                        import mimetypes as _mt
+                        content_type, _ = _mt.guess_type(original_filename)
+                        content_type = content_type or "application/pdf"
+                        result = await ocr_client.extract_text(
+                            pdf_bytes, original_filename, content_type
+                        )
+                        text_content = result["full_text"]
+                        extraction_method = f"cloud_run_ocr ({result['provider']})"
+                        ocr_provider = result["provider"]
+                        logger.info(
+                            f"Remote OCR completed for {original_filename}",
+                            extra={
+                                "trace_id": result.get("trace_id"),
+                                "provider": result["provider"],
+                                "page_count": result.get("page_count"),
+                                "latency_ms": result.get("latency_ms"),
+                            },
+                        )
+                    except Exception as e:
+                        logger.error(f"Remote OCR failed for {original_filename}: {e}")
+                        if _settings.ocr_remote_required:
+                            raise
+                        # Emergency fallback only
+                        logger.warning(f"EMERGENCY: Falling back to local OCR for {original_filename}")
+                        vision_text = await _extract_text_via_google_ocr_bytes(
+                            pdf_bytes, original_filename, progress_callback
+                        )
+                        if vision_text:
+                            text_content = vision_text
+                            extraction_method = "Google Cloud Vision"
+                            ocr_provider = "Google"
+                        else:
+                            vision_text = await _extract_text_via_vision_bytes(
+                                pdf_bytes, original_filename, progress_callback
+                            )
+                            if vision_text:
+                                text_content = vision_text
+                                extraction_method = "GPT-4o Vision"
+                                ocr_provider = "OpenAI"
                 else:
-                    # Fall back to GPT-4o Vision if Google Vision unavailable or failed
-                    vision_text = await _extract_text_via_vision_bytes(
+                    # Local OCR path (OCR_REMOTE_ENABLED=false)
+                    # Try Google Cloud Vision first (faster and cheaper) - using bytes
+                    vision_text = await _extract_text_via_google_ocr_bytes(
                         pdf_bytes, original_filename, progress_callback
                     )
                     if vision_text:
                         text_content = vision_text
-                        extraction_method = "GPT-4o Vision"
-                        ocr_provider = "OpenAI"
+                        extraction_method = "Google Cloud Vision"
+                        ocr_provider = "Google"
+                    else:
+                        # Fall back to GPT-4o Vision if Google Vision unavailable or failed
+                        vision_text = await _extract_text_via_vision_bytes(
+                            pdf_bytes, original_filename, progress_callback
+                        )
+                        if vision_text:
+                            text_content = vision_text
+                            extraction_method = "GPT-4o Vision"
+                            ocr_provider = "OpenAI"
 
             # No library available or all failed
             if not text_content.strip():

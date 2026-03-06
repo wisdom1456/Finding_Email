@@ -38,8 +38,32 @@ async def process_image(
 
     text_content = ""
 
+    from legal_portal.config.default import get_settings
+    _settings = get_settings()
+
     try:
-        if HAS_OCR:
+        if _settings.ocr_remote_enabled:
+            # Route to Cloud Run OCR service
+            from legal_portal.utils.ocr_service_client import get_ocr_client
+            with open(file_path, "rb") as f:
+                img_bytes = f.read()
+            import mimetypes as _mt
+            content_type, _ = _mt.guess_type(file_path)
+            content_type = content_type or "image/png"
+            ocr_client = get_ocr_client()
+            result = await ocr_client.extract_text(
+                img_bytes, original_filename, content_type,
+            )
+            text_content = result["full_text"]
+            logger.info(
+                f"Remote OCR completed for {original_filename}",
+                extra={
+                    "trace_id": result.get("trace_id"),
+                    "provider": result["provider"],
+                    "latency_ms": result.get("latency_ms"),
+                },
+            )
+        elif HAS_OCR:
             with open(file_path, "rb") as f:
                 image = Image.open(BytesIO(f.read()))
                 # Convert image to grayscale for better OCR results
@@ -50,6 +74,8 @@ async def process_image(
             logger.warning(f"OCR not available - skipping text extraction for {original_filename}")
             text_content = "[Image - OCR not available in this environment]"
     except Exception as e:
+        if _settings.ocr_remote_enabled and _settings.ocr_remote_required:
+            raise  # Fail-closed: surface error, no degraded results
         logger.error(f"Error processing image {original_filename}: {e}")
         text_content = f"Error extracting text from {original_filename}."
 

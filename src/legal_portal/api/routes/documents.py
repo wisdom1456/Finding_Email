@@ -354,101 +354,146 @@ async def upload_document(
                         logger.error(f"DOCX extraction error for {file_name}: {docx_err}")
 
                 elif file_type in ["image/png", "image/jpeg", "image/jpg"] or file_name.lower().endswith((".png", ".jpg", ".jpeg")):
-                    # Image file - use Google Vision OCR (with GPT-4o fallback)
-                    try:
-                        google_client = GoogleVisionClient.get_instance()
-                        if google_client.is_available:
+                    # Image file - OCR extraction
+                    from legal_portal.config.default import get_settings
+                    _settings = get_settings()
+
+                    if _settings.ocr_remote_enabled:
+                        # Route to Cloud Run OCR service (Google Vision only)
+                        try:
+                            from legal_portal.utils.ocr_service_client import (
+                                get_ocr_client, OCRServiceError,
+                            )
+                            ocr_client = get_ocr_client()
+                            img_content_type = file_type if file_type in ["image/png", "image/jpeg", "image/jpg"] else "image/png"
+                            result = await ocr_client.extract_text(
+                                file_content, file_name, img_content_type,
+                            )
+                            extracted_text = result["full_text"]
+                            extraction_method = f"cloud_run_ocr ({result['provider']})"
+                            extraction_quality = "high"
+                            ocr_provider = result["provider"]
+                            logger.info(
+                                f"Remote OCR completed for {file_name}",
+                                extra={
+                                    "trace_id": result.get("trace_id"),
+                                    "provider": result["provider"],
+                                    "latency_ms": result.get("latency_ms"),
+                                },
+                            )
+                        except Exception as e:
+                            logger.error(f"Remote OCR failed for {file_name}: {e}")
+                            if _settings.ocr_remote_required:
+                                extraction_error = f"Image OCR failed: {str(e)}"
+                                extraction_method = "failed"
+                                extraction_quality = "low"
+                            else:
+                                # Emergency local fallback
+                                logger.warning(f"EMERGENCY: Falling back to local OCR for {file_name}")
+                                try:
+                                    google_client = GoogleVisionClient.get_instance()
+                                    if google_client.is_available:
+                                        import asyncio
+                                        from starlette.concurrency import run_in_threadpool
+                                        def do_google_ocr():
+                                            return google_client.extract_text_from_image(file_content)
+                                        vision_text = await asyncio.wait_for(
+                                            run_in_threadpool(do_google_ocr), timeout=30.0,
+                                        )
+                                        if vision_text and vision_text.strip():
+                                            extracted_text = vision_text
+                                            extraction_method = "Google Cloud Vision"
+                                            extraction_quality = "high"
+                                            ocr_provider = "google_vision"
+                                        else:
+                                            raise ValueError("Google Vision returned empty text")
+                                    else:
+                                        raise ValueError("Google Vision client not available")
+                                except Exception as fallback_err:
+                                    extraction_error = f"Image OCR failed: {str(fallback_err)}"
+                                    extraction_method = "failed"
+                                    extraction_quality = "low"
+                                    logger.error(f"Emergency fallback OCR also failed for {file_name}: {fallback_err}")
+                    else:
+                        # Local OCR path (OCR_REMOTE_ENABLED=false)
+                        try:
+                            google_client = GoogleVisionClient.get_instance()
+                            if google_client.is_available:
+                                try:
+                                    import asyncio
+                                    from starlette.concurrency import run_in_threadpool
+                                    def do_google_ocr():
+                                        return google_client.extract_text_from_image(file_content)
+                                    vision_text = await asyncio.wait_for(
+                                        run_in_threadpool(do_google_ocr), timeout=30.0,
+                                    )
+                                    if vision_text and vision_text.strip():
+                                        extracted_text = vision_text
+                                        extraction_method = "Google Cloud Vision"
+                                        extraction_quality = "high"
+                                        ocr_provider = "google_vision"
+                                        logger.info(f"Successfully extracted text from {file_name} using Google Vision")
+                                    else:
+                                        raise ValueError("Google Vision returned empty text")
+                                except Exception as google_err:
+                                    logger.warning(f"{file_name}: Google Vision failed ({google_err}). Falling back to GPT-4o Vision.")
+                                    raise
+                            else:
+                                raise ValueError("Google Vision client not available")
+                        except Exception:
                             try:
                                 import asyncio
-
+                                import base64
                                 from starlette.concurrency import run_in_threadpool
-
-                                def do_google_ocr():
-                                    return google_client.extract_text_from_image(file_content)
-
-                                vision_text = await asyncio.wait_for(
-                                    run_in_threadpool(do_google_ocr),
-                                    timeout=30.0,
-                                )
-
-                                if vision_text and vision_text.strip():
-                                    extracted_text = vision_text
-                                    extraction_method = "Google Cloud Vision"
-                                    extraction_quality = "high"
-                                    ocr_provider = "google_vision"
-                                    logger.info(f"Successfully extracted text from {file_name} using Google Vision")
+                                from legal_portal.utils.openai_client import OpenAIClient
+                                logger.info(f"Using GPT-4o Vision for {file_name}")
+                                openai_client = OpenAIClient()
+                                client = openai_client.client
+                                if file_type in ["image/jpeg", "image/jpg"] or file_name.lower().endswith((".jpg", ".jpeg")):
+                                    mime_type = "image/jpeg"
                                 else:
-                                    raise ValueError("Google Vision returned empty text")
-                            except Exception as google_err:
-                                logger.warning(f"{file_name}: Google Vision failed ({google_err}). Falling back to GPT-4o Vision.")
-                                raise  # Fall through to GPT-4o fallback
-                        else:
-                            raise ValueError("Google Vision client not available")
-                    except Exception:
-                        # Fallback to GPT-4o Vision
-                        try:
-                            import asyncio
-                            import base64
-
-                            from starlette.concurrency import run_in_threadpool
-
-                            from legal_portal.utils.openai_client import OpenAIClient
-
-                            logger.info(f"Using GPT-4o Vision for {file_name}")
-                            openai_client = OpenAIClient()
-                            client = openai_client.client
-
-                            # Determine MIME type
-                            if file_type in ["image/jpeg", "image/jpg"] or file_name.lower().endswith((".jpg", ".jpeg")):
-                                mime_type = "image/jpeg"
-                            else:
-                                mime_type = "image/png"
-
-                            base64_image = base64.b64encode(file_content).decode("utf-8")
-                            prompt = (
-                                f"Extract ALL text from this legal document image. "
-                                f"Filename: {file_name}. "
-                                "This is a scanned document that needs OCR text extraction. "
-                                "Maintain the logical structure and layout. "
-                                "If there are tables, preserve the row/column relationship. "
-                                "Provide the text verbatim including all numbers, dates, and names. Do not summarize."
-                            )
-
-                            def gpt4o_ocr():
-                                return client.chat.completions.create(
-                                    model="gpt-4o",
-                                    messages=[{
-                                        "role": "user",
-                                        "content": [
-                                            {"type": "text", "text": prompt},
-                                            {
-                                                "type": "image_url",
-                                                "image_url": {
-                                                    "url": f"data:{mime_type};base64,{base64_image}",
-                                                    "detail": "high"
-                                                }
-                                            },
-                                        ]
-                                    }],
-                                    max_tokens=4000,
-                                    temperature=0.0,
+                                    mime_type = "image/png"
+                                base64_image = base64.b64encode(file_content).decode("utf-8")
+                                prompt = (
+                                    f"Extract ALL text from this legal document image. "
+                                    f"Filename: {file_name}. "
+                                    "This is a scanned document that needs OCR text extraction. "
+                                    "Maintain the logical structure and layout. "
+                                    "If there are tables, preserve the row/column relationship. "
+                                    "Provide the text verbatim including all numbers, dates, and names. Do not summarize."
                                 )
-
-                            response = await asyncio.wait_for(
-                                run_in_threadpool(gpt4o_ocr),
-                                timeout=60.0,
-                            )
-
-                            extracted_text = response.choices[0].message.content
-                            extraction_method = "GPT-4o Vision"
-                            extraction_quality = "high"
-                            ocr_provider = "openai"
-                            logger.info(f"Successfully extracted text from {file_name} using GPT-4o Vision")
-                        except Exception as ocr_err:
-                            extraction_error = f"Image OCR failed: {str(ocr_err)}"
-                            extraction_method = "failed"
-                            extraction_quality = "low"
-                            logger.error(f"Image extraction error for {file_name}: {ocr_err}")
+                                def gpt4o_ocr():
+                                    return client.chat.completions.create(
+                                        model="gpt-4o",
+                                        messages=[{
+                                            "role": "user",
+                                            "content": [
+                                                {"type": "text", "text": prompt},
+                                                {
+                                                    "type": "image_url",
+                                                    "image_url": {
+                                                        "url": f"data:{mime_type};base64,{base64_image}",
+                                                        "detail": "high"
+                                                    }
+                                                },
+                                            ]
+                                        }],
+                                        max_tokens=4000,
+                                        temperature=0.0,
+                                    )
+                                response = await asyncio.wait_for(
+                                    run_in_threadpool(gpt4o_ocr), timeout=60.0,
+                                )
+                                extracted_text = response.choices[0].message.content
+                                extraction_method = "GPT-4o Vision"
+                                extraction_quality = "high"
+                                ocr_provider = "openai"
+                                logger.info(f"Successfully extracted text from {file_name} using GPT-4o Vision")
+                            except Exception as ocr_err:
+                                extraction_error = f"Image OCR failed: {str(ocr_err)}"
+                                extraction_method = "failed"
+                                extraction_quality = "low"
+                                logger.error(f"Image extraction error for {file_name}: {ocr_err}")
 
                 elif file_type in ["message/rfc822", "eml"] or file_name.lower().endswith(".eml"):
                     # Email file (.eml)
@@ -1772,181 +1817,229 @@ async def _trigger_extraction_inner(
                 logger.error(f"DOCX extraction error for {file_name}: {docx_err}")
 
         elif file_type in ["image/png", "image/jpeg", "image/jpg"] or file_name.lower().endswith((".png", ".jpg", ".jpeg")):
-            # Image file - use Google Vision OCR (with GPT-4o fallback)
-            try:
-                google_client = GoogleVisionClient.get_instance()
-                if google_client.is_available:
-                    try:
-                        import asyncio
+            # Image file - OCR extraction
+            from legal_portal.config.default import get_settings
+            _settings = get_settings()
 
-                        from starlette.concurrency import run_in_threadpool
-
-                        def do_google_ocr():
-                            return google_client.extract_text_from_image(file_bytes)
-
-                        vision_text = await asyncio.wait_for(
-                            run_in_threadpool(do_google_ocr),
-                            timeout=30.0,
-                        )
-
-                        if vision_text and vision_text.strip():
-                            extracted_text = vision_text
-                            extraction_method = "Google Cloud Vision"
-                            extraction_quality = "high"
-                            ocr_provider = "google_vision"
-                            logger.info(f"Successfully extracted text from {file_name} using Google Vision")
-
-                            # Check if the OCR result is a photo rejection message or low-quality result
-                            if is_photo_rejection_message(extracted_text) or is_low_quality_ocr_result(extracted_text):
-                                reason = "rejection message" if is_photo_rejection_message(extracted_text) else "low-quality OCR result"
-                                logger.info(f"Google Vision detected photo (non-text image) in {file_name} ({reason}), switching to visual analysis")
-                                try:
-                                    # Get case context - use .get() to avoid KeyError
-                                    case_id = document.get("case_id")
-                                    if not case_id:
-                                        logger.error(f"No case_id found in document {document_id}")
-                                        raise ValueError("Document missing case_id")
-                                    
-                                    case_context = await get_case_context(case_id, user_supabase)
-                                    
-                                    # Analyze image with context
-                                    visual_description, vision_method = await analyze_image_with_vision(
-                                        file_bytes, file_name, case_context
-                                    )
-                                    
-                                    if visual_description and len(visual_description) > 50:
-                                        extracted_text = visual_description
-                                        extraction_method = vision_method
-                                        extraction_quality = "high"
-                                        ocr_provider = "openai_vision_analysis"
-                                        
-                                        # Mark as visual content in metadata
-                                        document_metadata = document.get("metadata", {}) or {}
-                                        document_metadata["is_visual_content"] = True
-                                        
-                                        # Update metadata in database
-                                        user_supabase.table("documents").update({
-                                            "metadata": document_metadata
-                                        }).eq("id", document_id).execute()
-                                        
-                                        logger.info(f"Successfully analyzed photo content for {file_name}")
-                                    else:
-                                        logger.warning(f"Vision analysis returned insufficient content for {file_name}")
-                                except Exception as vision_err:
-                                    logger.error(f"Vision analysis failed for {file_name}: {vision_err}", exc_info=True)
-                                    # Keep the original rejection message if vision analysis fails
-                                    # Don't re-raise - we want to continue with OCR result
-                        else:
-                            raise ValueError("Google Vision returned empty text")
-                    except Exception as google_err:
-                        logger.warning(f"{file_name}: Google Vision failed ({google_err}). Falling back to GPT-4o Vision.")
-                        raise  # Fall through to GPT-4o fallback
-                else:
-                    raise ValueError("Google Vision client not available")
-            except Exception:
-                # Fallback to GPT-4o Vision
+            if _settings.ocr_remote_enabled:
+                # Route to Cloud Run OCR service (Google Vision only)
                 try:
-                    import asyncio
-                    import base64
-
-                    from starlette.concurrency import run_in_threadpool
-
-                    from legal_portal.utils.openai_client import OpenAIClient
-
-                    logger.info(f"Using GPT-4o Vision for {file_name}")
-                    openai_client = OpenAIClient()
-                    client = openai_client.client
-
-                    # Determine MIME type from actual file content
-                    mime_type = _detect_image_mime(file_bytes, file_name)
-                    file_bytes, mime_type = _ensure_vision_compatible(file_bytes, mime_type)
-                    base64_image = base64.b64encode(file_bytes).decode("utf-8")
-                    prompt = (
-                        f"Extract ALL text from this legal document image. "
-                        f"Filename: {file_name}. "
-                        "This is a scanned document that needs OCR text extraction. "
-                        "Maintain the logical structure and layout. "
-                        "If there are tables, preserve the row/column relationship. "
-                        "Provide the text verbatim including all numbers, dates, and names. Do not summarize."
+                    from legal_portal.utils.ocr_service_client import (
+                        get_ocr_client, OCRServiceError,
                     )
-
-                    def gpt4o_ocr():
-                        return client.chat.completions.create(
-                            model="gpt-4o",
-                            messages=[{
-                                "role": "user",
-                                "content": [
-                                    {"type": "text", "text": prompt},
-                                    {
-                                        "type": "image_url",
-                                        "image_url": {
-                                            "url": f"data:{mime_type};base64,{base64_image}",
-                                            "detail": "high"
-                                        }
-                                    },
-                                ]
-                            }],
-                            max_tokens=4000,
-                            temperature=0.0,
-                        )
-
-                    response = await asyncio.wait_for(
-                        run_in_threadpool(gpt4o_ocr),
-                        timeout=60.0,
+                    ocr_client = get_ocr_client()
+                    img_content_type = file_type if file_type in ["image/png", "image/jpeg", "image/jpg"] else "image/png"
+                    result = await ocr_client.extract_text(
+                        file_bytes, file_name, img_content_type,
                     )
-
-                    extracted_text = response.choices[0].message.content
-                    extraction_method = "GPT-4o Vision"
+                    extracted_text = result["full_text"]
+                    extraction_method = f"cloud_run_ocr ({result['provider']})"
                     extraction_quality = "high"
-                    ocr_provider = "openai"
-                    logger.info(f"Successfully extracted text from {file_name} using GPT-4o Vision")
-
+                    ocr_provider = result["provider"]
+                    logger.info(
+                        f"Remote OCR completed for {file_name}",
+                        extra={
+                            "trace_id": result.get("trace_id"),
+                            "provider": result["provider"],
+                            "latency_ms": result.get("latency_ms"),
+                        },
+                    )
 
                     # Check if the OCR result is a photo rejection message or low-quality result
                     if is_photo_rejection_message(extracted_text) or is_low_quality_ocr_result(extracted_text):
                         reason = "rejection message" if is_photo_rejection_message(extracted_text) else "low-quality OCR result"
-                        logger.info(f"Detected photo (non-text image) in {file_name} ({reason}), switching to visual analysis")
+                        logger.info(f"OCR detected photo (non-text image) in {file_name} ({reason}), switching to visual analysis")
                         try:
-                            # Get case context - use .get() to avoid KeyError
                             case_id = document.get("case_id")
                             if not case_id:
                                 logger.error(f"No case_id found in document {document_id}")
                                 raise ValueError("Document missing case_id")
-                            
                             case_context = await get_case_context(case_id, user_supabase)
-                            
-                            # Analyze image with context
                             visual_description, vision_method = await analyze_image_with_vision(
                                 file_bytes, file_name, case_context
                             )
-                            
                             if visual_description and len(visual_description) > 50:
                                 extracted_text = visual_description
                                 extraction_method = vision_method
                                 extraction_quality = "high"
                                 ocr_provider = "openai_vision_analysis"
-                                
-                                # Mark as visual content in metadata
                                 document_metadata = document.get("metadata", {}) or {}
                                 document_metadata["is_visual_content"] = True
-                                
-                                # Update metadata in database
                                 user_supabase.table("documents").update({
                                     "metadata": document_metadata
                                 }).eq("id", document_id).execute()
-                                
                                 logger.info(f"Successfully analyzed photo content for {file_name}")
                             else:
                                 logger.warning(f"Vision analysis returned insufficient content for {file_name}")
                         except Exception as vision_err:
-                                    logger.error(f"Vision analysis failed for {file_name}: {vision_err}", exc_info=True)
-                                    # Keep the original rejection message if vision analysis fails
-                                    # Don't re-raise - we want to continue with OCR result
-                    
-                except Exception as ocr_err:
-                    extraction_error = f"Image OCR failed: {str(ocr_err)}"
-                    extraction_method = "failed"
-                    extraction_quality = "low"
+                            logger.error(f"Vision analysis failed for {file_name}: {vision_err}", exc_info=True)
+
+                except Exception as e:
+                    logger.error(f"Remote OCR failed for {file_name}: {e}")
+                    if _settings.ocr_remote_required:
+                        extraction_error = f"Image OCR failed: {str(e)}"
+                        extraction_method = "failed"
+                        extraction_quality = "low"
+                    else:
+                        # Emergency local fallback
+                        logger.warning(f"EMERGENCY: Falling back to local OCR for {file_name}")
+                        try:
+                            google_client = GoogleVisionClient.get_instance()
+                            if google_client.is_available:
+                                import asyncio
+                                from starlette.concurrency import run_in_threadpool
+                                def do_google_ocr():
+                                    return google_client.extract_text_from_image(file_bytes)
+                                vision_text = await asyncio.wait_for(
+                                    run_in_threadpool(do_google_ocr), timeout=30.0,
+                                )
+                                if vision_text and vision_text.strip():
+                                    extracted_text = vision_text
+                                    extraction_method = "Google Cloud Vision"
+                                    extraction_quality = "high"
+                                    ocr_provider = "google_vision"
+                                else:
+                                    raise ValueError("Google Vision returned empty text")
+                            else:
+                                raise ValueError("Google Vision client not available")
+                        except Exception as fallback_err:
+                            extraction_error = f"Image OCR failed: {str(fallback_err)}"
+                            extraction_method = "failed"
+                            extraction_quality = "low"
+                            logger.error(f"Emergency fallback OCR also failed for {file_name}: {fallback_err}")
+            else:
+                # Local OCR path (OCR_REMOTE_ENABLED=false)
+                try:
+                    google_client = GoogleVisionClient.get_instance()
+                    if google_client.is_available:
+                        try:
+                            import asyncio
+                            from starlette.concurrency import run_in_threadpool
+                            def do_google_ocr():
+                                return google_client.extract_text_from_image(file_bytes)
+                            vision_text = await asyncio.wait_for(
+                                run_in_threadpool(do_google_ocr), timeout=30.0,
+                            )
+                            if vision_text and vision_text.strip():
+                                extracted_text = vision_text
+                                extraction_method = "Google Cloud Vision"
+                                extraction_quality = "high"
+                                ocr_provider = "google_vision"
+                                logger.info(f"Successfully extracted text from {file_name} using Google Vision")
+                                # Check if the OCR result is a photo rejection message or low-quality result
+                                if is_photo_rejection_message(extracted_text) or is_low_quality_ocr_result(extracted_text):
+                                    reason = "rejection message" if is_photo_rejection_message(extracted_text) else "low-quality OCR result"
+                                    logger.info(f"Google Vision detected photo (non-text image) in {file_name} ({reason}), switching to visual analysis")
+                                    try:
+                                        case_id = document.get("case_id")
+                                        if not case_id:
+                                            logger.error(f"No case_id found in document {document_id}")
+                                            raise ValueError("Document missing case_id")
+                                        case_context = await get_case_context(case_id, user_supabase)
+                                        visual_description, vision_method = await analyze_image_with_vision(
+                                            file_bytes, file_name, case_context
+                                        )
+                                        if visual_description and len(visual_description) > 50:
+                                            extracted_text = visual_description
+                                            extraction_method = vision_method
+                                            extraction_quality = "high"
+                                            ocr_provider = "openai_vision_analysis"
+                                            document_metadata = document.get("metadata", {}) or {}
+                                            document_metadata["is_visual_content"] = True
+                                            user_supabase.table("documents").update({
+                                                "metadata": document_metadata
+                                            }).eq("id", document_id).execute()
+                                            logger.info(f"Successfully analyzed photo content for {file_name}")
+                                        else:
+                                            logger.warning(f"Vision analysis returned insufficient content for {file_name}")
+                                    except Exception as vision_err:
+                                        logger.error(f"Vision analysis failed for {file_name}: {vision_err}", exc_info=True)
+                            else:
+                                raise ValueError("Google Vision returned empty text")
+                        except Exception as google_err:
+                            logger.warning(f"{file_name}: Google Vision failed ({google_err}). Falling back to GPT-4o Vision.")
+                            raise
+                    else:
+                        raise ValueError("Google Vision client not available")
+                except Exception:
+                    try:
+                        import asyncio
+                        import base64
+                        from starlette.concurrency import run_in_threadpool
+                        from legal_portal.utils.openai_client import OpenAIClient
+                        logger.info(f"Using GPT-4o Vision for {file_name}")
+                        openai_client = OpenAIClient()
+                        client = openai_client.client
+                        mime_type = _detect_image_mime(file_bytes, file_name)
+                        file_bytes, mime_type = _ensure_vision_compatible(file_bytes, mime_type)
+                        base64_image = base64.b64encode(file_bytes).decode("utf-8")
+                        prompt = (
+                            f"Extract ALL text from this legal document image. "
+                            f"Filename: {file_name}. "
+                            "This is a scanned document that needs OCR text extraction. "
+                            "Maintain the logical structure and layout. "
+                            "If there are tables, preserve the row/column relationship. "
+                            "Provide the text verbatim including all numbers, dates, and names. Do not summarize."
+                        )
+                        def gpt4o_ocr():
+                            return client.chat.completions.create(
+                                model="gpt-4o",
+                                messages=[{
+                                    "role": "user",
+                                    "content": [
+                                        {"type": "text", "text": prompt},
+                                        {
+                                            "type": "image_url",
+                                            "image_url": {
+                                                "url": f"data:{mime_type};base64,{base64_image}",
+                                                "detail": "high"
+                                            }
+                                        },
+                                    ]
+                                }],
+                                max_tokens=4000,
+                                temperature=0.0,
+                            )
+                        response = await asyncio.wait_for(
+                            run_in_threadpool(gpt4o_ocr), timeout=60.0,
+                        )
+                        extracted_text = response.choices[0].message.content
+                        extraction_method = "GPT-4o Vision"
+                        extraction_quality = "high"
+                        ocr_provider = "openai"
+                        logger.info(f"Successfully extracted text from {file_name} using GPT-4o Vision")
+                        # Check if the OCR result is a photo rejection message or low-quality result
+                        if is_photo_rejection_message(extracted_text) or is_low_quality_ocr_result(extracted_text):
+                            reason = "rejection message" if is_photo_rejection_message(extracted_text) else "low-quality OCR result"
+                            logger.info(f"Detected photo (non-text image) in {file_name} ({reason}), switching to visual analysis")
+                            try:
+                                case_id = document.get("case_id")
+                                if not case_id:
+                                    logger.error(f"No case_id found in document {document_id}")
+                                    raise ValueError("Document missing case_id")
+                                case_context = await get_case_context(case_id, user_supabase)
+                                visual_description, vision_method = await analyze_image_with_vision(
+                                    file_bytes, file_name, case_context
+                                )
+                                if visual_description and len(visual_description) > 50:
+                                    extracted_text = visual_description
+                                    extraction_method = vision_method
+                                    extraction_quality = "high"
+                                    ocr_provider = "openai_vision_analysis"
+                                    document_metadata = document.get("metadata", {}) or {}
+                                    document_metadata["is_visual_content"] = True
+                                    user_supabase.table("documents").update({
+                                        "metadata": document_metadata
+                                    }).eq("id", document_id).execute()
+                                    logger.info(f"Successfully analyzed photo content for {file_name}")
+                                else:
+                                    logger.warning(f"Vision analysis returned insufficient content for {file_name}")
+                            except Exception as vision_err:
+                                logger.error(f"Vision analysis failed for {file_name}: {vision_err}", exc_info=True)
+                    except Exception as ocr_err:
+                        extraction_error = f"Image OCR failed: {str(ocr_err)}"
+                        extraction_method = "failed"
+                        extraction_quality = "low"
                     logger.error(f"Image extraction error for {file_name}: {ocr_err}")
 
         elif file_type in ["message/rfc822", "eml"] or file_name.lower().endswith(".eml"):

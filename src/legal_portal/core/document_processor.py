@@ -619,8 +619,10 @@ class DocumentProcessor:
     ):
         """Wrap batch image processing with progress tracking."""
         try:
-            # Prepare image files for batch processing
-            from legal_portal.services.file_processors.batch_vision_processor import process_images_batch
+            from legal_portal.config.default import get_settings
+            from legal_portal.core.data_models import FileMetadata, FileType
+
+            _settings = get_settings()
 
             image_info_list = []
             temp_files = []
@@ -656,9 +658,47 @@ class DocumentProcessor:
             if not image_info_list:
                 return []
 
-            # Process batch
+            # Process images individually via OCR service or local fallback
             logger.info(f"Processing image batch {batch_idx}/{total_batches} ({len(image_info_list)} images)")
-            batch_results = await process_images_batch(image_info_list)
+            batch_results = []
+            for (temp_path, doc_type, original_name) in image_info_list:
+                try:
+                    with open(temp_path, "rb") as f:
+                        img_bytes = f.read()
+                    content_type, _ = mimetypes.guess_type(temp_path)
+                    content_type = content_type or "image/png"
+
+                    if _settings.ocr_remote_enabled:
+                        from legal_portal.utils.ocr_service_client import get_ocr_client
+                        ocr_client = get_ocr_client()
+                        result = await ocr_client.extract_text(
+                            img_bytes, original_name, content_type,
+                        )
+                        text_content = result["full_text"]
+                        extraction_method = f"cloud_run_ocr ({result['provider']})"
+                    else:
+                        # Local fallback (emergency only)
+                        from legal_portal.services.file_processors.image_processor import process_image
+                        doc = await process_image(
+                            temp_path, doc_type, original_name,
+                        )
+                        text_content = doc.content
+                        extraction_method = "local_image_processor"
+
+                    batch_results.append(ProcessedDocument(
+                        file_name=original_name,
+                        content=text_content,
+                        document_type=doc_type,
+                        file_type=FileType.IMAGE,
+                        metadata=FileMetadata(
+                            file_name=original_name,
+                            file_type=FileType.IMAGE,
+                            file_size=len(img_bytes),
+                        ),
+                        extraction_method=extraction_method,
+                    ))
+                except Exception as e:
+                    logger.error(f"Error processing image {original_name}: {e}", exc_info=True)
 
             # Update progress
             processed_docs_count[0] += len(batch_results)

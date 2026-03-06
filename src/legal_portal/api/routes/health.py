@@ -75,6 +75,24 @@ async def detailed_health_check(supabase=Depends(get_supabase_client)):
     else:
         checks["openai"] = "not configured"
 
+    # Check OCR service
+    from legal_portal.config.default import get_settings
+    settings = get_settings()
+    ocr_status = "disabled"
+    if settings.ocr_remote_enabled:
+        try:
+            from legal_portal.utils.ocr_service_client import get_ocr_client
+            ocr_health = await get_ocr_client().health_check()
+            ocr_status = ocr_health.get("status", "unknown")
+        except Exception as e:
+            ocr_status = f"unreachable: {e}"
+
+    checks["ocr_service"] = {
+        "status": ocr_status,
+        "remote_enabled": settings.ocr_remote_enabled,
+        "remote_required": settings.ocr_remote_required,
+    }
+
     overall_status = "healthy" if checks["supabase"] == "healthy" else "degraded"
 
     return {"status": overall_status, "checks": checks}

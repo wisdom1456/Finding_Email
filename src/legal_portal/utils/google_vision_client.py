@@ -18,7 +18,7 @@ try:
     from google.oauth2 import service_account
 
     GOOGLE_VISION_AVAILABLE = True
-    logger.debug("Google Cloud Vision SDK available")
+    logger.info("Google Cloud Vision SDK available")
 except ImportError:
     logger.warning("Google Cloud Vision SDK not available - OCR will fall back to GPT-4o Vision")
 

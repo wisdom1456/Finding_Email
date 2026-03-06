@@ -308,6 +308,40 @@ class Settings(BaseSettings):
     )
 
     # ==================================================
+    # OCR SERVICE CONFIGURATION
+    # ==================================================
+
+    ocr_remote_enabled: bool = Field(
+        False,
+        alias="OCR_REMOTE_ENABLED",
+        description=(
+            "Route OCR to Cloud Run service. "
+            "Set to true once Cloud Run is deployed and validated."
+        ),
+    )
+
+    ocr_remote_required: bool = Field(
+        True,
+        alias="OCR_REMOTE_REQUIRED",
+        description=(
+            "If remote OCR fails, raise error (no local fallback). "
+            "Only set to false as emergency kill switch."
+        ),
+    )
+
+    ocr_service_url: str = Field(
+        "",
+        alias="OCR_SERVICE_URL",
+        description="Cloud Run OCR service URL.",
+    )
+
+    ocr_service_token: str = Field(
+        "",
+        alias="OCR_SERVICE_TOKEN",
+        description="Shared secret for OCR service auth.",
+    )
+
+    # ==================================================
     # OPTIONAL CONFIGURATION
     # ==================================================
 

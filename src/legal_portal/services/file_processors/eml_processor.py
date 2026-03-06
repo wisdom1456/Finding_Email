@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import os
 from email import policy
 from email.parser import BytesParser
@@ -52,6 +53,9 @@ async def process_eml(
     extraction_method = "email_parser"
     extraction_quality = "high"
     extraction_error = None
+    body_hash = None
+    pdf_attachments = []
+    attachment_hashes = []
 
     try:
         # Parse the email file
@@ -69,6 +73,31 @@ async def process_eml(
 
                 # Skip container parts
                 if content_type.startswith("multipart/"):
+                    continue
+
+                # Check if this part is an attachment
+                content_disposition = str(part.get("Content-Disposition", ""))
+                filename = part.get_filename()
+
+                if filename or "attachment" in content_disposition:
+                    # This is an attachment
+                    try:
+                        att_bytes = part.get_payload(decode=True)
+                        if att_bytes:
+                            content_hash = hashlib.sha256(att_bytes).hexdigest()
+                            attachment_hashes.append(content_hash)
+
+                            if content_type == "application/pdf" or (
+                                filename and filename.lower().endswith(".pdf")
+                            ):
+                                pdf_attachments.append({
+                                    "filename": filename or "unnamed.pdf",
+                                    "content_type": content_type,
+                                    "content_hash": content_hash,
+                                    "bytes": att_bytes,
+                                })
+                    except Exception as e:
+                        logger.warning(f"Failed to extract attachment {filename}: {e}")
                     continue
 
                 try:
@@ -138,6 +167,10 @@ async def process_eml(
             extraction_quality = "low"
             extraction_error = "No text/plain or text/html parts found"
 
+        # Compute body hash for dedup
+        body_text_for_hash = "\n\n".join(text_parts) if text_parts else ""
+        body_hash = hashlib.sha256(body_text_for_hash.encode("utf-8")).hexdigest()
+
         # Build full email text with headers
         subject = msg.get('subject', '(No Subject)')
         from_addr = msg.get('from', '(Unknown)')
@@ -188,7 +221,13 @@ async def process_eml(
 
     # Get file metadata
     file_size = os.path.getsize(file_path) if os.path.exists(file_path) else 0
-    file_metadata = FileMetadata(filename=original_filename, size=file_size)
+    file_metadata = FileMetadata(
+        filename=original_filename,
+        size=file_size,
+        attachments=pdf_attachments if pdf_attachments else None,
+        attachment_hashes=attachment_hashes if attachment_hashes else None,
+        body_hash=body_hash,
+    )
 
     return ProcessedDocument(
         file_name=original_filename,

@@ -67,6 +67,11 @@ class FileMetadata(BaseModel):
     uploaded_at: datetime = Field(default_factory=datetime.now)
     processing_time_ms: Optional[float] = None
 
+    # EML attachment metadata (populated by eml_processor)
+    attachments: Optional[List[Dict[str, Any]]] = None
+    attachment_hashes: Optional[List[str]] = None
+    body_hash: Optional[str] = None
+
     model_config = {"populate_by_name": True}
 
     def __init__(self, **data):

@@ -1202,7 +1202,7 @@ const { session, user } = await getSecureSession();
 							onToggleExclusion={(id, excluded) => handleToggleExclusion(id, excluded)}
 							isProcessing={processingDocIds.has(doc.id)}
 							onTypeOverride={handleTypeOverride}
-							onRelevanceChange={handleRelevanceChange}
+
 							onNotesUpdate={handleNotesUpdate}
 							onFactUpdate={handleFactUpdate}
 							onFactConfirm={handleFactConfirm}
@@ -1272,7 +1272,7 @@ const { session, user } = await getSecureSession();
 							onToggleExclusion={(id, excluded) => handleToggleExclusion(id, excluded)}
 							isProcessing={processingDocIds.has(doc.id)}
 							onTypeOverride={handleTypeOverride}
-							onRelevanceChange={handleRelevanceChange}
+
 							onNotesUpdate={handleNotesUpdate}
 							onFactUpdate={handleFactUpdate}
 							onFactConfirm={handleFactConfirm}
@@ -1322,7 +1322,7 @@ const { session, user } = await getSecureSession();
 								onToggleExclusion={(id, excluded) => handleToggleExclusion(id, excluded)}
 								isProcessing={processingDocIds.has(doc.id)}
 								onTypeOverride={handleTypeOverride}
-								onRelevanceChange={handleRelevanceChange}
+	
 								onNotesUpdate={handleNotesUpdate}
 								onFactUpdate={handleFactUpdate}
 								onFactConfirm={handleFactConfirm}
@@ -1375,7 +1375,7 @@ const { session, user } = await getSecureSession();
 							onToggleExclusion={(id, excluded) => handleToggleExclusion(id, excluded)}
 							isProcessing={processingDocIds.has(doc.id)}
 							onTypeOverride={handleTypeOverride}
-							onRelevanceChange={handleRelevanceChange}
+
 							onNotesUpdate={handleNotesUpdate}
 							onFactUpdate={handleFactUpdate}
 							onFactConfirm={handleFactConfirm}
@@ -1430,7 +1430,7 @@ const { session, user } = await getSecureSession();
 							onToggleExclusion={(id, excluded) => handleToggleExclusion(id, excluded)}
 							isProcessing={processingDocIds.has(doc.id)}
 							onTypeOverride={handleTypeOverride}
-							onRelevanceChange={handleRelevanceChange}
+
 							onNotesUpdate={handleNotesUpdate}
 							onFactUpdate={handleFactUpdate}
 							onFactConfirm={handleFactConfirm}
@@ -1496,7 +1496,7 @@ const { session, user } = await getSecureSession();
 							onToggleExclusion={(id, excluded) => handleToggleExclusion(id, excluded)}
 							isProcessing={processingDocIds.has(doc.id)}
 							onTypeOverride={handleTypeOverride}
-							onRelevanceChange={handleRelevanceChange}
+
 							onNotesUpdate={handleNotesUpdate}
 							onFactUpdate={handleFactUpdate}
 							onFactConfirm={handleFactConfirm}

@@ -856,20 +856,34 @@ class DocumentRegistryService:
         return hints
 
     def _infer_doc_type_from_name(self, file_name: str, hints: List[str]) -> str:
-        blob = " ".join([file_name or "", " ".join(hints)]).lower()
-        if any(term in blob for term in ("agreement", "note", "memo terms", "financing")):
+        fn = (file_name or "").lower()
+        blob = " ".join([fn, " ".join(hints)]).lower()
+
+        # Detect Clio Notes and Communications first (before "note" matches Contract)
+        if fn.startswith("clio note") or fn.startswith("clio communication"):
+            return "Correspondence"
+        # Detect emails from extension
+        if fn.endswith(".eml"):
+            return "Correspondence"
+        # Detect photos/images from filename extension
+        if re.search(r"\.(jpe?g|png|heic|gif|tiff?|bmp|webp)$", fn):
+            return "Photo/Media"
+        # Detect intake forms
+        if "intake" in blob and ("form" in blob or fn.endswith(".pdf")):
+            return "Intake Form"
+        # Contracts — use "agreement" and specific "note" terms, not bare "note"
+        if any(term in blob for term in ("agreement", "promissory note", "memo terms", "financing")):
             return "Contract"
-        if any(term in blob for term in ("email", "correspondence", "update", "message", "clio note")):
+        if any(term in blob for term in ("email", "correspondence", "update", "message")):
             return "Correspondence"
         if any(term in blob for term in ("search", "articles", "official", "secretary of state")):
             return "Notice"
         if any(term in blob for term in ("p&l", "financial", "statement", "breakdown", "packet")):
             return "Evidence"
-        # Detect photos/images from filename extension
-        if re.search(r"\.(jpe?g|png|heic|gif|tiff?|bmp|webp)$", file_name or "", re.IGNORECASE):
-            return "Photo/Media"
-        # Detect emails from extension
-        if re.search(r"\.eml$", file_name or "", re.IGNORECASE):
+        # Small text files (Clio notes, chat logs) — classify as notes
+        if fn.endswith(".txt") or fn.endswith(".csv"):
+            return "Note"
+        if fn == "chat.doc":
             return "Correspondence"
         return "Other"
 
@@ -906,11 +920,15 @@ class DocumentRegistryService:
         instrument_hints: List[str],
     ) -> tuple[bool, str]:
         """Infer whether the document is typically expected to be executed/signed."""
-        # Emails and photos are never expected to be signed
-        if (doc_type or "").lower() in ("correspondence", "photo/media", "email"):
+        # Emails, photos, notes, text files are never expected to be signed
+        no_sig_types = {"correspondence", "photo/media", "email", "note", "communication"}
+        if (doc_type or "").lower() in no_sig_types:
             return False, "Document type does not require signatures."
-        if re.search(r"\.(eml|jpe?g|png|heic|gif|tiff?|bmp|webp)$", file_name or "", re.IGNORECASE):
+        fn_lower = (file_name or "").lower()
+        if re.search(r"\.(eml|jpe?g|png|heic|gif|tiff?|bmp|webp|txt|csv)$", fn_lower):
             return False, "File type does not require signatures."
+        if fn_lower.startswith("clio note") or fn_lower.startswith("clio communication"):
+            return False, "Clio notes and communications do not require signatures."
 
         hint_set = {h.lower() for h in instrument_hints}
         typically_signed_hints = {

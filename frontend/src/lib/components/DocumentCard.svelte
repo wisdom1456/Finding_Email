@@ -37,7 +37,6 @@
 		onToggleExclusion,
 		isProcessing = false,
 		onTypeOverride,
-		onRelevanceChange,
 		onNotesUpdate,
 		onFactUpdate,
 		onFactConfirm,
@@ -61,7 +60,6 @@
 		onToggleExclusion?: (id: string, excluded: boolean) => void;
 		isProcessing?: boolean;
 		onTypeOverride?: (id: string, type: string) => void;
-		onRelevanceChange?: (id: string, level: string) => void;
 		onNotesUpdate?: (id: string, notes: string) => void;
 		onFactUpdate?: (id: string, key: string, value: string) => void;
 		onFactConfirm?: (id: string, key: string) => void;
@@ -194,24 +192,38 @@
 		return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
 	}
 
+	/** File extensions that never need signature review. */
+	const _NO_SIG_EXTENSIONS = new Set([
+		'.eml', '.txt', '.csv', '.doc', '.jpg', '.jpeg', '.png', '.heic', '.gif', '.bmp', '.tiff', '.tif',
+	]);
+
+	/** Document types that never need signature review. */
+	const _NO_SIG_TYPES = new Set([
+		'correspondence', 'email', 'photo/media', 'note', 'communication',
+	]);
+
 	/**
 	 * Determines if a document requires signature review.
 	 * Uses registry-backed signature_expected column + signed_status.
-	 * Excludes emails, photos, and media (these never need signature review).
+	 * Excludes emails, photos, text notes, and media.
 	 */
 	function requiresSignatureReview(_fileName: string | undefined): boolean {
+		// Exclude by file extension first (cheapest check)
+		const fn = String(doc.file_name || '').toLowerCase();
+		const ext = fn.includes('.') ? '.' + fn.split('.').pop() : '';
+		if (_NO_SIG_EXTENSIONS.has(ext)) return false;
+
+		// Exclude Clio Notes and Communications by filename pattern
+		if (fn.startsWith('clio note') || fn.startsWith('clio communication')) return false;
+
+		// Exclude by document type
+		const docType = (doc.document_type_label || doc.metadata?.registry?.document_type || '').toLowerCase();
+		if (_NO_SIG_TYPES.has(docType)) return false;
+
 		// Use registry-backed column when available
 		const sigExpected = doc.signature_expected === true ||
 		                    doc.metadata?.registry?.signature_expected === true;
 		if (!sigExpected) return false;
-
-		// Exclude file types that never need signatures
-		const docType = (doc.document_type_label || doc.metadata?.registry?.document_type || '').toLowerCase();
-		if (['correspondence', 'email', 'photo/media'].includes(docType)) return false;
-
-		const fn = String(doc.file_name || '').toLowerCase();
-		if (fn.endsWith('.eml') || fn.endsWith('.jpg') || fn.endsWith('.jpeg') ||
-		    fn.endsWith('.png') || fn.endsWith('.heic') || fn.endsWith('.gif')) return false;
 
 		// Check if already signed
 		const sigSatisfied =
@@ -233,6 +245,14 @@
 	}
 
 	function getSignatureStatus(): 'signed' | 'not_detected' | 'review_required' | 'other' | 'none' {
+		// Quick exit for file types that never need signature review
+		const fn = String(doc.file_name || '').toLowerCase();
+		const ext = fn.includes('.') ? '.' + fn.split('.').pop() : '';
+		if (_NO_SIG_EXTENSIONS.has(ext)) return 'none';
+		if (fn.startsWith('clio note') || fn.startsWith('clio communication')) return 'none';
+		const docType = (doc.document_type_label || doc.metadata?.registry?.document_type || '').toLowerCase();
+		if (_NO_SIG_TYPES.has(docType)) return 'none';
+
 		const verificationStatus = getSignatureVerificationStatus();
 		if (verificationStatus === 'signed') return 'signed';
 		if (verificationStatus === 'not_signed') return 'not_detected';
@@ -382,14 +402,13 @@
 	function getAiTypeSuggestion(): string | null {
 		const aiType = doc.metadata?.registry?.ai_suggested_document_type;
 		if (!aiType) return null;
-		const effective = (doc.metadata?.attorney_enrichment?.document_type_override || doc.document_type_label || '').toLowerCase();
+		const effective = (doc.metadata?.attorney_enrichment?.document_type_override || doc.document_type_label || doc.metadata?.registry?.document_type || '').toLowerCase();
 		if (aiType.toLowerCase() === effective.toLowerCase()) return null;
 		return aiType;
 	}
 
-	// Derived attention needs and relevance (avoids {@const} in invalid positions)
+	// Derived attention needs (avoids {@const} in invalid positions)
 	const attentionNeeds = $derived(getAttentionNeeds(doc));
-	const relevanceLevel = $derived(doc.metadata?.attorney_enrichment?.relevance_level as string | undefined);
 	const resolvedKeyFacts = $derived(getResolvedKeyFacts());
 	const hasAnyFacts = $derived(Object.keys(resolvedKeyFacts).length > 0);
 	const suggestedRelationships = $derived(getSuggestedRelationships());
@@ -521,6 +540,11 @@
 
 						<!-- Type Override Dropdown + Confidence Dot -->
 						{#if onTypeOverride}
+						{@const effectiveType = doc.metadata?.attorney_enrichment?.document_type_override
+							|| doc.document_type_label
+							|| doc.metadata?.registry?.document_type
+							|| ''}
+						{@const normalizedType = effectiveType.toLowerCase().replace(/[\s\/]+/g, '_')}
 						<span class="inline-flex items-center gap-1">
 							{#if confidenceColor}
 							<span class="w-1.5 h-1.5 rounded-full {confidenceColor} flex-shrink-0" title={typeTooltip}></span>
@@ -529,22 +553,24 @@
 								class="text-xs font-semibold px-2 py-0.5 rounded border
 									   {doc.metadata?.attorney_enrichment?.document_type_override
 										   ? 'bg-blue-50 border-blue-300 text-blue-700'
-										   : doc.document_type_label
+										   : effectiveType
 										   ? 'bg-gray-100 border-gray-300 text-gray-700'
 										   : 'bg-gray-100 border-gray-300 text-gray-600'}
 									   cursor-pointer focus:ring-1 focus:ring-accent"
-								value={doc.metadata?.attorney_enrichment?.document_type_override || doc.document_type_label || ''}
+								value={normalizedType}
 								onchange={(e) => onTypeOverride!(doc.id, (e.target as HTMLSelectElement).value)}
 								title={typeTooltip}
 							>
-								<option value="">{doc.document_type_label ? doc.document_type_label : 'Auto-detect'}</option>
+								<option value="">Auto-detect</option>
 								<option value="contract">Contract</option>
 								<option value="addendum">Addendum</option>
+								<option value="intake_form">Intake Form</option>
 								<option value="inspection_report">Inspection Report</option>
 								<option value="disclosure">Disclosure</option>
 								<option value="correspondence">Correspondence</option>
 								<option value="invoice_receipt">Invoice/Receipt</option>
 								<option value="photo_media">Photo/Media</option>
+								<option value="note">Note</option>
 								<option value="legal_filing">Legal Filing</option>
 								<option value="other">Other</option>
 							</select>
@@ -555,24 +581,6 @@
 							title="AI suggests this type based on document content analysis"
 						>AI: {aiTypeSuggestion}</span>
 						{/if}
-						{/if}
-
-						<!-- Relevance Star Button -->
-						{#if onRelevanceChange}
-						<button
-							class="p-0.5 rounded transition-colors"
-							onclick={() => {
-								const next = relevanceLevel === 'critical' ? 'supporting' :
-											  relevanceLevel === 'supporting' ? 'background' : 'critical';
-								onRelevanceChange!(doc.id, next);
-							}}
-							title={relevanceLevel ? `Relevance: ${relevanceLevel} (click to change)` : 'Set relevance'}
-						>
-							<!-- Star icon: filled gold for critical, gray for supporting, outline for background/none -->
-							<svg class="w-4 h-4 {relevanceLevel === 'critical' ? 'text-amber-500 fill-current' : relevanceLevel === 'supporting' ? 'text-gray-400 fill-current' : 'text-gray-300'}" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" fill="none">
-								<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
-							</svg>
-						</button>
 						{/if}
 
 						<!-- Expand/Collapse Button -->
@@ -797,24 +805,36 @@
 				{/if}
 
 				<!-- Attorney Notes (system_summary shown as helper text when no notes) -->
+				{#if true}
+				{@const existingNotes = doc.metadata?.attorney_enrichment?.attorney_notes || ''}
+				{@const hasHtmlNotes = existingNotes && existingNotes.includes('<') && existingNotes.includes('>')}
 				<div>
 					<div class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Notes</div>
-					{#if !doc.metadata?.attorney_enrichment?.attorney_notes && (doc.system_summary || doc.metadata?.registry?.system_summary)}
+					{#if !existingNotes && (doc.system_summary || doc.metadata?.registry?.system_summary)}
 					<p class="text-xs text-gray-400 italic mb-1">{doc.system_summary || doc.metadata?.registry?.system_summary}</p>
+					{/if}
+					{#if hasHtmlNotes}
+					<!-- Render AI-generated HTML notes as formatted content -->
+					<div class="text-sm text-gray-700 bg-gray-50 border border-gray-200 rounded-lg p-3 mb-2 prose prose-sm max-w-none [&_p]:my-1 [&_strong]:font-semibold [&_br]:leading-relaxed">
+						{@html existingNotes}
+					</div>
 					{/if}
 					<textarea
 						class="w-full text-sm border border-gray-200 rounded-lg p-2 resize-none focus:ring-1 focus:ring-accent focus:border-transparent bg-gray-50"
 						rows="2"
 						placeholder="Add notes about this document..."
-						value={doc.metadata?.attorney_enrichment?.attorney_notes || ''}
+						value={hasHtmlNotes ? '' : existingNotes}
 						onblur={(e) => {
 							const val = (e.target as HTMLTextAreaElement).value;
-							if (val !== (doc.metadata?.attorney_enrichment?.attorney_notes || '')) {
+							if (hasHtmlNotes) {
+								if (val.trim()) onNotesUpdate?.(doc.id, existingNotes + '\n<p>' + val + '</p>');
+							} else if (val !== existingNotes) {
 								onNotesUpdate?.(doc.id, val);
 							}
 						}}
 					></textarea>
 				</div>
+				{/if}
 
 				<!-- Suggested Relationships (from registry cross-doc analysis) -->
 				{#if suggestedRelationships.length > 0}

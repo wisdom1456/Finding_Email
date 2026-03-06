@@ -455,7 +455,7 @@
 		try {
 			const { session } = await getSecureSession();
 			if (!session?.access_token) return;
-			const resp = await fetch(`${getApiUrl()}/documents/case/${caseId}/enrich-cross-document`, {
+			const resp = await fetch(`${getApiUrl()}/api/documents/case/${caseId}/enrich-cross-document`, {
 				method: 'POST',
 				headers: {
 					'Authorization': `Bearer ${session.access_token}`,

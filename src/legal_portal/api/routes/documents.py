@@ -398,10 +398,21 @@ async def upload_document(
                         extraction_quality = "high" if len(extracted_text) > 50 else "medium"
                         logger.info(f"DOCX immediate extraction ({docx_backend}): {len(extracted_text)} characters")
                     except Exception as docx_err:
-                        extraction_error = f"DOCX extraction failed: {docx_err}"
-                        extraction_method = "failed"
-                        extraction_quality = "low"
-                        logger.error(f"DOCX extraction error for {file_name}: {docx_err}")
+                        # Try plain text fallback (legacy .doc files may be text with .doc extension)
+                        logger.warning(f"DOCX extraction failed for {file_name}: {docx_err}, trying plain text")
+                        try:
+                            fallback_text = file_content.decode("utf-8", errors="replace").strip()
+                            if fallback_text and len(fallback_text) > 10:
+                                extracted_text = fallback_text
+                                extraction_method = "text_fallback"
+                                extraction_quality = "medium"
+                            else:
+                                raise ValueError("Insufficient content")
+                        except Exception:
+                            extraction_error = f"DOCX extraction failed: {docx_err}"
+                            extraction_method = "failed"
+                            extraction_quality = "low"
+                            logger.error(f"DOCX extraction error for {file_name}: {docx_err}")
 
                 elif file_type in ["image/png", "image/jpeg", "image/jpg"] or file_name.lower().endswith((".png", ".jpg", ".jpeg")):
                     # Image file - OCR extraction
@@ -2089,10 +2100,23 @@ async def _trigger_extraction_inner(
                 extraction_quality = "high" if len(extracted_text) > 50 else "medium"
                 logger.info(f"DOCX extraction ({docx_backend}): {len(extracted_text)} characters")
             except Exception as docx_err:
-                extraction_error = f"DOCX extraction failed: {str(docx_err)}"
-                extraction_method = "none"
-                extraction_quality = "low"
-                logger.error(f"DOCX extraction error for {file_name}: {docx_err}")
+                # DOCX parsing failed — try reading as plain text (legacy .doc files
+                # from Clio are often just text with a .doc extension)
+                logger.warning(f"DOCX extraction failed for {file_name}: {docx_err}, trying plain text fallback")
+                try:
+                    fallback_text = file_bytes.decode("utf-8", errors="replace").strip()
+                    if fallback_text and len(fallback_text) > 10:
+                        extracted_text = fallback_text
+                        extraction_method = "text_fallback"
+                        extraction_quality = "medium"
+                        logger.info(f"Plain text fallback succeeded for {file_name}: {len(extracted_text)} chars")
+                    else:
+                        raise ValueError("Plain text fallback returned insufficient content")
+                except Exception:
+                    extraction_error = f"DOCX extraction failed: {str(docx_err)}"
+                    extraction_method = "none"
+                    extraction_quality = "low"
+                    logger.error(f"DOCX extraction error for {file_name}: {docx_err}")
 
         elif file_type in ["image/png", "image/jpeg", "image/jpg"] or file_name.lower().endswith((".png", ".jpg", ".jpeg")):
             # Image file - OCR extraction

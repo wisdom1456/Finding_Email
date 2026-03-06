@@ -769,6 +769,9 @@
 				return;
 			}
 
+			// Show loading state while fetching text content
+			loadingPreview = true;
+
 			// If document has text extracted (indicated by extracted_at), fetch it on demand
 			// as it is no longer loaded in the initial documents list to prevent timeouts.
 			if (doc.extracted_at) {
@@ -777,22 +780,25 @@
 					.select('extracted_text')
 					.eq('id', doc.id)
 					.single();
-				
+
 				const typedData = textData as any;
 				if (!textError && typedData?.extracted_text) {
 					documentViewerContent = typedData.extracted_text;
+					loadingPreview = false;
 					return;
 				}
 			}
 
 			if (!isTextLikeDocument(doc)) {
 				documentViewerContent = `Unable to display this document. File type: ${doc.file_type}`;
+				loadingPreview = false;
 				return;
 			}
 
 			const { session, user } = await getSecureSession();
 			if (!session || !user) {
 				documentViewerContent = 'Error: Not authenticated';
+				loadingPreview = false;
 				return;
 			}
 
@@ -806,6 +812,8 @@
 		} catch (error: any) {
 			console.error('Failed to load document:', error);
 			documentViewerContent = `Unable to display this document. File type: ${doc.file_type}`;
+		} finally {
+			loadingPreview = false;
 		}
 	}
 

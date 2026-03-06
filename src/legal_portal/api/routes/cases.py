@@ -1870,12 +1870,8 @@ def run_content_hash_dedup(case_id: str, supabase) -> Dict[str, Any]:
                 extra={"dup_id": dup_id, "canonical_id": canonical["id"], "hash": content_hash[:12]},
             )
 
-    # Update case metadata with dedup timestamp
-    case_resp = supabase.table("cases").select("metadata").eq("id", case_id).execute()
-    case_metadata = (case_resp.data[0].get("metadata") or {}) if case_resp.data else {}
-    case_metadata["content_hash_dedup_at"] = datetime.now(timezone.utc).isoformat()
-    case_metadata["content_hash_dedup_duplicates"] = duplicates_found
-    supabase.table("cases").update({"metadata": case_metadata}).eq("id", case_id).execute()
+    # Record dedup timestamp in case description field is not viable (no metadata column on cases).
+    # Instead, we track dedup state per-document via metadata.content_hash on each doc.
 
     return {
         "duplicates_found": duplicates_found,

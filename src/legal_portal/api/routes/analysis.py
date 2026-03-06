@@ -1801,9 +1801,9 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
                     documents.append(att_doc)
 
         # Step 0a: Content-hash dedup (if not already done)
-        case_resp = supabase.table("cases").select("metadata").eq("id", case_id).execute()
-        case_meta = (case_resp.data[0].get("metadata") or {}) if case_resp.data else {}
-        if not case_meta.get("content_hash_dedup_at"):
+        # Check whether any docs already have content_hash (indicates prior dedup run)
+        has_hashes = any((d.get("metadata") or {}).get("content_hash") for d in documents)
+        if not has_hashes:
             logger.info(
                 f"[BACKGROUND:CONTENT_DEDUP] [CASE:{case_id}] "
                 f"Running content-hash dedup (first time)"

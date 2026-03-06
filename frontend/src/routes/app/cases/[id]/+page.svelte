@@ -473,9 +473,9 @@
 		}
 	}
 
-	// Trigger cross-doc enrichment when verification tab is activated
+	// Trigger cross-doc enrichment (also auto-builds missing registries) when documents load
 	$effect(() => {
-		if (activeTab === 'verification' && documents.length > 0) {
+		if (documents.length > 0) {
 			runCrossDocEnrichment();
 		}
 	});

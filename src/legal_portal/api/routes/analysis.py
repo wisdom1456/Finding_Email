@@ -59,6 +59,181 @@ _TRANSIENT_CODES = {"502", "503", "57014"}
 _TRANSIENT_MESSAGES = ("bad gateway", "service unavailable", "schema cache", "statement timeout")
 
 
+async def _extract_deferred_documents(
+    deferred_docs: list,
+    supabase,
+    progress_manager,
+    analysis_id: str,
+) -> dict:
+    """Extract text for documents that were uploaded with skip_extraction=True.
+
+    Downloads each file from storage, runs the appropriate processor,
+    and updates the DB record with extracted text.
+
+    Returns dict mapping doc_id -> updated fields dict.
+    """
+    import mimetypes as _mt
+
+    from legal_portal.services.file_processors import PROCESSOR_MAP
+    from legal_portal.services.file_processors.eml_processor import process_eml
+    from legal_portal.core.data_models import DocumentType
+
+    settings = get_settings()
+    results = {}
+
+    for i, doc in enumerate(deferred_docs):
+        doc_id = doc["id"]
+        doc_name = doc.get("file_name", "unknown")
+        file_type = doc.get("file_type", "")
+        storage_path = doc.get("storage_path", "")
+
+        logger.info(f"[DEFERRED:{i+1}/{len(deferred_docs)}] Extracting: {doc_name}")
+
+        try:
+            # Download file from Supabase storage
+            file_bytes = supabase.storage.from_("documents").download(storage_path)
+            if not file_bytes:
+                raise ValueError(f"Empty file downloaded from {storage_path}")
+
+            # Determine processor
+            processor = PROCESSOR_MAP.get(file_type)
+            lower_name = doc_name.lower()
+
+            # Extension-based fallback routing
+            if not processor or (file_type == "text/plain" and lower_name.endswith(".eml")):
+                if lower_name.endswith(".eml"):
+                    processor = process_eml
+                elif lower_name.endswith(".pdf"):
+                    processor = PROCESSOR_MAP.get("application/pdf")
+                elif lower_name.endswith((".png", ".jpg", ".jpeg", ".gif", ".bmp", ".tiff")):
+                    processor = PROCESSOR_MAP.get("image/png") or PROCESSOR_MAP.get("image/jpeg")
+
+            if not processor:
+                logger.warning(f"[DEFERRED] No processor for {doc_name} (type={file_type})")
+                results[doc_id] = {
+                    "extraction_method": "unsupported",
+                    "extraction_quality": "low",
+                    "extraction_error": f"No processor for type: {file_type}",
+                    "status": DocumentStatus.EXTRACTION_FAILED,
+                }
+                supabase.table("documents").update(results[doc_id]).eq("id", doc_id).execute()
+                continue
+
+            # Write to temp file for processor
+            ext = "." + doc_name.rsplit(".", 1)[-1] if "." in doc_name else ""
+            with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as tmp:
+                tmp.write(file_bytes)
+                tmp_path = tmp.name
+
+            try:
+                # Handle image files with remote OCR
+                if file_type.startswith("image/") or lower_name.endswith(
+                    (".png", ".jpg", ".jpeg", ".gif", ".bmp", ".tiff")
+                ):
+                    if settings.ocr_remote_enabled:
+                        from legal_portal.utils.ocr_service_client import get_ocr_client
+                        content_type, _ = _mt.guess_type(doc_name)
+                        content_type = content_type or "image/png"
+                        ocr_client = get_ocr_client()
+                        ocr_result = await ocr_client.extract_text(
+                            file_bytes, doc_name, content_type,
+                        )
+                        extracted_text = ocr_result["full_text"]
+                        extraction_method = f"cloud_run_ocr ({ocr_result['provider']})"
+                        ocr_provider = ocr_result["provider"]
+                        extraction_error = None
+                        page_count = ocr_result.get("page_count")
+                    else:
+                        # Fall through to processor (image_processor handles local OCR)
+                        doc_type = DocumentType.CASE_DOCUMENT
+                        processed = await processor(tmp_path, doc_type, doc_name, None)
+                        extracted_text = processed.content
+                        extraction_method = processed.extraction_method or "unknown"
+                        ocr_provider = processed.ocr_provider
+                        extraction_error = processed.extraction_error
+                        page_count = processed.page_count
+                else:
+                    # PDF, EML, text, etc.
+                    doc_type = DocumentType.CASE_DOCUMENT
+                    if doc.get("metadata", {}).get("is_intake_form"):
+                        doc_type = DocumentType.INTAKE_FORM
+
+                    processed = await processor(tmp_path, doc_type, doc_name, None)
+                    extracted_text = processed.content
+                    extraction_method = processed.extraction_method or "unknown"
+                    ocr_provider = processed.ocr_provider
+                    extraction_error = processed.extraction_error
+                    page_count = processed.page_count
+            finally:
+                try:
+                    os.unlink(tmp_path)
+                except OSError:
+                    pass
+
+            # Sanitize
+            if extracted_text:
+                extracted_text = sanitize_text_for_db(extracted_text)
+
+            # Determine quality
+            text_len = len((extracted_text or "").strip())
+            if text_len == 0:
+                extraction_quality = "low"
+                doc_status = DocumentStatus.EXTRACTION_FAILED
+            elif text_len < 200:
+                extraction_quality = "medium"
+                doc_status = DocumentStatus.NEEDS_REVIEW
+            else:
+                extraction_quality = "high"
+                doc_status = DocumentStatus.READY
+
+            update_data = {
+                "extracted_text": extracted_text if extracted_text else None,
+                "extraction_method": extraction_method,
+                "extraction_quality": extraction_quality,
+                "ocr_provider": ocr_provider,
+                "extraction_error": extraction_error,
+                "page_count": page_count,
+                "extracted_at": datetime.utcnow().isoformat() if extracted_text else None,
+                "updated_at": datetime.utcnow().isoformat(),
+                "status": doc_status,
+            }
+            supabase.table("documents").update(update_data).eq("id", doc_id).execute()
+            results[doc_id] = update_data
+
+            logger.info(
+                f"[DEFERRED] Extracted {doc_name}: "
+                f"{text_len} chars, method={extraction_method}, quality={extraction_quality}"
+            )
+
+        except Exception as e:
+            logger.error(f"[DEFERRED] Failed to extract {doc_name}: {e}", exc_info=True)
+            error_update = {
+                "extraction_method": "failed",
+                "extraction_quality": "low",
+                "extraction_error": str(e)[:500],
+                "status": DocumentStatus.EXTRACTION_FAILED,
+                "updated_at": datetime.utcnow().isoformat(),
+            }
+            try:
+                supabase.table("documents").update(error_update).eq("id", doc_id).execute()
+            except Exception:
+                pass
+            results[doc_id] = error_update
+
+        # Progress update
+        if progress_manager and analysis_id:
+            pct = 3 + int((i + 1) / len(deferred_docs) * 2)  # 3-5% range
+            await progress_manager.publish_progress(
+                channel_id=analysis_id,
+                message=f"Extracted {i+1}/{len(deferred_docs)} documents...",
+                phase="deferred_extraction",
+                percent=pct,
+                timestamp=datetime.utcnow().isoformat(),
+            )
+
+    return results
+
+
 def _is_transient_error(err: Exception) -> bool:
     """Check if a Supabase/PostgREST error is transient and worth retrying."""
     code = str(getattr(err, "code", ""))
@@ -1387,6 +1562,34 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
             f"[BACKGROUND:PREP] [CASE:{case_id}] [ELAPSED:{elapsed:.1f}s] "
             f"Preparing documents | total_docs={len(documents)} jurisdiction={jurisdiction}"
         )
+
+        # Step 0: Extract text for deferred documents (bulk imports skip extraction)
+        deferred_docs = [
+            d for d in documents
+            if d.get("extraction_method") == "deferred"
+            and not d.get("extracted_text")
+        ]
+        if deferred_docs:
+            logger.info(
+                f"[BACKGROUND:DEFERRED] [CASE:{case_id}] "
+                f"Extracting text for {len(deferred_docs)} deferred documents"
+            )
+            await progress_manager.publish_progress(
+                channel_id=analysis_id,
+                message=f"Extracting text from {len(deferred_docs)} documents...",
+                phase="deferred_extraction",
+                percent=3,
+                timestamp=datetime.utcnow().isoformat(),
+            )
+            deferred_results = await _extract_deferred_documents(
+                deferred_docs, supabase, progress_manager, analysis_id,
+            )
+            # Merge results back into documents list
+            for doc_id, result in deferred_results.items():
+                for doc in documents:
+                    if doc["id"] == doc_id:
+                        doc.update(result)
+                        break
 
         # Step 1: Prepare ProcessedDocument objects directly from DB (no re-extraction)
         from legal_portal.core.data_models import FileMetadata, FileType

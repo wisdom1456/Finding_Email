@@ -316,8 +316,8 @@ class DocumentProcessor:
             # Determine status based on text content quality
             status = DocumentStatus.READY
             if extraction_method == "deferred":
-                # Deferred extraction - mark as ready (file is uploaded, extraction later)
-                status = DocumentStatus.READY
+                # Deferred extraction - mark as pending (text extraction still needed)
+                status = DocumentStatus.PENDING
             elif not extracted_text or len(extracted_text.strip()) == 0:
                 status = DocumentStatus.EXTRACTION_FAILED
                 extraction_quality = "low"

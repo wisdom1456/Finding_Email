@@ -427,7 +427,7 @@
 			const { data, error } = await withRetry(() =>
 				supabase
 					.from('documents')
-					.select('id, case_id, file_name, file_type, file_size, storage_path, status, extraction_method, extraction_quality, extracted_at, page_count, ocr_provider, extraction_error, is_verified, is_flagged_as_junk, text_edited_at, metadata, created_at, updated_at')
+					.select('id, case_id, file_name, file_type, file_size, storage_path, status, extraction_method, extraction_quality, extracted_at, page_count, ocr_provider, extraction_error, is_verified, is_flagged_as_junk, text_edited_at, metadata, created_at, updated_at, document_type_label, document_type_confidence, signed_status, signature_expected, system_summary, enrichment_stage')
 					.eq('case_id', caseId as string)
 					.order('created_at', { ascending: true })
 					.limit(10000)
@@ -440,6 +440,45 @@
 			console.error('Failed to load documents:', error);
 		}
 	}
+
+	// Track whether cross-doc enrichment has run for this case load
+	let crossDocEnriched = $state(false);
+
+	/**
+	 * Run cross-document enrichment via the backend endpoint.
+	 * Fires once when the verification tab is first activated,
+	 * then reloads documents so suggested_relationships appear.
+	 */
+	async function runCrossDocEnrichment() {
+		if (crossDocEnriched || !caseId || documents.length === 0) return;
+		crossDocEnriched = true;
+		try {
+			const session = await getSecureSession();
+			if (!session?.access_token) return;
+			const resp = await fetch(`${getApiUrl()}/documents/case/${caseId}/enrich-cross-document`, {
+				method: 'POST',
+				headers: {
+					'Authorization': `Bearer ${session.access_token}`,
+					'Content-Type': 'application/json',
+				},
+			});
+			if (!resp.ok) return;
+			const result = await resp.json();
+			if (result.enriched > 0) {
+				// Reload documents to pick up new suggested_relationships
+				await loadDocuments();
+			}
+		} catch (e) {
+			console.error('Cross-document enrichment failed:', e);
+		}
+	}
+
+	// Trigger cross-doc enrichment when verification tab is activated
+	$effect(() => {
+		if (activeTab === 'verification' && documents.length > 0) {
+			runCrossDocEnrichment();
+		}
+	});
 
 	async function loadAnalysisStatus() {
 		try {

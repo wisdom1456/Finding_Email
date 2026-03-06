@@ -194,30 +194,30 @@
 		return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
 	}
 
-	const signatureRequiredKeywords = [
-		'agreement',
-		'contract',
-		'lease',
-		'addendum',
-		'amendment',
-		'settlement',
-		'release',
-		'authorization',
-		'consent',
-		'affidavit',
-		'declaration',
-		'stipulation',
-		'promissory note',
-		'guaranty',
-		'power of attorney',
-		'poa',
-		'signature page',
-		'executed'
-	];
+	/**
+	 * Determines if a document requires signature review.
+	 * Uses registry-backed signature_expected column + signed_status.
+	 * Excludes emails, photos, and media (these never need signature review).
+	 */
+	function requiresSignatureReview(_fileName: string | undefined): boolean {
+		// Use registry-backed column when available
+		const sigExpected = doc.signature_expected === true ||
+		                    doc.metadata?.registry?.signature_expected === true;
+		if (!sigExpected) return false;
 
-	function requiresSignatureReview(fileName: string | undefined): boolean {
-		const normalizedName = String(fileName || '').toLowerCase();
-		return signatureRequiredKeywords.some((keyword) => normalizedName.includes(keyword));
+		// Exclude file types that never need signatures
+		const docType = (doc.document_type_label || doc.metadata?.registry?.document_type || '').toLowerCase();
+		if (['correspondence', 'email', 'photo/media'].includes(docType)) return false;
+
+		const fn = String(doc.file_name || '').toLowerCase();
+		if (fn.endsWith('.eml') || fn.endsWith('.jpg') || fn.endsWith('.jpeg') ||
+		    fn.endsWith('.png') || fn.endsWith('.heic') || fn.endsWith('.gif')) return false;
+
+		// Check if already signed
+		const sigSatisfied =
+			doc.signed_status === 'signed' ||
+			doc.metadata?.attorney_enrichment?.signature_verification === 'signed';
+		return !sigSatisfied;
 	}
 
 	function getSignatureVerificationStatus(): 'signed' | 'not_signed' | 'unknown' | 'none' {
@@ -287,7 +287,13 @@
 		return getSignatureStatus() !== 'none';
 	}
 
-	// Format flat key_facts object into the structured shape KeyFactsChips expects
+	/**
+	 * Format key facts into the structured shape KeyFactsChips expects.
+	 * Fact source resolution order:
+	 *   1. attorney_enrichment.key_facts  → confirmed chips
+	 *   2. registry.quick_facts_ai        → unconfirmed chips (AI-extracted)
+	 *   3. registry.quick_facts_raw       → unconfirmed chips (regex-extracted at upload)
+	 */
 	function formatKeyFacts(facts: Record<string, string> | null | undefined): Record<string, { value: string; confirmed: boolean }> {
 		if (!facts) return {};
 		return Object.fromEntries(
@@ -295,9 +301,194 @@
 		);
 	}
 
+	/**
+	 * Build combined key facts from all sources for display.
+	 * Attorney facts are confirmed, registry facts are unconfirmed.
+	 */
+	function getResolvedKeyFacts(): Record<string, { value: string; confirmed: boolean }> {
+		const result: Record<string, { value: string; confirmed: boolean }> = {};
+		const registry = doc.metadata?.registry || {};
+		const enrichment = doc.metadata?.attorney_enrichment || {};
+
+		// Layer 3: regex-extracted raw facts (lowest priority, unconfirmed)
+		const rawFacts = registry.quick_facts_raw || {};
+		if (rawFacts.dates) {
+			rawFacts.dates.forEach((d: string, i: number) => {
+				result[`date_${i + 1}`] = { value: d, confirmed: false };
+			});
+		}
+		if (rawFacts.amounts) {
+			rawFacts.amounts.forEach((a: string, i: number) => {
+				result[`amount_${i + 1}`] = { value: a, confirmed: false };
+			});
+		}
+
+		// Layer 2: AI-extracted facts (overwrite raw, still unconfirmed)
+		const aiFacts = registry.quick_facts_ai;
+		if (aiFacts) {
+			// Clear raw date/amount entries if AI provided richer data
+			if (aiFacts.dates?.length > 0) {
+				Object.keys(result).filter(k => k.startsWith('date_')).forEach(k => delete result[k]);
+				aiFacts.dates.forEach((d: string, i: number) => {
+					result[`date_${i + 1}`] = { value: d, confirmed: false };
+				});
+			}
+			if (aiFacts.amounts?.length > 0) {
+				Object.keys(result).filter(k => k.startsWith('amount_')).forEach(k => delete result[k]);
+				aiFacts.amounts.forEach((a: string, i: number) => {
+					result[`amount_${i + 1}`] = { value: a, confirmed: false };
+				});
+			}
+			if (aiFacts.parties?.length > 0) {
+				aiFacts.parties.forEach((p: string, i: number) => {
+					result[`party_${i + 1}`] = { value: p, confirmed: false };
+				});
+			}
+		}
+
+		// Layer 1: Attorney-confirmed facts (highest priority, confirmed)
+		const attorneyFacts = enrichment.key_facts;
+		if (attorneyFacts && typeof attorneyFacts === 'object') {
+			Object.entries(attorneyFacts).forEach(([k, v]) => {
+				result[k] = { value: String(v), confirmed: true };
+			});
+		}
+
+		return result;
+	}
+
+	/**
+	 * Get suggested relationships from the registry for display.
+	 * Returns a flat list of { type, label, documents } for rendering.
+	 */
+	function getSuggestedRelationships(): Array<{ type: string; label: string; documents: string[] }> {
+		const rels = doc.metadata?.registry?.suggested_relationships;
+		if (!Array.isArray(rels) || rels.length === 0) return [];
+		const labels: Record<string, string> = {
+			email_thread: 'Email thread',
+			sequential_photo: 'Photo sequence',
+			contract_family: 'Contract family',
+		};
+		return rels.map((r: any) => ({
+			type: r.type || 'related',
+			label: labels[r.type] || r.type,
+			documents: r.related_documents || [],
+		}));
+	}
+
+	/**
+	 * Get AI suggested type when it differs from the effective type.
+	 */
+	function getAiTypeSuggestion(): string | null {
+		const aiType = doc.metadata?.registry?.ai_suggested_document_type;
+		if (!aiType) return null;
+		const effective = (doc.metadata?.attorney_enrichment?.document_type_override || doc.document_type_label || '').toLowerCase();
+		if (aiType.toLowerCase() === effective.toLowerCase()) return null;
+		return aiType;
+	}
+
 	// Derived attention needs and relevance (avoids {@const} in invalid positions)
 	const attentionNeeds = $derived(getAttentionNeeds(doc));
 	const relevanceLevel = $derived(doc.metadata?.attorney_enrichment?.relevance_level as string | undefined);
+	const resolvedKeyFacts = $derived(getResolvedKeyFacts());
+	const hasAnyFacts = $derived(Object.keys(resolvedKeyFacts).length > 0);
+	const suggestedRelationships = $derived(getSuggestedRelationships());
+	const aiTypeSuggestion = $derived(getAiTypeSuggestion());
+
+	// --- Suggested relationship → manual link prefill ---
+	let relPrefillDocId = $state('');
+	let relPrefillType = $state('');
+
+	/**
+	 * Resolve a suggested filename to an available document ID.
+	 * Match strategy: exact filename > normalized (case-insensitive, no ext) > stem prefix.
+	 * Returns the doc ID if a single confident match exists, '' otherwise.
+	 */
+	function resolveDocIdFromFilename(filename: string): string {
+		const docs = availableDocuments || [];
+		if (!docs.length || !filename) return '';
+
+		// Exact match
+		const exact = docs.find(d => d.name === filename);
+		if (exact) return exact.id;
+
+		// Normalized match (lowercase, strip extension)
+		const norm = (s: string) => s.toLowerCase().replace(/\.[a-z0-9]{1,8}$/i, '').replace(/[^a-z0-9]+/g, ' ').trim();
+		const target = norm(filename);
+		const normMatches = docs.filter(d => norm(d.name) === target);
+		if (normMatches.length === 1) return normMatches[0].id;
+
+		// Stem prefix match (target starts with or is contained in available name)
+		const stemMatches = docs.filter(d => {
+			const n = norm(d.name);
+			return n.startsWith(target) || target.startsWith(n);
+		});
+		if (stemMatches.length === 1) return stemMatches[0].id;
+
+		return '';
+	}
+
+	/** Map relationship type to a default relationship category for the manual link. */
+	function suggestedTypeToRelType(type: string): string {
+		if (type === 'contract_family') return 'modifies';
+		if (type === 'email_thread') return 'relates to';
+		if (type === 'sequential_photo') return 'relates to';
+		return 'relates to';
+	}
+
+	function handleSuggestedLinkClick(filename: string, relType: string) {
+		const docId = resolveDocIdFromFilename(filename);
+		relPrefillType = suggestedTypeToRelType(relType);
+		if (docId) {
+			relPrefillDocId = docId;
+		} else {
+			// No confident match — just open the selector so attorney can pick manually
+			relPrefillDocId = '';
+		}
+	}
+
+	// --- Confidence indicator ---
+	const confidenceColor = $derived.by(() => {
+		if (doc.metadata?.attorney_enrichment?.document_type_override) return ''; // No dot for overrides
+		const c = (doc.document_type_confidence || doc.metadata?.registry?.document_type_confidence || '').toLowerCase();
+		if (c === 'high') return 'bg-green-400';
+		if (c === 'medium') return 'bg-amber-400';
+		return 'bg-gray-300'; // low or unknown
+	});
+
+	const typeTooltip = $derived.by(() => {
+		const parts: string[] = [];
+		const override = doc.metadata?.attorney_enrichment?.document_type_override;
+		const baseType = doc.metadata?.registry?.document_type || doc.document_type_label;
+		const confidence = doc.document_type_confidence || doc.metadata?.registry?.document_type_confidence || 'low';
+		const source = doc.metadata?.registry?.document_type_source || '';
+		const aiSugg = doc.metadata?.registry?.ai_suggested_document_type;
+
+		if (override) {
+			parts.push(`Attorney override: ${override}`);
+			if (baseType && baseType.toLowerCase() !== override.toLowerCase()) {
+				parts.push(`Detected: ${baseType} (${confidence}, ${source || 'heuristic'})`);
+			}
+		} else if (baseType) {
+			parts.push(`Detected: ${baseType} (${confidence} confidence${source ? ', ' + source : ''})`);
+		} else {
+			parts.push('No type detected — click to classify');
+		}
+
+		if (aiSugg) {
+			const effective = (override || baseType || '').toLowerCase();
+			if (aiSugg.toLowerCase() !== effective) {
+				parts.push(`AI suggests: ${aiSugg}`);
+			}
+		}
+		return parts.join('\n');
+	});
+
+	// --- Collapsed card indicators ---
+	const hasSuggestedLinks = $derived(suggestedRelationships.length > 0);
+	const hasQuickFacts = $derived(hasAnyFacts);
+	const needsSigReview = $derived(requiresSignatureReview(doc?.file_name));
+	const hasAiSuggestion = $derived(!!aiTypeSuggestion);
 </script>
 
 <div
@@ -328,29 +519,42 @@
 						<span class="text-xs text-gray-400 italic ml-1">Needs: {attentionNeeds.join(', ')}</span>
 						{/if}
 
-						<!-- Type Override Dropdown -->
+						<!-- Type Override Dropdown + Confidence Dot -->
 						{#if onTypeOverride}
-						<select
-							class="text-xs font-semibold px-2 py-0.5 rounded border
-								   {doc.metadata?.attorney_enrichment?.document_type_override
-									   ? 'bg-blue-50 border-blue-300 text-blue-700'
-									   : 'bg-gray-100 border-gray-300 text-gray-600'}
-								   cursor-pointer focus:ring-1 focus:ring-accent"
-							value={doc.metadata?.attorney_enrichment?.document_type_override || doc.metadata?.document_type_label || ''}
-							onchange={(e) => onTypeOverride!(doc.id, (e.target as HTMLSelectElement).value)}
-							title="Document type (click to change)"
-						>
-							<option value="">Auto-detect</option>
-							<option value="contract">Contract</option>
-							<option value="addendum">Addendum</option>
-							<option value="inspection_report">Inspection Report</option>
-							<option value="disclosure">Disclosure</option>
-							<option value="correspondence">Correspondence</option>
-							<option value="invoice_receipt">Invoice/Receipt</option>
-							<option value="photo_media">Photo/Media</option>
-							<option value="legal_filing">Legal Filing</option>
-							<option value="other">Other</option>
-						</select>
+						<span class="inline-flex items-center gap-1">
+							{#if confidenceColor}
+							<span class="w-1.5 h-1.5 rounded-full {confidenceColor} flex-shrink-0" title={typeTooltip}></span>
+							{/if}
+							<select
+								class="text-xs font-semibold px-2 py-0.5 rounded border
+									   {doc.metadata?.attorney_enrichment?.document_type_override
+										   ? 'bg-blue-50 border-blue-300 text-blue-700'
+										   : doc.document_type_label
+										   ? 'bg-gray-100 border-gray-300 text-gray-700'
+										   : 'bg-gray-100 border-gray-300 text-gray-600'}
+									   cursor-pointer focus:ring-1 focus:ring-accent"
+								value={doc.metadata?.attorney_enrichment?.document_type_override || doc.document_type_label || ''}
+								onchange={(e) => onTypeOverride!(doc.id, (e.target as HTMLSelectElement).value)}
+								title={typeTooltip}
+							>
+								<option value="">{doc.document_type_label ? doc.document_type_label : 'Auto-detect'}</option>
+								<option value="contract">Contract</option>
+								<option value="addendum">Addendum</option>
+								<option value="inspection_report">Inspection Report</option>
+								<option value="disclosure">Disclosure</option>
+								<option value="correspondence">Correspondence</option>
+								<option value="invoice_receipt">Invoice/Receipt</option>
+								<option value="photo_media">Photo/Media</option>
+								<option value="legal_filing">Legal Filing</option>
+								<option value="other">Other</option>
+							</select>
+						</span>
+						{#if aiTypeSuggestion}
+						<span
+							class="text-[10px] text-violet-500 italic"
+							title="AI suggests this type based on document content analysis"
+						>AI: {aiTypeSuggestion}</span>
+						{/if}
 						{/if}
 
 						<!-- Relevance Star Button -->
@@ -402,6 +606,18 @@
 							>
 								{getSignatureLabel()}
 							</span>
+						{/if}
+						<!-- Collapsed-state awareness indicators -->
+						{#if !isExpanded}
+							{#if hasQuickFacts}
+							<span class="text-[10px] text-gray-400" title="Key facts available — expand to view">facts</span>
+							{/if}
+							{#if hasSuggestedLinks}
+							<span class="text-[10px] text-gray-400" title="Suggested document links — expand to view">links</span>
+							{/if}
+							{#if hasAiSuggestion}
+							<span class="text-[10px] text-violet-400" title={`AI suggests: ${aiTypeSuggestion}`}>AI</span>
+							{/if}
 						{/if}
 					</div>
 				</div>
@@ -568,21 +784,24 @@
 			<!-- Expanded panel: key facts, notes, relationships -->
 			{#if isExpanded}
 			<div class="mt-3 pt-3 border-t border-gray-100 space-y-3" transition:slide={{ duration: 200 }}>
-				<!-- Key Facts -->
-				{#if doc.metadata?.attorney_enrichment?.key_facts || Object.keys(doc.metadata?.attorney_enrichment || {}).some((k: string) => ['date','amount','parties','property'].includes(k))}
+				<!-- Key Facts (merged from all sources) -->
+				{#if hasAnyFacts}
 				<div>
 					<div class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Key Facts</div>
 					<KeyFactsChips
-						facts={doc.metadata?.attorney_enrichment?.key_facts_structured || formatKeyFacts(doc.metadata?.attorney_enrichment?.key_facts)}
+						facts={resolvedKeyFacts}
 						onFactUpdate={(key, value) => onFactUpdate?.(doc.id, key, value)}
 						onFactConfirm={(key) => onFactConfirm?.(doc.id, key)}
 					/>
 				</div>
 				{/if}
 
-				<!-- Attorney Notes -->
+				<!-- Attorney Notes (system_summary shown as helper text when no notes) -->
 				<div>
 					<div class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Notes</div>
+					{#if !doc.metadata?.attorney_enrichment?.attorney_notes && (doc.system_summary || doc.metadata?.registry?.system_summary)}
+					<p class="text-xs text-gray-400 italic mb-1">{doc.system_summary || doc.metadata?.registry?.system_summary}</p>
+					{/if}
 					<textarea
 						class="w-full text-sm border border-gray-200 rounded-lg p-2 resize-none focus:ring-1 focus:ring-accent focus:border-transparent bg-gray-50"
 						rows="2"
@@ -597,15 +816,39 @@
 					></textarea>
 				</div>
 
-				<!-- Document Relationships -->
+				<!-- Suggested Relationships (from registry cross-doc analysis) -->
+				{#if suggestedRelationships.length > 0}
+				<div>
+					<div class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Suggested Links</div>
+					<div class="flex flex-wrap gap-1.5">
+						{#each suggestedRelationships as rel}
+							{#each rel.documents as relDoc}
+							<button
+								type="button"
+								class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] bg-gray-50 border border-dashed border-gray-300 text-gray-600 hover:bg-blue-50 hover:border-blue-300 hover:text-blue-700 transition-colors cursor-pointer"
+								title="Click to link this document"
+								onclick={() => handleSuggestedLinkClick(relDoc, rel.type)}
+							>
+								<span class="font-medium text-gray-500">{rel.label}:</span>
+								<span class="truncate max-w-[140px]">{relDoc}</span>
+							</button>
+							{/each}
+						{/each}
+					</div>
+				</div>
+				{/if}
+
+				<!-- Document Relationships (attorney-confirmed) -->
 				<div>
 					<div class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Related Documents</div>
 					<DocumentRelationships
 						documentId={doc.id}
 						relationships={doc.metadata?.attorney_enrichment?.document_relationships || []}
 						availableDocuments={availableDocuments || []}
-						onAddRelationship={(relId, type) => onRelationshipAdd?.(doc.id, relId, type)}
+						onAddRelationship={(relId, type) => { onRelationshipAdd?.(doc.id, relId, type); relPrefillDocId = ''; relPrefillType = ''; }}
 						onRemoveRelationship={(relId) => onRelationshipRemove?.(doc.id, relId)}
+						prefillDocId={relPrefillDocId}
+						prefillType={relPrefillType}
 					/>
 				</div>
 			</div>

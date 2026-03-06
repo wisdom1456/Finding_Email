@@ -904,11 +904,54 @@ async def process_case_documents(
                 legal_issues_hint = [str(review_data.get("legal_issue")).strip()]
 
             registry_service = DocumentRegistryService()
-            document_registry_seed = registry_service.build_registry(
-                processed_documents=all_processed_docs + processed_intake,
-                document_summaries=structured_summaries,
-                fact_matrix=None,
+            all_docs = all_processed_docs + processed_intake
+
+            # --- Load existing registries or build initial ones ---
+            # Documents uploaded after Phase 3 carry metadata.registry.
+            # Legacy documents (pre-migration) get a fresh initial registry.
+            registry_by_name: Dict[str, Dict[str, Any]] = {}
+            for pdoc in all_docs:
+                fn = (pdoc.file_name or "").strip()
+                if not fn:
+                    continue
+                norm = registry_service._normalize_name(fn)
+                if norm in registry_by_name:
+                    continue
+                if pdoc.registry:
+                    reg = pdoc.registry
+                    # Ensure document_id is set (defensive for legacy registry data)
+                    if not reg.get("document_id") and pdoc.document_id:
+                        reg["document_id"] = pdoc.document_id
+                    registry_by_name[norm] = reg
+                else:
+                    registry_by_name[norm] = registry_service.build_initial_registry(pdoc)
+
+            # --- Cross-document enrichment (Stage 2) ---
+            # Detect email threads, sequential photos, contract families.
+            # Runs before AI so multi-stage analysis can see relationships.
+            cross_doc_registries = list(registry_by_name.values())
+            cross_doc_registries = registry_service.enrich_cross_document(
+                cross_doc_registries, all_docs
             )
+            # Update registry_by_name with enriched entries
+            for reg in cross_doc_registries:
+                norm = registry_service._normalize_name(reg.get("document_name", ""))
+                if norm:
+                    registry_by_name[norm] = reg
+
+            # --- Enrich with AI summaries (Stage 4, pass 1) ---
+            summary_by_name = {
+                registry_service._normalize_name(s.document_name): s.model_dump(mode="json")
+                for s in (structured_summaries or [])
+                if (s.document_name or "").strip()
+            }
+            for norm, summary in summary_by_name.items():
+                if norm in registry_by_name:
+                    registry_by_name[norm] = registry_service.enrich_with_ai(
+                        registry_by_name[norm], summary
+                    )
+
+            document_registry_seed = list(registry_by_name.values())
 
             if progress_callback:
                 await progress_callback(
@@ -919,17 +962,15 @@ async def process_case_documents(
                 )
 
             multi_stage_start = time.time()
-            signature_evidence = _build_signature_evidence_for_gap_analysis(
-                all_processed_docs + processed_intake
-            )
+            signature_evidence = _build_signature_evidence_for_gap_analysis(all_docs)
             multi_stage_result = await multi_stage_analyzer.analyze_case(
                 intake_content=intake_content,
                 document_summaries=structured_summaries,
                 progress_callback=progress_callback,
                 case_type=case_analysis_dict.get("practice_area"),
                 legal_issues=legal_issues_hint or None,
-                jurisdiction=jurisdiction,  # Pass jurisdiction
-                diag_logger=diag_logger,  # Pass diagnostic logger
+                jurisdiction=jurisdiction,
+                diag_logger=diag_logger,
                 signature_evidence=signature_evidence,
                 document_registry=document_registry_seed,
             )
@@ -939,15 +980,35 @@ async def process_case_documents(
             legal_issue_map = multi_stage_result.issue_map
             letter_structure = multi_stage_result.letter_structure
 
+            # --- Enrich with key document flags (Stage 4, pass 2) ---
+            key_docs_by_name = {
+                registry_service._normalize_name(k.document_name): k.model_dump(mode="json")
+                for k in ((fact_matrix.key_documents if fact_matrix else []) or [])
+                if (k.document_name or "").strip()
+            }
+            for norm, key_doc in key_docs_by_name.items():
+                if norm in registry_by_name:
+                    reg = registry_by_name[norm]
+                    reg["is_key_document"] = True
+                    reg["key_document_significance"] = key_doc.get("significance")
+
+            # --- Persist enriched registries back to DB ---
+            if supabase_client:
+                for norm, reg in registry_by_name.items():
+                    doc_id = reg.get("document_id")
+                    if doc_id:
+                        try:
+                            registry_service.persist_to_document(
+                                doc_id, reg, supabase_client
+                            )
+                        except Exception as persist_err:
+                            logger.warning(
+                                f"Failed to persist enriched registry for {doc_id}: {persist_err}"
+                            )
+
             # Attach original documents to multi-stage result for letter generation
-            multi_stage_result.original_documents = _build_original_documents_map(
-                all_processed_docs + processed_intake
-            )
-            multi_stage_result.document_registry = registry_service.build_registry(
-                processed_documents=all_processed_docs + processed_intake,
-                document_summaries=structured_summaries,
-                fact_matrix=fact_matrix,
-            )
+            multi_stage_result.original_documents = _build_original_documents_map(all_docs)
+            multi_stage_result.document_registry = list(registry_by_name.values())
 
             elapsed = time.time() - start_time
             logger.info(
@@ -1307,6 +1368,72 @@ def _chunk_document_content_for_prompt(content: str, max_chars: int = PROMPT_MAX
     )
 
 
+def _format_registry_context(doc: Any) -> str:
+    """Build a compact prior-classification block from a document's registry.
+
+    Gives the AI model context about preliminary classification, quick facts,
+    signature status, and any attorney input so it can refine rather than
+    classify from scratch.
+    """
+    registry = getattr(doc, "registry", None) or {}
+    enrichment = getattr(doc, "attorney_enrichment", None) or {}
+    if not registry and not enrichment:
+        return ""
+
+    parts: list[str] = []
+
+    # Pre-classified type (heuristic or prior AI)
+    doc_type = enrichment.get("document_type_override") or registry.get("document_type")
+    if doc_type:
+        confidence = registry.get("document_type_confidence", "")
+        source = registry.get("document_type_source", "")
+        parts.append(f"pre_classified_type={doc_type} (confidence={confidence}, source={source})")
+
+    instrument = registry.get("primary_instrument")
+    if instrument:
+        parts.append(f"instrument={instrument}")
+
+    # Quick facts (prefer AI > raw)
+    facts_ai = registry.get("quick_facts_ai") or {}
+    facts_raw = registry.get("quick_facts_raw") or {}
+    dates = facts_ai.get("dates") or facts_raw.get("dates") or []
+    amounts = facts_ai.get("amounts") or facts_raw.get("amounts") or []
+    if dates:
+        parts.append(f"dates={dates[:4]}")
+    if amounts:
+        parts.append(f"amounts={amounts[:4]}")
+
+    # Signature status
+    sig_expected = registry.get("signature_expected")
+    exec_status = registry.get("execution_status")
+    if sig_expected is not None:
+        parts.append(f"signature_expected={sig_expected}; signed={exec_status or 'unknown'}")
+
+    # System summary
+    summary = registry.get("system_summary")
+    if summary:
+        parts.append(f"summary=\"{summary[:120]}\"")
+
+    # Attorney overrides — these are authoritative
+    attorney_parts: list[str] = []
+    if enrichment.get("document_type_override"):
+        attorney_parts.append(f"type_override={enrichment['document_type_override']}")
+    if enrichment.get("attorney_notes"):
+        attorney_parts.append(f"notes=\"{str(enrichment['attorney_notes'])[:100]}\"")
+    if enrichment.get("key_facts") and isinstance(enrichment["key_facts"], dict):
+        facts_str = ", ".join(f"{k}={v}" for k, v in list(enrichment["key_facts"].items())[:5])
+        attorney_parts.append(f"confirmed_facts=[{facts_str}]")
+
+    if not parts and not attorney_parts:
+        return ""
+
+    lines = ["[PRIOR_CLASSIFICATION: " + "; ".join(parts) + "]"] if parts else []
+    if attorney_parts:
+        lines.append("[ATTORNEY_INPUT: " + "; ".join(attorney_parts) + "]")
+
+    return "\n".join(lines) + "\n"
+
+
 def _format_single_document_with_metadata(doc: Any, document_index: Optional[int] = None) -> str:
     """Format a single document block for AI prompt input."""
     quality_flag = ""
@@ -1332,12 +1459,15 @@ def _format_single_document_with_metadata(doc: Any, document_index: Optional[int
         if signing_date:
             signature_flag += f" [SIGNING_DATE={signing_date}]"
 
+    # Prior registry context (pre-classification, quick facts, attorney input)
+    registry_context = _format_registry_context(doc)
+
     content = _normalize_document_content(getattr(doc, "content", ""))
     content_preview = _chunk_document_content_for_prompt(content)
     doc_name = getattr(doc, "file_name", "Unknown document")
     label = f"Document {document_index}" if document_index is not None else "Document"
 
-    return f"\n--- {label}: {doc_name}{quality_flag}{doc_type_flag}{signature_flag} ---\n{content_preview}\n"
+    return f"\n--- {label}: {doc_name}{quality_flag}{doc_type_flag}{signature_flag} ---\n{registry_context}{content_preview}\n"
 
 
 def _format_documents_with_metadata(case_documents: list) -> str:
@@ -2033,6 +2163,10 @@ INTAKE INFORMATION (for context):
 {intake_content}
 
 {IMAGE_HANDLING_INSTRUCTIONS}
+
+Some documents include [PRIOR_CLASSIFICATION] and [ATTORNEY_INPUT] blocks.
+Use these as starting context — refine the classification rather than starting from scratch.
+Attorney-provided values (type overrides, confirmed facts, notes) are authoritative.
 
 {batch_header}DOCUMENTS TO ANALYZE:
 {_format_documents_with_metadata(documents)}

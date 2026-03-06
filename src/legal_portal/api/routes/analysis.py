@@ -1960,6 +1960,7 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
                 document_id=doc["id"],
                 signature_detection=signature_detection,
                 attorney_enrichment=doc_metadata.get("attorney_enrichment") or None,
+                registry=doc_metadata.get("registry") or None,
             )
 
             if pdoc.document_type == DocumentType.INTAKE_FORM:

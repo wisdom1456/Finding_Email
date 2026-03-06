@@ -5,8 +5,11 @@ import SignatureReviewPanel from './SignatureReviewPanel.svelte';
 const mockDoc = {
     id: 'doc-123',
     file_name: 'Purchase_Agreement.pdf',
+    signature_expected: true,
+    signed_status: 'not_detected',
     metadata: {
-        signature_detection: { status: 'not_detected', signature_expected: true, indicators: [] }
+        signature_detection: { status: 'not_detected', indicators: [] },
+        registry: { signature_expected: true, execution_status: 'not_detected' }
     }
 };
 

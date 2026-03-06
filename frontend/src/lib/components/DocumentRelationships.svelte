@@ -18,17 +18,30 @@
         availableDocuments = [],
         onAddRelationship,
         onRemoveRelationship,
+        prefillDocId = '',
+        prefillType = '',
     }: {
         documentId: string;
         relationships: Relationship[];
         availableDocuments: AvailableDoc[];
         onAddRelationship: (relatedDocId: string, type: string) => void;
         onRemoveRelationship: (relatedDocId: string) => void;
+        prefillDocId?: string;
+        prefillType?: string;
     } = $props();
 
     let showDropdown = $state(false);
     let selectedDocId = $state('');
     let selectedType = $state('modifies');
+
+    // React to prefill changes from parent (e.g., clicking a suggested link)
+    $effect(() => {
+        if (prefillDocId) {
+            selectedDocId = prefillDocId;
+            if (prefillType) selectedType = prefillType;
+            showDropdown = true;
+        }
+    });
 
     // Docs not already linked
     const unlinkedDocs = $derived(

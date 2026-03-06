@@ -11,14 +11,16 @@
         onFilterToggle: (filter: string) => void;
     } = $props();
 
-    // Missing signatures: docs where signature is expected but not signed/verified
+    // Missing signatures: use denormalized columns (signature_expected + signed_status)
+    // Excludes emails and photos which should never trigger signature review
     const missingSigCount = $derived(
         documents.filter(d => {
-            const sig = d.metadata?.signature_detection || {};
-            const enrichment = d.metadata?.attorney_enrichment || {};
-            return sig.signature_expected &&
-                   sig.status !== 'signed' &&
-                   enrichment.signature_verification !== 'signed';
+            const sigExpected = d.signature_expected === true ||
+                                d.metadata?.registry?.signature_expected === true;
+            const sigSatisfied =
+                d.signed_status === 'signed' ||
+                d.metadata?.attorney_enrichment?.signature_verification === 'signed';
+            return sigExpected && !sigSatisfied;
         }).length
     );
 
@@ -30,10 +32,10 @@
         }).length
     );
 
-    // Needs type classification
+    // Needs type classification — uses denormalized document_type_label column
     const needsTypeCount = $derived(
         documents.filter(d => {
-            return !d.metadata?.document_type_label &&
+            return !d.document_type_label &&
                    !d.metadata?.attorney_enrichment?.document_type_override;
         }).length
     );

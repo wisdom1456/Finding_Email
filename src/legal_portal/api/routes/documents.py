@@ -11,8 +11,9 @@ from pydantic import BaseModel
 
 from legal_portal.api.dependencies import get_current_user, get_supabase_client, get_user_supabase_client
 from legal_portal.api.utils.content_extractor import DocumentProcessor as ContentExtractor
-from legal_portal.core.data_models import DocumentStatus, DocumentType
+from legal_portal.core.data_models import DocumentStatus, DocumentType, FileMetadata, FileType, ProcessedDocument
 from legal_portal.core.document_processor import DocumentProcessor, ValidationError
+from legal_portal.services.document_registry_service import DocumentRegistryService
 from legal_portal.services.file_processors.eml_processor import process_eml
 from legal_portal.utils.google_vision_client import GoogleVisionClient
 from legal_portal.utils.security import sanitize_text_for_db
@@ -26,6 +27,55 @@ EXTRACTION_SEMAPHORE = asyncio.Semaphore(3)
 
 _TRANSIENT_CODES = {"502", "503", "57014"}
 _TRANSIENT_MESSAGES = ("bad gateway", "service unavailable", "schema cache", "statement timeout")
+
+# Map MIME content types to FileType enum values for registry construction
+_MIME_TO_FILETYPE = {
+    "application/pdf": FileType.PDF,
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": FileType.DOCX,
+    "application/msword": FileType.DOC,
+    "text/plain": FileType.TXT,
+    "text/csv": FileType.CSV,
+    "message/rfc822": FileType.EML,
+    "image/jpeg": FileType.JPG,
+    "image/png": FileType.PNG,
+    "image/gif": FileType.GIF,
+    "image/bmp": FileType.BMP,
+    "image/tiff": FileType.TIFF,
+}
+
+
+def _build_and_persist_registry(
+    *,
+    document_id: str,
+    file_name: str,
+    file_type: str,
+    extracted_text: str,
+    extraction_quality: str,
+    extraction_method: str,
+    signature_detection: Optional[Dict[str, Any]],
+    supabase_client: Any,
+) -> None:
+    """Build initial registry from extraction data and persist to DB.
+
+    Called after text extraction succeeds during upload or deferred extraction.
+    """
+    ft = _MIME_TO_FILETYPE.get(file_type, FileType.PDF)
+    pdoc = ProcessedDocument(
+        file_name=file_name,
+        content=extracted_text or "",
+        document_type=DocumentType.CASE_DOCUMENT,
+        file_type=ft,
+        metadata=FileMetadata(file_name=file_name, file_type=ft, file_size=0),
+        document_id=document_id,
+        extraction_quality=extraction_quality,
+        extraction_method=extraction_method,
+        signature_detection=signature_detection,
+    )
+    service = DocumentRegistryService()
+    registry = service.build_initial_registry(pdoc)
+    service.persist_to_document(document_id, registry, supabase_client)
+    logger.info(f"Registry built for {document_id}: type={registry.get('document_type')}, "
+                f"sig_expected={registry.get('signature_expected')}")
 
 
 def _is_transient_supabase_error(err: Exception) -> bool:
@@ -566,6 +616,22 @@ async def upload_document(
                     f"quality={extraction_quality}, chars={len(extracted_text)}"
                 )
 
+                # Build and persist initial document registry (Stage 1)
+                if extracted_text:
+                    try:
+                        _build_and_persist_registry(
+                            document_id=document_id,
+                            file_name=file_name,
+                            file_type=file_type,
+                            extracted_text=extracted_text,
+                            extraction_quality=extraction_quality,
+                            extraction_method=extraction_method,
+                            signature_detection=signature_detection,
+                            supabase_client=user_supabase,
+                        )
+                    except Exception as reg_err:
+                        logger.warning(f"Registry build failed for {document_id}: {reg_err}")
+
             except Exception as extract_err:
                 # Log but don't fail the upload if extraction fails
                 logger.warning(f"Immediate extraction failed for {document_id}: {extract_err}")
@@ -633,7 +699,9 @@ async def list_documents_for_case(
                 "id, case_id, file_name, file_type, file_size, storage_path, status, "
                 "extraction_method, extraction_quality, extracted_at, page_count, "
                 "ocr_provider, extraction_error, is_verified, is_flagged_as_junk, "
-                "text_edited_at, metadata, created_at, updated_at"
+                "text_edited_at, metadata, created_at, updated_at, "
+                "document_type_label, document_type_confidence, signed_status, "
+                "signature_expected, system_summary, enrichment_stage"
             )
             .eq("case_id", case_id)
             .order("created_at", desc=False)
@@ -646,6 +714,125 @@ async def list_documents_for_case(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error fetching documents: {str(e)}"
+        ) from e
+
+
+@router.post("/case/{case_id}/enrich-cross-document")
+async def enrich_cross_document_for_case(
+    case_id: str,
+    user=Depends(get_current_user),
+    user_supabase=Depends(get_user_supabase_client),
+    service_supabase=Depends(get_supabase_client),
+):
+    """Run cross-document enrichment for a case.
+
+    Detects email threads, sequential photos, and contract families.
+    Populates suggested_relationships in each document's registry.
+    Idempotent — skips documents already at cross_doc or ai_analysis stage.
+
+    Call this before displaying the Verification Hub so relationship
+    suggestions are available immediately (no analysis run required).
+    """
+    try:
+        # Verify case ownership
+        case_response = (
+            user_supabase.table("cases")
+            .select("id")
+            .eq("id", case_id)
+            .eq("user_id", user["id"])
+            .execute()
+        )
+        if not case_response.data:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Case not found")
+
+        # Load documents with extracted_text (needed for email subject extraction)
+        docs_response = (
+            service_supabase.table("documents")
+            .select("id, file_name, file_type, file_size, extracted_text, metadata, "
+                    "enrichment_stage")
+            .eq("case_id", case_id)
+            .execute()
+        )
+        docs = docs_response.data or []
+        if not docs:
+            return {"enriched": 0, "total": 0}
+
+        registry_service = DocumentRegistryService()
+        registries: list[dict] = []
+        processed_docs: list[ProcessedDocument] = []
+        doc_id_by_name: dict[str, str] = {}
+        needs_enrichment = False
+
+        for doc in docs:
+            metadata = doc.get("metadata") or {}
+            registry = metadata.get("registry")
+            if not registry:
+                continue
+
+            # Skip docs already enriched beyond extraction
+            stage = registry.get("enrichment_stage", "none")
+            if stage in ("cross_doc", "ai_analysis"):
+                registries.append(registry)
+                # Still include in processed_docs for cross-doc matching
+                pdoc = ProcessedDocument(
+                    file_name=doc.get("file_name", ""),
+                    content=(doc.get("extracted_text") or "")[:5000],
+                    document_type=DocumentType.CASE_DOCUMENT,
+                    file_type=FileType.PDF,
+                    metadata=FileMetadata(
+                        file_name=doc.get("file_name", ""),
+                        file_type=FileType.PDF,
+                        file_size=doc.get("file_size", 0),
+                    ),
+                    document_id=doc["id"],
+                )
+                processed_docs.append(pdoc)
+                doc_id_by_name[doc.get("file_name", "")] = doc["id"]
+                continue
+
+            needs_enrichment = True
+            registries.append(registry)
+            pdoc = ProcessedDocument(
+                file_name=doc.get("file_name", ""),
+                content=(doc.get("extracted_text") or "")[:5000],
+                document_type=DocumentType.CASE_DOCUMENT,
+                file_type=FileType.PDF,
+                metadata=FileMetadata(
+                    file_name=doc.get("file_name", ""),
+                    file_type=FileType.PDF,
+                    file_size=doc.get("file_size", 0),
+                ),
+                document_id=doc["id"],
+            )
+            processed_docs.append(pdoc)
+            doc_id_by_name[doc.get("file_name", "")] = doc["id"]
+
+        if not needs_enrichment:
+            return {"enriched": 0, "total": len(docs)}
+
+        # Run cross-document enrichment
+        enriched = registry_service.enrich_cross_document(registries, processed_docs)
+
+        # Persist updated registries
+        persisted = 0
+        for reg in enriched:
+            doc_name = reg.get("document_name", "")
+            doc_id = reg.get("document_id") or doc_id_by_name.get(doc_name)
+            if not doc_id:
+                continue
+            if reg.get("enrichment_stage") == "cross_doc":
+                registry_service.persist_to_document(doc_id, reg, service_supabase)
+                persisted += 1
+
+        return {"enriched": persisted, "total": len(docs)}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in enrich_cross_document_for_case: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error running cross-document enrichment: {str(e)}",
         ) from e
 
 
@@ -1191,6 +1378,50 @@ async def verify_document(
             metadata["attorney_enrichment"]["document_relationships"] = request.document_relationships
         if "attorney_enrichment" in metadata:
             update_data["metadata"] = metadata
+
+        # --- Sync denormalized columns via registry service ---
+        # All registry-backed column writes go through resolve_denormalized_columns()
+        # to maintain a single source of truth for column computation.
+        registry = metadata.get("registry") or {}
+
+        # Update registry dict to reflect attorney changes
+        if registry:
+            if request.document_type_override is not None:
+                registry["document_type_override"] = request.document_type_override
+            if request.attorney_notes is not None:
+                registry["attorney_notes"] = request.attorney_notes
+            if request.key_facts is not None:
+                registry["key_facts"] = request.key_facts
+            if request.relevance_level is not None:
+                registry["relevance_level"] = request.relevance_level
+            if request.document_relationships is not None:
+                registry["document_relationships"] = request.document_relationships
+            if should_update_signature_meta and normalized_status:
+                # Sync execution_status in registry so columns resolve correctly
+                if normalized_status == "signed":
+                    registry["execution_status"] = "signed"
+                elif normalized_status == "not_signed":
+                    registry["execution_status"] = "not_detected"
+                else:
+                    registry["execution_status"] = "unknown"
+
+            # Compute denormalized columns from updated registry
+            column_values = DocumentRegistryService.resolve_denormalized_columns(registry)
+            update_data.update(column_values)
+            metadata["registry"] = registry
+            update_data["metadata"] = metadata
+        else:
+            # No registry yet — still sync what we can from attorney enrichment
+            enrichment = metadata.get("attorney_enrichment") or {}
+            if request.document_type_override is not None:
+                update_data["document_type_label"] = request.document_type_override
+            if should_update_signature_meta and normalized_status:
+                if normalized_status == "signed":
+                    update_data["signed_status"] = "signed"
+                elif normalized_status == "not_signed":
+                    update_data["signed_status"] = "not_detected"
+                else:
+                    update_data["signed_status"] = "unknown"
 
         # Update document
         update_response = user_supabase.table("documents").update(update_data).eq("id", document_id).execute()
@@ -2125,6 +2356,22 @@ async def _trigger_extraction_inner(
             f"Extraction complete for {document_id}: method={extraction_method}, "
             f"quality={extraction_quality}, chars={len(extracted_text or '')}"
         )
+
+        # Build and persist initial document registry (Stage 1) for deferred extraction
+        if extracted_text and extracted_text.strip():
+            try:
+                _build_and_persist_registry(
+                    document_id=document_id,
+                    file_name=file_name,
+                    file_type=file_type,
+                    extracted_text=extracted_text,
+                    extraction_quality=extraction_quality,
+                    extraction_method=extraction_method,
+                    signature_detection=signature_detection,
+                    supabase_client=user_supabase,
+                )
+            except Exception as reg_err:
+                logger.warning(f"Registry build failed for {document_id}: {reg_err}")
 
         return {
             "document_id": document_id,

@@ -6,11 +6,13 @@ const mockDoc = {
     id: 'doc-123',
     file_name: 'Purchase_Agreement.pdf',
     status: 'needs_review',
+    document_type_label: null,
+    signature_expected: true,
+    signed_status: 'not_detected',
     metadata: {
         extraction_quality: 'medium',
         quality_score: 7,
-        document_type_label: null,
-        signature_detection: { status: 'not_detected', signature_expected: true },
+        registry: { document_type: null, signature_expected: true, execution_status: 'not_detected' },
         attorney_enrichment: {}
     }
 };

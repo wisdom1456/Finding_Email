@@ -171,23 +171,26 @@
 		activeFilters = newFilters;
 	}
 
-	// Compute filtered documents for display (used when filters are active)
+	// Compute filtered documents using registry-backed columns
 	let displayDocuments = $derived((() => {
 		if (activeFilters.size === 0) return localDocuments;
 		return localDocuments.filter(d => {
-			const sig = d.metadata?.signature_detection || {};
 			const enrichment = d.metadata?.attorney_enrichment || {};
 			const quality = d.metadata?.quality_score ?? 10;
 
 			if (activeFilters.has('missing-signatures')) {
-				if (sig.signature_expected && sig.status !== 'signed' &&
-					enrichment.signature_verification !== 'signed') return true;
+				const sigExpected = d.signature_expected === true ||
+				                    d.metadata?.registry?.signature_expected === true;
+				const sigSatisfied =
+					d.signed_status === 'signed' ||
+					enrichment.signature_verification === 'signed';
+				if (sigExpected && !sigSatisfied) return true;
 			}
 			if (activeFilters.has('low-ocr')) {
 				if (quality < 5) return true;
 			}
 			if (activeFilters.has('needs-type')) {
-				if (!d.metadata?.document_type_label && !enrichment.document_type_override) return true;
+				if (!d.document_type_label && !enrichment.document_type_override) return true;
 			}
 			if (activeFilters.has('ready')) {
 				if (d.status === 'ready') return true;
@@ -766,9 +769,12 @@ const { session, user } = await getSecureSession();
 	// Signature Review Panel handlers
 	function handleSignatureReviewFromCard(doc: any) {
 		const needsSig = localDocuments.filter(d => {
-			const sig = d.metadata?.signature_detection || {};
-			const enrichment = d.metadata?.attorney_enrichment || {};
-			return sig.signature_expected && sig.status !== 'signed' && enrichment.signature_verification !== 'signed';
+			const sigExpected = d.signature_expected === true ||
+			                    d.metadata?.registry?.signature_expected === true;
+			const sigSatisfied =
+				d.signed_status === 'signed' ||
+				d.metadata?.attorney_enrichment?.signature_verification === 'signed';
+			return sigExpected && !sigSatisfied;
 		});
 		const clickedIdx = needsSig.findIndex(d => d.id === doc.id);
 		if (clickedIdx >= 0) {

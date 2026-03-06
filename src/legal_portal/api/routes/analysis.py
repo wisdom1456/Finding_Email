@@ -20,6 +20,7 @@ import html2text
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, validator
+from starlette.concurrency import run_in_threadpool
 
 from legal_portal.api.dependencies import get_current_user, get_supabase_client, get_user_supabase_client
 from legal_portal.api.rate_limiter import limiter
@@ -1773,53 +1774,71 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
                         doc.update(result)
                         break
 
-            # Step 0b: Deduplicate email threads
-            eml_docs_for_dedup = [
-                d for d in documents
-                if d.get("file_name", "").lower().endswith(".eml")
-                and d.get("extracted_text")
-                and not d.get("is_flagged_as_junk")
-            ]
-            if eml_docs_for_dedup:
+            # Step 0c: Extract any newly created attachment documents
+            # Re-fetch documents to pick up any new attachment docs created during Step 0
+            new_docs_resp = (
+                supabase.table("documents")
+                .select("*")
+                .eq("case_id", case_id)
+                .eq("extraction_method", "eml_attachment")
+                .eq("status", DocumentStatus.PENDING)
+                .execute()
+            )
+            new_att_docs = new_docs_resp.data or []
+            if new_att_docs:
+                logger.info(
+                    f"[BACKGROUND:ATTACHMENTS] [CASE:{case_id}] "
+                    f"Extracting {len(new_att_docs)} EML attachment PDFs"
+                )
+                att_results = await _extract_deferred_documents(
+                    new_att_docs, supabase, progress_manager, analysis_id,
+                )
+                # Add extracted attachment docs to the documents list
+                for att_doc in new_att_docs:
+                    att_id = att_doc["id"]
+                    if att_id in att_results:
+                        att_doc.update(att_results[att_id])
+                    documents.append(att_doc)
+
+        # Step 0a: Content-hash dedup (if not already done)
+        case_resp = supabase.table("cases").select("metadata").eq("id", case_id).execute()
+        case_meta = (case_resp.data[0].get("metadata") or {}) if case_resp.data else {}
+        if not case_meta.get("content_hash_dedup_at"):
+            logger.info(
+                f"[BACKGROUND:CONTENT_DEDUP] [CASE:{case_id}] "
+                f"Running content-hash dedup (first time)"
+            )
+            from legal_portal.api.routes.cases import run_content_hash_dedup
+            dedup_result = await run_in_threadpool(run_content_hash_dedup, case_id, supabase)
+            if dedup_result["duplicates_found"] > 0:
+                # Remove flagged duplicates from documents list
+                flagged = set(dedup_result.get("flagged_ids", []))
+                documents = [d for d in documents if d["id"] not in flagged]
+                logger.info(
+                    f"[BACKGROUND:CONTENT_DEDUP] [CASE:{case_id}] "
+                    f"Removed {dedup_result['duplicates_found']} content-hash duplicates"
+                )
+
+        # Step 0b: Deduplicate email threads
+        eml_docs_for_dedup = [
+            d for d in documents
+            if d.get("file_name", "").lower().endswith(".eml")
+            and d.get("extracted_text")
+            and not d.get("is_flagged_as_junk")
+        ]
+        if eml_docs_for_dedup:
+            logger.info(
+                f"[BACKGROUND:DEDUP] [CASE:{case_id}] "
+                f"Deduplicating {len(eml_docs_for_dedup)} email threads"
+            )
+            flagged_ids = await _dedup_email_threads(eml_docs_for_dedup, supabase)
+            # Remove flagged docs from documents list so they're excluded from analysis
+            if flagged_ids:
+                documents = [d for d in documents if d["id"] not in flagged_ids]
                 logger.info(
                     f"[BACKGROUND:DEDUP] [CASE:{case_id}] "
-                    f"Deduplicating {len(eml_docs_for_dedup)} email threads"
+                    f"Removed {len(flagged_ids)} duplicate/superseded emails"
                 )
-                flagged_ids = await _dedup_email_threads(eml_docs_for_dedup, supabase)
-                # Remove flagged docs from documents list so they're excluded from analysis
-                if flagged_ids:
-                    documents = [d for d in documents if d["id"] not in flagged_ids]
-                    logger.info(
-                        f"[BACKGROUND:DEDUP] [CASE:{case_id}] "
-                        f"Removed {len(flagged_ids)} duplicate/superseded emails"
-                    )
-
-            # Step 0c: Extract any newly created attachment documents
-            if deferred_docs:
-                # Re-fetch documents to pick up any new attachment docs created during Step 0
-                new_docs_resp = (
-                    supabase.table("documents")
-                    .select("*")
-                    .eq("case_id", case_id)
-                    .eq("extraction_method", "eml_attachment")
-                    .eq("status", DocumentStatus.PENDING)
-                    .execute()
-                )
-                new_att_docs = new_docs_resp.data or []
-                if new_att_docs:
-                    logger.info(
-                        f"[BACKGROUND:ATTACHMENTS] [CASE:{case_id}] "
-                        f"Extracting {len(new_att_docs)} EML attachment PDFs"
-                    )
-                    att_results = await _extract_deferred_documents(
-                        new_att_docs, supabase, progress_manager, analysis_id,
-                    )
-                    # Add extracted attachment docs to the documents list
-                    for att_doc in new_att_docs:
-                        att_id = att_doc["id"]
-                        if att_id in att_results:
-                            att_doc.update(att_results[att_id])
-                        documents.append(att_doc)
 
         # Step 1: Prepare ProcessedDocument objects directly from DB (no re-extraction)
         from legal_portal.core.data_models import FileMetadata, FileType

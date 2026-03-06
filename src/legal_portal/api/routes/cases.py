@@ -1,6 +1,8 @@
 """Case management endpoints."""
 
+import hashlib
 import logging
+from collections import defaultdict
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
@@ -646,6 +648,7 @@ async def import_clio_documents_helper(
         # This handles re-imports and duplicate files from Clio
         existing_docs = supabase.table("documents").select("file_name, file_size, metadata").eq("case_id", case_id).execute()
         existing_file_keys = set()  # (filename, size) tuples for quick lookup
+        existing_content_hashes = set()  # SHA-256 hashes
         for existing in existing_docs.data or []:
             key = (existing["file_name"], existing.get("file_size", 0))
             existing_file_keys.add(key)
@@ -653,9 +656,13 @@ async def import_clio_documents_helper(
             if existing.get("metadata", {}).get("original_filename"):
                 key2 = (existing["metadata"]["original_filename"], existing.get("file_size", 0))
                 existing_file_keys.add(key2)
+            # Track content hashes
+            if existing.get("metadata", {}).get("content_hash"):
+                existing_content_hashes.add(existing["metadata"]["content_hash"])
 
         # Track duplicates seen in THIS import batch
         import_batch_keys = set()
+        import_batch_hashes = set()
         duplicates_count = 0
 
         # Cache Clio access token once (instead of fetching per document)
@@ -778,12 +785,22 @@ async def import_clio_documents_helper(
                 logger.debug("Downloaded file", extra={"size_mb": f"{original_size / (1024 * 1024):.2f}"})
 
                 # --- DUPLICATE DETECTION ---
-                # Check if this file is a duplicate (by name + size)
+                # Check by content hash (SHA-256) first, then by name + size
+                content_hash = hashlib.sha256(file_content).hexdigest()
+
                 file_key = (doc_name, original_size)
                 is_duplicate = False
                 duplicate_reason = None
 
-                if file_key in existing_file_keys:
+                if content_hash in existing_content_hashes:
+                    is_duplicate = True
+                    duplicate_reason = "content_hash_match"
+                    logger.info(f"Duplicate detected (content hash): {doc_name}")
+                elif content_hash in import_batch_hashes:
+                    is_duplicate = True
+                    duplicate_reason = "content_hash_match_in_batch"
+                    logger.info(f"Duplicate detected (content hash in batch): {doc_name}")
+                elif file_key in existing_file_keys:
                     is_duplicate = True
                     duplicate_reason = "exists_in_case"
                     logger.info(f"Duplicate detected (exists in case): {doc_name} ({original_size} bytes)")
@@ -794,6 +811,7 @@ async def import_clio_documents_helper(
 
                 # Track this file in the import batch
                 import_batch_keys.add(file_key)
+                import_batch_hashes.add(content_hash)
 
                 if is_duplicate:
                     duplicates_count += 1
@@ -855,7 +873,8 @@ async def import_clio_documents_helper(
                             "clio_url": doc_url,
                             "clio_filename": doc_name,
                             "is_intake_candidate": is_intake_candidate,
-                            "classification": classification,  # Add classification
+                            "classification": classification,
+                            "content_hash": content_hash,
                         }
                     )
                     logger.debug(f"Classified as {classification}: {doc_name}")
@@ -1761,4 +1780,143 @@ async def change_clio_matter(
         logger.exception("Error changing matter", extra={"error": str(e)})
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error changing matter: {str(e)}"
+        ) from e
+
+
+def run_content_hash_dedup(case_id: str, supabase) -> Dict[str, Any]:
+    """Run content-hash dedup on all documents in a case.
+
+    Downloads each document's bytes from storage, computes SHA-256,
+    and flags duplicates (keeping the earliest uploaded version).
+
+    Returns dict with dedup results summary.
+    """
+    # Fetch all non-duplicate, non-skipped documents
+    docs_resp = (
+        supabase.table("documents")
+        .select("id, file_name, file_size, storage_path, metadata, status, created_at")
+        .eq("case_id", case_id)
+        .neq("status", "duplicate")
+        .neq("status", "skipped")
+        .order("created_at")
+        .execute()
+    )
+    docs = docs_resp.data or []
+
+    if not docs:
+        return {"duplicates_found": 0, "documents_checked": 0}
+
+    # Compute content hashes (use existing if available)
+    hash_groups: Dict[str, list] = defaultdict(list)
+    docs_checked = 0
+    docs_hashed = 0
+
+    for doc in docs:
+        doc_id = doc["id"]
+        metadata = doc.get("metadata") or {}
+        content_hash = metadata.get("content_hash")
+
+        if not content_hash:
+            # Download file and compute hash
+            storage_path = doc.get("storage_path")
+            if not storage_path:
+                continue
+            try:
+                file_bytes = supabase.storage.from_("documents").download(storage_path)
+                content_hash = hashlib.sha256(file_bytes).hexdigest()
+                # Store the hash for future use
+                metadata["content_hash"] = content_hash
+                supabase.table("documents").update(
+                    {"metadata": metadata}
+                ).eq("id", doc_id).execute()
+                docs_hashed += 1
+            except Exception as e:
+                logger.warning(
+                    f"Failed to download doc for hash: {doc['file_name']}",
+                    extra={"doc_id": doc_id, "error": str(e)},
+                )
+                continue
+
+        hash_groups[content_hash].append(doc)
+        docs_checked += 1
+
+    # Flag duplicates (keep earliest, flag rest)
+    duplicates_found = 0
+    flagged_ids = []
+
+    for content_hash, group in hash_groups.items():
+        if len(group) <= 1:
+            continue
+
+        # First doc (earliest by created_at) is the canonical one
+        canonical = group[0]
+        for dup in group[1:]:
+            dup_id = dup["id"]
+            dup_metadata = dup.get("metadata") or {}
+            dup_metadata["is_duplicate"] = True
+            dup_metadata["duplicate_reason"] = "content_hash_match"
+            dup_metadata["duplicate_of"] = canonical["id"]
+            dup_metadata["excluded"] = True
+
+            supabase.table("documents").update({
+                "status": "duplicate",
+                "metadata": dup_metadata,
+            }).eq("id", dup_id).execute()
+
+            duplicates_found += 1
+            flagged_ids.append(dup_id)
+            logger.info(
+                f"Content-hash duplicate: {dup['file_name']} -> {canonical['file_name']}",
+                extra={"dup_id": dup_id, "canonical_id": canonical["id"], "hash": content_hash[:12]},
+            )
+
+    # Update case metadata with dedup timestamp
+    case_resp = supabase.table("cases").select("metadata").eq("id", case_id).execute()
+    case_metadata = (case_resp.data[0].get("metadata") or {}) if case_resp.data else {}
+    case_metadata["content_hash_dedup_at"] = datetime.now(timezone.utc).isoformat()
+    case_metadata["content_hash_dedup_duplicates"] = duplicates_found
+    supabase.table("cases").update({"metadata": case_metadata}).eq("id", case_id).execute()
+
+    return {
+        "duplicates_found": duplicates_found,
+        "documents_checked": docs_checked,
+        "documents_hashed": docs_hashed,
+        "flagged_ids": flagged_ids,
+    }
+
+
+@router.post("/{case_id}/dedup")
+async def dedup_case_documents(
+    case_id: str,
+    user=Depends(get_current_user),  # noqa: B008
+    supabase=Depends(get_supabase_client),  # noqa: B008
+):
+    """Run content-hash deduplication on all documents in a case.
+
+    Downloads each document, computes SHA-256, and flags duplicates.
+    """
+    # Verify case ownership
+    case_result = (
+        supabase.table("cases").select("id").eq("id", case_id).eq("user_id", user["id"]).execute()
+    )
+    if not case_result.data:
+        raise HTTPException(status_code=404, detail="Case not found")
+
+    try:
+        result = await run_in_threadpool(run_content_hash_dedup, case_id, supabase)
+        return {
+            "success": True,
+            "duplicates_found": result["duplicates_found"],
+            "documents_checked": result["documents_checked"],
+            "message": (
+                f"Found and flagged {result['duplicates_found']} duplicate documents"
+                if result["duplicates_found"] > 0
+                else "No duplicate documents found"
+            ),
+        }
+    except Exception as e:
+        logger.exception("Error running dedup", extra={"case_id": case_id, "error": str(e)})
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error running dedup: {str(e)}",
         ) from e

@@ -24,7 +24,7 @@
 	import type { CaseData } from '$lib/types';
 	import DocumentSummaryCard from '$lib/components/DocumentSummaryCard.svelte';
 	import DocumentPreviewPane from '$lib/components/DocumentPreviewPane.svelte';
-	import { syncClioMatter, type ClioSyncResponse } from '$lib/api/cases';
+	import { syncClioMatter, dedupCaseDocuments, type ClioSyncResponse, type DedupResponse } from '$lib/api/cases';
 
 	let caseData = $state<CaseData | null>(null);
 	let documents = $state<any[]>([]);
@@ -60,6 +60,9 @@
 	let syncLoading = $state(false);
 	let syncResult = $state<ClioSyncResponse | null>(null);
 	let syncError = $state<string | null>(null);
+
+	// Dedup state
+	let dedupLoading = $state(false);
 
 	// Documents that are ready but missing extracted text (will be skipped in analysis)
 	let docsWithoutText = $derived(
@@ -143,6 +146,15 @@
 			// Otherwise by date (oldest first)
 			return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
 		})
+	);
+
+	// Filter out duplicates and junk by default
+	let showHiddenDocs = $state(false);
+	let hiddenDocs = $derived(
+		sortedDocuments.filter(doc => doc.status === 'duplicate' || doc.is_flagged_as_junk)
+	);
+	let visibleDocuments = $derived(
+		showHiddenDocs ? sortedDocuments : sortedDocuments.filter(doc => doc.status !== 'duplicate' && !doc.is_flagged_as_junk)
 	);
 
 	// Document viewer modal state
@@ -477,6 +489,23 @@
 			toastStore.error(syncError);
 		} finally {
 			syncLoading = false;
+		}
+	}
+
+	async function handleDedup() {
+		dedupLoading = true;
+		try {
+			const result = await dedupCaseDocuments(caseId as string);
+			await loadDocuments();
+			if (result.duplicates_found > 0) {
+				toastStore.success(`Found and removed ${result.duplicates_found} duplicate document${result.duplicates_found === 1 ? '' : 's'}`);
+			} else {
+				toastStore.success('No duplicate documents found');
+			}
+		} catch (err) {
+			toastStore.error(err instanceof Error ? err.message : 'Failed to run dedup');
+		} finally {
+			dedupLoading = false;
 		}
 	}
 
@@ -1907,17 +1936,28 @@
 				<div class="flex justify-between items-center">
 					<h3 class="text-lg font-heading font-semibold text-contrast">Documents</h3>
 
-					{#if caseData?.clio_matter_id}
+					<div class="flex items-center gap-2">
 						<AsyncButton
-							onclick={handleSync}
-							loading={syncLoading}
+							onclick={handleDedup}
+							loading={dedupLoading}
 							variant="secondary"
 							size="sm"
-							loadingText="Syncing..."
+							loadingText="Scanning..."
 						>
-							Sync from Clio
+							Find Duplicates
 						</AsyncButton>
-					{/if}
+						{#if caseData?.clio_matter_id}
+							<AsyncButton
+								onclick={handleSync}
+								loading={syncLoading}
+								variant="secondary"
+								size="sm"
+								loadingText="Syncing..."
+							>
+								Sync from Clio
+							</AsyncButton>
+						{/if}
+					</div>
 				</div>
 			</div>
 
@@ -2204,9 +2244,22 @@
 					<p class="text-sm text-gray-500">No documents uploaded yet.</p>
 				</div>
 			{:else if documents.length > 0}
+				{#if hiddenDocs.length > 0}
+					<div class="px-4 py-2 bg-gray-50 border-t border-b border-gray-200 flex items-center justify-between">
+						<span class="text-xs text-gray-500">
+							{hiddenDocs.length} duplicate/junk document{hiddenDocs.length === 1 ? '' : 's'} hidden
+						</span>
+						<button
+							onclick={() => showHiddenDocs = !showHiddenDocs}
+							class="text-xs text-indigo-600 hover:text-indigo-800 font-medium"
+						>
+							{showHiddenDocs ? 'Hide' : 'Show'}
+						</button>
+					</div>
+				{/if}
 				<div class="border-t border-gray-200">
 					<ul class="divide-y divide-gray-200">
-					{#each sortedDocuments as doc}
+					{#each visibleDocuments as doc}
 							<li 
 								class="px-4 py-4 sm:px-6 group transition-colors {isVideoAudioFile(doc.file_name) ? 'bg-red-50 hover:bg-red-100 border-l-4 border-red-500 opacity-75' : doc.metadata?.is_intake_form ? (isCaseSummary(doc) ? 'bg-gradient-to-r from-indigo-50 to-purple-50 hover:from-indigo-100 hover:to-purple-100 border-l-[6px] border-indigo-600' : 'bg-gradient-to-r from-green-50 to-green-100 hover:from-green-100 hover:to-green-150 border-l-[6px] border-green-600') : (isCaseSummary(doc) ? 'bg-indigo-50 hover:bg-indigo-100 border-l-4 border-indigo-400' : isIntakeForm(doc) ? 'bg-yellow-50 hover:bg-yellow-100 border-l-4 border-yellow-400' : 'hover:bg-gray-50')}"
 								role={doc.metadata?.is_intake_form ? 'article' : undefined}

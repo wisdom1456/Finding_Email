@@ -107,11 +107,8 @@ def main():
                 stats["skipped_healthy"] += 1
                 continue
 
-        # Skip documents without extracted text
+        # Even without extracted text, we can still classify by filename
         text = doc.get("extracted_text") or ""
-        if not text.strip():
-            stats["skipped_no_text"] += 1
-            continue
 
         # Build ProcessedDocument
         file_type = _guess_file_type(file_name)

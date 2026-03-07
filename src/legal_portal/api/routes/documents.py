@@ -2458,7 +2458,7 @@ async def _trigger_extraction_inner(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error in trigger_extraction: {str(e)}")
+        logger.error(f"Error in trigger_extraction for {document_id}: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error extracting text: {str(e)}",

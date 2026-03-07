@@ -535,7 +535,14 @@ const { session, user } = await getSecureSession();
 					if (r.status === 'fulfilled' && r.value.ok) {
 						extractedCount++;
 					} else {
-						console.error(`Failed to extract ${batch[j].file_name}:`, r.status === 'rejected' ? r.reason : r.value.status);
+						let errorDetail = r.status === 'rejected' ? r.reason : r.value.status;
+						if (r.status === 'fulfilled' && !r.value.ok) {
+							try {
+								const errBody = await r.value.json();
+								errorDetail = `${r.value.status}: ${errBody.detail || JSON.stringify(errBody)}`;
+							} catch { /* response not JSON */ }
+						}
+						console.error(`Failed to extract ${batch[j].file_name}:`, errorDetail);
 						failedCount++;
 					}
 					const next = new Set(processingDocIds);

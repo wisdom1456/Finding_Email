@@ -116,9 +116,20 @@
 		'executed'
 	];
 
+	const _NO_SIG_EXTENSIONS = new Set([
+		'.eml', '.txt', '.csv', '.doc', '.jpg', '.jpeg', '.png', '.heic', '.gif', '.bmp', '.tiff', '.tif',
+	]);
+	const _NO_SIG_TYPES = new Set([
+		'correspondence', 'email', 'photo/media', 'note', 'communication',
+	]);
+
 	function requiresSignatureReview(documentName: string | undefined, documentType: string | undefined): boolean {
 		const normalizedName = String(documentName || '').toLowerCase();
+		const ext = normalizedName.includes('.') ? '.' + normalizedName.split('.').pop() : '';
+		if (_NO_SIG_EXTENSIONS.has(ext)) return false;
+		if (normalizedName.startsWith('clio note') || normalizedName.startsWith('clio communication')) return false;
 		const normalizedType = String(documentType || '').toLowerCase();
+		if (_NO_SIG_TYPES.has(normalizedType)) return false;
 
 		if (normalizedType.includes('contract') || normalizedType.includes('agreement')) {
 			return true;

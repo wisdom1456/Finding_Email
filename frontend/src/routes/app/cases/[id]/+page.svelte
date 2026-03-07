@@ -1505,8 +1505,20 @@
 		'executed'
 	];
 
+	const _NO_SIG_EXTENSIONS = new Set([
+		'.eml', '.txt', '.csv', '.doc', '.jpg', '.jpeg', '.png', '.heic', '.gif', '.bmp', '.tiff', '.tif',
+	]);
+	const _NO_SIG_TYPES = new Set([
+		'correspondence', 'email', 'photo/media', 'note', 'communication',
+	]);
+
 	function requiresSignatureReview(doc: any): boolean {
 		const fileName = String(doc?.file_name || '').toLowerCase();
+		const ext = fileName.includes('.') ? '.' + fileName.split('.').pop() : '';
+		if (_NO_SIG_EXTENSIONS.has(ext)) return false;
+		if (fileName.startsWith('clio note') || fileName.startsWith('clio communication')) return false;
+		const docType = (doc?.document_type_label || doc?.metadata?.registry?.document_type || '').toLowerCase();
+		if (_NO_SIG_TYPES.has(docType)) return false;
 		return signatureRequiredKeywords.some((keyword) => fileName.includes(keyword));
 	}
 

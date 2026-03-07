@@ -23,21 +23,28 @@ export const supabase = createBrowserClient<Database>(
 export async function getSecureSession(): Promise<{ session: Session | null; user: User | null }> {
   // Get session from storage (may be stale or tampered)
   const { data: { session } } = await supabase.auth.getSession();
-  
+
   if (!session) {
     return { session: null, user: null };
   }
-  
+
   // Validate the session by contacting Supabase Auth server
-  const { data: { user }, error } = await supabase.auth.getUser();
-  
+  let { data: { user }, error } = await supabase.auth.getUser();
+
   if (error || !user) {
-    // Session was invalid or expired
-    return { session: null, user: null };
+    // Token may be expired — attempt explicit refresh before giving up
+    const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+    if (refreshError || !refreshData.session || !refreshData.user) {
+      return { session: null, user: null };
+    }
+    return { session: refreshData.session, user: refreshData.user };
   }
-  
-  // Session is valid
-  return { session, user };
+
+  // Re-fetch session after validation — getUser() or auto-refresh may have
+  // refreshed the access token, so the original session object could be stale.
+  const { data: { session: freshSession } } = await supabase.auth.getSession();
+
+  return { session: freshSession ?? session, user };
 }
 
 /**

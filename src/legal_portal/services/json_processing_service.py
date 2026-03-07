@@ -401,6 +401,13 @@ class JsonProcessingService:
         ),
     ]
     _MARKDOWN_HEADER_PREFIX = re.compile(r"(?m)^[ \t]{0,3}#{1,6}[ \t]+")
+    _CANONICAL_SECTION_RE = re.compile(
+        r"(?i)^[ \t]{0,3}#{1,3}[ \t]+"
+        r"(BACKGROUND\s*(?:&|AND)\s*ISSUE|"
+        r"KEY\s*PROVISIONS?|"
+        r"ANALYSIS|"
+        r"RECOMMENDED\s*NEXT\s*STEPS?)"
+    )
     _MARKDOWN_RULE_LINE = re.compile(r"(?m)^[ \t]{0,3}(?:-{3,}|={3,})[ \t]*$")
     _LIST_ITEM_PREFIX_PATTERN = re.compile(r"(?m)^[ \t]*(?:[-*•][ \t]+|\d+[.)][ \t]+)")
     _LIST_ITEM_SENTINEL = "__LIST_ITEM__ "
@@ -1261,11 +1268,11 @@ class JsonProcessingService:
             "Keep KEY PROVISIONS limited to substantive legal theories — address procedural matters "
             "like evidence preservation and jurisdiction in ANALYSIS or RECOMMENDED NEXT STEPS. "
             "In ANALYSIS, apply the provisions to the client's specific facts, assess evidence strength, "
-            "and explicitly anticipate likely defenses the opposing side will raise. "
+            "and briefly note the primary evidentiary gap or risk. "
             "In RECOMMENDED NEXT STEPS, state the recommended course of action and include "
             "a scope-of-engagement paragraph clarifying what the firm will and will not do. "
             "Reference documents naturally in prose without parenthetical citation labels. "
-            "Be thorough — cover all applicable legal theories with substance. "
+            "Be concise — cover the most applicable legal theories without redundancy. "
             "Close with a call to action and confidentiality statement."
         )
 
@@ -1893,11 +1900,11 @@ class JsonProcessingService:
             "- Use these section headers in this order:\n"
             "  1. BACKGROUND & ISSUE (formally restate client's account and document findings)\n"
             "  2. KEY PROVISIONS (bold-titled bullet for each applicable doctrine with detailed explanation)\n"
-            "  3. ANALYSIS (apply provisions to facts, assess evidence, anticipate defenses)\n"
+            "  3. ANALYSIS (apply provisions to facts, assess evidence, note primary risk)\n"
             "  4. RECOMMENDED NEXT STEPS (recommendations + engagement scope paragraph)\n"
             "- Open with a professional greeting and brief statement of documents reviewed.\n"
             "- In KEY PROVISIONS, give each doctrine its own bold-titled bullet — do not compress.\n"
-            "- In ANALYSIS, discuss the strongest theories fully and anticipate opposing defenses.\n"
+            "- In ANALYSIS, discuss the strongest theories fully and note the primary risk or gap.\n"
             "- In RECOMMENDED NEXT STEPS, always include a scope-of-engagement paragraph.\n"
             "- Reference documents naturally in prose — no parenthetical source labels.\n"
             "- End with a call to action and confidentiality statement.\n"
@@ -1919,7 +1926,7 @@ class JsonProcessingService:
             "- Give each applicable doctrine substantive treatment — do not compress secondary theories.\n"
             "- In ANALYSIS, apply the provisions to the client's facts. Discuss the primary theory "
             "(ranked_theories[0]) most thoroughly, but give secondary theories substantive analysis too.\n"
-            "- Anticipate likely defenses in the ANALYSIS section with dedicated paragraphs.\n"
+            "- Note the primary risk or evidentiary gap in ANALYSIS — one sentence is sufficient.\n"
             "- Use evidence anchors naturally in sentences (date, amount, document, or communication) "
             "without label phrasing like 'Evidence:' or 'Supporting documents:'.\n"
             "- Mention missing proof directly and explain why it affects leverage or viability.\n"
@@ -1965,6 +1972,18 @@ class JsonProcessingService:
         try:
             # Convert markdown to HTML
             html_content = markdown2.markdown(cleaned_markdown, extras=extras)
+
+            # Apply semantic CSS classes to known structural elements
+            html_content = re.sub(
+                r'(<p>This analysis is based on the documents provided.*?</p>)',
+                r'<div class="disclaimer">\1</div>',
+                html_content, flags=re.DOTALL,
+            )
+            html_content = re.sub(
+                r'(<p>Please let us know (?:if|whether) you would like.*?</p>)',
+                r'<div class="call-to-action">\1</div>',
+                html_content, flags=re.DOTALL,
+            )
 
             # Wrap in a legal-letter container div for styling consistency
             wrapped_html = f'<div class="legal-letter">\\n{html_content}\\n</div>'
@@ -2027,18 +2046,27 @@ class JsonProcessingService:
         text = text.replace("\r\n", "\n").replace("\r", "\n")
 
         if letter_type == "findings":
-            text = self._MARKDOWN_HEADER_PREFIX.sub("", text)
+            # Preserve canonical section headers as ## markdown; strip all others
+            lines = text.split("\n")
+            cleaned_lines = []
+            for line in lines:
+                m = self._CANONICAL_SECTION_RE.match(line)
+                if m:
+                    cleaned_lines.append(f"## {m.group(1).upper()}")
+                elif self._MARKDOWN_HEADER_PREFIX.match(line):
+                    cleaned_lines.append(self._MARKDOWN_HEADER_PREFIX.sub("", line))
+                else:
+                    cleaned_lines.append(line)
+            text = "\n".join(cleaned_lines)
             text = self._MARKDOWN_RULE_LINE.sub("", text)
             for pattern, replacement in self._PRESENTATION_HEADER_REPLACEMENTS:
                 text = pattern.sub(replacement, text)
-            text = self._LIST_ITEM_PREFIX_PATTERN.sub(self._LIST_ITEM_SENTINEL, text)
             for boilerplate_pattern in self._FINDINGS_BOILERPLATE_REMOVALS:
                 text = boilerplate_pattern.sub("", text)
             for pattern, replacement in self._FINDINGS_LABEL_PREFIX_REWRITES:
                 text = pattern.sub(replacement, text)
             for pattern, replacement in self._FINDINGS_INLINE_LABEL_REWRITES:
                 text = pattern.sub(replacement, text)
-            text = self._collapse_list_blocks_to_paragraphs(text)
             text = re.sub(
                 r"([.!?])\s+([a-z])",
                 lambda match: f"{match.group(1)} {match.group(2).upper()}",

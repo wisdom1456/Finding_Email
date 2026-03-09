@@ -23,6 +23,12 @@
 	let prevStatus = '';
 	let completionTimeout: ReturnType<typeof setTimeout> | null = null;
 
+	// Safety valve: if the component is alive for more than 10 minutes without
+	// reaching a terminal state, stop listening and report an error.
+	// This prevents the UI from staying stuck indefinitely.
+	let safetyTimer: ReturnType<typeof setTimeout> | null = null;
+	const MAX_PROGRESS_AGE_MS = 10 * 60 * 1000; // 10 minutes
+
 	$effect(() => {
 		if (state.status === 'completed' && prevStatus !== 'completed') {
 			if (completionTimeout) clearTimeout(completionTimeout);
@@ -39,12 +45,26 @@
 	onMount(async () => {
 		// Start listening to the analysis stream
 		await progressStore.startListening(analysisId);
+
+		// Safety valve — prevent indefinite stuck state
+		safetyTimer = setTimeout(() => {
+			const current = state.status;
+			if (current !== 'completed' && current !== 'error' && current !== 'idle') {
+				console.warn('[InlineAnalysisProgress] Safety timeout — forcing error state after 10 min');
+				progressStore.stopListening();
+				onError?.('Analysis progress timed out. The analysis may have completed — try refreshing the page.');
+			}
+		}, MAX_PROGRESS_AGE_MS);
 	});
 
 	onDestroy(() => {
 		if (completionTimeout) {
 			clearTimeout(completionTimeout);
 			completionTimeout = null;
+		}
+		if (safetyTimer) {
+			clearTimeout(safetyTimer);
+			safetyTimer = null;
 		}
 		progressStore.stopListening();
 	});

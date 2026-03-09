@@ -392,16 +392,23 @@
 
 	async function loadCase() {
 		try {
+			// Use maybeSingle() instead of single() to avoid 406 when the row
+			// doesn't exist yet (e.g., during a Clio import race) or was deleted.
 			const { data, error } = await withRetry(() =>
 				supabase
 					.from('cases')
 					.select('*')
 					.eq('id', caseId)
-					.single()
+					.maybeSingle()
 			);
 
 			if (error) throw error;
-			
+
+			if (!data) {
+				errorMessage = 'Case not found';
+				return;
+			}
+
 			// Parse clio_matter_data if it's a string
 			const case_data = data as any;
 			if (case_data && case_data.clio_matter_data) {
@@ -413,7 +420,7 @@
 					}
 				}
 			}
-			
+
 			caseData = case_data;
 		} catch (error: any) {
 			errorMessage = error.message || 'Failed to load case';
@@ -1629,14 +1636,26 @@
 		toastStore.success('Analysis complete! Loading results workspace...');
 		if (!componentActive) return;
 
-		// Save is now awaited in AnalysisStreamPanel.emitComplete, no delay needed
-		await loadAnalysisStatus();
+		// Always settle the UI to a terminal state, even if sub-steps fail.
+		try {
+			await loadAnalysisStatus();
+		} catch (e) {
+			console.error('Failed to load analysis status after streaming:', e);
+		}
+
 		navigatingToResults = true;
 		showStreamingPanel = false;
 		activeTab = 'analysis';
 		showingEmbeddedResults = true;
 		autoRunGapAnalysis = true;
-		await loadEmbeddedResults(true);
+
+		try {
+			await loadEmbeddedResults(true);
+		} catch (e) {
+			console.error('Failed to load embedded results:', e);
+			toastStore.error('Results are ready but failed to load. Try refreshing the page.');
+		}
+
 		persistAnalysisViewToUrl();
 		navigatingToResults = false;
 	}

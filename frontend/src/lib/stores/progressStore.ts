@@ -121,6 +121,34 @@ function createProgressStore() {
 	// Track last logged document states to prevent console spam
 	let lastLoggedDocStates: Record<string, string> = {};
 
+	/**
+	 * One-shot status check: fetch the status endpoint to see if the backend
+	 * already completed. If it did, dispatch the terminal event to settle the UI.
+	 * Returns true if the backend reported a terminal state (completed/failed/error).
+	 */
+	async function reconcileFromStatus(
+		statusUrl: string,
+		token: string,
+		messageHandler: (event: ProgressEvent | any) => void
+	): Promise<boolean> {
+		try {
+			const response = await fetch(statusUrl, {
+				headers: { Authorization: `Bearer ${token}` },
+			});
+			if (!response.ok) return false;
+			const data = await response.json();
+			const terminalTypes = ['completed', 'failed', 'error'];
+			if (data && terminalTypes.includes(data.type)) {
+				console.log('[progressStore] Reconciled from status endpoint:', data.type);
+				messageHandler(data);
+				return true;
+			}
+			return false;
+		} catch {
+			return false;
+		}
+	}
+
 	// Internal connect function that can be referenced by other methods
 	const connectInternal = (url: string, onComplete?: (data?: unknown) => void, statusUrl?: string, token?: string): boolean => {
 		console.log('[progressStore] connectInternal called:', { url, statusUrl });
@@ -249,35 +277,59 @@ function createProgressStore() {
 		const errorHandler = (error: Error) => {
 			const errorMessage = error.message;
 			console.log('[progressStore] SSE error:', errorMessage, 'hasStatusUrl:', !!currentStatusUrl);
-			
-			// If SSE times out or fails, try polling fallback
-			if ((errorMessage.includes('SSE_TIMEOUT') || errorMessage.includes('SSE_CONNECTION_FAILED')) 
-			    && currentStatusUrl && currentToken) {
-				update(state => ({
-					...state,
-					message: 'Stream timeout, switching to polling mode...',
-					status: 'active'
-				}));
 
-				// Start polling
-				pollingClient = new PollingClient();
-				pollingClient.startPolling(
-					currentStatusUrl,
-					currentToken,
-					messageHandler,
-					(pollError: Error) => {
+			// If SSE stream ended unexpectedly (network disconnect) or timed out,
+			// try a one-shot status check first. If the backend already completed,
+			// reconcile the UI immediately instead of starting a polling loop.
+			const isRecoverable = errorMessage.includes('SSE_TIMEOUT')
+				|| errorMessage.includes('SSE_CONNECTION_FAILED')
+				|| errorMessage.includes('SSE_STREAM_ENDED');
+
+			if (isRecoverable && currentStatusUrl && currentToken) {
+				// One-shot status check — if backend already finished, settle immediately
+				reconcileFromStatus(currentStatusUrl, currentToken, messageHandler)
+					.then((settled) => {
+						if (settled) {
+							// Backend already completed/failed — UI is now up to date
+							if (onComplete) onComplete(finalData);
+							return;
+						}
+						// Backend still in progress — fall back to polling
 						update(state => ({
 							...state,
-							status: 'error',
-							error: pollError.message
+							message: 'Reconnecting to progress stream...',
+							status: 'active'
 						}));
-					},
-					() => {
-						if (onComplete) {
-							onComplete(finalData);
-						}
-					}
-				);
+						pollingClient = new PollingClient();
+						pollingClient.startPolling(
+							currentStatusUrl,
+							currentToken,
+							messageHandler,
+							(pollError: Error) => {
+								update(state => ({
+									...state,
+									status: 'error',
+									error: pollError.message
+								}));
+							},
+							() => {
+								if (onComplete) onComplete(finalData);
+							}
+						);
+					})
+					.catch(() => {
+						// Status check failed — fall back to polling anyway
+						pollingClient = new PollingClient();
+						pollingClient.startPolling(
+							currentStatusUrl,
+							currentToken,
+							messageHandler,
+							(pollError: Error) => {
+								update(state => ({ ...state, status: 'error', error: pollError.message }));
+							},
+							() => { if (onComplete) onComplete(finalData); }
+						);
+					});
 			} else {
 				// Non-recoverable error
 				update(state => ({

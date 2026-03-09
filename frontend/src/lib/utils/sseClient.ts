@@ -135,8 +135,10 @@ export class SSEClient<T = unknown> {
 				}
 			}
 
-			// Stream ended without terminal event — treat as completed
+			// Stream ended without terminal event (e.g., network disconnect).
+			// Notify via error so progressStore can attempt recovery (check backend status).
 			if (!this.isManuallyDisconnected) {
+				this.onErrorHandler?.(new Error('SSE_STREAM_ENDED'));
 				this.onCompleteHandler?.();
 			}
 		} catch (err) {

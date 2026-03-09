@@ -219,6 +219,10 @@ describe('SSEClient', () => {
 		mockStream.close();
 		await vi.advanceTimersByTimeAsync(0);
 
+		// Should fire SSE_STREAM_ENDED error so progressStore can reconcile
+		expect(onError).toHaveBeenCalledWith(
+			expect.objectContaining({ message: 'SSE_STREAM_ENDED' })
+		);
 		expect(onComplete).toHaveBeenCalled();
 	});
 

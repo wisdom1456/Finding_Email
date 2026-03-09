@@ -107,13 +107,13 @@ describe('progressStore', () => {
 	// ── connect ──
 
 	it('sets status to connecting on connect', () => {
-		progressStore.connect('http://localhost/stream');
+		progressStore.connect('http://localhost/stream', undefined, undefined, 'test-token');
 		const state = get(progressStore);
 		expect(state.status).toBe('connecting');
 	});
 
 	it('isProcessing is true when connecting', () => {
-		progressStore.connect('http://localhost/stream');
+		progressStore.connect('http://localhost/stream', undefined, undefined, 'test-token');
 		expect(get(isProcessing)).toBe(true);
 	});
 
@@ -319,7 +319,7 @@ describe('progressStore', () => {
 
 	it('marks previous stages as completed when a later stage becomes active', () => {
 		// Connect — this creates a real SSEClient with our MockEventSource
-		progressStore.connect('http://localhost/stream');
+		progressStore.connect('http://localhost/stream', undefined, undefined, 'test-token');
 		vi.advanceTimersByTime(0); // trigger onopen
 
 		// Find the MockEventSource created by the SSEClient inside the store.

@@ -143,8 +143,9 @@
 			
 			// Start SSE for import progress if import_id is returned
 			if (result.import_id) {
-				const sseUrl = `${apiUrl}/api/progress/clio-import/${result.import_id}?token=${encodeURIComponent(session.access_token)}`;
-				const statusUrl = `${apiUrl}/api/progress/clio-import/${result.import_id}/status?token=${encodeURIComponent(session.access_token)}`;
+				// Token is sent via Authorization header — never in the URL
+				const sseUrl = `${apiUrl}/api/progress/clio-import/${result.import_id}`;
+				const statusUrl = `${apiUrl}/api/progress/clio-import/${result.import_id}/status`;
 				
 				// Keep phase as 'creating' or 'importing' until SSE starts
 				importPhase = 'importing';

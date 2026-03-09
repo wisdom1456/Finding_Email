@@ -48,10 +48,38 @@
   let saveError = $state(false);
   let savePendingContent = $state('');
 
-  // Rendered HTML from markdown (sanitized via DOMPurify)
-  let renderedHtml = $derived.by(() => {
-    return parseMarkdown(content);
-  });
+  // ── Performance: throttled markdown rendering ──
+  // Accumulate raw tokens and only re-parse markdown at most every 80ms.
+  // This avoids O(n²) work from calling marked+DOMPurify on every single token.
+  let renderedHtml = $state('');
+  let renderTimer: ReturnType<typeof setTimeout> | null = null;
+  let renderPending = false;
+
+  function scheduleRender() {
+    if (renderTimer) { renderPending = true; return; }
+    flushRender();
+    renderTimer = setTimeout(() => {
+      renderTimer = null;
+      if (renderPending) { renderPending = false; flushRender(); }
+    }, 80);
+  }
+
+  function flushRender() {
+    renderedHtml = parseMarkdown(content);
+  }
+
+  // Also schedule a scroll after rendering (batched via rAF)
+  let scrollQueued = false;
+  function scheduleScroll() {
+    if (scrollQueued) return;
+    scrollQueued = true;
+    requestAnimationFrame(() => {
+      scrollQueued = false;
+      if (panelElement) {
+        panelElement.scrollTop = panelElement.scrollHeight;
+      }
+    });
+  }
 
   // Start streaming analysis using fetch (supports Authorization header)
   export async function startStreaming() {
@@ -113,7 +141,8 @@
         const { done, value } = await reader.read();
         
         if (done) {
-          // Stream ended - check if we got completion signal
+          // Stream ended - flush any pending render and complete
+          flushRender();
           if (status === 'streaming') {
             emitComplete(content);
           }
@@ -155,12 +184,9 @@
                   thinkingTime = elapsedTime;
                 }
                 content += data.token;
-                // Auto-scroll to bottom
-                if (panelElement) {
-                  requestAnimationFrame(() => {
-                    panelElement.scrollTop = panelElement.scrollHeight;
-                  });
-                }
+                // Throttled render + scroll (avoids O(n²) markdown re-parse per token)
+                scheduleRender();
+                scheduleScroll();
               }
               
               // Heartbeat - just keep connection alive, no action needed
@@ -172,6 +198,8 @@
                 // Capture scope counts before emitting complete
                 if (data.docs_in_scope !== undefined) docsInScope = data.docs_in_scope;
                 if (data.docs_omitted !== undefined) docsOmitted = data.docs_omitted;
+                // Final render with full content before completing
+                flushRender();
                 emitComplete(content);
               }
               
@@ -314,6 +342,10 @@
       if (copyResetTimer) {
         clearTimeout(copyResetTimer);
         copyResetTimer = null;
+      }
+      if (renderTimer) {
+        clearTimeout(renderTimer);
+        renderTimer = null;
       }
     };
   });

@@ -14,8 +14,27 @@ router = APIRouter(prefix="/progress", tags=["progress"])
 logger = logging.getLogger(__name__)
 
 
+def _extract_token(request: Request, token: str | None = None) -> str:
+    """Extract auth token from Authorization header (preferred) or query param (legacy).
+
+    Priority: Authorization header > query parameter.
+    This allows clients to stop sending tokens in URLs while maintaining
+    backwards compatibility with older clients that still do.
+    """
+    # 1. Try Authorization header first (secure — not logged in URLs)
+    auth_header = request.headers.get("authorization", "")
+    if auth_header.startswith("Bearer "):
+        return auth_header[7:]
+
+    # 2. Fall back to query parameter (legacy EventSource clients)
+    if token:
+        return token
+
+    raise HTTPException(status_code=http_status.HTTP_401_UNAUTHORIZED, detail="Token required")
+
+
 async def _authenticate_from_token(token: str) -> dict:
-    """Validate a Bearer token passed as query parameter (for SSE/EventSource)."""
+    """Validate a Bearer token (extracted from header or query param)."""
     if not token:
         raise HTTPException(status_code=http_status.HTTP_401_UNAUTHORIZED, detail="Token required")
     supabase = get_supabase_client()
@@ -28,6 +47,12 @@ async def _authenticate_from_token(token: str) -> dict:
         raise
     except Exception:
         raise HTTPException(status_code=http_status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+
+
+async def _authenticate_request(request: Request, token: str | None = None) -> dict:
+    """Authenticate from Authorization header (preferred) or query param (legacy)."""
+    resolved_token = _extract_token(request, token)
+    return await _authenticate_from_token(resolved_token)
 
 
 async def _verify_analysis_ownership(supabase, analysis_id: str, user_id: str):
@@ -133,7 +158,7 @@ async def poll_database_for_progress(
 async def stream_analysis_progress(
     request: Request,
     analysis_id: str,
-    token: str = Query(..., description="Access token for authentication"),
+    token: str | None = Query(None, description="Access token (legacy, prefer Authorization header)"),
     supabase=Depends(get_supabase_client),
 ):
     """Stream analysis progress updates via SSE.
@@ -141,7 +166,7 @@ async def stream_analysis_progress(
     Uses database polling instead of in-memory pub/sub to work across
     Vercel serverless function instances.
     """
-    user = await _authenticate_from_token(token)
+    user = await _authenticate_request(request, token)
     await _verify_analysis_ownership(supabase, analysis_id, user["id"])
 
     # Use database polling for cross-instance compatibility on Vercel
@@ -156,10 +181,10 @@ async def stream_analysis_progress(
 async def stream_clio_import_progress(
     request: Request,
     import_id: str,
-    token: str = Query(..., description="Access token for authentication"),
+    token: str | None = Query(None, description="Access token (legacy, prefer Authorization header)"),
 ):
     """Stream Clio import progress updates via SSE."""
-    await _authenticate_from_token(token)
+    await _authenticate_request(request, token)
     progress_manager = ProgressManager.get_instance()
 
     return EventSourceResponse(progress_manager.subscribe(import_id), ping=15, media_type="text/event-stream")
@@ -169,11 +194,11 @@ async def stream_clio_import_progress(
 async def get_analysis_status(
     request: Request,
     analysis_id: str,
-    token: str = Query(..., description="Access token for authentication"),
+    token: str | None = Query(None, description="Access token (legacy, prefer Authorization header)"),
     supabase=Depends(get_supabase_client),
 ):
     """Get current analysis progress status (polling endpoint with DB fallback)."""
-    user = await _authenticate_from_token(token)
+    user = await _authenticate_request(request, token)
     await _verify_analysis_ownership(supabase, analysis_id, user["id"])
 
     progress_manager = ProgressManager.get_instance()
@@ -227,11 +252,11 @@ async def get_analysis_status(
 async def get_clio_import_status(
     request: Request,
     import_id: str,
-    token: str = Query(..., description="Access token for authentication"),
+    token: str | None = Query(None, description="Access token (legacy, prefer Authorization header)"),
     supabase=Depends(get_supabase_client),
 ):
     """Get current Clio import progress status (polling endpoint with DB fallback)."""
-    await _authenticate_from_token(token)
+    await _authenticate_request(request, token)
     progress_manager = ProgressManager.get_instance()
 
     # Try memory first

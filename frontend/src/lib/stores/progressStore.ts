@@ -146,9 +146,15 @@ function createProgressStore() {
 		if (statusUrl) currentStatusUrl = statusUrl;
 		if (token) currentToken = token;
 
+		if (!currentToken) {
+			console.error('[progressStore] No auth token provided');
+			update(state => ({ ...state, status: 'error', error: 'No auth token' }));
+			return false;
+		}
+
 		let finalData: unknown = null;
 
-		// Try SSE first
+		// Try SSE first (uses fetch + Authorization header — token never in URL)
 		sseClient = new SSEClient();
 
 		const messageHandler = (event: ProgressEvent | any) => {
@@ -288,7 +294,7 @@ function createProgressStore() {
 			}
 		};
 
-		const connected = sseClient.connect(url, messageHandler, errorHandler, completeHandler);
+		const connected = sseClient.connect(url, currentToken, messageHandler, errorHandler, completeHandler);
 
 		if (!connected) {
 			// SSE not supported, try polling immediately if available
@@ -352,12 +358,11 @@ function createProgressStore() {
 			if (!session || !user) return;
 
 			const apiUrl = getApiUrl();
-			// FIX: Corrected URL paths - backend has /progress/analysis/{id} not /analysis/progress/{id}
-			const streamUrl = `${apiUrl}/api/progress/analysis/${analysisId}?token=${encodeURIComponent(session.access_token)}`;
-			const statusUrl = `${apiUrl}/api/progress/analysis/${analysisId}/status?token=${encodeURIComponent(session.access_token)}`;
+			// Token is sent via Authorization header — never in the URL
+			const streamUrl = `${apiUrl}/api/progress/analysis/${analysisId}`;
+			const statusUrl = `${apiUrl}/api/progress/analysis/${analysisId}/status`;
 			console.log('[progressStore] URLs:', { streamUrl, statusUrl });
 
-			// FIX: Use internal connect function, not createProgressStore()
 			connectInternal(streamUrl, undefined, statusUrl, session.access_token);
 		},
 

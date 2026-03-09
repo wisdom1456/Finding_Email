@@ -1,55 +1,45 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { SSEClient } from './sseClient';
 
-// ── EventSource Mock ──
+// ── fetch + ReadableStream Mock ──
 
-class MockEventSource {
-	static CONNECTING = 0;
-	static OPEN = 1;
-	static CLOSED = 2;
-
-	readyState = MockEventSource.OPEN;
-	onmessage: ((event: MessageEvent) => void) | null = null;
-	onerror: (() => void) | null = null;
-	onopen: (() => void) | null = null;
-	url: string;
-
-	constructor(url: string) {
-		this.url = url;
-		MockEventSource._lastInstance = this;
-		// Simulate async open — only if not suppressed
-		if (!MockEventSource._suppressOpen) {
-			setTimeout(() => this.onopen?.(), 0);
-		}
-	}
-
-	static _lastInstance: MockEventSource | null = null;
-	static _suppressOpen = false;
-
-	close() {
-		this.readyState = MockEventSource.CLOSED;
-	}
-
-	// Test helper: simulate a message
-	simulateMessage(data: any) {
-		const event = { data: typeof data === 'string' ? data : JSON.stringify(data) } as MessageEvent;
-		this.onmessage?.(event);
-	}
-
-	// Test helper: simulate an error
-	simulateError() {
-		this.onerror?.();
-	}
+/**
+ * Creates a controllable ReadableStream for testing SSE parsing.
+ * Returns the stream and a controller to push data / close it.
+ */
+function createMockStream() {
+	let controller!: ReadableStreamDefaultController<Uint8Array>;
+	const stream = new ReadableStream<Uint8Array>({
+		start(c) {
+			controller = c;
+		},
+	});
+	const encoder = new TextEncoder();
+	return {
+		stream,
+		push(text: string) {
+			controller.enqueue(encoder.encode(text));
+		},
+		close() {
+			controller.close();
+		},
+		error(e: Error) {
+			controller.error(e);
+		},
+	};
 }
 
-// Install mock
-vi.stubGlobal('EventSource', MockEventSource);
+/** SSE-format a JSON payload as a `data: ...\n\n` line */
+function sseData(obj: Record<string, unknown>): string {
+	return `data: ${JSON.stringify(obj)}\n\n`;
+}
 
 describe('SSEClient', () => {
 	let client: SSEClient;
 	let onMessage: ReturnType<typeof vi.fn>;
 	let onError: ReturnType<typeof vi.fn>;
 	let onComplete: ReturnType<typeof vi.fn>;
+	let mockStream: ReturnType<typeof createMockStream>;
 
 	beforeEach(() => {
 		vi.useFakeTimers();
@@ -57,193 +47,284 @@ describe('SSEClient', () => {
 		onMessage = vi.fn();
 		onError = vi.fn();
 		onComplete = vi.fn();
+		mockStream = createMockStream();
+
+		// Default: successful fetch returning our controllable stream
+		vi.stubGlobal(
+			'fetch',
+			vi.fn().mockResolvedValue({
+				ok: true,
+				body: mockStream.stream,
+			})
+		);
 	});
 
 	afterEach(() => {
 		client.disconnect();
 		vi.useRealTimers();
+		vi.restoreAllMocks();
 	});
 
 	// ── isSupported ──
 
-	it('reports SSE as supported when EventSource exists', () => {
+	it('reports SSE as supported when ReadableStream exists', () => {
 		expect(SSEClient.isSupported()).toBe(true);
 	});
 
 	// ── connect ──
 
 	it('returns true on successful connect', () => {
-		const result = client.connect('http://localhost/stream', onMessage, onError, onComplete);
+		const result = client.connect(
+			'http://localhost/stream',
+			'test-token',
+			onMessage,
+			onError,
+			onComplete
+		);
 		expect(result).toBe(true);
 	});
 
-	it('returns false and fires error when EventSource not supported', () => {
-		const saved = globalThis.EventSource;
+	it('sends Authorization header, not token in URL', async () => {
+		client.connect('http://localhost/stream', 'my-secret-jwt', onMessage, onError, onComplete);
+
+		// Let fetch resolve
+		await vi.advanceTimersByTimeAsync(0);
+
+		expect(fetch).toHaveBeenCalledWith(
+			'http://localhost/stream',
+			expect.objectContaining({
+				headers: expect.objectContaining({
+					Authorization: 'Bearer my-secret-jwt',
+				}),
+			})
+		);
+	});
+
+	it('returns false and fires error when ReadableStream not supported', () => {
+		const saved = globalThis.ReadableStream;
 		// @ts-ignore
-		delete globalThis.EventSource;
+		delete globalThis.ReadableStream;
 		try {
 			const localClient = new SSEClient();
-			const result = localClient.connect('http://localhost/stream', onMessage, onError, onComplete);
+			const result = localClient.connect(
+				'http://localhost/stream',
+				'tok',
+				onMessage,
+				onError,
+				onComplete
+			);
 			expect(result).toBe(false);
-			expect(onError).toHaveBeenCalledWith(expect.objectContaining({ message: 'SSE_NOT_SUPPORTED' }));
+			expect(onError).toHaveBeenCalledWith(
+				expect.objectContaining({ message: 'SSE_NOT_SUPPORTED' })
+			);
 		} finally {
-			globalThis.EventSource = saved;
+			globalThis.ReadableStream = saved;
 		}
 	});
 
 	// ── message handling ──
 
-	it('parses and forwards progress messages', () => {
-		client.connect('http://localhost/stream', onMessage, onError, onComplete);
-		const es = getEventSource(client);
+	it('parses and forwards progress messages', async () => {
+		client.connect('http://localhost/stream', 'tok', onMessage, onError, onComplete);
+		await vi.advanceTimersByTimeAsync(0);
 
-		es.simulateMessage({ type: 'progress', message: 'Working', phase: 'doc_summary', percent: 42 });
+		mockStream.push(
+			sseData({ type: 'progress', message: 'Working', phase: 'doc_summary', percent: 42 })
+		);
+		await vi.advanceTimersByTimeAsync(0);
 
-		expect(onMessage).toHaveBeenCalledWith(expect.objectContaining({
-			type: 'progress',
-			message: 'Working',
-			percent: 42,
-		}));
+		expect(onMessage).toHaveBeenCalledWith(
+			expect.objectContaining({
+				type: 'progress',
+				message: 'Working',
+				percent: 42,
+			})
+		);
 	});
 
-	it('skips empty keep-alive messages', () => {
-		client.connect('http://localhost/stream', onMessage, onError, onComplete);
-		const es = getEventSource(client);
+	it('skips empty and comment lines (keep-alive)', async () => {
+		client.connect('http://localhost/stream', 'tok', onMessage, onError, onComplete);
+		await vi.advanceTimersByTimeAsync(0);
 
-		es.simulateMessage('   ');
-		es.simulateMessage(': ping');
+		mockStream.push('   \n');
+		mockStream.push(': ping\n');
+		await vi.advanceTimersByTimeAsync(0);
 
 		expect(onMessage).not.toHaveBeenCalled();
 	});
 
-	it('fires parse error for invalid JSON', () => {
-		client.connect('http://localhost/stream', onMessage, onError, onComplete);
-		const es = getEventSource(client);
+	it('handles incomplete lines across chunks', async () => {
+		client.connect('http://localhost/stream', 'tok', onMessage, onError, onComplete);
+		await vi.advanceTimersByTimeAsync(0);
 
-		es.simulateMessage('not valid json {{{');
+		// Split a single SSE message across two chunks
+		mockStream.push('data: {"type":"pro');
+		await vi.advanceTimersByTimeAsync(0);
+		expect(onMessage).not.toHaveBeenCalled();
 
-		expect(onError).toHaveBeenCalledWith(expect.objectContaining({
-			message: expect.stringContaining('Failed to parse'),
-		}));
+		mockStream.push('gress","message":"OK","phase":"p","percent":10}\n\n');
+		await vi.advanceTimersByTimeAsync(0);
+		expect(onMessage).toHaveBeenCalledWith(
+			expect.objectContaining({ type: 'progress', percent: 10 })
+		);
 	});
 
 	// ── terminal events ──
 
-	it('disconnects and calls onComplete on "completed" event', () => {
-		client.connect('http://localhost/stream', onMessage, onError, onComplete);
-		const es = getEventSource(client);
+	it('disconnects and calls onComplete on "completed" event', async () => {
+		client.connect('http://localhost/stream', 'tok', onMessage, onError, onComplete);
+		await vi.advanceTimersByTimeAsync(0);
 
-		es.simulateMessage({ type: 'completed', message: 'Done', phase: 'done', percent: 100 });
+		mockStream.push(
+			sseData({ type: 'completed', message: 'Done', phase: 'done', percent: 100 })
+		);
+		await vi.advanceTimersByTimeAsync(0);
 
 		expect(onMessage).toHaveBeenCalled();
 		expect(onComplete).toHaveBeenCalled();
 		expect(client.isConnected()).toBe(false);
 	});
 
-	it('disconnects and calls onComplete on "failed" event', () => {
-		client.connect('http://localhost/stream', onMessage, onError, onComplete);
-		const es = getEventSource(client);
+	it('disconnects and calls onComplete on "failed" event', async () => {
+		client.connect('http://localhost/stream', 'tok', onMessage, onError, onComplete);
+		await vi.advanceTimersByTimeAsync(0);
 
-		es.simulateMessage({ type: 'failed', message: 'Error', phase: 'error', percent: 50, error: 'boom' });
+		mockStream.push(
+			sseData({ type: 'failed', message: 'Error', phase: 'error', percent: 50, error: 'boom' })
+		);
+		await vi.advanceTimersByTimeAsync(0);
 
 		expect(onComplete).toHaveBeenCalled();
 	});
 
-	it('disconnects and calls onComplete on "error" event', () => {
-		client.connect('http://localhost/stream', onMessage, onError, onComplete);
-		const es = getEventSource(client);
+	it('disconnects and calls onComplete on "error" event', async () => {
+		client.connect('http://localhost/stream', 'tok', onMessage, onError, onComplete);
+		await vi.advanceTimersByTimeAsync(0);
 
-		es.simulateMessage({ type: 'error', message: 'Bad', phase: 'error', percent: 0 });
+		mockStream.push(sseData({ type: 'error', message: 'Bad', phase: 'error', percent: 0 }));
+		await vi.advanceTimersByTimeAsync(0);
+
+		expect(onComplete).toHaveBeenCalled();
+	});
+
+	// ── stream end ──
+
+	it('calls onComplete when stream closes without terminal event', async () => {
+		client.connect('http://localhost/stream', 'tok', onMessage, onError, onComplete);
+		await vi.advanceTimersByTimeAsync(0);
+
+		mockStream.push(sseData({ type: 'progress', message: 'OK', phase: 'p', percent: 50 }));
+		await vi.advanceTimersByTimeAsync(0);
+
+		mockStream.close();
+		await vi.advanceTimersByTimeAsync(0);
 
 		expect(onComplete).toHaveBeenCalled();
 	});
 
 	// ── reconnection ──
 
-	it('reconnects with exponential backoff on connection error', () => {
-		client.connect('http://localhost/stream', onMessage, onError, onComplete);
-		const es = getEventSource(client);
+	it('reconnects with exponential backoff on fetch failure', async () => {
+		let fetchCount = 0;
+		vi.stubGlobal(
+			'fetch',
+			vi.fn().mockImplementation(() => {
+				fetchCount++;
+				if (fetchCount <= 3) {
+					return Promise.reject(new Error('Network error'));
+				}
+				// 4th attempt succeeds
+				return Promise.resolve({ ok: true, body: mockStream.stream });
+			})
+		);
 
-		// Simulate connection error
-		es.simulateError();
+		client.connect('http://localhost/stream', 'tok', onMessage, onError, onComplete);
 
-		// Should schedule reconnect after 1s (first attempt)
-		expect(onError).not.toHaveBeenCalled(); // Not called yet, retrying
+		// 1st attempt fails immediately
+		await vi.advanceTimersByTimeAsync(0);
+		expect(fetchCount).toBe(1);
 
-		// Advance past first reconnect delay (1s)
-		vi.advanceTimersByTime(1000);
+		// 2nd attempt after 1s backoff
+		await vi.advanceTimersByTimeAsync(1000);
+		expect(fetchCount).toBe(2);
 
-		// Should have created a new EventSource (reconnected)
-		// The second error triggers 2s delay
+		// 3rd attempt after 2s backoff
+		await vi.advanceTimersByTimeAsync(2000);
+		expect(fetchCount).toBe(3);
+
+		// 4th attempt after 4s backoff — succeeds
+		await vi.advanceTimersByTimeAsync(4000);
+		expect(fetchCount).toBe(4);
+
+		// Should NOT have fired SSE_CONNECTION_FAILED
+		expect(onError).not.toHaveBeenCalledWith(
+			expect.objectContaining({ message: 'SSE_CONNECTION_FAILED' })
+		);
 	});
 
-	it('fires SSE_CONNECTION_FAILED after max reconnect attempts', () => {
-		client.connect('http://localhost/stream', onMessage, onError, onComplete);
+	it('fires SSE_CONNECTION_FAILED after max reconnect attempts', async () => {
+		vi.stubGlobal(
+			'fetch',
+			vi.fn().mockRejectedValue(new Error('Network error'))
+		);
 
-		// Let the initial onopen fire (clears reconnect counter — normal behavior)
-		vi.advanceTimersByTime(0);
+		client.connect('http://localhost/stream', 'tok', onMessage, onError, onComplete);
 
-		// Now suppress onopen on reconnected EventSources — simulates connections
-		// that fail before fully opening (so reconnectAttempts accumulates)
-		MockEventSource._suppressOpen = true;
+		// Attempt 1 fails
+		await vi.advanceTimersByTimeAsync(0);
+		// Attempt 2 after 1s
+		await vi.advanceTimersByTimeAsync(1000);
+		await vi.advanceTimersByTimeAsync(0);
+		// Attempt 3 after 2s
+		await vi.advanceTimersByTimeAsync(2000);
+		await vi.advanceTimersByTimeAsync(0);
+		// Attempt 4 after 4s — exceeds maxReconnectAttempts (3)
+		await vi.advanceTimersByTimeAsync(4000);
+		await vi.advanceTimersByTimeAsync(0);
 
-		// maxReconnectAttempts = 3 in SSEClient
-		// Need 4 errors: 3 trigger reconnects (attempts 1,2,3), 4th hits max
-		const es1 = getEventSource(client)!;
-		es1.simulateError(); // reconnectAttempts = 1, schedules reconnect at 1s
-
-		vi.advanceTimersByTime(1000); // reconnect → ES2
-		const es2 = getEventSource(client)!;
-		es2.simulateError(); // reconnectAttempts = 2, schedules reconnect at 2s
-
-		vi.advanceTimersByTime(2000); // reconnect → ES3
-		const es3 = getEventSource(client)!;
-		es3.simulateError(); // reconnectAttempts = 3, schedules reconnect at 4s
-
-		vi.advanceTimersByTime(4000); // reconnect → ES4
-		const es4 = getEventSource(client)!;
-		es4.simulateError(); // reconnectAttempts = 3, 3 < 3 is false → FAILED
-
-		expect(onError).toHaveBeenCalledWith(expect.objectContaining({
-			message: 'SSE_CONNECTION_FAILED',
-		}));
+		expect(onError).toHaveBeenCalledWith(
+			expect.objectContaining({ message: 'SSE_CONNECTION_FAILED' })
+		);
 		expect(onComplete).toHaveBeenCalled();
-
-		MockEventSource._suppressOpen = false;
 	});
 
-	it('does not reconnect after manual disconnect', () => {
-		client.connect('http://localhost/stream', onMessage, onError, onComplete);
-		client.disconnect();
+	it('does not reconnect after manual disconnect', async () => {
+		client.connect('http://localhost/stream', 'tok', onMessage, onError, onComplete);
+		await vi.advanceTimersByTimeAsync(0);
 
-		const es = getEventSource(client);
-		// EventSource should be null after disconnect
-		expect(es).toBeNull();
+		client.disconnect();
+		expect(client.isConnected()).toBe(false);
 	});
 
 	// ── inactivity timeout ──
 
-	it('fires SSE_TIMEOUT after 5 minutes of inactivity', () => {
-		client.connect('http://localhost/stream', onMessage, onError, onComplete);
+	it('fires SSE_TIMEOUT after 5 minutes of inactivity', async () => {
+		client.connect('http://localhost/stream', 'tok', onMessage, onError, onComplete);
+		await vi.advanceTimersByTimeAsync(0);
 
 		// Advance past inactivity timeout (5 minutes = 300000ms)
 		vi.advanceTimersByTime(300001);
 
-		expect(onError).toHaveBeenCalledWith(expect.objectContaining({
-			message: expect.stringContaining('SSE_TIMEOUT'),
-		}));
+		expect(onError).toHaveBeenCalledWith(
+			expect.objectContaining({
+				message: expect.stringContaining('SSE_TIMEOUT'),
+			})
+		);
 		expect(onComplete).toHaveBeenCalled();
 	});
 
-	it('resets inactivity timer on message', () => {
-		client.connect('http://localhost/stream', onMessage, onError, onComplete);
-		const es = getEventSource(client);
+	it('resets inactivity timer on message', async () => {
+		client.connect('http://localhost/stream', 'tok', onMessage, onError, onComplete);
+		await vi.advanceTimersByTimeAsync(0);
 
 		// Advance 4 minutes
 		vi.advanceTimersByTime(240000);
 
 		// Send a message — should reset timer
-		es.simulateMessage({ type: 'progress', message: 'Still alive', phase: 'working', percent: 50 });
+		mockStream.push(
+			sseData({ type: 'progress', message: 'Still alive', phase: 'working', percent: 50 })
+		);
+		await vi.advanceTimersByTimeAsync(0);
 
 		// Advance another 4 minutes (total 8 since start, but only 4 since last message)
 		vi.advanceTimersByTime(240000);
@@ -254,22 +335,25 @@ describe('SSEClient', () => {
 		// Advance past full timeout from last message
 		vi.advanceTimersByTime(60001);
 
-		expect(onError).toHaveBeenCalledWith(expect.objectContaining({
-			message: expect.stringContaining('SSE_TIMEOUT'),
-		}));
+		expect(onError).toHaveBeenCalledWith(
+			expect.objectContaining({
+				message: expect.stringContaining('SSE_TIMEOUT'),
+			})
+		);
 	});
 
-	it('resets inactivity timer on keep-alive', () => {
-		client.connect('http://localhost/stream', onMessage, onError, onComplete);
-		const es = getEventSource(client);
+	it('resets inactivity timer on keep-alive', async () => {
+		client.connect('http://localhost/stream', 'tok', onMessage, onError, onComplete);
+		await vi.advanceTimersByTimeAsync(0);
 
 		// Advance 4.5 minutes
 		vi.advanceTimersByTime(270000);
 
-		// Send keep-alive
-		es.simulateMessage('   ');
+		// Send keep-alive (SSE comment line)
+		mockStream.push(': ping\n');
+		await vi.advanceTimersByTimeAsync(0);
 
-		// Advance another 4.5 minutes (total 9 since start, 4.5 since keep-alive)
+		// Advance another 4.5 minutes
 		vi.advanceTimersByTime(270000);
 
 		// Should NOT have timed out
@@ -278,36 +362,37 @@ describe('SSEClient', () => {
 
 	// ── disconnect ──
 
-	it('disconnect clears all state', () => {
-		client.connect('http://localhost/stream', onMessage, onError, onComplete);
-		client.disconnect();
+	it('disconnect clears all state', async () => {
+		client.connect('http://localhost/stream', 'tok', onMessage, onError, onComplete);
+		await vi.advanceTimersByTimeAsync(0);
 
+		client.disconnect();
 		expect(client.isConnected()).toBe(false);
 	});
 
-	// ── resets reconnect counter ──
+	// ── HTTP error handling ──
 
-	it('resets reconnect counter on successful message', () => {
-		client.connect('http://localhost/stream', onMessage, onError, onComplete);
-		const es = getEventSource(client);
+	it('retries on non-ok HTTP response', async () => {
+		let fetchCount = 0;
+		vi.stubGlobal(
+			'fetch',
+			vi.fn().mockImplementation(() => {
+				fetchCount++;
+				if (fetchCount === 1) {
+					return Promise.resolve({ ok: false, status: 502, body: null });
+				}
+				return Promise.resolve({ ok: true, body: mockStream.stream });
+			})
+		);
 
-		// Simulate an error then reconnect
-		es.simulateError();
-		vi.advanceTimersByTime(1000);
+		client.connect('http://localhost/stream', 'tok', onMessage, onError, onComplete);
+		await vi.advanceTimersByTimeAsync(0);
 
-		// Now send a successful message on the new connection
-		const es2 = getEventSource(client);
-		if (es2) {
-			es2.simulateMessage({ type: 'progress', message: 'OK', phase: 'p', percent: 10 });
-		}
+		// First attempt fails with 502, reconnect after 1s
+		await vi.advanceTimersByTimeAsync(1000);
+		await vi.advanceTimersByTimeAsync(0);
 
-		// Reconnect counter should be reset, so we get 3 more attempts
-		// (not tested deeply — just verifying the message was received)
-		expect(onMessage).toHaveBeenCalled();
+		expect(fetchCount).toBe(2);
+		expect(client.isConnected()).toBe(true);
 	});
 });
-
-// Helper to access private eventSource
-function getEventSource(client: SSEClient): MockEventSource | null {
-	return (client as any).eventSource;
-}

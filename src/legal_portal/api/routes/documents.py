@@ -423,7 +423,7 @@ async def upload_document(
                         # Route to Cloud Run OCR service (Google Vision only)
                         try:
                             from legal_portal.utils.ocr_service_client import (
-                                get_ocr_client, OCRServiceError,
+                                get_ocr_client, OCRServiceError, OCRConfigError,
                             )
                             ocr_client = get_ocr_client()
                             img_content_type = file_type if file_type in ["image/png", "image/jpeg", "image/jpg"] else "image/png"
@@ -442,6 +442,33 @@ async def upload_document(
                                     "latency_ms": result.get("latency_ms"),
                                 },
                             )
+                        except OCRConfigError as e:
+                            # Missing OCR_SERVICE_TOKEN/URL — config error, always fall back
+                            logger.warning(f"OCR remote misconfigured ({e}), falling back to local OCR for {file_name}")
+                            try:
+                                google_client = GoogleVisionClient.get_instance()
+                                if google_client.is_available:
+                                    import asyncio
+                                    from starlette.concurrency import run_in_threadpool
+                                    def do_google_ocr():
+                                        return google_client.extract_text_from_image(file_content)
+                                    vision_text = await asyncio.wait_for(
+                                        run_in_threadpool(do_google_ocr), timeout=30.0,
+                                    )
+                                    if vision_text and vision_text.strip():
+                                        extracted_text = vision_text
+                                        extraction_method = "Google Cloud Vision"
+                                        extraction_quality = "high"
+                                        ocr_provider = "google_vision"
+                                    else:
+                                        raise ValueError("Google Vision returned empty text")
+                                else:
+                                    raise ValueError("Google Vision client not available")
+                            except Exception as fallback_err:
+                                extraction_error = f"Image OCR failed (remote misconfigured, local fallback failed): {str(fallback_err)}"
+                                extraction_method = "failed"
+                                extraction_quality = "low"
+                                logger.error(f"Local OCR fallback also failed for {file_name}: {fallback_err}")
                         except Exception as e:
                             logger.error(f"Remote OCR failed for {file_name}: {e}")
                             if _settings.ocr_remote_required:
@@ -2164,7 +2191,7 @@ async def _trigger_extraction_inner(
                 # Route to Cloud Run OCR service (Google Vision only)
                 try:
                     from legal_portal.utils.ocr_service_client import (
-                        get_ocr_client, OCRServiceError,
+                        get_ocr_client, OCRServiceError, OCRConfigError,
                     )
                     ocr_client = get_ocr_client()
                     img_content_type = file_type if file_type in ["image/png", "image/jpeg", "image/jpg"] else "image/png"
@@ -2212,6 +2239,34 @@ async def _trigger_extraction_inner(
                                 logger.warning(f"Vision analysis returned insufficient content for {file_name}")
                         except Exception as vision_err:
                             logger.error(f"Vision analysis failed for {file_name}: {vision_err}", exc_info=True)
+
+                except OCRConfigError as e:
+                    # Missing OCR_SERVICE_TOKEN/URL — config error, always fall back to local
+                    logger.warning(f"OCR remote misconfigured ({e}), falling back to local OCR for {file_name}")
+                    try:
+                        google_client = GoogleVisionClient.get_instance()
+                        if google_client.is_available:
+                            import asyncio
+                            from starlette.concurrency import run_in_threadpool
+                            def do_google_ocr():
+                                return google_client.extract_text_from_image(file_bytes)
+                            vision_text = await asyncio.wait_for(
+                                run_in_threadpool(do_google_ocr), timeout=30.0,
+                            )
+                            if vision_text and vision_text.strip():
+                                extracted_text = vision_text
+                                extraction_method = "Google Cloud Vision"
+                                extraction_quality = "high"
+                                ocr_provider = "google_vision"
+                            else:
+                                raise ValueError("Google Vision returned empty text")
+                        else:
+                            raise ValueError("Google Vision client not available")
+                    except Exception as fallback_err:
+                        extraction_error = f"Image OCR failed (remote misconfigured, local fallback failed): {str(fallback_err)}"
+                        extraction_method = "failed"
+                        extraction_quality = "low"
+                        logger.error(f"Local OCR fallback also failed for {file_name}: {fallback_err}")
 
                 except Exception as e:
                     logger.error(f"Remote OCR failed for {file_name}: {e}")

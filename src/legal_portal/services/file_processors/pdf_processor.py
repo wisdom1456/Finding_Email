@@ -1609,7 +1609,7 @@ async def process_pdf(
                     # Route OCR to Cloud Run service (Google Vision only)
                     try:
                         from legal_portal.utils.ocr_service_client import (
-                            get_ocr_client, OCRServiceError,
+                            get_ocr_client, OCRServiceError, OCRConfigError,
                         )
                         ocr_client = get_ocr_client()
                         import mimetypes as _mt
@@ -1630,6 +1630,25 @@ async def process_pdf(
                                 "latency_ms": result.get("latency_ms"),
                             },
                         )
+                    except OCRConfigError as e:
+                        # Missing OCR_SERVICE_TOKEN/URL — config error, not transient.
+                        # Always fall back to local OCR regardless of ocr_remote_required.
+                        logger.warning(f"OCR remote misconfigured ({e}), falling back to local OCR for {original_filename}")
+                        vision_text = await _extract_text_via_google_ocr_bytes(
+                            pdf_bytes, original_filename, progress_callback
+                        )
+                        if vision_text:
+                            text_content = vision_text
+                            extraction_method = "Google Cloud Vision"
+                            ocr_provider = "Google"
+                        else:
+                            vision_text = await _extract_text_via_vision_bytes(
+                                pdf_bytes, original_filename, progress_callback
+                            )
+                            if vision_text:
+                                text_content = vision_text
+                                extraction_method = "GPT-4o Vision"
+                                ocr_provider = "OpenAI"
                     except Exception as e:
                         logger.error(f"Remote OCR failed for {original_filename}: {e}")
                         if _settings.ocr_remote_required:

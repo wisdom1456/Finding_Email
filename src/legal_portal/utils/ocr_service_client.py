@@ -131,12 +131,12 @@ class OCRServiceClient:
             )
             settings = get_settings()
             if not settings.ocr_service_url:
-                raise OCRServiceError(
+                raise OCRConfigError(
                     "OCR_SERVICE_URL must be set "
                     "when OCR_REMOTE_ENABLED=true"
                 )
             if not settings.ocr_service_token:
-                raise OCRServiceError(
+                raise OCRConfigError(
                     "OCR_SERVICE_TOKEN must be set "
                     "when OCR_REMOTE_ENABLED=true"
                 )
@@ -145,6 +145,15 @@ class OCRServiceClient:
                 settings.ocr_service_token,
             )
         return cls._instance
+
+
+class OCRConfigError(OCRServiceError):
+    """Raised when OCR remote service is misconfigured (missing env vars).
+
+    Distinguished from transient OCRServiceError so callers can fall back
+    to local OCR instead of treating it as a hard failure.
+    """
+    pass
 
 
 def get_ocr_client() -> OCRServiceClient:

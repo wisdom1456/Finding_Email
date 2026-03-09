@@ -17,6 +17,15 @@ const supabase: Handle = async ({ event, resolve }) => {
     },
   });
 
+  /**
+   * Safe session retrieval with strict contract:
+   *   - Returns { session, user } only when BOTH are valid
+   *   - Returns { session: null, user: null } in all other cases
+   *   - Callers can trust: if session is non-null, user is also non-null
+   *
+   * This prevents a "valid session, null user" state that could bypass
+   * downstream auth checks that only inspect the session.
+   */
   event.locals.safeGetSession = async () => {
     const {
       data: { session },
@@ -29,7 +38,9 @@ const supabase: Handle = async ({ event, resolve }) => {
       data: { user },
       error,
     } = await event.locals.supabase.auth.getUser();
-    if (error) {
+    if (error || !user) {
+      // Invalidate the session when user verification fails.
+      // A session without a verified user is not trustworthy.
       return { session: null, user: null };
     }
 
@@ -48,29 +59,37 @@ const authGuard: Handle = async ({ event, resolve }) => {
   event.locals.session = session;
   event.locals.user = user;
 
-  // Not logged in - require login for /app routes
-  if (!event.locals.session && event.url.pathname.startsWith('/app')) {
+  // Determine if the user is fully authenticated (session + valid user.id).
+  // A session without a valid user.id is treated as unauthenticated to prevent
+  // bypassing the approval check entirely.
+  const userId = user?.id;
+  const isAuthenticated = !!(session && userId && typeof userId === 'string' && userId.length > 0);
+
+  // Not authenticated - require login for /app routes
+  if (!isAuthenticated && event.url.pathname.startsWith('/app')) {
     throw redirect(303, '/login');
   }
 
-  // Logged in - check approval status
-  if (event.locals.session && event.locals.user?.id) {
-    // Fetch user profile to check approval status
-    const { data: profile } = await event.locals.supabase
-      .from('profiles')
-      .select('approved, role')
-      .eq('id', event.locals.user.id)
-      .single();
-
-    // Store full profile in locals for use in load functions - fetch separately
-    const { data: fullProfile } = await event.locals.supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', event.locals.user.id)
-      .single();
+  // Authenticated - check approval status
+  if (isAuthenticated) {
+    // Fetch user profile (single query) to check approval status and populate locals.
+    // Wrapped in try-catch: if profile fetch throws (network error, etc.),
+    // fail closed — null profile → isApproved = false → /app routes blocked.
+    let fullProfile: Record<string, any> | null = null;
+    try {
+      const { data } = await event.locals.supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .single();
+      fullProfile = data;
+    } catch (err) {
+      console.error('Profile fetch failed, denying access:', err);
+      fullProfile = null;
+    }
     event.locals.profile = fullProfile;
 
-    const isApproved = (profile as { approved?: boolean } | null)?.approved === true;
+    const isApproved = fullProfile?.approved === true;
     const isAccessingApp = event.url.pathname.startsWith('/app');
     const isOnPendingPage = event.url.pathname === '/account-pending';
     const isOnAuthPage = event.url.pathname === '/login' || event.url.pathname === '/register';

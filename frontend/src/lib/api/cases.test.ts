@@ -70,6 +70,39 @@ describe('dedupCaseDocuments', () => {
 
 		await expect(dedupCaseDocuments('case-1')).rejects.toThrow('Failed to deduplicate documents');
 	});
+
+	it('throws generic message when error JSON has no detail field', async () => {
+		vi.mocked(getSecureSession).mockResolvedValue(mockSession);
+		vi.mocked(fetch).mockResolvedValue({
+			ok: false,
+			status: 500,
+			json: () => Promise.resolve({ message: 'Internal Server Error' }),
+		} as Response);
+
+		await expect(dedupCaseDocuments('case-1')).rejects.toThrow('Failed to deduplicate documents');
+	});
+
+	it('handles 401 unauthorized', async () => {
+		vi.mocked(getSecureSession).mockResolvedValue(mockSession);
+		vi.mocked(fetch).mockResolvedValue({
+			ok: false,
+			status: 401,
+			json: () => Promise.resolve({ detail: 'Token expired' }),
+		} as Response);
+
+		await expect(dedupCaseDocuments('case-1')).rejects.toThrow('Token expired');
+	});
+
+	it('handles 403 forbidden', async () => {
+		vi.mocked(getSecureSession).mockResolvedValue(mockSession);
+		vi.mocked(fetch).mockResolvedValue({
+			ok: false,
+			status: 403,
+			json: () => Promise.resolve({ detail: 'Not authorized for this case' }),
+		} as Response);
+
+		await expect(dedupCaseDocuments('case-1')).rejects.toThrow('Not authorized for this case');
+	});
 });
 
 describe('syncClioMatter', () => {
@@ -113,5 +146,37 @@ describe('syncClioMatter', () => {
 		} as Response);
 
 		await expect(syncClioMatter('case-1')).rejects.toThrow('Clio token expired');
+	});
+
+	it('throws generic message when error response is not JSON', async () => {
+		vi.mocked(getSecureSession).mockResolvedValue(mockSession);
+		vi.mocked(fetch).mockResolvedValue({
+			ok: false,
+			json: () => Promise.reject(new Error('not json')),
+		} as Response);
+
+		await expect(syncClioMatter('case-1')).rejects.toThrow('Failed to sync Clio matter');
+	});
+
+	it('handles 500 server error', async () => {
+		vi.mocked(getSecureSession).mockResolvedValue(mockSession);
+		vi.mocked(fetch).mockResolvedValue({
+			ok: false,
+			status: 500,
+			json: () => Promise.resolve({ detail: 'Internal server error' }),
+		} as Response);
+
+		await expect(syncClioMatter('case-1')).rejects.toThrow('Internal server error');
+	});
+
+	it('handles 401 unauthorized', async () => {
+		vi.mocked(getSecureSession).mockResolvedValue(mockSession);
+		vi.mocked(fetch).mockResolvedValue({
+			ok: false,
+			status: 401,
+			json: () => Promise.resolve({ detail: 'Invalid token' }),
+		} as Response);
+
+		await expect(syncClioMatter('case-1')).rejects.toThrow('Invalid token');
 	});
 });

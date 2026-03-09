@@ -2,7 +2,7 @@
 	import { getApiUrl } from '$lib/config';
 	import { supabase, getSecureSession } from '$lib/supabase';
 	import { toastStore } from '$lib/stores/toastStore';
-	import { deriveBlacklistRule, isNameBlacklisted, toCanonicalBlacklistTerm } from '$lib/utils/blacklist';
+
 	import { slide, fade } from 'svelte/transition';
 	import { 
 		Search, 
@@ -34,6 +34,17 @@
 	import DocumentReviewPanel from './DocumentReviewPanel.svelte';
 	import { sortByAttention } from '$lib/utils/documentSorting';
 	import { groupDocuments, filterDocuments } from '$lib/utils/triageGrouping';
+	import {
+		handleTypeOverride as _handleTypeOverride,
+		handleRelevanceChange as _handleRelevanceChange,
+		handleNotesUpdate as _handleNotesUpdate,
+		handleReExtract as _handleReExtract,
+		type HandlerDeps,
+	} from './verificationHandlers';
+	import {
+		handleAlwaysDelete as _handleAlwaysDelete,
+		type AlwaysDeleteDeps,
+	} from './verificationHandlers.alwaysDelete';
 
 	// Props
 	let {
@@ -271,119 +282,19 @@ const { session, user } = await getSecureSession();
 	}
 
 	async function handleAlwaysDelete(docName: string, docId?: string) {
-		try {
-			const { session, user } = await getSecureSession();
-			if (!session || !user) throw new Error('Not authenticated');
-
-			const apiUrl = getApiUrl();
-			const blacklistRule = deriveBlacklistRule(docName) || docName;
-			let deleteWarning = '';
-
-			// 1. Delete the current document and any similar variants in this case
-			if (docId) {
-				const docsToDelete = localDocuments.filter(
-					(d) => d.file_name === docName || isNameBlacklisted(d.file_name, [blacklistRule])
-				);
-				const docIds = [...new Set(docsToDelete.map((d) => d.id))];
-
-				if (docIds.length > 0) {
-					const deleteResponse = await fetch(`${apiUrl}/api/documents/bulk-delete`, {
-						method: 'POST',
-						headers: {
-							'Content-Type': 'application/json',
-							Authorization: `Bearer ${session.access_token}`,
-						},
-						body: JSON.stringify({ document_ids: docIds }),
-					});
-
-					if (!deleteResponse.ok) throw new Error('Failed to delete selected documents');
-
-					const deleteResult = await deleteResponse.json();
-					const failedCount = deleteResult?.failed_ids?.length ?? 0;
-					if (failedCount > 0) {
-						deleteWarning =
-							`Deleted ${deleteResult.deleted_count} documents, but ${failedCount} could not be deleted.`;
-					}
-				}
-			}
-
-			// 2. Fetch current profile
-			const getResponse = await fetch(`${apiUrl}/api/profile`, {
-				headers: {
-					'Authorization': `Bearer ${session.access_token}`,
-					'Content-Type': 'application/json'
-				}
-			});
-
-			if (!getResponse.ok) throw new Error('Failed to fetch profile');
-			const profile = await getResponse.json();
-
-			// 3. Update blacklist
-			const currentBlacklist = profile.ai_preferences?.blacklisted_documents || [];
-			const hasEquivalentRule = currentBlacklist.some((rule: string) => {
-				const existingCanonical = toCanonicalBlacklistTerm(rule);
-				const incomingCanonical = toCanonicalBlacklistTerm(blacklistRule);
-				return (
-					rule.trim().toLowerCase() === blacklistRule.trim().toLowerCase() ||
-					(existingCanonical && existingCanonical === incomingCanonical)
-				);
-			});
-
-			if (!hasEquivalentRule) {
-				const updatedBlacklist = [...currentBlacklist, blacklistRule];
-
-				const profileData = {
-					ai_preferences: {
-						...profile.ai_preferences,
-						blacklisted_documents: updatedBlacklist
-					}
-				};
-
-				// 4. Save profile
-				const updateResponse = await fetch(`${apiUrl}/api/profile`, {
-					method: 'PUT',
-					headers: {
-						'Authorization': `Bearer ${session.access_token}`,
-						'Content-Type': 'application/json'
-					},
-					body: JSON.stringify(profileData)
-				});
-
-				if (!updateResponse.ok) throw new Error('Failed to update blacklist');
-			}
-
-			toastStore.success(`"${blacklistRule}" will always be excluded from future imports`);
-			if (deleteWarning) {
-				toastStore.warning(deleteWarning);
-			}
-			await onDocumentsUpdated(); // Refresh the document list
-		} catch (error: any) {
-			toastStore.error(`Blacklist error: ${error.message}`);
-		}
+		const alwaysDeleteDeps: AlwaysDeleteDeps = {
+			getSecureSession,
+			getApiUrl: () => getApiUrl(),
+			toastStore,
+			onDocumentsUpdated,
+			localDocuments,
+		};
+		await _handleAlwaysDelete(docName, docId, alwaysDeleteDeps);
 	}
 
 	async function handleReExtract(docId: string) {
-		toastStore.info('Re-extracting with Vision OCR...');
-		try {
-const { session, user } = await getSecureSession();
-		if (!session || !user) throw new Error('Not authenticated');
-
-			const response = await fetch(`${getApiUrl()}/api/documents/${docId}/extract`, {
-				method: 'POST',
-				headers: {
-					Authorization: `Bearer ${session.access_token}`,
-				}
-			});
-
-			if (!response.ok) {
-				const errBody = await response.json().catch(() => ({}));
-				throw new Error(errBody.detail || `Extraction failed (${response.status})`);
-			}
-			toastStore.success('Extraction complete');
-			await onDocumentsUpdated();
-		} catch (error: any) {
-			toastStore.error(error.message);
-		}
+		const result = await _handleReExtract(docId, processingDocIds, handlerDeps);
+		processingDocIds = result.newProcessingIds;
 	}
 
 	async function handleSkip(docId: string) {
@@ -762,92 +673,28 @@ const { session, user } = await getSecureSession();
 		expandedCardIds = newSet;
 	}
 
-	// Enrichment API handlers
+	// Shared handler deps for extracted handler functions
+	const handlerDeps: HandlerDeps = {
+		getSecureSession,
+		getApiUrl,
+		toastStore,
+		onDocumentsUpdated,
+	};
+
+	// Enrichment API handlers — use extracted functions with rollback on failure
 	async function handleTypeOverride(docId: string, type: string) {
-		try {
-			const idx = localDocuments.findIndex(d => d.id === docId);
-			if (idx >= 0) {
-				const doc = localDocuments[idx];
-				localDocuments[idx] = {
-					...doc,
-					metadata: {
-						...doc.metadata,
-						attorney_enrichment: {
-							...(doc.metadata?.attorney_enrichment || {}),
-							document_type_override: type
-						}
-					}
-				};
-			}
-			const { session, user } = await getSecureSession();
-			if (!session || !user) throw new Error('Not authenticated');
-			const apiUrl = getApiUrl();
-			const response = await fetch(`${apiUrl}/api/documents/${docId}/verify`, {
-				method: 'PATCH',
-				headers: {
-					'Content-Type': 'application/json',
-					'Authorization': `Bearer ${session.access_token}`
-				},
-				body: JSON.stringify({ document_type_override: type })
-			});
-			if (!response.ok) throw new Error('Failed to save changes');
-		} catch (e) {
-			toastStore.error('Failed to save document type');
-		}
+		const result = await _handleTypeOverride(docId, type, localDocuments, handlerDeps);
+		localDocuments = result.documents;
 	}
 
 	async function handleRelevanceChange(docId: string, level: string) {
-		try {
-			const idx = localDocuments.findIndex(d => d.id === docId);
-			if (idx >= 0) {
-				const doc = localDocuments[idx];
-				localDocuments[idx] = {
-					...doc,
-					metadata: {
-						...doc.metadata,
-						attorney_enrichment: { ...(doc.metadata?.attorney_enrichment || {}), relevance_level: level }
-					}
-				};
-			}
-			const { session, user } = await getSecureSession();
-			if (!session || !user) throw new Error('Not authenticated');
-			const apiUrl = getApiUrl();
-			const response = await fetch(`${apiUrl}/api/documents/${docId}/verify`, {
-				method: 'PATCH',
-				headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
-				body: JSON.stringify({ relevance_level: level })
-			});
-			if (!response.ok) throw new Error('Failed to save changes');
-		} catch (e) {
-			toastStore.error('Failed to save relevance');
-		}
+		const result = await _handleRelevanceChange(docId, level, localDocuments, handlerDeps);
+		localDocuments = result.documents;
 	}
 
 	async function handleNotesUpdate(docId: string, notes: string) {
-		try {
-			const idx = localDocuments.findIndex(d => d.id === docId);
-			if (idx >= 0) {
-				const doc = localDocuments[idx];
-				localDocuments[idx] = {
-					...doc,
-					metadata: {
-						...doc.metadata,
-						attorney_enrichment: { ...(doc.metadata?.attorney_enrichment || {}), attorney_notes: notes }
-					}
-				};
-			}
-			const { session, user } = await getSecureSession();
-			if (!session || !user) throw new Error('Not authenticated');
-			const apiUrl = getApiUrl();
-			const response = await fetch(`${apiUrl}/api/documents/${docId}/verify`, {
-				method: 'PATCH',
-				headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
-				body: JSON.stringify({ attorney_notes: notes })
-			});
-			if (!response.ok) throw new Error('Failed to save changes');
-		} catch (e) {
-			toastStore.error('Failed to save notes');
-		}
+		const result = await _handleNotesUpdate(docId, notes, localDocuments, handlerDeps);
+		localDocuments = result.documents;
 	}
 
 	async function handleFactUpdate(docId: string, factKey: string, newValue: string) {

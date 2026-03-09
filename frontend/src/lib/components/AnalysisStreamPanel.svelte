@@ -11,7 +11,7 @@
   - Abort streaming capability
 -->
 <script lang="ts">
-  import { marked } from 'marked';
+  import { parseMarkdown } from '$lib/utils/markdown';
   import { Copy, X, RotateCcw, Loader2, CheckCircle2, AlertCircle, Brain } from 'lucide-svelte';
   import { slide } from 'svelte/transition';
   import { getApiUrl } from '$lib/config';
@@ -48,14 +48,9 @@
   let saveError = $state(false);
   let savePendingContent = $state('');
 
-  // Rendered HTML from markdown
+  // Rendered HTML from markdown (sanitized via DOMPurify)
   let renderedHtml = $derived.by(() => {
-    if (!content) return '';
-    try {
-      return marked(content, { breaks: true, gfm: true });
-    } catch {
-      return content;
-    }
+    return parseMarkdown(content);
   });
 
   // Start streaming analysis using fetch (supports Authorization header)

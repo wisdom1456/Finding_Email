@@ -122,19 +122,58 @@ function createProgressStore() {
 	let lastLoggedDocStates: Record<string, string> = {};
 
 	/**
+	 * Refresh the auth token from Supabase session.
+	 * Returns the new token, or null if refresh failed.
+	 */
+	async function refreshToken(): Promise<string | null> {
+		try {
+			const { session } = await getSecureSession();
+			if (session?.access_token) {
+				currentToken = session.access_token;
+				console.log('[progressStore] Token refreshed');
+				return currentToken;
+			}
+			return null;
+		} catch (e) {
+			console.error('[progressStore] Token refresh failed:', e);
+			return null;
+		}
+	}
+
+	/**
+	 * Token refresher callback for PollingClient.
+	 */
+	const tokenRefresher = async (): Promise<string | null> => {
+		return refreshToken();
+	};
+
+	/**
 	 * One-shot status check: fetch the status endpoint to see if the backend
 	 * already completed. If it did, dispatch the terminal event to settle the UI.
 	 * Returns true if the backend reported a terminal state (completed/failed/error).
+	 * Returns 'auth_failed' if authentication failed and refresh also failed.
 	 */
 	async function reconcileFromStatus(
 		statusUrl: string,
 		token: string,
 		messageHandler: (event: ProgressEvent | any) => void
-	): Promise<boolean> {
+	): Promise<boolean | 'auth_failed'> {
 		try {
-			const response = await fetch(statusUrl, {
+			let response = await fetch(statusUrl, {
 				headers: { Authorization: `Bearer ${token}` },
 			});
+
+			// If 401, try refreshing the token once
+			if (response.status === 401 || response.status === 403) {
+				console.log('[progressStore] Status check got', response.status, '— refreshing token');
+				const newToken = await refreshToken();
+				if (!newToken) return 'auth_failed';
+				response = await fetch(statusUrl, {
+					headers: { Authorization: `Bearer ${newToken}` },
+				});
+				if (response.status === 401 || response.status === 403) return 'auth_failed';
+			}
+
 			if (!response.ok) return false;
 			const data = await response.json();
 			const terminalTypes = ['completed', 'failed', 'error'];
@@ -278,6 +317,46 @@ function createProgressStore() {
 			const errorMessage = error.message;
 			console.log('[progressStore] SSE error:', errorMessage, 'hasStatusUrl:', !!currentStatusUrl);
 
+			// SSE_AUTH_FAILED = auth failure on initial connect — try refresh once
+			if (errorMessage.includes('SSE_AUTH_FAILED')) {
+				refreshToken().then((newToken) => {
+					if (!newToken) {
+						update(state => ({
+							...state,
+							status: 'error',
+							error: 'Session expired. Please refresh the page to sign in again.'
+						}));
+						return;
+					}
+					// Retry with fresh token — fall through to polling with the refreshed token
+					if (currentStatusUrl) {
+						update(state => ({
+							...state,
+							message: 'Reconnecting with refreshed session...',
+							status: 'active'
+						}));
+						pollingClient = new PollingClient();
+						pollingClient.startPolling(
+							currentStatusUrl,
+							currentToken,
+							messageHandler,
+							(pollError: Error) => {
+								update(state => ({ ...state, status: 'error', error: pollError.message }));
+							},
+							() => { if (onComplete) onComplete(finalData); },
+							tokenRefresher
+						);
+					} else {
+						update(state => ({
+							...state,
+							status: 'error',
+							error: 'Session expired and no status endpoint available.'
+						}));
+					}
+				});
+				return;
+			}
+
 			// If SSE stream ended unexpectedly (network disconnect) or timed out,
 			// try a one-shot status check first. If the backend already completed,
 			// reconcile the UI immediately instead of starting a polling loop.
@@ -289,6 +368,15 @@ function createProgressStore() {
 				// One-shot status check — if backend already finished, settle immediately
 				reconcileFromStatus(currentStatusUrl, currentToken, messageHandler)
 					.then((settled) => {
+						if (settled === 'auth_failed') {
+							// Auth failed even after refresh — terminal
+							update(state => ({
+								...state,
+								status: 'error',
+								error: 'Session expired. Please refresh the page to sign in again.'
+							}));
+							return;
+						}
 						if (settled) {
 							// Backend already completed/failed — UI is now up to date
 							if (onComplete) onComplete(finalData);
@@ -314,7 +402,8 @@ function createProgressStore() {
 							},
 							() => {
 								if (onComplete) onComplete(finalData);
-							}
+							},
+							tokenRefresher
 						);
 					})
 					.catch(() => {
@@ -327,7 +416,8 @@ function createProgressStore() {
 							(pollError: Error) => {
 								update(state => ({ ...state, status: 'error', error: pollError.message }));
 							},
-							() => { if (onComplete) onComplete(finalData); }
+							() => { if (onComplete) onComplete(finalData); },
+							tokenRefresher
 						);
 					});
 			} else {
@@ -369,7 +459,8 @@ function createProgressStore() {
 							error: pollError.message
 						}));
 					},
-					completeHandler
+					completeHandler,
+					tokenRefresher
 				);
 				return true;
 			}

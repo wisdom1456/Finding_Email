@@ -106,6 +106,13 @@ export class SSEClient<T = unknown> {
 			});
 
 			if (!response.ok) {
+				// 401/403 = auth failure — don't retry, surface immediately
+				if (response.status === 401 || response.status === 403) {
+					this.clearInactivityTimer();
+					this.onErrorHandler?.(new Error(`SSE_AUTH_FAILED: ${response.status}`));
+					this.onCompleteHandler?.();
+					return;
+				}
 				throw new Error(`SSE connection failed: HTTP ${response.status}`);
 			}
 

@@ -1,7 +1,8 @@
 /**
  * Polling Client for Progress Updates
- * 
- * Fallback mechanism when SSE is not available or times out
+ *
+ * Fallback mechanism when SSE is not available or times out.
+ * Supports token refresh for long-running operations where JWTs expire.
  */
 
 import type { ProgressEvent } from './sseClient';
@@ -9,6 +10,8 @@ import type { ProgressEvent } from './sseClient';
 export type PollingMessageHandler = (event: ProgressEvent) => void;
 export type PollingErrorHandler = (error: Error) => void;
 export type PollingCompleteHandler = () => void;
+/** Returns a fresh access token, or null if refresh failed. */
+export type TokenRefresher = () => Promise<string | null>;
 
 export class PollingClient {
 	private pollInterval: NodeJS.Timeout | null = null;
@@ -18,6 +21,7 @@ export class PollingClient {
 	private isActive = false;
 	private url: string = '';
 	private token: string = '';
+	private tokenRefresher: TokenRefresher | null = null;
 	private onMessageHandler: PollingMessageHandler | null = null;
 	private onErrorHandler: PollingErrorHandler | null = null;
 	private onCompleteHandler: PollingCompleteHandler | null = null;
@@ -25,6 +29,8 @@ export class PollingClient {
 	private stallCount = 0;
 	private maxStallCount = 30; // 30 polls * 3s = 90 seconds (earlier warning)
 	private lastEventFingerprint = ''; // Track last event to prevent duplicate processing
+	private consecutiveAuthFailures = 0;
+	private maxConsecutiveAuthFailures = 2; // Stop after 2 consecutive 401s
 
 	/**
 	 * Start polling for progress updates
@@ -34,17 +40,20 @@ export class PollingClient {
 		token: string,
 		onMessage: PollingMessageHandler,
 		onError: PollingErrorHandler,
-		onComplete: PollingCompleteHandler
+		onComplete: PollingCompleteHandler,
+		tokenRefresher?: TokenRefresher
 	): void {
 		this.url = statusUrl;
 		this.token = token;
 		this.onMessageHandler = onMessage;
 		this.onErrorHandler = onError;
 		this.onCompleteHandler = onComplete;
+		this.tokenRefresher = tokenRefresher ?? null;
 		this.isActive = true;
 		this.pollAttempts = 0;
 		this.lastProgressPercent = -1;
 		this.stallCount = 0;
+		this.consecutiveAuthFailures = 0;
 
 		// Start immediate poll
 		this.poll();
@@ -66,6 +75,52 @@ export class PollingClient {
 	 */
 	private getEventFingerprint(data: ProgressEvent): string {
 		return `${data.percent}|${data.phase}|${data.timestamp}|${data.document?.status}`;
+	}
+
+	/**
+	 * Handle a 401/403 auth failure: attempt token refresh once,
+	 * then stop if still failing.
+	 * Returns true if we should retry with a new token.
+	 */
+	private async handleAuthFailure(status: number): Promise<boolean> {
+		this.consecutiveAuthFailures++;
+		console.warn(`[PollingClient] Auth failure (${status}), attempt ${this.consecutiveAuthFailures}/${this.maxConsecutiveAuthFailures}`);
+
+		if (this.consecutiveAuthFailures > this.maxConsecutiveAuthFailures) {
+			// Exhausted auth retries — terminal auth error
+			if (this.onErrorHandler) {
+				this.onErrorHandler(new Error(`AUTH_EXPIRED: Session expired after ${this.consecutiveAuthFailures} failed attempts (HTTP ${status})`));
+			}
+			this.stopPolling();
+			if (this.onCompleteHandler) {
+				this.onCompleteHandler();
+			}
+			return false;
+		}
+
+		// Try to refresh the token
+		if (this.tokenRefresher) {
+			try {
+				const newToken = await this.tokenRefresher();
+				if (newToken) {
+					this.token = newToken;
+					console.log('[PollingClient] Token refreshed successfully');
+					return true; // Retry with new token
+				}
+			} catch (e) {
+				console.error('[PollingClient] Token refresh failed:', e);
+			}
+		}
+
+		// No refresher or refresh failed — report auth error
+		if (this.onErrorHandler) {
+			this.onErrorHandler(new Error(`AUTH_EXPIRED: Unable to refresh session (HTTP ${status})`));
+		}
+		this.stopPolling();
+		if (this.onCompleteHandler) {
+			this.onCompleteHandler();
+		}
+		return false;
 	}
 
 	/**
@@ -94,9 +149,22 @@ export class PollingClient {
 				}
 			});
 
+			// Handle auth failures with refresh attempt
+			if (response.status === 401 || response.status === 403) {
+				const shouldRetry = await this.handleAuthFailure(response.status);
+				if (shouldRetry && this.isActive) {
+					// Retry immediately with refreshed token
+					this.pollInterval = setTimeout(() => this.poll(), 500);
+				}
+				return;
+			}
+
 			if (!response.ok) {
 				throw new Error(`Polling request failed: ${response.status} ${response.statusText}`);
 			}
+
+			// Successful response — reset auth failure counter
+			this.consecutiveAuthFailures = 0;
 
 			const data: ProgressEvent = await response.json();
 
@@ -147,7 +215,7 @@ export class PollingClient {
 				});
 			}
 		}
-		
+
 		// Continue warning periodically after initial stall
 			if (this.stallCount >= this.maxStallCount && this.stallCount % 20 === 0) {
 				console.warn(`Import appears stalled at ${currentPercent}% for ${Math.round(this.stallCount * this.pollFrequency / 1000)}s`);
@@ -158,7 +226,7 @@ export class PollingClient {
 			const maxStallBeforeGracefulExit = 100; // 5 minutes
 			if (this.stallCount >= maxStallBeforeGracefulExit) {
 				console.warn(`Import stalled for 5+ minutes at ${currentPercent}%. Treating as partial completion.`);
-				
+
 				// Return a special "stalled" completion instead of error
 				// The frontend can check if documents were actually imported
 				if (this.onMessageHandler) {
@@ -183,7 +251,7 @@ export class PollingClient {
 			}
 		} catch (err) {
 			console.error('Polling error:', err);
-			
+
 			// Don't fail immediately, retry on next poll
 			if (this.isActive && this.pollAttempts < this.maxPollAttempts) {
 				this.pollInterval = setTimeout(() => this.poll(), this.pollFrequency);
@@ -208,4 +276,3 @@ export class PollingClient {
 		return this.isActive;
 	}
 }
-

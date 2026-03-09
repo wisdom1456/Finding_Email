@@ -270,11 +270,12 @@
 			
 			// If import_id is returned, connect to SSE stream
 			if (result.import_id) {
-				const sseUrl = `${apiUrl}/api/progress/clio-import/${result.import_id}?token=${encodeURIComponent(session.access_token)}`;
-				const statusUrl = `${apiUrl}/api/progress/clio-import/${result.import_id}/status?token=${encodeURIComponent(session.access_token)}`;
+				// Token sent via Authorization header (not in URL) for security
+				const sseUrl = `${apiUrl}/api/progress/clio-import/${result.import_id}`;
+				const statusUrl = `${apiUrl}/api/progress/clio-import/${result.import_id}/status`;
 
 				progressStore.connect(
-					sseUrl, 
+					sseUrl,
 					(data: any) => {
 						const finalProgress = get(progressStore);
 						const importFailed =

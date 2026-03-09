@@ -3,9 +3,11 @@
  *
  * These tests wire together the REAL progressStore and SSEClient
  * with controlled fetch mocks to simulate network disconnects,
- * backend completion races, and reconnect exhaustion.
+ * backend completion races, reconnect exhaustion, and auth failures.
  *
- * They cover the exact bug class: "backend finished, UI stuck after disconnect."
+ * They cover two bug classes:
+ * 1. "backend finished, UI stuck after disconnect"
+ * 2. "recovery path fails because token expired" (401 on status/polling)
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { get } from 'svelte/store';
@@ -594,6 +596,304 @@ describe('progressStore recovery integration', () => {
 			const state = get(progressStore);
 			expect(state.status).toBe('error');
 			expect(state.error).toContain('SSE_STREAM_ENDED');
+		});
+	});
+
+	// ═══════════════════════════════════════════════════════════
+	// Scenario H — SSE gets 401 on initial connect
+	// ═══════════════════════════════════════════════════════════
+
+	describe('Scenario H: SSE auth failure on connect', () => {
+		it('reports auth error when SSE returns 401 and refresh fails', async () => {
+			// SSE returns 401, no valid session to refresh
+			fetchMock.mockImplementation((url: string) => {
+				if (url === STREAM_URL) {
+					return Promise.resolve({ ok: false, status: 401, statusText: 'Unauthorized' });
+				}
+				return Promise.resolve({ ok: false, status: 401 });
+			});
+
+			// getSecureSession returns no session (refresh fails)
+			mockGetSession.mockResolvedValue({ session: null, user: null });
+
+			connectStore();
+			await flushAsync();
+			await flushAsync();
+
+			const state = get(progressStore);
+			expect(state.status).toBe('error');
+			expect(state.error).toContain('Session expired');
+		});
+
+		it('falls back to polling with refreshed token when SSE returns 401', async () => {
+			const FRESH_TOKEN = 'fresh-jwt-token';
+			let sseCallCount = 0;
+
+			fetchMock.mockImplementation((url: string, init?: RequestInit) => {
+				if (url === STREAM_URL) {
+					sseCallCount++;
+					// SSE always returns 401 (can't do SSE with refresh mid-stream)
+					return Promise.resolve({ ok: false, status: 401, statusText: 'Unauthorized' });
+				}
+				if (url === STATUS_URL) {
+					const authHeader = (init?.headers as Record<string, string>)?.Authorization || '';
+					if (authHeader.includes(FRESH_TOKEN)) {
+						return Promise.resolve({
+							ok: true,
+							json: () => Promise.resolve({
+								type: 'completed',
+								message: 'Done',
+								phase: 'done',
+								percent: 100,
+							}),
+						});
+					}
+					return Promise.resolve({ ok: false, status: 401 });
+				}
+				return Promise.resolve({ ok: false, status: 404 });
+			});
+
+			// Token refresh succeeds
+			mockGetSession.mockResolvedValue({
+				session: { access_token: FRESH_TOKEN },
+				user: { id: 'user-1' },
+			});
+
+			connectStore();
+			await flushAsync();
+			await flushAsync();
+			// Give polling time to kick in
+			await vi.advanceTimersByTimeAsync(1000);
+			await flushAsync();
+			await vi.advanceTimersByTimeAsync(3000);
+			await flushAsync();
+
+			const state = get(progressStore);
+			// After refresh + polling with fresh token, should complete
+			expect(state.status).toBe('completed');
+		});
+	});
+
+	// ═══════════════════════════════════════════════════════════
+	// Scenario I — status endpoint returns 401, token refresh succeeds
+	// ═══════════════════════════════════════════════════════════
+
+	describe('Scenario I: status endpoint 401 with token refresh', () => {
+		it('refreshes token and retries status check on 401', async () => {
+			const FRESH_TOKEN = 'refreshed-jwt-token';
+			let statusCallCount = 0;
+
+			fetchMock.mockImplementation((url: string, init?: RequestInit) => {
+				if (url === STREAM_URL) {
+					return Promise.resolve({ ok: true, body: currentStream.stream });
+				}
+				if (url === STATUS_URL) {
+					statusCallCount++;
+					const authHeader = (init?.headers as Record<string, string>)?.Authorization || '';
+					if (authHeader.includes(FRESH_TOKEN)) {
+						// Fresh token works
+						return Promise.resolve({
+							ok: true,
+							json: () => Promise.resolve({
+								type: 'completed',
+								message: 'Analysis complete',
+								phase: 'done',
+								percent: 100,
+							}),
+						});
+					}
+					// Stale token returns 401
+					return Promise.resolve({ ok: false, status: 401, statusText: 'Unauthorized' });
+				}
+				return Promise.resolve({ ok: false, status: 404 });
+			});
+
+			// Token refresh succeeds
+			mockGetSession.mockResolvedValue({
+				session: { access_token: FRESH_TOKEN },
+				user: { id: 'user-1' },
+			});
+
+			connectStore();
+			await flushAsync();
+
+			// Stream closes unexpectedly
+			currentStream.close();
+			await flushAsync();
+			await flushAsync();
+			await flushAsync();
+
+			const state = get(progressStore);
+			// Should have refreshed token, retried status, and reconciled to completed
+			expect(state.status).toBe('completed');
+			expect(state.percent).toBe(100);
+			// Status was called at least twice: once with stale token (401), once with fresh
+			expect(statusCallCount).toBeGreaterThanOrEqual(2);
+		});
+
+		it('enters auth error state when both token and refresh fail', async () => {
+			fetchMock.mockImplementation((url: string) => {
+				if (url === STREAM_URL) {
+					return Promise.resolve({ ok: true, body: currentStream.stream });
+				}
+				if (url === STATUS_URL) {
+					return Promise.resolve({ ok: false, status: 401, statusText: 'Unauthorized' });
+				}
+				return Promise.resolve({ ok: false, status: 404 });
+			});
+
+			// Token refresh fails
+			mockGetSession.mockResolvedValue({ session: null, user: null });
+
+			connectStore();
+			await flushAsync();
+
+			currentStream.close();
+			await flushAsync();
+			await flushAsync();
+			await flushAsync();
+
+			const state = get(progressStore);
+			expect(state.status).toBe('error');
+			expect(state.error).toContain('Session expired');
+		});
+	});
+
+	// ═══════════════════════════════════════════════════════════
+	// Scenario J — polling gets 401, token refresh recovers
+	// ═══════════════════════════════════════════════════════════
+
+	describe('Scenario J: polling 401 with token refresh', () => {
+		it('refreshes token mid-polling and continues to completion', async () => {
+			const FRESH_TOKEN = 'polling-refreshed-token';
+			let pollCount = 0;
+
+			fetchMock.mockImplementation((url: string, init?: RequestInit) => {
+				if (url === STREAM_URL) {
+					return Promise.resolve({ ok: true, body: currentStream.stream });
+				}
+				if (url === STATUS_URL) {
+					pollCount++;
+					const authHeader = (init?.headers as Record<string, string>)?.Authorization || '';
+
+					if (pollCount === 1) {
+						// First call (reconcile): returns non-terminal → starts polling
+						return Promise.resolve({
+							ok: true,
+							json: () => Promise.resolve({
+								type: 'progress',
+								message: 'Working',
+								phase: 'analysis',
+								percent: 50,
+							}),
+						});
+					}
+					if (pollCount === 2) {
+						// Second call (first poll): 401 — token expired mid-session
+						return Promise.resolve({ ok: false, status: 401, statusText: 'Unauthorized' });
+					}
+					// Third+ calls: with fresh token, return completed
+					if (authHeader.includes(FRESH_TOKEN)) {
+						return Promise.resolve({
+							ok: true,
+							json: () => Promise.resolve({
+								type: 'completed',
+								message: 'Done',
+								phase: 'done',
+								percent: 100,
+							}),
+						});
+					}
+					return Promise.resolve({ ok: false, status: 401 });
+				}
+				return Promise.resolve({ ok: false, status: 404 });
+			});
+
+			// Token refresh succeeds
+			mockGetSession.mockResolvedValue({
+				session: { access_token: FRESH_TOKEN },
+				user: { id: 'user-1' },
+			});
+
+			connectStore();
+			await flushAsync();
+
+			currentStream.close();
+			await flushAsync();
+			await flushAsync();
+
+			// First poll happens, gets 401 → triggers refresh
+			await vi.advanceTimersByTimeAsync(3000);
+			await flushAsync();
+			// Refresh happens, retry with new token
+			await vi.advanceTimersByTimeAsync(1000);
+			await flushAsync();
+
+			const state = get(progressStore);
+			expect(state.status).toBe('completed');
+		});
+
+		it('stops polling after consecutive auth failures and enters error state', async () => {
+			fetchMock.mockImplementation((url: string) => {
+				if (url === STREAM_URL) {
+					return Promise.resolve({ ok: true, body: currentStream.stream });
+				}
+				if (url === STATUS_URL) {
+					return Promise.resolve({ ok: false, status: 401, statusText: 'Unauthorized' });
+				}
+				return Promise.resolve({ ok: false, status: 404 });
+			});
+
+			// Token refresh always fails
+			mockGetSession.mockResolvedValue({ session: null, user: null });
+
+			connectStore();
+			await flushAsync();
+
+			currentStream.close();
+			await flushAsync();
+			await flushAsync();
+			await flushAsync();
+
+			// reconcileFromStatus gets 401 → refreshes → still 401 → auth_failed
+			// So it should go to error state without even starting polling
+			const state = get(progressStore);
+			expect(state.status).toBe('error');
+			expect(state.error).toContain('Session expired');
+		});
+
+		it('does not retry infinitely on 401 — bounded auth failure count', async () => {
+			let fetchCallCount = 0;
+			fetchMock.mockImplementation((url: string) => {
+				fetchCallCount++;
+				if (url === STREAM_URL) {
+					return Promise.resolve({ ok: true, body: currentStream.stream });
+				}
+				// Everything returns 401
+				return Promise.resolve({ ok: false, status: 401, statusText: 'Unauthorized' });
+			});
+
+			mockGetSession.mockResolvedValue({ session: null, user: null });
+
+			connectStore();
+			await flushAsync();
+
+			currentStream.close();
+			await flushAsync();
+			await flushAsync();
+			await flushAsync();
+
+			const callsAfterSettle = fetchCallCount;
+
+			// Advance well past what would be many poll cycles
+			await vi.advanceTimersByTimeAsync(60000);
+			await flushAsync();
+
+			// No additional fetch calls should have happened (no infinite loop)
+			expect(fetchCallCount).toBe(callsAfterSettle);
+
+			const state = get(progressStore);
+			expect(state.status).toBe('error');
 		});
 	});
 });

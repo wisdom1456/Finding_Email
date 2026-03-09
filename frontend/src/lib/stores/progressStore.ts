@@ -395,6 +395,8 @@ function createProgressStore() {
 			pollingClient.stopPolling();
 			pollingClient = null;
 		}
+		currentStatusUrl = '';
+		currentToken = '';
 		set(initialState);
 	};
 

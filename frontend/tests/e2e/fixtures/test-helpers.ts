@@ -17,25 +17,27 @@ export interface MockDocumentOptions {
 }
 
 export function mockDocument(overrides: MockDocumentOptions = {}) {
+  // Use 'key in obj' checks for nullable fields where null is a meaningful value
+  // (nullish coalescing ?? treats null as "not provided", which breaks null overrides)
   return {
     id: overrides.id ?? 'doc-001',
     case_id: 'case-001',
     file_name: overrides.file_name ?? 'test-contract.pdf',
     file_type: 'application/pdf',
     file_size: 102400,
-    storage_path: overrides.storage_path ?? 'user-1/case-001/doc-001.pdf',
+    storage_path: 'storage_path' in overrides ? overrides.storage_path : 'user-1/case-001/doc-001.pdf',
     status: overrides.status ?? 'ready',
     extraction_method: 'Google Cloud Vision',
-    extraction_quality: overrides.extraction_quality ?? 'high',
-    extracted_at: overrides.extracted_at ?? '2025-01-01T00:00:00Z',
+    extraction_quality: 'extraction_quality' in overrides ? overrides.extraction_quality : 'high',
+    extracted_at: 'extracted_at' in overrides ? overrides.extracted_at : '2025-01-01T00:00:00Z',
     page_count: 3,
     ocr_provider: 'google_vision',
-    extraction_error: overrides.extraction_error ?? null,
+    extraction_error: 'extraction_error' in overrides ? overrides.extraction_error : null,
     is_verified: overrides.is_verified ?? false,
     is_flagged_as_junk: false,
     text_edited_at: null,
-    extracted_text: overrides.extracted_text ?? 'Sample extracted text content for testing purposes with enough words to pass quality checks and validation requirements in the document card component.',
-    manual_text: overrides.manual_text ?? null,
+    extracted_text: 'extracted_text' in overrides ? overrides.extracted_text : 'Sample extracted text content for testing purposes with enough words to pass quality checks and validation requirements in the document card component.',
+    manual_text: 'manual_text' in overrides ? overrides.manual_text : null,
     metadata: overrides.metadata ?? {},
     created_at: '2025-01-01T00:00:00Z',
     updated_at: '2025-01-01T00:00:00Z',
@@ -218,9 +220,10 @@ export async function setupMockedCasePage(
     });
   });
 
-  // Navigate to the case page — server-side auth will pass (we're logged in),
-  // then client-side data loading will hit our intercepted routes
-  await page.goto('/app/cases/case-001');
+  // Navigate to the case page on the verification tab where DocumentCards render.
+  // Server-side auth will pass (we're logged in), then client-side data loading
+  // will hit our intercepted routes.
+  await page.goto('/app/cases/case-001?tab=verification');
   await page.waitForLoadState('networkidle');
 }
 

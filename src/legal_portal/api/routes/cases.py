@@ -9,6 +9,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from starlette.concurrency import run_in_threadpool
+from starlette.responses import StreamingResponse
 
 from legal_portal.api.dependencies import get_current_user, get_supabase_client, get_user_supabase_client
 from legal_portal.api.services.clio_client import ClioAPIError, ClioAuthError, ClioClient
@@ -1456,19 +1457,28 @@ async def create_case_from_clio(
         logger.info("Case created", extra={"case_id": case_id})
 
         # 3. Trigger background import if auto_import
+        import os
+        is_vercel = os.getenv("VERCEL") is not None
+
         if request.auto_import:
-            logger.debug("Scheduling background import")
-            background_tasks.add_task(
-                process_clio_import_background,
-                matter_id=request.matter_id,
-                case_id=case_id,
-                user=user,
-                clio_client=clio_client,
-                supabase=supabase,
-                progress_manager=progress_manager,
-                import_id=import_id,
-                case_clio_data=clio_data,
-            )
+            if is_vercel:
+                # On Vercel, BackgroundTasks get killed when the response is sent.
+                # The frontend will call /run-import which uses StreamingResponse
+                # to keep the function alive for the full import duration.
+                logger.info("Vercel detected — skipping BackgroundTask, frontend will call /run-import")
+            else:
+                logger.debug("Scheduling background import")
+                background_tasks.add_task(
+                    process_clio_import_background,
+                    matter_id=request.matter_id,
+                    case_id=case_id,
+                    user=user,
+                    clio_client=clio_client,
+                    supabase=supabase,
+                    progress_manager=progress_manager,
+                    import_id=import_id,
+                    case_clio_data=clio_data,
+                )
         else:
             # If no auto import, verify intake manually or just finish
             # For consistency, we should probably just mark as complete
@@ -1529,6 +1539,100 @@ async def create_case_from_clio(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error creating case: {error_msg}"
         ) from e
+
+
+class RunImportRequest(BaseModel):
+    """Request body for run-import endpoint."""
+    import_id: str
+
+
+@router.post("/{case_id}/run-import")
+async def run_import(
+    case_id: str,
+    request: RunImportRequest,
+    user=Depends(get_current_user),  # noqa: B008
+    supabase=Depends(get_supabase_client),  # noqa: B008
+    clio_client: ClioClient = Depends(get_clio_client_for_user),
+    progress_manager: ProgressManager = Depends(get_progress_manager),
+):
+    """Run Clio document import as a StreamingResponse.
+
+    On Vercel, BackgroundTasks get killed when the response is sent.
+    This endpoint runs the import inline and streams heartbeats to keep
+    the Vercel function alive for the full import duration.
+
+    The frontend fires-and-forgets this call after create-from-clio.
+    Progress is persisted to DB so the SSE endpoint can relay it.
+    """
+    import asyncio
+    import json as _json
+
+    # Verify case ownership
+    case_response = supabase.table("cases").select(
+        "id, clio_matter_data, user_id"
+    ).eq("id", case_id).eq("user_id", user["id"]).execute()
+
+    if not case_response.data:
+        raise HTTPException(status_code=404, detail="Case not found")
+
+    case_data = case_response.data[0]
+    clio_matter_data = case_data.get("clio_matter_data", {})
+    matter_id = clio_matter_data.get("matter_id")
+
+    if not matter_id:
+        raise HTTPException(status_code=400, detail="Case has no Clio matter_id")
+
+    import_id = request.import_id
+
+    async def import_stream():
+        """Run the import and yield heartbeats to keep Vercel alive."""
+        try:
+            yield f"data: {_json.dumps({'type': 'started', 'import_id': import_id})}\n\n"
+
+            # Run the import as an asyncio task so we can yield heartbeats
+            import_task = asyncio.create_task(
+                process_clio_import_background(
+                    matter_id=matter_id,
+                    case_id=case_id,
+                    user=user,
+                    clio_client=clio_client,
+                    supabase=supabase,
+                    progress_manager=progress_manager,
+                    import_id=import_id,
+                    case_clio_data=clio_matter_data,
+                )
+            )
+
+            heartbeat_count = 0
+            while not import_task.done():
+                await asyncio.sleep(2)
+                heartbeat_count += 1
+                if heartbeat_count >= 5:  # Every 10 seconds
+                    yield f"data: {_json.dumps({'type': 'heartbeat'})}\n\n"
+                    heartbeat_count = 0
+
+            # Re-raise any exception from the task
+            import_task.result()
+
+            yield f"data: {_json.dumps({'type': 'completed'})}\n\n"
+            logger.info(f"Streaming import completed for case {case_id}")
+
+        except asyncio.CancelledError:
+            logger.warning(f"Import stream cancelled for case {case_id}")
+            yield f"data: {_json.dumps({'type': 'cancelled'})}\n\n"
+        except Exception as e:
+            logger.error(f"Import stream error for case {case_id}: {e}", exc_info=True)
+            yield f"data: {_json.dumps({'type': 'error', 'error': str(e)})}\n\n"
+
+    return StreamingResponse(
+        import_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache, no-transform",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @router.post("/{case_id}/set-intake-form")

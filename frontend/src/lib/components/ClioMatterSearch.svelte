@@ -146,12 +146,25 @@
 				// Token is sent via Authorization header — never in the URL
 				const sseUrl = `${apiUrl}/api/progress/clio-import/${result.import_id}`;
 				const statusUrl = `${apiUrl}/api/progress/clio-import/${result.import_id}/status`;
-				
+
 				// Keep phase as 'creating' or 'importing' until SSE starts
 				importPhase = 'importing';
-				
+
+				// Fire-and-forget: start the import via StreamingResponse endpoint.
+				// On Vercel, BackgroundTasks get killed — this endpoint runs the import
+				// inline with heartbeats to keep the function alive.
+				// On local dev, BackgroundTask handles it, so this is a no-op safety net.
+				fetch(`${apiUrl}/api/cases/${result.case_id}/run-import`, {
+					method: 'POST',
+					headers: {
+						'Content-Type': 'application/json',
+						Authorization: `Bearer ${session.access_token}`,
+					},
+					body: JSON.stringify({ import_id: result.import_id }),
+				}).catch((err) => console.warn('run-import fire-and-forget error:', err));
+
 				progressStore.connect(
-					sseUrl, 
+					sseUrl,
 					(data: any) => {
 						if (data && data.import_status) {
 							importResult = data.import_status;

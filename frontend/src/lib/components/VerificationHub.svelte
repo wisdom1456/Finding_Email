@@ -440,7 +440,10 @@ const { session, user } = await getSecureSession();
 				}
 			});
 
-			if (!response.ok) throw new Error('Extraction failed');
+			if (!response.ok) {
+				const errBody = await response.json().catch(() => ({}));
+				throw new Error(errBody.detail || `Extraction failed (${response.status})`);
+			}
 			toastStore.success('Extraction complete');
 			await onDocumentsUpdated();
 		} catch (error: any) {
@@ -1042,7 +1045,7 @@ const { session, user } = await getSecureSession();
 	}
 </script>
 
-<div class="space-y-8" id="verification">
+<div class="space-y-8" id="verification" data-testid="verification-hub">
 	<!-- Summary Header -->
 	<div class="flex flex-col sm:flex-row sm:items-end justify-between gap-6">
 		<div class="flex-1">
@@ -1248,7 +1251,8 @@ const { session, user } = await getSecureSession();
 						
 						<!-- Bulk Extraction Action -->
 						{#if docsNeedingExtraction.length > 0}
-							<button 
+							<button
+								data-testid="bulk-extract-btn"
 								onclick={handleBulkExtract}
 								disabled={bulkActionLoading}
 								class="ml-4 btn btn-secondary py-1.5 text-xs font-bold text-accent border-accent/20 hover:bg-accent/5"

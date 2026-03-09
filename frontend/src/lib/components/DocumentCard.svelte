@@ -511,6 +511,8 @@
 </script>
 
 <div
+	data-testid="document-card"
+	data-doc-status={doc.status}
 	class={`group relative border rounded-xl overflow-hidden transition-all duration-200 ${config.bgColor} ${config.borderColor} hover:shadow-md ${isProcessing ? 'animate-pulse' : ''}`}
 >
 	<div class="p-4 sm:p-5 flex items-start gap-4">
@@ -597,6 +599,8 @@
 					</div>
 
 					<div class="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1">
+						<span data-testid="doc-status-badge" class={`text-xs font-semibold ${config.textColor}`}>{config.label}</span>
+						<span class="text-xs text-gray-400">•</span>
 						<span class="text-xs text-gray-500">{doc.file_type?.split('/')[1]?.toUpperCase() || 'FILE'}</span>
 						<span class="text-xs text-gray-400">•</span>
 						<span class="text-xs text-gray-500">{formatSize(doc.file_size)}</span>
@@ -715,6 +719,7 @@
 
 				{#if doc.status === 'ready' || doc.status === 'needs_review' || doc.status === 'extraction_failed' || doc.status === 'duplicate'}
 					<button
+						data-testid="view-edit-btn"
 						onclick={() => onEdit?.(doc)}
 						class="inline-flex items-center px-3 py-1.5 text-xs font-bold rounded-lg bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 hover:border-gray-300 transition-colors shadow-sm"
 					>
@@ -725,6 +730,7 @@
 
 				{#if doc.status === 'extraction_failed'}
 					<button
+						data-testid="re-extract-btn"
 						onclick={() => onReExtract?.(doc.id)}
 						class="btn btn-primary px-3 py-1.5 text-xs font-bold shadow-sm"
 					>
@@ -735,6 +741,7 @@
 
 				{#if doc.status === 'download_failed' || doc.status === 'corrupted'}
 					<button
+						data-testid="re-upload-btn"
 						onclick={() => onReplace?.(doc.id)}
 						class="btn btn-primary px-3 py-1.5 text-xs font-bold shadow-sm"
 					>
@@ -745,6 +752,7 @@
 
 				{#if doc.status === 'needs_review' && !doc.is_verified}
 					<button
+						data-testid="verify-btn"
 						onclick={() => onVerify?.(doc.id)}
 						disabled={!doc.extracted_text && !doc.manual_text}
 						title={!doc.extracted_text && !doc.manual_text ? "Run OCR first to verify this document" : "Mark as ready for analysis"}

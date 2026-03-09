@@ -1990,7 +1990,7 @@
 				{#if activeTab === 'documents'}
 					<div class="page-spacing">
 						<!-- Enhanced Documents Section -->
-		<div class="card-standard !p-0 overflow-hidden">
+		<div data-testid="documents-list" class="card-standard !p-0 overflow-hidden">
 			<div class="px-6 py-5 border-b border-gray-100">
 				<div class="flex justify-between items-center">
 					<h3 class="text-lg font-heading font-semibold text-contrast">Documents</h3>
@@ -2151,6 +2151,7 @@
 			<!-- Drag and Drop Upload Zone -->
 			{#if selectedFiles.length === 0}
 				<div
+					data-testid="upload-zone"
 					role="button"
 					tabindex="0"
 					aria-label="Upload documents by dragging and dropping here or clicking the upload button"

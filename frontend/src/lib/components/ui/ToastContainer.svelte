@@ -16,7 +16,7 @@
 	import Toast from './Toast.svelte';
 </script>
 
-<div class="fixed bottom-4 right-4 z-50 space-y-2">
+<div data-testid="toast-container" class="fixed bottom-4 right-4 z-50 space-y-2">
 	{#each $toastStore as toast (toast.id)}
 		<Toast
 			type={toast.type}

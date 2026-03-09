@@ -769,10 +769,11 @@ async def enrich_cross_document_for_case(
         if not case_response.data:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Case not found")
 
-        # Load documents with extracted_text (needed for email subject extraction)
+        # Phase 1: Load document metadata WITHOUT extracted_text (fast, small payload).
+        # Only fetch extracted_text per-doc when actually needed for registry building.
         docs_response = (
             service_supabase.table("documents")
-            .select("id, file_name, file_type, file_size, extracted_text, metadata")
+            .select("id, file_name, file_type, file_size, metadata")
             .eq("case_id", case_id)
             .execute()
         )
@@ -786,6 +787,8 @@ async def enrich_cross_document_for_case(
         doc_id_by_name: dict[str, str] = {}
         needs_enrichment = False
         registries_built = 0
+        # Track doc IDs that need extracted_text for cross-doc matching
+        docs_needing_text: list[dict] = []
 
         for doc in docs:
             metadata = doc.get("metadata") or {}
@@ -795,10 +798,20 @@ async def enrich_cross_document_for_case(
             # (e.g. Clio imports, uploads from before registry code was added)
             if not registry:
                 try:
+                    # Lazy-load extracted_text only for docs needing registry build
+                    text_response = (
+                        service_supabase.table("documents")
+                        .select("extracted_text")
+                        .eq("id", doc["id"])
+                        .single()
+                        .execute()
+                    )
+                    extracted_text = (text_response.data or {}).get("extracted_text") or ""
+
                     ft = _MIME_TO_FILETYPE.get(doc.get("file_type", ""), FileType.PDF)
                     pdoc_tmp = ProcessedDocument(
                         file_name=doc.get("file_name", ""),
-                        content=(doc.get("extracted_text") or "")[:200_000],
+                        content=extracted_text[:200_000],
                         document_type=DocumentType.CASE_DOCUMENT,
                         file_type=ft,
                         metadata=FileMetadata(
@@ -822,27 +835,40 @@ async def enrich_cross_document_for_case(
             if stage in ("cross_doc", "ai_analysis"):
                 registries.append(registry)
                 # Still include in processed_docs for cross-doc matching
-                pdoc = ProcessedDocument(
-                    file_name=doc.get("file_name", ""),
-                    content=(doc.get("extracted_text") or "")[:5000],
-                    document_type=DocumentType.CASE_DOCUMENT,
-                    file_type=FileType.PDF,
-                    metadata=FileMetadata(
-                        file_name=doc.get("file_name", ""),
-                        file_type=FileType.PDF,
-                        file_size=doc.get("file_size", 0),
-                    ),
-                    document_id=doc["id"],
-                )
-                processed_docs.append(pdoc)
+                # Mark for lazy text loading below
+                docs_needing_text.append(doc)
                 doc_id_by_name[doc.get("file_name", "")] = doc["id"]
                 continue
 
             needs_enrichment = True
             registries.append(registry)
+            docs_needing_text.append(doc)
+            doc_id_by_name[doc.get("file_name", "")] = doc["id"]
+
+        if not needs_enrichment:
+            return {"enriched": 0, "registries_built": registries_built, "total": len(docs)}
+
+        # Phase 2: Batch-load extracted_text only for docs included in cross-doc matching.
+        # Load in batches of 50 to avoid oversized Supabase responses.
+        logger.info(f"Loading extracted_text for {len(docs_needing_text)} docs for cross-doc enrichment")
+        text_by_id: dict[str, str] = {}
+        batch_size = 50
+        for i in range(0, len(docs_needing_text), batch_size):
+            batch_ids = [d["id"] for d in docs_needing_text[i : i + batch_size]]
+            text_resp = (
+                service_supabase.table("documents")
+                .select("id, extracted_text")
+                .in_("id", batch_ids)
+                .execute()
+            )
+            for row in text_resp.data or []:
+                text_by_id[row["id"]] = (row.get("extracted_text") or "")[:5000]
+
+        # Build ProcessedDocument list with loaded text
+        for doc in docs_needing_text:
             pdoc = ProcessedDocument(
                 file_name=doc.get("file_name", ""),
-                content=(doc.get("extracted_text") or "")[:5000],
+                content=text_by_id.get(doc["id"], ""),
                 document_type=DocumentType.CASE_DOCUMENT,
                 file_type=FileType.PDF,
                 metadata=FileMetadata(
@@ -853,31 +879,42 @@ async def enrich_cross_document_for_case(
                 document_id=doc["id"],
             )
             processed_docs.append(pdoc)
-            doc_id_by_name[doc.get("file_name", "")] = doc["id"]
 
-        if not needs_enrichment:
-            return {"enriched": 0, "registries_built": registries_built, "total": len(docs)}
-
-        # Run cross-document enrichment
+        # Phase 3: Run cross-document enrichment (pure computation, no I/O)
+        logger.info(f"Running cross-document enrichment: {len(registries)} registries, {len(processed_docs)} docs")
         enriched = registry_service.enrich_cross_document(registries, processed_docs)
 
-        # Persist updated registries
+        # Phase 4: Persist updated registries
         persisted = 0
+        persist_errors = 0
         for reg in enriched:
             doc_name = reg.get("document_name", "")
             doc_id = reg.get("document_id") or doc_id_by_name.get(doc_name)
             if not doc_id:
                 continue
             if reg.get("enrichment_stage") == "cross_doc":
-                registry_service.persist_to_document(doc_id, reg, service_supabase)
-                persisted += 1
+                try:
+                    registry_service.persist_to_document(doc_id, reg, service_supabase)
+                    persisted += 1
+                except Exception as e:
+                    persist_errors += 1
+                    logger.warning(f"Failed to persist registry for {doc_id}: {e}")
 
-        return {"enriched": persisted, "registries_built": registries_built, "total": len(docs)}
+        return {
+            "enriched": persisted,
+            "registries_built": registries_built,
+            "persist_errors": persist_errors,
+            "total": len(docs),
+        }
 
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error in enrich_cross_document_for_case: {e}")
+        import traceback
+        tb = traceback.format_exc()
+        # Print to stdout so Vercel captures the full traceback
+        print(f"ERROR in enrich_cross_document_for_case: {e}\n{tb}")
+        logger.error(f"Error in enrich_cross_document_for_case: {e}\n{tb}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error running cross-document enrichment: {str(e)}",

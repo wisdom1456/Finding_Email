@@ -7,19 +7,26 @@
  *   C (@mocked) — Missing document / download failure (404)
  *   D (@mocked) — Failed extraction blocks verify
  *
- * Run mocked tests:    npx playwright test document-lifecycle --grep @mocked
+ * ALL tests require TEST_USER_EMAIL and TEST_USER_PASSWORD because SvelteKit
+ * server-side hooks validate auth via server-to-server Supabase calls that
+ * cannot be intercepted by Playwright. Mocked tests intercept client-side
+ * data loading after auth passes.
+ *
+ * Run mocked tests:    TEST_USER_EMAIL=x TEST_USER_PASSWORD=y npx playwright test document-lifecycle --grep @mocked
  * Run full-stack tests: RUN_FULL_E2E=true TEST_USER_EMAIL=x TEST_USER_PASSWORD=y npx playwright test document-lifecycle --grep @full-stack
- * Run all:             npx playwright test document-lifecycle
+ * Run all:             RUN_FULL_E2E=true TEST_USER_EMAIL=x TEST_USER_PASSWORD=y npx playwright test document-lifecycle
  */
 import { test, expect } from '@playwright/test';
 import {
   setupMockedCasePage,
+  login,
   loginAndNavigate,
 } from './fixtures/test-helpers';
 
 const RUN_FULL_E2E = process.env.RUN_FULL_E2E === 'true';
 const TEST_EMAIL = process.env.TEST_USER_EMAIL;
 const TEST_PASSWORD = process.env.TEST_USER_PASSWORD;
+const HAS_CREDENTIALS = !!TEST_EMAIL && !!TEST_PASSWORD;
 
 // ─────────────────────────────────────────────────────────────
 // Scenario A — Happy path (@full-stack)
@@ -30,7 +37,7 @@ test.describe('Scenario A — happy path @full-stack', () => {
 
   test.beforeEach(async ({ page }) => {
     test.skip(!RUN_FULL_E2E, 'Requires RUN_FULL_E2E=true');
-    test.skip(!TEST_EMAIL || !TEST_PASSWORD, 'Requires TEST_USER_EMAIL and TEST_USER_PASSWORD');
+    test.skip(!HAS_CREDENTIALS, 'Requires TEST_USER_EMAIL and TEST_USER_PASSWORD');
 
     await loginAndNavigate(page, '/app/cases', { email: TEST_EMAIL!, password: TEST_PASSWORD! });
   });
@@ -129,6 +136,11 @@ test.describe('Scenario A — happy path @full-stack', () => {
 // ─────────────────────────────────────────────────────────────
 
 test.describe('Scenario B — OCR misconfigured @mocked', () => {
+  test.beforeEach(async ({ page }) => {
+    test.skip(!HAS_CREDENTIALS, 'Requires TEST_USER_EMAIL and TEST_USER_PASSWORD');
+    await login(page, { email: TEST_EMAIL!, password: TEST_PASSWORD! });
+  });
+
   test('extract fails with 500 and shows actionable error message', async ({ page }) => {
     await setupMockedCasePage(page, {
       documents: [{
@@ -144,9 +156,6 @@ test.describe('Scenario B — OCR misconfigured @mocked', () => {
         body: { detail: 'OCR_SERVICE_TOKEN must be set when OCR_REMOTE_ENABLED=true' },
       },
     });
-
-    await page.goto('/app/cases/case-001');
-    await page.waitForLoadState('networkidle');
 
     // Document card should show extraction_failed status
     const docCard = page.locator('[data-testid="document-card"]').filter({ hasText: 'contract-needs-ocr.pdf' });
@@ -185,9 +194,6 @@ test.describe('Scenario B — OCR misconfigured @mocked', () => {
       }],
     });
 
-    await page.goto('/app/cases/case-001');
-    await page.waitForLoadState('networkidle');
-
     const docCard = page.locator('[data-testid="document-card"]').filter({ hasText: 'broken-doc.pdf' });
     await expect(docCard).toBeVisible({ timeout: 10000 });
 
@@ -204,6 +210,11 @@ test.describe('Scenario B — OCR misconfigured @mocked', () => {
 // ─────────────────────────────────────────────────────────────
 
 test.describe('Scenario C — missing document @mocked', () => {
+  test.beforeEach(async ({ page }) => {
+    test.skip(!HAS_CREDENTIALS, 'Requires TEST_USER_EMAIL and TEST_USER_PASSWORD');
+    await login(page, { email: TEST_EMAIL!, password: TEST_PASSWORD! });
+  });
+
   test('download_failed status shows re-upload action and hides verify', async ({ page }) => {
     await setupMockedCasePage(page, {
       documents: [{
@@ -216,9 +227,6 @@ test.describe('Scenario C — missing document @mocked', () => {
       }],
       downloadResponse: { status: 404 },
     });
-
-    await page.goto('/app/cases/case-001');
-    await page.waitForLoadState('networkidle');
 
     const docCard = page.locator('[data-testid="document-card"]').filter({ hasText: 'missing-file.pdf' });
     await expect(docCard).toBeVisible({ timeout: 10000 });
@@ -248,9 +256,6 @@ test.describe('Scenario C — missing document @mocked', () => {
       }],
     });
 
-    await page.goto('/app/cases/case-001');
-    await page.waitForLoadState('networkidle');
-
     const docCard = page.locator('[data-testid="document-card"]').filter({ hasText: 'damaged-file.pdf' });
     await expect(docCard).toBeVisible({ timeout: 10000 });
 
@@ -270,6 +275,11 @@ test.describe('Scenario C — missing document @mocked', () => {
 // ─────────────────────────────────────────────────────────────
 
 test.describe('Scenario D — failed extraction state gating @mocked', () => {
+  test.beforeEach(async ({ page }) => {
+    test.skip(!HAS_CREDENTIALS, 'Requires TEST_USER_EMAIL and TEST_USER_PASSWORD');
+    await login(page, { email: TEST_EMAIL!, password: TEST_PASSWORD! });
+  });
+
   test('verify button is disabled when document has no extracted text', async ({ page }) => {
     await setupMockedCasePage(page, {
       documents: [{
@@ -281,9 +291,6 @@ test.describe('Scenario D — failed extraction state gating @mocked', () => {
         extracted_at: null,
       }],
     });
-
-    await page.goto('/app/cases/case-001');
-    await page.waitForLoadState('networkidle');
 
     const docCard = page.locator('[data-testid="document-card"]').filter({ hasText: 'no-text-doc.pdf' });
     await expect(docCard).toBeVisible({ timeout: 10000 });
@@ -312,9 +319,6 @@ test.describe('Scenario D — failed extraction state gating @mocked', () => {
         body: { detail: 'Cannot verify document without extracted text. Please run OCR first.' },
       },
     });
-
-    await page.goto('/app/cases/case-001');
-    await page.waitForLoadState('networkidle');
 
     const docCard = page.locator('[data-testid="document-card"]').filter({ hasText: 'force-verify.pdf' });
     await expect(docCard).toBeVisible({ timeout: 10000 });
@@ -350,9 +354,6 @@ test.describe('Scenario D — failed extraction state gating @mocked', () => {
         },
       ],
     });
-
-    await page.goto('/app/cases/case-001');
-    await page.waitForLoadState('networkidle');
 
     // Failed doc: should have re-extract, no verify
     const failedCard = page.locator('[data-testid="document-card"]').filter({ hasText: 'failed-extraction.pdf' });

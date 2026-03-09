@@ -56,12 +56,55 @@ export function mockCase(overrides: Record<string, any> = {}) {
   };
 }
 
+// ── Full-Stack Login Helper ──
+
+/**
+ * Login via the real Supabase auth flow.
+ * Required for all tests because SvelteKit server-side hooks
+ * redirect unauthenticated requests to /login.
+ */
+export async function login(
+  page: Page,
+  credentials?: { email: string; password: string }
+) {
+  const email = credentials?.email ?? process.env.TEST_USER_EMAIL!;
+  const password = credentials?.password ?? process.env.TEST_USER_PASSWORD!;
+
+  await page.goto('/login');
+  await page.waitForLoadState('networkidle');
+
+  if (!page.url().includes('/app/')) {
+    await page.fill('input[type="email"]', email);
+    await page.fill('input[type="password"]', password);
+    await page.click('button:has-text("Sign in")');
+    await page.waitForURL(/\/app/, { timeout: 15000 });
+  }
+}
+
+export async function loginAndNavigate(
+  page: Page,
+  path: string,
+  credentials?: { email: string; password: string }
+) {
+  await login(page, credentials);
+  await page.goto(path);
+  await page.waitForLoadState('networkidle');
+}
+
 // ── API Route Interception ──
 
 /**
  * Sets up route interception for a case detail page with mocked documents.
- * Intercepts Supabase REST API calls (used by the frontend directly)
- * and backend API calls.
+ *
+ * IMPORTANT: The page must be authenticated first (call `login()` before this).
+ * SvelteKit server-side hooks validate auth via server-to-server calls to Supabase
+ * which cannot be intercepted by Playwright. After auth passes, the page component
+ * loads data client-side via browser requests that CAN be intercepted.
+ *
+ * This function:
+ * 1. Sets up route interception for Supabase REST API + backend API calls
+ * 2. Navigates to the case detail page
+ * 3. Waits for the page to finish loading
  */
 export async function setupMockedCasePage(
   page: Page,
@@ -76,14 +119,17 @@ export async function setupMockedCasePage(
   const docs = (options.documents ?? [{ status: 'ready' }]).map(d => mockDocument(d));
   const caseData = mockCase(options.caseData);
 
-  // Intercept Supabase REST API — case query
+  // Intercept Supabase REST API — case query (single-row response)
   await page.route('**/rest/v1/cases?*', async (route) => {
     const url = route.request().url();
-    if (url.includes('select=') && url.includes(caseData.id)) {
+    if (url.includes('select=')) {
+      // Supabase PostgREST returns the object directly when using .single()
+      // but the frontend may use .eq() which returns an array
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify(caseData),
+        headers: { 'content-range': '0-0/1' },
       });
     } else {
       await route.fallback();
@@ -93,7 +139,7 @@ export async function setupMockedCasePage(
   // Intercept Supabase REST API — documents query
   await page.route('**/rest/v1/documents?*', async (route) => {
     const url = route.request().url();
-    if (url.includes('select=') && url.includes(caseData.id)) {
+    if (url.includes('select=')) {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -171,6 +217,11 @@ export async function setupMockedCasePage(
       body: JSON.stringify({ connected: false }),
     });
   });
+
+  // Navigate to the case page — server-side auth will pass (we're logged in),
+  // then client-side data loading will hit our intercepted routes
+  await page.goto('/app/cases/case-001');
+  await page.waitForLoadState('networkidle');
 }
 
 // ── Assertion Helpers ──
@@ -198,28 +249,4 @@ export async function waitForToast(page: Page, textPattern: string | RegExp) {
  */
 export async function waitForErrorToast(page: Page, textPattern: string | RegExp) {
   return waitForToast(page, textPattern);
-}
-
-// ── Full-Stack Login Helper ──
-
-export async function loginAndNavigate(
-  page: Page,
-  path: string,
-  credentials?: { email: string; password: string }
-) {
-  const email = credentials?.email ?? process.env.TEST_USER_EMAIL!;
-  const password = credentials?.password ?? process.env.TEST_USER_PASSWORD!;
-
-  await page.goto('/login');
-  await page.waitForLoadState('networkidle');
-
-  if (!page.url().includes('/app/')) {
-    await page.fill('input[type="email"]', email);
-    await page.fill('input[type="password"]', password);
-    await page.click('button:has-text("Sign in")');
-    await page.waitForURL(/\/app/, { timeout: 15000 });
-  }
-
-  await page.goto(path);
-  await page.waitForLoadState('networkidle');
 }

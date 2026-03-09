@@ -33,6 +33,7 @@
 	import SignatureReviewPanel from './SignatureReviewPanel.svelte';
 	import DocumentReviewPanel from './DocumentReviewPanel.svelte';
 	import { sortByAttention } from '$lib/utils/documentSorting';
+	import { groupDocuments, filterDocuments } from '$lib/utils/triageGrouping';
 
 	// Props
 	let {
@@ -103,48 +104,7 @@
 	}>({ open: false, type: 'delete' });
 
 	// Triage Groups — sourced from displayDocuments so chip filters take effect
-	let triageGroups = $derived.by(() => {
-		const groups = {
-			critical: [] as any[], // download_failed, corrupted
-			needs_attention: [] as any[], // extraction_failed, needs_review (low quality)
-			ready: [] as any[], // ready (high/medium quality)
-			duplicates: [] as any[], // duplicate documents
-			excluded: [] as any[] // documents manually excluded from analysis
-		};
-
-		for (const doc of displayDocuments) {
-			const status = doc.status;
-			const isDuplicate = doc.metadata?.is_duplicate === true || status === 'duplicate';
-			const isExcluded = doc.metadata?.excluded === true;
-
-			if (isExcluded) {
-				groups.excluded.push(doc);
-			} else if (isDuplicate) {
-				// Duplicates go to their own section
-				groups.duplicates.push(doc);
-			} else if (status === 'download_failed' || status === 'corrupted') {
-				groups.critical.push(doc);
-			} else if (
-				status === 'extraction_failed' ||
-				status === 'needs_review' ||
-				status === 'pending' ||
-				(status === 'ready' && !doc.extracted_at)
-			) {
-				groups.needs_attention.push(doc);
-			} else {
-				groups.ready.push(doc);
-			}
-		}
-
-		// Apply smart sorting within each group
-		groups.critical = sortByAttention(groups.critical);
-		groups.needs_attention = sortByAttention(groups.needs_attention);
-		groups.ready = sortByAttention(groups.ready);
-		groups.duplicates = sortByAttention(groups.duplicates);
-		groups.excluded = sortByAttention(groups.excluded);
-
-		return groups;
-	});
+	let triageGroups = $derived(groupDocuments(displayDocuments));
 
 	let docsNeedingExtraction = $derived(
 		triageGroups.needs_attention.filter(d =>
@@ -174,32 +134,7 @@
 	}
 
 	// Compute filtered documents using registry-backed columns
-	let displayDocuments = $derived((() => {
-		if (activeFilters.size === 0) return localDocuments;
-		return localDocuments.filter(d => {
-			const enrichment = d.metadata?.attorney_enrichment || {};
-			const quality = d.metadata?.quality_score ?? 10;
-
-			if (activeFilters.has('missing-signatures')) {
-				const sigExpected = d.signature_expected === true ||
-				                    d.metadata?.registry?.signature_expected === true;
-				const sigSatisfied =
-					d.signed_status === 'signed' ||
-					enrichment.signature_verification === 'signed';
-				if (sigExpected && !sigSatisfied) return true;
-			}
-			if (activeFilters.has('low-ocr')) {
-				if (quality < 5) return true;
-			}
-			if (activeFilters.has('needs-type')) {
-				if (!d.document_type_label && !enrichment.document_type_override) return true;
-			}
-			if (activeFilters.has('ready')) {
-				if (d.status === 'ready') return true;
-			}
-			return false;
-		});
-	})());
+	let displayDocuments = $derived(filterDocuments(localDocuments, activeFilters));
 
 	// Selection Handlers
 	function toggleSelection(docId: string) {

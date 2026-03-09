@@ -177,17 +177,96 @@ async def stream_analysis_progress(
     )
 
 
+async def poll_database_for_clio_import_progress(
+    import_id: str,
+    supabase,
+    poll_interval: float = 2.0,
+    max_duration: float = 780.0,  # Stay under Vercel's 800s SSE limit
+) -> AsyncGenerator[str, None]:
+    """Poll database for Clio import progress and yield SSE events.
+
+    On Vercel, the run-import endpoint runs in a separate function instance,
+    so in-memory pub/sub doesn't work. This polls cases.import_progress instead.
+    """
+    start_time = asyncio.get_event_loop().time()
+    last_progress = None
+    last_percent = -1
+
+    while True:
+        elapsed = asyncio.get_event_loop().time() - start_time
+        if elapsed > max_duration:
+            yield json.dumps({
+                "type": "timeout",
+                "message": "Connection timeout - please refresh to continue monitoring",
+                "percent": last_percent if last_percent >= 0 else 0,
+            })
+            break
+
+        try:
+            response = (
+                supabase.table("cases")
+                .select("import_progress, status")
+                .filter("import_progress->>import_id", "eq", import_id)
+                .limit(1)
+                .execute()
+            )
+
+            if response.data and len(response.data) > 0:
+                case_data = response.data[0]
+                import_progress = case_data.get("import_progress", {})
+                progress_data = import_progress.get("progress", {})
+
+                if progress_data:
+                    current_progress = {
+                        "type": progress_data.get("type", "progress"),
+                        "message": progress_data.get("message", "Importing..."),
+                        "phase": progress_data.get("phase", "import"),
+                        "percent": progress_data.get("percent", 0),
+                        "timestamp": datetime.utcnow().isoformat(),
+                    }
+                    # Pass through extra fields (current_doc, sub_step, data, etc.)
+                    for k, v in progress_data.items():
+                        if k not in current_progress:
+                            current_progress[k] = v
+
+                    current_percent = current_progress.get("percent", 0)
+
+                    if current_progress != last_progress:
+                        last_progress = current_progress
+                        last_percent = current_percent
+                        yield json.dumps(current_progress)
+
+                    # Check terminal states
+                    progress_type = progress_data.get("type", "")
+                    progress_status = progress_data.get("status", "")
+                    if progress_type in ("completed", "error") or progress_status in ("completed", "error"):
+                        break
+
+        except Exception as e:
+            logger.warning(f"Error polling import progress for {import_id}: {e}")
+
+        await asyncio.sleep(poll_interval)
+
+
 @router.get("/clio-import/{import_id}")
 async def stream_clio_import_progress(
     request: Request,
     import_id: str,
     token: str | None = Query(None, description="Access token (legacy, prefer Authorization header)"),
+    supabase=Depends(get_supabase_client),
 ):
-    """Stream Clio import progress updates via SSE."""
-    await _authenticate_request(request, token)
-    progress_manager = ProgressManager.get_instance()
+    """Stream Clio import progress updates via SSE.
 
-    return EventSourceResponse(progress_manager.subscribe(import_id), ping=15, media_type="text/event-stream")
+    Uses database polling for cross-instance compatibility on Vercel
+    (same approach as analysis progress streaming).
+    """
+    await _authenticate_request(request, token)
+
+    return EventSourceResponse(
+        poll_database_for_clio_import_progress(import_id, supabase),
+        ping=15,
+        media_type="text/event-stream",
+    )
 
 
 @router.get("/analysis/{analysis_id}/status")

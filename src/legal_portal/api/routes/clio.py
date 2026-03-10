@@ -671,18 +671,17 @@ async def import_clio_data(
                 supabase.table("documents").insert(doc_data).execute()
                 items_processed += 1
 
-                if idx % 5 == 0:  # Update every 5 items
-                    progress_pct = 25 + int((items_processed / total_items) * 25)
-                    await publish_and_persist(
-                        f"Imported communication {idx}/{len(communications)}",
-                        "import_communications",
-                        progress_pct,
-                        current_doc={
-                            "name": comm.subject[:50] if comm.subject else "Untitled",
-                            "index": idx,
-                            "total": len(communications),
-                        },
-                    )
+                progress_pct = 25 + int((items_processed / total_items) * 25)
+                await publish_and_persist(
+                    f"Imported communication {idx}/{len(communications)}",
+                    "import_communications",
+                    progress_pct,
+                    current_doc={
+                        "name": comm.subject[:50] if comm.subject else "Untitled",
+                        "index": idx,
+                        "total": len(communications),
+                    },
+                )
             except Exception as e:
                 logger.warning("Failed to save communication", extra={"comm_id": comm.id, "error": str(e)})
 
@@ -741,14 +740,13 @@ async def import_clio_data(
                 supabase.table("documents").insert(doc_data).execute()
                 items_processed += 1
 
-                if idx % 5 == 0:  # Update every 5 items
-                    progress_pct = 30 + int((items_processed / total_items) * 20)
-                    await publish_and_persist(
-                        f"Imported note {idx}/{len(notes)}",
-                        "import_notes",
-                        progress_pct,
-                        current_doc={"name": note_subject[:50], "index": idx, "total": len(notes)},
-                    )
+                progress_pct = 30 + int((items_processed / total_items) * 20)
+                await publish_and_persist(
+                    f"Imported note {idx}/{len(notes)}",
+                    "import_notes",
+                    progress_pct,
+                    current_doc={"name": note_subject[:50], "index": idx, "total": len(notes)},
+                )
             except Exception as e:
                 logger.warning(
                     "Failed to save note", extra={"note_id": note.get("id", "unknown"), "error": str(e)}

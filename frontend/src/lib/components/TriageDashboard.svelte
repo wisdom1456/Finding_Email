@@ -11,10 +11,17 @@
         onFilterToggle: (filter: string) => void;
     } = $props();
 
+    // Exclude duplicates and excluded docs from counts — they're not part of the active case
+    const activeDocs = $derived(documents.filter(d => {
+        const isDuplicate = d.metadata?.is_duplicate === true || d.status === 'duplicate';
+        const isExcluded = d.metadata?.excluded === true;
+        return !isDuplicate && !isExcluded;
+    }));
+
     // Missing signatures: use denormalized columns (signature_expected + signed_status)
     // Excludes emails and photos which should never trigger signature review
     const missingSigCount = $derived(
-        documents.filter(d => {
+        activeDocs.filter(d => {
             const sigExpected = d.signature_expected === true ||
                                 d.metadata?.registry?.signature_expected === true;
             const sigSatisfied =
@@ -26,7 +33,7 @@
 
     // Low OCR quality
     const lowOcrCount = $derived(
-        documents.filter(d => {
+        activeDocs.filter(d => {
             const quality = d.metadata?.quality_score ?? 10;
             return quality < 5;
         }).length
@@ -34,15 +41,15 @@
 
     // Needs type classification — uses denormalized document_type_label column
     const needsTypeCount = $derived(
-        documents.filter(d => {
+        activeDocs.filter(d => {
             return !d.document_type_label &&
                    !d.metadata?.attorney_enrichment?.document_type_override;
         }).length
     );
 
     // Ready docs
-    const readyCount = $derived(documents.filter(d => d.status === 'ready').length);
-    const totalCount = $derived(documents.length);
+    const readyCount = $derived(activeDocs.filter(d => d.status === 'ready').length);
+    const totalCount = $derived(activeDocs.length);
 
     // All-clear condition
     const allClear = $derived(missingSigCount === 0 && lowOcrCount === 0 && totalCount > 0);

@@ -341,6 +341,31 @@ const { session, user } = await getSecureSession();
 		}
 	}
 
+	/** Fetch with retry for transient network errors (ERR_NETWORK_CHANGED, timeouts). */
+	async function fetchWithRetry(url: string, options: RequestInit, retries = 2): Promise<Response> {
+		for (let attempt = 0; attempt <= retries; attempt++) {
+			try {
+				const resp = await fetch(url, options);
+				// Retry on 502/503 (transient server errors)
+				if ((resp.status === 502 || resp.status === 503) && attempt < retries) {
+					await new Promise(r => setTimeout(r, 2000 * (attempt + 1)));
+					continue;
+				}
+				return resp;
+			} catch (err: any) {
+				// Network-level failures (ERR_NETWORK_CHANGED, Failed to fetch)
+				if (attempt < retries) {
+					console.warn(`[EXTRACT:RETRY] attempt ${attempt + 1} failed: ${err.message}, retrying...`);
+					await new Promise(r => setTimeout(r, 2000 * (attempt + 1)));
+					continue;
+				}
+				throw err;
+			}
+		}
+		// Unreachable, but satisfies TS
+		throw new Error('fetchWithRetry exhausted');
+	}
+
 	async function handleBulkExtract() {
 		const docsToProcess = docsNeedingExtraction;
 		if (docsToProcess.length === 0) return;
@@ -370,7 +395,7 @@ const { session, user } = await getSecureSession();
 
 				const results = await Promise.allSettled(
 					batch.map((doc: any) =>
-						fetch(`${getApiUrl()}/api/documents/${doc.id}/extract`, {
+						fetchWithRetry(`${getApiUrl()}/api/documents/${doc.id}/extract`, {
 							method: 'POST',
 							headers: { Authorization: `Bearer ${session.access_token}` },
 						})
@@ -838,7 +863,7 @@ const { session, user } = await getSecureSession();
 				Verification Hub
 			</h2>
 			<p class="mt-2 text-gray-500 font-medium text-lg max-w-2xl">
-				Review and confirm extracted data from {localDocuments.length} documents before running the final legal analysis.
+				Review and confirm extracted data from your case documents before running the final legal analysis.
 			</p>
 			<button 
 				onclick={() => showInstructions = !showInstructions}

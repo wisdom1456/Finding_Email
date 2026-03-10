@@ -707,6 +707,7 @@ async def import_clio_data(
 
                 note_storage_path = f"clio/{case_id}/note_{note['id']}.txt"
                 note_content = note_detail or ""
+                note_upload_ok = True
                 try:
                     supabase.storage.from_("documents").upload(
                         note_storage_path,
@@ -714,6 +715,7 @@ async def import_clio_data(
                         {"content-type": "text/plain"},
                     )
                 except Exception as upload_err:
+                    note_upload_ok = False
                     logger.warning(f"Failed to upload note to storage: {upload_err}")
 
                 doc_data = {
@@ -721,7 +723,7 @@ async def import_clio_data(
                     "file_name": f"Clio Note - {note_subject[:50]}.txt",
                     "file_type": "text/plain",
                     "file_size": len(note_content.encode("utf-8")),
-                    "storage_path": note_storage_path,
+                    "storage_path": note_storage_path if note_upload_ok else None,
                     "status": DocumentStatus.READY,
                     "extracted_text": note_detail,
                     "extracted_at": datetime.utcnow().isoformat(),
@@ -1318,6 +1320,7 @@ async def sync_clio_matter(
                 content = f"Subject: {note_subject}\n\n{note_detail}"
 
                 storage_path = f"clio/{case_id}/note_{note['id']}.txt"
+                sync_upload_ok = True
                 try:
                     supabase.storage.from_("documents").upload(
                         storage_path,
@@ -1325,8 +1328,8 @@ async def sync_clio_matter(
                         {"content-type": "text/plain"}
                     )
                 except Exception as e:
+                    sync_upload_ok = False
                     logger.warning(f"Failed to upload note to storage: {e}")
-                    continue  # Skip this item if storage fails
 
                 supabase.table("documents").insert({
                     "case_id": case_id,
@@ -1334,7 +1337,7 @@ async def sync_clio_matter(
                     "file_name": f"Clio Note - {note_subject[:50]}.txt",
                     "file_type": "text/plain",
                     "file_size": len(content.encode("utf-8")),
-                    "storage_path": storage_path,
+                    "storage_path": storage_path if sync_upload_ok else None,
                     "status": DocumentStatus.READY,
                     "extracted_text": content,
                     "extracted_at": datetime.utcnow().isoformat(),

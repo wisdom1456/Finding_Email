@@ -1990,9 +1990,10 @@ async def _trigger_extraction_inner(
         # storage file (legacy imports pre-dating the storage upload step, or cases where
         # the upload failed). Use the existing text as file_bytes so re-extract works.
         storage_path = document["storage_path"]
+        doc_metadata = document.get("metadata") or {}
+        is_clio_source = bool(doc_metadata.get("clio_source"))
         is_clio_text_doc = bool(
-            document.get("extracted_text")
-            and document.get("metadata", {}).get("clio_source")
+            document.get("extracted_text") and is_clio_source
         )
 
         if is_clio_text_doc:
@@ -2003,6 +2004,44 @@ async def _trigger_extraction_inner(
             try:
                 file_bytes = service_supabase.storage.from_("documents").download(storage_path)
             except Exception as download_err:
+                # Clio notes are plain text — if storage upload failed during import,
+                # recover the content from metadata (subject line) rather than 404ing.
+                if is_clio_source and doc_metadata.get("clio_type") == "note":
+                    subject = doc_metadata.get("clio_subject", "")
+                    clio_date = doc_metadata.get("clio_date", "")
+                    recovered_text = f"Subject: {subject}"
+                    if clio_date:
+                        recovered_text += f"\nDate: {clio_date}"
+                    logger.warning(
+                        f"[EXTRACT:CLIO_RECOVER] doc_id={document_id} | "
+                        f"Storage download failed, recovering Clio note from metadata"
+                    )
+                    file_bytes = recovered_text.encode("utf-8")
+                    # Update the document with recovered text so this doesn't happen again
+                    user_supabase.table("documents").update({
+                        "extracted_text": recovered_text,
+                        "extracted_at": datetime.utcnow().isoformat(),
+                        "extraction_quality": "low",
+                        "extraction_method": "clio_metadata_recovery",
+                        "status": DocumentStatus.READY,
+                        "extraction_error": None,
+                        "updated_at": datetime.utcnow().isoformat(),
+                    }).eq("id", document_id).execute()
+                    logger.info(
+                        f"[EXTRACT:CLIO_RECOVER] doc_id={document_id} | "
+                        f"Recovered and saved. Text length={len(recovered_text)}"
+                    )
+                    return {
+                        "document_id": document_id,
+                        "extracted_text_length": len(recovered_text),
+                        "extraction_method": "clio_metadata_recovery",
+                        "extraction_quality": "low",
+                        "message": (
+                            "Clio note recovered from metadata. Original content may be "
+                            "incomplete — re-import from Clio for full text."
+                        ),
+                    }
+
                 err_msg = f"File not found in storage (path: {storage_path})"
                 logger.error(f"Storage download failed for {document_id}: {download_err}")
                 user_supabase.table("documents").update({
@@ -2016,6 +2055,37 @@ async def _trigger_extraction_inner(
                 )
 
             if not file_bytes:
+                # Same recovery for Clio notes when storage returns empty
+                if is_clio_source and doc_metadata.get("clio_type") == "note":
+                    subject = doc_metadata.get("clio_subject", "")
+                    clio_date = doc_metadata.get("clio_date", "")
+                    recovered_text = f"Subject: {subject}"
+                    if clio_date:
+                        recovered_text += f"\nDate: {clio_date}"
+                    logger.warning(
+                        f"[EXTRACT:CLIO_RECOVER] doc_id={document_id} | "
+                        f"Storage returned empty, recovering Clio note from metadata"
+                    )
+                    user_supabase.table("documents").update({
+                        "extracted_text": recovered_text,
+                        "extracted_at": datetime.utcnow().isoformat(),
+                        "extraction_quality": "low",
+                        "extraction_method": "clio_metadata_recovery",
+                        "status": DocumentStatus.READY,
+                        "extraction_error": None,
+                        "updated_at": datetime.utcnow().isoformat(),
+                    }).eq("id", document_id).execute()
+                    return {
+                        "document_id": document_id,
+                        "extracted_text_length": len(recovered_text),
+                        "extraction_method": "clio_metadata_recovery",
+                        "extraction_quality": "low",
+                        "message": (
+                            "Clio note recovered from metadata. Original content may be "
+                            "incomplete — re-import from Clio for full text."
+                        ),
+                    }
+
                 user_supabase.table("documents").update({
                     "status": DocumentStatus.DOWNLOAD_FAILED,
                     "extraction_error": "Storage returned empty file",

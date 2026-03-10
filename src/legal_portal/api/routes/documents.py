@@ -471,37 +471,32 @@ async def upload_document(
                                 logger.error(f"Local OCR fallback also failed for {file_name}: {fallback_err}")
                         except Exception as e:
                             logger.error(f"Remote OCR failed for {file_name}: {e}")
-                            if _settings.ocr_remote_required:
-                                extraction_error = f"Image OCR failed: {str(e)}"
+                            # Always fall back to local OCR on remote failure
+                            logger.warning(f"Falling back to local OCR for {file_name}")
+                            try:
+                                google_client = GoogleVisionClient.get_instance()
+                                if google_client.is_available:
+                                    import asyncio
+                                    from starlette.concurrency import run_in_threadpool
+                                    def do_google_ocr():
+                                        return google_client.extract_text_from_image(file_content)
+                                    vision_text = await asyncio.wait_for(
+                                        run_in_threadpool(do_google_ocr), timeout=30.0,
+                                    )
+                                    if vision_text and vision_text.strip():
+                                        extracted_text = vision_text
+                                        extraction_method = "Google Cloud Vision"
+                                        extraction_quality = "high"
+                                        ocr_provider = "google_vision"
+                                    else:
+                                        raise ValueError("Google Vision returned empty text")
+                                else:
+                                    raise ValueError("Google Vision client not available")
+                            except Exception as fallback_err:
+                                extraction_error = f"Image OCR failed: {str(fallback_err)}"
                                 extraction_method = "failed"
                                 extraction_quality = "low"
-                            else:
-                                # Emergency local fallback
-                                logger.warning(f"EMERGENCY: Falling back to local OCR for {file_name}")
-                                try:
-                                    google_client = GoogleVisionClient.get_instance()
-                                    if google_client.is_available:
-                                        import asyncio
-                                        from starlette.concurrency import run_in_threadpool
-                                        def do_google_ocr():
-                                            return google_client.extract_text_from_image(file_content)
-                                        vision_text = await asyncio.wait_for(
-                                            run_in_threadpool(do_google_ocr), timeout=30.0,
-                                        )
-                                        if vision_text and vision_text.strip():
-                                            extracted_text = vision_text
-                                            extraction_method = "Google Cloud Vision"
-                                            extraction_quality = "high"
-                                            ocr_provider = "google_vision"
-                                        else:
-                                            raise ValueError("Google Vision returned empty text")
-                                    else:
-                                        raise ValueError("Google Vision client not available")
-                                except Exception as fallback_err:
-                                    extraction_error = f"Image OCR failed: {str(fallback_err)}"
-                                    extraction_method = "failed"
-                                    extraction_quality = "low"
-                                    logger.error(f"Emergency fallback OCR also failed for {file_name}: {fallback_err}")
+                                logger.error(f"Emergency fallback OCR also failed for {file_name}: {fallback_err}")
                     else:
                         # Local OCR path (OCR_REMOTE_ENABLED=false)
                         try:
@@ -2340,37 +2335,32 @@ async def _trigger_extraction_inner(
 
                 except Exception as e:
                     logger.error(f"Remote OCR failed for {file_name}: {e}")
-                    if _settings.ocr_remote_required:
-                        extraction_error = f"Image OCR failed: {str(e)}"
+                    # Always fall back to local OCR on remote failure
+                    logger.warning(f"Falling back to local OCR for {file_name}")
+                    try:
+                        google_client = GoogleVisionClient.get_instance()
+                        if google_client.is_available:
+                            import asyncio
+                            from starlette.concurrency import run_in_threadpool
+                            def do_google_ocr():
+                                return google_client.extract_text_from_image(file_bytes)
+                            vision_text = await asyncio.wait_for(
+                                run_in_threadpool(do_google_ocr), timeout=30.0,
+                            )
+                            if vision_text and vision_text.strip():
+                                extracted_text = vision_text
+                                extraction_method = "Google Cloud Vision"
+                                extraction_quality = "high"
+                                ocr_provider = "google_vision"
+                            else:
+                                raise ValueError("Google Vision returned empty text")
+                        else:
+                            raise ValueError("Google Vision client not available")
+                    except Exception as fallback_err:
+                        extraction_error = f"Image OCR failed: {str(fallback_err)}"
                         extraction_method = "failed"
                         extraction_quality = "low"
-                    else:
-                        # Emergency local fallback
-                        logger.warning(f"EMERGENCY: Falling back to local OCR for {file_name}")
-                        try:
-                            google_client = GoogleVisionClient.get_instance()
-                            if google_client.is_available:
-                                import asyncio
-                                from starlette.concurrency import run_in_threadpool
-                                def do_google_ocr():
-                                    return google_client.extract_text_from_image(file_bytes)
-                                vision_text = await asyncio.wait_for(
-                                    run_in_threadpool(do_google_ocr), timeout=30.0,
-                                )
-                                if vision_text and vision_text.strip():
-                                    extracted_text = vision_text
-                                    extraction_method = "Google Cloud Vision"
-                                    extraction_quality = "high"
-                                    ocr_provider = "google_vision"
-                                else:
-                                    raise ValueError("Google Vision returned empty text")
-                            else:
-                                raise ValueError("Google Vision client not available")
-                        except Exception as fallback_err:
-                            extraction_error = f"Image OCR failed: {str(fallback_err)}"
-                            extraction_method = "failed"
-                            extraction_quality = "low"
-                            logger.error(f"Emergency fallback OCR also failed for {file_name}: {fallback_err}")
+                        logger.error(f"Fallback OCR also failed for {file_name}: {fallback_err}")
             else:
                 # Local OCR path (OCR_REMOTE_ENABLED=false)
                 try:

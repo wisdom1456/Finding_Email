@@ -1651,10 +1651,10 @@ async def process_pdf(
                                 ocr_provider = "OpenAI"
                     except Exception as e:
                         logger.error(f"Remote OCR failed for {original_filename}: {e}")
-                        if _settings.ocr_remote_required:
-                            raise
-                        # Emergency fallback only
-                        logger.warning(f"EMERGENCY: Falling back to local OCR for {original_filename}")
+                        # Always fall back to local OCR on remote failure —
+                        # ocr_remote_required only controls whether we *prefer* remote,
+                        # not whether a server 500 should block extraction entirely.
+                        logger.warning(f"Falling back to local OCR for {original_filename}")
                         vision_text = await _extract_text_via_google_ocr_bytes(
                             pdf_bytes, original_filename, progress_callback
                         )

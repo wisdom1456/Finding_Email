@@ -74,8 +74,6 @@ async def process_image(
             logger.warning(f"OCR not available - skipping text extraction for {original_filename}")
             text_content = "[Image - OCR not available in this environment]"
     except Exception as e:
-        if _settings.ocr_remote_enabled and _settings.ocr_remote_required:
-            raise  # Fail-closed: surface error, no degraded results
         logger.error(f"Error processing image {original_filename}: {e}")
         text_content = f"Error extracting text from {original_filename}."
 

@@ -553,7 +553,7 @@
 		forceRefresh: boolean,
 		signal?: AbortSignal
 	): Promise<any> {
-		const response = await fetch(`${apiUrl}/api/analysis/analyze-gaps`, {
+		const response = await fetchWithRetry(`${apiUrl}/api/analysis/analyze-gaps`, {
 			method: 'POST',
 			headers: {
 				'Content-Type': 'application/json',
@@ -628,7 +628,7 @@
 			};
 
 			try {
-				const response = await fetch(`${apiUrl}/api/analysis/analyze-gaps/stream`, {
+				const response = await fetchWithRetry(`${apiUrl}/api/analysis/analyze-gaps/stream`, {
 					method: 'POST',
 					headers: {
 						'Content-Type': 'application/json',
@@ -827,7 +827,7 @@
 				params.set('force_generation', 'true');
 			}
 
-			const response = await fetch(`${apiUrl}/api/analysis/${results.analysis_id}/letter/stream?${params.toString()}`, {
+			const response = await fetchWithRetry(`${apiUrl}/api/analysis/${results.analysis_id}/letter/stream?${params.toString()}`, {
 				headers: { Authorization: `Bearer ${session.access_token}` },
 				signal: controller.signal
 			});
@@ -1044,7 +1044,7 @@
 			const analysisId = results?.analysis_id;
 			if (!analysisId) throw new Error('No analysis ID available');
 
-			const response = await fetch(
+			const response = await fetchWithRetry(
 				`${apiUrl}/api/analysis/${analysisId}/recommendation-letter/stream?letter_type=${letterType}&schema_version=2`,
 				{
 					headers: { Authorization: `Bearer ${session.access_token}` }
@@ -1226,14 +1226,44 @@
 		generatingDemand = false;
 	}
 
-async function generateLetterRequest(body: Record<string, any>) {
-	try {
-		const { session, user } = await getSecureSession();
+async function fetchWithRetry(
+		url: string,
+		options: RequestInit,
+		retries = 2
+	): Promise<Response> {
+		for (let attempt = 0; attempt <= retries; attempt++) {
+			try {
+				const response = await fetch(url, options);
+				if (response.status === 502 || response.status === 503) {
+					if (attempt < retries) {
+						console.warn(`[fetchWithRetry] ${response.status} on attempt ${attempt + 1}, retrying...`);
+						await new Promise((r) => setTimeout(r, 1000 * 2 ** attempt));
+						continue;
+					}
+				}
+				return response;
+			} catch (err) {
+				const isNetworkError =
+					err instanceof TypeError && /fetch|network/i.test(err.message);
+				if (isNetworkError && attempt < retries) {
+					console.warn(`[fetchWithRetry] Network error on attempt ${attempt + 1}, retrying...`, err);
+					await new Promise((r) => setTimeout(r, 1000 * 2 ** attempt));
+					continue;
+				}
+				throw err;
+			}
+		}
+		throw new Error('fetchWithRetry: should not reach here');
+	}
 
-		if (!session || !user) throw new Error('Not authenticated');
+	async function generateLetterRequest(body: Record<string, any>) {
+		try {
+			const { session, user } = await getSecureSession();
+
+			if (!session || !user) throw new Error('Not authenticated');
 
 			const apiUrl = getApiUrl();
-			const response = await fetch(`${apiUrl}/api/analysis/generate-letter`, {
+			const response = await fetchWithRetry(`${apiUrl}/api/analysis/generate-letter`, {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json',
@@ -1253,8 +1283,8 @@ async function generateLetterRequest(body: Record<string, any>) {
 			const data = await response.json();
 			applyLetterResult(data, body);
 		} catch (err: any) {
-			// Network errors (ERR_NETWORK_CHANGED, Failed to fetch) often mean the
-			// backend completed but the browser lost the response. Check the DB.
+			// Network errors that survived retries — backend may have completed
+			// but browser lost the response. Check the DB as last resort.
 			if (err instanceof TypeError && /fetch|network/i.test(err.message)) {
 				console.warn('Network error during letter generation — checking if letter was saved...', err);
 				const recovered = await tryRecoverSavedLetter(body);

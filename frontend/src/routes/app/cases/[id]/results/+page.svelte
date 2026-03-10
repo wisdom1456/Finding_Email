@@ -1101,7 +1101,19 @@
 				}
 			}
 		} catch (err: any) {
-			toastStore.error(err.message || 'Recommendation letter generation failed');
+			// Network errors (ERR_NETWORK_CHANGED, Failed to fetch) often mean the
+			// backend completed but the browser lost the response. Check the DB.
+			if (err instanceof TypeError && /fetch|network/i.test(err.message)) {
+				console.warn('Network error during recommendation letter generation — checking if letter was saved...', err);
+				const recovered = await tryRecoverRecommendationLetter(letterType);
+				if (recovered) {
+					shouldSwitchToLetters = true;
+				} else {
+					toastStore.error('Network interrupted. The letter may still be generating — try refreshing in a moment.');
+				}
+			} else {
+				toastStore.error(err.message || 'Recommendation letter generation failed');
+			}
 		} finally {
 			// Reset loading state first so Svelte can update the button's disabled prop
 			// while the CaseRecommendationCard is still mounted, before we switch tabs and unmount it.
@@ -1111,6 +1123,36 @@
 				activeTab = 'letters';
 			}
 		}
+	}
+
+	async function tryRecoverRecommendationLetter(letterType: string): Promise<boolean> {
+		// Wait for the backend to finish saving
+		await new Promise((r) => setTimeout(r, 5000));
+
+		try {
+			const { session } = await getSecureSession();
+			if (!session) return false;
+
+			const apiUrl = getApiUrl();
+			const res = await fetch(`${apiUrl}/api/analysis/results/${caseId}`, {
+				headers: { Authorization: `Bearer ${session.access_token}` }
+			});
+			if (!res.ok) return false;
+
+			const analysisResult = await res.json();
+			const letters = analysisResult?.result?.generated_letters;
+			if (!letters) return false;
+
+			const key = `recommendation_${letterType}`;
+			if (letters[key]) {
+				recommendationLetters = { ...recommendationLetters, [letterType]: letters[key] };
+				toastStore.success('Letter recovered after network interruption');
+				return true;
+			}
+		} catch (e) {
+			console.warn('Recovery fetch also failed:', e);
+		}
+		return false;
 	}
 
 	async function calculateDemandAmount() {

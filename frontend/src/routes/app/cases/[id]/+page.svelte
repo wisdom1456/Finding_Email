@@ -324,14 +324,19 @@
 		progressStore.disconnect();
 	});
 
-	async function loadSettings() {
+	async function loadSettings(retried = false) {
 		try {
 			const response = await fetch(`${getApiUrl()}/api/settings/limits`);
 			if (response.ok) {
 				const data = await response.json();
 				maxFileSizeMB = data.max_file_size_mb;
 			}
-		} catch (error) {
+		} catch (error: any) {
+			// Retry once on network errors (ERR_NETWORK_CHANGED)
+			if (!retried && error instanceof TypeError && /fetch|network/i.test(error.message)) {
+				await new Promise((r) => setTimeout(r, 1500));
+				return loadSettings(true);
+			}
 			console.error('Failed to load settings:', error);
 			// Keep default value
 		}
@@ -475,8 +480,14 @@
 				// Reload documents to pick up new registries and suggested_relationships
 				await loadDocuments();
 			}
-		} catch (e) {
-			console.error('Cross-document enrichment failed:', e);
+		} catch (e: any) {
+			// On network errors, allow retry on next trigger (e.g. tab switch)
+			if (e instanceof TypeError && /fetch|network/i.test(e.message)) {
+				crossDocEnriched = false;
+				console.warn('Cross-document enrichment interrupted by network change — will retry', e);
+			} else {
+				console.error('Cross-document enrichment failed:', e);
+			}
 		}
 	}
 
@@ -1069,13 +1080,13 @@
 		}
 	}
 
-	async function reExtractDocument(docId: string, forceMethod: 'ocr' | 'vision') {
+	async function reExtractDocument(docId: string, forceMethod: 'ocr' | 'vision', retried = false) {
 		try {
 			const { session, user } = await getSecureSession();
 			if (!session || !user) throw new Error('Not authenticated');
 
 			const methodLabel = forceMethod === 'vision' ? 'Image Analysis' : 'Text Extraction';
-			toastStore.info(`Starting ${methodLabel}...`);
+			if (!retried) toastStore.info(`Starting ${methodLabel}...`);
 
 			const response = await fetch(`${getApiUrl()}/api/documents/${docId}/extract?force_method=${forceMethod}`, {
 				method: 'POST',
@@ -1108,6 +1119,12 @@
 
 			toastStore.success(`${methodLabel} completed successfully`);
 		} catch (error: any) {
+			// Retry once on network errors (ERR_NETWORK_CHANGED)
+			if (!retried && error instanceof TypeError && /fetch|network/i.test(error.message)) {
+				console.warn('Network error during extraction — retrying...', error);
+				await new Promise((r) => setTimeout(r, 2000));
+				return reExtractDocument(docId, forceMethod, true);
+			}
 			console.error('Failed to re-extract document:', error);
 			toastStore.error(error.message || 'Re-extraction failed');
 		}

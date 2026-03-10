@@ -1209,21 +1209,74 @@ async function generateLetterRequest(body: Record<string, any>) {
 			}
 
 			const data = await response.json();
-			if (data.letter_type === 'findings') {
-				findingsLetter = data.letter_html;
-				findingsQualityReport = data.quality_report ?? null;
-				findingsGenerationMetrics = data.generation_metrics ?? null;
+			applyLetterResult(data, body);
+		} catch (err: any) {
+			// Network errors (ERR_NETWORK_CHANGED, Failed to fetch) often mean the
+			// backend completed but the browser lost the response. Check the DB.
+			if (err instanceof TypeError && /fetch|network/i.test(err.message)) {
+				console.warn('Network error during letter generation — checking if letter was saved...', err);
+				const recovered = await tryRecoverSavedLetter(body);
+				if (recovered) return;
+			}
+			alert(err.message || 'Letter generation failed');
+		}
+	}
+
+	function applyLetterResult(data: any, body: Record<string, any>) {
+		if (data.letter_type === 'findings' || body.letter_type === 'findings') {
+			findingsLetter = data.letter_html;
+			findingsQualityReport = data.quality_report ?? null;
+			findingsGenerationMetrics = data.generation_metrics ?? null;
+			findingsGenerationState = 'complete';
+			findingsPhaseMessage = 'Complete';
+		} else if (data.target_party_name) {
+			demandLetters = {
+				...demandLetters,
+				[data.target_party_name]: data.letter_html
+			};
+		}
+	}
+
+	async function tryRecoverSavedLetter(body: Record<string, any>): Promise<boolean> {
+		// Wait a few seconds for the backend to finish saving
+		await new Promise((r) => setTimeout(r, 5000));
+
+		try {
+			const { session } = await getSecureSession();
+			if (!session) return false;
+
+			const apiUrl = getApiUrl();
+			const res = await fetch(`${apiUrl}/api/analysis/results/${caseId}`, {
+				headers: { Authorization: `Bearer ${session.access_token}` }
+			});
+			if (!res.ok) return false;
+
+			const analysisResult = await res.json();
+			const letters = analysisResult?.result?.generated_letters;
+			if (!letters) return false;
+
+			if (body.letter_type === 'demand' && body.target_party_name) {
+				const key = `demand_${body.target_party_name.replace(/\s+/g, '_')}`;
+				if (letters[key]) {
+					demandLetters = { ...demandLetters, [body.target_party_name]: letters[key] };
+					toastStore.success('Letter recovered after network interruption');
+					return true;
+				}
+			} else if (body.letter_type === 'findings' && letters.findings) {
+				findingsLetter = letters.findings;
+				if (letters.findings_meta) {
+					findingsQualityReport = letters.findings_meta.quality_report ?? null;
+					findingsGenerationMetrics = letters.findings_meta.generation_metrics ?? null;
+				}
 				findingsGenerationState = 'complete';
 				findingsPhaseMessage = 'Complete';
-			} else if (data.target_party_name) {
-				demandLetters = {
-					...demandLetters,
-					[data.target_party_name]: data.letter_html
-				};
+				toastStore.success('Letter recovered after network interruption');
+				return true;
 			}
-		} catch (err: any) {
-			alert(err.message || 'Findings email generation failed');
+		} catch (e) {
+			console.warn('Recovery fetch also failed:', e);
 		}
+		return false;
 	}
 
 	async function sendChatMessage() {

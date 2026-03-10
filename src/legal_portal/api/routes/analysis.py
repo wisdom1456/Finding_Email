@@ -11,6 +11,7 @@ import tempfile
 import time
 import traceback
 import uuid
+from dataclasses import dataclass, field as dc_field
 from datetime import datetime
 from email.message import EmailMessage
 from email.utils import formatdate, make_msgid
@@ -54,7 +55,7 @@ logger = logging.getLogger(__name__)
 
 # Cache for database column existence checks
 _DB_COLUMNS_CACHE = {}
-_GAP_ANALYSIS_INPUT_SCHEMA_VERSION = "2026-02-18-reconciliation-v3"
+_GAP_ANALYSIS_INPUT_SCHEMA_VERSION = "2026-03-10-map-reduce-v1"
 
 _TRANSIENT_CODES = {"502", "503", "57014"}
 _TRANSIENT_MESSAGES = ("bad gateway", "service unavailable", "schema cache", "statement timeout")
@@ -5802,6 +5803,274 @@ def _build_case_document_state_hash(document_rows: List[Dict[str, Any]]) -> str:
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
+def _fetch_all_case_document_metadata(
+    supabase,
+    case_id: str,
+) -> List[Dict[str, Any]]:
+    """Fetch lightweight metadata for ALL case documents (no full text).
+
+    Includes extracted_at for cache invalidation without transferring
+    full extracted_text/manual_text payloads.
+    """
+    try:
+        fetch_start = time.time()
+        resp = (
+            supabase.table("documents")
+            .select("id, file_name, file_type, status, updated_at, extracted_at, metadata")
+            .eq("case_id", case_id)
+            .order("updated_at", desc=True)
+            .execute()
+        )
+        rows = resp.data or []
+        logger.info(
+            f"[GAP:FETCH_META] case_id={case_id} total_docs={len(rows)} "
+            f"elapsed={time.time() - fetch_start:.2f}s"
+        )
+        return rows
+    except Exception as err:
+        logger.warning(f"[GAP:FETCH_META] Failed to load case document metadata: {err}")
+        return []
+
+
+def _build_case_document_state_hash_lightweight(
+    metadata_rows: List[Dict[str, Any]],
+) -> str:
+    """State hash for large cases using metadata-only rows.
+
+    Trade-off (documented): This hash is sensitive to document additions,
+    deletions, status changes, and re-extractions (via extracted_at timestamp),
+    but NOT to manual text edits that don't update extracted_at or updated_at.
+
+    This is acceptable for v1 because:
+    1. Manual text edits always update updated_at (verified in verify_document endpoint)
+    2. The gap analysis input hash also includes document_summaries_hash,
+       which changes when summaries are regenerated after text edits
+    3. The only blind spot is: user edits manual_text, updated_at changes,
+       but summaries are NOT regenerated — a pre-existing limitation.
+    """
+    if not metadata_rows:
+        return "no_case_documents"
+
+    canonical_rows = sorted(
+        (
+            {
+                "id": doc.get("id"),
+                "updated_at": doc.get("updated_at"),
+                "status": str(doc.get("status") or ""),
+                "file_name": doc.get("file_name"),
+                "extracted_at": doc.get("extracted_at"),
+            }
+            for doc in metadata_rows
+        ),
+        key=lambda r: r.get("id") or "",
+    )
+    payload = json.dumps(canonical_rows, sort_keys=True, default=str)
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+@dataclass
+class GapBatch:
+    """A batch of documents for map-phase gap analysis."""
+
+    batch_id: str
+    batch_label: str
+    document_ids: List[str] = dc_field(default_factory=list)
+    document_summaries: List[Any] = dc_field(default_factory=list)  # DocumentSummaryStructured
+    signature_evidence: List[Dict[str, Any]] = dc_field(default_factory=list)
+    registry_entries: List[Dict[str, Any]] = dc_field(default_factory=list)
+
+
+# Deterministic small-group merge targets.
+# When a role group has <3 docs, merge it into the specified target.
+# Order matters: if the target is also small, both merge into the next target.
+_SMALL_GROUP_MERGE_MAP = {
+    "intake": "correspondence",
+    "official_record": "controlling_instrument",
+    "supporting_evidence": "financial_evidence",
+    "other": "correspondence",
+    "correspondence": "controlling_instrument",
+    "financial_evidence": "controlling_instrument",
+    # "controlling_instrument" is the terminal merge target — never merges further.
+}
+
+
+def _build_gap_analysis_batches(
+    doc_summaries_list: List[Any],
+    signature_evidence: List[Dict[str, Any]],
+    document_registry: List[Dict[str, Any]],
+) -> List["GapBatch"]:
+    """Partition documents into intelligent batches for map-phase analysis.
+
+    Grouping strategy:
+    1. Primary axis: role_in_case from document registry
+    2. Overflow splitting: groups >40 docs split by document_type, then date bands
+    3. Small-group merge: groups <3 docs merge via _SMALL_GROUP_MERGE_MAP
+    """
+    # Build doc_id -> role mapping from registry
+    id_to_role: Dict[str, str] = {}
+    for entry in document_registry:
+        doc_id = entry.get("document_id") or entry.get("id")
+        role = entry.get("role_in_case") or "other"
+        if doc_id:
+            id_to_role[doc_id] = role
+
+    # Build doc_id -> signature evidence mapping
+    id_to_sig: Dict[str, List[Dict[str, Any]]] = {}
+    for sig in signature_evidence:
+        doc_id = sig.get("document_id") or sig.get("id")
+        if doc_id:
+            id_to_sig.setdefault(doc_id, []).append(sig)
+
+    # Build doc_id -> registry entry mapping
+    id_to_registry: Dict[str, List[Dict[str, Any]]] = {}
+    for entry in document_registry:
+        doc_id = entry.get("document_id") or entry.get("id")
+        if doc_id:
+            id_to_registry.setdefault(doc_id, []).append(entry)
+
+    # Group summaries by role
+    role_groups: Dict[str, List[Any]] = {}
+    for summary in doc_summaries_list:
+        doc_id = summary.document_id
+        role = id_to_role.get(doc_id, "other") if doc_id else "other"
+        role_groups.setdefault(role, []).append(summary)
+
+    # Overflow splitting: groups >40 docs
+    split_groups: Dict[str, List[Any]] = {}
+    for role, summaries in role_groups.items():
+        if len(summaries) <= 40:
+            split_groups[role] = summaries
+        else:
+            # Split by document_type within the role
+            type_sub: Dict[str, List[Any]] = {}
+            for s in summaries:
+                dtype = (s.document_type or "unknown").lower()
+                type_sub.setdefault(dtype, []).append(s)
+            for dtype, type_docs in type_sub.items():
+                if len(type_docs) <= 40:
+                    key = f"{role}_{dtype}"
+                    split_groups[key] = type_docs
+                else:
+                    # Split by date bands (chronological thirds)
+                    thirds = max(1, len(type_docs) // 3)
+                    for i, chunk_start in enumerate(range(0, len(type_docs), thirds)):
+                        key = f"{role}_{dtype}_part{i + 1}"
+                        split_groups[key] = type_docs[chunk_start : chunk_start + thirds]
+
+    # Small-group merge: groups <3 docs merge via deterministic map
+    # Track where each group merged to
+    merge_targets: Dict[str, str] = {}  # original_key -> final_key
+
+    # Process in alphabetical order for determinism
+    for key in sorted(split_groups.keys()):
+        if len(split_groups[key]) < 3:
+            # Follow merge chain (max depth 3)
+            target = key
+            for _ in range(3):
+                next_target = _SMALL_GROUP_MERGE_MAP.get(target)
+                if next_target is None or next_target == target:
+                    break
+                # If target was already merged somewhere, follow the chain
+                if next_target in merge_targets:
+                    next_target = merge_targets[next_target]
+                target = next_target
+            # If target doesn't exist as a split_group key, use controlling_instrument
+            if target not in split_groups or target == key:
+                target = "controlling_instrument"
+            merge_targets[key] = target
+
+    # Apply merges
+    final_groups: Dict[str, List[Any]] = {}
+    for key in sorted(split_groups.keys()):
+        target = merge_targets.get(key, key)
+        final_groups.setdefault(target, []).extend(split_groups[key])
+
+    # Build GapBatch objects
+    batches: List[GapBatch] = []
+    for idx, (label, summaries) in enumerate(sorted(final_groups.items())):
+        doc_ids = [s.document_id for s in summaries if s.document_id]
+        doc_id_set = set(doc_ids)
+        batch = GapBatch(
+            batch_id=f"batch_{idx + 1}",
+            batch_label=label,
+            document_ids=doc_ids,
+            document_summaries=summaries,
+            signature_evidence=[
+                sig
+                for did in doc_id_set
+                for sig in id_to_sig.get(did, [])
+            ],
+            registry_entries=[
+                entry
+                for did in doc_id_set
+                for entry in id_to_registry.get(did, [])
+            ],
+        )
+        batches.append(batch)
+
+    logger.info(
+        f"[GAP:BATCH] Created {len(batches)} batches from {len(doc_summaries_list)} docs: "
+        + ", ".join(f"{b.batch_label}({len(b.document_summaries)})" for b in batches)
+    )
+
+    return batches
+
+
+async def _run_gap_analysis(
+    gap_service,
+    doc_summaries_list: List[Any],
+    fact_matrix,
+    issue_map,
+    deep_analysis,
+    intake_content: Optional[str] = None,
+    signature_evidence: Optional[List[Dict[str, Any]]] = None,
+    document_registry: Optional[List[Dict[str, Any]]] = None,
+    resolution_context: Optional[str] = None,
+    prior_gap_analysis=None,
+) -> Any:
+    """Route gap analysis to single-pass or map-reduce based on doc count.
+
+    <=50 docs: existing single-pass path (gpt-4.1, unchanged)
+    >50 docs: map-reduce path (gpt-5-mini map, gpt-5.4 reduce)
+    """
+    if len(doc_summaries_list) > _GAP_CONTEXT_MAX_DOCS:
+        logger.info(
+            f"[GAP:ROUTE] Using map-reduce path | docs={len(doc_summaries_list)} "
+            f"(threshold={_GAP_CONTEXT_MAX_DOCS})"
+        )
+        batches = _build_gap_analysis_batches(
+            doc_summaries_list,
+            signature_evidence or [],
+            document_registry or [],
+        )
+        return await gap_service.analyze_gaps_map_reduce(
+            batches=batches,
+            fact_matrix=fact_matrix,
+            issue_map=issue_map,
+            deep_analysis=deep_analysis,
+            intake_content=intake_content,
+            signature_evidence=signature_evidence,
+            document_registry=document_registry,
+            resolution_context=resolution_context,
+            prior_gap_analysis=prior_gap_analysis,
+        )
+    else:
+        logger.info(
+            f"[GAP:ROUTE] Using single-pass path | docs={len(doc_summaries_list)}"
+        )
+        return await gap_service.analyze_gaps(
+            fact_matrix=fact_matrix,
+            issue_map=issue_map,
+            deep_analysis=deep_analysis,
+            document_summaries=doc_summaries_list,
+            intake_content=intake_content,
+            resolution_context=resolution_context,
+            prior_gap_analysis=prior_gap_analysis,
+            signature_evidence=signature_evidence,
+            document_registry=document_registry,
+        )
+
+
 def _build_signature_evidence(
     document_rows: List[Dict[str, Any]],
 ) -> List[Dict[str, Any]]:
@@ -5952,6 +6221,7 @@ def _build_gap_analysis_input_hash(
     canonical = {
         "analysis_id": analysis_id,
         "analysis_logic_version": _GAP_ANALYSIS_INPUT_SCHEMA_VERSION,
+        "map_reduce_version": "1",
         "fact_matrix_hash": _hash_jsonable(multi_stage.get("fact_matrix", {})),
         "issue_map_hash": _hash_jsonable(multi_stage.get("issue_map", {})),
         "deep_analysis_hash": _hash_jsonable(multi_stage.get("deep_analysis", {})),
@@ -6023,11 +6293,12 @@ async def _ensure_fresh_gap_analysis_for_letter_generation(
         openai_client = OpenAIClient(user_preferences=ai_preferences)
         gap_service = GapAnalysisService(openai_client=openai_client)
 
-        gap_result = await gap_service.analyze_gaps(
+        gap_result = await _run_gap_analysis(
+            gap_service=gap_service,
+            doc_summaries_list=doc_summaries_list,
             fact_matrix=fact_matrix,
             issue_map=issue_map,
             deep_analysis=deep_analysis,
-            document_summaries=doc_summaries_list,
             intake_content=intake_content,
             signature_evidence=signature_evidence,
             document_registry=document_registry,
@@ -6095,8 +6366,17 @@ def _compute_resolution_document_state_hash(
         return f"fallback:{hashlib.sha256(fallback.encode('utf-8')).hexdigest()}"
 
 
-def _parse_gap_document_summaries(result_payload: Dict[str, Any]):
-    """Parse and validate document summaries for gap analysis."""
+def _parse_gap_document_summaries(
+    result_payload: Dict[str, Any],
+    metadata_rows: Optional[List[Dict[str, Any]]] = None,
+):
+    """Parse and validate document summaries for gap analysis.
+
+    If metadata_rows are provided, stamps document_id on each summary by
+    matching normalized file_name to the metadata row's id. On collisions
+    (multiple docs with the same display name), prefers the most recently
+    updated match.
+    """
     from legal_portal.core.data_models import DocumentSummaryStructured
 
     doc_summaries_raw = result_payload.get("document_summaries", [])
@@ -6125,7 +6405,55 @@ def _parse_gap_document_summaries(result_payload: Dict[str, Any]):
         except Exception as doc_err:
             logger.warning(f"[GAP] Could not convert doc summary: {doc_err}")
 
+    # Stamp document_id from metadata rows
+    if metadata_rows:
+        _stamp_document_ids(doc_summaries_list, metadata_rows)
+
     return doc_summaries_list
+
+
+def _stamp_document_ids(
+    summaries: List,
+    metadata_rows: List[Dict[str, Any]],
+) -> None:
+    """Stamp document_id on summaries by matching normalized file_name.
+
+    For collisions (multiple docs with the same display name), prefers the
+    most recently updated match (metadata_rows are already ordered by
+    updated_at DESC from _fetch_all_case_document_metadata).
+    """
+    # Build normalized name -> document_id map (first match wins = most recent)
+    name_to_id: Dict[str, str] = {}
+    for row in metadata_rows:
+        normalized = (row.get("file_name") or "").lower().strip()
+        if not normalized:
+            continue
+        if normalized in name_to_id:
+            logger.warning(
+                f'[GAP:ID_STAMP] Collision on normalized name "{normalized}" — '
+                f"multiple docs match, using most recent (id={name_to_id[normalized]})"
+            )
+        else:
+            name_to_id[normalized] = row["id"]
+
+    # Stamp IDs
+    stamped = 0
+    for summary in summaries:
+        if summary.document_id:
+            stamped += 1
+            continue
+        normalized = (summary.document_name or "").lower().strip()
+        doc_id = name_to_id.get(normalized)
+        if doc_id:
+            summary.document_id = doc_id
+            stamped += 1
+        else:
+            logger.warning(
+                f'[GAP:ID_STAMP] No metadata match for summary "{summary.document_name}" '
+                f"— will use name-based fallback"
+            )
+
+    logger.info(f"[GAP:ID_STAMP] Stamped {stamped}/{len(summaries)} summaries with document_id")
 
 
 def _fetch_gap_intake_content(supabase, case_id: str, result_payload: Dict[str, Any]) -> Optional[str]:
@@ -6324,11 +6652,12 @@ async def analyze_gaps_on_demand(
         logger.info(f"[GAP_ENDPOINT] Running gap analysis with {len(doc_summaries_list)} documents")
 
         # Run gap analysis (no timeout - let it complete)
-        gap_result = await gap_service.analyze_gaps(
+        gap_result = await _run_gap_analysis(
+            gap_service=gap_service,
+            doc_summaries_list=doc_summaries_list,
             fact_matrix=fact_matrix,
             issue_map=issue_map,
             deep_analysis=deep_analysis,
-            document_summaries=doc_summaries_list,
             intake_content=intake_content,
             signature_evidence=signature_evidence,
             document_registry=document_registry,
@@ -6492,16 +6821,17 @@ async def resolve_gaps_and_refresh(
             f"supporting_docs={len(supporting_docs)}"
         )
 
-        gap_result = await gap_service.analyze_gaps(
+        gap_result = await _run_gap_analysis(
+            gap_service=gap_service,
+            doc_summaries_list=doc_summaries_list,
             fact_matrix=fact_matrix,
             issue_map=issue_map,
             deep_analysis=deep_analysis,
-            document_summaries=doc_summaries_list,
             intake_content=intake_content,
-            resolution_context=resolution_context,
-            prior_gap_analysis=existing_gap_model,
             signature_evidence=signature_evidence,
             document_registry=document_registry,
+            resolution_context=resolution_context,
+            prior_gap_analysis=existing_gap_model,
         )
 
         gap_dict = gap_result.model_dump(mode="json")
@@ -6659,11 +6989,12 @@ async def analyze_gaps_streaming(
             logger.info(f"[GAP_STREAM] Running gap analysis with {len(doc_summaries_list)} documents")
 
             # Run gap analysis
-            gap_result = await gap_service.analyze_gaps(
+            gap_result = await _run_gap_analysis(
+                gap_service=gap_service,
+                doc_summaries_list=doc_summaries_list,
                 fact_matrix=fact_matrix,
                 issue_map=issue_map,
                 deep_analysis=deep_analysis,
-                document_summaries=doc_summaries_list,
                 intake_content=intake_content,
                 signature_evidence=signature_evidence,
                 document_registry=document_registry,

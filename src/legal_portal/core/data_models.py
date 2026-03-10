@@ -226,6 +226,7 @@ class DocumentSummaryStructured(BaseModel):
     This model ensures consistent, complete extraction of legal facts.
     """
 
+    document_id: Optional[str] = Field(default=None, description="Database UUID, stamped at parse time")
     document_name: str
     document_type: str = Field(description="E.g., contract, disclosure, correspondence, evidence")
 
@@ -1121,6 +1122,50 @@ class GapItem(BaseModel):
     impact_on_case: str = Field(description="How this gap affects case viability or strategy")
 
 
+class BatchEvidence(BaseModel):
+    """Evidence category detected in a single map-phase batch."""
+
+    category: str = Field(description="E.g., 'executed_contracts', 'payment_receipts'")
+    document_ids: List[str] = Field(default_factory=list, description="Database UUIDs")
+    status: str = Field(description="'present' | 'missing' | 'incomplete'")
+    severity: Optional[str] = Field(
+        default=None, description="Only for missing/incomplete: 'critical'/'high'/'medium'/'low'"
+    )
+    detail: str = Field(description="1-2 sentence explanation")
+
+
+class BatchFinding(BaseModel):
+    """A gap, contradiction, or concern found in a single map-phase batch."""
+
+    category: str = Field(description="Maps to GapCategory values")
+    severity: str = Field(description="'critical' / 'high' / 'medium' / 'low'")
+    title: str
+    description: str
+    document_ids: List[str] = Field(default_factory=list, description="Database UUIDs of related docs")
+    affected_issue: Optional[str] = None
+    cross_batch_uncertain: bool = Field(
+        default=False, description="May be resolved by another batch"
+    )
+
+
+class BatchGapReport(BaseModel):
+    """Structured output from a single map-phase batch."""
+
+    batch_id: str
+    batch_label: str
+    document_count: int
+    evidence: List[BatchEvidence] = Field(
+        default_factory=list, description="What's present, missing, or incomplete"
+    )
+    findings: List[BatchFinding] = Field(
+        default_factory=list, description="Gaps, contradictions, concerns"
+    )
+    cross_batch_flags: List[str] = Field(
+        default_factory=list,
+        description="Max 5 structured flags, format: 'CHECK_BATCH:{label} FOR:{category}'",
+    )
+
+
 class GapAnalysisResult(BaseModel):
     """Complete gap analysis result."""
 
@@ -1147,6 +1192,16 @@ class GapAnalysisResult(BaseModel):
     )
     recommendation: Optional[CaseRecommendation] = Field(
         default=None, description="Case recommendation based on gap analysis"
+    )
+    map_reduce_metadata: Optional[Dict[str, Any]] = Field(
+        default=None, description="Provenance metadata from map-reduce pipeline"
+    )
+    analysis_quality: Optional[str] = Field(
+        default=None,
+        description=(
+            "Pipeline quality: 'full' | 'degraded_partial' | 'degraded_merge' | "
+            "'fallback_single_pass' | None (single-pass path)"
+        ),
     )
 
 

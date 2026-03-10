@@ -235,7 +235,9 @@ class OpenAIClient:
     def estimate_cost(self, prompt_tokens: int, completion_tokens: int, model: str) -> float:
         """Estimate cost of API call based on token usage."""
         # Pricing as of 2025 (prices per 1K tokens)
+        # Models with None pricing are routable but cost tracking is skipped.
         pricing = {
+            "gpt-5.4": {"input": None, "output": None},  # Pricing unverified
             "gpt-5.2": {"input": 0.01, "output": 0.03},
             "gpt-5.2-pro": {"input": 0.015, "output": 0.045},
             "gpt-5-mini": {"input": 0.0001, "output": 0.0004},
@@ -253,6 +255,10 @@ class OpenAIClient:
             return 0.0
 
         model_pricing = pricing[model]
+        if model_pricing["input"] is None or model_pricing["output"] is None:
+            logger.info(f"[COST:SKIP] {model} pricing unverified — cost not tracked for this call")
+            return 0.0
+
         input_cost = (prompt_tokens / 1000) * model_pricing["input"]
         output_cost = (completion_tokens / 1000) * model_pricing["output"]
         total_cost = input_cost + output_cost

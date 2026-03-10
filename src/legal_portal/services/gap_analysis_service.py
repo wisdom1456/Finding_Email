@@ -14,6 +14,9 @@ import time
 from typing import Any, Dict, List, Optional, Set
 
 from legal_portal.core.data_models import (
+    BatchEvidence,
+    BatchFinding,
+    BatchGapReport,
     CaseRecommendation,
     CaseRecommendationCategory,
     ConfidenceLevel,
@@ -31,6 +34,81 @@ from legal_portal.utils.openai_client import OpenAIClient
 from legal_portal.utils.type_safety import safe_str_required
 
 logger = logging.getLogger(__name__)
+
+_SEVERITY_RANK = {"critical": 4, "high": 3, "medium": 2, "low": 1}
+
+
+def _normalize_title(title: str) -> str:
+    """Normalize a finding title for deduplication comparison."""
+    return re.sub(r"[^\w\s]", "", title.lower()).strip()
+
+
+def _deduplicate_findings(findings: List[BatchFinding]) -> List[BatchFinding]:
+    """Deterministic deduplication for mechanical merge fallback.
+
+    Two findings are considered duplicates if ALL of:
+    1. Normalized titles match (lowercase, strip whitespace, remove punctuation)
+    2. Same category
+    3. Overlapping document_ids (intersection >= 1)
+
+    When duplicates are found:
+    - Keep the finding with the higher severity (critical > high > medium > low)
+    - On severity tie, keep the one with more document_ids
+    - On further tie, keep the first encountered (stable sort)
+    - Merge document_ids from both into the kept finding (union)
+    """
+    if not findings:
+        return []
+
+    # Group by (normalized_title, category)
+    groups: Dict[tuple, List[BatchFinding]] = {}
+    for finding in findings:
+        key = (_normalize_title(finding.title), finding.category.lower())
+        groups.setdefault(key, []).append(finding)
+
+    result: List[BatchFinding] = []
+    for _key, group in sorted(groups.items()):
+        if len(group) == 1:
+            result.append(group[0])
+            continue
+
+        # Check for overlapping document_ids within the group
+        # Merge findings that share at least one document_id
+        merged: List[BatchFinding] = []
+        for finding in group:
+            found_merge = False
+            finding_ids = set(finding.document_ids)
+            for i, existing in enumerate(merged):
+                existing_ids = set(existing.document_ids)
+                if finding_ids & existing_ids:  # intersection >= 1
+                    # Keep the higher-severity finding, merge doc IDs
+                    existing_rank = _SEVERITY_RANK.get(existing.severity.lower(), 0)
+                    finding_rank = _SEVERITY_RANK.get(finding.severity.lower(), 0)
+
+                    winner = finding if (
+                        finding_rank > existing_rank
+                        or (finding_rank == existing_rank
+                            and len(finding.document_ids) > len(existing.document_ids))
+                    ) else existing
+
+                    merged[i] = BatchFinding(
+                        category=winner.category,
+                        severity=winner.severity,
+                        title=winner.title,
+                        description=winner.description,
+                        document_ids=list(existing_ids | finding_ids),
+                        affected_issue=winner.affected_issue,
+                        cross_batch_uncertain=False,
+                    )
+                    found_merge = True
+                    break
+
+            if not found_merge:
+                merged.append(finding)
+
+        result.extend(merged)
+
+    return result
 
 
 class GapAnalysisService:
@@ -1012,6 +1090,720 @@ Begin your analysis now.
 """
 
         return prompt
+
+    # ──────────────────────────────────────────────────────────────────
+    # Map-Reduce Gap Analysis (for cases with >50 docs)
+    # ──────────────────────────────────────────────────────────────────
+
+    async def analyze_gaps_map_reduce(
+        self,
+        batches: List[Any],  # List[GapBatch] from analysis.py
+        fact_matrix: FactMatrix,
+        issue_map: LegalIssueMap,
+        deep_analysis: DeepAnalysis,
+        intake_content: Optional[str] = None,
+        signature_evidence: Optional[List[Dict[str, Any]]] = None,
+        document_registry: Optional[List[Dict[str, Any]]] = None,
+        resolution_context: Optional[str] = None,
+        prior_gap_analysis: Optional[GapAnalysisResult] = None,
+    ) -> GapAnalysisResult:
+        """Run map-reduce gap analysis across multiple document batches.
+
+        Map phase: parallel batch analysis with gpt-5-mini
+        Reduce phase: merge batch reports with gpt-5.4
+
+        The existing single-pass path uses gpt-4.1 because it does straightforward
+        structured extraction on <=50 pre-summarized docs. The map-reduce path
+        uses reasoning models because map batches must detect cross-document
+        contradictions and infer missing evidence from partial views, and the
+        reduce phase must merge conflicting signals across batches.
+        """
+        pipeline_start = time.time()
+        total_docs = sum(len(b.document_summaries) for b in batches)
+        logger.info(
+            f"[GAP:MAP_REDUCE] Starting | batches={len(batches)} "
+            f"total_docs={total_docs}"
+        )
+
+        # ── Map phase ──
+        parse_stats = {
+            "first_attempt_success": 0,
+            "repair_prompt_success": 0,
+            "fallback_model_success": 0,
+            "total_failures": 0,
+        }
+        map_tasks = [
+            self._run_map_batch(batch, fact_matrix, issue_map, batches, parse_stats)
+            for batch in batches
+        ]
+        batch_results = await asyncio.gather(*map_tasks, return_exceptions=True)
+
+        successful: List[BatchGapReport] = []
+        failed_batches: List[Dict[str, Any]] = []
+        batch_metadata: List[Dict[str, Any]] = []
+
+        for i, result in enumerate(batch_results):
+            if isinstance(result, tuple) and len(result) == 2:
+                report, meta = result
+                successful.append(report)
+                batch_metadata.append(meta)
+            elif isinstance(result, Exception):
+                failed_batches.append({
+                    "batch_id": batches[i].batch_id,
+                    "batch_label": batches[i].batch_label,
+                    "error": str(result),
+                })
+                logger.error(
+                    f"[GAP:MAP:{batches[i].batch_id}] FAILED | error={result}"
+                )
+
+        total_attempted = len(batches)
+        parse_failure_pct = (
+            (parse_stats["total_failures"] / total_attempted * 100)
+            if total_attempted > 0
+            else 0.0
+        )
+
+        logger.info(
+            f"[GAP:MAP:PARSE_STATS] total_batches={total_attempted} "
+            f"first_attempt_success={parse_stats['first_attempt_success']} "
+            f"repair_success={parse_stats['repair_prompt_success']} "
+            f"fallback_success={parse_stats['fallback_model_success']} "
+            f"total_failures={parse_stats['total_failures']} "
+            f"parse_failure_rate={parse_failure_pct:.1f}%"
+        )
+
+        if parse_failure_pct > 40:
+            logger.warning(
+                "[GAP:MAP:VIABILITY_WARNING] gpt-5-mini parse failure rate "
+                f"exceeds 40% ({parse_failure_pct:.1f}%) — consider switching "
+                "default map model"
+            )
+
+        parse_stats["parse_failure_rate_pct"] = round(parse_failure_pct, 1)
+
+        # ── Determine quality and route to reduce or fallback ──
+        if not successful:
+            # All map batches failed → fall back to single-pass
+            logger.warning(
+                "[GAP:MAP_REDUCE] All map batches failed — falling back to single-pass"
+            )
+            all_summaries = [
+                s for batch in batches for s in batch.document_summaries
+            ]
+            # Use only first 50 docs for single-pass fallback
+            result = await self.analyze_gaps(
+                fact_matrix=fact_matrix,
+                issue_map=issue_map,
+                deep_analysis=deep_analysis,
+                document_summaries=all_summaries[:50],
+                intake_content=intake_content,
+                resolution_context=resolution_context,
+                prior_gap_analysis=prior_gap_analysis,
+                signature_evidence=signature_evidence,
+                document_registry=document_registry,
+            )
+            result.analysis_quality = "fallback_single_pass"
+            result.map_reduce_metadata = {
+                "pipeline": "fallback_single_pass",
+                "total_documents_analyzed": min(50, total_docs),
+                "failed_batches": failed_batches,
+                "parse_stats": parse_stats,
+            }
+            return result
+
+        # ── Reduce phase ──
+        analysis_quality = "full" if not failed_batches else "degraded_partial"
+        reduce_start = time.time()
+
+        try:
+            result = await self._run_reduce(
+                successful_reports=successful,
+                failed_batches=failed_batches,
+                fact_matrix=fact_matrix,
+                issue_map=issue_map,
+                deep_analysis=deep_analysis,
+                intake_content=intake_content,
+                signature_evidence=signature_evidence,
+                document_registry=document_registry,
+                resolution_context=resolution_context,
+                prior_gap_analysis=prior_gap_analysis,
+            )
+        except Exception as reduce_err:
+            logger.error(f"[GAP:REDUCE] FAILED | error={reduce_err}", exc_info=True)
+            result = self._mechanical_merge(successful)
+            analysis_quality = "degraded_merge"
+
+        reduce_duration = time.time() - reduce_start
+
+        # ── Post-processing (same as single-pass) ──
+        result = self._reconcile_signature_execution_gaps(result, signature_evidence)
+        result.recommendation = self._generate_recommendation(
+            result, deep_analysis=deep_analysis
+        )
+
+        # Add INCOMPLETE_INFO gap if some batches failed
+        if failed_batches:
+            incomplete_item = GapItem(
+                gap_id="gap_map_reduce_incomplete",
+                title="Incomplete Analysis - Some Document Batches Failed",
+                description=(
+                    f"{len(failed_batches)} of {total_attempted} document batches "
+                    f"could not be analyzed. Results may be incomplete."
+                ),
+                severity=GapSeverity.MEDIUM,
+                category=GapCategory.INCOMPLETE_INFO,
+                impact_on_case=(
+                    f"Analysis covers only {total_attempted - len(failed_batches)} of "
+                    f"{total_attempted} document batches. Some gaps may be undetected."
+                ),
+            )
+            result.gaps_by_category.setdefault("incomplete_info", []).append(
+                incomplete_item
+            )
+
+        # ── Attach provenance metadata ──
+        map_total_findings = sum(len(r.findings) for r in successful)
+        result.analysis_quality = analysis_quality
+        result.map_reduce_metadata = {
+            "pipeline": "map_reduce",
+            "total_documents_analyzed": total_docs,
+            "map_model": self.client.get_preferred_model(
+                "gap_analysis_map", "gpt-5-mini"
+            ),
+            "reduce_model": self.client.get_preferred_model(
+                "gap_analysis_reduce", "gpt-5.4"
+            ),
+            "batches": batch_metadata,
+            "failed_batches": failed_batches,
+            "reduce_duration_s": round(reduce_duration, 1),
+            "map_total_findings": map_total_findings,
+            "reduce_final_gaps": result.total_gaps,
+            "parse_stats": parse_stats,
+            "total_duration_s": round(time.time() - pipeline_start, 1),
+        }
+
+        logger.info(
+            f"[GAP:MAP_REDUCE] Complete | quality={analysis_quality} "
+            f"gaps={result.total_gaps} score={result.overall_completeness_score} "
+            f"duration={result.map_reduce_metadata['total_duration_s']}s"
+        )
+
+        return result
+
+    async def _run_map_batch(
+        self,
+        batch: Any,  # GapBatch
+        fact_matrix: FactMatrix,
+        issue_map: LegalIssueMap,
+        all_batches: List[Any],
+        parse_stats: Dict[str, int],
+    ) -> tuple:
+        """Run gap analysis on a single batch with tiered retry.
+
+        Returns (BatchGapReport, metadata_dict) on success, raises on failure.
+        """
+        batch_start = time.time()
+        map_model = self.client.get_preferred_model("gap_analysis_map", "gpt-5-mini")
+
+        logger.info(
+            f"[GAP:MAP:{batch.batch_id}] Starting | docs={len(batch.document_summaries)} "
+            f"label={batch.batch_label} model={map_model}"
+        )
+
+        prompt = self._build_map_prompt(batch, fact_matrix, issue_map, all_batches)
+        instructions = (
+            "You are a critical legal analyst reviewing a batch of case documents. "
+            "Return only valid JSON matching the BatchGapReport schema. "
+            "Do not include any text before or after the JSON."
+        )
+
+        def _build_batch_meta(
+            report: BatchGapReport, model: str, retry_count: int,
+        ) -> Dict[str, Any]:
+            return {
+                "batch_id": batch.batch_id,
+                "batch_label": batch.batch_label,
+                "doc_count": len(batch.document_summaries),
+                "evidence_count": len(report.evidence),
+                "findings_count": len(report.findings),
+                "duration_s": round(time.time() - batch_start, 1),
+                "model_used": model,
+                "retry_count": retry_count,
+            }
+
+        # Attempt 1: primary model
+        raw_response = None
+        try:
+            response_dict = await asyncio.to_thread(
+                self.client.create_response,
+                model=map_model,
+                instructions=instructions,
+                input=prompt,
+                max_output_tokens=3000,
+                reasoning_effort="low" if self.client._is_gpt5_model(map_model) else None,
+            )
+            raw_response = (response_dict.get("content") or "").strip()
+            report = self._parse_batch_report(raw_response, batch)
+            parse_stats["first_attempt_success"] += 1
+            logger.info(
+                f"[GAP:MAP:{batch.batch_id}] Complete | "
+                f"duration={time.time() - batch_start:.1f}s "
+                f"evidence={len(report.evidence)} findings={len(report.findings)}"
+            )
+            return report, _build_batch_meta(report, map_model, 0)
+        except (json.JSONDecodeError, ValueError, KeyError):
+            logger.warning(
+                f"[GAP:MAP:{batch.batch_id}] Parse failed (attempt 1) | "
+                f"model={map_model}"
+            )
+
+        # Attempt 2: same model, repair prompt
+        try:
+            repair_prompt = (
+                "The previous output had invalid JSON. Here is the malformed output:\n\n"
+                f"{(raw_response or '')[:2000]}\n\n"
+                "Return ONLY the corrected JSON object matching the BatchGapReport schema. "
+                "No markdown, no explanation. The schema requires: "
+                "batch_id (str), batch_label (str), document_count (int), "
+                "evidence (list of objects with category, document_ids, status, severity, detail), "
+                "findings (list of objects with category, severity, title, description, document_ids), "
+                "cross_batch_flags (list of strings)."
+            )
+            response_dict = await asyncio.to_thread(
+                self.client.create_response,
+                model=map_model,
+                instructions="Return ONLY valid JSON. No markdown, no explanation.",
+                input=repair_prompt,
+                max_output_tokens=2000,
+                reasoning_effort="low" if self.client._is_gpt5_model(map_model) else None,
+            )
+            raw_response = (response_dict.get("content") or "").strip()
+            report = self._parse_batch_report(raw_response, batch)
+            parse_stats["repair_prompt_success"] += 1
+            logger.info(
+                f"[GAP:MAP:{batch.batch_id}] Complete (repair) | "
+                f"duration={time.time() - batch_start:.1f}s "
+                f"evidence={len(report.evidence)} findings={len(report.findings)}"
+            )
+            return report, _build_batch_meta(report, map_model, 1)
+        except (json.JSONDecodeError, ValueError, KeyError):
+            logger.warning(
+                f"[GAP:MAP:{batch.batch_id}] Parse failed (attempt 2 repair) | "
+                f"model={map_model}"
+            )
+
+        # Attempt 3: fallback to gpt-4.1
+        fallback_model = "gpt-4.1"
+        try:
+            response_dict = await asyncio.to_thread(
+                self.client.create_response,
+                model=fallback_model,
+                instructions=instructions,
+                input=prompt,
+                max_output_tokens=3000,
+            )
+            raw_response = (response_dict.get("content") or "").strip()
+            report = self._parse_batch_report(raw_response, batch)
+            parse_stats["fallback_model_success"] += 1
+            logger.info(
+                f"[GAP:MAP:{batch.batch_id}] Complete (fallback) | "
+                f"duration={time.time() - batch_start:.1f}s model={fallback_model} "
+                f"evidence={len(report.evidence)} findings={len(report.findings)}"
+            )
+            return report, _build_batch_meta(report, fallback_model, 2)
+        except Exception as e:
+            parse_stats["total_failures"] += 1
+            logger.error(
+                f"[GAP:MAP:{batch.batch_id}] FAILED | all 3 attempts exhausted | "
+                f"error={e}"
+            )
+            raise RuntimeError(
+                f"Map batch {batch.batch_id} failed after 3 attempts: {e}"
+            ) from e
+
+    @staticmethod
+    def _strip_markdown_fences(text: str) -> str:
+        """Remove markdown code fences (```json ... ```) from LLM output."""
+        if text.startswith("```"):
+            text = re.sub(r"^```(?:json)?\s*\n?", "", text)
+            text = re.sub(r"\n?```\s*$", "", text)
+        return text
+
+    def _parse_batch_report(self, raw: str, batch: Any) -> BatchGapReport:
+        """Parse raw JSON into BatchGapReport, raising on failure."""
+        cleaned = self._strip_markdown_fences(raw)
+        data = json.loads(cleaned)
+        # Ensure batch_id/batch_label match what we sent
+        data["batch_id"] = batch.batch_id
+        data["batch_label"] = batch.batch_label
+        data["document_count"] = len(batch.document_summaries)
+        return BatchGapReport(**data)
+
+    def _build_map_prompt(
+        self,
+        batch: Any,  # GapBatch
+        fact_matrix: FactMatrix,
+        issue_map: LegalIssueMap,
+        all_batches: List[Any],
+    ) -> str:
+        """Build the prompt for a single map-phase batch."""
+        # Document ID mapping table
+        id_table = "\n".join(
+            f"  {s.document_id or 'NO_ID'} → {s.document_name}"
+            for s in batch.document_summaries
+        )
+
+        # Other batch labels for context
+        other_labels = [
+            f"{b.batch_label} ({len(b.document_summaries)} docs)"
+            for b in all_batches
+            if b.batch_id != batch.batch_id
+        ]
+
+        doc_evidence = self._build_document_evidence_summary(batch.document_summaries)
+        sig_evidence = self._build_signature_evidence_summary(batch.signature_evidence)
+        reg_summary = self._build_document_registry_summary(batch.registry_entries)
+
+        # Condensed shared context
+        parties_text = ", ".join(
+            p.name for p in (fact_matrix.parties or [])[:10]
+        ) or "None identified"
+        timeline_text = self._truncate_text(
+            json.dumps(
+                [e.model_dump() for e in (fact_matrix.timeline or [])[:10]],
+                default=str,
+            )
+            if fact_matrix.timeline
+            else "",
+            2000,
+        )
+        issues_text = "\n".join(
+            f"- {iss.issue_name}: {iss.description or ''}"
+            for iss in (issue_map.primary_issues or [])[:10]
+        ) or "None identified"
+
+        prompt = f"""## Gap Analysis — Batch: {batch.batch_label}
+
+You are analyzing batch "{batch.batch_label}" ({len(batch.document_summaries)} documents)
+as part of a multi-batch gap analysis.
+
+### Document ID Mapping
+{id_table}
+
+### Other Batches Being Analyzed Separately
+{chr(10).join(f"- {lbl}" for lbl in other_labels) if other_labels else "This is the only batch."}
+
+**Important:** If you suspect evidence might exist in another batch, set
+`cross_batch_uncertain: true` on that finding and add a flag to `cross_batch_flags`
+using format: `CHECK_BATCH:{{batch_label}} FOR:{{category}}`. Maximum 5 flags.
+
+### Case Context
+
+**Parties:** {parties_text}
+
+**Timeline:**
+{timeline_text}
+
+**Primary Issues:**
+{issues_text}
+
+### Document Evidence (This Batch Only)
+{doc_evidence}
+
+### Signature Evidence (This Batch Only)
+{sig_evidence}
+
+### Document Registry (This Batch Only)
+{reg_summary}
+
+### Your Task
+
+Analyze ONLY the documents in this batch. For each:
+1. Identify evidence categories that are present, missing, or incomplete
+2. Identify gaps, contradictions, and concerns
+3. Flag items that may be resolved by documents in other batches
+
+Return a JSON object matching this schema:
+{{
+  "batch_id": "{batch.batch_id}",
+  "batch_label": "{batch.batch_label}",
+  "document_count": {len(batch.document_summaries)},
+  "evidence": [
+    {{"category": "string", "document_ids": ["uuid"], "status": "present|missing|incomplete",
+      "severity": "critical|high|medium|low or null", "detail": "1-2 sentences"}}
+  ],
+  "findings": [
+    {{"category": "string", "severity": "critical|high|medium|low", "title": "string",
+      "description": "string", "document_ids": ["uuid"],
+      "affected_issue": "string or null", "cross_batch_uncertain": false}}
+  ],
+  "cross_batch_flags": ["CHECK_BATCH:label FOR:category"]
+}}
+
+Use document_ids (UUIDs) from the mapping table above, not document names.
+Return ONLY valid JSON. No markdown, no explanation.
+"""
+        return prompt
+
+    async def _run_reduce(
+        self,
+        successful_reports: List[BatchGapReport],
+        failed_batches: List[Dict[str, Any]],
+        fact_matrix: FactMatrix,
+        issue_map: LegalIssueMap,
+        deep_analysis: DeepAnalysis,
+        intake_content: Optional[str] = None,
+        signature_evidence: Optional[List[Dict[str, Any]]] = None,
+        document_registry: Optional[List[Dict[str, Any]]] = None,
+        resolution_context: Optional[str] = None,
+        prior_gap_analysis: Optional[GapAnalysisResult] = None,
+    ) -> GapAnalysisResult:
+        """Merge batch reports into a single GapAnalysisResult."""
+        reduce_model = self.client.get_preferred_model(
+            "gap_analysis_reduce", "gpt-5.4"
+        )
+        total_findings = sum(len(r.findings) for r in successful_reports)
+
+        logger.info(
+            f"[GAP:REDUCE] Starting | batches_ok={len(successful_reports)} "
+            f"batches_failed={len(failed_batches)} total_findings={total_findings} "
+            f"model={reduce_model}"
+        )
+
+        prompt = self._build_reduce_prompt(
+            successful_reports=successful_reports,
+            failed_batches=failed_batches,
+            fact_matrix=fact_matrix,
+            issue_map=issue_map,
+            deep_analysis=deep_analysis,
+            intake_content=intake_content,
+            signature_evidence=signature_evidence,
+            document_registry=document_registry,
+            resolution_context=resolution_context,
+            prior_gap_analysis=prior_gap_analysis,
+        )
+
+        response_dict = await asyncio.to_thread(
+            self.client.create_response,
+            model=reduce_model,
+            instructions=(
+                "You are a senior legal analyst merging batch gap analysis reports "
+                "into a unified assessment. Return only valid JSON matching the "
+                "GapAnalysisResult schema. Do not include any text before or after the JSON."
+            ),
+            input=prompt,
+            max_output_tokens=6000,
+            reasoning_effort="medium" if self.client._is_gpt5_model(reduce_model) else None,
+        )
+
+        raw = (response_dict.get("content") or "").strip()
+        if not raw:
+            raise ValueError("Reduce phase returned empty response")
+
+        data = json.loads(self._strip_markdown_fences(raw))
+        result = GapAnalysisResult(**data)
+
+        logger.info(
+            f"[GAP:REDUCE] Complete | final_gaps={result.total_gaps} "
+            f"score={result.overall_completeness_score}"
+        )
+        return result
+
+    def _build_reduce_prompt(
+        self,
+        successful_reports: List[BatchGapReport],
+        failed_batches: List[Dict[str, Any]],
+        fact_matrix: FactMatrix,
+        issue_map: LegalIssueMap,
+        deep_analysis: DeepAnalysis,
+        intake_content: Optional[str] = None,
+        signature_evidence: Optional[List[Dict[str, Any]]] = None,
+        document_registry: Optional[List[Dict[str, Any]]] = None,
+        resolution_context: Optional[str] = None,
+        prior_gap_analysis: Optional[GapAnalysisResult] = None,
+    ) -> str:
+        """Build the prompt for the reduce phase."""
+        # Serialize batch reports
+        batch_reports_json = json.dumps(
+            [r.model_dump() for r in successful_reports],
+            indent=2,
+            default=str,
+        )
+
+        # Full context blocks
+        sig_summary = self._build_signature_evidence_summary(signature_evidence)
+        reg_summary = self._build_document_registry_summary(document_registry)
+        intake_text = self._truncate_text(intake_content, 2000)
+
+        # Deep analysis summary
+        deep_text = ""
+        if deep_analysis:
+            deep_text = self._truncate_text(
+                json.dumps(deep_analysis.model_dump(), default=str), 4000
+            )
+
+        # Issues
+        issues_text = "\n".join(
+            f"- {iss.issue_name}: {iss.description or ''}"
+            for iss in (issue_map.primary_issues or [])[:15]
+        ) or "None identified"
+
+        # Prior analysis context
+        prior_text = ""
+        if prior_gap_analysis:
+            prior_text = f"\n### Prior Gap Analysis\n{self._truncate_text(json.dumps(prior_gap_analysis.model_dump(), default=str), 3000)}"
+        resolution_text = ""
+        if resolution_context:
+            resolution_text = f"\n### Resolution Context\n{self._truncate_text(resolution_context, 2000)}"
+
+        failed_text = ""
+        if failed_batches:
+            failed_text = (
+                "\n### Failed Batches (Not Analyzed)\n"
+                + "\n".join(
+                    f"- {fb['batch_label']}: {fb['error']}"
+                    for fb in failed_batches
+                )
+                + "\nNote: Documents in failed batches were not analyzed. "
+                "Flag any gaps that might be affected by this missing coverage."
+            )
+
+        prompt = f"""## Gap Analysis — Reduce Phase (Merge Batch Reports)
+
+You are merging {len(successful_reports)} batch gap analysis reports into a single
+unified gap analysis result.
+
+### Batch Reports
+{batch_reports_json}
+{failed_text}
+
+### Full Case Context
+
+**Primary Issues:**
+{issues_text}
+
+**Full Signature Evidence:**
+{sig_summary}
+
+**Full Document Registry:**
+{reg_summary}
+
+**Deep Analysis:**
+{deep_text}
+
+**Intake Content:**
+{intake_text}
+{prior_text}
+{resolution_text}
+
+### Merge Instructions
+
+1. **Cross-reference evidence:** If Batch A flags "missing contract" but Batch B's
+   evidence shows status="present" for that category, REMOVE the gap.
+2. **Resolve cross_batch_uncertain:** Items with cross_batch_uncertain=true require
+   cross-batch verification. Check cross_batch_flags against other batches' evidence.
+   Only include the gap if no other batch has the evidence.
+3. **Identify cross-batch gaps:** Look for gaps only visible when combining all batches
+   (e.g., timeline inconsistencies across documents in different batches).
+4. **Deduplicate:** Merge overlapping findings across batches. Keep the higher severity.
+5. **Recalibrate severity:** With full case context, adjust severity levels.
+6. **Calculate overall_completeness_score:** Single score 0-100 for the entire case.
+
+### Output Schema
+
+Return a JSON object with these fields:
+{{
+  "total_gaps": int,
+  "critical_count": int,
+  "high_count": int,
+  "medium_count": int,
+  "low_count": int,
+  "gaps_by_category": {{"category_name": [{{"title": "...", "description": "...",
+    "severity": "critical|high|medium|low", "category": "...",
+    "affected_issues": ["..."], "suggested_action": "...",
+    "supporting_documents": ["..."]}}]}},
+  "overall_completeness_score": float (0-100),
+  "attorney_summary": "Executive summary string"
+}}
+
+Return ONLY valid JSON. No markdown, no explanation.
+"""
+        return prompt
+
+    def _mechanical_merge(
+        self,
+        successful_reports: List[BatchGapReport],
+    ) -> GapAnalysisResult:
+        """Deterministic fallback when the reduce phase fails.
+
+        Concatenates batch findings, deduplicates, and constructs a
+        GapAnalysisResult without an LLM call.
+        """
+        logger.info(
+            f"[GAP:REDUCE:MECHANICAL] Merging {len(successful_reports)} batch reports"
+        )
+
+        all_findings = []
+        for report in successful_reports:
+            all_findings.extend(report.findings)
+
+        deduped = _deduplicate_findings(all_findings)
+
+        # Build gaps_by_category from deduplicated findings
+        gaps_by_category: Dict[str, List[GapItem]] = {}
+        severity_counts = {"critical": 0, "high": 0, "medium": 0, "low": 0}
+
+        _valid_categories = {cat.value for cat in GapCategory}
+
+        for idx, finding in enumerate(deduped):
+            severity_str = finding.severity.lower()
+            severity_counts[severity_str] = severity_counts.get(severity_str, 0) + 1
+
+            category = (
+                GapCategory(finding.category)
+                if finding.category in _valid_categories
+                else GapCategory.INCOMPLETE_INFO
+            )
+            gap_item = GapItem(
+                gap_id=f"gap_merge_{idx}",
+                title=finding.title,
+                description=finding.description,
+                severity=GapSeverity(severity_str),
+                category=category,
+                impact_on_case=finding.description,
+                related_documents=[str(did) for did in finding.document_ids],
+            )
+            cat_key = finding.category or "other"
+            gaps_by_category.setdefault(cat_key, []).append(gap_item)
+
+        total = len(deduped)
+        # Estimate completeness from severity distribution
+        penalty = (
+            severity_counts["critical"] * 15
+            + severity_counts["high"] * 8
+            + severity_counts["medium"] * 3
+            + severity_counts["low"] * 1
+        )
+        score = max(0.0, min(100.0, 100.0 - penalty))
+
+        return GapAnalysisResult(
+            total_gaps=total,
+            critical_count=severity_counts["critical"],
+            high_count=severity_counts["high"],
+            medium_count=severity_counts["medium"],
+            low_count=severity_counts["low"],
+            gaps_by_category=gaps_by_category,
+            overall_completeness_score=score,
+            attorney_summary=(
+                f"Mechanical merge of {len(successful_reports)} batch reports. "
+                f"{total} gaps identified ({severity_counts['critical']} critical, "
+                f"{severity_counts['high']} high). AI-powered merge was unavailable."
+            ),
+            reconciliation_notes=[
+                "Result produced by mechanical merge fallback (reduce phase failed)."
+            ],
+        )
 
     def _create_fallback_result(self, error: Optional[str] = None) -> GapAnalysisResult:
         """Create a fallback result when gap analysis fails.

@@ -41,5 +41,3 @@ slowapi>=0.1.9
 # SSE (Server-Sent Events) support for real-time progress
 sse-starlette==2.1.3
 
-# Optional: PDF generation (will gracefully degrade if not available)
-# weasyprint>=60.0 # Requires system dependencies, commented for Vercel compatibility

@@ -469,10 +469,6 @@ const { session, user } = await getSecureSession();
 		// Load document summary in the background
 		loadDocumentSummary(doc.file_name);
 
-		// Keep click-path light: only prefetch images automatically.
-		if (isImageDocument(doc)) {
-			await loadDocumentBinaryPreview(doc);
-		}
 	}
 
 	function isPdfDocument(doc: any): boolean {

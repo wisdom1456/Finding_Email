@@ -52,10 +52,14 @@
     }
   }
 
-  // Reset blob URL when document changes
+  // Auto-load preview when document changes
   $effect(() => {
     if (document) {
+      if (pdfBlobUrl) {
+        URL.revokeObjectURL(pdfBlobUrl);
+      }
       pdfBlobUrl = null;
+      loadDocumentBinaryPreview(document);
     }
   });
 </script>

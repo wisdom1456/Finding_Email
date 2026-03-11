@@ -1130,16 +1130,6 @@ def _extract_signature_instrument_hints(
     return deduped
 
 
-# Optional WeasyPrint import for PDF generation
-try:
-    from weasyprint import HTML
-
-    WEASYPRINT_AVAILABLE = True
-except (ImportError, OSError) as e:
-    WEASYPRINT_AVAILABLE = False
-    HTML = None
-    logger.info(f"WeasyPrint not available (optional — requires system libs): {e}. PDF export disabled; HTML export still works.")
-
 ARTIFACT_BUCKET = os.getenv("SUPABASE_ARTIFACT_BUCKET", "documents")
 ARTIFACT_PREFIX = os.getenv("ANALYSIS_ARTIFACT_PREFIX", "analysis_artifacts")
 SIGNED_URL_TTL = int(os.getenv("ANALYSIS_ARTIFACT_URL_TTL", "3600"))
@@ -1147,20 +1137,6 @@ SIGNED_URL_TTL = int(os.getenv("ANALYSIS_ARTIFACT_URL_TTL", "3600"))
 _HTML2TEXT_CONVERTER = html2text.HTML2Text()
 _HTML2TEXT_CONVERTER.ignore_links = False
 _HTML2TEXT_CONVERTER.body_width = 0
-
-
-def _html_to_pdf_bytes(html: Optional[str]) -> Optional[bytes]:
-    """Render HTML content to PDF bytes using WeasyPrint."""
-    if not html:
-        return None
-    if not WEASYPRINT_AVAILABLE:
-        logger.warning("WeasyPrint not available, PDF generation skipped")
-        return None
-    try:
-        return HTML(string=html, base_url=os.getcwd()).write_pdf()
-    except Exception as exc:
-        logger.warning(f"Failed to render PDF artifact: {exc}")
-        return None
 
 
 def _html_to_plain_text(html: Optional[str]) -> str:
@@ -1222,16 +1198,10 @@ def _generate_and_store_artifacts(
     analysis_id: str,
     supabase_client,
 ) -> Dict[str, Dict[str, Any]]:
-    """Create PDF/EML/appendix/citation map artifacts and store them in Supabase."""
+    """Create EML/HTML/appendix/citation map artifacts and store them in Supabase."""
     artifacts: Dict[str, Dict[str, Any]] = {}
     prefix = f"{ARTIFACT_PREFIX}/{case_id}/{analysis_id}"
     storage = supabase_client.storage.from_(ARTIFACT_BUCKET)
-
-    pdf_bytes = _html_to_pdf_bytes(result.main_letter)
-    if pdf_bytes:
-        metadata = _store_artifact(storage, f"{prefix}/findings-email.pdf", pdf_bytes, "application/pdf")
-        if metadata:
-            artifacts["letter_pdf"] = metadata
 
     eml_bytes = _generate_eml_bytes(result.main_letter, f"Findings Email - Case {case_id}")
     if eml_bytes:

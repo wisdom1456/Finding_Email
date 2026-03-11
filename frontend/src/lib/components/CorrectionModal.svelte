@@ -249,7 +249,7 @@ const { session, user } = await getSecureSession();
 	</div>
 
 	<!-- Content: Side-by-Side Layout -->
-	<div class="flex-1 overflow-hidden flex min-h-[500px] border border-gray-200 rounded-lg">
+	<div class="flex-1 overflow-auto flex min-h-[500px] border border-gray-200 rounded-lg">
 		<!-- Left: Preview Panel -->
 		<div class="w-1/2 border-r border-gray-200 flex flex-col">
 			<div class="px-4 py-2 bg-gray-50 border-b border-gray-200 flex items-center justify-between">

@@ -2105,6 +2105,10 @@ async def _trigger_extraction_inner(
         page_count = None
         signature_detection = None
 
+        # Never use vision for plain text files
+        if use_vision_analysis and file_type in ["text/plain", "txt"]:
+            use_vision_analysis = False
+
         # If we should use vision analysis, skip OCR and go straight to image analysis
         if use_vision_analysis and file_type in ["image/png", "image/jpeg", "image/jpg", "image/heic"]:
             logger.info(f"Skipping OCR, going straight to vision analysis for {file_name}")

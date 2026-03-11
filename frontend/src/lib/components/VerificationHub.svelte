@@ -31,7 +31,6 @@
 	import DocumentPreviewPane from './DocumentPreviewPane.svelte';
 	import TriageDashboard from './TriageDashboard.svelte';
 	import SignatureReviewPanel from './SignatureReviewPanel.svelte';
-	import DocumentReviewPanel from './DocumentReviewPanel.svelte';
 	import { sortByAttention } from '$lib/utils/documentSorting';
 	import { groupDocuments, filterDocuments } from '$lib/utils/triageGrouping';
 	import {
@@ -87,8 +86,6 @@
 	let signatureReviewOpen = $state(false);
 	let signatureReviewQueue = $state<any[]>([]);
 	let signatureReviewIndex = $state(0);
-	let documentReviewOpen = $state(false);
-	let documentReviewDoc = $state<any>(null);
 	let expandedCardIds = $state<Set<string>>(new Set());
 
 	// Pagination: caps DOM nodes rendered per triage group (all filtering/sorting still
@@ -367,7 +364,10 @@ const { session, user } = await getSecureSession();
 	}
 
 	async function handleBulkExtract() {
-		const docsToProcess = docsNeedingExtraction;
+		// Skip TXT files — they use direct text read, not vision OCR
+		const docsToProcess = docsNeedingExtraction.filter((d: any) =>
+			d.file_type !== 'text/plain' && !String(d.file_name || '').toLowerCase().endsWith('.txt')
+		);
 		if (docsToProcess.length === 0) return;
 
 		// Process in batches of 3 concurrent requests with a pause between batches.
@@ -448,28 +448,6 @@ const { session, user } = await getSecureSession();
 		}
 	}
 
-	async function handleView(doc: any) {
-		// Open the new DocumentReviewPanel
-		documentReviewDoc = doc;
-		documentReviewOpen = true;
-
-		// Also keep legacy modal state in sync (for backward compatibility)
-		viewingDocument = doc;
-		loadingPreview = false;
-		documentSummary = null;
-		documentViewerTab = 'preview';
-
-		// Clean up previous blob URL if it exists
-		if (pdfBlobUrl) {
-			URL.revokeObjectURL(pdfBlobUrl);
-			pdfBlobUrl = null;
-		}
-		previewBlobDocumentId = null;
-
-		// Load document summary in the background
-		loadDocumentSummary(doc.file_name);
-
-	}
 
 	function isPdfDocument(doc: any): boolean {
 		if (!doc) return false;
@@ -1008,7 +986,6 @@ const { session, user } = await getSecureSession();
 										{#each triageGroups.critical.slice(0, visibleCounts.critical) as doc (doc.id)}
 						<DocumentCard
 							{doc}
-							onView={() => handleView(doc)}
 							onMarkSigned={() => handleMarkSigned(doc)}
 							onReplace={() => { recoveryDocument = doc; showRecoveryModal = true; }}
 							onSkip={() => handleSkip(doc.id)}
@@ -1077,7 +1054,6 @@ const { session, user } = await getSecureSession();
 										{#each triageGroups.needs_attention.slice(0, visibleCounts.needs_attention) as doc (doc.id)}
 						<DocumentCard
 							{doc}
-							onView={() => handleView(doc)}
 							onEdit={() => editingDocument = doc}
 							onReExtract={() => handleReExtract(doc.id)}
 							onVerify={() => handleVerify(doc.id)}
@@ -1130,7 +1106,6 @@ const { session, user } = await getSecureSession();
 										{#each triageGroups.ready.slice(0, visibleCounts.ready) as doc (doc.id)}
 							<DocumentCard
 								{doc}
-								onView={() => handleView(doc)}
 								onEdit={() => editingDocument = doc}
 								onMarkSigned={() => handleMarkSigned(doc)}
 								onDelete={() => handleDelete(doc.id)}
@@ -1183,7 +1158,6 @@ const { session, user } = await getSecureSession();
 										{#each triageGroups.excluded.slice(0, visibleCounts.excluded) as doc (doc.id)}
 						<DocumentCard
 							{doc}
-							onView={() => handleView(doc)}
 							onEdit={() => editingDocument = doc}
 							onMarkSigned={() => handleMarkSigned(doc)}
 							onDelete={() => handleDelete(doc.id)}
@@ -1238,7 +1212,6 @@ const { session, user } = await getSecureSession();
 										{#each triageGroups.duplicates.slice(0, visibleCounts.duplicates) as doc (doc.id)}
 						<DocumentCard
 							{doc}
-							onView={() => handleView(doc)}
 							onEdit={() => editingDocument = doc}
 							onMarkSigned={() => handleMarkSigned(doc)}
 							onDelete={() => handleDelete(doc.id)}
@@ -1300,7 +1273,6 @@ const { session, user } = await getSecureSession();
 					<div class="flex-1">
 						<DocumentCard
 							{doc}
-							onView={() => handleView(doc)}
 							onEdit={() => editingDocument = doc}
 							onReplace={() => { recoveryDocument = doc; showRecoveryModal = true; }}
 							onReExtract={() => handleReExtract(doc.id)}
@@ -1522,16 +1494,6 @@ const { session, user } = await getSecureSession();
 	</Modal>
 {/if}
 
-<!-- Document Review Panel (side-by-side PDF + text) -->
-<DocumentReviewPanel
-	open={documentReviewOpen}
-	document={documentReviewDoc}
-	{caseId}
-	onClose={() => { documentReviewOpen = false; documentReviewDoc = null; }}
-	onVerify={handleVerify}
-	onReExtract={handleReExtract}
-	onTextEdit={(doc) => editingDocument = doc}
-/>
 
 <!-- Signature Review Panel -->
 <SignatureReviewPanel

@@ -60,7 +60,7 @@
 		wrapperClass?: string;
 	} = $props();
 
-	const downloadHref = $derived(documentId ? `/api/documents/${documentId}/download` : '');
+	const downloadHref = $derived('');
 	const previewText = $derived(String(textPreview || '').trim());
 	const hasLoadHandler = $derived(Boolean(onLoadPreview));
 

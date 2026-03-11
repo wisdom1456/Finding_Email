@@ -8,7 +8,6 @@
 		FileText,
 		RefreshCw,
 		Trash2,
-		Eye,
 		Upload,
 		MoreVertical,
 		ChevronRight,
@@ -33,7 +32,6 @@
 		onAlwaysDelete, // Now expects (name: string, id: string) => void
 		onReplace,
 		onSkip,
-		onView,
 		onToggleExclusion,
 		isProcessing = false,
 		onTypeOverride,
@@ -56,7 +54,6 @@
 		onAlwaysDelete?: (name: string, id: string) => void;
 		onReplace?: (id: string) => void;
 		onSkip?: (id: string) => void;
-		onView?: (doc: any) => void;
 		onToggleExclusion?: (id: string, excluded: boolean) => void;
 		isProcessing?: boolean;
 		onTypeOverride?: (id: string, type: string) => void;
@@ -786,15 +783,6 @@
 					</button>
 				{/if}
 
-				{#if doc.storage_path}
-					<button
-						onclick={() => onView?.(doc)}
-						class="btn btn-secondary px-3 py-1.5 text-xs font-bold"
-					>
-						<Eye class="w-3.5 h-3.5 mr-1.5" />
-						Preview
-					</button>
-				{/if}
 			</div>
 
 			<!-- Expanded panel: key facts, notes, relationships -->

@@ -140,7 +140,7 @@ Generate ONLY the letter content (no meta-commentary).
         print("🤖 Generating letter with current prompt...")
 
         response = self.openai_client.chat.completions.create(
-            model="gpt-4o",
+            model="gpt-5.4",
             messages=[
                 {
                     "role": "system",
@@ -212,7 +212,7 @@ Respond in JSON format:
         print("🔍 Analyzing failures with AI...")
 
         response = self.openai_client.chat.completions.create(
-            model="gpt-4o",
+            model="gpt-5.4",
             messages=[
                 {
                     "role": "system",
@@ -254,7 +254,7 @@ Output the full updated prompt.
         print("🔧 Applying fixes with AI...")
 
         response = self.openai_client.chat.completions.create(
-            model="gpt-4o",
+            model="gpt-5.4",
             messages=[
                 {
                     "role": "system",

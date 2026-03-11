@@ -26,7 +26,7 @@ class OpenAIClient:
         Args:
         ----
             user_preferences: Optional dict of user AI model preferences by operation type
-                             e.g., {"document_analysis": "gpt-4o", "letter_generation": "gpt-4o"}
+                             e.g., {"document_analysis": "gpt-5-mini", "letter_generation": "gpt-5.4"}
 
         """
         # Configure HTTP client with appropriate timeouts for cloud environments
@@ -49,7 +49,7 @@ class OpenAIClient:
             api_key=os.getenv("OPENAI_API_KEY"), http_client=async_http_client, max_retries=3
         )
 
-        self.default_model = "gpt-5.2"
+        self.default_model = "gpt-5.4"
         self.fallback_model = "gpt-5-mini"
         self.max_retries = 3
         self.base_retry_delay = 2  # Base delay in seconds for exponential backoff
@@ -57,7 +57,7 @@ class OpenAIClient:
         # Store user preferences for model selection
         self.user_preferences = user_preferences or {}
 
-    def get_preferred_model(self, operation_type: str, fallback: str = "gpt-4o") -> str:
+    def get_preferred_model(self, operation_type: str, fallback: str = "gpt-5.4") -> str:
         """Get the user's preferred model for a specific operation type.
 
         Args:
@@ -237,10 +237,11 @@ class OpenAIClient:
         # Pricing as of 2025 (prices per 1K tokens)
         # Models with None pricing are routable but cost tracking is skipped.
         pricing = {
-            "gpt-5.4": {"input": None, "output": None},  # Pricing unverified
-            "gpt-5.2": {"input": 0.01, "output": 0.03},
+            "gpt-5.4": {"input": 0.0025, "output": 0.015},
+            "gpt-5.2": {"input": 0.00175, "output": 0.014},
             "gpt-5.2-pro": {"input": 0.015, "output": 0.045},
-            "gpt-5-mini": {"input": 0.0001, "output": 0.0004},
+            "gpt-5-mini": {"input": 0.00025, "output": 0.002},
+            "gpt-5-nano": {"input": 0.00005, "output": 0.0004},
             "gpt-4.1": {"input": 0.002, "output": 0.008},
             "gpt-4.1-mini": {"input": 0.0004, "output": 0.0016},
             "gpt-4.1-nano": {"input": 0.0001, "output": 0.0004},
@@ -275,7 +276,7 @@ class OpenAIClient:
         try:
             # Make a minimal API call to test the key
             self.client.chat.completions.create(
-                model="gpt-4o-mini",
+                model="gpt-5-mini",
                 messages=[{"role": "user", "content": "Test"}],
                 max_tokens=1,
             )
@@ -320,7 +321,7 @@ class OpenAIClient:
 
         Args:
         ----
-            model: Model to use (e.g., "gpt-5.2", "gpt-5-mini", "gpt-4o")
+            model: Model to use (e.g., "gpt-5.4", "gpt-5-mini")
             messages: List of message dicts with 'role' and 'content'
             temperature: Sampling temperature (0.0-2.0)
             max_tokens: Maximum tokens to generate (None for model default)
@@ -420,7 +421,7 @@ class OpenAIClient:
 
         Args:
         ----
-            model: Model to use (e.g., "gpt-4o", "gpt-4o-mini")
+            model: Model to use (e.g., "gpt-5.4", "gpt-5-mini")
             messages: List of message dicts with 'role' and 'content'
             temperature: Sampling temperature (0.0-2.0)
             max_tokens: Maximum tokens to generate (None for model default)
@@ -517,7 +518,7 @@ class OpenAIClient:
 
         Args:
         ----
-            model: Model to use (e.g., "gpt-4.1", "gpt-5.2")
+            model: Model to use (e.g., "gpt-5.4", "gpt-5-mini")
             messages: List of message dicts with 'role' and 'content'
             temperature: Sampling temperature (0.0-2.0)
             max_tokens: Maximum tokens to generate (None for model default)

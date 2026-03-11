@@ -144,7 +144,7 @@ def test_simple_call():
     
     try:
         result = client.create_chat_completion(
-            model="gpt-4o-mini",
+            model="gpt-5-mini",
             messages=[{"role": "user", "content": "Say 'API working' in 3 words or less"}],
             max_tokens=10,
         )

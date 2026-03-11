@@ -60,7 +60,7 @@ class RecommendationLetterService:
 
     def _get_generation_model(self) -> str:
         """Resolve preferred model for recommendation letter generation."""
-        return self.client.get_preferred_model("letter_generation", "gpt-5.2")
+        return self.client.get_preferred_model("letter_generation", "gpt-5.4")
 
     def _load_prompt_template(self, letter_type: RecommendedLetterType) -> str:
         """Load the prompt template for the given letter type.

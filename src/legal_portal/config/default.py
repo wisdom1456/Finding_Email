@@ -60,7 +60,7 @@ class Settings(BaseSettings):
     # ==================================================
 
     openai_model: str = Field(
-        "gpt-4o",
+        "gpt-5.4",
         alias="OPENAI_MODEL",
         description="OpenAI model to use for content generation",
     )

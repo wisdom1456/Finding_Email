@@ -18,8 +18,9 @@ class TokenManager:
     def __init__(self):
         """Initialize TokenManager."""
         self.model_limits = {
-            "gpt-4o": 120000,  # 150k context window * 0.8
-            "gpt-4o-mini": 100000,  # 125k context window * 0.8
+            "gpt-5.4": 840000,  # 1M context window * 0.8 (approx)
+            "gpt-5.2": 840000,  # 1M context window * 0.8 (approx)
+            "gpt-5-mini": 320000,  # 400k context window * 0.8
             "gpt-4": 25600,  # 32k context window * 0.8
         }
 
@@ -39,7 +40,7 @@ class TokenManager:
 
         return estimated_tokens
 
-    def count_tokens_accurate(self, text: str, model: str = "gpt-4o") -> int:
+    def count_tokens_accurate(self, text: str, model: str = "gpt-5.4") -> int:
         """Count tokens using tiktoken for accurate token counting."""
         try:
             # Get the encoding for the model
@@ -59,7 +60,7 @@ class TokenManager:
             # Fallback to existing estimation method
             return self.estimate_tokens_detailed(text)
 
-    def check_token_threshold(self, analysis, model: str = "gpt-4o") -> bool:
+    def check_token_threshold(self, analysis, model: str = "gpt-5.4") -> bool:
         """Check if video insights would exceed token threshold before building prompt."""
         logger.debug(f"TOKEN MANAGER: 🔍 Pre-computation token checking for model: {model}")
 

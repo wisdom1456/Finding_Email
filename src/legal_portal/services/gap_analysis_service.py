@@ -186,7 +186,7 @@ class GapAnalysisService:
 
             # Use GPT-4.1 for gap detection - faster and more reliable for structured JSON
             # GPT-5.2 with reasoning_effort spends tokens on internal reasoning, not output
-            model = self.client.get_preferred_model("gap_analysis", "gpt-4.1")
+            model = self.client.get_preferred_model("gap_analysis", "gpt-5.2")
 
             logger.info(
                 f"[STAGE:3.5:API] Calling OpenAI for gap_analysis | "
@@ -1112,7 +1112,7 @@ Begin your analysis now.
         Map phase: parallel batch analysis with gpt-5-mini
         Reduce phase: merge batch reports with gpt-5.4
 
-        The existing single-pass path uses gpt-4.1 because it does straightforward
+        The existing single-pass path uses gpt-5.2 because it does straightforward
         structured extraction on <=50 pre-summarized docs. The map-reduce path
         uses reasoning models because map batches must detect cross-document
         contradictions and infer missing evidence from partial views, and the
@@ -1393,8 +1393,8 @@ Begin your analysis now.
                 f"model={map_model}"
             )
 
-        # Attempt 3: fallback to gpt-4.1
-        fallback_model = "gpt-4.1"
+        # Attempt 3: fallback to gpt-5.2
+        fallback_model = "gpt-5.2"
         try:
             response_dict = await asyncio.to_thread(
                 self.client.create_response,

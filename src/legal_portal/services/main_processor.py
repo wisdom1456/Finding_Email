@@ -432,7 +432,7 @@ OUTPUT AS STRICT JSON:
 """
 
     try:
-        model = openai_client_wrapper.get_preferred_model("document_analysis", "gpt-5.2")
+        model = openai_client_wrapper.get_preferred_model("document_analysis", "gpt-5.4")
         response = openai_client_wrapper.create_response(
             model=model,
             input=prompt,
@@ -1091,11 +1091,11 @@ async def process_case_documents(
 
     # Track which models were used for each operation
         models_used = {
-            "document_analysis": openai_client_wrapper.get_preferred_model("document_analysis", "gpt-5.2"),
-            "letter_generation": openai_client_wrapper.get_preferred_model("letter_generation", "gpt-5.2"),
+            "document_analysis": openai_client_wrapper.get_preferred_model("document_analysis", "gpt-5.4"),
+            "letter_generation": openai_client_wrapper.get_preferred_model("letter_generation", "gpt-5.4"),
             "case_chat": openai_client_wrapper.get_preferred_model("case_chat", "gpt-5-mini"),
             "multi_stage_analysis": openai_client_wrapper.get_preferred_model(
-                "multi_stage_analysis", "gpt-5.2"
+                "multi_stage_analysis", "gpt-5.4"
             ),
         }
 

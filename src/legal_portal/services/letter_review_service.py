@@ -73,7 +73,7 @@ class LetterReviewService:
 
         try:
             response_dict = self.client.create_chat_completion(
-                model="gpt-4o",
+                model="gpt-5.4",
                 messages=[
                     {
                         "role": "system",
@@ -523,7 +523,7 @@ minimal changes are fine.
 
         try:
             response_dict = self.client.create_chat_completion(
-                model="gpt-4o",
+                model="gpt-5.4",
                 messages=[
                     {
                         "role": "system",

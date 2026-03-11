@@ -546,9 +546,9 @@ class AIPreferences(BaseModel):
     """User preferences for AI model selection and document handling."""
 
     document_analysis: str = "gpt-5-mini"
-    letter_generation: str = "gpt-5.2"
+    letter_generation: str = "gpt-5.4"
     case_chat: str = "gpt-5-mini"
-    multi_stage_analysis: str = "gpt-5.2"
+    multi_stage_analysis: str = "gpt-5.4"
     blacklisted_documents: List[str] = Field(default_factory=list)
 
     # Document processing preferences
@@ -601,7 +601,7 @@ class StatsProgress(BaseModel):
     elapsed_seconds: float
     estimated_remaining: Optional[float] = None
     tokens_used: int = 0
-    model: str = "gpt-5.2"
+    model: str = "gpt-5.4"
 
 
 class EnhancedProgressEvent(BaseModel):
@@ -763,7 +763,7 @@ class CostEstimate(BaseModel):
     total_input_tokens: int = 0
     total_output_tokens: int = 0
     estimated_cost_usd: float = 0.0
-    model_used: str = "gpt-4"
+    model_used: str = "gpt-5.4"
 
     model_config = {"protected_namespaces": ()}  # Allow 'model_' prefix
 

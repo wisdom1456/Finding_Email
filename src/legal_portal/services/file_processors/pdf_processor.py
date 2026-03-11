@@ -73,7 +73,7 @@ async def _ocr_with_fallback(
 
             def gpt4o_ocr():
                 return client.chat.completions.create(
-                    model="gpt-4o",
+                    model="gpt-5.2",
                     messages=[{
                         "role": "user",
                         "content": [
@@ -1101,7 +1101,7 @@ async def _extract_text_via_vision(
                 # Make the API call in thread pool (since client is sync)
                 def make_api_call():
                     return client.chat.completions.create(
-                        model="gpt-4o",
+                        model="gpt-5.2",
                         messages=[{"role": "user", "content": content}],
                         max_tokens=4000,  # Increased for dense documents
                         temperature=0.0,
@@ -1308,7 +1308,7 @@ async def _extract_text_via_vision_bytes(
                 # Make the API call in thread pool (since client is sync)
                 def make_api_call():
                     return client.chat.completions.create(
-                        model="gpt-4o",
+                        model="gpt-5.2",
                         messages=[{"role": "user", "content": content}],
                         max_tokens=4000,  # Increased for dense documents
                         temperature=0.0,

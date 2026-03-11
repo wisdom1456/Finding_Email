@@ -307,8 +307,8 @@ class AIAnalyzer:
             "BEGIN SUMMARY."
         )
         try:
-            # Use gpt-4o-mini for efficiency, with non-JSON format since prompt doesn't contain 'json'
-            response = await self._make_openai_request(prompt, model="gpt-4o-mini", use_json_format=False)
+            # Use gpt-5-mini for efficiency, with non-JSON format since prompt doesn't contain 'json'
+            response = await self._make_openai_request(prompt, model="gpt-5-mini", use_json_format=False)
             # Extract the content from the response wrapper
             summary = response.get("content", "Summary could not be generated.")
             logger.info(f"AI ANALYZER: ✅ Successfully summarized {media_type} for {file_name}")
@@ -360,7 +360,7 @@ class AIAnalyzer:
 
         return estimated_tokens
 
-    def _count_tokens_accurate(self, text: str, model: str = "gpt-4o") -> int:
+    def _count_tokens_accurate(self, text: str, model: str = "gpt-5.4") -> int:
         """Count tokens using tiktoken for accurate token counting."""
         try:
             # Get the encoding for the model
@@ -381,16 +381,16 @@ class AIAnalyzer:
             return self._estimate_prompt_tokens_detailed(text)
 
     async def _check_token_threshold_precomputation(
-        self, analysis: CaseAnalysisResult, model: str = "gpt-4o"
+        self, analysis: CaseAnalysisResult, model: str = "gpt-5.4"
     ) -> bool:
         """Check if video insights would exceed token threshold before building prompt."""
         logger.debug(f"AI ANALYZER: 🔍 Pre-computation token checking for model: {model}")
 
         # Define thresholds (80% of context window)
         model_limits = {
-            "gpt-4o": 120000,  # 150k context window * 0.8
-            "gpt-4o-mini": 100000,  # 125k context window * 0.8
-            "gpt-4": 25600,  # 32k context window * 0.8
+            "gpt-5.4": 1050000,
+            "gpt-5.2": 1050000,
+            "gpt-5-mini": 400000,
         }
 
         threshold = model_limits.get(model, 96000)  # Default to 120k * 0.8
@@ -736,8 +736,8 @@ BEGIN.
             prompt = self._build_intake_prompt(intake_doc.content, prompt_config=None)
             logger.info(f"AI ANALYZER: 🔍 Prompt built successfully, length: {len(prompt)} characters")
 
-            logger.info("AI ANALYZER: 🔍 Making OpenAI request with gpt-4o-mini...")
-            raw_analysis = await self._make_openai_request(prompt, model="gpt-4o-mini")
+            logger.info("AI ANALYZER: 🔍 Making OpenAI request with gpt-5-mini...")
+            raw_analysis = await self._make_openai_request(prompt, model="gpt-5-mini")
             logger.info(f"AI ANALYZER: 🔍 OpenAI response received, type: {type(raw_analysis)}")
             logger.info(
                 f"AI ANALYZER: 🔍 Raw analysis keys: {(list(raw_analysis.keys()) if isinstance(raw_analysis, dict) else 'Not a dict')}"
@@ -963,10 +963,10 @@ BEGIN.
 
             # Estimate total prompt size and choose appropriate model
             total_estimated_tokens = self._estimate_tokens(prompt)
-            model_to_use = "gpt-4o-mini" if total_estimated_tokens > 20000 else "gpt-4o"
+            model_to_use = "gpt-5-mini" if total_estimated_tokens > 20000 else "gpt-5.4"
 
-            if model_to_use == "gpt-4o-mini":
-                logger.info(f"AI ANALYZER: 🔄 Using gpt-4o-mini for large document: {document.file_name}")
+            if model_to_use == "gpt-5-mini":
+                logger.info(f"AI ANALYZER: 🔄 Using gpt-5-mini for large document: {document.file_name}")
 
             raw_analysis = await self._make_openai_request(prompt, model=model_to_use)
             analyzed_doc = AnalyzedDocument.model_validate(raw_analysis)
@@ -1023,7 +1023,7 @@ BEGIN.
             logger.info("AI ANALYZER: Starting final legal assessment...")
 
             # PRE-COMPUTATION TOKEN CHECKING - Check before building prompt
-            model_to_use = "gpt-4o"
+            model_to_use = "gpt-5.4"
             token_check_passed = await self._check_token_threshold_precomputation(analysis, model_to_use)
 
             # Apply conditional logic based on token threshold
@@ -1065,7 +1065,7 @@ BEGIN.
                     raise ValueError(msg)
 
             try:
-                raw_assessment = await self._make_openai_request(prompt, model="gpt-4o")
+                raw_assessment = await self._make_openai_request(prompt, model="gpt-5.4")
             except BadRequestError as bad_request_error:
                 # ENHANCED ERROR RECOVERY WITH METADATA PRESERVATION
                 error_details = str(bad_request_error)
@@ -1162,7 +1162,7 @@ BEGIN.
                         logger.info(f"AI ANALYZER: 🔄 Recovery prompt tokens: {retry_tokens:,}")
 
                         logger.info("AI ANALYZER: 🔄 Making recovery API call with preserved data...")
-                        raw_assessment = await self._make_openai_request(retry_prompt, model="gpt-4o")
+                        raw_assessment = await self._make_openai_request(retry_prompt, model="gpt-5.4")
                         logger.info(
                             "AI ANALYZER: ✅ RECOVERY SUCCESSFUL - BadRequestError resolved with metadata preservation"
                         )
@@ -1256,7 +1256,7 @@ BEGIN.
                 logger.info(
                     f"AI ANALYZER: 🔍 Analysis state: docs={len(analysis.analyzed_documents)}, videos={len(analysis.video_insights)}"
                 )
-                logger.info("AI ANALYZER: 🔍 Model used: gpt-4o")
+                logger.info("AI ANALYZER: 🔍 Model used: gpt-5.4")
 
                 msg = f"Unexpected error ({error_type}) in final assessment: {error_details}"
                 raise AIAnalysisError(msg) from unexpected_error

@@ -43,7 +43,7 @@ class JsonProcessingService:
         self.client = client
         self.config = config
 
-    def _get_letter_generation_model(self, fallback: str = "gpt-5.2") -> str:
+    def _get_letter_generation_model(self, fallback: str = "gpt-5.4") -> str:
         """Resolve preferred model for letter generation."""
         try:
             return self.client.get_preferred_model("letter_generation", fallback)
@@ -239,7 +239,7 @@ class JsonProcessingService:
 
         """
         try:
-            model = self.client.get_preferred_model("document_analysis", "gpt-5.2")
+            model = self.client.get_preferred_model("document_analysis", "gpt-5.4")
             max_output_tokens = int(self.config.get("openai_max_tokens", 12000)) if isinstance(self.config, dict) else 12000
 
             response_content = await asyncio.to_thread(
@@ -1099,7 +1099,7 @@ class JsonProcessingService:
             logger.info(f"Making OpenAI request with master prompt for {jurisdiction} using gpt-5.2.")
             markdown_response = self._make_openai_request_responses_api(
                 formatted_prompt,
-                model="gpt-5.2",
+                model="gpt-5.4",
                 reasoning_effort="low",
                 verbosity="high"
             )
@@ -1357,7 +1357,7 @@ class JsonProcessingService:
             None,  # Use the default thread pool executor
             self._make_openai_request_responses_api,
             prompt,
-            "gpt-5.2",  # model
+            "gpt-5.4",  # model
             "medium",  # reasoning_effort
             "medium",  # verbosity
             12000,  # max_output_tokens
@@ -1496,7 +1496,7 @@ class JsonProcessingService:
 
         logger.info("Making OpenAI request for adaptive letter generation")
 
-        model = self._get_letter_generation_model("gpt-5.2")
+        model = self._get_letter_generation_model("gpt-5.4")
         loop = asyncio.get_running_loop()
         markdown_response = await loop.run_in_executor(
             None,
@@ -1696,7 +1696,7 @@ class JsonProcessingService:
         )
 
         logger.info(f"Streaming adaptive findings email for {jurisdiction}")
-        model = self._get_letter_generation_model("gpt-5.2")
+        model = self._get_letter_generation_model("gpt-5.4")
         stream_started = False
         try:
             async for token in self.client.create_response_stream(
@@ -2174,7 +2174,7 @@ class JsonProcessingService:
     def _make_openai_request(
         self,
         prompt: str,
-        model: Optional[str] = "gpt-5.2",
+        model: Optional[str] = "gpt-5.4",
         temperature: float = 0.3,
         max_tokens: int = 12000,
         system_message: str = None,
@@ -2228,7 +2228,7 @@ class JsonProcessingService:
     def _make_openai_request_responses_api(
         self,
         prompt: str,
-        model: Optional[str] = "gpt-5.2",
+        model: Optional[str] = "gpt-5.4",
         reasoning_effort: Optional[str] = "low",
         verbosity: Optional[str] = "high",
         max_output_tokens: int = 12000,

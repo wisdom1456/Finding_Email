@@ -88,7 +88,7 @@ class CostCalculator:
                 # Use actual token counts from OpenAI response
                 input_tokens = doc_log["token_usage"].get("prompt_tokens", 0)
                 output_tokens = doc_log["token_usage"].get("completion_tokens", 0)
-                model_used = doc_log.get("model", "gpt-4o")
+                model_used = doc_log.get("model", "gpt-5.4")
             else:
                 # Fallback to estimation if logs not available
                 analysis_text = doc.analysis if doc.analysis else ""
@@ -96,15 +96,15 @@ class CostCalculator:
                 full_text = analysis_text + key_points_text
                 input_tokens = self._estimate_tokens(full_text)
                 output_tokens = len(full_text) // 4
-                model_used = "gpt-4o"
+                model_used = "gpt-5.4"
 
             # Determine pricing rates based on model used
-            if "gpt-4o-mini" in model_used.lower():
+            if "gpt-5-mini" in model_used.lower():
                 model_key = "openai_gpt4o_mini"
-                model_name = "OpenAI GPT-4o-mini"
-            elif "gpt-5.2" in model_used.lower() or "gpt5.2" in model_used.lower():
+                model_name = "OpenAI GPT-5-mini"
+            elif "gpt-5.2" in model_used.lower() or "gpt-5.4" in model_used.lower():
                 model_key = "openai_gpt5_2"
-                model_name = "OpenAI GPT-5.2"
+                model_name = "OpenAI GPT-5.x"
             else:
                 model_key = "openai_gpt4o"
                 model_name = "OpenAI GPT-4o"

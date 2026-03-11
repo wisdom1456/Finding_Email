@@ -459,18 +459,18 @@ class TestRouting:
 
 
 class TestPricingGuard:
-    def test_gpt54_returns_zero_cost(self):
+    def test_gpt54_returns_nonzero_cost(self):
         from legal_portal.utils.openai_client import OpenAIClient
 
         client = OpenAIClient.__new__(OpenAIClient)
         cost = client.estimate_cost(1000, 500, "gpt-5.4")
-        assert cost == 0.0
+        assert cost > 0.0
 
     def test_gpt41_returns_nonzero_cost(self):
         from legal_portal.utils.openai_client import OpenAIClient
 
         client = OpenAIClient.__new__(OpenAIClient)
-        cost = client.estimate_cost(1000, 500, "gpt-4.1")
+        cost = client.estimate_cost(1000, 500, "gpt-5-mini")
         assert cost > 0.0
 
 

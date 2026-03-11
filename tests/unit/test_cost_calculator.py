@@ -40,7 +40,7 @@ def test_calculate_document_analysis_costs_exact():
 
     assert len(costs) == 1
     assert abs(costs[0].cost - float(expected_cost)) < 0.0001  # Allow small floating point differences
-    assert costs[0].service_name == "OpenAI GPT-5.2"
+    assert costs[0].service_name == "OpenAI GPT-5.x"
     assert costs[0].operation_type == "document_analysis"
     assert costs[0].units_consumed == 3000  # total tokens
 

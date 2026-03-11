@@ -547,7 +547,7 @@ async def upload_document(
                                 )
                                 def gpt4o_ocr():
                                     return client.chat.completions.create(
-                                        model="gpt-4o",
+                                        model="gpt-5.2",
                                         messages=[{
                                             "role": "user",
                                             "content": [
@@ -1862,7 +1862,7 @@ async def analyze_image_with_vision(file_bytes: bytes, file_name: str, case_cont
         
         def vision_analysis():
             return client.chat.completions.create(
-                model="gpt-4o",
+                model="gpt-5.2",
                 messages=[{
                     "role": "user",
                     "content": [
@@ -2437,7 +2437,7 @@ async def _trigger_extraction_inner(
                         )
                         def gpt4o_ocr():
                             return client.chat.completions.create(
-                                model="gpt-4o",
+                                model="gpt-5.2",
                                 messages=[{
                                     "role": "user",
                                     "content": [

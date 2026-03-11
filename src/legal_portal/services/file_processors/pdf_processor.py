@@ -81,7 +81,8 @@ async def _ocr_with_fallback(
                             {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}", "detail": "high"}},
                         ]
                     }],
-                    max_tokens=4000,
+                    max_completion_tokens=4000,
+                    reasoning_effort="none",
                     temperature=0.0,
                 )
 
@@ -1103,7 +1104,8 @@ async def _extract_text_via_vision(
                     return client.chat.completions.create(
                         model="gpt-5.2",
                         messages=[{"role": "user", "content": content}],
-                        max_tokens=4000,  # Increased for dense documents
+                        max_completion_tokens=4000,  # Increased for dense documents
+                        reasoning_effort="none",
                         temperature=0.0,
                     )
 
@@ -1310,7 +1312,8 @@ async def _extract_text_via_vision_bytes(
                     return client.chat.completions.create(
                         model="gpt-5.2",
                         messages=[{"role": "user", "content": content}],
-                        max_tokens=4000,  # Increased for dense documents
+                        max_completion_tokens=4000,  # Increased for dense documents
+                        reasoning_effort="none",
                         temperature=0.0,
                     )
 

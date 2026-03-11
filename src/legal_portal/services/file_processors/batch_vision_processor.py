@@ -106,7 +106,8 @@ IMPORTANT: You must analyze ALL {len(image_files)} images and provide a separate
         response = client.chat.completions.create(
             model="gpt-5.2",
             messages=[{"role": "user", "content": content}],
-            max_tokens=1500 * len(image_files),  # Scale tokens with number of images
+            max_completion_tokens=1500 * len(image_files),  # Scale tokens with number of images
+            reasoning_effort="none",
             temperature=0.1,
         )
 

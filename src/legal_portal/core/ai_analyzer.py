@@ -112,8 +112,11 @@ class AIAnalyzer:
             request_params = {
                 "model": model,
                 "messages": [{"role": "user", "content": prompt}],
-                "temperature": 0.2,
             }
+
+            # GPT-5 models don't support temperature with reasoning; GPT-4.x does
+            if not (model.startswith("gpt-5") or "gpt-5" in model):
+                request_params["temperature"] = 0.2
 
             # Only add JSON response format if requested and prompt contains 'json'
             if use_json_format and "json" in prompt.lower():

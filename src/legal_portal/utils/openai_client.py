@@ -109,9 +109,9 @@ class OpenAIClient:
 
         for attempt in range(self.max_retries):
             try:
-                response = self.client.chat.completions.create(
-                    model=model,
-                    messages=[
+                request_params = {
+                    "model": model,
+                    "messages": [
                         {
                             "role": "system",
                             "content": (
@@ -121,9 +121,16 @@ class OpenAIClient:
                         },
                         {"role": "user", "content": prompt},
                     ],
-                    temperature=temperature,
-                    max_tokens=max_tokens,
-                )
+                }
+                if self._is_gpt5_model(model):
+                    if max_tokens is not None:
+                        request_params["max_completion_tokens"] = max_tokens
+                else:
+                    request_params["temperature"] = temperature
+                    if max_tokens is not None:
+                        request_params["max_tokens"] = max_tokens
+
+                response = self.client.chat.completions.create(**request_params)
 
                 content = response.choices[0].message.content
 
@@ -278,7 +285,7 @@ class OpenAIClient:
             self.client.chat.completions.create(
                 model="gpt-5-mini",
                 messages=[{"role": "user", "content": "Test"}],
-                max_tokens=1,
+                max_completion_tokens=1,
             )
             logger.info("OPENAI CLIENT: ✅ API key validation successful")
             return True

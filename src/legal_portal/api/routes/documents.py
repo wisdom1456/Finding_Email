@@ -561,14 +561,15 @@ async def upload_document(
                                                 },
                                             ]
                                         }],
-                                        max_tokens=4000,
+                                        max_completion_tokens=4000,
+                                        reasoning_effort="none",
                                         temperature=0.0,
                                     )
                                 response = await asyncio.wait_for(
                                     run_in_threadpool(gpt4o_ocr), timeout=60.0,
                                 )
                                 extracted_text = response.choices[0].message.content
-                                extraction_method = "GPT-4o Vision"
+                                extraction_method = "GPT-5.2 Vision"
                                 extraction_quality = "high"
                                 ocr_provider = "openai"
                                 logger.info(f"Successfully extracted text from {file_name} using GPT-4o Vision")
@@ -1876,7 +1877,8 @@ async def analyze_image_with_vision(file_bytes: bytes, file_name: str, case_cont
                         },
                     ]
                 }],
-                max_tokens=1500,
+                max_completion_tokens=1500,
+                reasoning_effort="none",
                 temperature=0.3,
             )
         
@@ -2451,14 +2453,15 @@ async def _trigger_extraction_inner(
                                         },
                                     ]
                                 }],
-                                max_tokens=4000,
+                                max_completion_tokens=4000,
+                                reasoning_effort="none",
                                 temperature=0.0,
                             )
                         response = await asyncio.wait_for(
                             run_in_threadpool(gpt4o_ocr), timeout=60.0,
                         )
                         extracted_text = response.choices[0].message.content
-                        extraction_method = "GPT-4o Vision"
+                        extraction_method = "GPT-5.2 Vision"
                         extraction_quality = "high"
                         ocr_provider = "openai"
                         logger.info(f"Successfully extracted text from {file_name} using GPT-4o Vision")

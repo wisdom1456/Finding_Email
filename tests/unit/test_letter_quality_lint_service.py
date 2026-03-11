@@ -54,7 +54,7 @@ def _strict_mode_sample() -> str:
         "BACKGROUND & ISSUE\n\n"
         f"{facts}\n\n"
         f"{padding}\n\n"
-        "KEY PROVISIONS\n\n"
+        "KEY LEGAL ISSUES\n\n"
         f"{contract}\n\n"
         f"{fraud}\n\n"
         f"{securities}\n\n"

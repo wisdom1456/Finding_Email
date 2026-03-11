@@ -325,8 +325,8 @@ Comprehensive compliance recommendations will follow.
         sections.append(self.generate_fallback_factual_summary(case_data))
         sections.append("")
 
-        # Key Provisions section
-        sections.append("KEY PROVISIONS:")
+        # Key Legal Issues section
+        sections.append("KEY LEGAL ISSUES:")
         sections.append("")
         sections.append(self.generate_fallback_legal_analysis(case_data))
         sections.append("")

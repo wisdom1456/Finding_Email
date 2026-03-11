@@ -8,7 +8,7 @@ from typing import Tuple
 
 _REQUIRED_SECTIONS = [
     ("BACKGROUND & ISSUE", r"(?im)^(?:BACKGROUND\s*(?:&|AND)\s*ISSUE|Background\s*(?:&|and)\s*Issue)\s*:?\s*$"),
-    ("KEY PROVISIONS", r"(?im)^(?:KEY\s*PROVISIONS?|Key\s*Provisions?)\s*:?\s*$"),
+    ("KEY LEGAL ISSUES", r"(?im)^(?:KEY\s*(?:PROVISIONS?|LEGAL\s*ISSUES?)|Key\s*(?:Provisions?|Legal\s*Issues?))\s*:?\s*$"),
     ("ANALYSIS", r"(?im)^(?:ANALYSIS|Analysis)\s*:?\s*$"),
     ("RECOMMENDED NEXT STEPS", r"(?im)^(?:RECOMMENDED\s*NEXT\s*STEPS?|Recommended\s*Next\s*Steps?)\s*:?\s*$"),
 ]
@@ -41,14 +41,14 @@ class LetterFormatter:
         if _NON_STANDARD_HEADER_PATTERN.search(letter_text):
             issues.append(
                 "Has non-standard numbered section headers - use only: "
-                "Background & Issue, Key Provisions, Analysis, Recommended Next Steps"
+                "Background & Issue, Key Legal Issues, Analysis, Recommended Next Steps"
             )
 
-        # Check 3: KEY PROVISIONS should have bold doctrine titles
-        if re.search(r"(?im)^KEY\s*PROVISIONS", letter_text):
+        # Check 3: KEY LEGAL ISSUES (or KEY PROVISIONS) should have bold doctrine titles
+        if re.search(r"(?im)^KEY\s*(?:PROVISIONS|LEGAL\s*ISSUES)", letter_text):
             bold_bullet_count = letter_text.count("• **")
             if bold_bullet_count == 0:
-                issues.append("Key Provisions section has no bold-titled doctrine bullets")
+                issues.append("Key Legal Issues section has no bold-titled doctrine bullets")
 
         # Check 4: Should have greeting
         has_greeting = "Good afternoon" in letter_text or "Good morning" in letter_text or "Dear " in letter_text
@@ -113,7 +113,7 @@ class LetterFormatter:
         # Count bullets
         bullet_count = letter_text.count("•")
 
-        # Count bold doctrine titles in KEY PROVISIONS
+        # Count bold doctrine titles in KEY LEGAL ISSUES
         bold_bullet_count = letter_text.count("• **")
 
         # Check spacing
@@ -147,11 +147,11 @@ class LetterFormatter:
                 suggestions.append(f"Add the missing section header: {issue.split(': ')[-1]}")
             elif "non-standard" in issue:
                 suggestions.append(
-                    "Replace non-standard headers with: Background & Issue, Key Provisions, Analysis, Recommended Next Steps"
+                    "Replace non-standard headers with: Background & Issue, Key Legal Issues, Analysis, Recommended Next Steps"
                 )
             elif "bold-titled" in issue:
                 suggestions.append(
-                    "Add bold doctrine titles to Key Provisions bullets (e.g., '• **Breach of Contract:**')"
+                    "Add bold doctrine titles to Key Legal Issues bullets (e.g., '• **Breach of Contract:**')"
                 )
             elif "excessive spacing" in issue:
                 suggestions.append("Reduce blank lines to maximum 2 between sections")

@@ -1311,7 +1311,7 @@ Return ONLY valid JSON.
             issue_format="bold_titled_bullet_provisions",
             reasoning=(
                 f"Structured professional format with {num_primary_issues} issue(s). "
-                f"Four sections: Background & Issue, Key Provisions, Analysis, Recommended Next Steps."
+                f"Four sections: Background & Issue, Key Legal Issues, Analysis, Recommended Next Steps."
             ),
         )
 

@@ -42,10 +42,10 @@ TARGET STYLE:
 - Natural paragraphs that flow as continuous correspondence.
 
 SECTION STRUCTURE (PRESERVE):
-- The letter should have four labeled sections: Background & Issue, Key Provisions, Analysis, Recommended Next Steps.
-- Do NOT remove or rename these section headers.
+- The email should have four labeled sections: Background & Issue, Key Legal Issues, Analysis, Recommended Next Steps.
+- Do NOT remove or rename these section headers. (Legacy "Key Provisions" headers are also acceptable.)
 - Do NOT merge sections.
-- Within Key Provisions, each doctrine should have a bold title followed by detailed explanation.
+- Within Key Legal Issues, each doctrine should have a bold title followed by an analytical paragraph.
 
 FORMATTING FIXES TO APPLY:
 1. Remove internal pipeline parentheticals and source-label artifacts from the body text (e.g., "(intake packet 01-11-2026)", "(photos, file)") — preserve the underlying fact in natural prose.
@@ -53,7 +53,7 @@ FORMATTING FIXES TO APPLY:
 3. Smooth transitions between paragraphs within each section.
 4. Keep one blank line between paragraphs.
 5. Preserve greeting, signature, and confidentiality language.
-6. Ensure consistent formatting of doctrine titles in Key Provisions (bold, followed by colon).
+6. Ensure consistent formatting of doctrine titles in Key Legal Issues (bold, followed by colon).
 7. Ensure document references read naturally ("per the contract", "the inspection report documents") without citation-style parentheticals.
 8. Remove all distancing or doubt-casting phrasing toward the client. Replace phrases like "you report", "you state", "you say", "you claim", "you allege", or "you indicate" — when referring to the client's account of events — with direct, trust-affirming language: "you have", "you invested", "as you described", "based on what you've shared."
 9. Replace attorney and litigation shop talk with plain English throughout. This applies to any term a non-lawyer would not immediately understand. Examples: "spoliation" → "prevent the other side from destroying records"; "standing" → "your right to bring this claim"; "accrual" → "when the deadline clock starts"; "plaintiff" → use the client's name or "you"; "cause of action" → "legal claim"; "filing posture" → "ready to file"; "for limitations purposes" → "for the filing deadline."

@@ -38,10 +38,10 @@ class LetterQualityLintService:
             ],
         ),
         (
-            "key_provisions",
-            "Key Provisions",
+            "key_legal_issues",
+            "Key Legal Issues",
             [
-                re.compile(r"\bKEY\s*PROVISIONS?\b", re.IGNORECASE),
+                re.compile(r"\bKEY\s*(?:PROVISIONS?|LEGAL\s*ISSUES?)\b", re.IGNORECASE),
                 re.compile(r"\bcontract\b", re.IGNORECASE),
                 re.compile(r"\bfraud|misrepresentation\b", re.IGNORECASE),
                 re.compile(r"\bsecurities\b", re.IGNORECASE),
@@ -112,8 +112,8 @@ class LetterQualityLintService:
         r"(?im)^\s*("
         r"BACKGROUND\s*(?:&|AND)\s*ISSUE|"
         r"Background\s*(?:&|and)\s*Issue|"
-        r"KEY\s*PROVISIONS?|"
-        r"Key\s*Provisions?|"
+        r"KEY\s*(?:PROVISIONS?|LEGAL\s*ISSUES?)|"
+        r"Key\s*(?:Provisions?|Legal\s*Issues?)|"
         r"ANALYSIS|"
         r"Analysis|"
         r"RECOMMENDED\s*NEXT\s*STEPS?|"
@@ -268,7 +268,7 @@ class LetterQualityLintService:
                     severity="error" if mode == "strict_quality" else "warning",
                     message=(
                         "Non-standard section headers detected. Use only: "
-                        "Background & Issue, Key Provisions, Analysis, Recommended Next Steps."
+                        "Background & Issue, Key Legal Issues, Analysis, Recommended Next Steps."
                     ),
                     details={"headers_found": header_hits},
                 )
@@ -282,7 +282,7 @@ class LetterQualityLintService:
                 h_lower = h.lower()
                 if "background" in h_lower:
                     found_labels.add("background")
-                elif "provision" in h_lower:
+                elif "provision" in h_lower or "legal issue" in h_lower:
                     found_labels.add("provisions")
                 elif "analysis" in h_lower:
                     found_labels.add("analysis")
@@ -441,7 +441,7 @@ class LetterQualityLintService:
     ) -> None:
         """Apply strict section checks for structured professional format."""
         del section_positions
-        theme_keys = ["background_issue", "key_provisions", "analysis", "next_steps"]
+        theme_keys = ["background_issue", "key_legal_issues", "analysis", "next_steps"]
         matched = [name for name in theme_keys if section_counts.get(name, 0) > 0]
         if len(matched) < 3:
             violations.append(
@@ -450,7 +450,7 @@ class LetterQualityLintService:
                     severity="warning",
                     message=(
                         "Letter may be missing one or more required sections "
-                        "(Background & Issue, Key Provisions, Analysis, Recommended Next Steps)."
+                        "(Background & Issue, Key Legal Issues, Analysis, Recommended Next Steps)."
                     ),
                     details={"matched_themes": matched, "required_minimum": 3},
                 )
@@ -539,7 +539,7 @@ class LetterQualityLintService:
         if letter_type == "findings":
             targets = {
                 "background_issue": (100, 350),
-                "key_provisions": (150, 500),
+                "key_legal_issues": (150, 500),
                 "analysis": (80, 350),
                 "next_steps": (50, 200),
             }
@@ -607,8 +607,8 @@ class LetterQualityLintService:
                 "background_issue": [
                     r"(?im)^(?:BACKGROUND\s*(?:&|AND)\s*ISSUE|Background\s*(?:&|and)\s*Issue)\s*:?\s*$",
                 ],
-                "key_provisions": [
-                    r"(?im)^(?:KEY\s*PROVISIONS?|Key\s*Provisions?)\s*:?\s*$",
+                "key_legal_issues": [
+                    r"(?im)^(?:KEY\s*(?:PROVISIONS?|LEGAL\s*ISSUES?)|Key\s*(?:Provisions?|Legal\s*Issues?))\s*:?\s*$",
                 ],
                 "analysis": [
                     r"(?im)^(?:ANALYSIS|Analysis)\s*:?\s*$",
@@ -644,8 +644,8 @@ class LetterQualityLintService:
                     r"\bbased on (?:the )?records\b",
                     r"\byou invested\b",
                 ],
-                "key_provisions": [
-                    r"\bkey provisions\b",
+                "key_legal_issues": [
+                    r"\bkey (?:provisions|legal issues)\b",
                     r"\bcontract claim\b",
                     r"\bunjust enrichment\b",
                     r"\bbreach of contract\b",
@@ -671,7 +671,7 @@ class LetterQualityLintService:
 
         paragraph_windows = {
             "background_issue": 4,
-            "key_provisions": 5,
+            "key_legal_issues": 5,
             "analysis": 4,
             "next_steps": 3,
             "background": 3,

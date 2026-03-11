@@ -364,10 +364,7 @@ const { session, user } = await getSecureSession();
 	}
 
 	async function handleBulkExtract() {
-		// Skip TXT files — they use direct text read, not vision OCR
-		const docsToProcess = docsNeedingExtraction.filter((d: any) =>
-			d.file_type !== 'text/plain' && !String(d.file_name || '').toLowerCase().endsWith('.txt')
-		);
+		const docsToProcess = [...docsNeedingExtraction];
 		if (docsToProcess.length === 0) return;
 
 		// Process in batches of 3 concurrent requests with a pause between batches.

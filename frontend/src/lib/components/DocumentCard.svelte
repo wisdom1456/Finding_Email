@@ -725,14 +725,14 @@
 					</button>
 				{/if}
 
-				{#if doc.status === 'extraction_failed'}
+				{#if doc.status === 'extraction_failed' || (doc.status === 'pending' && !doc.extracted_at)}
 					<button
 						data-testid="re-extract-btn"
 						onclick={() => onReExtract?.(doc.id)}
 						class="btn btn-primary px-3 py-1.5 text-xs font-bold shadow-sm"
 					>
 						<RefreshCw class="w-3.5 h-3.5 mr-1.5" />
-						Try Vision OCR
+						{doc.status === 'pending' ? 'Extract Text' : 'Try Vision OCR'}
 					</button>
 				{/if}
 

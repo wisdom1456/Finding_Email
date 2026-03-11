@@ -218,7 +218,7 @@ describe('progressStore', () => {
 	it('updateProgress updates stats', () => {
 		progressStore.updateProgress({
 			type: 'progress', message: '', phase: '', percent: 50,
-			stats: { elapsedSeconds: 120, tokens_used: 5000, model: 'gpt-5.2' },
+			stats: { elapsedSeconds: 120, tokens_used: 5000, model: 'gpt-5.4' },
 		});
 
 		const state = get(progressStore);

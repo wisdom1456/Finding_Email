@@ -2,7 +2,7 @@
   AnalysisStreamPanel - Live streaming case analysis display
   
   Features:
-  - Streams markdown content from GPT-5.2 medium in real-time
+  - Streams markdown content from GPT-5.4 medium in real-time
   - Two-phase UX: "thinking" (AI reasoning) then "streaming" (tokens flowing)
   - Renders markdown as it arrives (like ChatGPT)
   - Auto-scrolls to show new content
@@ -438,7 +438,7 @@
         </div>
         <h4 class="thinking-title">AI is reasoning...</h4>
         <p class="thinking-description">
-          GPT-5.2 is analyzing your documents and building a comprehensive legal analysis.
+          GPT-5.4 is analyzing your documents and building a comprehensive legal analysis.
         </p>
         <p class="thinking-time">Usually takes 30-60 seconds</p>
         <div class="thinking-elapsed">{formatTime(elapsedTime)}</div>
@@ -482,7 +482,7 @@
   {#if status === 'thinking'}
     <div class="status-bar thinking">
       <div class="status-indicator thinking"></div>
-      <span>GPT-5.2 is reasoning about your case...</span>
+      <span>GPT-5.4 is reasoning about your case...</span>
     </div>
   {:else if status === 'streaming'}
     <div class="status-bar">

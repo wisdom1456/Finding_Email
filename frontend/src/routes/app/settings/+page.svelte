@@ -24,9 +24,9 @@ Palm Harbor, FL 34683`);
 
 	// AI Model Preferences
 	let documentAnalysisModel = $state('gpt-5-mini');
-	let letterGenerationModel = $state('gpt-5.2');
+	let letterGenerationModel = $state('gpt-5.4');
 	let caseChatModel = $state('gpt-5-mini');
-	let multiStageAnalysisModel = $state('gpt-5.2');
+	let multiStageAnalysisModel = $state('gpt-5.4');
 	let blacklistedDocuments = $state('');
 	
 	// Document Processing Preferences
@@ -35,10 +35,10 @@ Palm Harbor, FL 34683`);
 	let chunkMaxTokens = $state(50000);
 
 	const availableModels = [
-		{ value: 'gpt-5.2', label: 'GPT-5.2 (Recommended)', description: 'Most intelligent, complex reasoning' },
+		{ value: 'gpt-5.4', label: 'GPT-5.4 (Recommended)', description: 'Most intelligent, complex reasoning' },
 		{ value: 'gpt-5-mini', label: 'GPT-5 Mini', description: 'Cost-optimized, fast and capable' },
 		{ value: 'gpt-5-nano', label: 'GPT-5 Nano', description: 'High-throughput, simple tasks' },
-		{ value: 'gpt-4o', label: 'GPT-4o (Legacy)', description: 'Previous generation model' }
+		{ value: 'gpt-5.2', label: 'GPT-5.2', description: 'Previous flagship, vision/staged rollout' }
 	];
 
 	onMount(async () => {
@@ -78,9 +78,9 @@ Palm Harbor, FL 34683`);
 				// Load AI preferences
 				if (profile.ai_preferences) {
 					documentAnalysisModel = profile.ai_preferences.document_analysis || 'gpt-5-mini';
-					letterGenerationModel = profile.ai_preferences.letter_generation || 'gpt-5.2';
+					letterGenerationModel = profile.ai_preferences.letter_generation || 'gpt-5.4';
 					caseChatModel = profile.ai_preferences.case_chat || 'gpt-5-mini';
-					multiStageAnalysisModel = profile.ai_preferences.multi_stage_analysis || 'gpt-5.2';
+					multiStageAnalysisModel = profile.ai_preferences.multi_stage_analysis || 'gpt-5.4';
 					
 					if (profile.ai_preferences.blacklisted_documents) {
 						blacklistedDocuments = profile.ai_preferences.blacklisted_documents.join(', ');
@@ -103,9 +103,9 @@ Palm Harbor, FL 34683`);
 	// Default values for AI preferences
 	const defaultAIPreferences = {
 		documentAnalysis: 'gpt-5-mini',
-		letterGeneration: 'gpt-5.2',
+		letterGeneration: 'gpt-5.4',
 		caseChat: 'gpt-5-mini',
-		multiStageAnalysis: 'gpt-5.2',
+		multiStageAnalysis: 'gpt-5.4',
 		autoSkipFailed: false,
 		maxRetryAttempts: 2,
 		chunkMaxTokens: 50000
@@ -399,10 +399,10 @@ Palm Harbor, FL 34683`);
 							<h3 class="text-sm font-bold text-contrast-light">Model Information</h3>
 							<div class="mt-2 text-sm text-gray-600">
 								<ul class="list-disc list-inside space-y-1">
-									<li><strong>GPT-5.2:</strong> Most intelligent model with complex reasoning - recommended for legal analysis and demand letters</li>
+									<li><strong>GPT-5.4:</strong> Most intelligent model with complex reasoning - recommended for legal analysis and demand letters</li>
 									<li><strong>GPT-5 Mini:</strong> Cost-optimized, fast and capable for routine document analysis and chat</li>
 									<li><strong>GPT-5 Nano:</strong> High-throughput for simple extraction and classification tasks</li>
-									<li><strong>GPT-4o (Legacy):</strong> Previous generation model, maintained for compatibility</li>
+									<li><strong>GPT-5.2:</strong> Previous flagship model, used for vision/PDF extraction</li>
 								</ul>
 							</div>
 						</div>

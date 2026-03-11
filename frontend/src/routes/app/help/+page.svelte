@@ -273,7 +273,7 @@
 								<p class="detail-text">
 									Analyze as many documents as needed—there are no limits on document count per case.
 									Upload PDFs, Word documents, images, emails, and more. The system automatically
-									extracts text from each format, including OCR for scanned documents and images using GPT-4o Vision.
+									extracts text from each format, including OCR for scanned documents and images using GPT-5.2 Vision.
 								</p>
 							</div>
 							<div class="detail-item">
@@ -295,7 +295,7 @@
 							<div class="detail-item">
 								<h4 class="detail-title">OCR & Vision AI Text Extraction</h4>
 								<p class="detail-text">
-									Scanned PDFs and images are automatically processed using GPT-4o Vision for text extraction.
+									Scanned PDFs and images are automatically processed using GPT-5.2 Vision for text extraction.
 									<strong>New:</strong> The system automatically detects low-quality OCR results and switches to
 									advanced Vision AI analysis for photos, diagrams, and poor-quality scans. Vision AI provides
 									contextual understanding of visual documents that traditional OCR cannot handle. If extraction
@@ -423,9 +423,9 @@
 							<div class="detail-item">
 								<h4 class="detail-title">Multi-Model AI Architecture</h4>
 								<p class="detail-text">
-									Uses specialized AI models for different tasks: GPT-4o for OCR and Vision extraction,
-									GPT-4o-mini for legal issue identification, GPT-5 Mini for document analysis and case chat, and
-									GPT-5.2 for letter generation and comprehensive multi-stage analysis. You can customize which model is used for each task in Settings.
+									Uses specialized AI models for different tasks: GPT-5.2 for OCR and Vision extraction,
+									GPT-5 Mini for document analysis, legal issue identification, and case chat, and
+									GPT-5.4 for letter generation and comprehensive multi-stage analysis. You can customize which model is used for each task in Settings.
 								</p>
 							</div>
 							<div class="detail-item">
@@ -635,8 +635,8 @@
 								<p class="detail-text">
 									Choose which AI model powers each task: <strong>Document Analysis</strong>,
 									<strong>Findings Email & Demand Letter</strong>, <strong>Case Chat</strong>, and
-									<strong>Multi-Stage Analysis</strong>. Available models include GPT-5.2 (most capable),
-									GPT-5 Mini, GPT-5 Nano, and GPT-4o (legacy). Click <strong>"Reset to Defaults"</strong>
+									<strong>Multi-Stage Analysis</strong>. Available models include GPT-5.4 (most capable),
+									GPT-5 Mini, GPT-5 Nano, and GPT-5.2 (previous generation). Click <strong>"Reset to Defaults"</strong>
 									to restore recommended settings.
 								</p>
 							</div>
@@ -721,7 +721,7 @@
 								The portal supports a wide range of document formats including:
 							</p>
 							<ul class="faq-list">
-								<li><strong>PDF</strong> - Standard and scanned (with OCR via GPT-4o Vision)</li>
+								<li><strong>PDF</strong> - Standard and scanned (with OCR via GPT-5.2 Vision)</li>
 								<li><strong>DOCX/DOC</strong> - Microsoft Word documents</li>
 								<li><strong>EML</strong> - Email files with full HTML support (no conversion needed)</li>
 								<li><strong>JPG/PNG</strong> - Images and photos (analyzed via Vision AI or OCR)</li>
@@ -790,7 +790,7 @@
 							<div class="mt-2 p-3 bg-amber-50 rounded-lg">
 								<p class="text-sm text-amber-800">
 									<strong>Note:</strong> If documents need OCR (scanned PDFs or images), add 30-60 seconds per document
-									for text extraction using GPT-4o Vision.
+									for text extraction using GPT-5.2 Vision.
 								</p>
 							</div>
 						</AccordionItem>
@@ -850,7 +850,7 @@
 
 						<AccordionItem title="How does Vision AI work for photos and scanned documents?">
 							<p>
-								<strong>Vision AI</strong> uses GPT-4o Vision to analyze photographs, diagrams, and poor-quality scans
+								<strong>Vision AI</strong> uses GPT-5.2 Vision to analyze photographs, diagrams, and poor-quality scans
 								that traditional OCR cannot process effectively.
 							</p>
 							<p class="mt-2">
@@ -890,7 +890,7 @@
 										documents will be skipped. You have three options:
 									</p>
 									<ul class="faq-list-sm">
-										<li><strong>Run OCR on All</strong> - Automatically extracts text from all documents using GPT-4o Vision (recommended)</li>
+										<li><strong>Run OCR on All</strong> - Automatically extracts text from all documents using GPT-5.2 Vision (recommended)</li>
 										<li><strong>Skip These Documents</strong> - Proceed with analysis excluding those documents</li>
 										<li><strong>Cancel</strong> - Go back and fix documents manually</li>
 									</ul>
@@ -1119,8 +1119,8 @@
 								<li><strong>Multi-Stage Analysis</strong> — runs the full case analysis pipeline</li>
 							</ul>
 							<p class="mt-2">
-								Available models: GPT-5.2 (most capable), GPT-5 Mini, GPT-5 Nano, and GPT-4o (legacy).
-								The defaults (GPT-5.2 for analysis and letters, GPT-5 Mini for document analysis and chat)
+								Available models: GPT-5.4 (most capable), GPT-5 Mini, GPT-5 Nano, and GPT-5.2 (previous generation).
+								The defaults (GPT-5.4 for analysis and letters, GPT-5 Mini for document analysis and chat)
 								work well for most cases. Click <strong>"Reset to Defaults"</strong> to restore recommended settings.
 							</p>
 							<p class="mt-2">

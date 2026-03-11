@@ -363,11 +363,10 @@ class OpenAIClient:
                 "messages": messages,
             }
 
-            # GPT-5 models use max_completion_tokens via extra_body and don't support temperature with reasoning
+            # GPT-5 models use max_completion_tokens and don't support temperature with reasoning
             if self._is_gpt5_model(model):
                 if max_tokens is not None:
-                    # Pass max_completion_tokens via extra_body for SDK compatibility
-                    request_params["extra_body"] = {"max_completion_tokens": max_tokens}
+                    request_params["max_completion_tokens"] = max_tokens
                 # GPT-5 doesn't support temperature when using reasoning
             else:
                 request_params["temperature"] = temperature
@@ -463,11 +462,10 @@ class OpenAIClient:
                 "messages": messages,
             }
 
-            # GPT-5 models use max_completion_tokens via extra_body and don't support temperature with reasoning
+            # GPT-5 models use max_completion_tokens and don't support temperature with reasoning
             if self._is_gpt5_model(model):
                 if max_tokens is not None:
-                    # Pass max_completion_tokens via extra_body for SDK compatibility
-                    request_params["extra_body"] = {"max_completion_tokens": max_tokens}
+                    request_params["max_completion_tokens"] = max_tokens
             else:
                 request_params["temperature"] = temperature
                 if max_tokens is not None:
@@ -736,20 +734,14 @@ class OpenAIClient:
                 "messages": messages,
             }
 
-            # GPT-5.2 uses extra_body for new parameters
-            extra_body = {}
-
             if reasoning_effort:
-                extra_body["reasoning_effort"] = reasoning_effort
-
-            if verbosity:
-                extra_body["verbosity"] = verbosity
-
+                request_params["reasoning_effort"] = reasoning_effort
             if max_output_tokens:
-                extra_body["max_completion_tokens"] = max_output_tokens
+                request_params["max_completion_tokens"] = max_output_tokens
 
-            if extra_body:
-                request_params["extra_body"] = extra_body
+            # verbosity is not a standard Chat Completions param; pass via extra_body
+            if verbosity:
+                request_params["extra_body"] = {"verbosity": verbosity}
 
             response = await self.async_client.chat.completions.create(**request_params)
 
@@ -794,17 +786,12 @@ class OpenAIClient:
                 "stream": True,
             }
 
-            # GPT-5.2 uses extra_body for new parameters
-            extra_body = {}
-
             if reasoning_effort:
-                extra_body["reasoning_effort"] = reasoning_effort
+                request_params["reasoning_effort"] = reasoning_effort
 
+            # verbosity is not a standard Chat Completions param; pass via extra_body
             if verbosity:
-                extra_body["verbosity"] = verbosity
-
-            if extra_body:
-                request_params["extra_body"] = extra_body
+                request_params["extra_body"] = {"verbosity": verbosity}
 
             stream = await self.async_client.chat.completions.create(**request_params)
 

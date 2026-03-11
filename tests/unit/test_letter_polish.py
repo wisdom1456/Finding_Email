@@ -172,9 +172,10 @@ def test_polish_prompt_instructs_distancing_language():
     """The formatting prompt must cover all distancing phrases toward the client."""
     polisher = LetterPolisher(MagicMock())
     prompt = polisher.formatting_prompt
-    # All common distancing variants must be addressed
+    # All common distancing variants must be addressed (case-insensitive, since
+    # "You report" is now preserved in Background & Issue but still referenced)
     for phrase in ("you report", "you state", "you say", "you claim", "you allege"):
-        assert phrase in prompt, f"Missing distancing phrase: '{phrase}'"
+        assert phrase in prompt.lower(), f"Missing distancing phrase: '{phrase}'"
 
 
 def test_polish_prompt_instructs_plain_english_jargon():

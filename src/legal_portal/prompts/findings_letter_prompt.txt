@@ -20,7 +20,7 @@ Write a **client-facing email**, not a legal memorandum or court brief. The tone
 - Use "You report that..." when framing the client's account of events
 - Reference documents naturally in prose ("per the contract," "the inspection report documents," "as reflected in the payment records")
 - Include one empathy sentence after the greeting ("I understand this has been a difficult situation" or similar)
-- State each key fact (dates, amounts, party names) ONCE in Background & Issue; reference by shorthand later
+- State each key fact ONCE in Background & Issue (see Anti-Repetition Rule in WRITING GUIDELINES)
 
 **DO NOT:**
 - Write in court-brief or academic style — no "Pursuant to the foregoing," "It is well established that," or "The elements of [claim] are..."
@@ -71,7 +71,7 @@ Good afternoon [Client],
 
 ## BACKGROUND & ISSUE
 
-[2–3 paragraphs, 200–300 words: client's account, key facts from documents, critical dates, central dispute. Use "You report that..." framing. State each fact once here.]
+[2–3 paragraphs, 200–300 words. Synthesize key events from the timeline into a narrative. Identify the central dispute clearly. Highlight key documentation gaps early. Use attribution language: "You report that...", "The documents in the file indicate...", "Based on the materials provided..." Introduce each key fact (dates, amounts, party names) here; later sections reference by shorthand only.]
 
 ## KEY LEGAL ISSUES
 
@@ -83,7 +83,13 @@ Good afternoon [Client],
 
 ## RECOMMENDED NEXT STEPS
 
-[1–2 paragraphs: recommended course of action, engagement scope, call to action. A short numbered list is acceptable for concrete protective actions.]
+[1–2 paragraphs: recommended course of action, engagement scope, call to action. A short numbered list is acceptable for concrete protective actions.
+
+Next steps must be specific and concrete — the client should be able to read them and immediately understand what needs to happen. Avoid generic language like "review documents" or "consider legal options."
+
+GOOD examples of specific actions: obtain proof of payment, confirm the legal identity of the contractor, gather invoices or repair estimates, obtain a legible signed contract, verify the proper party to sue.
+
+BAD examples (too vague): "review your options," "gather relevant documents," "consider pursuing legal remedies."]
 
 Sincerely,
 {attorney_name}, Esq.
@@ -124,7 +130,23 @@ BAD (textbook definition only): "• **Breach of Contract:** A breach of contrac
 
 BAD (mixes in "What this means for you" subheader): "• **Breach of Contract:** [definition]... What this means for you: [application]"
 
-**Cite controlling authority when available.** Use verified statutes from the VERIFIED STATUTES section. For common-law doctrines, cite the leading case if clearly applicable. If no verified authority is available, state the rule without attribution rather than inventing a citation.
+**REASONING QUALITY:**
+- Connect the legal concept to the specific facts of this case — not abstract doctrine
+- Explain what the facts mean under the law for the client's position
+- Avoid textbook-style explanations of legal doctrine divorced from the facts
+- Follow this pattern: concept → facts → what it means for client
+
+**Additional CORRECT FORMAT example (concept → facts → impact):**
+
+"• **Breach of Contract:** If a contractor agrees to perform specific work and fails to deliver conforming work, the customer may pursue damages for the cost of repair, replacement, or refund of payments. In your situation, the photographs and messages suggest the countertops may have been cut incorrectly and do not fit the intended installation area. If we can confirm the specifications that were agreed upon and the amount you paid as a deposit, that evidence would support a claim seeking recovery of the deposit or the cost to correct the work."
+
+**CONCISION:**
+- Each legal issue should normally be one paragraph
+- Do not turn Key Legal Issues into extended doctrinal explanations
+- If an issue genuinely requires more than one paragraph, that is acceptable — but it should be the exception, not the default
+- The goal is a clear, focused explanation that a client can read quickly
+
+**Cite controlling authority when available.** Use verified statutes from the VERIFIED STATUTES section. For common-law doctrines, cite the leading case if clearly applicable. If no verified authority is available, state the rule without attribution rather than inventing a citation. Only include statutory references when they directly help explain the legal issue. Do not add statutes simply to make the analysis appear more formal.
 
 **What belongs in KEY LEGAL ISSUES (substantive theories only):**
 - Breach of contract, fraudulent concealment, negligent misrepresentation, implied warranty, seller's duty to disclose, securities claims, causation and damages, "as-is" clause limitations
@@ -149,11 +171,13 @@ BAD (mixes in "What this means for you" subheader): "• **Breach of Contract:**
 - "the inspection report documents several deficiencies"
 - "the email correspondence shows a pattern of non-responsiveness"
 
-**Anti-Repetition:** State each key fact once in BACKGROUND & ISSUE. In later sections, reference by shorthand — "the $1,800 payment" or "the January 31 exchange" instead of repeating full details.
+**Anti-Repetition Rule:** Facts (dates, amounts, party names, events) must be introduced in Background & Issue. Key Legal Issues and Analysis should reference those facts by shorthand, not restate them in full. Example: after stating "$128,000 contract price" in Background, later sections say "the contract price" or "the $128,000 payment." If a fact appears in full more than once across the letter, it is a drafting error.
 
 **Date Math:** Calculate and state time differences:
 - GOOD: "You vacated on April 15, 2025, but the landlord's notice was sent on May 30, 2025 — 45 days later, beyond the statutory deadline"
 - BAD: Just listing two dates without stating the gap
+
+**Evidentiary Gap Communication:** When documents are missing or unclear, identify those gaps in the email and explain in plain English why they matter for resolving the dispute. Examples: missing signed contract, unclear counterparty identity, missing proof of payment, unclear scope of work, missing invoices or receipts. Integrate gaps naturally into the Analysis or Recommended Next Steps sections — not as a standalone list. (See also GAP ANALYSIS GUARDRAILS for source-fidelity rules that prevent hallucination around missing documents.)
 
 **Explaining Escalating Risks:** When a risk escalates through steps (e.g., Notice to Owner → Lien → Foreclosure), walk the client through each step so they understand the progression. Define technical terms in plain English along the way. End with the ultimate consequence stated clearly, and close with actionable hope.
 
@@ -515,3 +539,8 @@ NOTE: The information above has been reviewed and verified by the user. Use this
 - No fabricated facts, dates, amounts, or citations
 - Disclaimer included
 - Reads like a senior attorney's email to a client
+- The dispute is clearly explained
+- Each legal issue relates directly to the facts
+- The analysis explains strengths and weaknesses
+- The next steps are practical and specific
+- The tone remains clear and client-focused

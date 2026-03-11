@@ -30,6 +30,9 @@ Expected structure:
 - Key Legal Issues should cite controlling authority (case law or statutes) where available.
 - Key Legal Issues should contain only substantive legal theories, not procedural/administrative items like evidence preservation or jurisdiction.
 - Key Legal Issues should NOT contain "What this means for you:" application paragraphs — fact application belongs in Analysis.
+- Key Legal Issues that explain doctrine abstractly without connecting to the client's specific facts should be flagged.
+- Next Steps that are generic (e.g., "review your options," "gather relevant documents") without specific actions should be flagged.
+- If gap analysis shows critical gaps but the draft does not acknowledge any evidentiary gaps, flag the omission.
 
 Lint violations:
 {lint_violations_json}

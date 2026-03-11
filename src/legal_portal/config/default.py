@@ -307,6 +307,24 @@ class Settings(BaseSettings):
         description="JPEG quality for image compression (0-100)",
     )
 
+    max_image_dimension: int = Field(
+        3000,
+        alias="MAX_IMAGE_DIMENSION",
+        description="Maximum dimension (width or height) for images in pixels. Larger images are resized down.",
+    )
+
+    png_to_jpeg_threshold_mb: float = Field(
+        5.0,
+        alias="PNG_TO_JPEG_THRESHOLD_MB",
+        description="PNG files larger than this (MB) are converted to JPEG for faster processing and smaller size",
+    )
+
+    image_hard_cap_mb: float = Field(
+        5.0,
+        alias="IMAGE_HARD_CAP_MB",
+        description="Maximum output size for compressed images in MB. Images exceeding this are re-compressed more aggressively.",
+    )
+
     # ==================================================
     # OCR SERVICE CONFIGURATION
     # ==================================================
@@ -412,6 +430,24 @@ class Settings(BaseSettings):
         """Validate image compression quality."""
         if not 1 <= v <= 100:
             msg = "Image compression quality must be between 1 and 100"
+            raise ValueError(msg)
+        return v
+
+    @field_validator("max_image_dimension")
+    @classmethod
+    def validate_max_image_dimension(cls, v):
+        """Validate max image dimension is reasonable."""
+        if not 500 <= v <= 10000:
+            msg = "Max image dimension must be between 500 and 10000 pixels"
+            raise ValueError(msg)
+        return v
+
+    @field_validator("png_to_jpeg_threshold_mb")
+    @classmethod
+    def validate_png_to_jpeg_threshold(cls, v):
+        """Validate PNG to JPEG threshold is reasonable."""
+        if not 0.5 <= v <= 50:
+            msg = "PNG to JPEG threshold must be between 0.5 and 50 MB"
             raise ValueError(msg)
         return v
 

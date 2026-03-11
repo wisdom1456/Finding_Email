@@ -180,7 +180,11 @@ def get_compression_method_description(method: str) -> str:
         "ghostscript-prepress": "Ghostscript (300dpi, prepress quality)",
         "pypdf2": "PyPDF2 (basic compression)",
         "pillow-jpeg": "Pillow (JPEG optimization)",
+        "pillow-jpeg-resized": "Pillow (JPEG, resized)",
+        "pillow-jpeg-resized-converted": "Pillow (PNG→JPEG, resized)",
+        "pillow-jpeg-converted": "Pillow (PNG→JPEG conversion)",
         "pillow-png": "Pillow (PNG optimization)",
+        "pillow-png-resized": "Pillow (PNG, resized)",
         "none": "No compression (below threshold)",
         "unsupported": "File type not supported for compression",
     }

@@ -10,6 +10,7 @@ import io
 import os
 import subprocess
 import tempfile
+import time
 from dataclasses import dataclass
 from typing import Optional, Tuple
 
@@ -48,6 +49,9 @@ class FileCompressionService:
         compression_threshold_mb: float = 10.0,
         pdf_quality: str = "ebook",
         image_quality: int = 85,
+        max_image_dimension: int = 3000,
+        png_to_jpeg_threshold_mb: float = 5.0,
+        image_hard_cap_mb: float = 5.0,
     ):
         """Initialize compression service.
 
@@ -56,11 +60,17 @@ class FileCompressionService:
             compression_threshold_mb: Size threshold in MB to trigger compression
             pdf_quality: Ghostscript quality preset (screen, ebook, printer, prepress)
             image_quality: JPEG quality (0-100)
+            max_image_dimension: Max width/height in pixels before resizing
+            png_to_jpeg_threshold_mb: PNG files larger than this are converted to JPEG
+            image_hard_cap_mb: Max output size in MB; images exceeding this are re-compressed
 
         """
         self.compression_threshold_bytes = int(compression_threshold_mb * 1024 * 1024)
         self.pdf_quality = pdf_quality
         self.image_quality = image_quality
+        self.max_image_dimension = max_image_dimension
+        self.png_to_jpeg_threshold_bytes = int(png_to_jpeg_threshold_mb * 1024 * 1024)
+        self.image_hard_cap_bytes = int(image_hard_cap_mb * 1024 * 1024)
         self.has_ghostscript = self._check_ghostscript()
 
         if self.has_ghostscript:
@@ -81,18 +91,21 @@ class FileCompressionService:
         except (FileNotFoundError, subprocess.TimeoutExpired):
             return False
 
-    def should_compress(self, file_size: int) -> bool:
+    def should_compress(self, file_size: int, content_type: str | None = None) -> bool:
         """Determine if a file should be compressed based on size.
 
         Args:
         ----
             file_size: File size in bytes
+            content_type: Optional MIME type; images use a lower threshold (3MB)
 
         Returns:
         -------
             True if file should be compressed
 
         """
+        if content_type and "image" in content_type.lower():
+            return file_size > 3 * 1024 * 1024  # 3MB for images
         return file_size > self.compression_threshold_bytes
 
     def compress_file(
@@ -394,7 +407,7 @@ class FileCompressionService:
             return pdf_data, "pymupdf-failed"
 
     def _compress_image(self, image_data: bytes, content_type: str) -> Tuple[bytes, str]:
-        """Compress an image using Pillow.
+        """Compress an image using Pillow with resize, format conversion, and metadata stripping.
 
         Args:
         ----
@@ -411,40 +424,97 @@ class FileCompressionService:
             return image_data, "pillow-unavailable"
 
         try:
-            # Open image
+            from PIL import ImageOps
+
+            start_time = time.monotonic()
             img = Image.open(io.BytesIO(image_data))
+            original_dims = img.size
+            original_format = "PNG" if "png" in content_type.lower() else "JPEG"
 
-            # Determine output format
-            if "png" in content_type.lower():
-                output_format = "PNG"
-                optimize_params = {"optimize": True}
+            # Apply EXIF orientation before stripping metadata
+            img = ImageOps.exif_transpose(img)
+
+            # 1. Resize if dimensions exceed cap
+            resized = False
+            if max(img.size) > self.max_image_dimension:
+                img.thumbnail(
+                    (self.max_image_dimension, self.max_image_dimension),
+                    Image.LANCZOS,
+                )
+                resized = True
+
+            # 2. Decide output format: convert large PNGs to JPEG
+            is_large_png = (
+                original_format == "PNG"
+                and len(image_data) > self.png_to_jpeg_threshold_bytes
+            )
+            output_format = "JPEG" if (original_format == "JPEG" or is_large_png) else "PNG"
+
+            # 3. Handle transparency for JPEG conversion
+            if output_format == "JPEG" and img.mode in ("RGBA", "LA", "P"):
+                if img.mode == "P":
+                    img = img.convert("RGBA")
+                background = Image.new("RGB", img.size, (255, 255, 255))
+                background.paste(img, mask=img.split()[-1] if "A" in img.mode else None)
+                img = background
+            elif output_format == "JPEG" and img.mode != "RGB":
+                img = img.convert("RGB")
+
+            # 4. Save with format-appropriate settings (metadata stripped by not passing exif)
+            output = io.BytesIO()
+            if output_format == "JPEG":
+                img.save(output, format="JPEG", quality=self.image_quality, optimize=True)
             else:
-                # Convert to JPEG for maximum compression
-                output_format = "JPEG"
-                optimize_params = {
-                    "quality": self.image_quality,
-                    "optimize": True,
-                }
+                # PNG: skip optimize=True to avoid the extremely slow filter search
+                img.save(output, format="PNG")
 
-                # Convert RGBA to RGB for JPEG
-                if img.mode in ("RGBA", "LA", "P"):
-                    background = Image.new("RGB", img.size, (255, 255, 255))
-                    if img.mode == "P":
-                        img = img.convert("RGBA")
-                    background.paste(img, mask=img.split()[-1] if img.mode in ("RGBA", "LA") else None)
-                    img = background
+            compressed_data = output.getvalue()
 
-            # Compress image
-            output_stream = io.BytesIO()
-            img.save(output_stream, format=output_format, **optimize_params)
-            compressed_data = output_stream.getvalue()
+            # 5. Hard cap enforcement: if still too large, retry more aggressively
+            if len(compressed_data) > self.image_hard_cap_bytes:
+                logger.info(
+                    f"Image still {len(compressed_data) / (1024*1024):.1f}MB after first pass, "
+                    f"applying aggressive compression"
+                )
+                # Force convert to JPEG if still PNG
+                if output_format == "PNG":
+                    if img.mode in ("RGBA", "LA", "P"):
+                        if img.mode == "P":
+                            img = img.convert("RGBA")
+                        bg = Image.new("RGB", img.size, (255, 255, 255))
+                        bg.paste(img, mask=img.split()[-1] if "A" in img.mode else None)
+                        img = bg
+                    elif img.mode != "RGB":
+                        img = img.convert("RGB")
+                    output_format = "JPEG"
+                # Reduce dimensions further if still too large
+                if max(img.size) > 2000:
+                    img.thumbnail((2000, 2000), Image.LANCZOS)
+                    resized = True
+                output = io.BytesIO()
+                img.save(output, format="JPEG", quality=70, optimize=True)
+                compressed_data = output.getvalue()
 
-            # Verify the compressed version is smaller
+            # 6. Build method description
+            elapsed_ms = int((time.monotonic() - start_time) * 1000)
+            method = f"pillow-{output_format.lower()}"
+            if resized:
+                method += "-resized"
+            if original_format == "PNG" and output_format == "JPEG":
+                method += "-converted"
+
+            logger.info(
+                f"Image compression: {original_dims[0]}x{original_dims[1]} → {img.size[0]}x{img.size[1]}, "
+                f"format: {original_format}→{output_format}, "
+                f"size: {len(image_data) / (1024*1024):.1f}MB → {len(compressed_data) / (1024*1024):.1f}MB, "
+                f"elapsed: {elapsed_ms}ms"
+            )
+
+            # Use compressed only if smaller
             if len(compressed_data) >= len(image_data):
-                logger.warning("Image compression resulted in larger file, using original")
-                return image_data, f"pillow-{output_format.lower()}-skipped"
+                return image_data, f"pillow-{original_format.lower()}-skipped"
 
-            return compressed_data, f"pillow-{output_format.lower()}"
+            return compressed_data, method
 
         except Exception as e:
             logger.error(f"Image compression failed: {e}")
@@ -469,11 +539,17 @@ def get_compression_service() -> FileCompressionService:
         threshold_mb = getattr(settings, "compression_threshold_mb", 10.0)
         pdf_quality = getattr(settings, "pdf_compression_quality", "ebook")
         image_quality = getattr(settings, "image_compression_quality", 85)
+        max_image_dim = getattr(settings, "max_image_dimension", 3000)
+        png_to_jpeg = getattr(settings, "png_to_jpeg_threshold_mb", 5.0)
+        image_hard_cap = getattr(settings, "image_hard_cap_mb", 5.0)
 
         _compression_service = FileCompressionService(
             compression_threshold_mb=threshold_mb,
             pdf_quality=pdf_quality,
             image_quality=image_quality,
+            max_image_dimension=max_image_dim,
+            png_to_jpeg_threshold_mb=png_to_jpeg,
+            image_hard_cap_mb=image_hard_cap,
         )
 
     return _compression_service

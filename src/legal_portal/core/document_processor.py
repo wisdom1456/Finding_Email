@@ -195,10 +195,11 @@ class DocumentProcessor:
                 "method": "none",
             }
 
-            if self.compression_service.should_compress(original_size):
+            if self.compression_service.should_compress(original_size, final_content_type):
                 try:
-                    compression_result = self.compression_service.compress_file(
-                        file_content, sanitized_name, final_content_type
+                    compression_result = await asyncio.to_thread(
+                        self.compression_service.compress_file,
+                        file_content, sanitized_name, final_content_type,
                     )
 
                     if compression_result.was_compressed:

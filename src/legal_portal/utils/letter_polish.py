@@ -43,7 +43,8 @@ TARGET STYLE:
 
 SECTION STRUCTURE (PRESERVE):
 - The email should have four labeled sections: Background & Issue, Key Legal Issues, Analysis, Recommended Next Steps.
-- Do NOT remove or rename these section headers. (Legacy "Key Provisions" headers are also acceptable.)
+- Do NOT remove or rename these section headers.
+- If the draft uses a legacy "Key Provisions" header, rename it to "Key Legal Issues".
 - Do NOT merge sections.
 - Within Key Legal Issues, each doctrine should have a bold title followed by an analytical paragraph.
 

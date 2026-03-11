@@ -1,6 +1,32 @@
 {
-	"helpLastReviewed": "February 11, 2026",
+	"helpLastReviewed": "March 11, 2026",
 	"entries": [
+		{
+			"checkInDate": "2026-03-11",
+			"title": "Findings Email Prompt Rewrite & Letter Generation Improvements",
+			"summary": "Findings email generation uses a rewritten V2 prompt with combined law+application format, improved critic review, duplicate heading fix, and automatic retry on network errors.",
+			"highlights": [
+				"Findings email prompt rewritten (V2) with combined law+application format for stronger legal reasoning and clarity.",
+				"Prompt quality improvements: reasoning depth examples, evidentiary gap communication, concision rules, and consolidated anti-repetition guidance.",
+				"Fixed duplicate \"Key Legal Issues\" heading that could appear near the end of some findings emails.",
+				"Polisher now preserves \"You report that...\" attribution in Background & Issue instead of stripping it.",
+				"\"Key Provisions\" heading removed from critic prompt and polisher for cleaner output.",
+				"Letter generation and analysis now auto-retry on network errors to prevent lost work.",
+				"Local OCR fallback when remote OCR returns 500 errors."
+			]
+		},
+		{
+			"checkInDate": "2026-03-11",
+			"title": "Documentation & Help Section Update",
+			"summary": "Help documentation updated to reflect current UI, workflows, and features including Settings page documentation.",
+			"highlights": [
+				"Clio connection instructions updated to reflect navigation bar modal workflow.",
+				"Results workspace tab names corrected: Case Analysis, Gaps, Full Analysis, Document Review, Findings & Demand, Case Chat, Quality Report.",
+				"Settings page fully documented: contact info, jurisdiction, AI model preferences, document blacklist, and analysis processing.",
+				"Recommendation letter types documented: proceed, declination, settlement advisory, request for documents.",
+				"AI model references updated to current models (GPT-5.2, GPT-5 Mini, GPT-5 Nano, GPT-4o)."
+			]
+		},
 		{
 			"checkInDate": "2026-02-11",
 			"title": "Gap Resolution Workflow + Signature Reconciliation Hardening",

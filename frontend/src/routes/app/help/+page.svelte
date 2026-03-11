@@ -193,6 +193,8 @@
 									</div>
 									<p class="step-description">
 										Generate your final findings email, demand letters, or recommendation letters with professional formatting.
+										Recommendation letter types include <strong>proceed</strong>, <strong>declination</strong>,
+										<strong>settlement advisory</strong>, and <strong>request for documents</strong>.
 										All documents include proper citations to source materials and are ready for client delivery or
 										further editing.
 									</p>
@@ -421,9 +423,9 @@
 							<div class="detail-item">
 								<h4 class="detail-title">Multi-Model AI Architecture</h4>
 								<p class="detail-text">
-									Uses specialized AI models for different tasks: GPT-4o for fast document extraction,
-									GPT-4o-mini for legal issue identification, GPT-4.1 for comprehensive analysis, and
-									GPT-5.2 for professional findings email generation.
+									Uses specialized AI models for different tasks: GPT-4o for OCR and Vision extraction,
+									GPT-4o-mini for legal issue identification, GPT-5 Mini for document analysis and case chat, and
+									GPT-5.2 for letter generation and comprehensive multi-stage analysis. You can customize which model is used for each task in Settings.
 								</p>
 							</div>
 							<div class="detail-item">
@@ -573,10 +575,84 @@
 								</p>
 							</div>
 							<div class="detail-item">
+								<h4 class="detail-title">Recommendation Letters</h4>
+								<p class="detail-text">
+									In addition to findings emails and demand letters, generate recommendation letters tailored
+									to case outcomes: <strong>Proceed</strong> (recommend pursuing the case),
+									<strong>Declination</strong> (recommend declining), <strong>Settlement Advisory</strong>
+									(recommend settlement), and <strong>Request for Documents</strong> (request additional
+									documentation from the client).
+								</p>
+							</div>
+							<div class="detail-item">
+								<h4 class="detail-title">Multi-Phase Generation Pipeline</h4>
+								<p class="detail-text">
+									Findings emails are generated through a multi-phase pipeline: initial draft, AI critic
+									review for accuracy and completeness, and a final polishing pass. This ensures high-quality
+									output with accurate legal reasoning and proper citations. The system automatically retries
+									on network errors to prevent lost work.
+								</p>
+							</div>
+							<div class="detail-item">
 								<h4 class="detail-title">Review & Edit</h4>
 								<p class="detail-text">
 									Review all generated content before finalizing. You can edit content, verify facts,
 									and adjust language as needed. Export as HTML for further formatting.
+								</p>
+							</div>
+						</div>
+					</section>
+
+					<!-- Settings & Preferences -->
+					<section class="feature-section">
+						<div class="feature-header">
+							<div class="feature-icon">
+								<Briefcase class="h-6 w-6" />
+							</div>
+							<div>
+								<h2 class="feature-heading">Settings & Preferences</h2>
+								<p class="feature-description">Customize your profile, AI models, and processing options.</p>
+							</div>
+						</div>
+						<div class="feature-details">
+							<div class="detail-item">
+								<h4 class="detail-title">Contact Information</h4>
+								<p class="detail-text">
+									Your name, email, phone, firm name, and firm address are used in generated letters.
+									Update these in Settings so findings emails and demand letters include the correct
+									attorney and firm details.
+								</p>
+							</div>
+							<div class="detail-item">
+								<h4 class="detail-title">Legal Jurisdiction Preference</h4>
+								<p class="detail-text">
+									Set your default jurisdiction (Florida or New Mexico) to pre-select the correct legal
+									corpus when creating new cases.
+								</p>
+							</div>
+							<div class="detail-item">
+								<h4 class="detail-title">AI Model Preferences</h4>
+								<p class="detail-text">
+									Choose which AI model powers each task: <strong>Document Analysis</strong>,
+									<strong>Findings Email & Demand Letter</strong>, <strong>Case Chat</strong>, and
+									<strong>Multi-Stage Analysis</strong>. Available models include GPT-5.2 (most capable),
+									GPT-5 Mini, GPT-5 Nano, and GPT-4o (legacy). Click <strong>"Reset to Defaults"</strong>
+									to restore recommended settings.
+								</p>
+							</div>
+							<div class="detail-item">
+								<h4 class="detail-title">Document Handling (Blacklist)</h4>
+								<p class="detail-text">
+									Add document names to the blacklist to automatically skip them during Clio import.
+									Useful for excluding irrelevant documents like billing statements or internal memos.
+								</p>
+							</div>
+							<div class="detail-item">
+								<h4 class="detail-title">Analysis Processing</h4>
+								<p class="detail-text">
+									Configure auto-skip for failed documents, set max retry attempts (0-5) for extraction,
+									and adjust chunk size (25K-100K tokens) for processing large document sets.
+									Default settings work well for most cases.
 								</p>
 							</div>
 						</div>
@@ -1028,6 +1104,29 @@
 								<strong>Note:</strong> Federal claims, criminal law, immigration, bankruptcy, and
 								patent/trademark matters are not supported.
 							</div>
+						</AccordionItem>
+
+						<AccordionItem title="How do I change AI model preferences?">
+							<p>
+								Navigate to <strong>Settings</strong> from the navigation bar. In the
+								<strong>AI Model Preferences</strong> section, you can choose which model to use for
+								each task:
+							</p>
+							<ul class="faq-list">
+								<li><strong>Document Analysis</strong> — processes and extracts information from documents</li>
+								<li><strong>Findings Email & Demand Letter</strong> — generates letters and findings</li>
+								<li><strong>Case Chat</strong> — powers the chat assistant</li>
+								<li><strong>Multi-Stage Analysis</strong> — runs the full case analysis pipeline</li>
+							</ul>
+							<p class="mt-2">
+								Available models: GPT-5.2 (most capable), GPT-5 Mini, GPT-5 Nano, and GPT-4o (legacy).
+								The defaults (GPT-5.2 for analysis and letters, GPT-5 Mini for document analysis and chat)
+								work well for most cases. Click <strong>"Reset to Defaults"</strong> to restore recommended settings.
+							</p>
+							<p class="mt-2">
+								Settings also lets you configure your contact information (used in letter headers),
+								default jurisdiction, document blacklist, and analysis processing options.
+							</p>
 						</AccordionItem>
 
 						<AccordionItem title="How do I contact support?">

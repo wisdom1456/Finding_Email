@@ -5,11 +5,11 @@
 **End-to-End Process for Case Analysis & Findings Email:**
 
 ```
-1. REGISTER → 2. CONNECT CLIO → 3. CREATE CASE → 4. RUN OCR → 5. ANALYZE → 6. GENERATE FINDINGS EMAIL
-   ↓              ↓                ↓                ↓             ↓            ↓
-Sign Up &    Connect Clio    Import Clio      Extract Text   Run Case    Generate Findings
-Request      Integration     Matter with      from All       Analysis    Email & Download
-Approval     (One-time)      Documents        Documents      (2-5 min)   HTML (30-90s)
+1. REGISTER → 2. CONNECT CLIO → 3. CREATE CASE → 4. VERIFY DOCS → 5. ANALYZE → 6. GENERATE FINDINGS EMAIL
+   ↓              ↓                ↓                ↓                ↓            ↓
+Sign Up &    Connect Clio    Import Clio      Review & Verify  Run Case    Generate Findings
+Request      via Nav Bar     Matter with      Documents        Analysis    Email & Download
+Approval     (One-time)      Documents        (auto-OCR)       (2-5 min)   HTML (30-90s)
 ```
 
 **Quick Navigation:**
@@ -19,6 +19,7 @@ Approval     (One-time)      Documents        Documents      (2-5 min)   HTML (3
 - [OCR Text Extraction](#using-ocr-to-extract-text-from-documents)
 - [Generating Findings Email](#generating-the-findings-email)
 - [Case Chat](#case-chat)
+- [Settings & Preferences](#settings--preferences)
 - [Troubleshooting](#common-issues--solutions)
 
 ---
@@ -60,27 +61,23 @@ Approval     (One-time)      Documents        Documents      (2-5 min)   HTML (3
 
 #### Step-by-Step:
 
-1. **Navigate to the Cases page**
-   - Click **"Cases"** in the main navigation menu
-   - OR go directly to any case detail page
+1. **Click the "Clio" button in the navigation bar**
+   - Located in the top navigation bar (visible on all pages)
+   - A modal dialog will open
 
-2. **Find the "Clio Integration" card**
-   - Scroll down to locate the card titled **"Clio Integration"**
-   - It will show: "Connect your Clio account to import matters, communications, and documents"
+2. **Click "Connect to Clio" in the modal**
+   - The modal shows your Clio connection status
+   - Click the **"Connect to Clio"** button
 
-3. **Click the "Connect to Clio" button**
-   - Large blue button with a lightning bolt icon
-   - Button text: **"Connect to Clio"**
-
-4. **Authorize on Clio's website**
+3. **Authorize on Clio's website**
    - You will be redirected to Clio's authorization page
    - Log in with your Clio username and password
    - Click **"Allow"** or **"Authorize"** to grant access
 
-5. **Return to the application**
+4. **Return to the application**
    - You will automatically be redirected back
-   - The "Clio Integration" card now shows: **"Connected to Clio"** with a green checkmark
-   - You'll see your Clio User ID displayed
+   - The Clio button in the navigation bar now shows a green indicator
+   - Click the Clio button again to verify your connected status
 
 **You only need to connect once. Your connection will remain active.**
 
@@ -160,13 +157,15 @@ You'll see a list of matching matters showing:
 
 ## Using OCR to Extract Text from Documents
 
-### When Do I Need OCR?
+**Note:** Most documents are processed automatically during import. The system uses Vision AI to classify documents as IMAGE or TEXT, and applies the appropriate extraction method. Manual OCR is only needed when automatic extraction fails or produces poor results.
 
-You need to run OCR when documents show:
+### When Do I Need Manual OCR?
+
+You may need to run OCR manually when documents show:
 - **Red warning badge:** "Extraction Failed"
 - **Yellow badge:** "Needs Review"
 - **No extracted text** in the document preview
-- **Scanned PDFs** or **images** with text
+- **Scanned PDFs** or **images** that weren't automatically processed
 
 ### Three Ways to Run OCR
 
@@ -197,7 +196,7 @@ You need to run OCR when documents show:
 **From the Verification Hub:**
 
 1. **Go to the case detail page**
-2. **Click the "Review & Verify" tab** OR **"Verification Hub"** button
+2. **Click the "Verification" tab** OR **"Verification Hub"** button
 3. **Look for "Pending Review" section** (yellow lightning bolt icon)
 4. **Click "Run OCR on X Doc(s)"** button (gray button with spinning arrow)
 5. **Wait for extraction** to complete (progress bar shows updates)
@@ -248,8 +247,8 @@ You need to run OCR when documents show:
 | Action | Where to Find | Button Name | Icon |
 |--------|---------------|-------------|------|
 | Sign Up | Registration Page | "Sign Up" | None |
-| Connect Clio | Any Case Page → Clio Integration Card | "Connect to Clio" | ⚡ Lightning |
-| Disconnect Clio | Any Case Page → Clio Integration Card | "Disconnect Clio" | None |
+| Connect Clio | Navigation Bar → "Clio" button → Modal | "Connect to Clio" | ⚡ Lightning |
+| Disconnect Clio | Navigation Bar → "Clio" button → Modal | "Disconnect Clio" | None |
 | Create New Case | Cases Page | "New Case" OR "+ New Case" | None |
 | Search Matters | Create Case Page → Find Your Clio Matter | "Search" | 🔍 Magnifying glass |
 | Create from Matter | Search Results → Matter Card | "Create Case" | None |
@@ -260,57 +259,13 @@ You need to run OCR when documents show:
 | View Case | Import Complete Modal | "View Case" | None |
 | Start Analysis | Case Page → Analysis Section | "Start Analysis" | None |
 | View Results | Case Page → After Analysis | "View Results" | None |
-| Switch to Findings & Demand | Results Page → Top Tabs | "Findings & Demand" tab | None |
-| Generate Findings Email | Results → Letters Tab | "Generate Email" | None |
-| Download Findings Email | Results → After Generation | "Download HTML" | None |
-| Generate Demand | Results → Letters Tab → Demand Section | "Generate Demand Letter" | None |
-| Calculate Amount | Results → Demand Letter Form | "Calculate" | None |
-| Open Case Chat | Results Page → Top Tabs | "Case Chat" tab | None |
+| Switch to Findings & Demand | Results Workspace → Top Tabs | "Findings & Demand" tab | None |
+| Generate Findings Email | Results Workspace → Findings & Demand Tab | "Generate Email" | None |
+| Download Findings Email | Results Workspace → After Generation | "Download HTML" | None |
+| Generate Demand | Results Workspace → Findings & Demand Tab → Demand Section | "Generate Demand Letter" | None |
+| Calculate Amount | Results Workspace → Demand Letter Form | "Calculate" | None |
+| Open Case Chat | Results Workspace → Top Tabs | "Case Chat" tab | None |
 | Send Chat Message | Case Chat → Input at bottom | "Send" (or press Enter) | None |
-
----
-
-## Using OCR to Extract Text from Documents
-
-### When to Use OCR
-
-Use OCR (Optical Character Recognition) when:
-- Documents appear to have no extracted text
-- Documents show "extraction failed" status
-- You need to extract text from scanned PDFs or images
-- Documents are marked as "needs review"
-
-### How to Run OCR
-
-#### Option 1: Individual Document Extraction
-
-1. Navigate to the case detail page
-2. Find the document in the document list
-3. Click **"Try Vision OCR"** or **"Run OCR"** button on the document card
-4. Wait for extraction to complete (may take 30-60 seconds per document)
-
-#### Option 2: Bulk OCR Extraction
-
-1. Navigate to the case detail page
-2. Look for documents that need text extraction (marked with warning indicators)
-3. Click **"Run OCR on X Docs"** button (appears when documents need extraction)
-4. The system will process all documents that need OCR
-5. Monitor progress as each document is processed
-
-#### Option 3: From Verification Hub
-
-1. Navigate to the case detail page
-2. Go to the **"Verification Hub"** or document review section
-3. Documents needing OCR will be grouped under **"Pending Review"**
-4. Click **"Run OCR on X Doc(s)"** button
-5. Wait for all documents to be processed
-
-### After OCR Extraction
-
-- Review extracted text by clicking **"View/Edit"** or **"Review Text"** on the document
-- Verify the text is accurate and complete
-- Mark documents as **"Verified"** once text extraction is confirmed
-- Documents with extracted text are ready for case analysis
 
 ---
 
@@ -337,7 +292,7 @@ After creating a case and importing documents from Clio, you can analyze the cas
      - Wait for all extractions to complete
 
 3. **Optional: Use Verification Hub**
-   - Click the **"Review & Verify"** tab or **"Verification Hub"** button
+   - Click the **"Verification"** tab or **"Verification Hub"** button
    - This shows documents organized by status
    - Click **"Mark Verified"** on each document after reviewing text
 
@@ -371,25 +326,27 @@ After creating a case and importing documents from Clio, you can analyze the cas
 
 ---
 
-#### Step 3: Navigate to Results
+#### Step 3: View Results
 
 1. **Click "View Results" button**
    - Blue button that appears after analysis completes
-   - OR click the **"Results"** tab at the top of the case page
+   - Results open in the embedded results workspace within the Analysis tab
 
-2. **You'll see the Results page with several tabs:**
-   - **Analysis** (default view)
-   - **Documents**
-   - **Letters** ← Generate findings email and demand letter
+2. **The results workspace has several tabs:**
+   - **Case Analysis** (default view) ← Structured case summary and key findings
+   - **Gaps** ← Gap analysis identifying missing evidence and weaknesses
+   - **Full Analysis** ← Magazine-style comprehensive narrative
+   - **Document Review** ← Document summaries and extracted content
+   - **Findings & Demand** ← Generate findings email, demand letter, and recommendation letters
    - **Case Chat** ← Ask questions about your case with AI (see [Case Chat](#case-chat))
-   - **Quality Report**
+   - **Quality Report** ← Analysis quality metrics
 
 ---
 
 #### Step 4: Generate Findings Email
 
 1. **Click the "Findings & Demand" tab**
-   - Located in the tab bar at the top of the results page
+   - Located in the tab bar at the top of the results workspace
    - Tab shows: **"Findings & Demand"**
 
 2. **Find "Findings Email" section**
@@ -467,8 +424,8 @@ After creating a case and importing documents from Clio, you can analyze the cas
 
 #### Where to Find It
 
-1. **Go to the Results page** (after analysis has completed).
-2. **Click the "Case Chat" tab** in the top tab bar (same row as Analysis, Documents, Letters, Quality Report).
+1. **Open the results workspace** (after analysis has completed, click "View Results" from the Analysis tab).
+2. **Click the "Case Chat" tab** in the top tab bar (same row as Case Analysis, Gaps, Full Analysis, Document Review, Findings & Demand, Quality Report).
 3. You’ll see the **"Case Chat Assistant"** panel with the subtitle: *"Ask questions about this case—responses include specific facts and citations."*
 
 #### What It Does
@@ -489,7 +446,7 @@ After creating a case and importing documents from Clio, you can analyze the cas
 
 #### How to Use It
 
-1. **Click the "Case Chat" tab** on the Results page.
+1. **Click the "Case Chat" tab** in the results workspace.
 2. **Type your question** in the text box at the bottom. Placeholder: *"Ask a question about case facts, documents, or legal strategy..."*
 3. **Send the message** by clicking the blue **"Send"** button or pressing **Enter**.
 4. **Watch the response:** The assistant’s reply streams in as it’s generated.
@@ -508,7 +465,50 @@ After creating a case and importing documents from Clio, you can analyze the cas
 #### When Chat Is Available
 
 - **Requires completed analysis:** Case Chat uses the latest analysis. If you haven’t run analysis, or it failed, you must run (or re-run) analysis first.
-- **Same Results page:** Chat is on the same Results view as the Analysis, Documents, Letters, and Quality Report tabs—no separate page.
+- **Same results workspace:** Chat is in the embedded results workspace alongside Case Analysis, Gaps, Full Analysis, Document Review, Findings & Demand, and Quality Report tabs—no separate page.
+
+---
+
+## Settings & Preferences
+
+### How to Access Settings
+
+Click **"Settings"** in the navigation bar to open the Settings page.
+
+### Contact Information
+
+Enter your profile details including **name**, **email**, **phone number**, **firm name**, and **firm address**. This information is automatically used in generated findings emails, demand letters, and recommendation letters as the sender/attorney information.
+
+### Legal Jurisdiction Preference
+
+Select your default jurisdiction (**Florida** or **New Mexico**). This pre-selects the legal corpus when creating new cases, ensuring the correct statutes and rules are applied during analysis.
+
+### AI Model Preferences
+
+You can choose which AI model to use for four separate tasks:
+
+| Task | Description | Default Model |
+|------|-------------|---------------|
+| **Document Analysis** | Processes and extracts information from documents | GPT-5 Mini |
+| **Findings Email & Demand Letter** | Generates findings emails, demand letters, and recommendation letters | GPT-5.2 |
+| **Case Chat** | Powers the case chat assistant | GPT-5 Mini |
+| **Multi-Stage Analysis** | Runs the comprehensive case analysis pipeline | GPT-5.2 |
+
+**Available models:** GPT-5.2 (recommended for most tasks), GPT-5 Mini (faster, good for document processing), GPT-5 Nano (fastest, lighter tasks), GPT-4o (legacy).
+
+Click **"Reset to Defaults"** to restore the recommended model configuration.
+
+**When to change models:** The defaults work well for most cases. Consider switching to GPT-5.2 for all tasks on complex, high-stakes cases. Use GPT-5 Nano for quick document processing when speed matters more than depth.
+
+### Document Handling (Blacklist)
+
+Add document names to the blacklist to automatically exclude them during Clio import. This is useful for documents that are always irrelevant to your analysis (e.g., billing statements, internal memos).
+
+### Analysis Processing
+
+- **Auto-skip failed documents:** When enabled, analysis proceeds automatically even if some documents fail text extraction, rather than stopping for manual intervention.
+- **Max retry attempts (0-5):** How many times the system retries failed document extraction before giving up.
+- **Chunk size (25K-100K tokens):** Controls how large document sets are split for processing. Larger chunks process fewer API calls but may hit token limits; smaller chunks are more reliable for very large cases.
 
 ---
 
@@ -584,11 +584,11 @@ The AI-generated findings email typically includes:
 **Problem:** I can't search for Clio matters.
 
 **Solution:**
-1. Find the **"Clio Integration"** card on any case page
-2. Click the blue **"Connect to Clio"** button
+1. Click the **"Clio"** button in the navigation bar
+2. Click **"Connect to Clio"** in the modal that appears
 3. Log in to Clio and click **"Authorize"**
 4. Wait to be redirected back (this happens automatically)
-5. Verify you see **"Connected to Clio"** with a green checkmark
+5. Verify the Clio button shows a green indicator
 
 ---
 
@@ -602,7 +602,7 @@ The AI-generated findings email typically includes:
    - Client's full name or part of it (e.g., "Smith" instead of "John Smith")
    - Matter number without dashes (e.g., "2024001" instead of "2024-001")
 3. Verify your Clio account has access to this matter
-4. Try **disconnecting** and **reconnecting** Clio (see button in Clio Integration card)
+4. Try **disconnecting** and **reconnecting** Clio (click "Clio" in the navigation bar)
 
 ---
 
@@ -656,7 +656,7 @@ The AI-generated findings email typically includes:
 **Problem:** Getting an error after clicking "Create Case" button.
 
 **Solution:**
-1. Check that Clio connection is still active (green checkmark in Clio Integration card)
+1. Check that Clio connection is still active (green indicator on Clio button in navigation bar)
 2. Verify you have permission to access this matter in Clio
 3. Try searching for and selecting the matter again
 4. If error persists:
@@ -730,7 +730,7 @@ The AI-generated findings email typically includes:
 2. **If you see "Case chat requires the latest analysis":**
    - Go back to the case detail page (not Results).
    - Click **"Start Analysis"** or **"Run New Analysis"**.
-   - Wait for analysis to complete, then open Results → **Case Chat** again.
+   - Wait for analysis to complete, then open the results workspace → **Case Chat** tab again.
 3. **If "Send" is disabled:** Type at least one character in the question box; the button enables when there is text.
 4. **If responses fail or time out:** Check your internet connection and try a shorter question.
 
@@ -742,12 +742,12 @@ The AI-generated findings email typically includes:
 
 **Solution:**
 1. **Review source documents:**
-   - Go to Results → Documents tab
+   - Go to Results Workspace → Document Review tab
    - Check that all key documents have accurate extracted text
    - Click "View/Edit" to verify text quality
 
 2. **Check document verification:**
-   - Return to case page → Verification Hub
+   - Return to case page → Verification tab
    - Ensure important documents are marked "Verified"
    - Unverified docs may be given less weight
 
@@ -790,18 +790,19 @@ The AI-generated findings email typically includes:
 | Feature | How to Get There |
 |---------|------------------|
 | **Register** | Click "Sign Up" from login page |
-| **Connect Clio** | Cases → Any case → Scroll to "Clio Integration" card → "Connect to Clio" |
+| **Connect Clio** | Navigation Bar → "Clio" button → Modal → "Connect to Clio" |
 | **Create Case from Clio** | Cases → "New Case" button → Enter search term → "Search" → "Create Case" |
-| **Verify Documents** | Case Detail → "Review & Verify" tab OR "Verification Hub" button |
+| **Verify Documents** | Case Detail → "Verification" tab OR "Verification Hub" button |
 | **Run OCR (Bulk)** | Case Detail → Scroll to documents → "Run OCR on X Docs" |
 | **Run OCR (Single)** | Case Detail → Document card → "Try Vision OCR" |
 | **View Document Text** | Case Detail → Document card → "View/Edit" button |
 | **Start Analysis** | Case Detail → Scroll to "Analysis" section → "Start Analysis" button |
-| **View Results** | Case Detail → After analysis → "View Results" button OR "Results" tab |
-| **Generate Findings Email** | Results page → "Letters" tab → "Generate Email" button |
-| **Download Findings Email** | Results → Letters tab → After generation → "Download HTML" button |
-| **Generate Demand Letter** | Results → Letters tab → Fill form → "Generate Demand Letter" button |
-| **Case Chat** | Results page → "Case Chat" tab → Type question → "Send" button |
+| **View Results** | Case Detail → Analysis tab → "View Results" button |
+| **Generate Findings Email** | Results Workspace → "Findings & Demand" tab → "Generate Email" button |
+| **Download Findings Email** | Results Workspace → Findings & Demand tab → After generation → "Download HTML" button |
+| **Generate Demand Letter** | Results Workspace → Findings & Demand tab → Fill form → "Generate Demand Letter" button |
+| **Case Chat** | Results Workspace → "Case Chat" tab → Type question → "Send" button |
+| **Settings** | Navigation Bar → "Settings" link |
 | **Request Approval** | Email **Franklin@BRFlorida.com** |
 
 ---

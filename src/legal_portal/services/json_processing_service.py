@@ -2049,13 +2049,23 @@ class JsonProcessingService:
         text = text.replace("\r\n", "\n").replace("\r", "\n")
 
         if letter_type == "findings":
-            # Preserve canonical section headers as ## markdown; strip all others
+            # Preserve canonical section headers as ## markdown; strip all others.
+            # Deduplicate: only the FIRST occurrence of each canonical heading survives.
             lines = text.split("\n")
             cleaned_lines = []
+            seen_canonical: set[str] = set()
             for line in lines:
                 m = self._CANONICAL_SECTION_RE.match(line)
                 if m:
-                    cleaned_lines.append(f"## {m.group(1).upper()}")
+                    normalized_heading = m.group(1).upper()
+                    # Collapse KEY PROVISIONS → KEY LEGAL ISSUES before dedup check
+                    dedup_key = re.sub(
+                        r"KEY\s*PROVISIONS?", "KEY LEGAL ISSUES", normalized_heading
+                    )
+                    if dedup_key in seen_canonical:
+                        continue  # drop duplicate canonical heading
+                    seen_canonical.add(dedup_key)
+                    cleaned_lines.append(f"## {normalized_heading}")
                 elif self._MARKDOWN_HEADER_PREFIX.match(line):
                     cleaned_lines.append(self._MARKDOWN_HEADER_PREFIX.sub("", line))
                 else:

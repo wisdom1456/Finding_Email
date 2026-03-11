@@ -48,6 +48,48 @@ def test_normalize_client_letter_markdown_cleans_headers_and_file_tokens() -> No
     assert "Memo Terms For Financing Cuchillo Grow 1 LLC" in normalized
 
 
+def test_normalize_deduplicates_canonical_section_headings() -> None:
+    """Duplicate canonical headings (e.g., two '## KEY LEGAL ISSUES') must be collapsed to one."""
+    service = JsonProcessingService(client=None, config={})  # type: ignore[arg-type]
+    draft = (
+        "Good afternoon Client,\n\n"
+        "## BACKGROUND & ISSUE\n\n"
+        "Background text.\n\n"
+        "## KEY LEGAL ISSUES\n\n"
+        "Issue text.\n\n"
+        "## ANALYSIS\n\n"
+        "Analysis text.\n\n"
+        "## RECOMMENDED NEXT STEPS\n\n"
+        "Next steps text.\n\n"
+        "## Key Legal Issues\n\n"
+        "Duplicate engagement-scope text that should not get this heading.\n"
+    )
+
+    normalized = service.normalize_client_letter_markdown(draft, letter_type="findings")
+
+    count = normalized.count("## KEY LEGAL ISSUES")
+    assert count == 1, f"Expected 1 KEY LEGAL ISSUES heading, found {count}"
+
+
+def test_normalize_deduplicates_key_provisions_and_key_legal_issues() -> None:
+    """KEY PROVISIONS and KEY LEGAL ISSUES are the same section — only the first survives."""
+    service = JsonProcessingService(client=None, config={})  # type: ignore[arg-type]
+    draft = (
+        "## BACKGROUND & ISSUE\n\nText.\n\n"
+        "## Key Legal Issues\n\nIssue text.\n\n"
+        "## ANALYSIS\n\nAnalysis text.\n\n"
+        "## RECOMMENDED NEXT STEPS\n\nSteps text.\n\n"
+        "## Key Provisions\n\nDuplicate.\n"
+    )
+
+    normalized = service.normalize_client_letter_markdown(draft, letter_type="findings")
+
+    kli_count = normalized.count("## KEY LEGAL ISSUES")
+    kp_count = normalized.count("## KEY PROVISIONS")
+    assert kli_count == 1, f"Expected 1 KEY LEGAL ISSUES, found {kli_count}"
+    assert kp_count == 0, f"Expected 0 KEY PROVISIONS, found {kp_count}"
+
+
 def test_normalize_client_letter_markdown_cleans_snake_case_headers_and_placeholders() -> None:
     service = JsonProcessingService(client=None, config={})  # type: ignore[arg-type]
     draft = (

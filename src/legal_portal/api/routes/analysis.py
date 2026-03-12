@@ -4148,16 +4148,9 @@ async def stream_case_analysis(
         # 3. Determine jurisdiction
         jurisdiction = case_data.get("jurisdiction", "Florida")
 
-        # Compute scope counts before the stream so they're available in the done event.
-        # _build_condensed_context caps at max_docs=20 for token budget reasons.
-        _STREAM_MAX_DOCS = 20
-        _docs_in_scope = min(len(doc_summaries), _STREAM_MAX_DOCS)
-        _docs_omitted = max(0, len(doc_summaries) - _STREAM_MAX_DOCS)
-
         logger.info(
             f"[STREAM] Starting streaming analysis for case {case_id} | "
-            f"docs={len(doc_summaries)} in_scope={_docs_in_scope} omitted={_docs_omitted} "
-            f"jurisdiction={jurisdiction}"
+            f"docs={len(doc_summaries)} jurisdiction={jurisdiction}"
         )
 
         # 4. Stream the analysis with thinking heartbeats
@@ -4174,12 +4167,14 @@ async def stream_case_analysis(
                 # Signal that we're starting (thinking phase begins)
                 yield f"data: {json.dumps({'phase': 'thinking', 'elapsed': 0})}\n\n"
 
-                # Create the token generator
-                token_generator = analyzer.analyze_streaming(
+                # Create the token generator (now returns tuple)
+                token_generator, ctx_result = await analyzer.analyze_streaming(
                     intake_content=intake_content,
                     document_summaries=doc_summaries,
                     jurisdiction=jurisdiction,
                 )
+                _docs_in_scope = ctx_result.docs_in_scope
+                _docs_omitted = ctx_result.docs_omitted
 
                 # Use asyncio.Queue to handle tokens with heartbeat timeout
                 token_queue: asyncio.Queue = asyncio.Queue()
@@ -4219,7 +4214,7 @@ async def stream_case_analysis(
 
                             elif msg_type == 'done':
                                 # Signal completion — include scope counts for UI warning
-                                yield f"data: {json.dumps({'done': True, 'content': full_content, 'docs_in_scope': _docs_in_scope, 'docs_omitted': _docs_omitted})}\n\n"
+                                yield f"data: {json.dumps({'done': True, 'content': full_content, 'docs_in_scope': ctx_result.docs_in_scope, 'docs_omitted': ctx_result.docs_omitted, 'context_tokens': ctx_result.total_tokens, 'omission_reason': ctx_result.omission_reason, 'omitted_doc_names': ctx_result.omitted_doc_names[:10]})}\n\n"
                                 logger.info(
                                     f"[STREAM] Completed streaming for case {case_id} | "
                                     f"docs_in_scope={_docs_in_scope} docs_omitted={_docs_omitted}"
@@ -4234,8 +4229,10 @@ async def stream_case_analysis(
                                         "status": "streaming_complete",
                                         "result": {
                                             "raw_streaming_content": full_content,
-                                            "docs_in_scope": _docs_in_scope,
-                                            "docs_omitted": _docs_omitted,
+                                            "docs_in_scope": ctx_result.docs_in_scope,
+                                            "docs_omitted": ctx_result.docs_omitted,
+                                            "context_tokens": ctx_result.total_tokens,
+                                            "omission_reason": ctx_result.omission_reason,
                                             "jurisdiction": jurisdiction,
                                             "streaming_completed_at": datetime.utcnow().isoformat(),
                                         },

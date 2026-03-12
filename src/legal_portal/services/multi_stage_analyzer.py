@@ -14,7 +14,8 @@ from __future__ import annotations
 import asyncio
 import json
 import time
-from typing import Any, AsyncGenerator, Callable, Dict, List, Optional
+from dataclasses import dataclass, field
+from typing import Any, AsyncGenerator, Callable, Dict, List, Optional, Tuple
 
 from legal_portal.core.data_models import (
     CriticalDeadline,
@@ -43,6 +44,30 @@ from legal_portal.utils.openai_client import OpenAIClient
 from legal_portal.utils.type_safety import safe_str_required
 
 logger = get_module_logger(__name__)
+
+# --- Token-budget context building constants ---
+_DOC_TYPE_PRIORITY = {
+    "intake": 0,
+    "controlling_instrument": 1,
+    "contract": 2, "agreement": 2, "lease": 2, "deed": 2,
+    "medical": 3, "evidence": 3, "report": 3, "assessment": 3,
+    "correspondence": 4, "letter": 4, "notice": 4,
+}
+
+_MAX_ENTRY_TOKENS = 1_000       # Hard cap per document entry (~4K chars)
+_DEFAULT_BUDGET_TOKENS = 50_000  # Total context budget in tokens
+_PROMPT_GUARD_TOKENS = 200_000   # Abort if total prompt would exceed this
+
+
+@dataclass(frozen=True)
+class ContextBuildResult:
+    """Immutable result from context building — no mutable instance state."""
+    context_text: str
+    docs_in_scope: int
+    docs_omitted: int
+    total_tokens: int
+    omitted_doc_names: list[str] = field(default_factory=list)
+    omission_reason: str = ""
 
 
 class MultiStageAnalyzer:
@@ -76,45 +101,94 @@ class MultiStageAnalyzer:
     # STREAMING SINGLE-PASS ANALYSIS (New - replaces multi-stage for speed)
     # =========================================================================
 
+    @staticmethod
+    def _get_doc_priority(summary: DocumentSummaryStructured) -> int:
+        """Return priority bucket for sorting.
+
+        Lower bucket = higher importance. Original index preserves
+        insertion order within the same bucket.
+        """
+        doc_type = (summary.document_type or "").lower()
+        doc_name = (summary.document_name or "").lower()
+        # Intake forms always first
+        if "intake" in doc_name:
+            return 0
+        for key, pri in _DOC_TYPE_PRIORITY.items():
+            if key in doc_type:
+                return pri
+        return 5  # default: lowest
+
     def _build_condensed_context(
         self,
         document_summaries: List[DocumentSummaryStructured],
-        max_docs: int = 20,
-    ) -> str:
-        """Build token-efficient context from document summaries.
+        max_tokens: int = _DEFAULT_BUDGET_TOKENS,
+    ) -> ContextBuildResult:
+        """Build token-budget context from document summaries.
 
-        Args:
-            document_summaries: List of document summaries
-            max_docs: Maximum number of documents to include
-
-        Returns:
-            Condensed string representation of documents
-
-        Note:
-            When document_summaries exceeds max_docs, the excess documents are excluded
-            from the analysis prompt. A warning is logged and the caller should surface
-            docs_in_scope / docs_omitted to the user.
+        Uses TokenManager.estimate_tokens for speed (tiktoken per-doc would be slow).
+        Sorts by priority bucket, preserving original order within each bucket.
+        Caps each doc entry at _MAX_ENTRY_TOKENS. Stops when budget is reached.
         """
-        total = len(document_summaries)
-        if total > max_docs:
-            logger.warning(
-                f"[ANALYSIS:TRUNCATED] _build_condensed_context capped at {max_docs} of {total} docs. "
-                f"{total - max_docs} documents excluded from analysis prompt. "
-                "Consider Option C (RAG architecture) for full coverage."
-            )
+        from legal_portal.utils.token_manager import TokenManager
+        tm = TokenManager()
 
-        lines = []
-        for i, summary in enumerate(document_summaries[:max_docs]):
-            doc_name = summary.document_name
-            exec_summary = (summary.executive_summary or "")[:300]
+        # Stable sort: (priority_bucket, original_index)
+        indexed = [(self._get_doc_priority(s), idx, s)
+                   for idx, s in enumerate(document_summaries)]
+        indexed.sort(key=lambda x: (x[0], x[1]))
+
+        lines: list[str] = []
+        total_tokens = 0
+        included = 0
+        omitted_names: list[str] = []
+
+        for _pri, _orig_idx, summary in indexed:
+            doc_name = summary.document_name or "unknown"
             doc_type = summary.document_type or "document"
+            content = (summary.key_content or summary.executive_summary or "")[:4000]
 
-            lines.append(f"[{i+1}] {doc_name} ({doc_type})")
-            if exec_summary:
-                lines.append(f"    Summary: {exec_summary}")
-            lines.append("")
+            entry = f"[{included + 1}] {doc_name} ({doc_type})\n    {content}\n"
 
-        return "\n".join(lines)
+            entry_tokens = tm.estimate_tokens_detailed(entry)
+            # Per-doc hard cap
+            if entry_tokens > _MAX_ENTRY_TOKENS:
+                ratio = _MAX_ENTRY_TOKENS / entry_tokens
+                truncated_len = int(len(content) * ratio)
+                content = content[:truncated_len]
+                entry = f"[{included + 1}] {doc_name} ({doc_type})\n    {content}\n"
+                entry_tokens = tm.estimate_tokens_detailed(entry)
+
+            if total_tokens + entry_tokens > max_tokens:
+                # Budget exhausted — collect remaining as omitted
+                omitted_names.append(doc_name)
+                continue  # keep collecting names for reporting
+
+            lines.append(entry)
+            total_tokens += entry_tokens
+            included += 1
+
+        docs_omitted = len(document_summaries) - included
+        omission_reason = ""
+        if docs_omitted > 0:
+            omission_reason = (
+                f"Token budget ({max_tokens:,} tokens) reached after {included} docs. "
+                f"{docs_omitted} lower-priority documents excluded."
+            )
+            logger.warning(f"[ANALYSIS:BUDGET] {omission_reason}")
+
+        logger.info(
+            f"[ANALYSIS:CONTEXT] Included {included}/{len(document_summaries)} docs | "
+            f"{total_tokens:,} tokens"
+        )
+
+        return ContextBuildResult(
+            context_text="\n".join(lines),
+            docs_in_scope=included,
+            docs_omitted=docs_omitted,
+            total_tokens=total_tokens,
+            omitted_doc_names=omitted_names,
+            omission_reason=omission_reason,
+        )
 
     @staticmethod
     def _condense_intake_for_prompt(
@@ -298,20 +372,19 @@ This block MUST be valid JSON wrapped in a code fence:
         intake_content: str,
         document_summaries: List[DocumentSummaryStructured],
         jurisdiction: str = "Florida",
-    ) -> AsyncGenerator[str, None]:
-        """Stream comprehensive case analysis as markdown.
-        
+    ) -> Tuple[AsyncGenerator[str, None], ContextBuildResult]:
+        """Build context and return (token_generator, context_result).
+
         Single API call that outputs readable markdown in real-time.
         Much faster than multi-stage analysis and eliminates timeout issues.
-        
+
         Args:
             intake_content: Client intake form content
             document_summaries: List of document summaries
             jurisdiction: Legal jurisdiction
-            
-        Yields:
-            Tokens as they are generated by the model
 
+        Returns:
+            Tuple of (async token generator, ContextBuildResult with scope metadata)
         """
         logger.info(
             f"[STREAMING] Starting streaming analysis | "
@@ -319,10 +392,17 @@ This block MUST be valid JSON wrapped in a code fence:
             f"intake_chars={len(intake_content)}"
         )
 
-        start_time = time.time()
+        # Build condensed context with token budget
+        ctx = self._build_condensed_context(document_summaries)
+        document_context = ctx.context_text
 
-        # Build condensed context to reduce tokens
-        document_context = self._build_condensed_context(document_summaries)
+        # Preflight guard
+        if ctx.total_tokens > _PROMPT_GUARD_TOKENS:
+            logger.error(
+                f"[ANALYSIS:GUARD] Context alone is {ctx.total_tokens:,} tokens, "
+                f"exceeding guard limit of {_PROMPT_GUARD_TOKENS:,}. Aborting."
+            )
+            raise ValueError(f"Document context too large: {ctx.total_tokens:,} tokens")
 
         # Build the comprehensive prompt
         prompt = self._build_streaming_prompt(
@@ -333,41 +413,44 @@ This block MUST be valid JSON wrapped in a code fence:
 
         logger.info(
             f"[STREAMING] Prompt built | "
-            f"prompt_chars={len(prompt)} context_chars={len(document_context)}"
+            f"prompt_chars={len(prompt)} context_chars={len(document_context)} "
+            f"context_tokens={ctx.total_tokens:,} docs_in_scope={ctx.docs_in_scope}"
         )
 
-        system_prompt = f"""You are a senior {jurisdiction} attorney with 20+ years of experience. 
+        system_prompt = f"""You are a senior {jurisdiction} attorney with 20+ years of experience.
 Analyze cases thoroughly and provide actionable insights.
 Always cite specific statutes and case law where applicable.
 Be direct and specific - avoid vague language.
 Output in clean markdown format."""
 
-        token_count = 0
+        start_time = time.time()
 
-        try:
-            # Use GPT-5.2 medium for high-quality analysis
-            # 24K tokens allows for ~10-12K visible output after reasoning overhead
-            async for token in self.client.create_chat_completion_stream(
-                model="gpt-5.4",
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": prompt}
-                ],
-                max_tokens=24000,
-                reasoning_effort="medium",
-            ):
-                token_count += 1
-                yield token
+        async def _generate() -> AsyncGenerator[str, None]:
+            token_count = 0
+            try:
+                async for token in self.client.create_chat_completion_stream(
+                    model="gpt-5.4",
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": prompt}
+                    ],
+                    max_tokens=24000,
+                    reasoning_effort="medium",
+                ):
+                    token_count += 1
+                    yield token
 
-        except Exception as e:
-            logger.error(f"[STREAMING] Error during streaming: {e}")
-            raise
+            except Exception as e:
+                logger.error(f"[STREAMING] Error during streaming: {e}")
+                raise
 
-        elapsed = time.time() - start_time
-        logger.info(
-            f"[STREAMING] Complete | "
-            f"duration={elapsed:.1f}s tokens={token_count}"
-        )
+            elapsed = time.time() - start_time
+            logger.info(
+                f"[STREAMING] Complete | "
+                f"duration={elapsed:.1f}s tokens={token_count}"
+            )
+
+        return _generate(), ctx
 
     # =========================================================================
     # LEGACY MULTI-STAGE ANALYSIS (kept for backward compatibility)

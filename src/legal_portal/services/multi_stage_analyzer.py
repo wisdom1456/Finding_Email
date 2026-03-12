@@ -354,7 +354,7 @@ Output in clean markdown format."""
                     {"role": "user", "content": prompt}
                 ],
                 max_tokens=24000,
-                reasoning_effort="medium",
+                reasoning_effort="low",
             ):
                 token_count += 1
                 yield token

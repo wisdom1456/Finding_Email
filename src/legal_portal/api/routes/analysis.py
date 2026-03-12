@@ -4049,6 +4049,7 @@ async def stream_case_analysis(
     case_id: str,
     user=Depends(get_current_user),
     supabase=Depends(get_user_supabase_client),
+    service_supabase=Depends(get_supabase_client),
 ):
     """Stream comprehensive case analysis in real-time.
     
@@ -4223,6 +4224,27 @@ async def stream_case_analysis(
                                     f"[STREAM] Completed streaming for case {case_id} | "
                                     f"docs_in_scope={_docs_in_scope} docs_omitted={_docs_omitted}"
                                 )
+
+                                # Auto-save raw content for recovery if frontend loses connection
+                                try:
+                                    analysis_id = str(uuid.uuid4())
+                                    service_supabase.table("analysis_results").upsert({
+                                        "id": analysis_id,
+                                        "case_id": case_id,
+                                        "status": "streaming_complete",
+                                        "result": {
+                                            "raw_streaming_content": full_content,
+                                            "docs_in_scope": _docs_in_scope,
+                                            "docs_omitted": _docs_omitted,
+                                            "jurisdiction": jurisdiction,
+                                            "streaming_completed_at": datetime.utcnow().isoformat(),
+                                        },
+                                        "created_at": datetime.utcnow().isoformat(),
+                                    }, on_conflict="case_id").execute()
+                                    logger.info(f"[STREAM] Auto-saved streaming result for case {case_id}")
+                                except Exception as save_err:
+                                    logger.error(f"[STREAM] Auto-save failed for case {case_id}: {save_err}")
+
                                 break
 
                             elif msg_type == 'error':
@@ -4269,6 +4291,37 @@ async def stream_case_analysis(
     except Exception as e:
         logger.error(f"Error in stream_case_analysis: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/stream/{case_id}/result")
+async def get_streaming_result(
+    case_id: str,
+    user=Depends(get_current_user),
+    supabase=Depends(get_user_supabase_client),
+):
+    """Check if a streaming analysis has completed for this case (recovery endpoint)."""
+    response = supabase.table("analysis_results") \
+        .select("id, status, result, created_at") \
+        .eq("case_id", case_id) \
+        .in_("status", ["streaming_complete", "completed"]) \
+        .order("created_at", desc=True) \
+        .limit(1) \
+        .execute()
+
+    if response.data:
+        row = response.data[0]
+        result = row.get("result", {})
+        content = result.get("raw_streaming_content") or result.get("streaming_analysis_content", "")
+        if content:
+            return {
+                "found": True,
+                "content": content,
+                "docs_in_scope": result.get("docs_in_scope", 0),
+                "docs_omitted": result.get("docs_omitted", 0),
+                "analysis_id": row["id"],
+            }
+
+    return {"found": False}
 
 
 @router.post("/generate-letter", response_model=LetterGenerationResponse)

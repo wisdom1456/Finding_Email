@@ -17,7 +17,7 @@
   import { getApiUrl } from '$lib/config';
   import { getSecureSession } from '$lib/supabase';
 
-  type StreamStatus = 'idle' | 'thinking' | 'streaming' | 'complete' | 'error';
+  type StreamStatus = 'idle' | 'thinking' | 'streaming' | 'complete' | 'error' | 'recovering' | 'reconnecting';
 
   let {
     caseId,
@@ -47,6 +47,10 @@
   // Track save failures so the user can retry
   let saveError = $state(false);
   let savePendingContent = $state('');
+  // Recovery state for network interruptions
+  let retryCount = $state(0);
+  const MAX_RETRIES = 3;
+  let serverSaved = $state(false);
 
   // ── Performance: throttled markdown rendering ──
   // Accumulate raw tokens and only re-parse markdown at most every 80ms.
@@ -84,16 +88,21 @@
   // Start streaming analysis using fetch (supports Authorization header)
   export async function startStreaming() {
     if (status === 'streaming' || status === 'thinking') return;
-    
+
+    const isReconnect = status === 'reconnecting';
     content = '';
     status = 'thinking';  // Start in thinking phase
     hasEmittedComplete = false;
     errorMessage = '';
-    startTime = Date.now();
-    elapsedTime = 0;
-    thinkingTime = 0;
-    docsInScope = 0;
-    docsOmitted = 0;
+    if (!isReconnect) {
+      startTime = Date.now();
+      elapsedTime = 0;
+      thinkingTime = 0;
+      docsInScope = 0;
+      docsOmitted = 0;
+      retryCount = 0;
+      serverSaved = false;
+    }
     
     // Start elapsed time counter
     timerInterval = setInterval(() => {
@@ -226,12 +235,18 @@
         stopTimer();
         return;
       }
-      
-      console.error('Streaming error:', e);
-      status = 'error';
-      errorMessage = e instanceof Error ? e.message : 'Failed to start streaming';
-      stopTimer();
-      onError?.(errorMessage);
+
+      console.warn('Stream interrupted:', e);
+
+      // Try to recover instead of showing error immediately
+      if (retryCount < MAX_RETRIES) {
+        await attemptRecovery();
+      } else {
+        status = 'error';
+        errorMessage = e instanceof Error ? e.message : 'Failed to start streaming';
+        stopTimer();
+        onError?.(errorMessage);
+      }
     }
   }
 
@@ -240,8 +255,50 @@
     hasEmittedComplete = true;
     status = 'complete';
     stopTimer();
-    await saveAnalysis(analysisContent);
+    if (!serverSaved) {
+      await saveAnalysis(analysisContent);
+    }
     onComplete?.(analysisContent);
+  }
+
+  async function attemptRecovery() {
+    status = 'recovering';
+    retryCount++;
+
+    // Wait for network to stabilize + exponential backoff
+    const delay = Math.pow(2, retryCount) * 1000; // 2s, 4s, 8s
+    await new Promise(r => setTimeout(r, delay));
+
+    // Check if backend already completed
+    try {
+      const { session } = await getSecureSession();
+      if (!session) throw new Error('No session');
+
+      const apiUrl = getApiUrl();
+      const resp = await fetch(`${apiUrl}/api/analysis/stream/${caseId}/result`, {
+        headers: { 'Authorization': `Bearer ${session.access_token}` },
+      });
+
+      if (resp.ok) {
+        const data = await resp.json();
+        if (data.found) {
+          // Backend completed — use saved result
+          content = data.content;
+          docsInScope = data.docs_in_scope || 0;
+          docsOmitted = data.docs_omitted || 0;
+          serverSaved = true;
+          flushRender();
+          emitComplete(content);
+          return;
+        }
+      }
+    } catch {
+      // Recovery endpoint failed, try reconnecting stream
+    }
+
+    // Backend hasn't finished — retry the stream
+    status = 'reconnecting';
+    startStreaming();
   }
 
   function stopTimer() {
@@ -362,13 +419,15 @@
           <Loader2 class="h-5 w-5 animate-spin text-blue-500" />
         {:else if status === 'complete'}
           <CheckCircle2 class="h-5 w-5 text-green-500" />
+        {:else if status === 'recovering' || status === 'reconnecting'}
+          <Loader2 class="h-5 w-5 animate-spin text-amber-500" />
         {:else if status === 'error'}
           <AlertCircle class="h-5 w-5 text-red-500" />
         {/if}
         <span>Case Analysis</span>
       </h3>
       
-      {#if status === 'thinking' || status === 'streaming' || status === 'complete'}
+      {#if status === 'thinking' || status === 'streaming' || status === 'complete' || status === 'recovering' || status === 'reconnecting'}
         <span class="elapsed-time">
           {formatTime(elapsedTime)}
         </span>
@@ -430,6 +489,14 @@
           Retry Analysis
         </button>
       </div>
+    {:else if status === 'recovering' && !content}
+      <div class="thinking-state">
+        <Loader2 class="h-12 w-12 animate-spin text-amber-500" />
+        <h4 class="thinking-title" style="color: #d97706;">Checking for results...</h4>
+        <p class="thinking-description">
+          Connection was interrupted. Checking if the analysis completed on the server.
+        </p>
+      </div>
     {:else if status === 'thinking'}
       <div class="thinking-state">
         <div class="thinking-icon-container">
@@ -479,7 +546,17 @@
   {/if}
 
   <!-- Status bar -->
-  {#if status === 'thinking'}
+  {#if status === 'recovering'}
+    <div class="status-bar reconnecting">
+      <div class="status-indicator reconnecting"></div>
+      <span>Connection lost. Checking for results...</span>
+    </div>
+  {:else if status === 'reconnecting'}
+    <div class="status-bar reconnecting">
+      <div class="status-indicator reconnecting"></div>
+      <span>Reconnecting (attempt {retryCount}/{MAX_RETRIES})...</span>
+    </div>
+  {:else if status === 'thinking'}
     <div class="status-bar thinking">
       <div class="status-indicator thinking"></div>
       <span>GPT-5.4 is reasoning about your case...</span>
@@ -752,6 +829,12 @@
     color: #7c3aed;
   }
 
+  .status-bar.reconnecting {
+    background: #fffbeb;
+    border-top-color: #fde68a;
+    color: #92400e;
+  }
+
   .status-indicator {
     width: 8px;
     height: 8px;
@@ -766,6 +849,11 @@
   @keyframes thinking-indicator {
     0%, 100% { transform: scale(1); opacity: 1; }
     50% { transform: scale(1.3); opacity: 0.6; }
+  }
+
+  .status-indicator.reconnecting {
+    background: #f59e0b;
+    animation: pulse 1.5s ease-in-out infinite;
   }
 
   .status-indicator.streaming {

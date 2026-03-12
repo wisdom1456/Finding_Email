@@ -1076,8 +1076,8 @@ Return your analysis as structured JSON matching the GapAnalysisResult schema:
 Each GapItem should have:
 {{
     "gap_id": "<unique_id>",
-    "category": "<GapCategory enum value>",
-    "severity": "<GapSeverity enum value>",
+    "category": "<category_enum>",
+    "severity": "<severity_enum>",
     "title": "<brief description>",
     "description": "<detailed explanation>",
     "affected_issue": "<legal issue name or null>",
@@ -1085,6 +1085,9 @@ Each GapItem should have:
     "recommendations": [<action items>],
     "impact_on_case": "<explanation>"
 }}
+
+Valid category values (category_enum): missing_document, factual_contradiction, timeline_gap, unverifiable_claim, hallucination_risk, incomplete_info
+Valid severity values (severity_enum): critical, high, medium, low
 
 Begin your analysis now.
 """
@@ -1546,6 +1549,132 @@ Return ONLY valid JSON. No markdown, no explanation.
 """
         return prompt
 
+    # Category keyword heuristics for normalizing freeform LLM category strings
+    _CATEGORY_KEYWORDS: Dict[str, List[str]] = {
+        "missing_document": [
+            "missing", "absent", "lack", "unavailable", "not provided", "proof", "no ",
+        ],
+        "factual_contradiction": [
+            "contradict", "inconsisten", "conflict", "discrepan",
+        ],
+        "timeline_gap": [
+            "timeline", "date", "chronolog", "sequence", "delay",
+        ],
+        "unverifiable_claim": [
+            "unverif", "cannot confirm", "no evidence", "unsupported",
+        ],
+        "hallucination_risk": [
+            "hallucin", "fabricat", "invented",
+        ],
+        "incomplete_info": [
+            "incomplete", "partial", "insufficient", "unclear", "vague",
+            "communication", "identity", "damage", "valuation", "execution",
+            "contract", "repair",
+        ],
+    }
+
+    _VALID_CATEGORIES = {
+        "missing_document", "factual_contradiction", "timeline_gap",
+        "unverifiable_claim", "hallucination_risk", "incomplete_info",
+    }
+
+    def _map_category_key(self, raw_key: str) -> str:
+        """Map a freeform category string to a valid GapCategory enum value."""
+        normalized = raw_key.strip().lower().replace("-", "_").replace(" ", "_")
+        if normalized in self._VALID_CATEGORIES:
+            return normalized
+        # Keyword heuristic search
+        for cat, keywords in self._CATEGORY_KEYWORDS.items():
+            for kw in keywords:
+                if kw in normalized or kw in raw_key.lower():
+                    return cat
+        return "incomplete_info"
+
+    def _normalize_reduce_output(self, data: dict) -> dict:
+        """Defense-in-depth normalizer for reduce-phase LLM output.
+
+        Handles common LLM deviations from the GapItem schema:
+        - Freeform category keys → valid enum values
+        - Missing gap_id → auto-generated
+        - Missing impact_on_case → filled from description
+        - affected_issues (list) → affected_issue (str)
+        - suggested_action → recommendations (list)
+        - supporting_documents → related_documents
+        - Missing reconciliation_notes → []
+        - Severity counts recalculated from actual items
+        """
+        # --- Normalize gaps_by_category keys ---
+        raw_gaps = data.get("gaps_by_category", {})
+        normalized_gaps: Dict[str, list] = {}
+        for raw_key, items in raw_gaps.items():
+            mapped_key = self._map_category_key(raw_key)
+            if mapped_key not in normalized_gaps:
+                normalized_gaps[mapped_key] = []
+            if isinstance(items, list):
+                normalized_gaps[mapped_key].extend(items)
+
+        # --- Per-item fixes ---
+        gap_counter = 0
+        severity_counts = {"critical": 0, "high": 0, "medium": 0, "low": 0}
+
+        for cat_key, items in normalized_gaps.items():
+            for item in items:
+                if not isinstance(item, dict):
+                    continue
+
+                # Auto-generate gap_id if missing
+                if not item.get("gap_id"):
+                    item["gap_id"] = f"gap_reduce_{gap_counter}"
+                gap_counter += 1
+
+                # Normalize category field on the item itself
+                if "category" in item:
+                    item["category"] = self._map_category_key(str(item["category"]))
+                else:
+                    item["category"] = cat_key
+
+                # affected_issues (list) → affected_issue (str)
+                if "affected_issues" in item and "affected_issue" not in item:
+                    ai = item.pop("affected_issues")
+                    item["affected_issue"] = ai[0] if isinstance(ai, list) and ai else None
+
+                # suggested_action → recommendations (wrap in list)
+                if "suggested_action" in item and "recommendations" not in item:
+                    sa = item.pop("suggested_action")
+                    item["recommendations"] = [sa] if sa else []
+
+                # supporting_documents → related_documents
+                if "supporting_documents" in item and "related_documents" not in item:
+                    item["related_documents"] = item.pop("supporting_documents")
+
+                # Missing impact_on_case → fill from description or suggested_action
+                if not item.get("impact_on_case"):
+                    item["impact_on_case"] = (
+                        item.get("description")
+                        or item.get("suggested_action")
+                        or "Impact not specified"
+                    )
+
+                # Count severity
+                sev = str(item.get("severity", "medium")).lower()
+                if sev in severity_counts:
+                    severity_counts[sev] += 1
+
+        data["gaps_by_category"] = normalized_gaps
+
+        # --- Top-level fixes ---
+        if "reconciliation_notes" not in data:
+            data["reconciliation_notes"] = []
+
+        # Recalculate severity counts from actual items
+        data["critical_count"] = severity_counts["critical"]
+        data["high_count"] = severity_counts["high"]
+        data["medium_count"] = severity_counts["medium"]
+        data["low_count"] = severity_counts["low"]
+        data["total_gaps"] = sum(severity_counts.values())
+
+        return data
+
     async def _run_reduce(
         self,
         successful_reports: List[BatchGapReport],
@@ -1602,6 +1731,7 @@ Return ONLY valid JSON. No markdown, no explanation.
             raise ValueError("Reduce phase returned empty response")
 
         data = json.loads(self._strip_markdown_fences(raw))
+        data = self._normalize_reduce_output(data)
         result = GapAnalysisResult(**data)
 
         logger.info(
@@ -1719,13 +1849,33 @@ Return a JSON object with these fields:
   "high_count": int,
   "medium_count": int,
   "low_count": int,
-  "gaps_by_category": {{"category_name": [{{"title": "...", "description": "...",
-    "severity": "critical|high|medium|low", "category": "...",
-    "affected_issues": ["..."], "suggested_action": "...",
-    "supporting_documents": ["..."]}}]}},
+  "gaps_by_category": {{
+    "<category_enum>": [
+      {{
+        "gap_id": "gap_1",
+        "category": "<category_enum>",
+        "severity": "critical|high|medium|low",
+        "title": "Brief description of the gap",
+        "description": "Detailed explanation",
+        "impact_on_case": "How this gap affects case viability or strategy",
+        "affected_issue": "Which legal issue is affected",
+        "related_documents": ["doc names..."],
+        "recommendations": ["Suggested actions..."]
+      }}
+    ]
+  }},
   "overall_completeness_score": float (0-100),
-  "attorney_summary": "Executive summary string"
+  "attorney_summary": "Executive summary string",
+  "reconciliation_notes": ["Notes about cross-batch reconciliation..."]
 }}
+
+IMPORTANT — category_enum MUST be one of these exact values (use as BOTH dictionary keys AND each item's "category" field):
+- missing_document
+- factual_contradiction
+- timeline_gap
+- unverifiable_claim
+- hallucination_risk
+- incomplete_info
 
 Return ONLY valid JSON. No markdown, no explanation.
 """
@@ -1774,7 +1924,7 @@ Return ONLY valid JSON. No markdown, no explanation.
                 impact_on_case=finding.description,
                 related_documents=[str(did) for did in finding.document_ids],
             )
-            cat_key = finding.category or "other"
+            cat_key = category.value
             gaps_by_category.setdefault(cat_key, []).append(gap_item)
 
         total = len(deduped)

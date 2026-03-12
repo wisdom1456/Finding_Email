@@ -1919,7 +1919,7 @@ async function fetchWithRetry(
 						{#if analyzingGaps && gapAnalysisProgress}
 							<p class="text-sm text-blue-600 mt-4 animate-pulse">{gapAnalysisProgress}</p>
 						{:else}
-							<p class="text-xs text-gray-400 mt-4">Analysis typically takes 30-60 seconds</p>
+							<p class="text-xs text-gray-400 mt-4">Analysis typically takes 2-5 minutes depending on case size</p>
 						{/if}
 
 						{#if streamingGapSummary}

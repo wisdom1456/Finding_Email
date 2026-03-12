@@ -507,7 +507,7 @@
         <p class="thinking-description">
           GPT-5.4 is analyzing your documents and building a comprehensive legal analysis.
         </p>
-        <p class="thinking-time">Usually takes 30-60 seconds</p>
+        <p class="thinking-time">Usually takes 2-5 minutes depending on case size</p>
         <div class="thinking-elapsed">{formatTime(elapsedTime)}</div>
       </div>
     {:else if content}

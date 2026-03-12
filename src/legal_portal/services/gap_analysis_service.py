@@ -1479,7 +1479,7 @@ Begin your analysis now.
             2000,
         )
         issues_text = "\n".join(
-            f"- {iss.issue_name}: {iss.description or ''}"
+            f"- {iss.issue_name} ({iss.category})"
             for iss in (issue_map.primary_issues or [])[:10]
         ) or "None identified"
 
@@ -1645,7 +1645,7 @@ Return ONLY valid JSON. No markdown, no explanation.
 
         # Issues
         issues_text = "\n".join(
-            f"- {iss.issue_name}: {iss.description or ''}"
+            f"- {iss.issue_name} ({iss.category})"
             for iss in (issue_map.primary_issues or [])[:15]
         ) or "None identified"
 

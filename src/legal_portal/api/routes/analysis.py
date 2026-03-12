@@ -4228,7 +4228,7 @@ async def stream_case_analysis(
                                 # Auto-save raw content for recovery if frontend loses connection
                                 try:
                                     analysis_id = str(uuid.uuid4())
-                                    service_supabase.table("analysis_results").upsert({
+                                    service_supabase.table("analysis_results").insert({
                                         "id": analysis_id,
                                         "case_id": case_id,
                                         "status": "streaming_complete",
@@ -4240,7 +4240,7 @@ async def stream_case_analysis(
                                             "streaming_completed_at": datetime.utcnow().isoformat(),
                                         },
                                         "created_at": datetime.utcnow().isoformat(),
-                                    }, on_conflict="case_id").execute()
+                                    }).execute()
                                     logger.info(f"[STREAM] Auto-saved streaming result for case {case_id}")
                                 except Exception as save_err:
                                     logger.error(f"[STREAM] Auto-save failed for case {case_id}: {save_err}")

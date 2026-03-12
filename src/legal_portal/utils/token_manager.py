@@ -5,8 +5,6 @@ from __future__ import annotations
 import json
 from typing import Any
 
-import tiktoken
-
 from legal_portal.utils.logging_config import get_module_logger
 
 logger = get_module_logger(__name__)
@@ -43,6 +41,8 @@ class TokenManager:
     def count_tokens_accurate(self, text: str, model: str = "gpt-5.4") -> int:
         """Count tokens using tiktoken for accurate token counting."""
         try:
+            import tiktoken
+
             # Get the encoding for the model
             if model.startswith("gpt-4"):
                 encoding_name = "cl100k_base"  # GPT-4 encoding

@@ -1812,10 +1812,22 @@ def _ensure_vision_compatible(file_bytes: bytes, mime_type: str) -> tuple:
         from PIL import Image
         from io import BytesIO
 
+        # Register HEIF/HEIC opener if available (must happen before Image.open)
+        try:
+            from pillow_heif import register_heif_opener
+            register_heif_opener()
+        except ImportError:
+            pass
+
         img = Image.open(BytesIO(file_bytes))
 
-        # Pick output format: keep JPEG as JPEG, everything else as PNG
-        if mime_type == "image/jpeg" or img.format == "JPEG":
+        # HEIC/HEIF → always convert to JPEG (OpenAI doesn't support HEIC)
+        if mime_type in ("image/heic", "image/heif") or img.format in ("HEIF", "HEIC"):
+            out_format, out_mime = "JPEG", "image/jpeg"
+            if img.mode != "RGB":
+                img = img.convert("RGB")
+        # Keep JPEG as JPEG, everything else as PNG
+        elif mime_type == "image/jpeg" or img.format == "JPEG":
             out_format, out_mime = "JPEG", "image/jpeg"
             if img.mode in ("RGBA", "P", "LA"):
                 img = img.convert("RGB")

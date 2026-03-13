@@ -122,28 +122,26 @@ class TestEnsureVisionCompatible:
         assert result_bytes == b"RIFF"
         assert result_mime == "image/webp"
 
-    def test_heic_converted_to_png(self):
-        """HEIC bytes should be re-encoded (to PNG since not JPEG)."""
+    def test_heic_converted_to_jpeg(self):
+        """HEIC bytes should be re-encoded to JPEG (OpenAI doesn't support HEIC)."""
         from legal_portal.api.routes.documents import _ensure_vision_compatible
 
-        # Create a mock PIL Image — mode "RGB" means convert() won't be called,
-        # so save is called directly on the original mock_image.
         mock_image = MagicMock()
         mock_image.format = "HEIC"
         mock_image.mode = "RGB"
 
-        fake_png = b"\x89PNG\r\n\x1a\nconverted"
+        fake_jpeg = b"\xff\xd8\xff\xe0converted"
 
         def fake_save(buf, format, **kwargs):
-            buf.write(fake_png)
+            buf.write(fake_jpeg)
 
         mock_image.save.side_effect = fake_save
 
         with patch("PIL.Image.open", return_value=mock_image):
             result_bytes, result_mime = _ensure_vision_compatible(HEIC_MAGIC, "image/heic")
 
-        assert result_bytes == fake_png
-        assert result_mime == "image/png"
+        assert result_bytes == fake_jpeg
+        assert result_mime == "image/jpeg"
 
     def test_conversion_failure_returns_fallback(self):
         """If PIL fails to convert, return original bytes with original mime."""

@@ -1722,7 +1722,7 @@ Return ONLY valid JSON. No markdown, no explanation.
                 "GapAnalysisResult schema. Do not include any text before or after the JSON."
             ),
             input=prompt,
-            max_output_tokens=6000,
+            max_output_tokens=16000,
             reasoning_effort="medium" if self.client._is_gpt5_model(reduce_model) else None,
         )
 

@@ -57,6 +57,7 @@ gcloud run deploy "${SERVICE_NAME}" \
     --platform managed \
     --allow-unauthenticated \
     --ingress=all \
+    --use-http2 \
     --memory 2Gi \
     --cpu 2 \
     --timeout 180 \

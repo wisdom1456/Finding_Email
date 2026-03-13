@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import io
 import mimetypes
 import os
 import re
 import time
+from dataclasses import dataclass, field
 
 from starlette.concurrency import run_in_threadpool
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
@@ -18,9 +20,230 @@ from legal_portal.core.data_models import (
 )
 from legal_portal.utils.google_vision_client import GoogleVisionClient
 from legal_portal.utils.logging_config import get_module_logger
+from legal_portal.utils.metrics import MetricsCollector
 from legal_portal.utils.openai_client import OpenAIClient
 
 logger = get_module_logger(__name__)
+
+# --- OCR size constants ---
+OCR_COMPRESS_THRESHOLD = 20 * 1024 * 1024    # 20MB — trigger compression early
+SAFE_REMOTE_OCR_LIMIT = 28 * 1024 * 1024     # 28MB — safe transport ceiling
+MAX_OCR_CHUNKS = 20                            # cap total chunks per document
+OCR_CHUNK_SEMAPHORE = 3                        # max concurrent chunk OCR requests
+OCR_CHUNK_TARGET_BYTES = 20 * 1024 * 1024     # target chunk size
+
+
+@dataclass
+class ChunkedOCRResult:
+    """Result of chunked OCR extraction."""
+
+    text: str
+    ocr_status: str          # "complete" | "partial" | "failed"
+    ocr_strategy: str        # "chunked"
+    successful_page_ranges: list[str] = field(default_factory=list)
+    failed_page_ranges: list[str] = field(default_factory=list)
+    total_chunks: int = 0
+    successful_chunks: int = 0
+
+
+async def _ocr_pdf_in_chunks(
+    pdf_bytes: bytes,
+    original_filename: str,
+    ocr_client,
+    comp_svc,
+    target_chunk_bytes: int = OCR_CHUNK_TARGET_BYTES,
+    safe_limit: int = SAFE_REMOTE_OCR_LIMIT,
+    max_chunks: int = MAX_OCR_CHUNKS,
+    concurrency: int = OCR_CHUNK_SEMAPHORE,
+) -> ChunkedOCRResult:
+    """Split a large PDF into size-aware chunks and OCR each via the remote service."""
+    from pypdf import PdfReader, PdfWriter
+
+    # --- Parse PDF ---
+    try:
+        pdf_reader = PdfReader(io.BytesIO(pdf_bytes))
+    except Exception as e:
+        logger.error(f"[OCR:CHUNK:PDF_CORRUPT] {original_filename}: cannot parse PDF for chunking ({e})")
+        return ChunkedOCRResult(text="", ocr_status="failed", ocr_strategy="chunked")
+
+    total_pages = len(pdf_reader.pages)
+    if total_pages == 0:
+        return ChunkedOCRResult(text="", ocr_status="failed", ocr_strategy="chunked")
+
+    # --- Build size-aware chunks ---
+    def _build_chunks(target: int) -> list[tuple[bytes, str]]:
+        """Build PDF chunks, each targeting `target` bytes. Returns [(chunk_bytes, page_range_str), ...]."""
+        chunks: list[tuple[bytes, str]] = []
+        writer = PdfWriter()
+        chunk_start = 0
+
+        for i, page in enumerate(pdf_reader.pages):
+            writer.add_page(page)
+            buf = io.BytesIO()
+            writer.write(buf)
+            current_size = len(buf.getvalue())
+
+            is_last_page = (i == total_pages - 1)
+            if current_size >= target or is_last_page:
+                chunk_bytes = buf.getvalue()
+                page_range = f"{chunk_start + 1}-{i + 1}"
+                chunks.append((chunk_bytes, page_range))
+                writer = PdfWriter()
+                chunk_start = i + 1
+
+        return chunks
+
+    chunks = _build_chunks(target_chunk_bytes)
+
+    # Handle MAX_OCR_CHUNKS overflow
+    if len(chunks) > max_chunks:
+        logger.warning(
+            f"[OCR:CHUNK:CAP_EXCEEDED] {original_filename}: {len(chunks)} chunks needed, "
+            f"cap is {max_chunks}, attempting rebuild with larger target"
+        )
+        MetricsCollector.record_counter("ocr.chunk_cap_exceeded")
+        # Rebuild with larger target
+        larger_target = safe_limit - 2 * 1024 * 1024  # SAFE_REMOTE_OCR_LIMIT - 2MB
+        chunks = _build_chunks(larger_target)
+
+        if len(chunks) > max_chunks:
+            # Trim to cap and mark remaining as failed
+            overflow_ranges = [pr for _, pr in chunks[max_chunks:]]
+            remaining_pages = sum(
+                int(pr.split("-")[1]) - int(pr.split("-")[0]) + 1 for pr in overflow_ranges
+            )
+            logger.error(
+                f"[OCR:CHUNK:CAP_EXCEEDED] {original_filename}: still {len(chunks)} chunks after rebuild, "
+                f"cap is {max_chunks}, {remaining_pages} pages not extracted"
+            )
+            failed_overflow = overflow_ranges
+            chunks = chunks[:max_chunks]
+        else:
+            failed_overflow = []
+    else:
+        failed_overflow = []
+
+    num_chunks = len(chunks)
+    logger.info(
+        f"[OCR:CHUNK] {original_filename}: splitting {total_pages} pages into "
+        f"{num_chunks} chunks (target {target_chunk_bytes / (1024*1024):.0f}MB each)"
+    )
+    MetricsCollector.record_counter("ocr.chunk_fallback_used")
+    MetricsCollector.record_gauge("ocr.chunks_created", num_chunks)
+
+    # --- OCR each chunk with concurrency control ---
+    semaphore = asyncio.Semaphore(concurrency)
+
+    async def ocr_chunk(chunk_index: int, chunk_bytes: bytes, page_range_str: str) -> tuple[int, str, bool]:
+        """Returns (chunk_index, text, success)."""
+        async with semaphore:
+            # Size check — compress individual chunk if needed
+            if len(chunk_bytes) > safe_limit:
+                try:
+                    comp_result = comp_svc.compress_pdf_for_ocr(
+                        chunk_bytes, target_size_mb=safe_limit / (1024 * 1024)
+                    )
+                    if comp_result.was_compressed and comp_result.compressed_size <= safe_limit:
+                        chunk_bytes = comp_result.compressed_data
+                    else:
+                        logger.error(
+                            f"[OCR:CHUNK:TOO_LARGE] {original_filename} pages {page_range_str}: "
+                            f"{len(chunk_bytes) / (1024*1024):.1f}MB even after compression"
+                        )
+                        MetricsCollector.record_counter("ocr.chunk_too_large")
+                        return (chunk_index, f"[Pages {page_range_str}: extraction failed — chunk too large for OCR]", False)
+                except Exception as e:
+                    logger.error(
+                        f"[OCR:CHUNK:TOO_LARGE] {original_filename} pages {page_range_str}: "
+                        f"compression error: {e}"
+                    )
+                    MetricsCollector.record_counter("ocr.chunk_too_large")
+                    return (chunk_index, f"[Pages {page_range_str}: extraction failed — chunk too large for OCR]", False)
+
+            try:
+                result = await ocr_client.extract_text(
+                    chunk_bytes, f"{original_filename}_chunk{chunk_index}.pdf", "application/pdf"
+                )
+                chunk_text = result.get("full_text", "") if isinstance(result, dict) else ""
+                if not chunk_text or not chunk_text.strip():
+                    logger.warning(
+                        f"[OCR:CHUNK:EMPTY] {original_filename} pages {page_range_str}: OCR returned empty text"
+                    )
+                    MetricsCollector.record_counter("ocr.chunk_empty")
+                    return (chunk_index, f"[Pages {page_range_str}: extraction returned no text]", False)
+                return (chunk_index, chunk_text, True)
+            except Exception as e:
+                logger.error(
+                    f"[OCR:CHUNK:FAILED] {original_filename} pages {page_range_str}: {type(e).__name__}: {e}"
+                )
+                MetricsCollector.record_counter("ocr.chunk_ocr_failed")
+                return (chunk_index, f"[Pages {page_range_str}: extraction failed — {type(e).__name__}]", False)
+
+    tasks = [
+        ocr_chunk(i, chunk_bytes, page_range)
+        for i, (chunk_bytes, page_range) in enumerate(chunks)
+    ]
+    raw_results = await asyncio.gather(*tasks, return_exceptions=True)
+
+    # --- Reassemble in page order ---
+    successful_ranges: list[str] = []
+    failed_ranges: list[str] = list(failed_overflow)
+    ordered_texts: list[tuple[int, str, str]] = []  # (index, text, page_range)
+
+    for i, raw in enumerate(raw_results):
+        page_range = chunks[i][1]
+        if isinstance(raw, Exception):
+            logger.error(f"[OCR:CHUNK:FAILED] {original_filename} pages {page_range}: {raw}")
+            MetricsCollector.record_counter("ocr.chunk_ocr_failed")
+            ordered_texts.append((i, f"[Pages {page_range}: extraction failed — {type(raw).__name__}]", page_range))
+            failed_ranges.append(page_range)
+        else:
+            chunk_index, text, success = raw
+            ordered_texts.append((chunk_index, text, page_range))
+            if success:
+                successful_ranges.append(page_range)
+            else:
+                failed_ranges.append(page_range)
+
+    ordered_texts.sort(key=lambda x: x[0])
+
+    # Build final text with separators
+    parts = []
+    for _, text, page_range in ordered_texts:
+        parts.append(f"\n\n--- Page Range {page_range} ---\n\n")
+        parts.append(text)
+    assembled_text = "".join(parts).strip()
+
+    successful_count = len(successful_ranges)
+    total_count = num_chunks + len(failed_overflow)
+
+    if successful_count == 0:
+        status = "failed"
+    elif failed_ranges:
+        status = "partial"
+    else:
+        status = "complete"
+
+    if status == "complete":
+        logger.info(
+            f"[OCR:CHUNK:COMPLETE] {original_filename}: {len(assembled_text)} chars "
+            f"from {successful_count}/{total_count} chunks"
+        )
+    elif status == "partial":
+        logger.warning(
+            f"[OCR:CHUNK:PARTIAL] {original_filename}: {len(failed_ranges)} chunks failed, "
+            f"pages {', '.join(failed_ranges)} not extracted"
+        )
+
+    return ChunkedOCRResult(
+        text=assembled_text,
+        ocr_status=status,
+        ocr_strategy="chunked",
+        successful_page_ranges=successful_ranges,
+        failed_page_ranges=failed_ranges,
+        total_chunks=total_count,
+        successful_chunks=successful_count,
+    )
 
 
 async def _ocr_with_fallback(
@@ -1610,29 +1833,87 @@ async def process_pdf(
 
                 if _settings.ocr_remote_enabled:
                     # Route OCR to Cloud Run service (Google Vision only)
+                    # with pre-OCR compression + size gate + chunked fallback
                     try:
                         from legal_portal.utils.ocr_service_client import (
                             get_ocr_client, OCRServiceError, OCRConfigError,
                         )
+                        from legal_portal.services.file_compression_service import get_compression_service
                         ocr_client = get_ocr_client()
+                        comp_svc = get_compression_service()
                         import mimetypes as _mt
                         content_type, _ = _mt.guess_type(original_filename)
                         content_type = content_type or "application/pdf"
-                        result = await ocr_client.extract_text(
-                            pdf_bytes, original_filename, content_type
-                        )
-                        text_content = result["full_text"]
-                        extraction_method = f"cloud_run_ocr ({result['provider']})"
-                        ocr_provider = result["provider"]
-                        logger.info(
-                            f"Remote OCR completed for {original_filename}",
-                            extra={
-                                "trace_id": result.get("trace_id"),
-                                "provider": result["provider"],
-                                "page_count": result.get("page_count"),
-                                "latency_ms": result.get("latency_ms"),
-                            },
-                        )
+
+                        # --- Pre-OCR compression + size gate ---
+                        ocr_bytes = pdf_bytes
+                        ocr_strategy = "direct"
+                        size_mb = len(pdf_bytes) / (1024 * 1024)
+
+                        MetricsCollector.record_gauge("ocr.original_bytes", len(pdf_bytes))
+
+                        if len(pdf_bytes) > OCR_COMPRESS_THRESHOLD:
+                            MetricsCollector.record_counter("ocr.compression_attempted")
+                            try:
+                                comp_result = comp_svc.compress_pdf_for_ocr(pdf_bytes, target_size_mb=20.0)
+                                MetricsCollector.record_gauge("ocr.compressed_bytes", comp_result.compressed_size)
+                                if comp_result.was_compressed and comp_result.compressed_size < len(pdf_bytes):
+                                    logger.info(
+                                        f"[OCR:COMPRESS] {original_filename}: {size_mb:.1f}MB -> "
+                                        f"{comp_result.compressed_size / (1024*1024):.1f}MB ({comp_result.method_used})"
+                                    )
+                                    MetricsCollector.record_counter("ocr.compression_succeeded")
+                                    ocr_bytes = comp_result.compressed_data
+                                    ocr_strategy = "compressed"
+                                else:
+                                    logger.info(
+                                        f"[OCR:COMPRESS] {original_filename}: compression did not reduce size"
+                                    )
+                            except Exception as e:
+                                logger.warning(f"[OCR:COMPRESS:FAILED] {original_filename}: {e}")
+                                MetricsCollector.record_counter("ocr.compression_failed")
+                        else:
+                            logger.info(
+                                f"[OCR:DIRECT] {original_filename}: {size_mb:.1f}MB — under threshold, sending directly"
+                            )
+                            MetricsCollector.record_gauge("ocr.compressed_bytes", 0)
+
+                        if len(ocr_bytes) <= SAFE_REMOTE_OCR_LIMIT:
+                            # Direct send (original or compressed)
+                            if ocr_strategy == "compressed":
+                                logger.info(f"[OCR:COMPRESS:OK] {original_filename}: under limit after compression, sending to remote OCR")
+                            result = await ocr_client.extract_text(
+                                ocr_bytes, original_filename, content_type
+                            )
+                            text_content = result["full_text"]
+                            extraction_method = f"cloud_run_ocr ({result['provider']})"
+                            ocr_provider = result["provider"]
+                            logger.info(
+                                f"Remote OCR completed for {original_filename}",
+                                extra={
+                                    "trace_id": result.get("trace_id"),
+                                    "provider": result["provider"],
+                                    "page_count": result.get("page_count"),
+                                    "latency_ms": result.get("latency_ms"),
+                                },
+                            )
+                        else:
+                            # Chunked OCR fallback
+                            logger.info(
+                                f"[OCR:COMPRESS:INSUFFICIENT] {original_filename}: still "
+                                f"{len(ocr_bytes) / (1024*1024):.1f}MB, entering chunk fallback"
+                            )
+                            MetricsCollector.record_counter("ocr.compression_insufficient")
+                            chunked = await _ocr_pdf_in_chunks(
+                                pdf_bytes=pdf_bytes,
+                                original_filename=original_filename,
+                                ocr_client=ocr_client,
+                                comp_svc=comp_svc,
+                            )
+                            text_content = chunked.text
+                            extraction_method = f"cloud_run_ocr_chunked ({chunked.ocr_status})"
+                            ocr_provider = "Google"
+
                     except OCRConfigError as e:
                         # Missing OCR_SERVICE_TOKEN/URL — config error, not transient.
                         # Always fall back to local OCR regardless of ocr_remote_required.

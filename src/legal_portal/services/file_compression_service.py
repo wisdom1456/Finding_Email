@@ -195,6 +195,39 @@ class FileCompressionService:
                 was_compressed=False,
             )
 
+    def compress_pdf_for_ocr(
+        self, pdf_bytes: bytes, target_size_mb: float = 20.0
+    ) -> CompressionResult:
+        """Compress a PDF to fit within the remote OCR transport limit.
+
+        Delegates to the existing compression chain (ghostscript -> pypdf -> aggressive).
+        Returns a CompressionResult with compressed_data, sizes, method, etc.
+        Does NOT raise — returns original bytes with was_compressed=False on failure.
+        """
+        original_size = len(pdf_bytes)
+        try:
+            compressed_data, method = self._compress_pdf(pdf_bytes, target_size_mb=target_size_mb)
+            compressed_size = len(compressed_data)
+            was_compressed = compressed_size < original_size
+            return CompressionResult(
+                compressed_data=compressed_data,
+                original_size=original_size,
+                compressed_size=compressed_size,
+                compression_ratio=compressed_size / original_size if original_size > 0 else 1.0,
+                method_used=method,
+                was_compressed=was_compressed,
+            )
+        except Exception as e:
+            logger.error(f"compress_pdf_for_ocr failed: {e}", exc_info=True)
+            return CompressionResult(
+                compressed_data=pdf_bytes,
+                original_size=original_size,
+                compressed_size=original_size,
+                compression_ratio=1.0,
+                method_used=f"failed: {e}",
+                was_compressed=False,
+            )
+
     def _compress_pdf(self, pdf_data: bytes, target_size_mb: float = 50.0) -> Tuple[bytes, str]:
         """Compress a PDF using Ghostscript (preferred) or PyPDF2 (fallback).
         
@@ -319,10 +352,11 @@ class FileCompressionService:
             pdf_reader = PdfReader(io.BytesIO(pdf_data))
             pdf_writer = PdfWriter()
 
-            # Copy pages and compress
+            # Copy pages first, then compress on writer-owned pages
             for page in pdf_reader.pages:
-                page.compress_content_streams()
                 pdf_writer.add_page(page)
+            for page in pdf_writer.pages:
+                page.compress_content_streams()
 
             # Write to bytes
             output_stream = io.BytesIO()

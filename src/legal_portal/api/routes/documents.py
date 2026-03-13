@@ -1802,19 +1802,36 @@ def _detect_image_mime(file_bytes: bytes, file_name: str) -> str:
 
 
 def _ensure_vision_compatible(file_bytes: bytes, mime_type: str) -> tuple:
-    """Convert unsupported image formats to JPEG for GPT-4o Vision."""
-    SUPPORTED = {"image/jpeg", "image/png", "image/gif", "image/webp"}
-    if mime_type in SUPPORTED:
-        return file_bytes, mime_type
+    """Re-encode image through PIL to normalize exotic PNG/image features.
+
+    Always re-encodes to strip APNG frames, unusual color depths, and other
+    features that OpenAI's vision parser rejects.  PNGs stay PNG, JPEGs stay
+    JPEG — only the raw bytes are normalized.
+    """
     try:
         from PIL import Image
         from io import BytesIO
+
         img = Image.open(BytesIO(file_bytes))
+
+        # Pick output format: keep JPEG as JPEG, everything else as PNG
+        if mime_type == "image/jpeg" or img.format == "JPEG":
+            out_format, out_mime = "JPEG", "image/jpeg"
+            if img.mode in ("RGBA", "P", "LA"):
+                img = img.convert("RGB")
+        else:
+            out_format, out_mime = "PNG", "image/png"
+            if img.mode not in ("RGB", "RGBA", "L", "LA"):
+                img = img.convert("RGBA")
+
         buf = BytesIO()
-        img.convert("RGB").save(buf, format="JPEG", quality=90)
-        return buf.getvalue(), "image/jpeg"
+        save_kwargs = {"optimize": True}
+        if out_format == "JPEG":
+            save_kwargs["quality"] = 90
+        img.save(buf, format=out_format, **save_kwargs)
+        return buf.getvalue(), out_mime
     except Exception:
-        return file_bytes, "image/jpeg"  # best-effort fallback
+        return file_bytes, mime_type  # best-effort fallback
 
 
 async def analyze_image_with_vision(file_bytes: bytes, file_name: str, case_context: dict) -> tuple[str, str]:

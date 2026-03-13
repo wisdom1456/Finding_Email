@@ -122,34 +122,35 @@ class TestEnsureVisionCompatible:
         assert result_bytes == b"RIFF"
         assert result_mime == "image/webp"
 
-    def test_heic_converted_to_jpeg(self):
-        """HEIC bytes should be converted to JPEG."""
+    def test_heic_converted_to_png(self):
+        """HEIC bytes should be re-encoded (to PNG since not JPEG)."""
         from legal_portal.api.routes.documents import _ensure_vision_compatible
 
-        # Create a mock PIL Image
+        # Create a mock PIL Image — mode "RGB" means convert() won't be called,
+        # so save is called directly on the original mock_image.
         mock_image = MagicMock()
-        mock_converted = MagicMock()
-        mock_image.convert.return_value = mock_converted
+        mock_image.format = "HEIC"
+        mock_image.mode = "RGB"
 
-        fake_jpeg = b"\xff\xd8\xff\xe0converted"
+        fake_png = b"\x89PNG\r\n\x1a\nconverted"
 
-        def fake_save(buf, format, quality):
-            buf.write(fake_jpeg)
+        def fake_save(buf, format, **kwargs):
+            buf.write(fake_png)
 
-        mock_converted.save.side_effect = fake_save
+        mock_image.save.side_effect = fake_save
 
         with patch("PIL.Image.open", return_value=mock_image):
             result_bytes, result_mime = _ensure_vision_compatible(HEIC_MAGIC, "image/heic")
 
-        assert result_bytes == fake_jpeg
-        assert result_mime == "image/jpeg"
+        assert result_bytes == fake_png
+        assert result_mime == "image/png"
 
     def test_conversion_failure_returns_fallback(self):
-        """If PIL fails to convert, return original bytes with image/jpeg mime."""
+        """If PIL fails to convert, return original bytes with original mime."""
         from legal_portal.api.routes.documents import _ensure_vision_compatible
 
         with patch("PIL.Image.open", side_effect=Exception("Cannot open HEIC")):
             result_bytes, result_mime = _ensure_vision_compatible(HEIC_MAGIC, "image/heic")
 
         assert result_bytes == HEIC_MAGIC
-        assert result_mime == "image/jpeg"
+        assert result_mime == "image/heic"

@@ -8,6 +8,7 @@
 	import ClioMatterSearch from '$lib/components/ClioMatterSearch.svelte';
 	import ClioLinkedMatter from '$lib/components/ClioLinkedMatter.svelte';
 	import FailedClioDownloads from '$lib/components/FailedClioDownloads.svelte';
+	import FilteredSmallImages from '$lib/components/FilteredSmallImages.svelte';
 	import UploadFailureSummary from '$lib/components/UploadFailureSummary.svelte';
 	// @ts-ignore
 	import VerificationHub from '$lib/components/VerificationHub.svelte';
@@ -2018,6 +2019,7 @@
 						</div>
 
 						<FailedClioDownloads {documents} onDocumentsUpdated={loadDocuments} />
+						<FilteredSmallImages {documents} />
 					{/if}
 					</div>
 				{/if}

@@ -14,6 +14,7 @@
 		communications_count?: number;
 		notes_count?: number;
 		documents_count?: number;
+		filtered_small_images_count?: number;
 		total_imported?: number;
 		errors?: string[];
 	}
@@ -332,9 +333,18 @@
 							</div>
 						{/if}
 						
+						{#if importResult?.filtered_small_images_count && importResult.filtered_small_images_count > 0}
+							<div class="mt-4 p-3 bg-gray-50 rounded-lg border border-gray-200 text-left">
+								<p class="text-sm text-gray-700">
+									<span class="font-semibold">{importResult.filtered_small_images_count} small images filtered</span>
+									— Small image files under 50KB were skipped because they are typically email signature logos or icons.
+								</p>
+							</div>
+						{/if}
+
 						<div class="mt-4 p-3 bg-yellow-50 rounded-lg border border-yellow-200 text-left">
 							<p class="text-sm text-yellow-800">
-								<strong>Tip:</strong> Large file imports may take longer than server limits allow. 
+								<strong>Tip:</strong> Large file imports may take longer than server limits allow.
 								Your case has been created and you can view/edit it now.
 							</p>
 						</div>
@@ -392,6 +402,15 @@
 											<p class="font-medium">... and {importResult.errors.length - 5} more</p>
 										{/if}
 									</div>
+								</div>
+							{/if}
+
+							{#if importResult.filtered_small_images_count && importResult.filtered_small_images_count > 0}
+								<div class="mt-4 p-3 bg-gray-50 rounded-lg border border-gray-200 text-left">
+									<p class="text-sm text-gray-700">
+										<span class="font-semibold">{importResult.filtered_small_images_count} small images filtered</span>
+										— Small image files under 50KB were skipped because they are typically email signature logos or icons.
+									</p>
 								</div>
 							{/if}
 						{/if}

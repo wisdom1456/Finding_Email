@@ -650,6 +650,7 @@ async def import_clio_documents_helper(
         existing_docs = supabase.table("documents").select("file_name, file_size, metadata").eq("case_id", case_id).execute()
         existing_file_keys = set()  # (filename, size) tuples for quick lookup
         existing_content_hashes = set()  # SHA-256 hashes
+        existing_clio_ids = set()  # Track clio_ids for idempotent skip records
         for existing in existing_docs.data or []:
             key = (existing["file_name"], existing.get("file_size", 0))
             existing_file_keys.add(key)
@@ -660,11 +661,17 @@ async def import_clio_documents_helper(
             # Track content hashes
             if existing.get("metadata", {}).get("content_hash"):
                 existing_content_hashes.add(existing["metadata"]["content_hash"])
+            # Track clio_ids for idempotent skip record handling
+            clio_id = (existing.get("metadata") or {}).get("clio_id")
+            if clio_id:
+                existing_clio_ids.add(clio_id)
 
         # Track duplicates seen in THIS import batch
         import_batch_keys = set()
         import_batch_hashes = set()
         duplicates_count = 0
+        filtered_small_images_count = 0
+        SMALL_IMAGE_THRESHOLD_BYTES = 50 * 1024  # 50KB
 
         # Cache Clio access token once (instead of fetching per document)
         _clio_access_token = None
@@ -699,6 +706,45 @@ async def import_clio_documents_helper(
 
                 if is_name_blacklisted(doc_name, blacklist):
                     logger.info("Skipping blacklisted document during Clio import", extra={"doc_name": doc_name})
+                    continue
+
+                # Filter small images (typically email signature logos, social media icons)
+                # Safety: only filter when both content_type and size are present and valid
+                doc_content_type = (doc.get("content_type") or "").lower().strip()
+                if (
+                    doc_content_type.startswith("image/")
+                    and doc_size > 0
+                    and doc_size < SMALL_IMAGE_THRESHOLD_BYTES
+                ):
+                    filtered_small_images_count += 1
+                    # Idempotency: don't insert a duplicate record on re-import
+                    if doc_id not in existing_clio_ids:
+                        logger.info(
+                            f"Filtering small image ({doc_size} bytes): {doc_name}",
+                            extra={"doc_name": doc_name, "size_bytes": doc_size, "content_type": doc_content_type},
+                        )
+                        skip_record = {
+                            "case_id": case_id,
+                            "file_name": doc_name,
+                            "file_type": doc_content_type,
+                            "file_size": doc_size,
+                            "storage_path": "",
+                            "status": "skipped_small_image",
+                            "extracted_text": None,
+                            "metadata": {
+                                "clio_source": True,
+                                "clio_type": "document",
+                                "clio_id": doc_id,
+                                "skip_reason": "small_image_filtered",
+                                "skip_detail": f"Image under {SMALL_IMAGE_THRESHOLD_BYTES // 1024}KB threshold ({doc_size} bytes)",
+                            },
+                        }
+                        supabase.table("documents").insert(skip_record).execute()
+                    else:
+                        logger.debug(
+                            f"Small image already recorded, skipping re-insert: {doc_name}",
+                            extra={"doc_name": doc_name, "clio_id": doc_id},
+                        )
                     continue
 
                 # Check file size limits before downloading
@@ -934,6 +980,7 @@ async def import_clio_documents_helper(
             "notes_count": note_success,
             "documents_count": doc_success,
             "duplicates_count": duplicates_count,
+            "filtered_small_images_count": filtered_small_images_count,
             "total_imported": comm_success + note_success + doc_success,
             "errors": errors if errors else None,
         }
@@ -945,6 +992,7 @@ async def import_clio_documents_helper(
                 "notes": note_success,
                 "documents": doc_success,
                 "duplicates": duplicates_count,
+                "filtered_small_images": filtered_small_images_count,
                 "total": comm_success + note_success + doc_success,
                 "errors": len(errors) if errors else 0,
             },

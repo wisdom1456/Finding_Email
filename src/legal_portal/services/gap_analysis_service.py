@@ -134,6 +134,7 @@ class GapAnalysisService:
         prior_gap_analysis: Optional[GapAnalysisResult] = None,
         signature_evidence: Optional[List[Dict[str, Any]]] = None,
         document_registry: Optional[List[Dict[str, Any]]] = None,
+        truncation_context: Optional[Dict[str, Any]] = None,
     ) -> GapAnalysisResult:
         """Analyze case for gaps, contradictions, and weaknesses.
 
@@ -182,7 +183,11 @@ class GapAnalysisService:
                 prior_gap_analysis=prior_gap_analysis,
                 signature_evidence=signature_evidence,
                 document_registry=document_registry,
+                truncation_context=truncation_context,
             )
+
+            prompt_chars = len(prompt)
+            logger.info(f"[GAP:PROMPT] prompt_size={prompt_chars} chars (~{prompt_chars // 4} tokens)")
 
             # Use GPT-4.1 for gap detection - faster and more reliable for structured JSON
             # GPT-5.2 with reasoning_effort spends tokens on internal reasoning, not output
@@ -241,9 +246,13 @@ class GapAnalysisService:
             # Parse JSON response
             response_json = json.loads(raw_response)
             result = GapAnalysisResult(**response_json)
+            overflow_doc_ids = set(truncation_context.get("overflow_doc_ids", [])) if truncation_context else None
+            overflow_doc_names = set(truncation_context.get("overflow_doc_names", [])) if truncation_context else None
             result = self._reconcile_signature_execution_gaps(
                 result=result,
                 signature_evidence=signature_evidence,
+                overflow_doc_ids=overflow_doc_ids,
+                overflow_doc_names=overflow_doc_names,
             )
 
             # Generate case recommendation based on gap analysis and deep analysis
@@ -325,8 +334,9 @@ class GapAnalysisService:
         if not rows:
             return "No signature metadata was provided."
 
+        display_limit = min(len(rows), 60)
         lines: List[str] = []
-        for item in rows[:40]:
+        for item in rows[:display_limit]:
             file_name = item.get("file_name") or "Unknown document"
             status = (item.get("status") or "unknown").lower()
             confidence = item.get("confidence") or "unknown"
@@ -348,9 +358,9 @@ class GapAnalysisService:
                 line += f", hints={preview}"
             lines.append(line)
 
-        if len(rows) > 40:
+        if len(rows) > display_limit:
             lines.append(
-                f"... {len(rows) - 40} additional signature records omitted for brevity."
+                f"... {len(rows) - display_limit} additional signature records omitted for brevity."
             )
 
         return "\n".join(lines)
@@ -367,13 +377,21 @@ class GapAnalysisService:
         sorted_rows = sorted(
             rows,
             key=lambda row: (
+                1 if row.get("authority_score") is None else 0,
                 -int(row.get("authority_score") or 0),
                 str(row.get("document_name") or "").lower(),
             ),
         )
+        display_limit = min(len(sorted_rows), 75)
         lines: List[str] = []
-        for row in sorted_rows[:50]:
+        for row in sorted_rows[:display_limit]:
             file_name = row.get("document_name") or "Unknown document"
+            eval_status = row.get("evaluation_status")
+            if eval_status == "metadata_only":
+                lines.append(
+                    f"- {file_name}: evaluation_status=metadata_only (full text not analyzed)"
+                )
+                continue
             doc_type = row.get("document_type") or "Unknown"
             authority = row.get("authority_level") or "supporting_evidence"
             authority_reason = row.get("authority_reason") or ""
@@ -393,9 +411,9 @@ class GapAnalysisService:
                 line += f", authority_reason={self._truncate_text(str(authority_reason), 140)}"
             lines.append(line)
 
-        if len(sorted_rows) > 50:
+        if len(sorted_rows) > display_limit:
             lines.append(
-                f"... {len(sorted_rows) - 50} additional registry records omitted for brevity."
+                f"... {len(sorted_rows) - display_limit} additional registry records omitted for brevity."
             )
         return "\n".join(lines)
 
@@ -694,8 +712,15 @@ class GapAnalysisService:
         self,
         result: GapAnalysisResult,
         signature_evidence: Optional[List[Dict[str, Any]]],
+        overflow_doc_ids: Optional[Set[str]] = None,
+        overflow_doc_names: Optional[Set[str]] = None,
     ) -> GapAnalysisResult:
-        """Suppress execution/signature follow-up gaps when signed evidence is present."""
+        """Suppress execution/signature follow-up gaps when signed evidence is present.
+
+        When overflow_doc_ids/overflow_doc_names are provided, also reclassify
+        missing_document gaps that reference overflow-present docs to incomplete_info
+        instead of removing them entirely.
+        """
         logger.info(
             "[GAP_RECONCILE] Starting reconciliation | signature_evidence_count=%s",
             len(signature_evidence or [])
@@ -714,8 +739,9 @@ class GapAnalysisService:
                 "[GAP_RECONCILE] Signed doc examples: %s",
                 [doc.get("file_name") for doc in signed_docs[:3]]
             )
-        if not signed_docs:
-            logger.info("[GAP_RECONCILE] No signed docs found, skipping reconciliation")
+        has_overflow = bool(overflow_doc_ids or overflow_doc_names)
+        if not signed_docs and not has_overflow:
+            logger.info("[GAP_RECONCILE] No signed docs and no overflow, skipping reconciliation")
             return result
 
         candidate_categories = (
@@ -741,74 +767,147 @@ class GapAnalysisService:
         non_blocking_identity_hits = 0
         matched_doc_names: List[str] = []
 
-        for category in candidate_categories:
-            gaps_in_category = list(result.gaps_by_category.get(category, []))
-            logger.info(
-                "[GAP_RECONCILE] Processing %s gaps in category: %s",
-                len(gaps_in_category),
-                category
-            )
-            for gap in gaps_in_category:
-                is_exec = self._is_execution_gap(gap)
-                is_followup = self._is_signature_followup_gap(gap)
+        if signed_docs:
+            # Signature-based reconciliation: suppress execution gaps matched to signed docs
+            for category in candidate_categories:
+                gaps_in_category = list(result.gaps_by_category.get(category, []))
+                logger.info(
+                    "[GAP_RECONCILE] Processing %s gaps in category: %s",
+                    len(gaps_in_category),
+                    category
+                )
+                for gap in gaps_in_category:
+                    is_exec = self._is_execution_gap(gap)
+                    is_followup = self._is_signature_followup_gap(gap)
 
-                if not (is_exec or is_followup):
+                    if not (is_exec or is_followup):
+                        logger.info(
+                            "[GAP_RECONCILE] Gap not execution-related, keeping | title=%s is_exec=%s is_followup=%s",
+                            gap.title[:60] if gap.title else "No title",
+                            is_exec,
+                            is_followup
+                        )
+                        kept_by_category[category].append(gap)
+                        continue
+
                     logger.info(
-                        "[GAP_RECONCILE] Gap not execution-related, keeping | title=%s is_exec=%s is_followup=%s",
+                        "[GAP_RECONCILE] Gap IS execution-related | title=%s is_exec=%s is_followup=%s",
                         gap.title[:60] if gap.title else "No title",
                         is_exec,
                         is_followup
                     )
-                    kept_by_category[category].append(gap)
+
+                    gap_blob = " ".join(
+                        [
+                            gap.title or "",
+                            gap.description or "",
+                            gap.impact_on_case or "",
+                            " ".join(gap.recommendations or []),
+                        ]
+                    )
+                    matched = self._find_matching_signed_docs(gap, signed_docs)
+                    logger.info(
+                        "[GAP_RECONCILE] Matching result | gap_title=%s matched_count=%s matched_docs=%s",
+                        gap.title[:60] if gap.title else "No title",
+                        len(matched),
+                        matched[:3] if matched else []
+                    )
+                    if matched:
+                        matched_doc_names.extend(matched)
+                        if self._is_identity_or_party_gap_text(gap_blob):
+                            non_blocking_identity_hits += 1
+                        logger.info(
+                            "[GAP_RECONCILE] REMOVING gap | title=%s matched_docs=%s",
+                            gap.title[:60] if gap.title else "No title",
+                            matched[:2]
+                        )
+                        removed.append(gap)
+                    else:
+                        logger.info(
+                            "[GAP_RECONCILE] No matches found, keeping gap | title=%s",
+                            gap.title[:60] if gap.title else "No title"
+                        )
+                        kept_by_category[category].append(gap)
+        else:
+            # No signed docs — copy all gaps to kept_by_category for overflow pass
+            for category in candidate_categories:
+                kept_by_category[category] = list(result.gaps_by_category.get(category, []))
+
+        # Overflow-aware reclassification: reclassify missing_document gaps
+        # whose referenced documents all exist in the overflow set
+        overflow_reclassified = 0
+        if overflow_doc_ids or overflow_doc_names:
+            _norm_overflow_names = {
+                (n or "").strip().lower() for n in (overflow_doc_names or set()) if n
+            }
+            _overflow_ids = overflow_doc_ids or set()
+            missing_kept = kept_by_category.get(GapCategory.MISSING_DOCUMENT.value, [])
+            still_missing = []
+            for gap in missing_kept:
+                related = gap.related_documents or []
+                if not related:
+                    still_missing.append(gap)
                     continue
 
-                logger.info(
-                    "[GAP_RECONCILE] Gap IS execution-related | title=%s is_exec=%s is_followup=%s",
-                    gap.title[:60] if gap.title else "No title",
-                    is_exec,
-                    is_followup
-                )
-
-                gap_blob = " ".join(
-                    [
-                        gap.title or "",
-                        gap.description or "",
-                        gap.impact_on_case or "",
-                        " ".join(gap.recommendations or []),
-                    ]
-                )
-                matched = self._find_matching_signed_docs(gap, signed_docs)
-                logger.info(
-                    "[GAP_RECONCILE] Matching result | gap_title=%s matched_count=%s matched_docs=%s",
-                    gap.title[:60] if gap.title else "No title",
-                    len(matched),
-                    matched[:3] if matched else []
-                )
-                if matched:
-                    matched_doc_names.extend(matched)
-                    if self._is_identity_or_party_gap_text(gap_blob):
-                        non_blocking_identity_hits += 1
-                    logger.info(
-                        "[GAP_RECONCILE] REMOVING gap | title=%s matched_docs=%s",
-                        gap.title[:60] if gap.title else "No title",
-                        matched[:2]
+                # Check if ALL referenced docs are in the overflow set
+                # Match by ID first (if gap has document_id refs), then by name
+                all_in_overflow = True
+                any_in_overflow = False
+                for doc_ref in related:
+                    doc_ref_str = (doc_ref or "").strip()
+                    # Try ID match first, then normalized name match
+                    in_overflow = (
+                        (doc_ref_str in _overflow_ids)
+                        or (doc_ref_str.lower() in _norm_overflow_names)
                     )
-                    removed.append(gap)
-                else:
+                    if in_overflow:
+                        any_in_overflow = True
+                    else:
+                        all_in_overflow = False
+
+                if all_in_overflow and any_in_overflow:
+                    # All referenced docs exist in overflow — reclassify to incomplete_info
+                    gap.category = GapCategory.INCOMPLETE_INFO
+                    if gap.severity in (GapSeverity.CRITICAL, GapSeverity.HIGH):
+                        gap.severity = GapSeverity.MEDIUM
+                    gap.description = (
+                        (gap.description or "")
+                        + " [Note: Referenced document(s) exist in the case file but were "
+                        "outside the full analysis window. Reclassified from missing_document.]"
+                    )
+                    kept_by_category.setdefault(GapCategory.INCOMPLETE_INFO.value, []).append(gap)
+                    overflow_reclassified += 1
                     logger.info(
-                        "[GAP_RECONCILE] No matches found, keeping gap | title=%s",
+                        "[GAP_RECONCILE] Reclassified overflow gap to incomplete_info | title=%s",
                         gap.title[:60] if gap.title else "No title"
                     )
-                    kept_by_category[category].append(gap)
+                elif any_in_overflow and not all_in_overflow:
+                    # Mix of overflow and genuinely missing — keep but annotate
+                    gap.description = (
+                        (gap.description or "")
+                        + " [Note: Some referenced documents exist in the case file but were "
+                        "outside the full analysis window.]"
+                    )
+                    still_missing.append(gap)
+                else:
+                    still_missing.append(gap)
 
-        if not removed:
-            logger.info("[GAP_RECONCILE] No gaps were removed during reconciliation")
+            kept_by_category[GapCategory.MISSING_DOCUMENT.value] = still_missing
+            if overflow_reclassified:
+                logger.info(
+                    "[GAP_RECONCILE] Overflow reclassification | reclassified=%s",
+                    overflow_reclassified,
+                )
+
+        if not removed and not overflow_reclassified:
+            logger.info("[GAP_RECONCILE] No gaps were removed or reclassified during reconciliation")
             return result
 
         logger.info(
-            "[GAP_RECONCILE] Reconciliation complete | removed=%s non_blocking_identity=%s",
+            "[GAP_RECONCILE] Reconciliation complete | removed=%s non_blocking_identity=%s overflow_reclassified=%s",
             len(removed),
-            non_blocking_identity_hits
+            non_blocking_identity_hits,
+            overflow_reclassified,
         )
 
         for category in candidate_categories:
@@ -879,6 +978,7 @@ class GapAnalysisService:
         prior_gap_analysis: Optional[GapAnalysisResult] = None,
         signature_evidence: Optional[List[Dict[str, Any]]] = None,
         document_registry: Optional[List[Dict[str, Any]]] = None,
+        truncation_context: Optional[Dict[str, Any]] = None,
     ) -> str:
         """Build the AI prompt for gap detection.
 
@@ -935,6 +1035,32 @@ class GapAnalysisService:
 
         resolution_section = resolution_context.strip() if resolution_context else "None provided"
 
+        # Build truncation disclosure section
+        truncation_section = ""
+        if truncation_context and truncation_context.get("overflow_count", 0) > 0:
+            total = truncation_context["total_documents"]
+            window = truncation_context["evidence_window"]
+            overflow_count = truncation_context["overflow_count"]
+            overflow_names = truncation_context.get("overflow_doc_names", [])
+            capped_names = overflow_names[:20]
+            bullet_list = "\n".join(f"  - {name}" for name in capped_names)
+            more_text = f"\n  ... and {overflow_count - 20} more" if overflow_count > 20 else ""
+            truncation_section = f"""
+**Document Coverage Notice:**
+This case contains {total} documents. {window} documents had full text analysis;
+{overflow_count} additional documents have metadata-only coverage (marked
+"not_evaluated" / "metadata_only" in the registry and signature evidence).
+
+Documents outside full analysis window (showing first {min(20, overflow_count)}):
+{bullet_list}{more_text}
+
+CRITICAL: Do NOT flag any document with evaluation_status="metadata_only" as
+"missing." These documents EXIST in the case file but were not fully analyzed.
+If you have concerns about their content, classify as "incomplete_info" with a
+recommendation to review, NOT as "missing_document."
+
+"""
+
         prompt = f"""You are a critical legal analyst reviewing a case file for completeness and consistency.
 Your role is to identify weaknesses, gaps, and concerns that an attorney should address BEFORE proceeding.
 
@@ -977,7 +1103,7 @@ CONTEXT:
 
 **Intake Information:**
 {intake_content[:2000] if intake_content else 'No intake form provided'}
-
+{truncation_section}
 ---
 
 TASK: Identify gaps and inconsistencies in 5 categories:
@@ -1109,6 +1235,7 @@ Begin your analysis now.
         document_registry: Optional[List[Dict[str, Any]]] = None,
         resolution_context: Optional[str] = None,
         prior_gap_analysis: Optional[GapAnalysisResult] = None,
+        truncation_context: Optional[Dict[str, Any]] = None,
     ) -> GapAnalysisResult:
         """Run map-reduce gap analysis across multiple document batches.
 
@@ -1136,7 +1263,10 @@ Begin your analysis now.
             "total_failures": 0,
         }
         map_tasks = [
-            self._run_map_batch(batch, fact_matrix, issue_map, batches, parse_stats)
+            self._run_map_batch(
+                batch, fact_matrix, issue_map, batches, parse_stats,
+                truncation_context=truncation_context,
+            )
             for batch in batches
         ]
         batch_results = await asyncio.gather(*map_tasks, return_exceptions=True)
@@ -1194,6 +1324,19 @@ Begin your analysis now.
             all_summaries = [
                 s for batch in batches for s in batch.document_summaries
             ]
+            # Build fallback truncation context from omitted summaries
+            fallback_truncation = truncation_context
+            if len(all_summaries) > 50 and not fallback_truncation:
+                omitted = all_summaries[50:]
+                fallback_truncation = {
+                    "total_documents": len(all_summaries),
+                    "evidence_window": 50,
+                    "overflow_count": len(omitted),
+                    "overflow_doc_ids": set(),
+                    "overflow_doc_names": [
+                        getattr(s, "document_name", "Unknown") for s in omitted
+                    ],
+                }
             # Use only first 50 docs for single-pass fallback
             result = await self.analyze_gaps(
                 fact_matrix=fact_matrix,
@@ -1205,6 +1348,7 @@ Begin your analysis now.
                 prior_gap_analysis=prior_gap_analysis,
                 signature_evidence=signature_evidence,
                 document_registry=document_registry,
+                truncation_context=fallback_truncation,
             )
             result.analysis_quality = "fallback_single_pass"
             result.map_reduce_metadata = {
@@ -1212,6 +1356,11 @@ Begin your analysis now.
                 "total_documents_analyzed": min(50, total_docs),
                 "failed_batches": failed_batches,
                 "parse_stats": parse_stats,
+                "overflow_doc_names": (
+                    fallback_truncation.get("overflow_doc_names", [])
+                    if fallback_truncation
+                    else []
+                ),
             }
             return result
 
@@ -1231,6 +1380,7 @@ Begin your analysis now.
                 document_registry=document_registry,
                 resolution_context=resolution_context,
                 prior_gap_analysis=prior_gap_analysis,
+                truncation_context=truncation_context,
             )
         except Exception as reduce_err:
             logger.error(f"[GAP:REDUCE] FAILED | error={reduce_err}", exc_info=True)
@@ -1240,7 +1390,13 @@ Begin your analysis now.
         reduce_duration = time.time() - reduce_start
 
         # ── Post-processing (same as single-pass) ──
-        result = self._reconcile_signature_execution_gaps(result, signature_evidence)
+        overflow_doc_ids = set(truncation_context.get("overflow_doc_ids", [])) if truncation_context else None
+        overflow_doc_names = set(truncation_context.get("overflow_doc_names", [])) if truncation_context else None
+        result = self._reconcile_signature_execution_gaps(
+            result, signature_evidence,
+            overflow_doc_ids=overflow_doc_ids,
+            overflow_doc_names=overflow_doc_names,
+        )
         result.recommendation = self._generate_recommendation(
             result, deep_analysis=deep_analysis
         )
@@ -1301,6 +1457,7 @@ Begin your analysis now.
         issue_map: LegalIssueMap,
         all_batches: List[Any],
         parse_stats: Dict[str, int],
+        truncation_context: Optional[Dict[str, Any]] = None,
     ) -> tuple:
         """Run gap analysis on a single batch with tiered retry.
 
@@ -1314,7 +1471,15 @@ Begin your analysis now.
             f"label={batch.batch_label} model={map_model}"
         )
 
-        prompt = self._build_map_prompt(batch, fact_matrix, issue_map, all_batches)
+        prompt = self._build_map_prompt(
+            batch, fact_matrix, issue_map, all_batches,
+            truncation_context=truncation_context,
+        )
+        prompt_chars = len(prompt)
+        logger.info(
+            f"[GAP:PROMPT] batch={batch.batch_id} prompt_size={prompt_chars} chars "
+            f"(~{prompt_chars // 4} tokens)"
+        )
         instructions = (
             "You are a critical legal analyst reviewing a batch of case documents. "
             "Return only valid JSON matching the BatchGapReport schema. "
@@ -1449,6 +1614,7 @@ Begin your analysis now.
         fact_matrix: FactMatrix,
         issue_map: LegalIssueMap,
         all_batches: List[Any],
+        truncation_context: Optional[Dict[str, Any]] = None,
     ) -> str:
         """Build the prompt for a single map-phase batch."""
         # Document ID mapping table
@@ -1486,6 +1652,15 @@ Begin your analysis now.
             for iss in (issue_map.primary_issues or [])[:10]
         ) or "None identified"
 
+        # Lightweight truncation notice for map batches
+        map_truncation_note = ""
+        if truncation_context and truncation_context.get("overflow_count", 0) > 0:
+            map_truncation_note = (
+                f"\n**Note:** This case has {truncation_context['total_documents']} total documents. "
+                f"Some documents have metadata-only coverage (evaluation_status='metadata_only'). "
+                "Do NOT flag metadata_only documents as 'missing.'\n"
+            )
+
         prompt = f"""## Gap Analysis — Batch: {batch.batch_label}
 
 You are analyzing batch "{batch.batch_label}" ({len(batch.document_summaries)} documents)
@@ -1519,7 +1694,7 @@ using format: `CHECK_BATCH:{{batch_label}} FOR:{{category}}`. Maximum 5 flags.
 
 ### Document Registry (This Batch Only)
 {reg_summary}
-
+{map_truncation_note}
 ### Your Task
 
 Analyze ONLY the documents in this batch. For each:
@@ -1687,6 +1862,7 @@ Return ONLY valid JSON. No markdown, no explanation.
         document_registry: Optional[List[Dict[str, Any]]] = None,
         resolution_context: Optional[str] = None,
         prior_gap_analysis: Optional[GapAnalysisResult] = None,
+        truncation_context: Optional[Dict[str, Any]] = None,
     ) -> GapAnalysisResult:
         """Merge batch reports into a single GapAnalysisResult."""
         reduce_model = self.client.get_preferred_model(
@@ -1711,7 +1887,11 @@ Return ONLY valid JSON. No markdown, no explanation.
             document_registry=document_registry,
             resolution_context=resolution_context,
             prior_gap_analysis=prior_gap_analysis,
+            truncation_context=truncation_context,
         )
+
+        prompt_chars = len(prompt)
+        logger.info(f"[GAP:PROMPT] prompt_size={prompt_chars} chars (~{prompt_chars // 4} tokens)")
 
         response_dict = await asyncio.to_thread(
             self.client.create_response,
@@ -1752,6 +1932,7 @@ Return ONLY valid JSON. No markdown, no explanation.
         document_registry: Optional[List[Dict[str, Any]]] = None,
         resolution_context: Optional[str] = None,
         prior_gap_analysis: Optional[GapAnalysisResult] = None,
+        truncation_context: Optional[Dict[str, Any]] = None,
     ) -> str:
         """Build the prompt for the reduce phase."""
         # Serialize batch reports
@@ -1799,6 +1980,31 @@ Return ONLY valid JSON. No markdown, no explanation.
                 "Flag any gaps that might be affected by this missing coverage."
             )
 
+        # Build truncation disclosure for reduce prompt
+        truncation_text = ""
+        if truncation_context and truncation_context.get("overflow_count", 0) > 0:
+            total = truncation_context["total_documents"]
+            window = truncation_context["evidence_window"]
+            overflow_count = truncation_context["overflow_count"]
+            overflow_names = truncation_context.get("overflow_doc_names", [])
+            capped_names = overflow_names[:20]
+            bullet_list = "\n".join(f"  - {name}" for name in capped_names)
+            more_text = f"\n  ... and {overflow_count - 20} more" if overflow_count > 20 else ""
+            truncation_text = f"""
+### Document Coverage Notice
+This case contains {total} documents. {window} documents had full text analysis;
+{overflow_count} additional documents have metadata-only coverage (marked
+"metadata_only" in the registry and signature evidence).
+
+Documents outside full analysis window (showing first {min(20, overflow_count)}):
+{bullet_list}{more_text}
+
+CRITICAL: Do NOT flag any document with evaluation_status="metadata_only" as
+"missing." These documents EXIST in the case file but were not fully analyzed.
+If you have concerns about their content, classify as "incomplete_info" with a
+recommendation to review, NOT as "missing_document."
+"""
+
         prompt = f"""## Gap Analysis — Reduce Phase (Merge Batch Reports)
 
 You are merging {len(successful_reports)} batch gap analysis reports into a single
@@ -1826,7 +2032,7 @@ unified gap analysis result.
 {intake_text}
 {prior_text}
 {resolution_text}
-
+{truncation_text}
 ### Merge Instructions
 
 1. **Cross-reference evidence:** If Batch A flags "missing contract" but Batch B's

@@ -6047,6 +6047,7 @@ async def _run_gap_analysis(
     document_registry: Optional[List[Dict[str, Any]]] = None,
     resolution_context: Optional[str] = None,
     prior_gap_analysis=None,
+    truncation_context: Optional[Dict[str, Any]] = None,
 ) -> Any:
     """Route gap analysis to single-pass or map-reduce based on doc count.
 
@@ -6073,6 +6074,7 @@ async def _run_gap_analysis(
             document_registry=document_registry,
             resolution_context=resolution_context,
             prior_gap_analysis=prior_gap_analysis,
+            truncation_context=truncation_context,
         )
     else:
         logger.info(
@@ -6088,16 +6090,23 @@ async def _run_gap_analysis(
             prior_gap_analysis=prior_gap_analysis,
             signature_evidence=signature_evidence,
             document_registry=document_registry,
+            truncation_context=truncation_context,
         )
 
 
 def _build_signature_evidence(
     document_rows: List[Dict[str, Any]],
+    overflow_metadata: Optional[List[Dict[str, Any]]] = None,
 ) -> List[Dict[str, Any]]:
     """Create compact signature evidence list for gap-analysis prompt grounding."""
     evidence: List[Dict[str, Any]] = []
+    processed_ids: set = set()
 
     for doc in document_rows:
+        doc_id = doc.get("id")
+        if doc_id:
+            processed_ids.add(doc_id)
+
         signature_detection = _derive_signature_detection_for_gap_doc(doc)
         if not isinstance(signature_detection, dict):
             continue
@@ -6112,7 +6121,7 @@ def _build_signature_evidence(
 
         evidence.append(
             {
-                "document_id": doc.get("id"),
+                "document_id": doc_id,
                 "file_name": doc.get("file_name"),
                 "status": signature_detection.get("status"),
                 "confidence": signature_detection.get("confidence"),
@@ -6127,6 +6136,37 @@ def _build_signature_evidence(
             }
         )
 
+    # Add overflow docs (metadata-only, no text available)
+    if overflow_metadata:
+        for meta_doc in overflow_metadata:
+            meta_id = meta_doc.get("id")
+            if meta_id and meta_id in processed_ids:
+                continue
+
+            signature_detection = _derive_signature_detection_for_gap_doc(meta_doc)
+            if not isinstance(signature_detection, dict):
+                continue
+
+            signer_names = signature_detection.get("signer_names")
+            indicators = signature_detection.get("indicators")
+
+            evidence.append(
+                {
+                    "document_id": meta_id,
+                    "file_name": meta_doc.get("file_name"),
+                    "status": signature_detection.get("status"),
+                    "confidence": "low",
+                    "has_digital_signature": bool(
+                        signature_detection.get("has_digital_signature")
+                    ),
+                    "signing_date": signature_detection.get("signing_date"),
+                    "detection_source": "metadata_only",
+                    "signer_names": signer_names if isinstance(signer_names, list) else [],
+                    "indicators": indicators if isinstance(indicators, list) else [],
+                    "instrument_hints": [],
+                }
+            )
+
     return sorted(evidence, key=lambda row: (row.get("file_name") or "").lower())
 
 
@@ -6134,6 +6174,7 @@ def _build_document_registry_for_gap_context(
     document_rows: List[Dict[str, Any]],
     result_payload: Dict[str, Any],
     fact_matrix: Optional[Any] = None,
+    overflow_metadata: Optional[List[Dict[str, Any]]] = None,
 ) -> List[Dict[str, Any]]:
     """Build authoritative document registry rows from current DB document state."""
     try:
@@ -6207,14 +6248,57 @@ def _build_document_registry_for_gap_context(
             fact_matrix_model = FactMatrix(**fact_matrix)
 
         registry_service = DocumentRegistryService()
-        return registry_service.build_registry(
+        registry = registry_service.build_registry(
             processed_documents=processed_docs,
             document_summaries=summaries,
             fact_matrix=fact_matrix_model,
         )
+
+        # Add stub entries for overflow docs (metadata-only, neutral scoring)
+        if overflow_metadata:
+            registry_ids = {
+                row.get("document_id") for row in registry if row.get("document_id")
+            }
+            for meta_doc in overflow_metadata:
+                meta_id = meta_doc.get("id")
+                if meta_id and meta_id in registry_ids:
+                    continue
+                registry.append(
+                    {
+                        "document_id": meta_id,
+                        "document_name": meta_doc.get("file_name") or "Unknown",
+                        "document_type": None,
+                        "authority_level": None,
+                        "execution_status": None,
+                        "authority_score": None,
+                        "is_key_document": None,
+                        "role_in_case": None,
+                        "evaluation_status": "metadata_only",
+                    }
+                )
+
+        return registry
     except Exception as registry_err:
         logger.warning("[GAP] Failed to build document registry context: %s", registry_err)
         return []
+
+
+def _build_truncation_context(
+    case_document_rows: List[Dict[str, Any]],
+    all_doc_metadata: List[Dict[str, Any]],
+) -> Optional[Dict[str, Any]]:
+    """Build truncation disclosure context when metadata rows exceed text-fetched rows."""
+    text_ids = {doc.get("id") for doc in case_document_rows}
+    overflow = [m for m in all_doc_metadata if m.get("id") not in text_ids]
+    if not overflow:
+        return None
+    return {
+        "total_documents": len(all_doc_metadata),
+        "evidence_window": len(case_document_rows),
+        "overflow_count": len(overflow),
+        "overflow_doc_ids": [m.get("id") for m in overflow if m.get("id")],
+        "overflow_doc_names": [m.get("file_name", "Unknown") for m in overflow],
+    }
 
 
 def _hash_jsonable(value: Any) -> str:
@@ -6227,8 +6311,14 @@ def _build_gap_analysis_input_hash(
     analysis_id: str,
     result_payload: Dict[str, Any],
     case_document_state_hash: str,
+    all_doc_metadata_hash: Optional[str] = None,
 ) -> str:
-    """Build stable hash representing inputs that materially affect gap-analysis output."""
+    """Build stable hash representing inputs that materially affect gap-analysis output.
+
+    Uses a composite hash: text-window hash for text-change sensitivity,
+    plus lightweight metadata hash so overflow-only changes (new docs added,
+    status changes on older docs) also invalidate the cache.
+    """
     document_summaries_raw = result_payload.get("document_summaries", [])
     if isinstance(document_summaries_raw, str):
         document_summaries_hash = hashlib.sha256(
@@ -6248,6 +6338,8 @@ def _build_gap_analysis_input_hash(
         "document_summaries_hash": document_summaries_hash,
         "case_document_state_hash": case_document_state_hash,
     }
+    if all_doc_metadata_hash:
+        canonical["all_doc_metadata_hash"] = all_doc_metadata_hash
     return _hash_jsonable(canonical)
 
 
@@ -6270,11 +6362,19 @@ async def _ensure_fresh_gap_analysis_for_letter_generation(
         return
 
     case_document_rows = _fetch_case_documents_for_gap_context(supabase, case_id)
+    all_doc_metadata = _fetch_all_case_document_metadata(supabase, case_id)
     case_document_state_hash = _build_case_document_state_hash(case_document_rows)
+    all_doc_metadata_hash = _build_case_document_state_hash_lightweight(all_doc_metadata)
+
+    # Compute overflow metadata (docs beyond text window)
+    text_ids = {doc.get("id") for doc in case_document_rows}
+    overflow_metadata = [m for m in all_doc_metadata if m.get("id") not in text_ids]
+
     gap_input_hash = _build_gap_analysis_input_hash(
         analysis_id=analysis_id,
         result_payload=result_payload,
         case_document_state_hash=case_document_state_hash,
+        all_doc_metadata_hash=all_doc_metadata_hash,
     )
     existing_gap_state = result_payload.get("gap_analysis_state") or {}
     if existing_gap_state.get("input_hash") == gap_input_hash:
@@ -6283,6 +6383,11 @@ async def _ensure_fresh_gap_analysis_for_letter_generation(
     logger.info(
         "[LETTER] Refreshing stale gap analysis before letter generation for case %s",
         case_id,
+    )
+    logger.info(
+        f"[GAP:SCOPE] call_site=letter_refresh total_docs={len(all_doc_metadata)} "
+        f"text_window_docs={len(case_document_rows)} "
+        f"overflow_docs={len(overflow_metadata)}"
     )
 
     try:
@@ -6302,11 +6407,13 @@ async def _ensure_fresh_gap_analysis_for_letter_generation(
 
         doc_summaries_list = _parse_gap_document_summaries(result_payload)
         intake_content = _fetch_gap_intake_content(supabase, case_id, result_payload)
-        signature_evidence = _build_signature_evidence(case_document_rows)
+        signature_evidence = _build_signature_evidence(case_document_rows, overflow_metadata=overflow_metadata)
+        truncation_context = _build_truncation_context(case_document_rows, all_doc_metadata)
         document_registry = _build_document_registry_for_gap_context(
             document_rows=case_document_rows,
             result_payload=result_payload,
             fact_matrix=fact_matrix,
+            overflow_metadata=overflow_metadata,
         )
 
         ai_preferences = await _get_user_ai_preferences(user_id, supabase)
@@ -6322,6 +6429,7 @@ async def _ensure_fresh_gap_analysis_for_letter_generation(
             intake_content=intake_content,
             signature_evidence=signature_evidence,
             document_registry=document_registry,
+            truncation_context=truncation_context,
         )
 
         gap_dict = gap_result.model_dump(mode="json")
@@ -6612,12 +6720,27 @@ async def analyze_gaps_on_demand(
         )
 
     case_document_rows = _fetch_case_documents_for_gap_context(supabase, case_id)
+    all_doc_metadata = _fetch_all_case_document_metadata(supabase, case_id)
     case_document_state_hash = _build_case_document_state_hash(case_document_rows)
-    signature_evidence = _build_signature_evidence(case_document_rows)
+    all_doc_metadata_hash = _build_case_document_state_hash_lightweight(all_doc_metadata)
+
+    # Compute overflow metadata (docs beyond text window)
+    text_ids = {doc.get("id") for doc in case_document_rows}
+    overflow_metadata = [m for m in all_doc_metadata if m.get("id") not in text_ids]
+
+    signature_evidence = _build_signature_evidence(case_document_rows, overflow_metadata=overflow_metadata)
     gap_input_hash = _build_gap_analysis_input_hash(
         analysis_id=analysis_id,
         result_payload=result_payload,
         case_document_state_hash=case_document_state_hash,
+        all_doc_metadata_hash=all_doc_metadata_hash,
+    )
+    truncation_context = _build_truncation_context(case_document_rows, all_doc_metadata)
+
+    logger.info(
+        f"[GAP:SCOPE] call_site=primary total_docs={len(all_doc_metadata)} "
+        f"text_window_docs={len(case_document_rows)} "
+        f"overflow_docs={len(overflow_metadata)}"
     )
 
     # Check if gap analysis already exists
@@ -6667,6 +6790,7 @@ async def analyze_gaps_on_demand(
             document_rows=case_document_rows,
             result_payload=result_payload,
             fact_matrix=fact_matrix,
+            overflow_metadata=overflow_metadata,
         )
 
         logger.info(f"[GAP_ENDPOINT] Running gap analysis with {len(doc_summaries_list)} documents")
@@ -6681,6 +6805,7 @@ async def analyze_gaps_on_demand(
             intake_content=intake_content,
             signature_evidence=signature_evidence,
             document_registry=document_registry,
+            truncation_context=truncation_context,
         )
 
         logger.info(f"[GAP_ENDPOINT] Gap analysis complete: {gap_result.total_gaps} gaps found")
@@ -6768,7 +6893,18 @@ async def resolve_gaps_and_refresh(
     all_doc_ids_list = sorted(all_doc_ids)
 
     case_document_rows = _fetch_case_documents_for_gap_context(supabase, case_id)
+    all_doc_metadata = _fetch_all_case_document_metadata(supabase, case_id)
     case_document_state_hash = _build_case_document_state_hash(case_document_rows)
+
+    # Compute overflow metadata (docs beyond text window)
+    text_ids = {doc.get("id") for doc in case_document_rows}
+    overflow_metadata = [m for m in all_doc_metadata if m.get("id") not in text_ids]
+
+    logger.info(
+        f"[GAP:SCOPE] call_site=resolution total_docs={len(all_doc_metadata)} "
+        f"text_window_docs={len(case_document_rows)} "
+        f"overflow_docs={len(overflow_metadata)}"
+    )
 
     supporting_doc_hash = _compute_resolution_document_state_hash(
         supabase=supabase,
@@ -6802,7 +6938,7 @@ async def resolve_gaps_and_refresh(
         openai_client = OpenAIClient(user_preferences=ai_preferences)
         gap_service = GapAnalysisService(openai_client=openai_client)
 
-        signature_evidence = _build_signature_evidence(case_document_rows)
+        signature_evidence = _build_signature_evidence(case_document_rows, overflow_metadata=overflow_metadata)
 
         fact_matrix = FactMatrix(**multi_stage_result.get("fact_matrix", {}))
         issue_map = LegalIssueMap(**multi_stage_result.get("issue_map", {}))
@@ -6818,10 +6954,12 @@ async def resolve_gaps_and_refresh(
         doc_summaries_list = _parse_gap_document_summaries(result_payload)
         intake_content = _fetch_gap_intake_content(supabase, case_id, result_payload)
         existing_gap_model = GapAnalysisResult(**existing_gap_dict)
+        truncation_context = _build_truncation_context(case_document_rows, all_doc_metadata)
         document_registry = _build_document_registry_for_gap_context(
             document_rows=case_document_rows,
             result_payload=result_payload,
             fact_matrix=fact_matrix,
+            overflow_metadata=overflow_metadata,
         )
 
         supporting_docs = _collect_resolution_documents(
@@ -6852,6 +6990,7 @@ async def resolve_gaps_and_refresh(
             document_registry=document_registry,
             resolution_context=resolution_context,
             prior_gap_analysis=existing_gap_model,
+            truncation_context=truncation_context,
         )
 
         gap_dict = gap_result.model_dump(mode="json")
@@ -6945,12 +7084,27 @@ async def analyze_gaps_streaming(
                 return
 
             case_document_rows = _fetch_case_documents_for_gap_context(supabase, case_id)
+            all_doc_metadata = _fetch_all_case_document_metadata(supabase, case_id)
             case_document_state_hash = _build_case_document_state_hash(case_document_rows)
-            signature_evidence = _build_signature_evidence(case_document_rows)
+            all_doc_metadata_hash = _build_case_document_state_hash_lightweight(all_doc_metadata)
+
+            # Compute overflow metadata (docs beyond text window)
+            text_ids = {doc.get("id") for doc in case_document_rows}
+            overflow_metadata = [m for m in all_doc_metadata if m.get("id") not in text_ids]
+
+            signature_evidence = _build_signature_evidence(case_document_rows, overflow_metadata=overflow_metadata)
             gap_input_hash = _build_gap_analysis_input_hash(
                 analysis_id=analysis_id,
                 result_payload=result_payload,
                 case_document_state_hash=case_document_state_hash,
+                all_doc_metadata_hash=all_doc_metadata_hash,
+            )
+            truncation_context = _build_truncation_context(case_document_rows, all_doc_metadata)
+
+            logger.info(
+                f"[GAP:SCOPE] call_site=streaming total_docs={len(all_doc_metadata)} "
+                f"text_window_docs={len(case_document_rows)} "
+                f"overflow_docs={len(overflow_metadata)}"
             )
 
             # Check if gap analysis already exists
@@ -7001,6 +7155,7 @@ async def analyze_gaps_streaming(
                 document_rows=case_document_rows,
                 result_payload=result_payload,
                 fact_matrix=fact_matrix,
+                overflow_metadata=overflow_metadata,
             )
 
             # Phase 2: Analyzing
@@ -7018,6 +7173,7 @@ async def analyze_gaps_streaming(
                 intake_content=intake_content,
                 signature_evidence=signature_evidence,
                 document_registry=document_registry,
+                truncation_context=truncation_context,
             )
 
             logger.info(f"[GAP_STREAM] Gap analysis complete: {gap_result.total_gaps} gaps found")

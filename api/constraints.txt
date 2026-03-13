@@ -64,6 +64,7 @@ httpcore==1.0.9
     # via httpx
 httpx==0.28.1
     # via
+    #   -r api/requirements.txt
     #   gotrue
     #   openai
     #   postgrest
@@ -92,6 +93,10 @@ packaging==26.0
     #   deprecation
     #   limits
 pillow==12.1.1
+    # via
+    #   -r api/requirements.txt
+    #   pillow-heif
+pillow-heif==1.3.0
     # via -r api/requirements.txt
 postgrest==1.1.1
     # via supabase

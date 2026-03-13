@@ -490,15 +490,15 @@ You can choose which AI model to use for four separate tasks:
 | Task | Description | Default Model |
 |------|-------------|---------------|
 | **Document Analysis** | Processes and extracts information from documents | GPT-5 Mini |
-| **Findings Email & Demand Letter** | Generates findings emails, demand letters, and recommendation letters | GPT-5.2 |
+| **Findings Email & Demand Letter** | Generates findings emails, demand letters, and recommendation letters | GPT-5.4 |
 | **Case Chat** | Powers the case chat assistant | GPT-5 Mini |
-| **Multi-Stage Analysis** | Runs the comprehensive case analysis pipeline | GPT-5.2 |
+| **Multi-Stage Analysis** | Runs the comprehensive case analysis pipeline | GPT-5.4 |
 
-**Available models:** GPT-5.2 (recommended for most tasks), GPT-5 Mini (faster, good for document processing), GPT-5 Nano (fastest, lighter tasks), GPT-4o (legacy).
+**Available models:** GPT-5.4 (recommended for most tasks), GPT-5 Mini (faster, good for document processing), GPT-5 Nano (fastest, lighter tasks), GPT-5.2 (previous generation).
 
 Click **"Reset to Defaults"** to restore the recommended model configuration.
 
-**When to change models:** The defaults work well for most cases. Consider switching to GPT-5.2 for all tasks on complex, high-stakes cases. Use GPT-5 Nano for quick document processing when speed matters more than depth.
+**When to change models:** The defaults work well for most cases. Consider switching to GPT-5.4 for all tasks on complex, high-stakes cases. Use GPT-5 Nano for quick document processing when speed matters more than depth.
 
 ### Document Handling (Blacklist)
 

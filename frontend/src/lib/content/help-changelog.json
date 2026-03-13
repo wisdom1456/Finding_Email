@@ -1,6 +1,20 @@
 {
-	"helpLastReviewed": "March 11, 2026",
+	"helpLastReviewed": "March 13, 2026",
 	"entries": [
+		{
+			"checkInDate": "2026-03-13",
+			"title": "v2.0.0 — GPT-5.4 Upgrade, Map-Reduce Gap Analysis, HEIC Support & Streaming Recovery",
+			"summary": "GPT-5.4 is now the default model for analysis and letter generation. Gap analysis uses a map-reduce pipeline for large cases. HEIC image support added. Small images filtered during Clio import. Network auto-recovery for streaming and letter generation.",
+			"highlights": [
+				"GPT-5.4 is now the default model for letter generation and multi-stage analysis, with improved reasoning capabilities.",
+				"Gap analysis uses a map-reduce pipeline for cases with 50+ documents, designed to scale more reliably on large matters.",
+				"HEIC/HEIF image support added — iPhone photos are automatically converted to JPEG for processing.",
+				"Small images under 50KB (email signature logos, social media icons) are automatically filtered during Clio import.",
+				"Network auto-recovery for streaming analysis and letter generation helps prevent lost progress on transient errors.",
+				"SSE progress polling added for Vercel serverless environments to maintain progress visibility.",
+				"Help documentation and model references updated to reflect GPT-5.4 defaults."
+			]
+		},
 		{
 			"checkInDate": "2026-03-11",
 			"title": "Findings Email Prompt Rewrite & Letter Generation Improvements",
@@ -24,7 +38,7 @@
 				"Results workspace tab names corrected: Case Analysis, Gaps, Full Analysis, Document Review, Findings & Demand, Case Chat, Quality Report.",
 				"Settings page fully documented: contact info, jurisdiction, AI model preferences, document blacklist, and analysis processing.",
 				"Recommendation letter types documented: proceed, declination, settlement advisory, request for documents.",
-				"AI model references updated to current models (GPT-5.2, GPT-5 Mini, GPT-5 Nano, GPT-4o)."
+				"AI model references updated to current models (GPT-5.4, GPT-5 Mini, GPT-5 Nano, GPT-5.2)."
 			]
 		},
 		{

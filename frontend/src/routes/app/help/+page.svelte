@@ -724,7 +724,7 @@
 								<li><strong>PDF</strong> - Standard and scanned (with OCR via GPT-5.2 Vision)</li>
 								<li><strong>DOCX/DOC</strong> - Microsoft Word documents</li>
 								<li><strong>EML</strong> - Email files with full HTML support (no conversion needed)</li>
-								<li><strong>JPG/PNG</strong> - Images and photos (analyzed via Vision AI or OCR)</li>
+								<li><strong>JPG/PNG/HEIC</strong> - Images and photos, including iPhone photos (analyzed via Vision AI or OCR)</li>
 								<li><strong>TXT</strong> - Plain text files</li>
 								<li><strong>CSV</strong> - Spreadsheet data</li>
 								<li><strong>HTML</strong> - Web page content</li>

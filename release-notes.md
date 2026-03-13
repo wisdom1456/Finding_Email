@@ -1,88 +1,90 @@
-# Release Notes: Recent Updates
-**Since: January 23, 2025** (Document Viewer with Tabbed Interface)
+# Release Notes — v2.0.0
+**February 5, 2026 → March 13, 2026**
 
-## 🎯 Major New Features
+## Major Features
 
-### Clio Integration & Document Sync
-- **Two-way Clio Synchronization**: Automatically sync documents between Clio and the platform. New documents from Clio are imported, analyzed, and results are sent back to Clio.
-- **Sync Status Tracking**: See which documents are up-to-date and which need re-analysis when changes occur in Clio.
-- **One-Click Sync Button**: Manually trigger syncs from the documents page to pull in the latest changes.
-- **Smart Change Detection**: The system tracks when Clio documents are modified and flags cases for re-analysis.
+### GPT-5.4 Model Upgrade
+- Analysis, letter generation, and multi-stage processing now default to GPT-5.4, with improved reasoning and legal analysis capabilities.
+- OCR and Vision extraction continue to use GPT-5.2 Vision.
+- Model preferences remain configurable per-task in Settings (GPT-5.4, GPT-5 Mini, GPT-5 Nano, GPT-5.2).
 
-### Email File Support
-- **Direct .eml File Processing**: Upload email files (.eml format) directly without conversion.
-- **HTML Email Handling**: Properly processes emails that only contain HTML content (no plain text).
+### Verification Hub
+- New unified document management interface replacing the previous Document Review panel.
+- Triage groups: Critical, Needs Attention, Ready, Duplicates, Excluded.
+- Signature review: reconciles signed vs. unsigned documents using content hints, not just filenames.
+- Bulk OCR: run text extraction across all documents that need it in one action.
+- Canonical document registry: tracks document identities and relationships across the case.
 
-### Enhanced Document Analysis
+### Map-Reduce Gap Analysis
+- Large cases (50+ documents) now use a map-reduce pipeline for more thorough gap analysis.
+- Map phase uses GPT-5 Mini for per-batch processing; reduce phase uses GPT-5.4 for synthesis.
+- Designed to produce more consistent results on cases with extensive documentation.
 
-#### Gap Analysis
-- **Comprehensive Case Assessment**: New analysis mode that identifies missing information, evidence gaps, and weak points in your case.
-- **Attorney Summary**: Get a concise executive summary of the gap analysis written specifically for legal professionals.
-- **Real-time Streaming**: Watch the analysis being generated live with streaming text display.
-- **Integration with Letters**: Gap analysis results automatically inform recommendation letters to prevent hallucinations and ensure accuracy.
+### Findings Email V2
+- Findings email prompt fully rewritten with combined law + application format for stronger legal reasoning.
+- Critic review pass validates structure and substance before final output.
+- Polish pass improves readability while preserving legal precision.
+- Automatic retry on network errors to help prevent lost work.
 
-#### Vision AI for Photos & Scanned Documents
-- **Automatic Photo Detection**: System recognizes when documents are photos or low-quality scans.
-- **Intelligent Analysis**: Uses advanced vision AI to analyze photographs, diagrams, and poor-quality scans that traditional OCR can't handle.
-- **Contextual Understanding**: Vision AI considers the context of your case when analyzing visual documents.
-- **Quality Detection**: Automatically switches to vision analysis when OCR quality is too low to be useful.
+### Email Thread Processing
+- Direct .eml file processing with full HTML email support.
+- Attachment extraction from email files.
+- Thread deduplication to reduce redundant content in analysis.
+- Content-hash deduplication identifies exact-duplicate documents across the case.
 
-### Case Recommendation System
-- **Advisory Letter Generation**: Generate professional recommendation letters based on case analysis.
-- **Hallucination Prevention**: Letters are validated against actual case findings to ensure accuracy.
-- **Gap Analysis Integration**: Recommendations are informed by identified case gaps and weaknesses.
+### HEIC Image Support
+- HEIC/HEIF images (common iPhone photo format) are now accepted and automatically converted to JPEG for processing.
+- Requires `pillow-heif` runtime dependency.
 
-### Legal Corpus & Research Integration
-- **Enhanced Search Functionality**: Improved search within the legal knowledge base.
-- **Better Resource Discovery**: Find relevant legal standards, precedents, and guidelines more easily.
+### Small Image Filtering
+- Images under 50KB (typically email signature logos, social media icons) are automatically filtered during Clio document import to reduce noise.
 
-## 🎨 User Interface Improvements
+### Deferred Document Extraction
+- Documents can now be extracted on-demand rather than all at import time, allowing faster initial case setup.
 
-### Document Analysis Display
-- **Magazine-Style Layout**: Full Analysis tab redesigned with a modern, editorial-style layout for easier reading.
-- **Multi-line Chat Support**: Case chat assistant now supports multi-line text input for more natural conversations.
-- **Outdated Analysis Banner**: Clear warnings when analysis needs to be refreshed due to document changes.
-- **Primary Intake Selection**: Choose which document serves as the main case summary.
+### Cloud Run OCR
+- Optional Google Cloud Run OCR service integration for faster, more scalable text extraction.
+- Falls back to local OCR processing if Cloud Run is unavailable or not configured.
 
-### Navigation & Help
-- **Modernized Help Page**: Completely redesigned help section with current features and clearer instructions.
-- **Enhanced Component Library**: Consistent, polished design across all pages.
-- **Improved Accessibility**: Better support for screen readers and keyboard navigation.
-- **Updated How-To Guides**: Clear, step-by-step instructions for all major features.
+## Reliability Improvements
 
-## 🔧 Performance & Reliability Improvements
+### Network Auto-Recovery
+- Streaming analysis, letter generation, and document processing now include automatic retry logic designed to recover from transient network interruptions.
+- SSE progress polling for Vercel serverless environments helps maintain progress visibility.
 
-### Document Processing
-- **File Size Limits**: Automatic handling of large files to prevent timeouts and system overload.
-- **Improved Error Handling**: Better recovery from document extraction failures.
-- **Extraction Status Updates**: User interface now updates immediately when document extraction completes.
-- **Skip Protection**: Can now properly process cases even if some documents have no extractable text.
+### Clio Import Stability
+- Improved handling of large Clio matters with many documents.
+- Small image filtering reduces unnecessary processing.
 
-### System Stability
-- **Race Condition Fixes**: Resolved timing issues that could cause analysis to fail intermittently.
-- **Timeout Adjustments**: Increased timeouts for complex analyses to prevent premature failures.
-- **Async Processing Fixes**: Fixed critical issues in background processing that could cause data loss.
-- **Better Model Selection**: Switched certain analyses to more reliable AI models for consistent results.
+### Security Hardening
+- Authentication, session management, and XSS protections strengthened.
+- Input sanitization improvements across the application.
 
-### Clio Integration Reliability
-- **Unlimited Pagination**: Removed artificial limits on how many documents can be retrieved from Clio.
-- **Timezone Handling**: Fixed issues with date/time comparisons across different time zones.
-- **Upload Error Handling**: Better recovery when uploading results back to Clio fails.
-- **Comprehensive Testing**: Added extensive automated tests for Clio integration to catch issues early.
+## User Interface
 
-## 📝 Technical Quality Improvements
+### Results Workspace
+- Results workspace persists when switching between case tabs — no need to reopen.
+- Unified case + results navigation reduces context switching.
 
-- **Code Quality**: Automatic linting and code style improvements throughout the codebase.
-- **Test Coverage**: Added comprehensive unit and integration tests for critical features.
-- **Documentation**: Detailed implementation plans and design documents for major features.
-- **Deployment Checklist**: Systematic testing procedures before production releases.
+### Updated Analysis Time Estimates
+- Time estimates updated to reflect current processing speeds: 1-2 min (small), 2-4 min (medium), 4-8 min (large), 10-15 min (very large 50+ doc cases).
+- OCR adds approximately 30-60 seconds per document.
+
+### Removed
+- **DocumentReviewPanel** — consolidated into the Verification Hub.
+- **WeasyPrint PDF generation** — removed in favor of client-side document rendering.
+
+## Dependencies & Infrastructure
+- `pillow-heif` added for HEIC image support.
+- `tiktoken` made optional with lazy-import fallback.
+- `httpx` added for Cloud Run OCR service communication.
+- WeasyPrint dependency fully removed.
 
 ---
 
 ## Summary
-This release focuses on three key areas:
-1. **Deeper Clio Integration** - Seamless two-way sync with automatic updates
-2. **Smarter Document Analysis** - Vision AI for photos, gap analysis for case assessment
-3. **Better User Experience** - Modern interface, clearer feedback, more reliable processing
-
-All changes have been tested and are designed to make case analysis more accurate, comprehensive, and easier to use.
+This release focuses on four areas:
+1. **Smarter AI** — GPT-5.4 default with map-reduce gap analysis for large cases
+2. **Better Document Management** — Verification Hub, HEIC support, dedup, and deferred extraction
+3. **Improved Letters** — Rewritten findings email with critic review and polish
+4. **Reliability** — Network recovery, security hardening, and Clio import stability

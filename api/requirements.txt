@@ -52,6 +52,9 @@ python-docx>=1.1.0,<2.0
 # Image compression for document processing (re-enabled on Pro plan)
 Pillow>=10.0.0
 
+# HEIC/HEIF image format support (iPhone photos)
+pillow-heif>=0.16.0
+
 # Lightweight text processing
 html2text==2020.1.16
 markdown2>=2.4.0

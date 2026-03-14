@@ -6,8 +6,7 @@ Verifies:
 - Retry exhaustion raises HTTPException 500
 """
 
-import time
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi import HTTPException
@@ -23,55 +22,55 @@ class FakeAPIError(Exception):
 
 
 class TestIsTransientSupabaseError:
-    """Test the _is_transient_supabase_error helper."""
+    """Test the is_transient_supabase_error helper."""
 
     def test_502_is_transient(self):
-        from legal_portal.api.routes.documents import _is_transient_supabase_error
+        from legal_portal.api.middleware.retry import is_transient_supabase_error
 
         err = FakeAPIError("Bad gateway", code="502")
-        assert _is_transient_supabase_error(err) is True
+        assert is_transient_supabase_error(err) is True
 
     def test_503_is_transient(self):
-        from legal_portal.api.routes.documents import _is_transient_supabase_error
+        from legal_portal.api.middleware.retry import is_transient_supabase_error
 
         err = FakeAPIError("Service Unavailable", code="503")
-        assert _is_transient_supabase_error(err) is True
+        assert is_transient_supabase_error(err) is True
 
     def test_schema_cache_message_is_transient(self):
-        from legal_portal.api.routes.documents import _is_transient_supabase_error
+        from legal_portal.api.middleware.retry import is_transient_supabase_error
 
         err = FakeAPIError("schema cache is being rebuilt", code="500")
-        assert _is_transient_supabase_error(err) is True
+        assert is_transient_supabase_error(err) is True
 
     def test_bad_gateway_message_is_transient(self):
-        from legal_portal.api.routes.documents import _is_transient_supabase_error
+        from legal_portal.api.middleware.retry import is_transient_supabase_error
 
         err = FakeAPIError("Bad Gateway", code="")
-        assert _is_transient_supabase_error(err) is True
+        assert is_transient_supabase_error(err) is True
 
     def test_400_is_not_transient(self):
-        from legal_portal.api.routes.documents import _is_transient_supabase_error
+        from legal_portal.api.middleware.retry import is_transient_supabase_error
 
         err = FakeAPIError("Invalid request", code="400")
-        assert _is_transient_supabase_error(err) is False
+        assert is_transient_supabase_error(err) is False
 
     def test_permission_denied_is_not_transient(self):
-        from legal_portal.api.routes.documents import _is_transient_supabase_error
+        from legal_portal.api.middleware.retry import is_transient_supabase_error
 
         err = FakeAPIError("permission denied", code="403")
-        assert _is_transient_supabase_error(err) is False
+        assert is_transient_supabase_error(err) is False
 
     def test_57014_statement_timeout_is_transient(self):
-        from legal_portal.api.routes.documents import _is_transient_supabase_error
+        from legal_portal.api.middleware.retry import is_transient_supabase_error
 
         err = FakeAPIError("canceling statement due to statement timeout", code="57014")
-        assert _is_transient_supabase_error(err) is True
+        assert is_transient_supabase_error(err) is True
 
     def test_statement_timeout_message_is_transient(self):
-        from legal_portal.api.routes.documents import _is_transient_supabase_error
+        from legal_portal.api.middleware.retry import is_transient_supabase_error
 
         err = FakeAPIError("statement timeout", code="")
-        assert _is_transient_supabase_error(err) is True
+        assert is_transient_supabase_error(err) is True
 
 
 class TestExtractionDbRetry:
@@ -87,7 +86,8 @@ class TestExtractionDbRetry:
         mock_supabase.table.return_value = mock_table
         return mock_supabase, mock_table
 
-    def test_retries_on_502_and_succeeds(self):
+    @pytest.mark.asyncio
+    async def test_retries_on_502_and_succeeds(self):
         """Mock .execute() to raise 502 twice, then succeed. Verify update completes."""
         from legal_portal.api.routes.documents import _update_document_with_retry
 
@@ -99,16 +99,16 @@ class TestExtractionDbRetry:
             ]
         )
 
-        # Should succeed after 2 retries (no real sleep in test)
-        with patch("legal_portal.api.routes.documents.time.sleep"):
-            result = _update_document_with_retry(
+        with patch("legal_portal.api.middleware.retry.asyncio.sleep", new_callable=AsyncMock):
+            result = await _update_document_with_retry(
                 mock_supabase, "doc-001", {"status": "ready"}
             )
 
         assert result.data == [{"id": "doc-001"}]
         assert mock_table.execute.call_count == 3
 
-    def test_retries_on_503_and_succeeds(self):
+    @pytest.mark.asyncio
+    async def test_retries_on_503_and_succeeds(self):
         """Mock .execute() to raise 503 once, then succeed."""
         from legal_portal.api.routes.documents import _update_document_with_retry
 
@@ -119,15 +119,16 @@ class TestExtractionDbRetry:
             ]
         )
 
-        with patch("legal_portal.api.routes.documents.time.sleep"):
-            result = _update_document_with_retry(
+        with patch("legal_portal.api.middleware.retry.asyncio.sleep", new_callable=AsyncMock):
+            result = await _update_document_with_retry(
                 mock_supabase, "doc-002", {"status": "ready"}
             )
 
         assert result.data == [{"id": "doc-002"}]
         assert mock_table.execute.call_count == 2
 
-    def test_exhausts_retries_raises_500(self):
+    @pytest.mark.asyncio
+    async def test_exhausts_retries_raises_500(self):
         """All 3 attempts fail with transient error → HTTPException 500."""
         from legal_portal.api.routes.documents import _update_document_with_retry
 
@@ -139,9 +140,9 @@ class TestExtractionDbRetry:
             ]
         )
 
-        with patch("legal_portal.api.routes.documents.time.sleep"):
+        with patch("legal_portal.api.middleware.retry.asyncio.sleep", new_callable=AsyncMock):
             with pytest.raises(HTTPException) as exc_info:
-                _update_document_with_retry(
+                await _update_document_with_retry(
                     mock_supabase, "doc-003", {"status": "ready"}
                 )
 
@@ -149,7 +150,8 @@ class TestExtractionDbRetry:
         assert "Failed to save extraction results" in exc_info.value.detail
         assert mock_table.execute.call_count == 3
 
-    def test_no_retry_on_non_transient_error(self):
+    @pytest.mark.asyncio
+    async def test_no_retry_on_non_transient_error(self):
         """Non-transient error (400) → immediate HTTPException 500, no retry."""
         from legal_portal.api.routes.documents import _update_document_with_retry
 
@@ -157,17 +159,18 @@ class TestExtractionDbRetry:
             [FakeAPIError("Invalid request body", code="400")]
         )
 
-        with patch("legal_portal.api.routes.documents.time.sleep"):
+        with patch("legal_portal.api.middleware.retry.asyncio.sleep", new_callable=AsyncMock):
             with pytest.raises(HTTPException) as exc_info:
-                _update_document_with_retry(
+                await _update_document_with_retry(
                     mock_supabase, "doc-004", {"status": "ready"}
                 )
 
         assert exc_info.value.status_code == 500
         assert mock_table.execute.call_count == 1  # No retry
 
-    def test_backoff_delays_are_exponential(self):
-        """Verify sleep is called with 1, 2, 4 second delays."""
+    @pytest.mark.asyncio
+    async def test_backoff_delays_are_exponential(self):
+        """Verify sleep is called with 1, 2 second delays."""
         from legal_portal.api.routes.documents import _update_document_with_retry
 
         mock_supabase, _ = self._make_mock_chain(
@@ -178,9 +181,9 @@ class TestExtractionDbRetry:
             ]
         )
 
-        with patch("legal_portal.api.routes.documents.time.sleep") as mock_sleep:
+        with patch("legal_portal.api.middleware.retry.asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
             with pytest.raises(HTTPException):
-                _update_document_with_retry(
+                await _update_document_with_retry(
                     mock_supabase, "doc-005", {"status": "ready"}
                 )
 
@@ -189,7 +192,8 @@ class TestExtractionDbRetry:
         mock_sleep.assert_any_call(1)
         mock_sleep.assert_any_call(2)
 
-    def test_retries_on_57014_and_succeeds(self):
+    @pytest.mark.asyncio
+    async def test_retries_on_57014_and_succeeds(self):
         """Mock .execute() to raise 57014 once, then succeed. Verify retry works."""
         from legal_portal.api.routes.documents import _update_document_with_retry
 
@@ -200,8 +204,8 @@ class TestExtractionDbRetry:
             ]
         )
 
-        with patch("legal_portal.api.routes.documents.time.sleep"):
-            result = _update_document_with_retry(
+        with patch("legal_portal.api.middleware.retry.asyncio.sleep", new_callable=AsyncMock):
+            result = await _update_document_with_retry(
                 mock_supabase, "doc-006", {"status": "ready"}
             )
 

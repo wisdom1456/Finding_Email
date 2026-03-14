@@ -24,6 +24,7 @@ from pydantic import BaseModel, Field, validator
 from starlette.concurrency import run_in_threadpool
 
 from legal_portal.api.dependencies import get_current_user, get_supabase_client, get_user_supabase_client
+from legal_portal.api.middleware.retry import retry_sync
 from legal_portal.api.rate_limiter import limiter
 from legal_portal.config.default import get_settings
 from legal_portal.core.data_models import (
@@ -56,10 +57,6 @@ logger = logging.getLogger(__name__)
 # Cache for database column existence checks
 _DB_COLUMNS_CACHE = {}
 _GAP_ANALYSIS_INPUT_SCHEMA_VERSION = "2026-03-10-map-reduce-v1"
-
-_TRANSIENT_CODES = {"502", "503", "57014"}
-_TRANSIENT_MESSAGES = ("bad gateway", "service unavailable", "schema cache", "statement timeout")
-
 
 async def _extract_deferred_documents(
     deferred_docs: list,
@@ -418,47 +415,22 @@ async def _dedup_email_threads(
     return flagged_ids
 
 
-def _is_transient_error(err: Exception) -> bool:
-    """Check if a Supabase/PostgREST error is transient and worth retrying."""
-    code = str(getattr(err, "code", ""))
-    message = str(getattr(err, "message", str(err))).lower()
-    if code in _TRANSIENT_CODES:
-        return True
-    return any(msg in message for msg in _TRANSIENT_MESSAGES)
-
-
 def _upsert_with_retry(supabase_client, table: str, data: dict, context_id: str, max_attempts: int = 3):
     """Upsert a row with retry on transient Supabase errors."""
-    for attempt in range(max_attempts):
-        try:
-            return supabase_client.table(table).upsert(data).execute()
-        except Exception as db_err:
-            if _is_transient_error(db_err) and attempt < max_attempts - 1:
-                delay = 2 ** attempt
-                logger.warning(
-                    f"Transient DB error on {table} upsert for {context_id} "
-                    f"(attempt {attempt + 1}/{max_attempts}), retrying in {delay}s: {db_err}"
-                )
-                time.sleep(delay)
-                continue
-            raise
+    return retry_sync(
+        lambda: supabase_client.table(table).upsert(data).execute(),
+        max_attempts=max_attempts,
+        context_label=f"{table} upsert for {context_id}",
+    )
 
 
 def _update_case_with_retry(supabase_client, case_id: str, update_data: dict, max_attempts: int = 3):
     """Update a case row with retry on transient Supabase errors."""
-    for attempt in range(max_attempts):
-        try:
-            return supabase_client.table("cases").update(update_data).eq("id", case_id).execute()
-        except Exception as db_err:
-            if _is_transient_error(db_err) and attempt < max_attempts - 1:
-                delay = 2 ** attempt
-                logger.warning(
-                    f"Transient DB error updating case {case_id} "
-                    f"(attempt {attempt + 1}/{max_attempts}), retrying in {delay}s: {db_err}"
-                )
-                time.sleep(delay)
-                continue
-            raise
+    return retry_sync(
+        lambda: supabase_client.table("cases").update(update_data).eq("id", case_id).execute(),
+        max_attempts=max_attempts,
+        context_label=f"cases update for {case_id}",
+    )
 
 
 def _new_generation_metrics(

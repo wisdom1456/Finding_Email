@@ -16,6 +16,7 @@ from fastapi.responses import JSONResponse
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
+from legal_portal.api.middleware.error_handler import register_app_error_handler
 from legal_portal.api.rate_limiter import limiter
 from legal_portal.api.routes import (
     analysis,
@@ -74,6 +75,7 @@ app = FastAPI(
 # Add rate limiter to app state and exception handler
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+register_app_error_handler(app)
 
 # CORS configuration
 # Get allowed origins from environment variable or use defaults

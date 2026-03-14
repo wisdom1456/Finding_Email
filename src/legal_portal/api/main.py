@@ -21,6 +21,7 @@ from legal_portal.api.rate_limiter import limiter
 from legal_portal.api.routes import (
     analysis,
     cases,
+    chat_routes,
     clio,
     corpus,
     document_status_routes,
@@ -128,6 +129,7 @@ app.include_router(health.router, tags=["health"])
 app.include_router(cases.router, prefix="/api/cases", tags=["cases"])
 app.include_router(documents.router, prefix="/api/documents", tags=["documents"])
 app.include_router(analysis.router, prefix="/api/analysis", tags=["analysis"])
+app.include_router(chat_routes.router, prefix="/api/analysis", tags=["analysis"])
 app.include_router(document_status_routes.router, prefix="/api/analysis", tags=["analysis"])
 app.include_router(progress.router, prefix="/api", tags=["progress"])
 app.include_router(clio.router, prefix="/api", tags=["clio"])

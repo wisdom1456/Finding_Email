@@ -53,6 +53,42 @@ class FileType(str, Enum):
     TIFF = "image/tiff"
 
 
+class GroupType(str, Enum):
+    """Types of document groups. Only high-confidence types are auto-detected."""
+    # --- First rollout (high confidence) ---
+    EMAIL_THREAD = "email_thread"
+    CONTRACT_FAMILY = "contract_family"
+    PHOTO_SEQUENCE = "photo_sequence"
+    BANK_STATEMENTS = "bank_statements"
+    # --- Deferred (validation needed) ---
+    CREDIT_CARD_STATEMENTS = "credit_card_statements"
+    MEDICAL_RECORDS = "medical_records"
+    FINANCIAL_REPORTS = "financial_reports"
+    INSURANCE_CLAIMS = "insurance_claims"
+    TEXT_MESSAGES = "text_messages"
+    REAL_ESTATE_PACKAGE = "real_estate_package"
+    GENERIC = "generic"
+
+
+class DocumentGroup(BaseModel):
+    """A group of related documents processed as a single unit.
+
+    Groups are ephemeral in-memory structures until Phase D (DB persistence).
+    """
+    group_id: str
+    group_type: GroupType
+    label: str  # Human-readable: "Chase Bank Statements (Jan–Jun 2024)"
+    member_document_ids: List[str]
+    member_document_names: List[str]
+    group_metadata: Dict[str, Any] = Field(default_factory=dict)
+    authority_score: Optional[int] = None  # Max of members
+    canonical_document_id: Optional[str] = None  # Primary doc (e.g., base contract)
+
+    @property
+    def member_count(self) -> int:
+        return len(self.member_document_ids)
+
+
 # ============================================================================
 # Data Models
 # ============================================================================

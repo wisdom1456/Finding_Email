@@ -907,9 +907,12 @@ class DocumentRegistryService:
             subject = self._extract_email_subject(doc.get("extracted_text") or "")
             if not subject:
                 continue
-            # _extract_email_subject already strips Re:/Fwd: and lowercases,
-            # but apply again as a safety measure
-            norm = re.sub(r"^(re:\s*|fwd?:\s*|fw:\s*)+", "", subject, flags=re.IGNORECASE).strip().lower()
+            # _extract_email_subject already strips one layer of Re:/Fwd:
+            # and lowercases; strip any remaining nested prefixes
+            norm = re.sub(r"^(re|fwd?|fw)\s*:\s*", "", subject, flags=re.IGNORECASE)
+            while re.match(r"^(re|fwd?|fw)\s*:", norm, re.IGNORECASE):
+                norm = re.sub(r"^(re|fwd?|fw)\s*:\s*", "", norm, flags=re.IGNORECASE)
+            norm = norm.strip().lower()
             if norm:
                 threads.setdefault(norm, []).append(doc)
 
@@ -1009,13 +1012,18 @@ class DocumentRegistryService:
         for seq in sequences:
             if len(seq) < 2:
                 continue
+            scores = [
+                (m.get("metadata") or {}).get("registry", {}).get("authority_score")
+                for m in seq
+            ]
+            valid_scores = [s for s in scores if s is not None]
             groups.append(DocumentGroup(
                 group_id=f"grp_{uuid.uuid4().hex[:12]}",
                 group_type=GroupType.PHOTO_SEQUENCE,
                 label=f"Photos ({len(seq)} images)",
                 member_document_ids=[m["id"] for m in seq],
                 member_document_names=[m.get("file_name", "") for m in seq],
-                authority_score=50,
+                authority_score=max(valid_scores) if valid_scores else 50,
             ))
         return groups
 

@@ -154,8 +154,8 @@ class TestGroupAuthorityScore:
         ]
         service = DocumentRegistryService()
         groups = service.detect_document_groups(docs)
-        if groups:
-            assert groups[0].authority_score == 72
+        assert len(groups) == 1
+        assert groups[0].authority_score == 72
 
 
 class TestDocumentInOneGroupOnly:

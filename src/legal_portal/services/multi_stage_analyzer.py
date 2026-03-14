@@ -118,66 +118,113 @@ class MultiStageAnalyzer:
                 return pri
         return 5  # default: lowest
 
+    @staticmethod
+    def _score_to_priority(authority_score: int) -> int:
+        """Map authority_score to priority bucket (same scale as _get_doc_priority)."""
+        if authority_score >= 80:
+            return 1
+        if authority_score >= 60:
+            return 2
+        if authority_score >= 40:
+            return 3
+        return 4
+
     def _build_condensed_context(
         self,
         document_summaries: List[DocumentSummaryStructured],
         max_tokens: int = _DEFAULT_BUDGET_TOKENS,
+        group_summaries: Optional[List] = None,
     ) -> ContextBuildResult:
-        """Build token-budget context from document summaries.
+        """Build token-budget context from document summaries and optional group summaries.
 
         Uses TokenManager.estimate_tokens for speed (tiktoken per-doc would be slow).
         Sorts by priority bucket, preserving original order within each bucket.
-        Caps each doc entry at _MAX_ENTRY_TOKENS. Stops when budget is reached.
+        Caps each entry at its token budget. Stops when budget is reached.
+
+        When group_summaries are provided, they compete in the same priority queue
+        as individual documents, using authority_score mapped to priority buckets.
         """
+        import math
+
         from legal_portal.utils.token_manager import TokenManager
         tm = TokenManager()
 
-        # Stable sort: (priority_bucket, original_index)
-        indexed = [(self._get_doc_priority(s), idx, s)
-                   for idx, s in enumerate(document_summaries)]
-        indexed.sort(key=lambda x: (x[0], x[1]))
+        # Build unified priority queue: groups + individual docs
+        # Each entry: (priority, index, entry_text, token_budget, name)
+        entries: list[tuple] = []
+
+        # Add group entries
+        if group_summaries:
+            for idx, gs in enumerate(group_summaries):
+                auth = gs.authority_score or 50
+                pri = self._score_to_priority(auth)
+
+                # Group token budget: proportional to members but compressed
+                # sqrt(member_count) rewards compression (12 stmts -> ~3.5x budget, not 12x)
+                group_budget = min(
+                    int(_MAX_ENTRY_TOKENS * math.sqrt(gs.member_count)),
+                    3000,  # hard cap
+                )
+
+                entry_text = (
+                    f"{gs.label} ({gs.group_type.value}, "
+                    f"{gs.member_count} docs: {', '.join(gs.member_document_names[:5])})\n"
+                    f"    {gs.combined_narrative}\n"
+                )
+                if gs.key_findings:
+                    entry_text += "    Findings: " + "; ".join(gs.key_findings[:5]) + "\n"
+                if gs.legal_significance:
+                    entry_text += f"    Significance: {gs.legal_significance}\n"
+
+                entries.append((pri, idx, entry_text, group_budget, gs.label))
+
+        # Add individual document entries
+        group_offset = len(group_summaries or [])
+        for idx, summary in enumerate(document_summaries):
+            pri = self._get_doc_priority(summary)
+            doc_name = (summary.document_name or "unknown").strip()
+            doc_type = summary.document_type or "document"
+            content = (summary.key_content or summary.executive_summary or "")[:4000]
+            entry_text = f"{doc_name} ({doc_type})\n    {content}\n"
+            entries.append((pri, group_offset + idx, entry_text, _MAX_ENTRY_TOKENS, doc_name))
+
+        # Sort by priority (lower = higher importance), then index
+        entries.sort(key=lambda x: (x[0], x[1]))
 
         lines: list[str] = []
         total_tokens = 0
         included = 0
         omitted_names: list[str] = []
 
-        for _pri, _orig_idx, summary in indexed:
-            doc_name = summary.document_name or "unknown"
-            doc_type = summary.document_type or "document"
-            content = (summary.key_content or summary.executive_summary or "")[:4000]
-
-            entry = f"[{included + 1}] {doc_name} ({doc_type})\n    {content}\n"
-
+        for _pri, _idx, entry_text, budget, name in entries:
+            entry = f"[{included + 1}] {entry_text}"
             entry_tokens = tm.estimate_tokens_detailed(entry)
-            # Per-doc hard cap
-            if entry_tokens > _MAX_ENTRY_TOKENS:
-                ratio = _MAX_ENTRY_TOKENS / entry_tokens
-                truncated_len = int(len(content) * ratio)
-                content = content[:truncated_len]
-                entry = f"[{included + 1}] {doc_name} ({doc_type})\n    {content}\n"
+
+            if entry_tokens > budget:
+                ratio = budget / entry_tokens
+                entry = entry[:int(len(entry) * ratio)]
                 entry_tokens = tm.estimate_tokens_detailed(entry)
 
             if total_tokens + entry_tokens > max_tokens:
-                # Budget exhausted — collect remaining as omitted
-                omitted_names.append(doc_name)
+                omitted_names.append(name)
                 continue  # keep collecting names for reporting
 
             lines.append(entry)
             total_tokens += entry_tokens
             included += 1
 
-        docs_omitted = len(document_summaries) - included
+        total_entries = len(document_summaries) + len(group_summaries or [])
+        docs_omitted = total_entries - included
         omission_reason = ""
         if docs_omitted > 0:
             omission_reason = (
-                f"Token budget ({max_tokens:,} tokens) reached after {included} docs. "
-                f"{docs_omitted} lower-priority documents excluded."
+                f"Token budget ({max_tokens:,} tokens) reached after {included} entries. "
+                f"{docs_omitted} lower-priority entries excluded."
             )
             logger.warning(f"[ANALYSIS:BUDGET] {omission_reason}")
 
         logger.info(
-            f"[ANALYSIS:CONTEXT] Included {included}/{len(document_summaries)} docs | "
+            f"[ANALYSIS:CONTEXT] Included {included}/{total_entries} entries | "
             f"{total_tokens:,} tokens"
         )
 
@@ -372,6 +419,7 @@ This block MUST be valid JSON wrapped in a code fence:
         intake_content: str,
         document_summaries: List[DocumentSummaryStructured],
         jurisdiction: str = "Florida",
+        group_summaries: Optional[List] = None,
     ) -> Tuple[AsyncGenerator[str, None], ContextBuildResult]:
         """Build context and return (token_generator, context_result).
 
@@ -382,6 +430,7 @@ This block MUST be valid JSON wrapped in a code fence:
             intake_content: Client intake form content
             document_summaries: List of document summaries
             jurisdiction: Legal jurisdiction
+            group_summaries: Optional list of GroupSummary objects (gated by feature flag)
 
         Returns:
             Tuple of (async token generator, ContextBuildResult with scope metadata)
@@ -393,7 +442,13 @@ This block MUST be valid JSON wrapped in a code fence:
         )
 
         # Build condensed context with token budget
-        ctx = self._build_condensed_context(document_summaries)
+        from legal_portal.config.default import get_settings as _get_settings
+        _settings = _get_settings()
+
+        ctx = self._build_condensed_context(
+            document_summaries,
+            group_summaries=group_summaries if _settings.enable_group_context else None,
+        )
         document_context = ctx.context_text
 
         # Preflight guard

@@ -26,6 +26,7 @@ from legal_portal.api.routes import (
     corpus,
     document_status_routes,
     gap_routes,
+    letter_routes,
     documents,
     health,
     intake,
@@ -133,6 +134,7 @@ app.include_router(analysis.router, prefix="/api/analysis", tags=["analysis"])
 app.include_router(chat_routes.router, prefix="/api/analysis", tags=["analysis"])
 app.include_router(document_status_routes.router, prefix="/api/analysis", tags=["analysis"])
 app.include_router(gap_routes.router, prefix="/api/analysis", tags=["analysis"])
+app.include_router(letter_routes.router, prefix="/api/analysis", tags=["analysis"])
 app.include_router(progress.router, prefix="/api", tags=["progress"])
 app.include_router(clio.router, prefix="/api", tags=["clio"])
 app.include_router(intake.router, prefix="/api", tags=["intake"])

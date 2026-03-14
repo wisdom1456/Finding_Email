@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { CheckCircle2, AlertTriangle, XCircle, FileQuestion, HelpCircle } from 'lucide-svelte';
+	import { CheckCircle2, AlertTriangle, XCircle, FileQuestion } from 'lucide-svelte';
 
 	let { 
 		stats = { ready: 0, review: 0, failed: 0, missing: 0 } 

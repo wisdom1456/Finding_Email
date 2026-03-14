@@ -210,7 +210,7 @@ class JsonProcessingService:
 
     def _load_prompt_asset(self, file_name: str) -> str:
         """Load prompt template from the prompts directory."""
-        prompt_path = os.path.join(os.path.dirname(__file__), "..", "prompts", file_name)
+        prompt_path = os.path.join(os.path.dirname(__file__), "..", "..", "prompts", file_name)
         with open(prompt_path, "r", encoding="utf-8") as handle:
             return handle.read()
 
@@ -1018,7 +1018,7 @@ class JsonProcessingService:
 
     def _load_prompt_template(self, jurisdiction: str = "Florida") -> str:
         """Load the prompt template from a file and inject jurisdiction-specific guidance."""
-        prompt_path = os.path.join(os.path.dirname(__file__), "..", "prompts", "findings_letter_prompt.txt")
+        prompt_path = os.path.join(os.path.dirname(__file__), "..", "..", "prompts", "findings_letter_prompt.txt")
         try:
             with open(prompt_path, "r", encoding="utf-8") as f:
                 template = f.read()
@@ -1028,7 +1028,7 @@ class JsonProcessingService:
             jurisdiction_specific_guidance = ""
             if guidance_file_name:
                 guidance_path = os.path.join(
-                    os.path.dirname(__file__), "..", "prompts", "jurisdiction_guidance", guidance_file_name
+                    os.path.dirname(__file__), "..", "..", "prompts", "jurisdiction_guidance", guidance_file_name
                 )
                 if os.path.exists(guidance_path):
                     with open(guidance_path, "r", encoding="utf-8") as f_guidance:

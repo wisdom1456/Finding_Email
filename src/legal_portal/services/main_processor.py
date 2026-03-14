@@ -580,6 +580,42 @@ async def process_case_documents(
                 else:
                     doc.extraction_quality = "high"
 
+        # --- Document Group Detection (Phase A: logging only) ---
+        detected_groups = []
+        if settings.enable_group_detection:
+            try:
+                doc_dicts = [
+                    {
+                        "id": pdoc.document_id or f"local_{i}",
+                        "file_name": pdoc.file_name,
+                        "extracted_text": (pdoc.content or "")[:3000],
+                        "metadata": {"registry": pdoc.registry or {}},
+                        "file_type": pdoc.file_type.value if pdoc.file_type else "",
+                    }
+                    for i, pdoc in enumerate(all_processed_docs)
+                ]
+                registry_service = DocumentRegistryService()
+                detected_groups = registry_service.detect_document_groups(doc_dicts)
+
+                # --- Quality metrics logging ---
+                for group in detected_groups:
+                    logger.info(
+                        f"[GROUPING:DETECTED] type={group.group_type.value} "
+                        f"label={group.label!r} members={group.member_count} "
+                        f"authority={group.authority_score} "
+                        f"docs={group.member_document_names}"
+                    )
+                logger.info(
+                    f"[GROUPING:SUMMARY] "
+                    f"total_docs={len(all_processed_docs)} "
+                    f"groups={len(detected_groups)} "
+                    f"grouped_docs={sum(g.member_count for g in detected_groups)} "
+                    f"ungrouped_docs={len(all_processed_docs) - sum(g.member_count for g in detected_groups)}"
+                )
+            except Exception as e:
+                logger.warning(f"[GROUPING:ERROR] Detection failed: {e}")
+                detected_groups = []
+
         # Aggregate quality results and create context string
         aggregated_quality_report = _aggregate_quality_results(quality_results)
         quality_context = _format_quality_context(aggregated_quality_report)

@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+import logging
+import os
 import re
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from legal_portal.core.data_models import DocumentSummaryStructured, FactMatrix, ProcessedDocument
+from legal_portal.core.data_models import DocumentGroup, DocumentSummaryStructured, FactMatrix, GroupType, ProcessedDocument
+
+logger = logging.getLogger(__name__)
 
 _DATE_RE = re.compile(
     r"\b("
@@ -16,6 +20,20 @@ _DATE_RE = re.compile(
 )
 _AMOUNT_RE = re.compile(
     r"\$\s?\d[\d,]*(?:\.\d{2})?",
+)
+_STATEMENT_KEYWORDS = re.compile(
+    r"\b(statement\s+period|account\s+summary|account\s+ending|"
+    r"checking\s+account|savings\s+account)\b",
+    re.IGNORECASE,
+)
+_ACCOUNT_RE = re.compile(r"(?:\*{2,4}|x{2,4}|ending\s+in\s*)(\d{3,6})", re.IGNORECASE)
+_INSTITUTION_RE = re.compile(
+    r"\b(Chase|Wells\s+Fargo|Bank\s+of\s+America|Citibank|Capital\s+One|"
+    r"TD\s+Bank|PNC|US\s+Bank|USAA|Ally|Discover|American\s+Express|"
+    r"SunTrust|BB&T|Truist|Regions|Fifth\s+Third|KeyBank|Huntington|"
+    r"Citizens|M&T\s+Bank|Comerica|Zions|BMO|HSBC|Barclays|"
+    r"Navy\s+Federal)\b",
+    re.IGNORECASE,
 )
 
 
@@ -813,6 +831,262 @@ class DocumentRegistryService:
         text = re.sub(r"\.[a-z0-9]{1,8}$", "", text)
         text = re.sub(r"[^a-z0-9]+", " ", text)
         return re.sub(r"\s+", " ", text).strip()
+
+    # ------------------------------------------------------------------ #
+    #  Document Group Detection (Phase A)
+    # ------------------------------------------------------------------ #
+
+    def detect_document_groups(
+        self,
+        documents: List[Dict[str, Any]],
+    ) -> List[DocumentGroup]:
+        """Detect groups of related documents. Deterministic — no AI calls.
+
+        First rollout: only high-confidence group types (email threads,
+        contract families, sequential photos, bank statements with
+        institution + account + statement pattern).
+
+        Returns list of DocumentGroup. Documents not in any group are excluded.
+        A document can appear in at most one group.
+        """
+        import uuid
+
+        groups: List[DocumentGroup] = []
+
+        # 1. Email thread grouping
+        groups.extend(self._detect_email_thread_groups(documents))
+
+        # 2. Contract family grouping
+        groups.extend(self._detect_contract_family_groups(documents))
+
+        # 3. Sequential photo grouping
+        groups.extend(self._detect_photo_sequence_groups(documents))
+
+        # 4. Bank statement grouping (high-confidence: all 3 signals required)
+        groups.extend(self._detect_bank_statement_groups(documents))
+
+        # Enforce: each document in at most one group (first-detected wins)
+        seen_doc_ids: set = set()
+        final_groups: List[DocumentGroup] = []
+        for group in groups:
+            remaining_ids = [did for did in group.member_document_ids if did not in seen_doc_ids]
+            remaining_names = [
+                group.member_document_names[i]
+                for i, did in enumerate(group.member_document_ids)
+                if did not in seen_doc_ids
+            ]
+            if len(remaining_ids) >= 2:
+                group = DocumentGroup(
+                    group_id=group.group_id,
+                    group_type=group.group_type,
+                    label=group.label,
+                    member_document_ids=remaining_ids,
+                    member_document_names=remaining_names,
+                    group_metadata=group.group_metadata,
+                    authority_score=group.authority_score,
+                    canonical_document_id=group.canonical_document_id,
+                )
+                final_groups.append(group)
+                seen_doc_ids.update(remaining_ids)
+
+        logger.info(
+            f"[GROUPING] Detected {len(final_groups)} groups "
+            f"covering {len(seen_doc_ids)}/{len(documents)} documents"
+        )
+        return final_groups
+
+    def _detect_email_thread_groups(self, documents: List[Dict[str, Any]]) -> List[DocumentGroup]:
+        """Group .eml files by normalized email subject."""
+        import uuid
+
+        threads: Dict[str, List[Dict[str, Any]]] = {}
+        for doc in documents:
+            name = (doc.get("file_name") or "").lower()
+            if not (name.endswith(".eml") or "email" in name):
+                continue
+            subject = self._extract_email_subject(doc.get("extracted_text") or "")
+            if not subject:
+                continue
+            # _extract_email_subject already strips Re:/Fwd: and lowercases,
+            # but apply again as a safety measure
+            norm = re.sub(r"^(re:\s*|fwd?:\s*|fw:\s*)+", "", subject, flags=re.IGNORECASE).strip().lower()
+            if norm:
+                threads.setdefault(norm, []).append(doc)
+
+        groups = []
+        for subject, members in threads.items():
+            if len(members) < 2:
+                continue
+            scores = [
+                (m.get("metadata") or {}).get("registry", {}).get("authority_score")
+                for m in members
+            ]
+            valid_scores = [s for s in scores if s is not None]
+            groups.append(DocumentGroup(
+                group_id=f"grp_{uuid.uuid4().hex[:12]}",
+                group_type=GroupType.EMAIL_THREAD,
+                label=f"Thread: {subject[:60]}",
+                member_document_ids=[m["id"] for m in members],
+                member_document_names=[m.get("file_name", "") for m in members],
+                group_metadata={"subject": subject},
+                authority_score=max(valid_scores) if valid_scores else None,
+            ))
+        return groups
+
+    def _detect_contract_family_groups(self, documents: List[Dict[str, Any]]) -> List[DocumentGroup]:
+        """Group documents with base contract + amendment/exhibit naming pattern."""
+        import uuid
+
+        suffix_re = re.compile(
+            r"[_\s\-]+(addendum|amendment|exhibit|schedule|attachment|"
+            r"supplement|rider|appendix|annex|side\s*letter)[\s_\-]*[a-z0-9]*",
+            re.IGNORECASE,
+        )
+        families: Dict[str, List[tuple]] = {}  # stem -> [(doc, is_base)]
+        for doc in documents:
+            norm = self._normalize_name(doc.get("file_name") or "")
+            match = suffix_re.search(norm)
+            if match:
+                stem = norm[:match.start()].strip()
+                if stem:
+                    families.setdefault(stem, []).append((doc, False))
+            else:
+                families.setdefault(norm, []).append((doc, True))
+
+        groups = []
+        for stem, members_flags in families.items():
+            if len(members_flags) < 2:
+                continue
+            if not any(not is_base for _, is_base in members_flags):
+                continue  # No amendments/exhibits — not a family
+            members = [m for m, _ in members_flags]
+            base_docs = [m for m, is_base in members_flags if is_base]
+            canonical_id = base_docs[0]["id"] if base_docs else members[0]["id"]
+            scores = [
+                (m.get("metadata") or {}).get("registry", {}).get("authority_score")
+                for m in members
+            ]
+            valid_scores = [s for s in scores if s is not None]
+            groups.append(DocumentGroup(
+                group_id=f"grp_{uuid.uuid4().hex[:12]}",
+                group_type=GroupType.CONTRACT_FAMILY,
+                label=f"Contract: {stem.replace('_', ' ').title()} ({len(members)} docs)",
+                member_document_ids=[m["id"] for m in members],
+                member_document_names=[m.get("file_name", "") for m in members],
+                group_metadata={"stem": stem},
+                authority_score=max(valid_scores) if valid_scores else None,
+                canonical_document_id=canonical_id,
+            ))
+        return groups
+
+    def _detect_photo_sequence_groups(self, documents: List[Dict[str, Any]]) -> List[DocumentGroup]:
+        """Group image files with sequential numbering in filenames."""
+        import uuid
+
+        photo_exts = {".jpg", ".jpeg", ".png", ".heic", ".tiff", ".bmp", ".gif"}
+        numbered = []
+        for doc in documents:
+            name = doc.get("file_name") or ""
+            ext = os.path.splitext(name)[1].lower()
+            if ext not in photo_exts:
+                continue
+            match = re.search(r"(\d+)\.[a-z]+$", name.lower())
+            if match:
+                numbered.append((int(match.group(1)), doc))
+
+        if len(numbered) < 2:
+            return []
+
+        numbered.sort(key=lambda x: x[0])
+        sequences: List[List[Dict[str, Any]]] = [[numbered[0][1]]]
+        for i in range(1, len(numbered)):
+            if numbered[i][0] - numbered[i - 1][0] <= 2:
+                sequences[-1].append(numbered[i][1])
+            else:
+                sequences.append([numbered[i][1]])
+
+        groups = []
+        for seq in sequences:
+            if len(seq) < 2:
+                continue
+            groups.append(DocumentGroup(
+                group_id=f"grp_{uuid.uuid4().hex[:12]}",
+                group_type=GroupType.PHOTO_SEQUENCE,
+                label=f"Photos ({len(seq)} images)",
+                member_document_ids=[m["id"] for m in seq],
+                member_document_names=[m.get("file_name", "") for m in seq],
+                authority_score=50,
+            ))
+        return groups
+
+    def _detect_bank_statement_groups(self, documents: List[Dict[str, Any]]) -> List[DocumentGroup]:
+        """Group bank statements when ALL 3 signals match: institution + account + statement."""
+        import uuid
+
+        candidates = []
+        for doc in documents:
+            content = (doc.get("extracted_text") or "")[:3000]
+            name_lower = (doc.get("file_name") or "").lower()
+
+            # Signal 1: statement pattern (filename or content)
+            has_statement = bool(_STATEMENT_KEYWORDS.search(content)) or "statement" in name_lower
+            if not has_statement:
+                continue
+
+            # Signal 2: institution
+            inst_match = _INSTITUTION_RE.search(content)
+            if not inst_match:
+                continue
+            institution = inst_match.group(0).strip().lower()
+
+            # Signal 3: account hint
+            acct_match = _ACCOUNT_RE.search(content)
+            if not acct_match:
+                continue
+            account = acct_match.group(1)
+
+            key = f"{institution}|{account}"
+            candidates.append((key, doc, institution))
+
+        clusters: Dict[str, tuple] = {}
+        for key, doc, inst in candidates:
+            if key not in clusters:
+                clusters[key] = ([], inst)
+            clusters[key][0].append(doc)
+
+        groups = []
+        for key, (members, institution) in clusters.items():
+            if len(members) < 2:
+                continue
+            account = key.split("|")[1]
+            dates = []
+            for m in members:
+                for d in re.findall(
+                    r"((?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\w*[\s_-]*\d{4})",
+                    (m.get("file_name") or "").lower(),
+                ):
+                    dates.append(d.strip())
+            date_range = f"{dates[0]} to {dates[-1]}" if len(dates) >= 2 else ""
+            scores = [
+                (m.get("metadata") or {}).get("registry", {}).get("authority_score")
+                for m in members
+            ]
+            valid_scores = [s for s in scores if s is not None]
+            groups.append(DocumentGroup(
+                group_id=f"grp_{uuid.uuid4().hex[:12]}",
+                group_type=GroupType.BANK_STATEMENTS,
+                label=f"{institution.title()} Statements"
+                      + (f" ({date_range})" if date_range else f" ({len(members)} docs)"),
+                member_document_ids=[m["id"] for m in members],
+                member_document_names=[m.get("file_name", "") for m in members],
+                group_metadata={
+                    "institution": institution.title(),
+                    "account_hint": f"****{account}",
+                    "date_range": date_range or None,
+                },
+                authority_score=max(valid_scores) if valid_scores else 68,
+            ))
+        return groups
 
     @staticmethod
     def _ensure_list(value: Any) -> List[Any]:

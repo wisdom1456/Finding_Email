@@ -1,8 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from enum import Enum
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Literal, Optional, Union
 
 from pydantic import BaseModel, Field, validator
 
@@ -500,7 +499,4 @@ class MultiStageAnalysisResult(BaseModel):
         default_factory=list,
         description="Authoritative document registry with authority tiers/execution metadata.",
     )
-
-
-
 

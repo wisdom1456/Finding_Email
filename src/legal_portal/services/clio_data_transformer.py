@@ -1,2 +1,6 @@
 """Stub — real code moved to services/integrations/clio_data_transformer.py."""
-from legal_portal.services.integrations.clio_data_transformer import *  # noqa: F401,F403
+import importlib as _importlib
+import sys as _sys
+
+_real = _importlib.import_module("legal_portal.services.integrations.clio_data_transformer")
+_sys.modules[__name__] = _real

@@ -1,2 +1,6 @@
 """Stub — real code moved to services/shared/progress_manager.py."""
-from legal_portal.services.shared.progress_manager import *  # noqa: F401,F403
+import importlib as _importlib
+import sys as _sys
+
+_real = _importlib.import_module("legal_portal.services.shared.progress_manager")
+_sys.modules[__name__] = _real

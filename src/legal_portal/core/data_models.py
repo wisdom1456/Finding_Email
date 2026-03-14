@@ -89,6 +89,23 @@ class DocumentGroup(BaseModel):
         return len(self.member_document_ids)
 
 
+class GroupSummary(BaseModel):
+    """Summary of a document group — replaces N individual summaries with 1."""
+
+    group_id: str
+    group_type: GroupType
+    label: str
+    member_count: int
+    member_document_names: List[str]
+    combined_narrative: str
+    key_findings: List[str] = Field(default_factory=list)
+    structured_data: Dict[str, Any] = Field(default_factory=dict)
+    legal_significance: Optional[str] = None
+    key_quotes: List[str] = Field(default_factory=list)
+    authority_score: Optional[int] = None
+    extraction_quality: str = "high"
+
+
 # ============================================================================
 # Data Models
 # ============================================================================

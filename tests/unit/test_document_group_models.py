@@ -1,4 +1,4 @@
-from legal_portal.core.data_models import DocumentGroup, GroupType
+from legal_portal.core.data_models import DocumentGroup, GroupSummary, GroupType
 
 
 def test_group_type_enum_high_confidence_types():
@@ -50,3 +50,20 @@ def test_group_defaults():
     assert group.authority_score is None
     assert group.group_metadata == {}
     assert group.canonical_document_id is None
+
+
+def test_group_summary_creation():
+    gs = GroupSummary(
+        group_id="grp_abc",
+        group_type=GroupType.BANK_STATEMENTS,
+        label="Chase Statements",
+        member_count=3,
+        member_document_names=["a.pdf", "b.pdf", "c.pdf"],
+        combined_narrative="Three monthly bank statements from Chase.",
+        key_findings=["Total deposits: $15,000"],
+        authority_score=68,
+    )
+    assert gs.member_count == 3
+    assert gs.extraction_quality == "high"
+    assert gs.legal_significance is None
+    assert gs.key_quotes == []

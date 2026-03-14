@@ -612,6 +612,18 @@ async def process_case_documents(
                     f"grouped_docs={sum(g.member_count for g in detected_groups)} "
                     f"ungrouped_docs={len(all_processed_docs) - sum(g.member_count for g in detected_groups)}"
                 )
+
+                # Build and log quality metrics
+                from legal_portal.services.group_quality_metrics import build_grouping_metrics
+
+                if detected_groups:
+                    metrics = build_grouping_metrics(
+                        case_id=case_info.get("id", "unknown") if case_info else "unknown",
+                        total_documents=len(all_processed_docs),
+                        groups=detected_groups,
+                    )
+                    metrics.log()
+
             except Exception as e:
                 logger.warning(f"[GROUPING:ERROR] Detection failed: {e}")
                 detected_groups = []

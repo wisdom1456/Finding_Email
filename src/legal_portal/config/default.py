@@ -146,6 +146,34 @@ class Settings(BaseSettings):
     )
 
     # ==================================================
+    # DOCUMENT GROUPING FEATURE FLAGS (phased rollout)
+    # ==================================================
+
+    enable_group_detection: bool = Field(
+        False,
+        alias="ENABLE_GROUP_DETECTION",
+        description="Phase A: detect document groups and log metrics only, no behavior change",
+    )
+
+    enable_group_summarization: bool = Field(
+        False,
+        alias="ENABLE_GROUP_SUMMARIZATION",
+        description="Phase B: generate group summaries alongside individual ones",
+    )
+
+    enable_group_context: bool = Field(
+        False,
+        alias="ENABLE_GROUP_CONTEXT",
+        description="Phase C: use group summaries in context building",
+    )
+
+    enable_group_persistence: bool = Field(
+        False,
+        alias="ENABLE_GROUP_PERSISTENCE",
+        description="Phase D: persist document groups to database",
+    )
+
+    # ==================================================
     # LETTER GENERATION FEATURE FLAGS
     # ==================================================
 

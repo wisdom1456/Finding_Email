@@ -19,6 +19,7 @@ from pydantic import BaseModel, Field, validator
 
 from legal_portal.api.middleware.retry import retry_sync
 from legal_portal.config.default import get_settings
+from legal_portal.core.data_models import LetterType
 from legal_portal.services.progress_manager import ProgressManager
 from legal_portal.utils.type_safety import safe_str, safe_str_required, sanitize_nested_dict
 
@@ -879,7 +880,7 @@ class LetterGenerationRequest(BaseModel):
     """Request payload for on-demand letter generation."""
 
     case_id: str
-    letter_type: str = "findings"
+    letter_type: LetterType = LetterType.FINDINGS
     target_party_name: Optional[str] = None
     demand_amount: Optional[float] = None
     demand_deadline: str = "10 business days"
@@ -905,7 +906,7 @@ class LetterGenerationResponse(BaseModel):
     """Response payload for generated letters."""
 
     letter_html: str
-    letter_type: str = "findings"
+    letter_type: LetterType = LetterType.FINDINGS
     target_party_name: Optional[str] = None
     quality_report: Optional[Dict[str, Any]] = None
     generation_metrics: Optional[Dict[str, Any]] = None

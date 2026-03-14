@@ -11,6 +11,7 @@ from typing import Any, Dict, List, Optional
 import pytest
 
 from legal_portal.api.routes import analysis as analysis_routes
+from legal_portal.api.routes import letter_routes
 
 
 def _build_analysis_record(analysis_id: str = "analysis-test-1") -> Dict[str, Any]:
@@ -328,15 +329,15 @@ async def test_findings_stream_event_order_with_strategy_critic_and_repair(monke
                 },
             }
 
-    monkeypatch.setattr(analysis_routes, "get_settings", lambda: settings)
-    monkeypatch.setattr(analysis_routes, "_ensure_fresh_gap_analysis_for_letter_generation", _no_op_ensure_gap)
-    monkeypatch.setattr(analysis_routes, "_get_user_ai_preferences", _fake_ai_preferences)
-    monkeypatch.setattr(analysis_routes, "OpenAIClient", _FakeOpenAIClient)
-    monkeypatch.setattr(analysis_routes, "JsonProcessingService", _FakeJsonProcessingService)
-    monkeypatch.setattr(analysis_routes, "LetterValidationService", _FakeLetterValidationService)
-    monkeypatch.setattr(analysis_routes, "_emit_generation_metrics", lambda _metrics: None)
+    monkeypatch.setattr(letter_routes, "get_settings", lambda: settings)
+    monkeypatch.setattr(letter_routes, "_ensure_fresh_gap_analysis_for_letter_generation", _no_op_ensure_gap)
+    monkeypatch.setattr(letter_routes, "_get_user_ai_preferences", _fake_ai_preferences)
+    monkeypatch.setattr(letter_routes, "OpenAIClient", _FakeOpenAIClient)
+    monkeypatch.setattr(letter_routes, "JsonProcessingService", _FakeJsonProcessingService)
+    monkeypatch.setattr(letter_routes, "LetterValidationService", _FakeLetterValidationService)
+    monkeypatch.setattr(letter_routes, "_emit_generation_metrics", lambda _metrics: None)
 
-    response = await analysis_routes.stream_findings_letter(
+    response = await letter_routes.stream_findings_letter(
         analysis_id=record["id"],
         schema_version=2,
         mode="strict_quality",
@@ -437,15 +438,15 @@ async def test_findings_stream_skips_critic_and_repair_when_budget_insufficient(
                 },
             }
 
-    monkeypatch.setattr(analysis_routes, "get_settings", lambda: settings)
-    monkeypatch.setattr(analysis_routes, "_ensure_fresh_gap_analysis_for_letter_generation", _no_op_ensure_gap)
-    monkeypatch.setattr(analysis_routes, "_get_user_ai_preferences", _fake_ai_preferences)
-    monkeypatch.setattr(analysis_routes, "OpenAIClient", _FakeOpenAIClient)
-    monkeypatch.setattr(analysis_routes, "JsonProcessingService", _FakeJsonProcessingService)
-    monkeypatch.setattr(analysis_routes, "LetterValidationService", _FakeLetterValidationService)
-    monkeypatch.setattr(analysis_routes, "_emit_generation_metrics", lambda _metrics: None)
+    monkeypatch.setattr(letter_routes, "get_settings", lambda: settings)
+    monkeypatch.setattr(letter_routes, "_ensure_fresh_gap_analysis_for_letter_generation", _no_op_ensure_gap)
+    monkeypatch.setattr(letter_routes, "_get_user_ai_preferences", _fake_ai_preferences)
+    monkeypatch.setattr(letter_routes, "OpenAIClient", _FakeOpenAIClient)
+    monkeypatch.setattr(letter_routes, "JsonProcessingService", _FakeJsonProcessingService)
+    monkeypatch.setattr(letter_routes, "LetterValidationService", _FakeLetterValidationService)
+    monkeypatch.setattr(letter_routes, "_emit_generation_metrics", lambda _metrics: None)
 
-    response = await analysis_routes.stream_findings_letter(
+    response = await letter_routes.stream_findings_letter(
         analysis_id=record["id"],
         schema_version=2,
         mode="strict_quality",
@@ -499,14 +500,14 @@ async def test_findings_stream_emits_recoverable_timeout_and_finishes(monkeypatc
         def _convert_markdown_to_html(self, markdown_content: str) -> str:
             return f"<html><body>{markdown_content}</body></html>"
 
-    monkeypatch.setattr(analysis_routes, "get_settings", lambda: settings)
-    monkeypatch.setattr(analysis_routes, "_ensure_fresh_gap_analysis_for_letter_generation", _no_op_ensure_gap)
-    monkeypatch.setattr(analysis_routes, "_get_user_ai_preferences", _fake_ai_preferences)
-    monkeypatch.setattr(analysis_routes, "OpenAIClient", _FakeOpenAIClient)
-    monkeypatch.setattr(analysis_routes, "JsonProcessingService", _FakeJsonProcessingService)
-    monkeypatch.setattr(analysis_routes, "_emit_generation_metrics", lambda _metrics: None)
+    monkeypatch.setattr(letter_routes, "get_settings", lambda: settings)
+    monkeypatch.setattr(letter_routes, "_ensure_fresh_gap_analysis_for_letter_generation", _no_op_ensure_gap)
+    monkeypatch.setattr(letter_routes, "_get_user_ai_preferences", _fake_ai_preferences)
+    monkeypatch.setattr(letter_routes, "OpenAIClient", _FakeOpenAIClient)
+    monkeypatch.setattr(letter_routes, "JsonProcessingService", _FakeJsonProcessingService)
+    monkeypatch.setattr(letter_routes, "_emit_generation_metrics", lambda _metrics: None)
 
-    response = await analysis_routes.stream_findings_letter(
+    response = await letter_routes.stream_findings_letter(
         analysis_id=record["id"],
         schema_version=2,
         mode="strict_quality",
@@ -586,16 +587,16 @@ async def test_findings_stream_reverts_polish_when_fact_integrity_fails(monkeypa
             "polished_letter": "Polished text changed to $57,656.00 on February 28, 2023.",
         }
 
-    monkeypatch.setattr(analysis_routes, "get_settings", lambda: settings)
-    monkeypatch.setattr(analysis_routes, "_ensure_fresh_gap_analysis_for_letter_generation", _no_op_ensure_gap)
-    monkeypatch.setattr(analysis_routes, "_get_user_ai_preferences", _fake_ai_preferences)
-    monkeypatch.setattr(analysis_routes, "OpenAIClient", _FakeOpenAIClient)
-    monkeypatch.setattr(analysis_routes, "JsonProcessingService", _FakeJsonProcessingService)
-    monkeypatch.setattr(analysis_routes, "LetterValidationService", _FakeLetterValidationService)
+    monkeypatch.setattr(letter_routes, "get_settings", lambda: settings)
+    monkeypatch.setattr(letter_routes, "_ensure_fresh_gap_analysis_for_letter_generation", _no_op_ensure_gap)
+    monkeypatch.setattr(letter_routes, "_get_user_ai_preferences", _fake_ai_preferences)
+    monkeypatch.setattr(letter_routes, "OpenAIClient", _FakeOpenAIClient)
+    monkeypatch.setattr(letter_routes, "JsonProcessingService", _FakeJsonProcessingService)
+    monkeypatch.setattr(letter_routes, "LetterValidationService", _FakeLetterValidationService)
     monkeypatch.setattr("legal_portal.utils.letter_polish.polish_letter_async", _fake_polish)
-    monkeypatch.setattr(analysis_routes, "_emit_generation_metrics", lambda _metrics: None)
+    monkeypatch.setattr(letter_routes, "_emit_generation_metrics", lambda _metrics: None)
 
-    response = await analysis_routes.stream_findings_letter(
+    response = await letter_routes.stream_findings_letter(
         analysis_id=record["id"],
         schema_version=2,
         mode="strict_quality",

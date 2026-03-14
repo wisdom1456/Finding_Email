@@ -9,6 +9,7 @@ import pytest
 from starlette.requests import Request
 
 from legal_portal.api.routes import analysis as analysis_routes
+from legal_portal.api.routes import letter_routes
 from legal_portal.core.data_models import LetterType
 
 
@@ -183,18 +184,18 @@ async def test_generate_letter_findings_returns_professional_html(monkeypatch):
     analysis_record = _build_analysis_record()
     supabase = _FakeSupabase(analysis_record)
 
-    monkeypatch.setattr(analysis_routes, "get_settings", lambda: _SettingsStub())
-    monkeypatch.setattr(analysis_routes, "_ensure_case_access", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(letter_routes, "get_settings", lambda: _SettingsStub())
+    monkeypatch.setattr(letter_routes, "_ensure_case_access", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(
-        analysis_routes,
+        letter_routes,
         "_fetch_latest_analysis_result",
         lambda *_args, **_kwargs: analysis_record,
     )
-    monkeypatch.setattr(analysis_routes, "_ensure_fresh_gap_analysis_for_letter_generation", _no_op_ensure_gap)
-    monkeypatch.setattr(analysis_routes, "_get_user_ai_preferences", _no_op_ensure_gap)
-    monkeypatch.setattr(analysis_routes, "OpenAIClient", _FakeOpenAIClient)
-    monkeypatch.setattr(analysis_routes, "JsonProcessingService", _FakeJsonProcessingService)
-    monkeypatch.setattr(analysis_routes, "_emit_generation_metrics", lambda _metrics: None)
+    monkeypatch.setattr(letter_routes, "_ensure_fresh_gap_analysis_for_letter_generation", _no_op_ensure_gap)
+    monkeypatch.setattr(letter_routes, "_get_user_ai_preferences", _no_op_ensure_gap)
+    monkeypatch.setattr(letter_routes, "OpenAIClient", _FakeOpenAIClient)
+    monkeypatch.setattr(letter_routes, "JsonProcessingService", _FakeJsonProcessingService)
+    monkeypatch.setattr(letter_routes, "_emit_generation_metrics", lambda _metrics: None)
 
     request = Request(
         {
@@ -206,8 +207,8 @@ async def test_generate_letter_findings_returns_professional_html(monkeypatch):
         }
     )
 
-    response = await analysis_routes.generate_letter.__wrapped__(  # type: ignore[attr-defined]
-        letter_request=analysis_routes.LetterGenerationRequest(
+    response = await letter_routes.generate_letter.__wrapped__(  # type: ignore[attr-defined]
+        letter_request=letter_routes.LetterGenerationRequest(
             case_id="case-1",
             letter_type=LetterType.FINDINGS,
         ),

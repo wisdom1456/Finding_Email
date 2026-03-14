@@ -36,11 +36,12 @@ from legal_portal.api.routes._analysis_helpers import (
 )
 from legal_portal.api.routes.gap_routes import _ensure_fresh_gap_analysis_for_letter_generation
 from legal_portal.config.default import get_settings
-from legal_portal.core.data_models import ProcessingResult
+from legal_portal.core.data_models import LetterType, ProcessingResult
 from legal_portal.services.demand_letter_service import DemandLetterService
 from legal_portal.services.document_formatter import DocumentFormatterService
 from legal_portal.services.json_processing_service import JsonProcessingService
 from legal_portal.services.letter_validation_service import LetterValidationService
+from legal_portal.utils.diagnostic_logger import DiagnosticLogger
 from legal_portal.utils.openai_client import OpenAIClient
 
 logger = logging.getLogger(__name__)

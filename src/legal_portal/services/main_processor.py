@@ -628,6 +628,52 @@ async def process_case_documents(
                 logger.warning(f"[GROUPING:ERROR] Detection failed: {e}")
                 detected_groups = []
 
+        # --- Document Group Summarization (Phase B) ---
+        group_summaries = []
+        grouped_doc_ids = set()
+
+        if detected_groups and settings.enable_group_summarization:
+            try:
+                from legal_portal.services.group_summarizer import GroupSummarizer
+
+                group_summarizer = GroupSummarizer(openai_client=openai_client_wrapper)
+
+                for group in detected_groups:
+                    member_texts = {}
+                    for doc_id in group.member_document_ids:
+                        for pdoc in all_processed_docs:
+                            if (pdoc.document_id or "") == doc_id:
+                                member_texts[doc_id] = pdoc.content or ""
+                                break
+
+                    gs = await group_summarizer.summarize_group(
+                        group,
+                        member_texts,
+                        jurisdiction=jurisdiction,
+                        intake_context=intake_content[:1000],
+                    )
+                    group_summaries.append(gs)
+                    grouped_doc_ids.update(group.member_document_ids)
+
+                logger.info(
+                    f"[PIPELINE] Generated {len(group_summaries)} group summaries, "
+                    f"excluding {len(grouped_doc_ids)} docs from individual summarization"
+                )
+
+                # Update metrics if available
+                if detected_groups and settings.enable_group_detection:
+                    try:
+                        metrics.group_summaries_generated = len(group_summaries)
+                        metrics.individual_summaries_generated = len(all_processed_docs) - len(grouped_doc_ids)
+                        metrics.ai_calls_saved = len(grouped_doc_ids) - len(group_summaries)
+                    except NameError:
+                        pass  # metrics not defined if detection had no groups
+
+            except Exception as e:
+                logger.warning(f"[PIPELINE] Group summarization failed, falling back: {e}")
+                group_summaries = []
+                grouped_doc_ids = set()
+
         # Aggregate quality results and create context string
         aggregated_quality_report = _aggregate_quality_results(quality_results)
         quality_context = _format_quality_context(aggregated_quality_report)
@@ -670,9 +716,15 @@ async def process_case_documents(
                     15,
                     stage={"id": "doc_summary", "name": "Document Analysis", "status": "active", "progress": 10}
                 )
+            # Filter out docs that were grouped (Phase B) for individual summarization
+            docs_for_summary = [
+                pdoc for pdoc in all_processed_docs
+                if (pdoc.document_id or "") not in grouped_doc_ids
+            ]
+
             structured_summaries, summary_errors = await _generate_document_summaries(
                 intake_content,
-                all_processed_docs,
+                docs_for_summary,
                 openai_client_wrapper,
                 json_processing_service,  # Pass the instance here
                 review_data,  # Pass through

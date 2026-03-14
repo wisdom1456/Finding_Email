@@ -7,7 +7,9 @@
 	 * The raw extracted text can optionally be shown via a toggle.
 	 */
 	import { slide } from 'svelte/transition';
-	import { ChevronRight, FileText, Scale, AlertCircle, Quote, Calendar, DollarSign, Users } from 'lucide-svelte';
+	import { ChevronRight, FileText, Scale, AlertCircle, Quote, Calendar, DollarSign, Users, Layers } from 'lucide-svelte';
+	import type { GroupType } from '$lib/types';
+	import { GROUP_TYPE_LABELS } from '$lib/types';
 
 	interface KeyDate {
 		date: string;
@@ -34,6 +36,12 @@
 		key_amounts?: KeyAmount[];
 		parties?: string[];
 		extraction_notes?: string;
+		// Group summary fields (present when this represents a document group)
+		group_type?: GroupType;
+		member_count?: number;
+		member_document_names?: string[];
+		combined_narrative?: string;
+		key_findings?: string[];
 	}
 
 	interface Props {
@@ -87,6 +95,11 @@
 		(summary.key_dates && summary.key_dates.length > 0) ||
 		(summary.key_amounts && summary.key_amounts.length > 0) ||
 		(summary.parties && summary.parties.length > 0)
+	);
+
+	const isGroup = $derived(!!summary.group_type && !!summary.member_count && summary.member_count > 1);
+	const groupTypeLabel = $derived(
+		summary.group_type ? (GROUP_TYPE_LABELS[summary.group_type] || 'Related Documents') : ''
 	);
 
 	const qualityColors = {
@@ -184,15 +197,23 @@
 				<div class="flex-1 min-w-0">
 					<div class="flex items-center gap-3 mb-2">
 						{#if collapsible}
-							<ChevronRight 
+							<ChevronRight
 								class="w-5 h-5 text-gray-400 transition-transform shrink-0 {isCollapsed ? '' : 'rotate-90'}"
 							/>
+						{:else if isGroup}
+							<Layers class="w-5 h-5 text-blue-500 shrink-0" />
 						{:else}
 							<FileText class="w-5 h-5 text-gray-400 shrink-0" />
 						{/if}
 						<h3 class="{compact ? 'text-base' : 'text-lg'} font-bold text-contrast truncate">{summary.document_name}</h3>
 					</div>
 					<div class="flex flex-wrap gap-2 {collapsible ? 'ml-8' : 'ml-8'}">
+						{#if isGroup}
+							<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold tracking-wider uppercase bg-blue-50 text-blue-700 border border-blue-200">
+								<Layers class="w-3 h-3" />
+								{groupTypeLabel} — {summary.member_count} docs
+							</span>
+						{/if}
 						{#if summary.document_type}
 							<span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold tracking-wider bg-contrast/5 text-contrast uppercase border border-contrast/10">
 								{summary.document_type}
@@ -226,6 +247,50 @@
 	{#if !isCollapsed}
 		<div transition:slide class="{compact ? 'p-4' : 'p-6'} space-y-5">
 			{#if hasStructuredContent}
+				<!-- Group member documents -->
+				{#if isGroup && summary.member_document_names && summary.member_document_names.length > 0}
+					<div class="bg-blue-50/50 rounded-lg p-4 border border-blue-100">
+						<p class="text-[10px] font-bold text-blue-600 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+							<Layers class="w-3.5 h-3.5" />
+							Documents in this group
+						</p>
+						<div class="flex flex-wrap gap-1.5">
+							{#each summary.member_document_names as name}
+								<span class="inline-flex items-center gap-1 px-2 py-1 rounded text-xs bg-white border border-blue-200 text-blue-800">
+									<FileText class="w-3 h-3 opacity-50" />
+									{name}
+								</span>
+							{/each}
+						</div>
+					</div>
+				{/if}
+
+				<!-- Combined Narrative (group summary) -->
+				{#if summary.combined_narrative}
+					<div>
+						<p class="text-sm text-gray-700 leading-relaxed font-medium italic border-l-2 border-blue-300 pl-4">
+							{summary.combined_narrative}
+						</p>
+					</div>
+				{/if}
+
+				<!-- Key Findings (group summary) -->
+				{#if summary.key_findings && summary.key_findings.length > 0}
+					<div>
+						<p class="text-[10px] font-bold text-blue-800 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+							Key Findings
+						</p>
+						<ul class="space-y-1.5">
+							{#each summary.key_findings as finding}
+								<li class="text-sm text-gray-700 flex items-start gap-2">
+									<span class="text-blue-400 font-bold mt-0.5">-</span>
+									<span>{finding}</span>
+								</li>
+							{/each}
+						</ul>
+					</div>
+				{/if}
+
 				<!-- Executive Summary -->
 				{#if summary.executive_summary}
 					<div>

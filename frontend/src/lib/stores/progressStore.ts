@@ -78,9 +78,9 @@ export interface EnhancedProgressState<T = unknown> extends ProgressState<T> {
 }
 
 const DEFAULT_STAGES: StageState[] = [
-	{ id: 'doc_summary', name: 'Document Analysis', status: 'pending', progress: 0 },
-	{ id: 'fact_matrix', name: 'Extracting Facts', status: 'pending', progress: 0 },
-	{ id: 'issue_mapping', name: 'Legal Issues', status: 'pending', progress: 0 },
+	{ id: 'doc_summary', name: 'Analyzing Documents', status: 'pending', progress: 0 },
+	{ id: 'fact_matrix', name: 'Extracting Key Facts', status: 'pending', progress: 0 },
+	{ id: 'issue_mapping', name: 'Mapping Legal Issues', status: 'pending', progress: 0 },
 	{ id: 'deep_analysis', name: 'Deep Analysis', status: 'pending', progress: 0 },
 	{ id: 'letter_structure', name: 'Findings Email Structure', status: 'pending', progress: 0 },
 ];

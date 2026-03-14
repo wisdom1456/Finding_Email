@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { CheckCircle2, PenLine, AlertCircle, Tag } from 'lucide-svelte';
+    import { CheckCircle2, PenLine, AlertCircle, Tag, Layers, ArrowUpDown } from 'lucide-svelte';
 
     let {
         documents,
@@ -50,6 +50,22 @@
     // Ready docs
     const readyCount = $derived(activeDocs.filter(d => d.status === 'ready').length);
     const totalCount = $derived(activeDocs.length);
+
+    // Documents with suggested grouping relationships (from registry cross-doc analysis)
+    const groupedCount = $derived(
+        activeDocs.filter(d => {
+            const rels = d.metadata?.registry?.suggested_relationships;
+            return Array.isArray(rels) && rels.length > 0;
+        }).length
+    );
+
+    // High-priority documents (authority score >= 70)
+    const highPriorityCount = $derived(
+        activeDocs.filter(d => {
+            const score = d.metadata?.registry?.authority_score ?? d.authority_score;
+            return typeof score === 'number' && score >= 70;
+        }).length
+    );
 
     // All-clear condition
     const allClear = $derived(missingSigCount === 0 && lowOcrCount === 0 && totalCount > 0);
@@ -105,6 +121,22 @@
             theme: 'bg-green-50 border-green-200 text-green-700',
             alwaysShow: true,
         },
+        {
+            key: 'high-priority',
+            label: 'Key Documents',
+            count: highPriorityCount,
+            icon: ArrowUpDown,
+            theme: 'bg-blue-50 border-blue-200 text-blue-700',
+            alwaysShow: false,
+        },
+        {
+            key: 'grouped',
+            label: 'Related / Grouped',
+            count: groupedCount,
+            icon: Layers,
+            theme: 'bg-indigo-50 border-indigo-200 text-indigo-700',
+            alwaysShow: false,
+        },
     ].filter(chip => chip.alwaysShow || chip.count > 0));
 
     const progressPercent = $derived(totalCount > 0 ? Math.round((readyCount / totalCount) * 100) : 0);
@@ -116,7 +148,9 @@
     <div class="mb-4">
         {#if allClear}
             <p class="text-sm font-medium text-green-700">
-                All {totalCount} documents verified and ready for analysis
+                All {totalCount} documents verified and ready for analysis{#if highPriorityCount > 0}
+                    <span class="text-gray-500 font-normal"> — {highPriorityCount} key document{highPriorityCount !== 1 ? 's' : ''} will be prioritized</span>
+                {/if}
             </p>
         {:else if totalCount === 0}
             <p class="text-sm font-medium text-gray-500">No documents loaded yet</p>

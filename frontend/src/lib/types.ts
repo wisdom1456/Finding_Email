@@ -77,6 +77,77 @@ export interface DocumentData {
 }
 
 /**
+ * Document Grouping Types
+ * Used when related documents are processed as a single unit (e.g., bank statements, email threads).
+ */
+
+/**
+ * Types of document groups detected by the pipeline.
+ */
+export type GroupType =
+	| 'email_thread'
+	| 'contract_family'
+	| 'photo_sequence'
+	| 'bank_statements'
+	| 'credit_card_statements'
+	| 'medical_records'
+	| 'financial_reports'
+	| 'insurance_claims'
+	| 'text_messages'
+	| 'real_estate_package'
+	| 'generic';
+
+/**
+ * A group of related documents processed as a single unit.
+ */
+export interface DocumentGroup {
+	group_id: string;
+	group_type: GroupType;
+	label: string;
+	member_document_ids: string[];
+	member_document_names: string[];
+	member_count: number;
+	group_metadata: Record<string, unknown>;
+	authority_score: number | null;
+	canonical_document_id: string | null;
+}
+
+/**
+ * Summary generated for a document group (replaces N individual summaries with 1).
+ */
+export interface GroupSummary {
+	group_id: string;
+	group_type: GroupType;
+	label: string;
+	member_count: number;
+	member_document_names: string[];
+	combined_narrative: string;
+	key_findings: string[];
+	structured_data: Record<string, unknown>;
+	legal_significance: string | null;
+	key_quotes: string[];
+	authority_score: number | null;
+	extraction_quality: 'high' | 'medium' | 'low';
+}
+
+/**
+ * Human-readable labels for group types.
+ */
+export const GROUP_TYPE_LABELS: Record<GroupType, string> = {
+	email_thread: 'Email Thread',
+	contract_family: 'Contract Family',
+	photo_sequence: 'Photo Sequence',
+	bank_statements: 'Bank Statements',
+	credit_card_statements: 'Credit Card Statements',
+	medical_records: 'Medical Records',
+	financial_reports: 'Financial Reports',
+	insurance_claims: 'Insurance Claims',
+	text_messages: 'Text Messages',
+	real_estate_package: 'Real Estate Package',
+	generic: 'Related Documents',
+};
+
+/**
  * Gap Analysis Types (NEW - 2025-01-30)
  * Used to identify missing documents, contradictions, and weaknesses in case materials.
  */

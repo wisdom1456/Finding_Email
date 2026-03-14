@@ -17,6 +17,7 @@
 	import DocumentPreviewPane from '$lib/components/DocumentPreviewPane.svelte';
 	import GapAnalysisPanel from '$lib/components/GapAnalysisPanel.svelte';
 	import FullAnalysisDisplay from '$lib/components/FullAnalysisDisplay.svelte';
+	import DocumentCoverageSection from '$lib/components/DocumentCoverageSection.svelte';
 	import { AlertTriangle } from 'lucide-svelte';
 
 	type ResultsWorkspaceData = {
@@ -64,10 +65,11 @@
 	];
 	const FINDINGS_PHASE_LABELS: Record<string, string> = {
 		strategy: 'Preparing strategy',
-		context_build: 'Gathering documents',
+		context_build: 'Prioritizing key documents',
 		draft_generation: 'Drafting letter',
-		lint_validation: 'Quality check',
-		polishing: 'Polishing',
+		lint_validation: 'Reviewing for accuracy',
+		repair: 'Fixing issues',
+		polishing: 'Final polish',
 		finalizing: 'Saving'
 	};
 	let findingsQualityReport = $state<Record<string, any> | null>(null);
@@ -131,6 +133,41 @@
 	let recommendationLetters = $state<Record<string, string>>({});
 	let insufficientDocError = $state<{ completeness_score: number; critical_gaps: number } | null>(null);
 	
+	// Document coverage stats (derived from summaries and documents)
+	let docCoverageStats = $derived.by(() => {
+		const totalDocs = documents?.length || 0;
+		const summaries = results?.document_summaries;
+		if (!Array.isArray(summaries) || totalDocs === 0) {
+			return { total: totalDocs, fullyAnalyzed: 0, grouped: 0, groupCount: 0, metadataOnly: 0, skipped: 0 };
+		}
+
+		// Count group summaries vs individual summaries
+		let groupSummaryCount = 0;
+		let groupedDocCount = 0;
+		let individualCount = 0;
+
+		for (const s of summaries) {
+			if (s.group_type && s.member_count && s.member_count > 1) {
+				groupSummaryCount++;
+				groupedDocCount += s.member_count;
+			} else {
+				individualCount++;
+			}
+		}
+
+		const skippedArr = results?.artifacts?.skipped_documents || [];
+		const metadataOnly = Math.max(0, totalDocs - individualCount - groupedDocCount - skippedArr.length);
+
+		return {
+			total: totalDocs,
+			fullyAnalyzed: individualCount,
+			grouped: groupedDocCount,
+			groupCount: groupSummaryCount,
+			metadataOnly: metadataOnly > 0 ? metadataOnly : 0,
+			skipped: skippedArr.length,
+		};
+	});
+
 	// Viability data
 	let deepAnalysis = $derived(multiStageResult?.deep_analysis);
 	let isViable = $derived(deepAnalysis?.is_viable ?? true);
@@ -1879,13 +1916,19 @@ async function fetchWithRetry(
 						</div>
 					</div>
 				</div>
-				<GapAnalysisPanel 
-					gapAnalysis={gapAnalysis} 
+				<GapAnalysisPanel
+					gapAnalysis={gapAnalysis}
 					availableDocuments={documents}
 					onGenerateRecommendationLetter={(letterType: RecommendedLetterType) => generateRecommendationLetter(letterType)}
 					{generatingRecommendationLetter}
 					onResolveGaps={resolveGapsAndRefresh}
 					{resolvingGaps}
+					totalDocuments={docCoverageStats.total}
+					fullyAnalyzed={docCoverageStats.fullyAnalyzed}
+					groupedDocuments={docCoverageStats.grouped}
+					groupCount={docCoverageStats.groupCount}
+					metadataOnly={docCoverageStats.metadataOnly}
+					skippedCount={docCoverageStats.skipped}
 				/>
 			{:else}
 				<div class="card-standard">
@@ -1955,11 +1998,52 @@ async function fetchWithRetry(
 		{:else if activeTab === 'documents'}
 			<!-- Signature status is now set in Verification Hub. This is read-only. -->
 			{#if results.document_summaries && results.document_summaries.length > 0}
+				{@const groupSummaries = results.document_summaries.filter((s: any) => s.group_type && s.member_count && s.member_count > 1)}
+				{@const individualSummaries = results.document_summaries.filter((s: any) => !(s.group_type && s.member_count && s.member_count > 1))}
+
+				<!-- Document coverage overview -->
+				{#if docCoverageStats.total > 0}
+					<div class="mb-6">
+						<DocumentCoverageSection
+							totalDocuments={docCoverageStats.total}
+							fullyAnalyzed={docCoverageStats.fullyAnalyzed}
+							groupedDocuments={docCoverageStats.grouped}
+							groupCount={docCoverageStats.groupCount}
+							metadataOnly={docCoverageStats.metadataOnly}
+							skipped={docCoverageStats.skipped}
+						/>
+					</div>
+				{/if}
+
+				<!-- Group summaries section -->
+				{#if groupSummaries.length > 0}
+					<div class="card-standard mb-6">
+						<h2 class="text-2xl font-heading font-bold text-contrast mb-2 border-b border-gray-100 pb-4">
+							Grouped Documents
+						</h2>
+						<p class="text-sm text-gray-500 mb-6">
+							Related documents were analyzed together for more efficient and accurate summaries.
+						</p>
+						<div class="space-y-6">
+							{#each groupSummaries as doc}
+								<DocumentSummaryCard
+									summary={doc}
+									collapsible={true}
+									defaultCollapsed={collapsedDocs.has(doc.document_name)}
+								/>
+							{/each}
+						</div>
+					</div>
+				{/if}
+
+				<!-- Individual document summaries -->
 				<div class="card-standard">
-					<h2 class="text-2xl font-heading font-bold text-contrast mb-8 border-b border-gray-100 pb-4">Document Analysis</h2>
+					<h2 class="text-2xl font-heading font-bold text-contrast mb-8 border-b border-gray-100 pb-4">
+						{groupSummaries.length > 0 ? 'Individual Documents' : 'Document Analysis'}
+					</h2>
 					<div class="space-y-6">
-						{#each results.document_summaries as doc}
-							<DocumentSummaryCard 
+						{#each individualSummaries as doc}
+							<DocumentSummaryCard
 								summary={doc}
 								rawText={getDocumentRawText(doc.document_name)}
 								signatureDetection={getDocumentSignatureDetection(doc.document_name)}
@@ -2025,10 +2109,21 @@ async function fetchWithRetry(
 							</AsyncButton>
 						</div>
 
-						{#if generatingFindings || (findingsGenerationState !== 'idle' && findingsGenerationState !== 'complete')}
-							<div class="mb-4 flex items-center gap-2 text-sm text-gray-600">
-								<div class="h-2.5 w-2.5 rounded-full bg-accent animate-pulse"></div>
-								<span>{findingsPhaseMessage || findingsGenerationState.replace(/_/g, ' ')}</span>
+						{#if generatingFindings || (findingsGenerationState !== 'idle' && findingsGenerationState !== 'complete' && findingsGenerationState !== 'error' && findingsGenerationState !== 'cancelled')}
+							<div class="mb-4">
+								<div class="flex items-center gap-2 text-sm text-gray-600 mb-2">
+									<div class="h-2.5 w-2.5 rounded-full bg-accent animate-pulse"></div>
+									<span>{findingsPhaseMessage || FINDINGS_PHASE_LABELS[findingsGenerationState] || findingsGenerationState.replace(/_/g, ' ')}</span>
+								</div>
+								<!-- Phase progress steps -->
+								<div class="flex items-center gap-1 ml-5">
+									{#each FINDINGS_PHASE_ORDER as phase, i}
+										{@const phaseIdx = FINDINGS_PHASE_ORDER.indexOf(findingsGenerationState as any)}
+										{@const isPast = i < phaseIdx}
+										{@const isCurrent = findingsGenerationState === phase}
+										<div class="h-1 flex-1 rounded-full transition-all duration-300 {isPast ? 'bg-accent' : isCurrent ? 'bg-accent/50 animate-pulse' : 'bg-gray-200'}"></div>
+									{/each}
+								</div>
 							</div>
 						{/if}
 

@@ -24,6 +24,7 @@
 	import Badge from '$lib/components/ui/Badge.svelte';
 	import CaseRecommendationCard from '$lib/components/CaseRecommendationCard.svelte';
 	import AsyncButton from '$lib/components/ui/AsyncButton.svelte';
+	import DocumentCoverageSection from '$lib/components/DocumentCoverageSection.svelte';
 
 	// Props
 	export let gapAnalysis: GapAnalysisResult;
@@ -39,6 +40,16 @@
 		  }) => Promise<void> | void)
 		| undefined = undefined;
 	export let resolvingGaps: boolean = false;
+
+	// Document coverage stats (optional — shown when provided)
+	export let totalDocuments: number = 0;
+	export let fullyAnalyzed: number = 0;
+	export let groupedDocuments: number = 0;
+	export let groupCount: number = 0;
+	export let metadataOnly: number = 0;
+	export let skippedCount: number = 0;
+
+	$: showCoverage = totalDocuments > 0;
 
 	// State
 	let selectedSeverity: GapSeverity | 'all' = 'all';
@@ -276,6 +287,18 @@
 				}
 			}}
 			generatingLetter={generatingRecommendationLetter}
+		/>
+	{/if}
+
+	<!-- Document Coverage -->
+	{#if showCoverage}
+		<DocumentCoverageSection
+			{totalDocuments}
+			{fullyAnalyzed}
+			{groupedDocuments}
+			{groupCount}
+			metadataOnly={metadataOnly}
+			skipped={skippedCount}
 		/>
 	{/if}
 

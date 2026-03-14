@@ -505,7 +505,7 @@
         </div>
         <h4 class="thinking-title">AI is reasoning...</h4>
         <p class="thinking-description">
-          GPT-5.4 is analyzing your documents and building a comprehensive legal analysis.
+          Prioritizing key documents, grouping related files, and building a comprehensive legal analysis.
         </p>
         <p class="thinking-time">Usually takes 2-5 minutes depending on case size</p>
         <div class="thinking-elapsed">{formatTime(elapsedTime)}</div>
@@ -530,8 +530,14 @@
     <div class="scope-warning">
       <span class="scope-warning-icon">⚠</span>
       <span>
-        {docsInScope} of {docsInScope + docsOmitted} documents were included in this analysis.
-        Large cases may not include all documents in the AI summary.
+        <strong>{docsInScope} of {docsInScope + docsOmitted}</strong> documents were included in this analysis.
+        The system prioritized the most important documents based on relevance and type.
+        {#if docsOmitted <= 5}
+          {docsOmitted} lower-priority document{docsOmitted !== 1 ? 's were' : ' was'} not included.
+        {:else}
+          Related documents may have been grouped together to improve coverage.
+        {/if}
+        All documents remain available in the case file.
       </span>
     </div>
   {/if}

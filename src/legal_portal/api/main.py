@@ -19,7 +19,7 @@ from slowapi.errors import RateLimitExceeded
 from legal_portal.api.middleware.error_handler import register_app_error_handler
 from legal_portal.api.rate_limiter import limiter
 from legal_portal.api.routes import (
-    analysis,
+    analysis_core,
     cases,
     chat_routes,
     clio,
@@ -130,7 +130,7 @@ async def general_exception_handler(request: Request, exc: Exception):
 app.include_router(health.router, tags=["health"])
 app.include_router(cases.router, prefix="/api/cases", tags=["cases"])
 app.include_router(documents.router, prefix="/api/documents", tags=["documents"])
-app.include_router(analysis.router, prefix="/api/analysis", tags=["analysis"])
+app.include_router(analysis_core.router, prefix="/api/analysis", tags=["analysis"])
 app.include_router(chat_routes.router, prefix="/api/analysis", tags=["analysis"])
 app.include_router(document_status_routes.router, prefix="/api/analysis", tags=["analysis"])
 app.include_router(gap_routes.router, prefix="/api/analysis", tags=["analysis"])

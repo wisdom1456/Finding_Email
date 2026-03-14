@@ -24,6 +24,68 @@ from legal_portal.utils.type_safety import safe_str, safe_str_required, sanitize
 
 logger = logging.getLogger(__name__)
 
+# Explicit __all__ so that `from _analysis_helpers import *` re-exports
+# underscore-prefixed symbols (Python's default * behavior skips them).
+__all__ = [
+    # Constants
+    "_DB_COLUMNS_CACHE",
+    "_GAP_ANALYSIS_INPUT_SCHEMA_VERSION",
+    "_SIGNATURE_TEXT_FALLBACK_PATTERNS",
+    "_TEXT_SIGNING_DATE_PATTERNS",
+    "_SIGNER_NAME_PATTERNS",
+    "_SIGNATURE_INSTRUMENT_HINT_PATTERNS",
+    "_SIGNATURE_VERIFICATION_STATUS_ALIASES",
+    # Retry wrappers
+    "_upsert_with_retry",
+    "_update_case_with_retry",
+    # Metrics / SSE / quality
+    "_new_generation_metrics",
+    "_emit_generation_metrics",
+    "_to_sse",
+    "_quality_report_placeholder",
+    # Cancellation
+    "AnalysisCancelledError",
+    "_analysis_is_cancelled",
+    "_cancel_analysis",
+    "_update_analysis_progress",
+    # User preferences
+    "_get_user_ai_preferences",
+    # Identity resolution
+    "_first_non_empty_text",
+    "_resolve_letter_identity_context",
+    "_resolve_client_name_for_letter",
+    # Signature helpers
+    "_normalize_signature_verification_status",
+    "_extract_signature_verification",
+    "_apply_signature_verification_override",
+    "_normalize_text_signing_date",
+    "_infer_signature_detection_from_text",
+    "_is_pdf_like_document",
+    "_is_signature_inference_candidate",
+    "_sample_text_for_state_hash",
+    "_extract_signature_instrument_hints",
+    # Case access helpers
+    "_ensure_case_access",
+    "_fetch_latest_analysis_result",
+    # Pydantic models
+    "AnalysisRequest",
+    "AnalysisResponse",
+    "LetterGenerationRequest",
+    "LetterGenerationResponse",
+    "StreamingAnalysisSaveRequest",
+    "RecommendationLetterRequest",
+    "RecommendationLetterResponse",
+    "CalculateDemandAmountRequest",
+    "CalculateDemandAmountResponse",
+    "GapAnalysisRequest",
+    "GapResolutionItemRequest",
+    "GapResolutionRefreshRequest",
+    "RetryDocumentsRequest",
+    "SkipDocumentsRequest",
+    "DocumentStatusResponse",
+    "RecoveryActionResponse",
+]
+
 # ---------------------------------------------------------------------------
 # Module-level constants
 # ---------------------------------------------------------------------------

@@ -26,6 +26,9 @@
 	import DocumentSummaryCard from '$lib/components/DocumentSummaryCard.svelte';
 	import DocumentPreviewPane from '$lib/components/DocumentPreviewPane.svelte';
 	import { syncClioMatter, dedupCaseDocuments, type ClioSyncResponse, type DedupResponse } from '$lib/api/cases';
+	import { isCaseSummary, isIntakeForm, isPrimaryIntakeCandidate, isPdfLikeDocument, isImageLikeDocument, isTextLikeDocument, isVideoAudioFile } from '$lib/utils/documentClassification';
+	import { requiresSignatureReview, getDocumentSignatureDetection, getDocumentSignatureVerificationStatus, getDocumentSignatureStatus, getDocumentSignatureLabel, getDocumentSignatureBadgeClass, shouldShowSignatureBadge } from '$lib/utils/signatureDetection';
+	import { formatDate, formatFileSize, getStatusColor } from '$lib/utils/formatters';
 
 	let caseData = $state<CaseData | null>(null);
 	let documents = $state<any[]>([]);
@@ -74,20 +77,6 @@
 		)
 	);
 
-	// Helper functions to check document types
-	function isCaseSummary(doc: any): boolean {
-		return doc.file_name.toLowerCase().includes('case summary') || 
-		       doc.file_name.toLowerCase().includes('case_summary') ||
-		       doc.file_name.toLowerCase().includes('casesummary');
-	}
-	
-	function isIntakeForm(doc: any): boolean {
-		return doc.file_name.toLowerCase().includes('intake');
-	}
-	
-	function isPrimaryIntakeCandidate(doc: any): boolean {
-		return isCaseSummary(doc) || isIntakeForm(doc);
-	}
 
 	// Find all potential intake documents (case summaries and intake forms)
 	let intakeCandidates = $derived(
@@ -836,31 +825,6 @@
 		}
 	}
 
-	function isPdfLikeDocument(doc: any): boolean {
-		if (!doc) return false;
-		const fileType = String(doc.file_type || '').toLowerCase();
-		const fileName = String(doc.file_name || '').toLowerCase();
-		return fileType === 'application/pdf' || fileName.endsWith('.pdf');
-	}
-
-	function isImageLikeDocument(doc: any): boolean {
-		if (!doc) return false;
-		return String(doc.file_type || '').toLowerCase().startsWith('image/');
-	}
-
-	function isTextLikeDocument(doc: any): boolean {
-		if (!doc) return false;
-		const fileType = String(doc.file_type || '').toLowerCase();
-		const fileName = String(doc.file_name || '').toLowerCase();
-		return (
-			fileType.startsWith('text/') ||
-			fileName.endsWith('.txt') ||
-			fileName.endsWith('.md') ||
-			fileName.endsWith('.csv') ||
-			fileName.endsWith('.log')
-		);
-	}
-
 	async function loadDocumentBinaryPreview(doc: any = viewingDocument) {
 		if (!doc?.storage_path) return;
 
@@ -1491,131 +1455,7 @@
 		}
 	}
 
-	function formatDate(dateString: string) {
-		return new Date(dateString).toLocaleDateString('en-US', {
-			year: 'numeric',
-			month: 'short',
-			day: 'numeric',
-			hour: '2-digit',
-			minute: '2-digit'
-		});
-	}
 
-	function formatFileSize(bytes: number) {
-		if (bytes < 1024) return bytes + ' B';
-		if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(2) + ' KB';
-		return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
-	}
-
-	type SignatureStatus = 'signed' | 'not_detected' | 'review_required' | 'other' | 'none';
-
-	const signatureRequiredKeywords = [
-		'agreement',
-		'contract',
-		'lease',
-		'addendum',
-		'amendment',
-		'settlement',
-		'release',
-		'authorization',
-		'consent',
-		'affidavit',
-		'declaration',
-		'stipulation',
-		'promissory note',
-		'guaranty',
-		'power of attorney',
-		'poa',
-		'signature page',
-		'executed'
-	];
-
-	const _NO_SIG_EXTENSIONS = new Set([
-		'.eml', '.txt', '.csv', '.doc', '.jpg', '.jpeg', '.png', '.heic', '.gif', '.bmp', '.tiff', '.tif',
-	]);
-	const _NO_SIG_TYPES = new Set([
-		'correspondence', 'email', 'photo/media', 'note', 'communication',
-	]);
-
-	function requiresSignatureReview(doc: any): boolean {
-		const fileName = String(doc?.file_name || '').toLowerCase();
-		const ext = fileName.includes('.') ? '.' + fileName.split('.').pop() : '';
-		if (_NO_SIG_EXTENSIONS.has(ext)) return false;
-		if (fileName.startsWith('clio note') || fileName.startsWith('clio communication')) return false;
-		const docType = (doc?.document_type_label || doc?.metadata?.registry?.document_type || '').toLowerCase();
-		if (_NO_SIG_TYPES.has(docType)) return false;
-		return signatureRequiredKeywords.some((keyword) => fileName.includes(keyword));
-	}
-
-	function getDocumentSignatureDetection(doc: any): any | null {
-		const sig = doc?.metadata?.signature_detection;
-		return sig && typeof sig === 'object' ? sig : null;
-	}
-
-	function getDocumentSignatureVerificationStatus(doc: any): 'signed' | 'not_signed' | 'unknown' | 'none' {
-		const verification = doc?.metadata?.signature_verification;
-		if (!verification || typeof verification !== 'object') return 'none';
-		const status = String(verification.status || '').toLowerCase().trim();
-		if (status === 'signed') return 'signed';
-		if (status === 'not_signed' || status === 'unsigned' || status === 'not_detected' || status === 'not signed') {
-			return 'not_signed';
-		}
-		if (status === 'unknown' || status === 'unclear') return 'unknown';
-		return 'none';
-	}
-
-	function getDocumentSignatureStatus(doc: any): SignatureStatus {
-		const verifiedStatus = getDocumentSignatureVerificationStatus(doc);
-		if (verifiedStatus === 'signed') return 'signed';
-		if (verifiedStatus === 'not_signed') return 'not_detected';
-		if (verifiedStatus === 'unknown') return 'review_required';
-
-		const signatureDetection = getDocumentSignatureDetection(doc);
-		if (!signatureDetection) return requiresSignatureReview(doc) ? 'review_required' : 'none';
-		const status = String(signatureDetection.status || '').toLowerCase();
-		if (status === 'signed') return 'signed';
-		if (status === 'not_detected') return 'not_detected';
-		return 'other';
-	}
-
-	function getDocumentSignatureLabel(doc: any): string {
-		const verifiedStatus = getDocumentSignatureVerificationStatus(doc);
-		if (verifiedStatus === 'signed') return 'SIGNED (ATTORNEY VERIFIED)';
-		if (verifiedStatus === 'not_signed') return 'NOT SIGNED (ATTORNEY VERIFIED)';
-		if (verifiedStatus === 'unknown') return 'SIGNATURE REVIEWED (UNCLEAR)';
-
-		const signatureDetection = getDocumentSignatureDetection(doc);
-		if (!signatureDetection) {
-			if (requiresSignatureReview(doc)) return 'SIGNATURE REVIEW RECOMMENDED';
-			return '';
-		}
-		const status = getDocumentSignatureStatus(doc);
-		const confidence = signatureDetection?.confidence
-			? ` (${String(signatureDetection.confidence).toUpperCase()})`
-			: '';
-		if (status === 'signed') return `SIGNED${confidence}`;
-		if (status === 'not_detected') return `NO SIGNATURE DETECTED${confidence}`;
-		if (status === 'review_required') return 'SIGNATURE REVIEW RECOMMENDED';
-		return `SIGNATURE: ${String(signatureDetection.status || 'UNKNOWN').toUpperCase()}${confidence}`;
-	}
-
-	function getDocumentSignatureBadgeClass(doc: any): string {
-		const status = getDocumentSignatureStatus(doc);
-		if (status === 'signed') {
-			return 'bg-emerald-100 text-emerald-800 border-emerald-300';
-		}
-		if (status === 'not_detected') {
-			return 'bg-amber-100 text-amber-800 border-amber-300';
-		}
-		if (status === 'review_required') {
-			return 'bg-yellow-100 text-yellow-900 border-yellow-300';
-		}
-		return 'bg-gray-100 text-gray-700 border-gray-300';
-	}
-
-	function shouldShowSignatureBadge(doc: any): boolean {
-		return getDocumentSignatureStatus(doc) !== 'none';
-	}
 
 	// Start streaming analysis (fast single-pass)
 	async function startStreamingAnalysis(skipMissingTextCheck = false) {
@@ -1683,26 +1523,7 @@
 		showStreamingPanel = false;
 	}
 
-	function getStatusColor(status: string) {
-		switch (status) {
-			case 'completed':
-				return 'bg-accent/10 text-accent';
-			case 'processing':
-				return 'bg-contrast-light/10 text-contrast-light';
-			case 'error':
-				return 'bg-red-100 text-red-700';
-			default:
-				return 'bg-gray-100 text-gray-700';
-		}
-	}
 
-	function isVideoAudioFile(fileName: string): boolean {
-		const videoAudioExtensions = [
-			'.mov', '.mp4', '.avi', '.mkv', '.wmv', '.flv', '.webm', '.m4v',  // Video
-			'.mp3', '.wav', '.aac', '.flac', '.m4a', '.ogg', '.wma', '.aiff',  // Audio
-		];
-		return videoAudioExtensions.some(ext => fileName.toLowerCase().endsWith(ext));
-	}
 </script>
 
 <div class="page-spacing">

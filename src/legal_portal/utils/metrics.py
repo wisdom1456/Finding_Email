@@ -9,6 +9,7 @@ import time
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
+from functools import lru_cache
 from typing import Dict, List, Optional
 
 
@@ -23,39 +24,29 @@ class Metric:
     metric_type: str = "gauge"  # gauge, counter, histogram, timer
 
 
+@lru_cache(maxsize=1)
+def _get_metrics_instance() -> "MetricsCollector":
+    """Get the singleton MetricsCollector instance."""
+    instance = object.__new__(MetricsCollector)
+    instance.metrics = []
+    instance.counters = defaultdict(int)
+    instance.timers = defaultdict(list)
+    instance.gauges = {}
+    instance._start_exporter()
+    return instance
+
+
 class MetricsCollector:
     """Collect and export metrics."""
 
-    _instance = None
-    _lock = threading.Lock()
-
-    def __new__(cls):
-        """Singleton pattern for metrics collector."""
-        if cls._instance is None:
-            with cls._lock:
-                if cls._instance is None:
-                    cls._instance = super().__new__(cls)
-                    cls._instance._initialized = False
-        return cls._instance
-
     def __init__(self):
-        """Initialize metrics collector."""
-        if self._initialized:
-            return
-
-        self.metrics: List[Metric] = []
-        self.counters: Dict[str, int] = defaultdict(int)
-        self.timers: Dict[str, List[float]] = defaultdict(list)
-        self.gauges: Dict[str, float] = {}
-        self._initialized = True
-
-        # Start background thread for periodic export
-        self._start_exporter()
+        """No-op: singleton state is managed by _get_metrics_instance()."""
+        pass
 
     @classmethod
     def record_counter(cls, name: str, value: int = 1, tags: Optional[Dict] = None):
         """Record counter metric."""
-        instance = cls()
+        instance = _get_metrics_instance()
         instance.counters[name] += value
 
         metric = Metric(
@@ -66,7 +57,7 @@ class MetricsCollector:
     @classmethod
     def record_timing(cls, name: str, duration: float, tags: Optional[Dict] = None):
         """Record timing metric."""
-        instance = cls()
+        instance = _get_metrics_instance()
         instance.timers[name].append(duration)
 
         # Keep only last 1000 measurements
@@ -85,7 +76,7 @@ class MetricsCollector:
     @classmethod
     def record_gauge(cls, name: str, value: float, tags: Optional[Dict] = None):
         """Record gauge metric."""
-        instance = cls()
+        instance = _get_metrics_instance()
         instance.gauges[name] = value
 
         metric = Metric(

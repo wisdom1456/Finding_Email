@@ -25,6 +25,9 @@
 	import type { CaseData } from '$lib/types';
 	import DocumentViewerModal from '$lib/components/DocumentViewerModal.svelte';
 	import CaseDetailsCard from '$lib/components/CaseDetailsCard.svelte';
+	import ConfirmDeleteDocumentModal from '$lib/components/ConfirmDeleteDocumentModal.svelte';
+	import ConfirmDeleteCaseModal from '$lib/components/ConfirmDeleteCaseModal.svelte';
+	import MissingTextWarningModal from '$lib/components/MissingTextWarningModal.svelte';
 	import { syncClioMatter, dedupCaseDocuments, type ClioSyncResponse, type DedupResponse } from '$lib/api/cases';
 	import { isCaseSummary, isIntakeForm, isPrimaryIntakeCandidate, isVideoAudioFile } from '$lib/utils/documentClassification';
 	import { requiresSignatureReview, getDocumentSignatureDetection, getDocumentSignatureVerificationStatus, getDocumentSignatureStatus, getDocumentSignatureLabel, getDocumentSignatureBadgeClass, shouldShowSignatureBadge } from '$lib/utils/signatureDetection';
@@ -176,7 +179,6 @@
 	// Delete confirmation state
 	let deleteConfirmDoc = $state<string | null>(null);
 	let deleteConfirmCase = $state(false);
-	let deleteCaseText = $state('');
 
 	// Edit case state (bound to CaseDetailsCard)
 	let editingCase = $state(false);
@@ -871,8 +873,6 @@
 	}
 
 	async function deleteCase() {
-		if (deleteCaseText !== 'DELETE') return;
-
 		try {
 			const { session, user } = await getSecureSession();
 
@@ -2275,87 +2275,22 @@
 
 <!-- Document Delete Confirmation Modal -->
 {#if deleteConfirmDoc}
-	<div class="modal-overlay">
-		<div class="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
-			<h3 class="text-lg font-heading font-semibold text-contrast mb-4">Delete Document</h3>
-			<p class="text-sm text-gray-600 mb-4">
-				Are you sure you want to delete this document? This action cannot be undone.
-			</p>
-			<p class="text-sm font-semibold text-contrast mb-4">
-				{documents.find(d => d.id === deleteConfirmDoc)?.file_name}
-			</p>
-
-			<div class="flex justify-end space-x-3">
-				<button
-					onclick={() => (deleteConfirmDoc = null)}
-					class="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
-				>
-					Cancel
-				</button>
-				<AsyncButton
-					onclick={() => deleteDocument(deleteConfirmDoc!)}
-					variant="danger"
-					loadingText="Deleting..."
-					class="min-w-[100px]"
-				>
-					Delete
-				</AsyncButton>
-			</div>
-		</div>
-	</div>
+	<ConfirmDeleteDocumentModal
+		documentName={documents.find(d => d.id === deleteConfirmDoc)?.file_name ?? ''}
+		onconfirm={() => deleteDocument(deleteConfirmDoc!)}
+		oncancel={() => (deleteConfirmDoc = null)}
+	/>
 {/if}
 
 <!-- Case Delete Confirmation Modal -->
 {#if deleteConfirmCase}
-	<div class="modal-overlay">
-		<div class="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
-			<h3 class="text-lg font-heading font-semibold text-contrast mb-4">Delete Case</h3>
-			<div class="text-sm text-gray-600 space-y-3 mb-4">
-				<p><strong class="text-contrast">Case:</strong> {caseData?.client_name}</p>
-				{#if caseData?.reference_number}
-					<p><strong class="text-contrast">Reference:</strong> {caseData.reference_number}</p>
-				{/if}
-				<p class="text-red-600 font-semibold bg-red-50 p-3 rounded-md border border-red-100">
-					⚠️ This will permanently delete the case and all {documents.length} associated document(s).
-				</p>
-				<p>This action cannot be undone.</p>
-			</div>
-
-			<div class="mb-4">
-				<label for="delete-confirm" class="block text-sm font-semibold text-contrast mb-2">
-					Type <span class="font-mono font-bold text-red-600">DELETE</span> to confirm:
-				</label>
-				<input
-					id="delete-confirm"
-					type="text"
-					bind:value={deleteCaseText}
-					placeholder="DELETE"
-					class="input-standard focus:ring-red-500 border-gray-300"
-				/>
-			</div>
-
-			<div class="flex justify-end space-x-3">
-				<button
-					onclick={() => {
-						deleteConfirmCase = false;
-						deleteCaseText = '';
-					}}
-					class="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
-				>
-					Cancel
-				</button>
-				<AsyncButton
-					onclick={deleteCase}
-					disabled={deleteCaseText !== 'DELETE'}
-					variant="danger"
-					loadingText="Deleting..."
-					class="min-w-[120px]"
-				>
-					Delete Case
-				</AsyncButton>
-			</div>
-		</div>
-	</div>
+	<ConfirmDeleteCaseModal
+		clientName={caseData?.client_name ?? ''}
+		referenceNumber={caseData?.reference_number}
+		documentCount={documents.length}
+		onconfirm={deleteCase}
+		oncancel={() => (deleteConfirmCase = false)}
+	/>
 {/if}
 
 <!-- Document Viewer Modal -->
@@ -2495,71 +2430,13 @@
 
 <!-- Missing Text Warning Modal -->
 {#if showMissingTextWarning}
-	<div
-		class="modal-overlay"
-		role="dialog"
-		aria-modal="true"
-		tabindex="-1"
-		onclick={() => showMissingTextWarning = false}
-		onkeydown={(e) => { if (e.key === 'Escape') showMissingTextWarning = false; }}
-	>
-		<div
-			class="card-standard max-w-lg w-full mx-4"
-			role="presentation"
-			onclick={(e) => e.stopPropagation()}
-			onkeydown={(e) => e.stopPropagation()}
-		>
-			<h3 class="text-lg font-heading font-semibold text-contrast mb-2">Documents Missing Text</h3>
-			<p class="text-sm text-gray-600 mb-4">
-				{docsWithoutText.length} document{docsWithoutText.length === 1 ? '' : 's'} {docsWithoutText.length === 1 ? "doesn't" : "don't"} have extracted text and will be <strong>skipped</strong> during analysis.
-			</p>
-			
-			<div class="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4 max-h-40 overflow-auto">
-				<ul class="text-sm text-amber-800 space-y-1">
-					{#each docsWithoutText as doc}
-						<li class="flex items-center gap-2">
-							<span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
-							<span class="truncate">{doc.file_name}</span>
-						</li>
-					{/each}
-				</ul>
-			</div>
-
-			<p class="text-xs text-gray-500 mb-4">
-				Run OCR to extract text from these documents, or proceed without them.
-			</p>
-
-			<div class="flex flex-col sm:flex-row gap-3 justify-end">
-				<button 
-					onclick={() => showMissingTextWarning = false}
-					class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
-				>
-					Cancel
-				</button>
-				<button 
-					onclick={proceedWithoutMissingDocs}
-					class="px-4 py-2 text-sm font-medium text-amber-700 bg-amber-100 border border-amber-300 rounded-md hover:bg-amber-200 transition-colors"
-				>
-					Skip These Documents
-				</button>
-				<button 
-					onclick={runOcrOnMissingDocs}
-					disabled={runningBulkOcr}
-					class="px-4 py-2 text-sm font-medium text-white bg-accent rounded-md hover:bg-accent-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-				>
-					{#if runningBulkOcr}
-						<svg class="animate-spin h-4 w-4" viewBox="0 0 24 24">
-							<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle>
-							<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-						</svg>
-						Running OCR...
-					{:else}
-						Run OCR on All
-					{/if}
-				</button>
-			</div>
-		</div>
-	</div>
+	<MissingTextWarningModal
+		{docsWithoutText}
+		{runningBulkOcr}
+		oncancel={() => (showMissingTextWarning = false)}
+		onskip={proceedWithoutMissingDocs}
+		onocr={runOcrOnMissingDocs}
+	/>
 {/if}
 
 <!-- Analysis progress is now shown inline on the Analysis tab -->

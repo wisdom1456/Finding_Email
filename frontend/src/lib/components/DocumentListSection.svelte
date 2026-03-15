@@ -46,7 +46,7 @@
 </script>
 
 {#if documents.length === 0}
-	<div class="p-8 text-center">
+	<div data-testid="doc-list-empty" class="p-8 text-center">
 		<p class="text-sm text-gray-500">No documents uploaded yet.</p>
 	</div>
 {:else}
@@ -63,7 +63,7 @@
 			</button>
 		</div>
 	{/if}
-	<div class="border-t border-gray-200">
+	<div data-testid="doc-list" class="border-t border-gray-200">
 		<ul class="divide-y divide-gray-200">
 			{#each visibleDocuments as doc}
 				<li

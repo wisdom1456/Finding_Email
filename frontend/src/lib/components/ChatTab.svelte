@@ -188,7 +188,7 @@
 
 	<div class="flex-1 overflow-y-auto space-y-6 mb-6 p-6 bg-gray-50 rounded-xl border border-gray-200 shadow-inner">
 		{#if chatMessages.length === 0}
-			<div class="h-full flex flex-col items-center justify-center text-center opacity-50">
+			<div data-testid="chat-empty" class="h-full flex flex-col items-center justify-center text-center opacity-50">
 				<svg class="w-12 h-12 text-gray-300 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
 					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
 				</svg>
@@ -222,6 +222,7 @@
 
 	<div class="flex gap-3 bg-white p-2 rounded-lg border border-gray-200 shadow-sm focus-within:ring-2 focus-within:ring-accent/20 focus-within:border-accent transition-all">
 		<textarea
+		data-testid="chat-input"
 		class="flex-1 border-0 focus:ring-0 text-sm py-3 px-4 text-contrast placeholder-gray-400 font-medium resize-none min-h-[48px] max-h-[200px]"
 		rows="1"
 		placeholder="Ask a question about case facts, documents, or legal strategy..."
@@ -241,6 +242,7 @@
 			loading={sendingMessage}
 			loadingText="..."
 			class="px-6 rounded-md font-bold"
+			data-testid="chat-send"
 		>
 			Send
 		</AsyncButton>

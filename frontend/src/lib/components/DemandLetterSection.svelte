@@ -237,6 +237,7 @@
 				<label for="opposing-party" class="block text-sm font-bold text-contrast mb-1.5">Opposing Party</label>
 				<select
 					id="opposing-party"
+					data-testid="party-select"
 					bind:value={selectedParty}
 					class="input-standard focus:ring-accent"
 				>
@@ -356,6 +357,7 @@
 			loading={generatingDemand}
 			loadingText="Generating Letter..."
 			class="px-8 shadow-sm"
+			data-testid="generate-btn"
 		>
 			Generate Letter to {selectedParty || 'Party'}
 		</AsyncButton>

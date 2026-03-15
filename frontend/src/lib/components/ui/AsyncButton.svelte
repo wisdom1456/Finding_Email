@@ -91,6 +91,7 @@
 </script>
 
 <button
+	data-testid="async-button"
 	onclick={handleClick}
 	disabled={isDisabled}
 	class={buttonClasses}

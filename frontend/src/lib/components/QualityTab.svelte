@@ -11,7 +11,7 @@
 <div class="card-standard">
 	<div class="flex flex-col md:flex-row md:items-center justify-between mb-8 border-b border-gray-100 pb-6 gap-4">
 		<div>
-			<h3 class="text-2xl font-heading font-bold text-contrast">Quality Report</h3>
+			<h3 data-testid="quality-heading" class="text-2xl font-heading font-bold text-contrast">Quality Report</h3>
 			<p class="text-sm text-gray-500 mt-1 font-medium">Review the automated extraction quality for each document.</p>
 		</div>
 		{#if qualityReport && qualityReport.length > 0}
@@ -51,7 +51,7 @@
 				{@const isLowQuality = score < 6}
 				{@const isMediumQuality = score >= 6 && score <= 8}
 				{@const isHighQuality = score > 8}
-				<div class={`border-l-4 rounded-xl p-5 transition-all shadow-sm border border-gray-200 animate-fade-in-up ${
+				<div data-testid="quality-item" class={`border-l-4 rounded-xl p-5 transition-all shadow-sm border border-gray-200 animate-fade-in-up ${
 					isLowQuality
 						? 'border-l-red-500 bg-red-50/30'
 						: isMediumQuality
@@ -118,7 +118,7 @@
 			{/each}
 		</div>
 	{:else}
-		<div class="p-12 text-center bg-gray-50 rounded-xl border-2 border-dashed border-gray-200">
+		<div data-testid="quality-empty" class="p-12 text-center bg-gray-50 rounded-xl border-2 border-dashed border-gray-200">
 			<p class="text-gray-400 font-medium italic">No quality report data for this analysis.</p>
 		</div>
 	{/if}

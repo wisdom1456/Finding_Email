@@ -12,6 +12,7 @@ import subprocess
 import tempfile
 import time
 from dataclasses import dataclass
+from functools import lru_cache
 from typing import Optional, Tuple
 
 from legal_portal.config.default import settings
@@ -555,35 +556,27 @@ class FileCompressionService:
             return image_data, "pillow-failed"
 
 
-# Global instance with default settings from config
-_compression_service: Optional[FileCompressionService] = None
-
-
+@lru_cache(maxsize=1)
 def get_compression_service() -> FileCompressionService:
-    """Get or create the global compression service instance.
+    """Get the singleton FileCompressionService instance.
 
     Returns
     -------
         FileCompressionService instance configured from settings
 
     """
-    global _compression_service
-    if _compression_service is None:
-        # Get settings from config (with fallback defaults)
-        threshold_mb = getattr(settings, "compression_threshold_mb", 10.0)
-        pdf_quality = getattr(settings, "pdf_compression_quality", "ebook")
-        image_quality = getattr(settings, "image_compression_quality", 85)
-        max_image_dim = getattr(settings, "max_image_dimension", 3000)
-        png_to_jpeg = getattr(settings, "png_to_jpeg_threshold_mb", 5.0)
-        image_hard_cap = getattr(settings, "image_hard_cap_mb", 5.0)
+    threshold_mb = getattr(settings, "compression_threshold_mb", 10.0)
+    pdf_quality = getattr(settings, "pdf_compression_quality", "ebook")
+    image_quality = getattr(settings, "image_compression_quality", 85)
+    max_image_dim = getattr(settings, "max_image_dimension", 3000)
+    png_to_jpeg = getattr(settings, "png_to_jpeg_threshold_mb", 5.0)
+    image_hard_cap = getattr(settings, "image_hard_cap_mb", 5.0)
 
-        _compression_service = FileCompressionService(
-            compression_threshold_mb=threshold_mb,
-            pdf_quality=pdf_quality,
-            image_quality=image_quality,
-            max_image_dimension=max_image_dim,
-            png_to_jpeg_threshold_mb=png_to_jpeg,
-            image_hard_cap_mb=image_hard_cap,
-        )
-
-    return _compression_service
+    return FileCompressionService(
+        compression_threshold_mb=threshold_mb,
+        pdf_quality=pdf_quality,
+        image_quality=image_quality,
+        max_image_dimension=max_image_dim,
+        png_to_jpeg_threshold_mb=png_to_jpeg,
+        image_hard_cap_mb=image_hard_cap,
+    )

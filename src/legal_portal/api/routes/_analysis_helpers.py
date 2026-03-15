@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 # underscore-prefixed symbols (Python's default * behavior skips them).
 __all__ = [
     # Constants
-    "_DB_COLUMNS_CACHE",
+    "_db_columns_cache",
     "_GAP_ANALYSIS_INPUT_SCHEMA_VERSION",
     "_SIGNATURE_TEXT_FALLBACK_PATTERNS",
     "_TEXT_SIGNING_DATE_PATTERNS",
@@ -91,7 +91,23 @@ __all__ = [
 # Module-level constants
 # ---------------------------------------------------------------------------
 
-_DB_COLUMNS_CACHE: Dict[str, Any] = {}
+class DBColumnsCache:
+    """Encapsulates DB column existence checks to avoid repeated probing."""
+
+    def __init__(self):
+        self._cache: Dict[str, Any] = {}
+
+    def get(self, key: str, default=None):
+        return self._cache.get(key, default)
+
+    def __setitem__(self, key: str, value: Any):
+        self._cache[key] = value
+
+    def __getitem__(self, key: str):
+        return self._cache[key]
+
+
+_db_columns_cache = DBColumnsCache()
 _GAP_ANALYSIS_INPUT_SCHEMA_VERSION = "2026-03-10-map-reduce-v1"
 
 # ---------------------------------------------------------------------------
@@ -321,18 +337,16 @@ async def _cancel_analysis(
 
 async def _update_analysis_progress(supabase, analysis_id: str, payload: dict):
     """Update analysis progress in DB with safety check for column existence."""
-    global _DB_COLUMNS_CACHE
-
-    if _DB_COLUMNS_CACHE.get("has_progress_column") is False:
+    if _db_columns_cache.get("has_progress_column") is False:
         return
 
     try:
         supabase.table("analysis_results").update({"progress": payload}).eq("id", analysis_id).execute()
-        _DB_COLUMNS_CACHE["has_progress_column"] = True
+        _db_columns_cache["has_progress_column"] = True
     except Exception as e:
         if "column analysis_results.progress does not exist" in str(e):
             logger.warning("DB column analysis_results.progress missing. Disabling DB updates.")
-            _DB_COLUMNS_CACHE["has_progress_column"] = False
+            _db_columns_cache["has_progress_column"] = False
         else:
             logger.warning(f"Failed to persist progress to DB: {e}")
 

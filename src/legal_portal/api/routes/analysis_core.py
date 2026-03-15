@@ -68,7 +68,7 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 # Re-export for backward compatibility (tests import from analysis module)
-_DB_COLUMNS_CACHE = {}
+from legal_portal.api.routes._analysis_helpers import _db_columns_cache as _DB_COLUMNS_CACHE
 
 __all__ = [
     "router",

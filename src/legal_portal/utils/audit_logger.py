@@ -7,6 +7,7 @@ import json
 import os
 import uuid
 from datetime import datetime
+from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -188,5 +189,11 @@ class AuditLogger:
                 f.write(json.dumps(audit_entry) + "\n")
 
 
-# Global audit logger instance
-audit_logger = AuditLogger()
+@lru_cache(maxsize=1)
+def get_audit_logger() -> AuditLogger:
+    """Get the singleton AuditLogger instance."""
+    return AuditLogger()
+
+
+# Backward-compatible alias (preserves: from ...audit_logger import audit_logger)
+audit_logger = get_audit_logger()

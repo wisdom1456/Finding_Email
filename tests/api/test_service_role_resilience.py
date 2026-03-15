@@ -91,6 +91,11 @@ async def resilience_client(monkeypatch):
 
     app.dependency_overrides[get_user_supabase_client] = override_get_user_supabase
 
+    # Ensure app.state.progress_manager exists (lifespan doesn't run with ASGITransport)
+    if not hasattr(app.state, "progress_manager"):
+        from legal_portal.services.shared.progress_manager import ProgressManager
+        app.state.progress_manager = ProgressManager()
+
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         yield client

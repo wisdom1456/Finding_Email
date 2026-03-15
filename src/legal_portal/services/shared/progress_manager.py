@@ -1,8 +1,13 @@
+from __future__ import annotations
+
 import asyncio
 import json
 import logging
 from datetime import datetime, timedelta
-from typing import AsyncGenerator
+from typing import TYPE_CHECKING, AsyncGenerator
+
+if TYPE_CHECKING:
+    from fastapi import Request
 
 logger = logging.getLogger(__name__)
 
@@ -11,29 +16,13 @@ class ProgressManager:
     """Manages progress streams for different tasks using pub/sub pattern.
 
     Uses asyncio.Queue for single-process deployments.
+    Lifecycle managed via app.state in the FastAPI lifespan.
     """
 
-    _instance = None
-
-    def __new__(cls):
-        """Create or return the singleton instance."""
-        if cls._instance is None:
-            cls._instance = super(ProgressManager, cls).__new__(cls)
-            cls._instance._channels = {}  # type: Dict[str, asyncio.Queue]
-            cls._instance._last_activity = {}  # type: Dict[str, datetime]
-            cls._instance._latest_status = {}  # type: Dict[str, dict] - Store latest status for polling
-        return cls._instance
-
     def __init__(self):
-        # Initialized in __new__ to ensure singleton behavior
-        pass
-
-    @classmethod
-    def get_instance(cls):
-        """Get the singleton instance of the progress manager."""
-        if cls._instance is None:
-            cls._instance = cls()
-        return cls._instance
+        self._channels = {}  # type: Dict[str, asyncio.Queue]
+        self._last_activity = {}  # type: Dict[str, datetime]
+        self._latest_status = {}  # type: Dict[str, dict]
 
     async def create_channel(self, channel_id: str) -> str:
         """Create a new progress channel."""
@@ -201,6 +190,6 @@ class ProgressManager:
 
 
 # Dependency for FastAPI
-def get_progress_manager() -> ProgressManager:
-    """Get the ProgressManager singleton instance for FastAPI dependency injection."""
-    return ProgressManager.get_instance()
+def get_progress_manager(request: "Request") -> ProgressManager:
+    """Get the ProgressManager from app.state for FastAPI dependency injection."""
+    return request.app.state.progress_manager

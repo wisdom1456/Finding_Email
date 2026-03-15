@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, status as
 from sse_starlette.sse import EventSourceResponse
 
 from legal_portal.api.dependencies import get_supabase_client
-from legal_portal.services.progress_manager import ProgressManager
+
 
 router = APIRouter(prefix="/progress", tags=["progress"])
 logger = logging.getLogger(__name__)
@@ -280,7 +280,7 @@ async def get_analysis_status(
     user = await _authenticate_request(request, token)
     await _verify_analysis_ownership(supabase, analysis_id, user["id"])
 
-    progress_manager = ProgressManager.get_instance()
+    progress_manager = request.app.state.progress_manager
 
     # Try memory first
     status = await progress_manager.get_latest_status(analysis_id)
@@ -336,7 +336,7 @@ async def get_clio_import_status(
 ):
     """Get current Clio import progress status (polling endpoint with DB fallback)."""
     await _authenticate_request(request, token)
-    progress_manager = ProgressManager.get_instance()
+    progress_manager = request.app.state.progress_manager
 
     # Try memory first
     status = await progress_manager.get_latest_status(import_id)

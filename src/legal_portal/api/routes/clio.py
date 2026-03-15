@@ -23,7 +23,7 @@ from legal_portal.api.services.clio_client import (
 from legal_portal.api.utils.content_extractor import DocumentProcessor as ContentExtractor
 from legal_portal.core.data_models import DocumentStatus
 from legal_portal.core.document_processor import DocumentProcessor, ValidationError
-from legal_portal.services.progress_manager import ProgressManager
+
 from legal_portal.utils.blacklist import is_name_blacklisted
 from supabase import Client
 
@@ -537,6 +537,7 @@ def categorize_clio_sync_items(
 @router.post("/import", response_model=ClioImportResponse)
 async def import_clio_data(
     import_request: ClioImportRequest,
+    request: Request,
     user=Depends(get_current_user),  # noqa: B008
     clio_client: ClioClient = Depends(get_clio_client),  # noqa: B008
     supabase: Client = Depends(get_supabase_client),  # noqa: B008
@@ -544,7 +545,7 @@ async def import_clio_data(
     """Import communications, notes, and documents from a Clio matter."""
     # Generate unique import ID for SSE streaming
     import_id = f"clio_import_{str(uuid.uuid4())}"
-    progress_manager = ProgressManager.get_instance()
+    progress_manager = request.app.state.progress_manager
     await progress_manager.create_channel(import_id)
 
     # Store case_id for progress persistence

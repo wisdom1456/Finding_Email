@@ -907,7 +907,7 @@ def _download_and_extract_documents(
 
 
 
-async def process_case_background(case_id: str, analysis_id: str, supabase, provider: str = "openai"):
+async def process_case_background(case_id: str, analysis_id: str, supabase, provider: str = "openai", *, progress_manager: "ProgressManager" = None):
     """Background task to process case documents.
 
     Args:
@@ -916,6 +916,7 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
         analysis_id: Analysis record ID
         supabase: Supabase client
         provider: AI provider to use
+        progress_manager: ProgressManager instance (from app.state)
 
     """
     bg_start_time = time.time()
@@ -925,8 +926,7 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
         f"Background task started | provider={provider}"
     )
 
-    # Initialize progress manager
-    progress_manager = ProgressManager.get_instance()
+    # Initialize progress channel
     await progress_manager.create_channel(analysis_id)
 
     # Create temp directory before try block so it's available in finally
@@ -1728,6 +1728,7 @@ async def start_analysis(
                         analysis_id,
                         service_supabase,
                         analysis_request.provider,
+                        progress_manager=request.app.state.progress_manager,
                     )
                 )
 
@@ -1806,6 +1807,7 @@ async def start_analysis(
                 analysis["id"],
                 service_supabase,
                 analysis_request.provider,
+                progress_manager=request.app.state.progress_manager,
             )
             return analysis
 
@@ -1821,6 +1823,7 @@ async def start_analysis(
 @router.post("/cancel/{analysis_id}", status_code=status.HTTP_200_OK)
 async def cancel_analysis(
     analysis_id: str,
+    request: Request,
     user=Depends(get_current_user),  # noqa: B008
     user_supabase=Depends(get_user_supabase_client),  # noqa: B008
 ):
@@ -1846,12 +1849,11 @@ async def cancel_analysis(
         analysis = resp.data[0]
         case_id = analysis["case_id"]
 
-        progress_manager = ProgressManager.get_instance()
         await _cancel_analysis(
             supabase=user_supabase,
             case_id=case_id,
             analysis_id=analysis_id,
-            progress_manager=progress_manager,
+            progress_manager=request.app.state.progress_manager,
         )
 
         return {"status": "cancelled", "analysis_id": analysis_id, "case_id": case_id}
@@ -1867,6 +1869,7 @@ async def cancel_analysis(
 @router.post("/cancel-case/{case_id}", status_code=status.HTTP_200_OK)
 async def cancel_case_analysis(
     case_id: str,
+    request: Request,
     user=Depends(get_current_user),  # noqa: B008
     user_supabase=Depends(get_user_supabase_client),  # noqa: B008
 ):
@@ -1898,12 +1901,11 @@ async def cancel_case_analysis(
 
         analysis_id = analysis_resp.data[0]["id"]
 
-        progress_manager = ProgressManager.get_instance()
         await _cancel_analysis(
             supabase=user_supabase,
             case_id=case_id,
             analysis_id=analysis_id,
-            progress_manager=progress_manager,
+            progress_manager=request.app.state.progress_manager,
         )
 
         return {"status": "cancelled", "analysis_id": analysis_id, "case_id": case_id}

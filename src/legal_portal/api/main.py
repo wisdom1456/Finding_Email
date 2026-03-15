@@ -62,6 +62,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
     else:
         logger.info("All required environment variables are set")
 
+    # Initialize lifecycle-managed services
+    from legal_portal.services.shared.progress_manager import ProgressManager
+    app.state.progress_manager = ProgressManager()
+
     yield
 
     # Shutdown

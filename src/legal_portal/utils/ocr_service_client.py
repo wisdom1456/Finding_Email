@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from functools import lru_cache
 from typing import Optional
 
 import httpx
@@ -24,8 +25,6 @@ class OCRProviderError(Exception):
 
 class OCRServiceClient:
     """Async client for the Cloud Run OCR microservice."""
-
-    _instance: Optional["OCRServiceClient"] = None
 
     def __init__(self, base_url: str, token: str):
         self.base_url = base_url.rstrip("/")
@@ -125,26 +124,7 @@ class OCRServiceClient:
     @classmethod
     def get_instance(cls) -> "OCRServiceClient":
         """Get or create singleton instance."""
-        if cls._instance is None:
-            from legal_portal.config.default import (
-                get_settings,
-            )
-            settings = get_settings()
-            if not settings.ocr_service_url:
-                raise OCRConfigError(
-                    "OCR_SERVICE_URL must be set "
-                    "when OCR_REMOTE_ENABLED=true"
-                )
-            if not settings.ocr_service_token:
-                raise OCRConfigError(
-                    "OCR_SERVICE_TOKEN must be set "
-                    "when OCR_REMOTE_ENABLED=true"
-                )
-            cls._instance = cls(
-                settings.ocr_service_url,
-                settings.ocr_service_token,
-            )
-        return cls._instance
+        return get_ocr_client()
 
 
 class OCRConfigError(OCRServiceError):
@@ -156,6 +136,18 @@ class OCRConfigError(OCRServiceError):
     pass
 
 
+@lru_cache(maxsize=1)
 def get_ocr_client() -> OCRServiceClient:
-    """Convenience function for getting the singleton."""
-    return OCRServiceClient.get_instance()
+    """Get the singleton OCRServiceClient instance."""
+    from legal_portal.config.default import get_settings
+
+    settings = get_settings()
+    if not settings.ocr_service_url:
+        raise OCRConfigError(
+            "OCR_SERVICE_URL must be set when OCR_REMOTE_ENABLED=true"
+        )
+    if not settings.ocr_service_token:
+        raise OCRConfigError(
+            "OCR_SERVICE_TOKEN must be set when OCR_REMOTE_ENABLED=true"
+        )
+    return OCRServiceClient(settings.ocr_service_url, settings.ocr_service_token)

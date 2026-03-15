@@ -18,7 +18,26 @@ logger = get_module_logger(__name__)
 # Rate limiting for Clio API: 30 requests per 10 seconds = ~3 requests/second
 # Use 0.4s delay to stay safely under the limit
 CLIO_RATE_LIMIT_DELAY = 0.4
-_last_clio_request_time = 0
+
+
+class ClioRateLimiter:
+    """Encapsulates Clio API rate-limiting state."""
+
+    def __init__(self, delay: float = CLIO_RATE_LIMIT_DELAY):
+        self._last_request_time = 0.0
+        self._delay = delay
+
+    def wait_if_needed(self):
+        """Sleep if needed to respect rate limit, then record the request time."""
+        elapsed = time.time() - self._last_request_time
+        if elapsed < self._delay:
+            sleep_time = self._delay - elapsed
+            logger.debug(f"Rate limiting: sleeping {sleep_time:.2f}s before Clio request")
+            time.sleep(sleep_time)
+        self._last_request_time = time.time()
+
+
+_clio_rate_limiter = ClioRateLimiter()
 
 # Conditional imports for PDF extraction
 # Try pypdf first (lightweight, works on Vercel), then fitz (PyMuPDF, better quality)
@@ -78,8 +97,6 @@ class DocumentProcessor:
             Exception: If download fails after all retries
 
         """
-        global _last_clio_request_time
-
         headers = {
             "Authorization": f"Bearer {access_token}",
         }
@@ -91,12 +108,7 @@ class DocumentProcessor:
             try:
                 # Rate limiting for Clio API
                 if is_clio_request:
-                    elapsed = time.time() - _last_clio_request_time
-                    if elapsed < CLIO_RATE_LIMIT_DELAY:
-                        sleep_time = CLIO_RATE_LIMIT_DELAY - elapsed
-                        logger.debug(f"Rate limiting: sleeping {sleep_time:.2f}s before Clio request")
-                        time.sleep(sleep_time)
-                    _last_clio_request_time = time.time()
+                    _clio_rate_limiter.wait_if_needed()
 
                 response = requests.get(url, headers=headers, timeout=60)
 

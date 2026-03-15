@@ -14,7 +14,7 @@
 	import { onMount, onDestroy, tick } from 'svelte';
 	import SkippedDocumentsAlert from '$lib/components/SkippedDocumentsAlert.svelte';
 	import DocumentSummaryCard from '$lib/components/DocumentSummaryCard.svelte';
-	import DocumentPreviewPane from '$lib/components/DocumentPreviewPane.svelte';
+	import DocumentViewerModal from '$lib/components/DocumentViewerModal.svelte';
 	import GapAnalysisPanel from '$lib/components/GapAnalysisPanel.svelte';
 	import FullAnalysisDisplay from '$lib/components/FullAnalysisDisplay.svelte';
 	import DocumentCoverageSection from '$lib/components/DocumentCoverageSection.svelte';
@@ -182,11 +182,6 @@
 
 	// Document viewer for quality report
 	let viewingDocument = $state<any>(null);
-	let pdfBlobUrl = $state<string | null>(null);
-	let previewBlobDocumentId = $state<string | null>(null);
-	let loadingPdf = $state(false);
-	let documentViewerTab = $state<'preview' | 'summary' | 'text'>('preview');
-	let documentSummary = $state<any>(null);
 
 	// Collapsible document analysis state
 	let collapsedDocs = $state<Set<string>>(new Set());
@@ -418,64 +413,23 @@
 		collapsedDocs = newSet;
 	}
 
-	function isPdfDocument(doc: any): boolean {
-		if (!doc) return false;
-		return doc.file_type === 'application/pdf' || String(doc.file_name || '').toLowerCase().endsWith('.pdf');
-	}
-
-	function isImageDocument(doc: any): boolean {
-		if (!doc) return false;
-		return String(doc.file_type || '').toLowerCase().startsWith('image/');
-	}
-
-	async function loadDocumentBinaryPreview(doc: any = viewingDocument) {
-		if (!doc?.storage_path) return;
-
-		if (previewBlobDocumentId === doc.id && pdfBlobUrl) {
-			return;
-		}
-
-		loadingPdf = true;
-
-		try {
-			const { session, user } = await getSecureSession();
-			if (!session || !user) {
-				console.error('Not authenticated');
-				return;
-			}
-
-			const { data, error } = await supabase.storage.from('documents').download(doc.storage_path);
-			if (error) throw error;
-
-			if (pdfBlobUrl) {
-				URL.revokeObjectURL(pdfBlobUrl);
-			}
-			pdfBlobUrl = URL.createObjectURL(data);
-			previewBlobDocumentId = doc.id ?? null;
-		} catch (error: any) {
-			console.error('Failed to load document preview:', error);
-		} finally {
-			loadingPdf = false;
-		}
-	}
-
-	async function viewDocument(documentName: string, documentId?: string) {
+	function viewDocument(documentName: string, documentId?: string) {
 		// Priority 1: Use document_id if available
-		let doc = documentId 
+		let doc = documentId
 			? documentById.get(documentId)
 			: null;
-		
+
 		// Priority 2: Exact file_name match
 		if (!doc) {
 			doc = documentByName.get(documentName.toLowerCase());
 		}
-		
-		// Priority 4: Basename match (partial)
+
+		// Priority 3: Basename match (partial)
 		if (!doc) {
 			const baseName = documentName.split('/').pop()?.toLowerCase();
 			if (baseName) {
-				doc = documents.find((d) => 
-					d.file_name.toLowerCase().includes(baseName) || 
+				doc = documents.find((d) =>
+					d.file_name.toLowerCase().includes(baseName) ||
 					baseName.includes(d.file_name.toLowerCase())
 				);
 			}
@@ -485,60 +439,8 @@
 			toastStore.error(`Document "${documentName}" not found`);
 			return;
 		}
-		
+
 		viewingDocument = doc;
-		documentViewerTab = 'preview';
-		documentSummary = findDocumentSummary(documentName);
-		loadingPdf = false;
-
-		// Clean up previous blob URL if it exists
-		if (pdfBlobUrl) {
-			URL.revokeObjectURL(pdfBlobUrl);
-			pdfBlobUrl = null;
-			previewBlobDocumentId = null;
-		}
-
-		// Images are lightweight enough for immediate preview.
-		// PDFs are loaded lazily via explicit user action to avoid blocking click-path performance.
-		if (isImageDocument(doc)) {
-			await loadDocumentBinaryPreview(doc);
-		}
-	}
-
-	function closeDocumentViewer() {
-		viewingDocument = null;
-		documentSummary = null;
-		documentViewerTab = 'preview';
-		loadingPdf = false;
-		if (pdfBlobUrl) {
-			URL.revokeObjectURL(pdfBlobUrl);
-			pdfBlobUrl = null;
-		}
-		previewBlobDocumentId = null;
-	}
-
-	/**
-	 * Find the structured summary for a document by name
-	 */
-	function findDocumentSummary(documentName: string): any {
-		if (!results?.document_summaries || !Array.isArray(results.document_summaries)) {
-			return null;
-		}
-		
-		// Try exact match first
-		let summary = results.document_summaries.find(
-			(s: any) => s.document_name === documentName
-		);
-		
-		// Try case-insensitive match
-		if (!summary) {
-			const lowerName = documentName.toLowerCase();
-			summary = results.document_summaries.find(
-				(s: any) => s.document_name?.toLowerCase() === lowerName
-			);
-		}
-		
-		return summary || null;
 	}
 
 	/**
@@ -560,22 +462,6 @@
 	function getDocumentSignatureDetection(documentName: string): Record<string, any> | null {
 		if (!documentName) return null;
 		return signatureDetectionByDocName.get(documentName.toLowerCase()) || null;
-	}
-
-	function isTextPreviewableDocument(doc: any): boolean {
-		const fileType = String(doc?.file_type || '').toLowerCase();
-		const fileName = String(doc?.file_name || '').toLowerCase();
-		return (
-			fileType.startsWith('text/') ||
-			fileName.endsWith('.txt') ||
-			fileName.endsWith('.md') ||
-			fileName.endsWith('.csv') ||
-			fileName.endsWith('.log')
-		);
-	}
-
-	function getDocumentTextPreview(doc: any): string {
-		return String(doc?.extracted_text || doc?.manual_text || '').trim();
 	}
 
 	function applyGapAnalysisResult(gapResult: any) {
@@ -2658,148 +2544,13 @@ async function fetchWithRetry(
 </div>
 
 <!-- Document Viewer Modal -->
-{#if viewingDocument}
-	<div
-		class="modal-overlay"
-		role="dialog"
-		aria-modal="true"
-		tabindex="-1"
-		onclick={closeDocumentViewer}
-		onkeydown={(e) => { if (e.key === 'Escape') closeDocumentViewer(); }}
-	>
-		<div
-			class="relative bg-white rounded-lg shadow-2xl max-w-5xl w-full max-h-[90vh] flex flex-col"
-			role="presentation"
-			onclick={(e) => e.stopPropagation()}
-			onkeydown={(e) => e.stopPropagation()}
-		>
-			<!-- Header -->
-			<div class="flex items-start justify-between p-6 border-b border-gray-100">
-				<div class="flex-1 min-w-0">
-					<h3 class="text-xl font-heading font-bold text-contrast truncate">
-						{viewingDocument.file_name}
-					</h3>
-					<p class="text-xs font-bold text-gray-400 mt-1 uppercase tracking-widest">
-						{viewingDocument.file_type}
-					</p>
-				</div>
-				<button
-					onclick={closeDocumentViewer}
-					class="ml-4 p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-colors"
-				>
-					<span class="sr-only">Close</span>
-					<svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-					</svg>
-				</button>
-			</div>
-
-			<!-- Tabs -->
-			<div class="px-6 border-b border-gray-200">
-				<nav class="-mb-px flex space-x-6" aria-label="Tabs">
-					<button
-						onclick={() => (documentViewerTab = 'preview')}
-						class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm {documentViewerTab === 'preview' ? 'border-accent text-accent' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}"
-					>
-						Preview
-					</button>
-					<button
-						onclick={() => (documentViewerTab = 'summary')}
-						class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center gap-2 {documentViewerTab === 'summary' ? 'border-accent text-accent' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}"
-					>
-						Summary
-						{#if documentSummary}
-							<span class="w-2 h-2 rounded-full bg-green-500"></span>
-						{/if}
-					</button>
-					<button
-						onclick={() => (documentViewerTab = 'text')}
-						class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm {documentViewerTab === 'text' ? 'border-accent text-accent' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}"
-					>
-						Raw Text
-					</button>
-				</nav>
-			</div>
-
-				<!-- Content -->
-				<div class="flex-1 overflow-y-auto p-6">
-					{#if documentViewerTab === 'preview'}
-						<DocumentPreviewPane
-							fileName={viewingDocument.file_name}
-							fileType={viewingDocument.file_type}
-							documentId={viewingDocument.id}
-							hasStoragePath={Boolean(viewingDocument.storage_path)}
-							previewUrl={pdfBlobUrl}
-							loading={loadingPdf}
-							isPdf={isPdfDocument(viewingDocument)}
-							isImage={isImageDocument(viewingDocument)}
-							isTextDocument={isTextPreviewableDocument(viewingDocument)}
-							textPreview={getDocumentTextPreview(viewingDocument)}
-							onLoadPreview={() => loadDocumentBinaryPreview(viewingDocument)}
-							loadingLabel="Loading document preview..."
-							pdfHintMessage="PDF preview is loaded on demand to keep the interface responsive for large files."
-							unavailableStorageMessage="Preview unavailable: the original file could not be retrieved from storage."
-							loadPdfLabel="Load PDF Preview"
-							loadImageLabel="Load Image Preview"
-							openLinkLabel="Download PDF"
-							openInNewTab={false}
-							linkDownload={true}
-							noPreviewTitle="No file preview available"
-							noPreviewDescription="Use the Summary or Raw Text tabs to view the content."
-							textEmptyTitle="No text preview available yet"
-							textEmptyDescription="Run extraction to generate a preview for this text document."
-							textTheme="dark"
-							previewHeightClass="h-[600px]"
-						/>
-				{:else if documentViewerTab === 'summary'}
-					{#if documentSummary}
-						<DocumentSummaryCard 
-							summary={documentSummary}
-							rawText={viewingDocument?.extracted_text || ''}
-							signatureDetection={getDocumentSignatureDetection(documentSummary.document_name)}
-							collapsible={false}
-							showHeader={false}
-						/>
-					{:else}
-						<div class="flex flex-col items-center justify-center h-64 text-gray-400">
-							<svg class="h-12 w-12 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-							</svg>
-							<p class="font-medium text-gray-600">No analysis available</p>
-							<p class="text-sm mt-2 text-center max-w-sm">
-								Run case analysis to generate a structured summary of this document with key facts, legal significance, and evidence quotes.
-							</p>
-						</div>
-					{/if}
-				{:else if documentViewerTab === 'text'}
-					{#if getDocumentTextPreview(viewingDocument)}
-						<div class="bg-gray-900 rounded-lg p-4 max-h-[600px] overflow-auto">
-							<pre class="whitespace-pre-wrap font-mono text-xs text-gray-300 leading-relaxed">{getDocumentTextPreview(viewingDocument)}</pre>
-						</div>
-					{:else}
-						<div class="flex flex-col items-center justify-center h-64 text-gray-400">
-							<svg class="h-12 w-12 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-							</svg>
-							<p class="font-medium text-gray-600">No extracted text available</p>
-							<p class="text-sm mt-2">This document hasn't been processed for text extraction.</p>
-						</div>
-					{/if}
-				{/if}
-			</div>
-
-			<!-- Footer -->
-			<div class="flex justify-end space-x-3 px-6 py-4 border-t border-gray-200">
-				<button
-					onclick={closeDocumentViewer}
-					class="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent"
-				>
-					Close
-				</button>
-			</div>
-		</div>
-	</div>
-{/if}
+<DocumentViewerModal
+	document={viewingDocument}
+	{documents}
+	supabaseClient={supabase}
+	{results}
+	onclose={() => (viewingDocument = null)}
+/>
 
 <style>
 	/* Scoped prose styles for chat markdown rendering */

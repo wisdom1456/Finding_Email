@@ -4,10 +4,9 @@ import asyncio
 import json
 import logging
 from datetime import datetime, timedelta
-from typing import TYPE_CHECKING, AsyncGenerator
+from typing import AsyncGenerator
 
-if TYPE_CHECKING:
-    from fastapi import Request
+from fastapi import Request
 
 logger = logging.getLogger(__name__)
 

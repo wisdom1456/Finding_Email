@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import json
 import os
+from functools import lru_cache
 from typing import Optional
 
 from legal_portal.utils.logging_config import get_module_logger
@@ -25,8 +26,6 @@ except ImportError:
 
 class GoogleVisionClient:
     """Handle Google Cloud Vision API interactions for OCR."""
-
-    _instance: Optional["GoogleVisionClient"] = None
 
     def __init__(self):
         """Initialize Google Cloud Vision client.
@@ -99,9 +98,7 @@ class GoogleVisionClient:
     @classmethod
     def get_instance(cls) -> "GoogleVisionClient":
         """Get singleton instance of the client."""
-        if cls._instance is None:
-            cls._instance = cls()
-        return cls._instance
+        return get_vision_client()
 
     @property
     def is_available(self) -> bool:
@@ -284,3 +281,9 @@ class GoogleVisionClient:
         # Assuming past free tier
         cost_per_1000 = 1.50
         return (num_pages / 1000) * cost_per_1000
+
+
+@lru_cache(maxsize=1)
+def get_vision_client() -> GoogleVisionClient:
+    """Get the singleton GoogleVisionClient instance."""
+    return GoogleVisionClient()

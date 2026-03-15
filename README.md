@@ -2,82 +2,31 @@
 
 A modern full-stack application for analyzing legal documents and generating professional findings emails, built with SvelteKit and FastAPI.
 
-## 📚 Documentation
+## Documentation
 
-For comprehensive documentation, see the [Documentation Index](docs/README.md).
+- [Setup Guide](docs/SETUP.md) - Environment setup, database configuration, running the app
+- [Deployment](docs/deployment/DEPLOYMENT.md) - Vercel deployment and configuration
+- [Testing](docs/TESTING.md) - Running and writing tests
+- [Full Documentation Index](docs/README.md)
 
-## 🚀 Quick Start
+## Quick Start
 
-### Prerequisites
-
-1. **Node.js 20+** (for frontend)
-
-   ```bash
-   node --version  # Should be 20 or higher
-   ```
-
-2. **Python 3.11+** (for backend)
-
-   ```bash
-   python3 --version  # Should be 3.11 or higher
-   ```
-
-3. **System Dependencies** (macOS)
-
-   ```bash
-   brew install ghostscript  # Required for PDF compression
-   ```
-
-### Environment Setup
+See [docs/SETUP.md](docs/SETUP.md) for the complete setup guide.
 
 ```bash
-# Copy and configure environment variables
-cp .env.template .env
-# Edit .env and add your API keys:
-# - OPENAI_API_KEY
-# - SUPABASE_URL
-# - SUPABASE_SERVICE_KEY
-# - SUPABASE_ANON_KEY
-```
-
-### Installation & Running
-
-#### Backend (FastAPI)
-
-```bash
-# Install Python dependencies
+# Install dependencies
 pip install -r requirements.txt
+cd frontend && npm install && cd ..
 
-# Start the backend server
+# Start backend (Terminal 1)
 cd src && uvicorn legal_portal.api.main:app --reload --port 8000
+
+# Start frontend (Terminal 2)
+cd frontend && npm run dev
 ```
 
-The API will be available at `http://localhost:8000`.
-
-#### Frontend (SvelteKit)
-
-```bash
-# Install frontend dependencies
-cd frontend
-npm install
-
-# Start the development server
-npm run dev
-```
-
-The application will be available at `http://localhost:5173`.
-
-### Production Deployment
-
-The application is deployed on **Vercel**:
-
-- Frontend: SvelteKit with Vercel adapter
-- Backend: FastAPI as Vercel serverless function (`/api/index.py`)
-
-```bash
-# Deploy to Vercel
-vercel --prod
-```
+- Application: http://localhost:5173
+- API docs: http://localhost:8000/docs
 
 ## 📋 Features
 

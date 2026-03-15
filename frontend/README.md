@@ -1,38 +1,81 @@
-# sv
+# Legal Document Analysis Portal - Frontend
 
-Everything you need to build a Svelte project, powered by [`sv`](https://github.com/sveltejs/cli).
+SvelteKit 2 frontend with Svelte 5 (Runes), TypeScript, and Tailwind CSS v4.
 
-## Creating a project
+## Development
 
-If you're seeing this, you've probably already done this step. Congrats!
+```bash
+# Install dependencies
+npm install
 
-```sh
-# create a new project in the current directory
-npx sv create
-
-# create a new project in my-app
-npx sv create my-app
-```
-
-## Developing
-
-Once you've created a project and installed dependencies with `npm install` (or `pnpm install` or `yarn`), start a development server:
-
-```sh
+# Start dev server
 npm run dev
 
-# or start the server and open the app in a new browser tab
-npm run dev -- --open
-```
+# Type checking
+npm run check
 
-## Building
-
-To create a production version of your app:
-
-```sh
+# Build for production
 npm run build
 ```
 
-You can preview the production build with `npm run preview`.
+## Testing
 
-> To deploy your app, you may need to install an [adapter](https://svelte.dev/docs/kit/adapters) for your target environment.
+```bash
+# Unit tests (Vitest)
+npx vitest run
+
+# Unit tests with coverage
+npx vitest run --coverage
+
+# Watch mode
+npx vitest
+
+# E2E tests (Playwright)
+npx playwright test
+```
+
+## Project Structure
+
+```
+src/
+├── lib/
+│   ├── components/          # Svelte components
+│   │   ├── ui/              # Reusable UI (AsyncButton, LoadingOverlay, etc.)
+│   │   ├── ClioConnect.svelte
+│   │   ├── ClioMatterSearch.svelte
+│   │   └── ProgressIndicator.svelte
+│   ├── stores/              # Svelte stores
+│   │   ├── progressStore.ts # SSE progress tracking
+│   │   ├── toastStore.ts    # Toast notifications
+│   │   └── loadingStore.ts  # Global loading state
+│   ├── utils/               # Utilities
+│   │   ├── sseClient.ts     # Server-Sent Events client
+│   │   └── pollingClient.ts # Polling fallback
+│   ├── config.ts            # API URL configuration
+│   └── supabase.ts          # Supabase client
+└── routes/
+    ├── app/
+    │   ├── cases/            # Case management pages
+    │   │   ├── [id]/         # Case detail, results
+    │   │   └── new/          # New case creation
+    │   └── +layout.svelte    # Authenticated layout
+    ├── login/
+    └── register/
+```
+
+## Environment Variables
+
+Create `frontend/.env.local`:
+
+```bash
+PUBLIC_API_URL=http://localhost:8000
+PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+```
+
+## Key Patterns
+
+- **Svelte 5 Runes**: Uses `$state`, `$derived`, `$effect` for reactivity
+- **SSR Data Loading**: `+page.server.ts` files fetch data server-side
+- **SSE Progress**: Real-time progress via `progressStore` with polling fallback
+- **Vercel Adapter**: Configured for Vercel deployment via `@sveltejs/adapter-vercel`

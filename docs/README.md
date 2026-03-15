@@ -1,88 +1,52 @@
 # Legal Document Analysis Portal - Documentation
 
-Welcome to the comprehensive documentation for the Legal Document Analysis Portal. This documentation provides guides for both developers and end users.
+Welcome to the documentation for the Legal Document Analysis Portal.
 
-## Table of Contents
+## Getting Started
 
-### Getting Started
-- [Start Here](../START_HERE.md) - Quick start guide
-- [Setup Instructions](../SETUP_INSTRUCTIONS.md) - Detailed setup for development
-- [Launch Application](../LAUNCH_APP.md) - How to start the application
-- [Environment Setup Guide](../ENV_SETUP_GUIDE.md) - Configure your environment variables
+- [Setup Guide](SETUP.md) - Environment setup, database configuration, and running the app
+- [Testing Guide](TESTING.md) - Running and writing backend and frontend tests
+- [Playwright Guide](PLAYWRIGHT.md) - End-to-end testing with Playwright
 
-### User Guides
-- [User Guide](user/user-guide.md) - Complete user documentation
-- [Quick Reference](user/quick-reference.md) - Common tasks and workflows
+## Deployment
 
-### Developer Documentation
-- [Developer Guide](developer/developer-guide.md) - Architecture and development practices
-- [API Documentation](developer/api-documentation.md) - REST API reference
-- [Testing Guide](../TESTING_GUIDE.md) - How to run and write tests
-- [Testing Validation Guide](../TESTING_VALIDATION_GUIDE.md) - Validation procedures
+- [Deployment Guide](deployment/DEPLOYMENT.md) - Vercel deployment, environment variables, and troubleshooting
 
-### Features & Integration
-- [Clio Integration](CLIO_INTEGRATION.md) - Clio practice management integration
+## Features
+
+- [Letter Generation](features/LETTER_GENERATION.md) - Findings emails and demand letters
+- [Clio Integration](features/CLIO_INTEGRATION.md) - Clio practice management integration
 - [Authentication](AUTHENTICATION.md) - Authentication and authorization
 - [Citation Enhancement](CITATION_ENHANCEMENT_IMPLEMENTATION.md) - Legal citation tracking
-- [Full Document Content Architecture](FULL_DOCUMENT_CONTENT_ARCHITECTURE.md) - Document processing
-- [Hallucination Prevention](HALLUCINATION_PREVENTION.md) - Letter quality guardrails and AI hallucination prevention
+- [Hallucination Prevention](HALLUCINATION_PREVENTION.md) - AI safety and citation validation
+- [Document Processing](FULL_DOCUMENT_CONTENT_ARCHITECTURE.md) - Document content architecture
 
-### Testing
-- [Playwright Testing](PLAYWRIGHT_TESTING.md) - E2E testing with Playwright
-- [Test Plan](TEST_PLAN.md) - Comprehensive test coverage
-- [Testing Status](TESTING_STATUS.md) - Current testing status
-- [Testing Summary](TESTING_SUMMARY.md) - Test results overview
+## Developer
 
-### Deployment
-- [Deployment Guide](../DEPLOYMENT_GUIDE.md) - Production deployment
-- [Deployment Configuration](../DEPLOYMENT_CONFIG.md) - Configuration options
-- [Google Cloud Deployment](GOOGLE_CLOUD_DEPLOYMENT.md) - GCP deployment guide
+- [Architecture](developer/ARCHITECTURE.md) - Project structure and design patterns
+- [Performance](developer/PERFORMANCE.md) - Optimization strategies and benchmarks
+- [Debug Guide](developer/DEBUG_GUIDE.md) - Debugging techniques
+- [Security](developer/SECURITY.md) - Security practices
 
-### Technical Documentation
-- [Formatting and Linting Standards](FORMATTING_LINTING_STANDARDS.md) - Code style guide
-- [Output File Management](OUTPUT_FILE_MANAGEMENT.md) - File handling
-- [Prompt Size Optimization](PROMPT_SIZE_OPTIMIZATION.md) - AI optimization
-- [Enhanced File Validation](enhanced_file_validation.md) - File validation system
+## User Guides
 
-### Reports & Analysis
-- [Final Efficiency Report](FINAL_EFFICIENCY_REPORT.md) - Performance analysis
-- [Final Validation Report](FINAL_VALIDATION_REPORT.md) - Validation results
-- [Comprehensive Risk Assessment](COMPREHENSIVE_RISK_ASSESSMENT_REPORT.md) - Security analysis
-- [Cost Tracking Test Report](COST_TRACKING_TEST_REPORT.md) - Cost analysis
+- [User Guide](user/README.md) - End-user documentation
+- [Auto-Fill Legal Issue](user/AUTO_FILL_LEGAL_ISSUE_USER_GUIDE.md) - AI auto-fill feature
 
-### Florida Legal Corpus
-- [Florida Legal Corpus](../florida_legal_corpus/README.md) - Florida statutes database
-- [Coverage Targets](../florida_legal_corpus/COVERAGE_TARGETS.md) - Corpus coverage goals
-- [JSONL Corpus Guide](../florida_legal_corpus/JSONL-Corpus-Guide.md) - Data format guide
+## API
 
-### Project Management
-- [Project Cleanup 2025](../PROJECT_CLEANUP_2025.md) - Recent major cleanup
-- [Tech Debt Cleanup](../TECH_DEBT_CLEANUP_COMPLETED.md) - Technical debt addressed
-- [Demand Letter Improvements](../DEMAND_LETTER_IMPROVEMENTS_SUMMARY.md) - Feature enhancements
+- [API Reference](API.md) - REST API documentation
 
-### Archived Documentation
-Historical implementation notes and completed work can be found in the [archive](archive/) directory.
+## Legal Corpus
 
-## Quick Links
+- [Florida Legal Corpus](../florida_legal_corpus/README.md) - Florida statutes (51 statutes)
+- [New Mexico Legal Corpus](../new_mexico_legal_corpus/README.md) - New Mexico statutes (42 statutes + 8 rules)
 
-- **GitHub Repository**: [wisdom1456/Finding_Email](https://github.com/wisdom1456/Finding_Email)
-- **Issue Tracking**: Use GitHub Issues for bug reports and feature requests
-- **Latest Release**: Check the repository for the latest stable release
+## Archive
 
-## Contributing
+Historical implementation notes and completed work are in the [archive](archive/) directory.
 
-For development guidelines and contribution procedures, please refer to the [Developer Guide](developer/developer-guide.md).
+## Links
 
-## Support
-
-For issues, questions, or feedback:
-1. Check the relevant documentation section above
-2. Review [archived implementation notes](archive/implementation-notes/) for historical context
-3. Create a GitHub issue with detailed information
-
-## License
-
-Copyright © 2024 Legal Document Analysis Portal
-
-
-
+- **GitHub**: [wisdom1456/Finding_Email](https://github.com/wisdom1456/Finding_Email)
+- **Release Notes**: [release-notes.md](../release-notes.md)

@@ -24,6 +24,7 @@
 	import { Trash2, Edit, ArrowLeft } from 'lucide-svelte';
 	import type { CaseData } from '$lib/types';
 	import DocumentViewerModal from '$lib/components/DocumentViewerModal.svelte';
+	import CaseDetailsCard from '$lib/components/CaseDetailsCard.svelte';
 	import { syncClioMatter, dedupCaseDocuments, type ClioSyncResponse, type DedupResponse } from '$lib/api/cases';
 	import { isCaseSummary, isIntakeForm, isPrimaryIntakeCandidate, isVideoAudioFile } from '$lib/utils/documentClassification';
 	import { requiresSignatureReview, getDocumentSignatureDetection, getDocumentSignatureVerificationStatus, getDocumentSignatureStatus, getDocumentSignatureLabel, getDocumentSignatureBadgeClass, shouldShowSignatureBadge } from '$lib/utils/signatureDetection';
@@ -177,12 +178,9 @@
 	let deleteConfirmCase = $state(false);
 	let deleteCaseText = $state('');
 
-	// Edit case state
+	// Edit case state (bound to CaseDetailsCard)
 	let editingCase = $state(false);
-	let editClientName = $state('');
-	let editReferenceNumber = $state('');
-	let editDescription = $state('');
-	let savingCase = $state(false);
+	let caseDetailsRef: CaseDetailsCard | undefined = $state();
 
 	const caseId = $derived($page.params.id as string);
 	
@@ -908,60 +906,6 @@
 		}
 	}
 
-	function startEditCase() {
-		const data = caseData;
-		if (!data) return;
-		editClientName = data.client_name;
-		editReferenceNumber = data.reference_number || '';
-		editDescription = data.description || '';
-		editingCase = true;
-		errorMessage = '';
-	}
-
-	function cancelEditCase() {
-		editingCase = false;
-		editClientName = '';
-		editReferenceNumber = '';
-		editDescription = '';
-	}
-
-	async function saveCase() {
-		savingCase = true;
-		errorMessage = '';
-
-		try {
-			const { session, user } = await getSecureSession();
-
-		if (!session || !user) throw new Error('Not authenticated');
-
-		const response = await fetch(`${getApiUrl()}/api/cases/${caseId}`, {
-				method: 'PATCH',
-				headers: {
-					'Content-Type': 'application/json',
-					Authorization: `Bearer ${session.access_token}`
-				},
-				body: JSON.stringify({
-					client_name: editClientName,
-					reference_number: editReferenceNumber || null,
-					description: editDescription || null
-				})
-			});
-
-			if (!response.ok) {
-				const errorData = await response.json();
-				throw new Error(errorData.detail || 'Failed to update case');
-			}
-
-			// Reload case data
-			await loadCase();
-			editingCase = false;
-		} catch (error: any) {
-			errorMessage = error.message || 'Failed to update case';
-		} finally {
-			savingCase = false;
-		}
-	}
-
 	async function startAnalysis(skipMissingTextCheck = false) {
 		// Refresh documents from database first to get latest state
 		await loadDocuments();
@@ -1340,7 +1284,7 @@
 					</span>
 					{#if !editingCase}
 						<button
-							onclick={startEditCase}
+							onclick={() => caseDetailsRef?.startEditCase()}
 							class="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent transition-colors"
 						>
 							<Edit class="h-4 w-4 mr-1.5" />
@@ -1379,109 +1323,14 @@
 				{#if activeTab === 'overview'}
 					<div class="page-spacing">
 						<!-- Case Info -->
-						<div class="card-standard">
-							<div class="flex justify-between items-center mb-4">
-								<h3 class="text-lg font-semibold text-contrast">Case Details</h3>
-							</div>
-
-			{#if editingCase}
-				<!-- Edit Form -->
-				<form onsubmit={(e) => { e.preventDefault(); saveCase(); }} class="space-y-4">
-					<div>
-						<label for="edit-client-name" class="block text-sm font-medium text-contrast">
-							Client Name <span class="text-red-500">*</span>
-						</label>
-						<input
-							id="edit-client-name"
-							type="text"
-							bind:value={editClientName}
-							required
-							class="input-standard focus:ring-accent focus:border-accent"
+						<CaseDetailsCard
+							bind:this={caseDetailsRef}
+							{caseData}
+							{caseId}
+							bind:editingCase
+							onsaved={loadCase}
+							onerror={(msg) => (errorMessage = msg)}
 						/>
-					</div>
-
-					<div>
-						<label for="edit-reference-number" class="block text-sm font-medium text-contrast">
-							Reference Number
-						</label>
-						<input
-							id="edit-reference-number"
-							type="text"
-							bind:value={editReferenceNumber}
-							class="input-standard focus:ring-accent focus:border-accent"
-						/>
-					</div>
-
-					<div>
-						<label for="edit-description" class="block text-sm font-medium text-contrast">
-							Description
-						</label>
-						<textarea
-							id="edit-description"
-							bind:value={editDescription}
-							rows="3"
-							class="input-standard focus:ring-accent focus:border-accent"
-						></textarea>
-					</div>
-
-					<div class="flex justify-end space-x-3 pt-2">
-						<button
-							type="button"
-							onclick={cancelEditCase}
-							disabled={savingCase}
-							class="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
-						>
-							Cancel
-						</button>
-						<AsyncButton
-							type="submit"
-							disabled={!editClientName.trim()}
-							loading={savingCase}
-							variant="primary"
-							loadingText="Saving..."
-						>
-							Save Changes
-						</AsyncButton>
-					</div>
-				</form>
-			{:else}
-				<!-- View Mode -->
-				<dl class="grid grid-cols-1 gap-x-4 gap-y-6 sm:grid-cols-2">
-					<div>
-						<dt class="text-sm font-medium text-gray-500">Client Name</dt>
-						<dd class="mt-1 text-sm text-gray-900">{data.client_name}</dd>
-					</div>
-					<div>
-						<dt class="text-sm font-medium text-gray-500">Jurisdiction</dt>
-						<dd class="mt-1 text-sm text-gray-900">
-							<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium {data.jurisdiction === 'New Mexico' ? 'bg-indigo-100 text-indigo-800' : 'bg-orange-100 text-orange-800'}">
-								{data.jurisdiction || 'Florida'}
-							</span>
-						</dd>
-					</div>
-					{#if data.reference_number}
-						<div>
-							<dt class="text-sm font-medium text-gray-500">Reference Number</dt>
-							<dd class="mt-1 text-sm text-gray-900">{data.reference_number}</dd>
-						</div>
-					{/if}
-					<div>
-						<dt class="text-sm font-medium text-gray-500">Created</dt>
-						<dd class="mt-1 text-sm text-gray-900">{formatDate(data.created_at)}</dd>
-					</div>
-					<div>
-						<dt class="text-sm font-medium text-gray-500">Last Updated</dt>
-						<dd class="mt-1 text-sm text-gray-900">{formatDate(data.updated_at)}</dd>
-					</div>
-					{#if data.description}
-						<div class="sm:col-span-2">
-							<dt class="text-sm font-medium text-gray-500">Description</dt>
-							<dd class="mt-1 text-sm text-gray-900">{data.description}</dd>
-						</div>
-					{/if}
-				</dl>
-					{/if}
-				</div>
 
 				<!-- Practice Area Guidance -->
 				<details class="info-box info-box-teal">

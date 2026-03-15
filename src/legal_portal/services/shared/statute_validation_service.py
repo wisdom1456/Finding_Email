@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass, field
+from functools import lru_cache
 from pathlib import Path
 from typing import Dict, List, Optional, Set
 
@@ -360,15 +361,7 @@ class StatuteValidationService:
         return matches
 
 
-# Module-level dictionary for singleton instances by jurisdiction
-_statute_validation_service_instances: Dict[str, StatuteValidationService] = {}
-
-
+@lru_cache(maxsize=16)
 def get_statute_validation_service(jurisdiction: str = "Florida") -> StatuteValidationService:
     """Get cached instance of StatuteValidationService for a specific jurisdiction."""
-    global _statute_validation_service_instances
-    if jurisdiction not in _statute_validation_service_instances:
-        _statute_validation_service_instances[jurisdiction] = StatuteValidationService(
-            jurisdiction=jurisdiction
-        )
-    return _statute_validation_service_instances[jurisdiction]
+    return StatuteValidationService(jurisdiction=jurisdiction)

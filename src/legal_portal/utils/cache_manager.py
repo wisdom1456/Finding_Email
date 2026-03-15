@@ -12,7 +12,7 @@ import logging
 import os
 import pickle
 from datetime import datetime, timedelta
-from functools import wraps
+from functools import lru_cache, wraps
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -263,27 +263,10 @@ class CacheManager:
         return cleaned
 
 
-# Global cache instance (singleton pattern)
-_global_cache = None
-
-
-def get_cache_manager(cache_dir: str = ".cache", use_redis: bool = False) -> CacheManager:
-    """Get or create global cache manager instance.
-
-    Args:
-    ----
-        cache_dir: Directory for file-based cache
-        use_redis: Use Redis for distributed caching
-
-    Returns:
-    -------
-        CacheManager instance
-
-    """
-    global _global_cache
-    if _global_cache is None:
-        _global_cache = CacheManager(cache_dir, use_redis)
-    return _global_cache
+@lru_cache(maxsize=1)
+def get_cache_manager() -> CacheManager:
+    """Get the singleton CacheManager instance."""
+    return CacheManager(cache_dir=".cache", use_redis=False)
 
 
 # Convenience decorators using global cache

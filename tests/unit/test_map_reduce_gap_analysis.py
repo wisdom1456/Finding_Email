@@ -22,7 +22,7 @@ from legal_portal.core.data_models import (
     DocumentSummaryStructured,
     GapAnalysisResult,
 )
-from legal_portal.services.gap_analysis_service import (
+from legal_portal.services.analysis.gap_analysis_service import (
     _deduplicate_findings,
     _normalize_title,
 )
@@ -707,7 +707,7 @@ class TestParseBatchReport:
 
     def _make_service(self):
         from unittest.mock import MagicMock
-        from legal_portal.services.gap_analysis_service import GapAnalysisService
+        from legal_portal.services.analysis.gap_analysis_service import GapAnalysisService
 
         svc = GapAnalysisService.__new__(GapAnalysisService)
         svc.client = MagicMock()
@@ -786,7 +786,7 @@ class TestMechanicalMerge:
 
     def _make_service(self):
         from unittest.mock import MagicMock
-        from legal_portal.services.gap_analysis_service import GapAnalysisService
+        from legal_portal.services.analysis.gap_analysis_service import GapAnalysisService
 
         svc = GapAnalysisService.__new__(GapAnalysisService)
         svc.client = MagicMock()
@@ -881,7 +881,7 @@ class TestBuildMapPrompt:
 
     def _make_service(self):
         from unittest.mock import MagicMock
-        from legal_portal.services.gap_analysis_service import GapAnalysisService
+        from legal_portal.services.analysis.gap_analysis_service import GapAnalysisService
 
         svc = GapAnalysisService.__new__(GapAnalysisService)
         svc.client = MagicMock()
@@ -999,7 +999,7 @@ class TestBuildReducePrompt:
 
     def _make_service(self):
         from unittest.mock import MagicMock
-        from legal_portal.services.gap_analysis_service import GapAnalysisService
+        from legal_portal.services.analysis.gap_analysis_service import GapAnalysisService
 
         svc = GapAnalysisService.__new__(GapAnalysisService)
         svc.client = MagicMock()
@@ -1112,7 +1112,7 @@ class TestAnalyzeGapsMapReduce:
 
     def _make_service(self):
         from unittest.mock import MagicMock
-        from legal_portal.services.gap_analysis_service import GapAnalysisService
+        from legal_portal.services.analysis.gap_analysis_service import GapAnalysisService
 
         svc = GapAnalysisService.__new__(GapAnalysisService)
         svc.client = MagicMock()
@@ -1299,7 +1299,7 @@ class TestAnalyzeGapsMapReduce:
         )
 
         # Simulate: _run_map_batch increments parse_stats internally
-        async def _mock_run_map(batch, fm, im, all_b, parse_stats):
+        async def _mock_run_map(batch, fm, im, all_b, parse_stats, truncation_context=None):
             parse_stats["first_attempt_success"] += 1
             return (
                 report,
@@ -1341,7 +1341,7 @@ class TestAnalyzeGapsMapReduce:
 
 class TestStripMarkdownFences:
     def _make_service(self):
-        from legal_portal.services.gap_analysis_service import GapAnalysisService
+        from legal_portal.services.analysis.gap_analysis_service import GapAnalysisService
         return GapAnalysisService.__new__(GapAnalysisService)
 
     def test_strips_json_fence(self):

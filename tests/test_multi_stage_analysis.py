@@ -10,6 +10,8 @@ import os
 import sys
 from pathlib import Path
 
+import pytest
+
 # Load environment variables first
 from dotenv import load_dotenv  # noqa: E402
 
@@ -19,15 +21,20 @@ load_dotenv()
 sys.path.insert(0, str(Path(__file__).parent / "src"))
 
 from legal_portal.core.document_processor import DocumentProcessor  # noqa: E402
-from legal_portal.services.json_processing_service import JsonProcessingService  # noqa: E402
-from legal_portal.services.multi_stage_analyzer import MultiStageAnalyzer  # noqa: E402
-from legal_portal.services.statute_recommendation_service import StatuteRecommendationService  # noqa: E402
+from legal_portal.services.shared.json_processing_service import JsonProcessingService  # noqa: E402
+from legal_portal.services.analysis.multi_stage_analyzer import MultiStageAnalyzer  # noqa: E402
+from legal_portal.services.shared.statute_recommendation_service import StatuteRecommendationService  # noqa: E402
 from legal_portal.utils.logging_config import get_module_logger  # noqa: E402
 from legal_portal.utils.openai_client import OpenAIClient  # noqa: E402
 
 logger = get_module_logger(__name__)
 
 
+@pytest.mark.asyncio
+@pytest.mark.skipif(
+    not os.environ.get("OPENAI_API_KEY"),
+    reason="OPENAI_API_KEY not set — live API test",
+)
 async def test_multi_stage_pipeline():
     """Test the complete multi-stage analysis pipeline."""
     print("\n" + "=" * 80)

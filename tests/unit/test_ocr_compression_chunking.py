@@ -8,9 +8,11 @@ from dataclasses import dataclass
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from pypdf import PdfWriter
 
-from legal_portal.services.file_compression_service import (
+pypdf = pytest.importorskip("pypdf", reason="pypdf not installed")
+from pypdf import PdfWriter  # noqa: E402
+
+from legal_portal.services.documents.file_compression_service import (
     CompressionResult,
     FileCompressionService,
 )

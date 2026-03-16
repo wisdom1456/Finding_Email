@@ -12,6 +12,34 @@ vi.mock('$app/navigation', () => ({
 	goto: (...args: any[]) => mockGoto(...args)
 }));
 
+// Mock supabase
+vi.mock('$lib/supabase', () => ({
+	supabase: {
+		auth: {
+			getUser: vi.fn().mockResolvedValue({ data: { user: null }, error: null })
+		},
+		from: vi.fn().mockReturnValue({
+			select: vi.fn().mockReturnValue({
+				eq: vi.fn().mockReturnValue({
+					single: vi.fn().mockResolvedValue({ data: null, error: null })
+				})
+			})
+		})
+	},
+	getSecureAccessToken: vi.fn().mockResolvedValue('mock-token'),
+	getSecureSession: vi.fn().mockResolvedValue({ session: null, user: null })
+}));
+
+// Mock config
+vi.mock('$lib/config', () => ({
+	getApiUrl: () => 'http://localhost:8000'
+}));
+
+// Mock toast store
+vi.mock('$lib/stores/toastStore', () => ({
+	toastStore: { success: vi.fn(), error: vi.fn() }
+}));
+
 // Create a controllable mock for the Clio store
 let mockClioConnected = false;
 vi.mock('$lib/stores/clioStore', () => ({

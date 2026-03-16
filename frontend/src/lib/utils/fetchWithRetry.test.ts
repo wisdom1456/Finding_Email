@@ -19,6 +19,21 @@ describe('fetchWithRetry', () => {
 		expect(global.fetch).toHaveBeenCalledTimes(1);
 	});
 
+	it('retries on 429', async () => {
+		const retryResponse = new Response('too many requests', { status: 429 });
+		const successResponse = new Response('ok', { status: 200 });
+		vi.mocked(global.fetch)
+			.mockResolvedValueOnce(retryResponse)
+			.mockResolvedValueOnce(successResponse);
+
+		const promise = fetchWithRetry('/api/test', {});
+		await vi.advanceTimersByTimeAsync(1100);
+
+		const result = await promise;
+		expect(result.status).toBe(200);
+		expect(global.fetch).toHaveBeenCalledTimes(2);
+	});
+
 	it('retries on 502', async () => {
 		const retryResponse = new Response('bad gateway', { status: 502 });
 		const successResponse = new Response('ok', { status: 200 });

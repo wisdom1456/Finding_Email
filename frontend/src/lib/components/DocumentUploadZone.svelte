@@ -12,7 +12,7 @@
 	}
 
 	let {
-		accept = '.pdf,.docx,.doc,.txt,.png,.jpg,.jpeg,.zip,.csv,.eml',
+		accept = '.pdf,.docx,.doc,.txt,.png,.jpg,.jpeg,.csv,.eml',
 		maxFileSizeMB = 50,
 		disabled = false,
 		onFilesSelected
@@ -117,7 +117,7 @@
 			/>
 		</div>
 		<p class="text-[10px] font-bold text-gray-400 mt-4 uppercase tracking-widest italic">
-			Supported: PDF, DOCX, DOC, TXT, PNG, JPG, CSV, EML, ZIP up to {maxFileSizeMB}MB
+			Supported: PDF, DOCX, DOC, TXT, PNG, JPG, CSV, EML up to {maxFileSizeMB}MB
 		</p>
 	</div>
 </div>

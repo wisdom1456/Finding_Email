@@ -40,7 +40,7 @@ describe('DemandLetterSection', () => {
 
 	it('disables generate without party selected', () => {
 		render(DemandLetterSection, {
-			props: { caseId: 'case-1', opposingParties: makeParties() },
+			props: { caseId: 'case-1', opposingParties: [] },
 		});
 		const generateBtn = document.querySelector('[data-testid="generate-btn"]') as HTMLButtonElement;
 		expect(generateBtn.disabled).toBe(true);

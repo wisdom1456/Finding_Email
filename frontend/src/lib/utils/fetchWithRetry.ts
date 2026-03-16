@@ -1,5 +1,5 @@
 /**
- * Fetch wrapper with automatic retry on 502/503 and network errors.
+ * Fetch wrapper with automatic retry on 429/502/503 and network errors.
  */
 export async function fetchWithRetry(
 	url: string,
@@ -9,7 +9,7 @@ export async function fetchWithRetry(
 	for (let attempt = 0; attempt <= retries; attempt++) {
 		try {
 			const response = await fetch(url, options);
-			if (response.status === 502 || response.status === 503) {
+			if (response.status === 429 || response.status === 502 || response.status === 503) {
 				if (attempt < retries) {
 					console.warn(`[fetchWithRetry] ${response.status} on attempt ${attempt + 1}, retrying...`);
 					await new Promise((r) => setTimeout(r, 1000 * 2 ** attempt));

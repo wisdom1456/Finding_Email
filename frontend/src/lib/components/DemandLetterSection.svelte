@@ -9,18 +9,22 @@
 		caseId,
 		opposingParties,
 		initialDemandLetters = {},
+		initialDemandAmount = null,
+		initialSpecificDemands = '',
 	}: {
 		caseId: string;
 		opposingParties: Array<{ name: string; role: string }>;
 		initialDemandLetters?: Record<string, string>;
+		initialDemandAmount?: number | null;
+		initialSpecificDemands?: string;
 	} = $props();
 
 	let demandLetters = $state<Record<string, string>>(initialDemandLetters);
 	let generatingDemand = $state(false);
-	let selectedParty = $state('');
-	let demandAmount = $state<number | null>(null);
+	let selectedParty = $state(opposingParties.length > 0 ? opposingParties[0].name : '');
+	let demandAmount = $state<number | null>(initialDemandAmount);
 	let demandDeadline = $state('10 business days');
-	let specificDemands = $state('');
+	let specificDemands = $state(initialSpecificDemands);
 	let calculatingAmount = $state(false);
 	let calculationReasoning = $state('');
 	let calculationBreakdown = $state<Array<{ description: string; amount: number }>>([]);

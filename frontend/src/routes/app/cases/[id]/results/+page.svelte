@@ -45,6 +45,8 @@
 	
 	let activeTab = $state<'analysis' | 'gaps' | 'fullAnalysis' | 'documents' | 'letters' | 'chat' | 'quality'>('analysis');
 	let initialDemandLetters = $state<Record<string, string>>({});
+	let initialDemandAmount = $state<number | null>(null);
+	let initialSpecificDemands = $state('');
 	let initialFindingsLetter = $state<string | null>(null);
 	let initialFindingsQualityReport = $state<Record<string, any> | null>(null);
 	let initialFindingsMetrics = $state<Record<string, any> | null>(null);
@@ -161,6 +163,69 @@
 		return lookup;
 	});
 
+	function extractDemandAmount(res: any): number | null {
+		// 1. Try multi_stage_result first
+		if (res.multi_stage_result) {
+			const factMatrix = res.multi_stage_result.fact_matrix || {};
+			const financialData = factMatrix.financial_data || [];
+			const claimedAmount = financialData.find(
+				(item: any) => item.payment_type === 'claimed' || item.category === 'damages_claimed'
+			);
+			if (claimedAmount?.amount) return claimedAmount.amount;
+
+			const owedAmount = financialData.find(
+				(item: any) =>
+					item.payment_type === 'owed' ||
+					item.description?.toLowerCase().includes('owed') ||
+					item.description?.toLowerCase().includes('damage')
+			);
+			if (owedAmount?.amount) return owedAmount.amount;
+		}
+
+		// 2. Fall back to case_analysis financial_impact
+		if (typeof res.case_analysis === 'object') {
+			const financialText = res.case_analysis.intake_analysis?.financial_impact;
+			if (financialText) {
+				const amountMatch = financialText.match(/\$[\d,]+(?:\.\d{2})?/);
+				if (amountMatch) return parseFloat(amountMatch[0].replace(/[$,]/g, ''));
+			}
+		}
+
+		// 3. Fall back to document summaries key_amounts
+		if (res.document_summaries && Array.isArray(res.document_summaries)) {
+			for (const doc of res.document_summaries) {
+				if (doc.key_amounts && Array.isArray(doc.key_amounts)) {
+					for (const amount of doc.key_amounts) {
+						if (
+							amount.description?.toLowerCase().includes('damage') ||
+							amount.description?.toLowerCase().includes('owed') ||
+							amount.description?.toLowerCase().includes('claim')
+						) {
+							const amountStr = amount.amount?.replace(/[$,]/g, '');
+							if (amountStr) return parseFloat(amountStr);
+						}
+					}
+				}
+			}
+		}
+
+		return null;
+	}
+
+	function extractSpecificDemands(res: any): string {
+		if (res.multi_stage_result) {
+			const issueMap = res.multi_stage_result.issue_map || {};
+			const primaryIssues = issueMap.primary_issues || [];
+			if (primaryIssues.length > 0) {
+				return primaryIssues
+					.map((issue: any) => `Resolve the issue of ${issue.issue_name} by providing appropriate remedies.`)
+					.join('\n');
+			}
+			return 'Provide full and timely compliance with all outstanding obligations.';
+		}
+		return '';
+	}
+
 	// Initialize from streamed data
 	onMount(async () => {
 		try {
@@ -235,84 +300,9 @@
 				}
 			}
 
-			// Pre-fill demand letter fields
-			if (res.opposing_parties && res.opposing_parties.length > 0) {
-				selectedParty = res.opposing_parties[0].name;
-			}
-
-			// Try to find demand amount from various sources
-			let foundAmount = false;
-
-			// 1. Try multi_stage_result first
-			if (res.multi_stage_result) {
-				const factMatrix = res.multi_stage_result.fact_matrix || {};
-				const financialData = factMatrix.financial_data || [];
-				const claimedAmount = financialData.find(
-					(item: any) => item.payment_type === 'claimed' || item.category === 'damages_claimed'
-				);
-
-				if (claimedAmount?.amount) {
-					demandAmount = claimedAmount.amount;
-					foundAmount = true;
-				} else {
-					const owedAmount = financialData.find(
-						(item: any) =>
-							item.payment_type === 'owed' ||
-							item.description?.toLowerCase().includes('owed') ||
-							item.description?.toLowerCase().includes('damage')
-					);
-					if (owedAmount?.amount) {
-						demandAmount = owedAmount.amount;
-						foundAmount = true;
-					}
-				}
-
-				const issueMap = res.multi_stage_result.issue_map || {};
-				const primaryIssues = issueMap.primary_issues || [];
-				if (primaryIssues.length > 0) {
-					specificDemands = primaryIssues
-						.map((issue: any) => `Resolve the issue of ${issue.issue_name} by providing appropriate remedies.`)
-						.join('\n');
-				} else {
-					specificDemands = 'Provide full and timely compliance with all outstanding obligations.';
-				}
-			}
-
-			// 2. Fall back to case_analysis financial_impact
-			if (!foundAmount && typeof res.case_analysis === 'object') {
-				const financialText = res.case_analysis.intake_analysis?.financial_impact;
-				if (financialText) {
-					const amountMatch = financialText.match(/\$[\d,]+(?:\.\d{2})?/);
-					if (amountMatch) {
-						const amountStr = amountMatch[0].replace(/[$,]/g, '');
-						demandAmount = parseFloat(amountStr);
-						foundAmount = true;
-					}
-				}
-			}
-
-			// 3. Fall back to document summaries key_amounts
-			if (!foundAmount && res.document_summaries && Array.isArray(res.document_summaries)) {
-				for (const doc of res.document_summaries) {
-					if (doc.key_amounts && Array.isArray(doc.key_amounts)) {
-						for (const amount of doc.key_amounts) {
-							if (
-								amount.description?.toLowerCase().includes('damage') ||
-								amount.description?.toLowerCase().includes('owed') ||
-								amount.description?.toLowerCase().includes('claim')
-							) {
-								const amountStr = amount.amount?.replace(/[$,]/g, '');
-								if (amountStr) {
-									demandAmount = parseFloat(amountStr);
-									foundAmount = true;
-									break;
-								}
-							}
-						}
-						if (foundAmount) break;
-					}
-				}
-			}
+				// Extract demand amount from various sources for DemandLetterSection
+			initialDemandAmount = extractDemandAmount(res);
+			initialSpecificDemands = extractSpecificDemands(res);
 
 			// Initialize all documents as collapsed
 			const newCollapsed = new Set<string>();
@@ -1270,6 +1260,8 @@
 						{caseId}
 						{opposingParties}
 						{initialDemandLetters}
+						{initialDemandAmount}
+						{initialSpecificDemands}
 					/>
 				{/if}
 			</div>

@@ -10,7 +10,7 @@ import logging
 import time
 from typing import Any, Dict, List, Optional
 
-from legal_portal.api.routes._analysis_helpers import (
+from legal_portal.core.signature_detection import (
     _apply_signature_verification_override,
     _extract_signature_instrument_hints,
     _infer_signature_detection_from_text,

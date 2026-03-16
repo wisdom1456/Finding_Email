@@ -9,8 +9,10 @@ import json
 import logging
 from typing import Any, Dict, List, Optional
 
-from legal_portal.api.routes._analysis_helpers import (
+from legal_portal.core.analysis_state import (
     _GAP_ANALYSIS_INPUT_SCHEMA_VERSION,
+)
+from legal_portal.core.signature_detection import (
     _sample_text_for_state_hash,
 )
 from legal_portal.services.analysis.gap_document_context import (

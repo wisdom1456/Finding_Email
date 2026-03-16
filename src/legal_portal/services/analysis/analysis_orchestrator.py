@@ -21,18 +21,20 @@ from typing import Any, Dict, List, Optional
 from starlette.concurrency import run_in_threadpool
 
 from legal_portal.api.middleware.retry import retry_sync
-from legal_portal.api.routes._analysis_helpers import (
+from legal_portal.core.analysis_state import (
     AnalysisCancelledError,
     _analysis_is_cancelled,
-    _apply_signature_verification_override,
     _cancel_analysis,
+    _update_analysis_progress,
+    _update_case_with_retry,
+    _upsert_with_retry,
+)
+from legal_portal.core.signature_detection import (
+    _apply_signature_verification_override,
     _infer_signature_detection_from_text,
     _is_pdf_like_document,
     _is_signature_inference_candidate,
     _sample_text_for_state_hash,
-    _update_analysis_progress,
-    _update_case_with_retry,
-    _upsert_with_retry,
 )
 from legal_portal.config.default import get_settings
 from legal_portal.core.data_models import (

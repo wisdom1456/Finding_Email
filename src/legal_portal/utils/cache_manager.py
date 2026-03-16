@@ -31,13 +31,25 @@ except ImportError:
 class CacheManager:
     """Manage caching for expensive operations."""
 
-    def __init__(self, cache_dir: str = ".cache", use_redis: bool = False):
+    def __init__(
+        self,
+        cache_dir: str = ".cache",
+        use_redis: bool = False,
+        redis_host: str = "localhost",
+        redis_port: int = 6379,
+        redis_password: Optional[str] = None,
+        redis_db: int = 0,
+    ):
         """Initialize cache manager.
 
         Args:
         ----
             cache_dir: Directory for file-based cache
             use_redis: Use Redis for distributed caching
+            redis_host: Redis hostname
+            redis_port: Redis port
+            redis_password: Redis password (optional)
+            redis_db: Redis database number
 
         """
         self.cache_dir = Path(cache_dir)
@@ -48,8 +60,10 @@ class CacheManager:
         if use_redis and REDIS_AVAILABLE:
             try:
                 self.redis_client = redis.Redis(
-                    host=os.getenv("REDIS_HOST", "localhost"),
-                    port=int(os.getenv("REDIS_PORT", 6379)),
+                    host=redis_host,
+                    port=redis_port,
+                    password=redis_password,
+                    db=redis_db,
                     decode_responses=False,  # We'll handle encoding/decoding
                     socket_connect_timeout=5,
                     socket_timeout=5,
@@ -268,8 +282,27 @@ class CacheManager:
 
 @lru_cache(maxsize=1)
 def get_cache_manager() -> CacheManager:
-    """Get the singleton CacheManager instance."""
-    return CacheManager(cache_dir=".cache", use_redis=False)
+    """Get the singleton CacheManager instance.
+
+    Reads Redis settings from config.default.Settings when available.
+    Defaults to file-only cache if Redis is disabled or settings
+    cannot be loaded.
+    """
+    try:
+        from legal_portal.config.default import get_settings
+
+        settings = get_settings()
+        return CacheManager(
+            cache_dir=".cache",
+            use_redis=settings.redis_cache_enabled,
+            redis_host=settings.redis_cache_host,
+            redis_port=settings.redis_cache_port,
+            redis_password=settings.redis_cache_password,
+            redis_db=settings.redis_cache_db,
+        )
+    except Exception:
+        # Graceful fallback: if settings can't be loaded, use file cache only.
+        return CacheManager(cache_dir=".cache", use_redis=False)
 
 
 # Convenience decorators using global cache

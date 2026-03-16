@@ -1,4 +1,9 @@
-"""Tests for ProgressManager pub/sub progress stream service."""
+"""Tests for ProgressManager pub/sub progress stream service.
+
+These tests exercise the ProgressManager facade with its default
+InMemoryProgressBackend. Internal state is accessed via pm._backend
+for assertions that verify channel/queue behavior.
+"""
 
 from __future__ import annotations
 
@@ -19,9 +24,9 @@ async def test_create_channel():
     channel_id = await pm.create_channel("ch-1")
 
     assert channel_id == "ch-1"
-    assert "ch-1" in pm._channels
-    assert isinstance(pm._channels["ch-1"], asyncio.Queue)
-    assert "ch-1" in pm._last_activity
+    assert "ch-1" in pm._backend._channels
+    assert isinstance(pm._backend._channels["ch-1"], asyncio.Queue)
+    assert "ch-1" in pm._backend._last_activity
 
 
 @pytest.mark.asyncio
@@ -29,14 +34,14 @@ async def test_create_channel_idempotent():
     """Second create on the same channel is a no-op (queue preserved)."""
     pm = ProgressManager()
     await pm.create_channel("ch-dup")
-    queue_ref = pm._channels["ch-dup"]
+    queue_ref = pm._backend._channels["ch-dup"]
 
     # Put a message to verify queue identity is preserved
     await queue_ref.put("marker")
     await pm.create_channel("ch-dup")
 
-    assert pm._channels["ch-dup"] is queue_ref
-    assert not pm._channels["ch-dup"].empty()
+    assert pm._backend._channels["ch-dup"] is queue_ref
+    assert not pm._backend._channels["ch-dup"].empty()
 
 
 @pytest.mark.asyncio
@@ -53,7 +58,7 @@ async def test_publish_progress():
         status="progress",
     )
 
-    raw = await pm._channels["ch-pub"].get()
+    raw = await pm._backend._channels["ch-pub"].get()
     payload = json.loads(raw)
 
     assert payload["type"] == "progress"
@@ -67,12 +72,12 @@ async def test_publish_progress():
 async def test_publish_to_nonexistent_creates_channel():
     """Publishing to a non-existent channel auto-creates it."""
     pm = ProgressManager()
-    assert "new-ch" not in pm._channels
+    assert "new-ch" not in pm._backend._channels
 
     await pm.publish_progress("new-ch", message="auto-created")
 
-    assert "new-ch" in pm._channels
-    raw = await pm._channels["new-ch"].get()
+    assert "new-ch" in pm._backend._channels
+    raw = await pm._backend._channels["new-ch"].get()
     payload = json.loads(raw)
     assert payload["message"] == "auto-created"
 
@@ -142,11 +147,11 @@ async def test_cleanup_expired_channels():
     await pm.create_channel("ch-fresh")
 
     # Backdate stale channel
-    pm._last_activity["ch-stale"] = datetime.now() - timedelta(hours=2)
+    pm._backend._last_activity["ch-stale"] = datetime.now() - timedelta(hours=2)
 
     pm.cleanup_expired_channels(max_age_hours=1)
 
-    assert "ch-stale" not in pm._channels
-    assert "ch-stale" not in pm._last_activity
-    assert "ch-fresh" in pm._channels
-    assert "ch-fresh" in pm._last_activity
+    assert "ch-stale" not in pm._backend._channels
+    assert "ch-stale" not in pm._backend._last_activity
+    assert "ch-fresh" in pm._backend._channels
+    assert "ch-fresh" in pm._backend._last_activity

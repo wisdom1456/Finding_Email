@@ -63,8 +63,22 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
         logger.info("All required environment variables are set")
 
     # Initialize lifecycle-managed services
+    from legal_portal.config.default import get_settings
     from legal_portal.services.shared.progress_manager import ProgressManager
-    app.state.progress_manager = ProgressManager()
+
+    settings = get_settings()
+    if settings.redis_progress_enabled:
+        try:
+            from legal_portal.services.shared.progress_backend_redis import RedisProgressBackend
+
+            backend = RedisProgressBackend(settings.redis_progress_url)
+            app.state.progress_manager = ProgressManager(backend=backend)
+            logger.info("ProgressManager using Redis backend")
+        except Exception:
+            logger.warning("Redis progress backend failed, falling back to in-memory")
+            app.state.progress_manager = ProgressManager()
+    else:
+        app.state.progress_manager = ProgressManager()
 
     yield
 

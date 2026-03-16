@@ -42,5 +42,5 @@ slowapi>=0.1.9
 sse-starlette==2.1.3
 
 # Redis (optional but required for multi-instance progress tracking)
-redis[asyncio]>=5.0.0
+redis>=5.0.0
 

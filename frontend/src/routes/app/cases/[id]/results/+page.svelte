@@ -9,6 +9,7 @@
 	import { ArrowLeft } from 'lucide-svelte';
 	import { parseMarkdown } from '$lib/utils/markdown';
 	import { SSEEventParser } from '$lib/utils/sseEventParser';
+	import { fetchWithRetry } from '$lib/utils/fetchWithRetry';
 	import type { GapResolutionRefreshRequest, RecommendedLetterType } from '$lib/types';
 	import { onMount, onDestroy, tick } from 'svelte';
 	import SkippedDocumentsAlert from '$lib/components/SkippedDocumentsAlert.svelte';
@@ -1244,7 +1245,7 @@
 		{:else if activeTab === 'letters'}
 			<div class="space-y-6">
 				<FindingsEmailSection
-					{analysisId}
+					analysisId={results.analysis_id}
 					{caseId}
 					{hasMultiStageSupport}
 					{multiStageError}

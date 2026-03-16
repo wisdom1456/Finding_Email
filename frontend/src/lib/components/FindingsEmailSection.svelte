@@ -5,6 +5,7 @@
 	import { parseMarkdown } from '$lib/utils/markdown';
 	import { letterHtmlToPlainText, normalizeLetterHtml } from '$lib/utils/letterCopy';
 	import { SSEEventParser } from '$lib/utils/sseEventParser';
+	import { fetchWithRetry } from '$lib/utils/fetchWithRetry';
 	import { onDestroy } from 'svelte';
 	import AsyncButton from '$lib/components/ui/AsyncButton.svelte';
 	import { AlertTriangle } from 'lucide-svelte';
@@ -83,35 +84,7 @@
 		activeFindingsRequest = null;
 	});
 
-	async function fetchWithRetry(
-		url: string,
-		options: RequestInit,
-		retries = 2
-	): Promise<Response> {
-		for (let attempt = 0; attempt <= retries; attempt++) {
-			try {
-				const response = await fetch(url, options);
-				if (response.status === 502 || response.status === 503) {
-					if (attempt < retries) {
-						console.warn(`[fetchWithRetry] ${response.status} on attempt ${attempt + 1}, retrying...`);
-						await new Promise((r) => setTimeout(r, 1000 * 2 ** attempt));
-						continue;
-					}
-				}
-				return response;
-			} catch (err) {
-				const isNetworkError =
-					err instanceof TypeError && /fetch|network/i.test(err.message);
-				if (isNetworkError && attempt < retries) {
-					console.warn(`[fetchWithRetry] Network error on attempt ${attempt + 1}, retrying...`, err);
-					await new Promise((r) => setTimeout(r, 1000 * 2 ** attempt));
-					continue;
-				}
-				throw err;
-			}
-		}
-		throw new Error('fetchWithRetry: should not reach here');
-	}
+
 
 	async function generateFindingsLetter() {
 		const previousRequest = activeFindingsRequest;

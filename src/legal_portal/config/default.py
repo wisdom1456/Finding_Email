@@ -147,6 +147,12 @@ class Settings(BaseSettings):
         description="Enable multi-stage analysis pipeline for enhanced letter quality (Fact Matrix → Issue Mapping → Deep Analysis → Structure Determination)",
     )
 
+    enable_extraction_fallback: bool = Field(
+        True,
+        alias="ENABLE_EXTRACTION_FALLBACK",
+        description="When embedded JSON extraction fails, use API call to extract structured data",
+    )
+
     # ==================================================
     # DOCUMENT GROUPING FEATURE FLAGS (phased rollout)
     # ==================================================

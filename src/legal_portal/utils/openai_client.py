@@ -553,8 +553,14 @@ class OpenAIClient:
             stream = await self.async_client.chat.completions.create(**request_params)
 
             async for chunk in stream:
-                if chunk.choices and chunk.choices[0].delta.content:
-                    yield chunk.choices[0].delta.content
+                if chunk.choices:
+                    choice = chunk.choices[0]
+                    if choice.delta.content:
+                        yield choice.delta.content
+                    if choice.finish_reason:
+                        logger.info(
+                            f"Stream complete | model={model} finish_reason={choice.finish_reason}"
+                        )
 
         except Exception as e:
             logger.error(f"Error in async chat stream: {e}")

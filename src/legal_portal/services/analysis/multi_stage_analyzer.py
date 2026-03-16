@@ -476,7 +476,8 @@ This block MUST be valid JSON wrapped in a code fence:
 Analyze cases thoroughly and provide actionable insights.
 Always cite specific statutes and case law where applicable.
 Be direct and specific - avoid vague language.
-Output in clean markdown format."""
+Output in clean markdown format.
+IMPORTANT: Your response MUST end with the ```json structured data block as specified in the instructions."""
 
         start_time = time.time()
 

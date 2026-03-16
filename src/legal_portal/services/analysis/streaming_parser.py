@@ -7,9 +7,160 @@ embedded JSON, currency parsing, and section extraction.
 import json
 import logging
 import re
-from typing import Any, List
+from typing import Any, Dict, List
 
 logger = logging.getLogger(__name__)
+
+# JSON schema for structured extraction via API (strict mode)
+_EXTRACTION_JSON_SCHEMA = {
+    "type": "json_schema",
+    "json_schema": {
+        "name": "case_structured_data",
+        "strict": True,
+        "schema": {
+            "type": "object",
+            "properties": {
+                "practice_area": {"type": "string"},
+                "case_strength": {"type": "string"},
+                "recommended_letter_type": {"type": "string"},
+                "parties": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "name": {"type": "string"},
+                            "role": {"type": "string"},
+                            "entity_type": {"type": "string"},
+                        },
+                        "required": ["name", "role", "entity_type"],
+                        "additionalProperties": False,
+                    },
+                },
+                "key_dates": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "date": {"type": "string"},
+                            "event": {"type": "string"},
+                        },
+                        "required": ["date", "event"],
+                        "additionalProperties": False,
+                    },
+                },
+                "primary_issues": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "name": {"type": "string"},
+                            "category": {"type": "string"},
+                            "strength": {"type": "string"},
+                            "statutes": {
+                                "type": "array",
+                                "items": {"type": "string"},
+                            },
+                        },
+                        "required": ["name", "category", "strength", "statutes"],
+                        "additionalProperties": False,
+                    },
+                },
+                "financial_summary": {
+                    "type": "object",
+                    "properties": {
+                        "total_claimed": {"type": "string"},
+                        "documented_damages": {"type": "string"},
+                    },
+                    "required": ["total_claimed", "documented_damages"],
+                    "additionalProperties": False,
+                },
+            },
+            "required": [
+                "practice_area",
+                "case_strength",
+                "recommended_letter_type",
+                "parties",
+                "key_dates",
+                "primary_issues",
+                "financial_summary",
+            ],
+            "additionalProperties": False,
+        },
+    },
+}
+
+
+async def extract_structured_data_via_api(
+    markdown_content: str,
+    jurisdiction: str = "Florida",
+) -> Dict[str, Any]:
+    """Extract structured data from analysis markdown via a separate API call.
+
+    Layer 2 fallback: called when the embedded JSON block is missing from the
+    streaming analysis output. Uses gpt-5-mini with strict JSON schema to
+    guarantee valid, schema-conformant output.
+
+    Returns {} on any failure so callers can fall through to Layer 3.
+    """
+    from legal_portal.utils.openai_client import OpenAIClient
+
+    try:
+        client = OpenAIClient()
+        response = await client.create_chat_completion_async(
+            model="gpt-5-mini",
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "Extract structured data from a legal case analysis. "
+                        "Return valid JSON matching the required schema. "
+                        f"Jurisdiction: {jurisdiction}."
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": (
+                        "Extract the following structured data from this legal analysis markdown:\n"
+                        "- practice_area, case_strength, recommended_letter_type\n"
+                        "- parties (name, role, entity_type)\n"
+                        "- key_dates (date, event)\n"
+                        "- primary_issues (name, category, strength, statutes[])\n"
+                        "- financial_summary (total_claimed, documented_damages)\n\n"
+                        f"Analysis:\n{markdown_content}"
+                    ),
+                },
+            ],
+            max_tokens=2000,
+            response_format=_EXTRACTION_JSON_SCHEMA,
+        )
+
+        content = response.get("content", "")
+        if not content:
+            logger.warning("[STREAM:EXTRACTION] API extraction returned empty content")
+            return {}
+
+        # Check finish_reason if available
+        finish_reason = response.get("finish_reason")
+        if finish_reason == "length":
+            logger.warning(
+                "[STREAM:EXTRACTION] API extraction hit token limit (finish_reason=length), "
+                "output may be incomplete"
+            )
+            return {}
+
+        structured_data = json.loads(content)
+        logger.info(
+            f"[STREAM:EXTRACTION] API extraction succeeded | "
+            f"keys={list(structured_data.keys())}"
+        )
+        return structured_data
+
+    except json.JSONDecodeError as e:
+        logger.error(f"[STREAM:EXTRACTION] API extraction JSON parse error: {e}")
+        return {}
+    except Exception as e:
+        logger.error(f"[STREAM:EXTRACTION] API extraction failed: {e}")
+        return {}
 
 
 def _convert_statute_recommendations_recursive(obj: Any) -> Any:

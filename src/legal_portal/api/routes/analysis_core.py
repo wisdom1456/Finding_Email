@@ -533,8 +533,33 @@ async def save_streaming_analysis(
 
         case_data = case_response.data[0]
 
-        # Parse embedded JSON from the markdown content
+        # Parse embedded JSON from the markdown content (Layer 1: embedded extraction)
         structured_data = _extract_embedded_json(request.content)
+        extraction_layer = "embedded" if structured_data else None
+
+        # Layer 2: API extraction fallback when embedded JSON is missing
+        if not structured_data:
+            logger.warning(f"[STREAM:EXTRACTION] layer=embedded success=False case_id={case_id}")
+            from legal_portal.config.default import get_settings
+            settings = get_settings()
+            if settings.enable_extraction_fallback:
+                try:
+                    from legal_portal.services.analysis.streaming_parser import extract_structured_data_via_api
+                    structured_data = await extract_structured_data_via_api(
+                        markdown_content=request.content,
+                        jurisdiction=case_data.get("jurisdiction", "Florida"),
+                    )
+                    if structured_data:
+                        extraction_layer = "api_extraction"
+                        logger.info(f"[STREAM:EXTRACTION] layer=api_extraction success=True case_id={case_id}")
+                    else:
+                        logger.warning(f"[STREAM:EXTRACTION] layer=api_extraction success=False case_id={case_id}")
+                except Exception as e:
+                    logger.error(f"[STREAM:EXTRACTION] layer=api_extraction error={e} case_id={case_id}")
+                    structured_data = {}
+
+        if extraction_layer:
+            logger.info(f"[STREAM:EXTRACTION] layer={extraction_layer} success=True case_id={case_id}")
 
         # Build case analysis from extracted data
         # Use clean issue names from structured JSON, not raw markdown
@@ -575,6 +600,7 @@ async def save_streaming_analysis(
         # Build multi-stage compatible result for letter generation
         multi_stage_result = None
         if structured_data:
+            logger.info("[STREAM] Building multi_stage_result from structured data")
             # Build timeline with correct field names for FactMatrix model
             timeline_events = []
             for d in structured_data.get("key_dates", []):
@@ -773,6 +799,69 @@ async def save_streaming_analysis(
                 logger.warning(f"[STREAM] Failed to get verified statutes from corpus: {e}", exc_info=True)
                 if multi_stage_result is not None:
                     multi_stage_result["verified_statutes"] = []
+
+        # Fallback: build minimal multi_stage_result from markdown when structured_data extraction failed
+        if not multi_stage_result:
+            logger.warning(f"[STREAM:EXTRACTION] layer=fallback_skeleton case_id={case_id}")
+            fallback_issues = _extract_list_items(request.content, "Legal Issues Identified")
+            multi_stage_result = {
+                "fact_matrix": {
+                    "parties": [],
+                    "timeline": [],
+                    "financial_data": [],
+                    "key_documents": [],
+                    "preliminary_issues": fallback_issues,
+                    "financial_items": [],
+                },
+                "issue_map": {
+                    "primary_issues": [
+                        {"issue_name": issue, "category": "", "applicable_statutes": [], "strength": "Moderate"}
+                        for issue in fallback_issues
+                    ],
+                },
+                "letter_structure": {
+                    "style": "numbered_findings",
+                    "intro": "Key Findings",
+                    "issue_format": "numbered_sections_with_headers",
+                    "reasoning": "Fallback structure — structured JSON extraction was unavailable",
+                },
+                "deep_analysis": {
+                    "issue_analyses": [
+                        {
+                            "issue_name": issue,
+                            "legal_standard": f"See full analysis for {issue}",
+                            "fact_application": f"See full analysis for {issue}",
+                            "statute_analysis": None,
+                            "case_law_support": None,
+                            "remedies_available": [],
+                            "procedural_requirements": None,
+                            "confidence_level": "moderate",
+                            "supporting_evidence": [],
+                        }
+                        for issue in fallback_issues
+                    ],
+                    "risk_assessment": {
+                        "major_risks": [],
+                        "risk_mitigation_steps": [],
+                        "statute_of_limitations_concerns": None,
+                        "evidence_gaps": [],
+                    },
+                    "deadline_tracking": [],
+                    "evidence_strength": {
+                        "strong_evidence": [],
+                        "weak_evidence": [],
+                        "missing_evidence": [],
+                        "overall_strength": "moderate",
+                    },
+                    "overall_case_strength": "Moderate",
+                    "key_strengths": [],
+                    "key_challenges": [],
+                    "is_viable": True,
+                    "viability_reasoning": "Based on streaming analysis (structured data unavailable)",
+                    "recommend_demand_letter": False,
+                },
+                "verified_statutes": [],
+            }
 
         # Fetch documents for this case (they're in a separate table, not embedded in case_data)
         # Include extracted_text since it's used for summaries and quality assessment

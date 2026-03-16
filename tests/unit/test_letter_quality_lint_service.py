@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from legal_portal.services.letter_quality_lint_service import LetterQualityLintService
+from legal_portal.services.letters.letter_quality_lint_service import LetterQualityLintService
 
 
 def _strict_mode_sample() -> str:

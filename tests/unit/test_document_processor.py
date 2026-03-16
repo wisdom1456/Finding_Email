@@ -8,7 +8,7 @@ import pytest
 
 from legal_portal.core.data_models import DocumentType, FileMetadata, FileType, ProcessedDocument
 from legal_portal.core.document_processor import DocumentProcessor
-from legal_portal.services.main_processor import _build_summary_prompt
+from legal_portal.services.analysis.main_processor import _build_summary_prompt
 
 # Removed duplicate test - using async version below
 

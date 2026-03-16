@@ -34,13 +34,13 @@ from legal_portal.api.routes._analysis_helpers import (
     RecommendationLetterRequest,
     RecommendationLetterResponse,
 )
-from legal_portal.api.routes.gap_routes import _ensure_fresh_gap_analysis_for_letter_generation
+from legal_portal.services.analysis.gap_helpers import _ensure_fresh_gap_analysis_for_letter_generation
 from legal_portal.config.default import get_settings
 from legal_portal.core.data_models import LetterType, ProcessingResult
-from legal_portal.services.demand_letter_service import DemandLetterService
-from legal_portal.services.document_formatter import DocumentFormatterService
-from legal_portal.services.json_processing_service import JsonProcessingService
-from legal_portal.services.letter_validation_service import LetterValidationService
+from legal_portal.services.letters.demand_letter_service import DemandLetterService
+from legal_portal.services.shared.document_formatter import DocumentFormatterService
+from legal_portal.services.shared.json_processing_service import JsonProcessingService
+from legal_portal.services.letters.letter_validation_service import LetterValidationService
 from legal_portal.utils.diagnostic_logger import DiagnosticLogger
 from legal_portal.utils.openai_client import OpenAIClient
 
@@ -1238,7 +1238,7 @@ async def generate_recommendation_letter(
             GapAnalysisResult,
             RecommendedLetterType,
         )
-        from legal_portal.services.recommendation_letter_service import RecommendationLetterService
+        from legal_portal.services.letters.recommendation_letter_service import RecommendationLetterService
 
         try:
             letter_type_enum = RecommendedLetterType(letter_request.letter_type)
@@ -1401,7 +1401,7 @@ async def stream_recommendation_letter(
         GapAnalysisResult,
         RecommendedLetterType,
     )
-    from legal_portal.services.recommendation_letter_service import RecommendationLetterService
+    from legal_portal.services.letters.recommendation_letter_service import RecommendationLetterService
 
     response = supabase.table("analysis_results").select("*").eq("id", analysis_id).execute()
     if not response.data:

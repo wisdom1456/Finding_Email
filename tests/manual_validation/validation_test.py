@@ -23,8 +23,8 @@ def test_complete_workflow():
         print("\n1. Testing module imports...")
         from legal_portal.config.config_manager import ConfigManager
         from legal_portal.services import main_processor
-        from legal_portal.services.content_formatting_service import ContentFormattingService
-        from legal_portal.services.template_rendering_service import TemplateRenderingService
+        from legal_portal.services.letters.content_formatting_service import ContentFormattingService
+        from legal_portal.services.letters.template_rendering_service import TemplateRenderingService
 
         print("✓ All modules imported successfully")
 

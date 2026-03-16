@@ -1,7 +1,7 @@
 """Unit tests for chunk_service document ID tracking."""
 
 from legal_portal.core.data_models import DocumentType, FileMetadata, FileType, ProcessedDocument
-from legal_portal.services.chunk_service import ChunkService, build_document_tracking_ids, create_chunk_state
+from legal_portal.services.documents.chunk_service import ChunkService, build_document_tracking_ids, create_chunk_state
 
 
 def make_processed_doc(

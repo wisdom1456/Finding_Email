@@ -8,6 +8,8 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import Any, Dict, List, Optional
 
+from legal_portal.core.constants import SERVICE_PRICING_RATES
+from legal_portal.utils.token_manager import estimate_tokens as _estimate_tokens_simple
 from legal_portal.core.data_models import CostEstimate, ProcessedDocument, ServiceCost
 
 
@@ -19,32 +21,7 @@ class CostEstimator:
     and processing complexity assessment.
     """
 
-    # Current API Pricing Rates (USD)
-    PRICING_RATES = {
-        # OpenAI Pricing
-        "openai_gpt4o": {
-            "input_tokens": Decimal("5.00") / Decimal("1000000"),  # $5.00 per 1M tokens
-            "output_tokens": Decimal("15.00") / Decimal("1000000"),  # $15.00 per 1M tokens
-        },
-        "openai_gpt4o_mini": {
-            "input_tokens": Decimal("0.15") / Decimal("1000000"),  # $0.15 per 1M tokens
-            "output_tokens": Decimal("0.60") / Decimal("1000000"),  # $0.60 per 1M tokens
-        },
-        "openai_whisper": {
-            "per_minute": Decimal("0.006")  # $0.006 per minute
-        },
-        # Google Cloud Pricing
-        "vertex_ai_gemini_flash": {
-            "input_tokens": Decimal("0.075") / Decimal("1000000"),  # $0.075 per 1M tokens
-            "output_tokens": Decimal("0.30") / Decimal("1000000"),  # $0.30 per 1M tokens
-        },
-        "vertex_ai_video": {
-            "per_minute": Decimal("0.10")  # $0.10 per minute
-        },
-        "google_speech_to_text": {
-            "per_minute": Decimal("0.024")  # $0.024 per minute
-        },
-    }
+    PRICING_RATES = SERVICE_PRICING_RATES
 
     def __init__(self):
         """Initialize the cost estimator with current pricing rates."""
@@ -264,20 +241,13 @@ class CostEstimator:
     def _estimate_tokens(self, text: str) -> int:
         """Estimate token count for text content.
 
-        Uses approximation of 4 characters per token for English text.
-
-        Args:
-        ----
-            text: Text content to estimate
-
-        Returns:
-        -------
-            Estimated token count
-
+        Delegates to the canonical estimator with a null-guard and min-1 floor
+        to preserve the cost-estimation contract (non-empty text always counts
+        as at least 1 token).
         """
         if not text:
             return 0
-        return max(1, len(text) // 4)
+        return max(1, _estimate_tokens_simple(text))
 
     def _estimate_audio_duration_from_size(self, file_size_mb: float) -> float:
         """Estimate audio duration from file size.

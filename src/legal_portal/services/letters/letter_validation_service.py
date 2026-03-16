@@ -15,7 +15,7 @@ from legal_portal.core.data_models import (
     LetterValidationResult,
     LetterValidationWarning,
 )
-from legal_portal.services.letter_quality_lint_service import LetterQualityLintService
+from legal_portal.services.letters.letter_quality_lint_service import LetterQualityLintService
 
 logger = logging.getLogger(__name__)
 

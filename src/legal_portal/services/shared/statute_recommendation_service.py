@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Set
 
-from legal_portal.services.statute_validation_service import (
+from legal_portal.services.shared.statute_validation_service import (
     StatuteValidationService,
     get_statute_validation_service,
 )

@@ -24,8 +24,8 @@ from legal_portal.core.data_models import (
     GapSeverity,
     LetterStructure,
 )
-from legal_portal.services.demand_letter_service import DemandLetterService
-from legal_portal.services.json_processing_service import JsonProcessingService
+from legal_portal.services.letters.demand_letter_service import DemandLetterService
+from legal_portal.services.shared.json_processing_service import JsonProcessingService
 
 FIXTURES_DIR = Path(__file__).resolve().parents[1] / "fixtures" / "letters"
 

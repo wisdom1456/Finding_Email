@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from legal_portal.services.statute_validation_service import StatuteValidationService
+from legal_portal.services.shared.statute_validation_service import StatuteValidationService
 
 
 def test_validate_known_statute_returns_verified(mock_corpus_data):

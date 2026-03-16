@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from legal_portal.core.data_models import DocumentSummaryStructured
-from legal_portal.services.multi_stage_analyzer import (
+from legal_portal.services.analysis.multi_stage_analyzer import (
     ContextBuildResult,
     MultiStageAnalyzer,
     _DEFAULT_BUDGET_TOKENS,

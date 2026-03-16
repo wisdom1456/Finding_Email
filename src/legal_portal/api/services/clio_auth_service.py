@@ -38,7 +38,7 @@ class ClioAuthService:
             if vercel_url:
                 self.redirect_uri = f"https://{vercel_url}/api/clio/callback"
             else:
-                self.redirect_uri = os.getenv("CLIO_REDIRECT_URI", "http://localhost:8000/api/clio/callback")
+                self.redirect_uri = os.getenv("CLIO_REDIRECT_URI", "http://localhost:8080/api/clio/callback")
 
         if not self.client_id or not self.client_secret:
             raise ValueError(

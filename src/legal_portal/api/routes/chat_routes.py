@@ -22,7 +22,7 @@ from legal_portal.core.data_models import (
     ChatMessageResponse,
     ProcessingResult,
 )
-from legal_portal.services.case_chat_service import CaseChatService
+from legal_portal.services.shared.case_chat_service import CaseChatService
 from legal_portal.utils.openai_client import OpenAIClient
 
 logger = logging.getLogger(__name__)
@@ -54,8 +54,11 @@ async def stream_chat_response(
         result_payload = analysis_data["result"]
         processing_result = ProcessingResult(**result_payload)
 
-        # 2. Get conversation history (use case_id from the analysis record, not ProcessingResult)
+        # 2. Verify case ownership before granting access to data
         case_id = analysis_data["case_id"]
+        _ensure_case_access(supabase, case_id, user["id"])
+
+        # 3. Get conversation history (use case_id from the analysis record, not ProcessingResult)
         history_response = (
             supabase.table("case_chat_messages")
             .select("user_message, ai_response")

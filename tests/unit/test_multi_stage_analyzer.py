@@ -8,7 +8,7 @@ import re
 import pytest
 
 from legal_portal.core.data_models import DocumentSummaryStructured
-from legal_portal.services.multi_stage_analyzer import MultiStageAnalyzer
+from legal_portal.services.analysis.multi_stage_analyzer import MultiStageAnalyzer
 
 
 class FakeOpenAIClient:

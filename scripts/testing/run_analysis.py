@@ -15,7 +15,7 @@ os.environ["DIAGNOSTIC_MODE"] = "true"
 from dotenv import load_dotenv
 load_dotenv()
 
-from legal_portal.services.main_processor import MainProcessor
+from legal_portal.services.analysis.main_processor import MainProcessor
 
 
 async def run_analysis(snapshot_path: str):

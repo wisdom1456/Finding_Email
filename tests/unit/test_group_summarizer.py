@@ -4,7 +4,7 @@ import pytest
 from unittest.mock import AsyncMock, MagicMock
 
 from legal_portal.core.data_models import DocumentGroup, GroupSummary, GroupType
-from legal_portal.services.group_summarizer import GroupSummarizer
+from legal_portal.services.grouping.group_summarizer import GroupSummarizer
 
 
 def _make_group(group_type=GroupType.BANK_STATEMENTS, member_count=3):

@@ -5,9 +5,20 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from legal_portal.core.constants import MODEL_CONTEXT_WINDOWS
 from legal_portal.utils.logging_config import get_module_logger
 
 logger = get_module_logger(__name__)
+
+
+def estimate_tokens(text: str) -> int:
+    """Rough estimation of tokens (approximately 4 characters per token).
+
+    This is the canonical simple estimator used across the codebase.
+    Matches the original ``len(text) // 4`` formula with no null-guard
+    and no min-1 floor.
+    """
+    return len(text) // 4
 
 
 class TokenManager:
@@ -15,12 +26,7 @@ class TokenManager:
 
     def __init__(self):
         """Initialize TokenManager."""
-        self.model_limits = {
-            "gpt-5.4": 840000,  # 1M context window * 0.8 (approx)
-            "gpt-5.2": 840000,  # 1M context window * 0.8 (approx)
-            "gpt-5-mini": 320000,  # 400k context window * 0.8
-            "gpt-4": 25600,  # 32k context window * 0.8
-        }
+        self.model_limits = dict(MODEL_CONTEXT_WINDOWS)
 
     def estimate_tokens_detailed(self, prompt_content: str) -> int:
         """Enhanced token estimation with more accurate calculation."""
@@ -184,7 +190,7 @@ class TokenManager:
 
     def estimate_tokens(self, text: str) -> int:
         """Rough estimation of tokens (approximately 4 characters per token)."""
-        return len(text) // 4
+        return estimate_tokens(text)
 
     def truncate_content_if_needed(self, content: str, max_tokens: int = 25000) -> str:
         """Truncate content if it exceeds token limit."""

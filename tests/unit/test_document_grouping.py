@@ -1,5 +1,5 @@
 import pytest
-from legal_portal.services.document_registry_service import DocumentRegistryService
+from legal_portal.services.documents.document_registry_service import DocumentRegistryService
 from legal_portal.core.data_models import DocumentGroup, GroupType
 
 

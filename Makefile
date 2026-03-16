@@ -4,7 +4,7 @@
 PYTHON = python3
 
 # Set the source directory
-SRC = app
+SRC = src/legal_portal
 
 # Set the test directory
 TESTS = tests
@@ -60,12 +60,12 @@ clean:
 debug:
 	@echo "Starting backend in Vercel simulation mode..."
 	@VERCEL=1 LOG_LEVEL=DEBUG DIAGNOSTIC_MODE=true \
-	 bash -c 'source venv/bin/activate && uvicorn api.index:app --host 0.0.0.0 --port 8000 --reload'
+	 bash -c 'source venv/bin/activate && uvicorn api.index:app --host 0.0.0.0 --port 8080 --reload'
 
 # Start backend without Vercel simulation (uses BackgroundTasks)
 backend:
 	@echo "Starting backend in local mode..."
-	@source venv/bin/activate && uvicorn api.index:app --host 0.0.0.0 --port 8000 --reload
+	@source venv/bin/activate && uvicorn api.index:app --host 0.0.0.0 --port 8080 --reload
 
 # Start frontend dev server
 frontend:

@@ -9,8 +9,8 @@ from typing import Any, AsyncGenerator, Dict, List, Optional, Tuple
 import markdown2
 
 from legal_portal.core.data_models import DeepAnalysis, DocumentSummaryStructured, FactMatrix, Party
-from legal_portal.services.document_formatter import DocumentFormatterService
-from legal_portal.services.letter_strategy_service import LetterStrategyService
+from legal_portal.services.shared.document_formatter import DocumentFormatterService
+from legal_portal.services.letters.letter_strategy_service import LetterStrategyService
 from legal_portal.utils.logging_config import get_module_logger
 from legal_portal.utils.markdown_utils import clean_markdown_response
 from legal_portal.utils.openai_client import OpenAIClient

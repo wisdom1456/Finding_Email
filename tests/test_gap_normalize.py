@@ -6,7 +6,7 @@ import copy
 
 import pytest
 
-from legal_portal.services.gap_analysis_service import GapAnalysisService
+from legal_portal.services.analysis.gap_analysis_service import GapAnalysisService
 
 
 @pytest.fixture()

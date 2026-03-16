@@ -87,7 +87,7 @@ async def retry_failed_documents(
 
     If document_ids is empty, all failed documents will be retried.
     """
-    from legal_portal.services.chunk_state_manager import ChunkStateManager
+    from legal_portal.services.documents.chunk_state_manager import ChunkStateManager
 
     # Verify analysis exists and user has access
     response = supabase.table("analysis_results").select(
@@ -159,7 +159,7 @@ async def skip_failed_documents(
 
     If document_ids is empty, all failed documents will be skipped.
     """
-    from legal_portal.services.chunk_state_manager import ChunkStateManager
+    from legal_portal.services.documents.chunk_state_manager import ChunkStateManager
 
     # Verify analysis exists and user has access
     response = supabase.table("analysis_results").select(

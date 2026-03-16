@@ -122,6 +122,10 @@
 
 	// Attorney information for letters
 	let profileLoaded = $state(false);
+	let attorneyName = $state('');
+	let firmName = $state('');
+	let contactPhone = $state('');
+	let contactEmail = $state('');
 
 	// Document viewer for quality report
 	let viewingDocument = $state<any>(null);

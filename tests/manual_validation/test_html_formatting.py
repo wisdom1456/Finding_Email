@@ -22,7 +22,7 @@ try:
         LegalAssessment,
         PartyInvolved,
     )
-    from legal_portal.services.json_processing_service import JsonProcessingService
+    from legal_portal.services.shared.json_processing_service import JsonProcessingService
 except ImportError as e:
     print(f"Import error: {e}")
     print("Make sure you're running from the project root directory")

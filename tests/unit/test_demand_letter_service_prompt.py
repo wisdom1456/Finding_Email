@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from legal_portal.services.demand_letter_service import DemandLetterService
+from legal_portal.services.letters.demand_letter_service import DemandLetterService
 
 
 def test_build_demand_prompt_appends_strategy_directives() -> None:

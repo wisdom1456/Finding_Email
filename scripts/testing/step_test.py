@@ -11,7 +11,7 @@ os.environ["LOG_LEVEL"] = "DEBUG"
 from dotenv import load_dotenv
 load_dotenv()
 
-from legal_portal.services.multi_stage_analyzer import MultiStageAnalyzer
+from legal_portal.services.analysis.multi_stage_analyzer import MultiStageAnalyzer
 from legal_portal.utils.openai_client import OpenAIClient
 from legal_portal.core.data_models import DocumentSummaryStructured
 

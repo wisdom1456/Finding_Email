@@ -9,7 +9,7 @@ from __future__ import annotations
 import re
 from typing import Optional, Tuple
 
-from legal_portal.services.statute_validation_service import (
+from legal_portal.services.shared.statute_validation_service import (
     StatuteValidationService,
     ValidationResult,
 )

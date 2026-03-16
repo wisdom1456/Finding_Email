@@ -20,7 +20,7 @@ from legal_portal.core.data_models import (
     ProcessedDocument,
     ProcessingResult,
 )
-from legal_portal.services.main_processor import process_case_documents
+from legal_portal.services.analysis.main_processor import process_case_documents
 
 
 def _make_processed_document(
@@ -171,7 +171,7 @@ async def test_full_document_processing_workflow(
 
     with (
         patch(
-            "legal_portal.services.main_processor.get_settings",
+            "legal_portal.services.analysis.main_processor.get_settings",
             return_value=SimpleNamespace(
                 suggest_statutes=False,
                 corpus_coverage_warnings=True,
@@ -180,12 +180,12 @@ async def test_full_document_processing_workflow(
             ),
         ),
         patch(
-            "legal_portal.services.main_processor._generate_document_summaries",
+            "legal_portal.services.analysis.main_processor._generate_document_summaries",
             new=mock_generate_document_summaries,
         ),
-        patch("legal_portal.services.main_processor._detect_near_duplicates"),
+        patch("legal_portal.services.analysis.main_processor._detect_near_duplicates"),
         patch(
-            "legal_portal.services.main_processor._generate_case_analysis_summary",
+            "legal_portal.services.analysis.main_processor._generate_case_analysis_summary",
             return_value={
                 "case_summary": "Contract and warranty dispute with documented defects.",
                 "practice_area": "Consumer Protection",
@@ -196,11 +196,11 @@ async def test_full_document_processing_workflow(
                 "additional_details": "",
             },
         ),
-        patch("legal_portal.services.main_processor.CorpusCoverageService") as mock_coverage,
-        patch("legal_portal.services.main_processor.StatuteRecommendationService"),
-        patch("legal_portal.services.main_processor.MultiStageAnalyzer") as mock_multi_stage,
+        patch("legal_portal.services.analysis.main_processor.CorpusCoverageService") as mock_coverage,
+        patch("legal_portal.services.analysis.main_processor.StatuteRecommendationService"),
+        patch("legal_portal.services.analysis.main_processor.MultiStageAnalyzer") as mock_multi_stage,
         patch(
-            "legal_portal.services.deadline_extraction_service.DeadlineExtractionService"
+            "legal_portal.services.shared.deadline_extraction_service.DeadlineExtractionService"
         ) as mock_deadline_class,
     ):
         mock_coverage.return_value.analyze_coverage.return_value = {"is_covered": True, "warnings": []}
@@ -253,7 +253,7 @@ async def test_workflow_skips_document_summary_when_no_case_documents(
 
     with (
         patch(
-            "legal_portal.services.main_processor.get_settings",
+            "legal_portal.services.analysis.main_processor.get_settings",
             return_value=SimpleNamespace(
                 suggest_statutes=False,
                 corpus_coverage_warnings=False,
@@ -262,12 +262,12 @@ async def test_workflow_skips_document_summary_when_no_case_documents(
             ),
         ),
         patch(
-            "legal_portal.services.main_processor._generate_document_summaries",
+            "legal_portal.services.analysis.main_processor._generate_document_summaries",
             new=mock_generate_document_summaries,
         ),
-        patch("legal_portal.services.main_processor._detect_near_duplicates"),
+        patch("legal_portal.services.analysis.main_processor._detect_near_duplicates"),
         patch(
-            "legal_portal.services.main_processor._generate_case_analysis_summary",
+            "legal_portal.services.analysis.main_processor._generate_case_analysis_summary",
             return_value={
                 "case_summary": "Intake-only analysis",
                 "practice_area": "General Legal Matter",
@@ -276,10 +276,10 @@ async def test_workflow_skips_document_summary_when_no_case_documents(
                 "additional_details": "",
             },
         ),
-        patch("legal_portal.services.main_processor.StatuteRecommendationService"),
-        patch("legal_portal.services.main_processor.MultiStageAnalyzer") as mock_multi_stage,
+        patch("legal_portal.services.analysis.main_processor.StatuteRecommendationService"),
+        patch("legal_portal.services.analysis.main_processor.MultiStageAnalyzer") as mock_multi_stage,
         patch(
-            "legal_portal.services.deadline_extraction_service.DeadlineExtractionService"
+            "legal_portal.services.shared.deadline_extraction_service.DeadlineExtractionService"
         ) as mock_deadline_class,
     ):
         mock_multi_stage.return_value.analyze_case = AsyncMock(return_value=_sample_multi_stage_result())
@@ -391,7 +391,7 @@ async def test_workflow_graceful_failure(
 
     with (
         patch(
-            "legal_portal.services.main_processor.get_settings",
+            "legal_portal.services.analysis.main_processor.get_settings",
             return_value=SimpleNamespace(
                 suggest_statutes=False,
                 corpus_coverage_warnings=False,
@@ -400,12 +400,12 @@ async def test_workflow_graceful_failure(
             ),
         ),
         patch(
-            "legal_portal.services.main_processor._generate_document_summaries",
+            "legal_portal.services.analysis.main_processor._generate_document_summaries",
             new=AsyncMock(side_effect=Exception("API connection failed")),
         ),
-        patch("legal_portal.services.main_processor._detect_near_duplicates"),
+        patch("legal_portal.services.analysis.main_processor._detect_near_duplicates"),
         patch(
-            "legal_portal.services.main_processor._generate_case_analysis_summary",
+            "legal_portal.services.analysis.main_processor._generate_case_analysis_summary",
             return_value={
                 "case_summary": "unused",
                 "practice_area": "unused",
@@ -414,8 +414,8 @@ async def test_workflow_graceful_failure(
                 "additional_details": "",
             },
         ),
-        patch("legal_portal.services.main_processor.StatuteRecommendationService"),
-        patch("legal_portal.services.main_processor.MultiStageAnalyzer") as mock_multi_stage,
+        patch("legal_portal.services.analysis.main_processor.StatuteRecommendationService"),
+        patch("legal_portal.services.analysis.main_processor.MultiStageAnalyzer") as mock_multi_stage,
     ):
         mock_multi_stage.return_value.analyze_case = AsyncMock(return_value=_sample_multi_stage_result())
         result = await process_case_documents(
@@ -443,7 +443,7 @@ async def test_letter_generation_contains_required_elements(
     sample_case_info,
 ):
     """Test that generated letter contains all required elements."""
-    from legal_portal.services.json_processing_service import JsonProcessingService
+    from legal_portal.services.shared.json_processing_service import JsonProcessingService
 
     # Mock the letter generation response - need to return markdown that gets converted to HTML
     def mock_create_response(**_kwargs):
@@ -521,7 +521,7 @@ async def test_corpus_coverage_warnings_appear_in_result(
 
     with (
         patch(
-            "legal_portal.services.main_processor.get_settings",
+            "legal_portal.services.analysis.main_processor.get_settings",
             return_value=SimpleNamespace(
                 suggest_statutes=False,
                 corpus_coverage_warnings=True,
@@ -530,12 +530,12 @@ async def test_corpus_coverage_warnings_appear_in_result(
             ),
         ),
         patch(
-            "legal_portal.services.main_processor._generate_document_summaries",
+            "legal_portal.services.analysis.main_processor._generate_document_summaries",
             new=AsyncMock(return_value=(sample_document_summaries, [])),
         ),
-        patch("legal_portal.services.main_processor._detect_near_duplicates"),
+        patch("legal_portal.services.analysis.main_processor._detect_near_duplicates"),
         patch(
-            "legal_portal.services.main_processor._generate_case_analysis_summary",
+            "legal_portal.services.analysis.main_processor._generate_case_analysis_summary",
             return_value={
                 "case_summary": "Federal issues referenced in intake.",
                 "practice_area": "General Legal Matter",
@@ -544,11 +544,11 @@ async def test_corpus_coverage_warnings_appear_in_result(
                 "additional_details": "",
             },
         ),
-        patch("legal_portal.services.main_processor.CorpusCoverageService") as mock_coverage,
-        patch("legal_portal.services.main_processor.StatuteRecommendationService"),
-        patch("legal_portal.services.main_processor.MultiStageAnalyzer") as mock_multi_stage,
+        patch("legal_portal.services.analysis.main_processor.CorpusCoverageService") as mock_coverage,
+        patch("legal_portal.services.analysis.main_processor.StatuteRecommendationService"),
+        patch("legal_portal.services.analysis.main_processor.MultiStageAnalyzer") as mock_multi_stage,
         patch(
-            "legal_portal.services.deadline_extraction_service.DeadlineExtractionService"
+            "legal_portal.services.shared.deadline_extraction_service.DeadlineExtractionService"
         ) as mock_deadline_class,
     ):
         mock_coverage.return_value.analyze_coverage.return_value = {
@@ -602,7 +602,7 @@ async def test_cost_tracking_aggregates_correctly(
 
     with (
         patch(
-            "legal_portal.services.main_processor.get_settings",
+            "legal_portal.services.analysis.main_processor.get_settings",
             return_value=SimpleNamespace(
                 suggest_statutes=False,
                 corpus_coverage_warnings=False,
@@ -611,12 +611,12 @@ async def test_cost_tracking_aggregates_correctly(
             ),
         ),
         patch(
-            "legal_portal.services.main_processor._generate_document_summaries",
+            "legal_portal.services.analysis.main_processor._generate_document_summaries",
             new=AsyncMock(return_value=(sample_document_summaries, [])),
         ),
-        patch("legal_portal.services.main_processor._detect_near_duplicates"),
+        patch("legal_portal.services.analysis.main_processor._detect_near_duplicates"),
         patch(
-            "legal_portal.services.main_processor._generate_case_analysis_summary",
+            "legal_portal.services.analysis.main_processor._generate_case_analysis_summary",
             return_value={
                 "case_summary": "Cost tracking integration test case summary.",
                 "practice_area": "Consumer Protection",
@@ -627,10 +627,10 @@ async def test_cost_tracking_aggregates_correctly(
                 "additional_details": "",
             },
         ),
-        patch("legal_portal.services.main_processor.StatuteRecommendationService"),
-        patch("legal_portal.services.main_processor.MultiStageAnalyzer") as mock_multi_stage,
+        patch("legal_portal.services.analysis.main_processor.StatuteRecommendationService"),
+        patch("legal_portal.services.analysis.main_processor.MultiStageAnalyzer") as mock_multi_stage,
         patch(
-            "legal_portal.services.deadline_extraction_service.DeadlineExtractionService"
+            "legal_portal.services.shared.deadline_extraction_service.DeadlineExtractionService"
         ) as mock_deadline_class,
     ):
         mock_multi_stage.return_value.analyze_case = AsyncMock(return_value=_sample_multi_stage_result())
@@ -653,7 +653,7 @@ async def test_cost_tracking_aggregates_correctly(
 
 def test_statute_validation_catches_hallucinations(mock_corpus_data):
     """Test that statute validation catches fake/hallucinated citations."""
-    from legal_portal.services.statute_validation_service import StatuteValidationService
+    from legal_portal.services.shared.statute_validation_service import StatuteValidationService
 
     # Create service with mocked corpus
     service = StatuteValidationService()

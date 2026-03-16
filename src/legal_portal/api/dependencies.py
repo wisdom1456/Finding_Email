@@ -18,6 +18,8 @@ from supabase import Client, create_client
 
 logger = logging.getLogger(__name__)
 security = HTTPBearer()
+# Separate instance for optional auth: auto_error=False allows unauthenticated requests through
+optional_security = HTTPBearer(auto_error=False)
 
 
 @lru_cache()
@@ -144,15 +146,16 @@ async def get_current_user(
 
 
 async def get_optional_user(
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
-    supabase: Client = Depends(get_user_supabase_client),
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(optional_security),
 ) -> Optional[dict]:
     """Get current user if authenticated, otherwise None.
 
+    Uses optional_security (auto_error=False) so unauthenticated requests
+    pass through instead of getting a 403.
+
     Args:
     ----
-        credentials: Optional HTTP Bearer token
-        supabase: Supabase client
+        credentials: Optional HTTP Bearer token (None when unauthenticated)
 
     Returns:
     -------
@@ -163,6 +166,26 @@ async def get_optional_user(
         return None
 
     try:
-        return await get_current_user(credentials, supabase)
-    except HTTPException:
+        # Build a user-scoped supabase client manually for the token
+        supabase_url = os.getenv("SUPABASE_URL")
+        supabase_key = os.getenv("SUPABASE_ANON_KEY")
+        if not supabase_url or not supabase_key:
+            return None
+
+        client = create_client(supabase_url, supabase_key)
+        client.postgrest.auth(credentials.credentials)
+        client.postgrest.session.headers["Authorization"] = f"Bearer {credentials.credentials}"
+
+        response = client.auth.get_user(credentials.credentials)
+        if not response or not response.user:
+            return None
+
+        user = response.user
+        return {
+            "id": user.id,
+            "email": user.email,
+            "user_metadata": user.user_metadata,
+            "app_metadata": user.app_metadata,
+        }
+    except Exception:
         return None

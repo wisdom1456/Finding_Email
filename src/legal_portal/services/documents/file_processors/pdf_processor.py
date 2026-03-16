@@ -1838,7 +1838,7 @@ async def process_pdf(
                         from legal_portal.utils.ocr_service_client import (
                             get_ocr_client, OCRServiceError, OCRConfigError,
                         )
-                        from legal_portal.services.file_compression_service import get_compression_service
+                        from legal_portal.services.documents.file_compression_service import get_compression_service
                         ocr_client = get_ocr_client()
                         comp_svc = get_compression_service()
                         import mimetypes as _mt

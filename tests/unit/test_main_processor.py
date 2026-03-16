@@ -22,7 +22,7 @@ from legal_portal.core.data_models import (
     ProcessedDocument,
     QualityScore,
 )
-from legal_portal.services.main_processor import (
+from legal_portal.services.analysis.main_processor import (
     _aggregate_quality_results,
     _build_original_documents_map,
     _build_quality_context,
@@ -329,7 +329,7 @@ class TestDetectNearDuplicates:
             make_processed_doc(file_name="contract_v1.pdf"),
             make_processed_doc(file_name="contract_v2.pdf"),
         ]
-        with patch('legal_portal.services.main_processor.get_settings') as mock_settings:
+        with patch('legal_portal.services.analysis.main_processor.get_settings') as mock_settings:
             mock_settings.return_value.duplicate_similarity_threshold = 0.7
             _detect_near_duplicates(docs)
         # Note: This may or may not log depending on similarity calculation
@@ -515,7 +515,7 @@ class TestCreateSmartBatches:
     def test_single_document_single_batch(self):
         """Test single document creates single batch."""
         docs = [make_processed_doc(content="Short content")]
-        with patch('legal_portal.services.main_processor.get_settings') as mock_settings:
+        with patch('legal_portal.services.analysis.main_processor.get_settings') as mock_settings:
             mock_settings.return_value.max_tokens_per_batch = 100000
             batches = _create_smart_batches(docs)
         assert len(batches) == 1
@@ -524,7 +524,7 @@ class TestCreateSmartBatches:
     def test_multiple_documents_within_limit(self):
         """Test multiple small documents stay in one batch."""
         docs = [make_processed_doc(content="Short" * 10) for _ in range(5)]
-        with patch('legal_portal.services.main_processor.get_settings') as mock_settings:
+        with patch('legal_portal.services.analysis.main_processor.get_settings') as mock_settings:
             mock_settings.return_value.max_tokens_per_batch = 100000
             batches = _create_smart_batches(docs)
         assert len(batches) == 1
@@ -534,7 +534,7 @@ class TestCreateSmartBatches:
         """Test large documents are split into multiple batches."""
         # Create documents that exceed token limit
         docs = [make_processed_doc(content="A" * 10000) for _ in range(5)]  # ~2500 tokens each
-        with patch('legal_portal.services.main_processor.get_settings') as mock_settings:
+        with patch('legal_portal.services.analysis.main_processor.get_settings') as mock_settings:
             mock_settings.return_value.max_tokens_per_batch = 5000  # ~2 docs per batch
             batches = _create_smart_batches(docs)
         assert len(batches) > 1
@@ -542,7 +542,7 @@ class TestCreateSmartBatches:
     def test_respects_max_docs_per_batch(self):
         """Test that max 10 docs per batch is respected."""
         docs = [make_processed_doc(content="Short") for _ in range(25)]
-        with patch('legal_portal.services.main_processor.get_settings') as mock_settings:
+        with patch('legal_portal.services.analysis.main_processor.get_settings') as mock_settings:
             mock_settings.return_value.max_tokens_per_batch = 1000000
             batches = _create_smart_batches(docs)
         # With max 10 per batch, 25 docs should be split into at least 3 batches
@@ -552,7 +552,7 @@ class TestCreateSmartBatches:
 
     def test_empty_documents(self):
         """Test with empty document list."""
-        with patch('legal_portal.services.main_processor.get_settings') as mock_settings:
+        with patch('legal_portal.services.analysis.main_processor.get_settings') as mock_settings:
             mock_settings.return_value.max_tokens_per_batch = 100000
             batches = _create_smart_batches([])
         assert batches == []

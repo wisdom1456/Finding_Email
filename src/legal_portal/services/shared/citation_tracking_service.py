@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional
 from uuid import uuid4
 
 if TYPE_CHECKING:
-    from legal_portal.services.statute_validation_service import StatuteValidationService
+    from legal_portal.services.shared.statute_validation_service import StatuteValidationService
 
 import numpy as np
 from openai import OpenAI

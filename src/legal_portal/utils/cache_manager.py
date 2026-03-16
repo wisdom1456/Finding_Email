@@ -10,7 +10,6 @@ import hashlib
 import json
 import logging
 import os
-import pickle
 from datetime import datetime, timedelta
 from functools import lru_cache, wraps
 from pathlib import Path
@@ -78,32 +77,36 @@ class CacheManager:
                 value = self.redis_client.get(key)
                 if value:
                     logger.debug(f"Cache hit (Redis): {key[:8]}...")
-                    return pickle.loads(value)
+                    return json.loads(value)
             except Exception as e:
                 logger.debug(f"Redis cache get failed: {e}")
 
-        # Fall back to file cache
-        cache_file = self.cache_dir / f"{key}.pkl"
-        logger.info(f"🔍 Cache: Checking file {cache_file}, exists={cache_file.exists()}")
+        # Fall back to file cache (JSON format)
+        cache_file = self.cache_dir / f"{key}.json"
         if cache_file.exists():
             # Check if not expired (24 hours by default)
             file_age = datetime.now() - datetime.fromtimestamp(cache_file.stat().st_mtime)
-            logger.info(f"🔍 Cache: File age={file_age}, expired={file_age >= timedelta(hours=24)}")
             if file_age < timedelta(hours=24):
                 try:
-                    with open(cache_file, "rb") as f:
-                        logger.info(f"✅ Cache hit (file): {key[:8]}...")
-                        return pickle.load(f)
+                    with open(cache_file, "r") as f:
+                        logger.debug(f"Cache hit (file): {key[:8]}...")
+                        return json.load(f)
                 except Exception as e:
-                    logger.warning(f"❌ File cache read failed: {e}")
+                    logger.warning(f"File cache read failed: {e}")
             else:
-                logger.info(f"⏰ Cache expired (file): {key[:8]}...")
                 try:
                     cache_file.unlink()  # Remove expired cache file
                 except Exception:
                     pass
 
-        logger.info(f"❌ Cache miss: {key[:8]}...")
+        # Clean up any legacy .pkl files for this key
+        legacy_pkl = self.cache_dir / f"{key}.pkl"
+        if legacy_pkl.exists():
+            try:
+                legacy_pkl.unlink()
+            except Exception:
+                pass
+
         return None
 
     def set(self, key: str, value: Any, ttl: int = 86400):
@@ -116,7 +119,7 @@ class CacheManager:
             ttl: Time to live in seconds (default 24 hours)
 
         """
-        serialized_value = pickle.dumps(value)
+        serialized_value = json.dumps(value, default=str)
 
         # Save to Redis
         if self.redis_client:
@@ -126,11 +129,11 @@ class CacheManager:
             except Exception as e:
                 logger.debug(f"Redis cache set failed: {e}")
 
-        # Save to file cache
-        cache_file = self.cache_dir / f"{key}.pkl"
+        # Save to file cache (JSON format)
+        cache_file = self.cache_dir / f"{key}.json"
         try:
-            with open(cache_file, "wb") as f:
-                pickle.dump(value, f)
+            with open(cache_file, "w") as f:
+                json.dump(value, f, default=str)
             logger.debug(f"Cached to file: {key[:8]}...")
         except Exception as e:
             logger.error(f"File cache write failed: {e}")
@@ -145,7 +148,7 @@ class CacheManager:
                 pass
 
         # Delete from file cache
-        cache_file = self.cache_dir / f"{key}.pkl"
+        cache_file = self.cache_dir / f"{key}.json"
         if cache_file.exists():
             try:
                 cache_file.unlink()
@@ -165,7 +168,7 @@ class CacheManager:
                 logger.error(f"Failed to clear Redis cache: {e}")
 
         # Clear file cache
-        for cache_file in self.cache_dir.glob("*.pkl"):
+        for cache_file in self.cache_dir.glob("*.json"):
             try:
                 cache_file.unlink()
             except Exception:
@@ -221,8 +224,8 @@ class CacheManager:
         """Get cache statistics."""
         stats = {
             "cache_dir": str(self.cache_dir),
-            "file_cache_count": len(list(self.cache_dir.glob("*.pkl"))),
-            "file_cache_size_mb": sum(f.stat().st_size for f in self.cache_dir.glob("*.pkl")) / (1024 * 1024),
+            "file_cache_count": len(list(self.cache_dir.glob("*.json"))),
+            "file_cache_size_mb": sum(f.stat().st_size for f in self.cache_dir.glob("*.json")) / (1024 * 1024),
             "redis_available": self.redis_client is not None,
         }
 
@@ -248,7 +251,7 @@ class CacheManager:
         max_age = timedelta(hours=max_age_hours)
         cleaned = 0
 
-        for cache_file in self.cache_dir.glob("*.pkl"):
+        for cache_file in self.cache_dir.glob("*.json"):
             try:
                 file_age = now - datetime.fromtimestamp(cache_file.stat().st_mtime)
                 if file_age > max_age:

@@ -12,6 +12,8 @@ from dotenv import load_dotenv
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings
 
+from legal_portal.core.constants import DEFAULT_MODEL
+
 # Load environment variables from .env file
 load_dotenv()
 
@@ -60,7 +62,7 @@ class Settings(BaseSettings):
     # ==================================================
 
     openai_model: str = Field(
-        "gpt-5.4",
+        DEFAULT_MODEL,
         alias="OPENAI_MODEL",
         description="OpenAI model to use for content generation",
     )
@@ -392,9 +394,9 @@ class Settings(BaseSettings):
     # ==================================================
 
     port: int = Field(
-        8501,
+        8080,
         alias="PORT",
-        description="Port number for the application (set by Railway in production)",
+        description="Port number for the application",
     )
 
     railway_static_url: Optional[str] = Field(

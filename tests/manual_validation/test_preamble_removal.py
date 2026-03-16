@@ -22,7 +22,7 @@ def test_preamble_removal():
         from openai import OpenAI
 
         from legal_portal.config.config_manager import ConfigManager
-        from legal_portal.services.json_processing_service import JsonProcessingService
+        from legal_portal.services.shared.json_processing_service import JsonProcessingService
 
         print("✓ Modules imported successfully")
 

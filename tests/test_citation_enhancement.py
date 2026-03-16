@@ -18,7 +18,7 @@ from unittest.mock import Mock
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from legal_portal.core.data_models import CaseAnalysisResult
-from legal_portal.services.citation_tracking_service import (
+from legal_portal.services.shared.citation_tracking_service import (
     CitationTrackingService,
 )
 

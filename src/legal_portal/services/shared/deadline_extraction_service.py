@@ -9,8 +9,8 @@ from datetime import datetime, timedelta
 from typing import List, Optional
 
 from legal_portal.core.data_models import DocumentSummaryStructured
-from legal_portal.services.statute_recommendation_service import StatuteRecommendationService
-from legal_portal.services.statute_validation_service import get_statute_validation_service
+from legal_portal.services.shared.statute_recommendation_service import StatuteRecommendationService
+from legal_portal.services.shared.statute_validation_service import get_statute_validation_service
 from legal_portal.utils.logging_config import get_module_logger
 
 logger = get_module_logger(__name__)

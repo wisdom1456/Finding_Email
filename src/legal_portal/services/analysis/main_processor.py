@@ -10,6 +10,7 @@ from difflib import SequenceMatcher
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from legal_portal.config.default import get_settings
+from legal_portal.utils.token_manager import estimate_tokens as _estimate_tokens_imported
 from legal_portal.core.data_models import (
     AnalyzedDocument,
     CaseAnalysisResult,
@@ -22,14 +23,14 @@ from legal_portal.core.data_models import (
     QualityScore,
     SkippedDocument,
 )
-from legal_portal.services.chunk_service import build_document_tracking_ids
-from legal_portal.services.chunk_state_manager import ChunkStateManager
-from legal_portal.services.corpus_coverage_service import CorpusCoverageService
-from legal_portal.services.document_registry_service import DocumentRegistryService
-from legal_portal.services.document_quality_validator import DocumentQualityValidator
-from legal_portal.services.json_processing_service import JsonProcessingService
-from legal_portal.services.multi_stage_analyzer import MultiStageAnalyzer
-from legal_portal.services.statute_recommendation_service import StatuteRecommendationService
+from legal_portal.services.documents.chunk_service import build_document_tracking_ids
+from legal_portal.services.documents.chunk_state_manager import ChunkStateManager
+from legal_portal.services.analysis.corpus_coverage_service import CorpusCoverageService
+from legal_portal.services.documents.document_registry_service import DocumentRegistryService
+from legal_portal.services.documents.document_quality_validator import DocumentQualityValidator
+from legal_portal.services.shared.json_processing_service import JsonProcessingService
+from legal_portal.services.analysis.multi_stage_analyzer import MultiStageAnalyzer
+from legal_portal.services.shared.statute_recommendation_service import StatuteRecommendationService
 from legal_portal.utils.diagnostic_logger import DiagnosticLogger
 from legal_portal.utils.logging_config import get_module_logger
 from legal_portal.utils.openai_client import OpenAIClient
@@ -614,7 +615,7 @@ async def process_case_documents(
                 )
 
                 # Build and log quality metrics
-                from legal_portal.services.group_quality_metrics import build_grouping_metrics
+                from legal_portal.services.grouping.group_quality_metrics import build_grouping_metrics
 
                 if detected_groups:
                     metrics = build_grouping_metrics(
@@ -634,7 +635,7 @@ async def process_case_documents(
 
         if detected_groups and settings.enable_group_summarization:
             try:
-                from legal_portal.services.group_summarizer import GroupSummarizer
+                from legal_portal.services.grouping.group_summarizer import GroupSummarizer
 
                 group_summarizer = GroupSummarizer(openai_client=openai_client_wrapper)
 
@@ -794,7 +795,7 @@ async def process_case_documents(
                     document_summaries=[],
                     status="awaiting_recovery",
                     errors=errors,
-                    processing_time=time.time() - start_time,
+                    processing_time_seconds=time.time() - start_time,
                 )
             else:
                 await chunk_state_mgr.update_phase("synthesis")
@@ -856,8 +857,6 @@ async def process_case_documents(
         client_name_for_case = (
             (case_info or {}).get("client_name") or (case_info or {}).get("clientName") or "Client"
         )
-        _convert_to_case_analysis_result(structured_summaries, client_name_for_case, intake_content)
-
         document_summaries_json_str = json.dumps([s.model_dump() for s in structured_summaries], indent=2)
 
         # Extract information for downstream letter/chat generation
@@ -922,7 +921,7 @@ async def process_case_documents(
         # NEW: Extract deadlines using corpus and documents
         deadline_context = ""
         try:
-            from legal_portal.services.deadline_extraction_service import DeadlineExtractionService
+            from legal_portal.services.shared.deadline_extraction_service import DeadlineExtractionService
 
             deadline_service = DeadlineExtractionService(jurisdiction=jurisdiction)
             deadlines = deadline_service.extract_deadlines(
@@ -959,7 +958,7 @@ async def process_case_documents(
         # Check if CLIO context is available in review_data
         clio_context_str = ""
         if review_data.get("clio_matter_context"):
-            from legal_portal.services.clio_context_builder import ClioContextBuilder
+            from legal_portal.services.integrations.clio_context_builder import ClioContextBuilder
 
             builder = ClioContextBuilder()
             clio_context_str = builder.format_clio_context_for_prompt(review_data["clio_matter_context"])
@@ -1630,7 +1629,7 @@ def _aggregate_quality_results(results: List[QualityScore]) -> Dict[str, Any]:
 
 def _estimate_tokens(text: str) -> int:
     """Rough estimate: 1 token ≈ 4 characters."""
-    return len(text) // 4
+    return _estimate_tokens_imported(text)
 
 
 def _create_smart_batches(documents: list, max_tokens_per_batch: int | None = None) -> list:

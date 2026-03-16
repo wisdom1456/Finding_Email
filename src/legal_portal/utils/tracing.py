@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import uuid
 from contextvars import ContextVar
 from datetime import datetime
@@ -69,13 +70,17 @@ class Span:
             "status": self.status,
         }
 
-        # Ensure logs directory exists
-        log_dir = Path("logs")
-        log_dir.mkdir(exist_ok=True)
+        # Skip file export in serverless environments (read-only filesystem)
+        if os.getenv("VERCEL") or os.getenv("AWS_LAMBDA_FUNCTION_NAME"):
+            return
 
-        # Export to file (can be replaced with Jaeger/Zipkin)
-        with open(log_dir / "traces.json", "a") as f:
-            f.write(json.dumps(span_data) + "\n")
+        try:
+            log_dir = Path("logs")
+            log_dir.mkdir(exist_ok=True)
+            with open(log_dir / "traces.json", "a") as f:
+                f.write(json.dumps(span_data) + "\n")
+        except OSError:
+            pass  # Silently skip if filesystem is read-only
 
 
 def trace(operation: str):

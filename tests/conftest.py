@@ -258,7 +258,7 @@ def mock_corpus_data(monkeypatch):
 
     # Patch StatuteValidationService to use mock corpus
     monkeypatch.setattr(
-        "legal_portal.services.statute_validation_service.StatuteValidationService._load_corpus",
+        "legal_portal.services.shared.statute_validation_service.StatuteValidationService._load_corpus",
         mock_load_corpus,
     )
 

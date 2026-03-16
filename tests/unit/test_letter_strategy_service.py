@@ -18,7 +18,7 @@ from legal_portal.core.data_models import (
     Party,
     RiskAssessment,
 )
-from legal_portal.services.letter_strategy_service import LetterStrategyService
+from legal_portal.services.letters.letter_strategy_service import LetterStrategyService
 
 
 def _sample_fact_matrix() -> FactMatrix:

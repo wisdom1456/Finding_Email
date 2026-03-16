@@ -3,9 +3,9 @@
 import pytest
 
 from legal_portal.core.data_models import AnalyzedDocument, CaseAnalysisResult, IntakeAnalysis
-from legal_portal.services.citation_tracking_service import CitationTrackingService
-from legal_portal.services.corpus_coverage_service import CorpusCoverageService
-from legal_portal.services.statute_validation_service import StatuteValidationService
+from legal_portal.services.shared.citation_tracking_service import CitationTrackingService
+from legal_portal.services.analysis.corpus_coverage_service import CorpusCoverageService
+from legal_portal.services.shared.statute_validation_service import StatuteValidationService
 
 
 @pytest.mark.asyncio

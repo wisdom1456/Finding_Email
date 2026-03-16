@@ -144,6 +144,32 @@ jobs:
           name: frontend-coverage
         continue-on-error: true
 
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+
+      - name: Install security tools
+        run: pip install bandit[toml] pip-audit
+
+      - name: Run Bandit security scan
+        run: bandit -r src/ -f txt
+        continue-on-error: true
+
+      - name: Audit dependencies with pip-audit
+        run: |
+          pip install -r requirements.txt
+          pip-audit
+        continue-on-error: true
+
   e2e-tests:
     name: E2E Tests
     runs-on: ubuntu-latest
@@ -198,12 +224,12 @@ jobs:
           python run_app.py &
           echo $! > backend.pid
           # Wait for backend to be ready
-          timeout 60 bash -c 'until curl -f http://localhost:8000/health; do sleep 2; done'
+          timeout 60 bash -c 'until curl -f http://localhost:8080/health; do sleep 2; done'
       
       - name: Run Playwright tests
         working-directory: ./frontend
         env:
-          PUBLIC_API_URL: http://localhost:8000
+          PUBLIC_API_URL: http://localhost:8080
           TEST_USER_EMAIL: ${{ secrets.TEST_USER_EMAIL || 'test@example.com' }}
           TEST_USER_PASSWORD: ${{ secrets.TEST_USER_PASSWORD || 'testpassword' }}
         run: npm run test:e2e
@@ -309,5 +335,3 @@ jobs:
           fi
 
           echo "✅ All required tests passed"
-
-

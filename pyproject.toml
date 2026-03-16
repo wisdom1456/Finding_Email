@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "legal-portal"
 version = "0.1.0"
 description = "Legal Document Analysis Portal"
-requires-python = ">=3.8"
+requires-python = ">=3.10"
 dependencies = [
     "fastapi>=0.100.0",
     "uvicorn>=0.20.0",

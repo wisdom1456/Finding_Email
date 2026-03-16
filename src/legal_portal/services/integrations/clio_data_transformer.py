@@ -18,7 +18,7 @@ from legal_portal.core.data_models import (
     FileType,
     ProcessedDocument,
 )
-from legal_portal.services.clio_context_builder import ClioContextBuilder
+from legal_portal.services.integrations.clio_context_builder import ClioContextBuilder
 from legal_portal.utils.logging_config import get_module_logger
 
 logger = get_module_logger(__name__)

@@ -7,6 +7,8 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import Any
 
+from legal_portal.core.constants import SERVICE_PRICING_RATES
+from legal_portal.utils.token_manager import estimate_tokens as _estimate_tokens_simple
 from legal_portal.core.data_models import (
     ActualCosts,
     AnalyzedDocument,
@@ -24,36 +26,7 @@ class CostCalculator:
     and video processing to provide accurate cost summaries and variance analysis.
     """
 
-    # Current API Pricing Rates (USD) - matches CostEstimator
-    PRICING_RATES = {
-        # OpenAI Pricing
-        "openai_gpt4o": {
-            "input_tokens": Decimal("5.00") / Decimal("1000000"),  # $5.00 per 1M tokens
-            "output_tokens": Decimal("15.00") / Decimal("1000000"),  # $15.00 per 1M tokens
-        },
-        "openai_gpt4o_mini": {
-            "input_tokens": Decimal("0.15") / Decimal("1000000"),  # $0.15 per 1M tokens
-            "output_tokens": Decimal("0.60") / Decimal("1000000"),  # $0.60 per 1M tokens
-        },
-        "openai_gpt5_2": {
-            "input_tokens": Decimal("10.00") / Decimal("1000000"),  # $10.00 per 1M tokens
-            "output_tokens": Decimal("30.00") / Decimal("1000000"),  # $30.00 per 1M tokens
-        },
-        "openai_whisper": {
-            "per_minute": Decimal("0.006")  # $0.006 per minute
-        },
-        # Google Cloud Pricing
-        "vertex_ai_gemini_flash": {
-            "input_tokens": Decimal("0.075") / Decimal("1000000"),  # $0.075 per 1M tokens
-            "output_tokens": Decimal("0.30") / Decimal("1000000"),  # $0.30 per 1M tokens
-        },
-        "vertex_ai_video": {
-            "per_minute": Decimal("0.10")  # $0.10 per minute
-        },
-        "google_speech_to_text": {
-            "per_minute": Decimal("0.024")  # $0.024 per minute
-        },
-    }
+    PRICING_RATES = SERVICE_PRICING_RATES
 
     def __init__(self):
         """Initialize the cost calculator."""
@@ -368,18 +341,13 @@ class CostCalculator:
     def _estimate_tokens(self, text: str) -> int:
         """Estimate token count for text content.
 
-        Args:
-        ----
-            text: Text content to estimate
-
-        Returns:
-        -------
-            Estimated token count
-
+        Delegates to the canonical estimator with a null-guard and min-1 floor
+        to preserve the cost-calculation contract (non-empty text always counts
+        as at least 1 token).
         """
         if not text:
             return 0
-        return max(1, len(text) // 4)
+        return max(1, _estimate_tokens_simple(text))
 
     def parse_openai_response_for_tokens(self, response_data: dict[str, Any]) -> dict[str, int]:
         """Parse OpenAI API response to extract token usage.

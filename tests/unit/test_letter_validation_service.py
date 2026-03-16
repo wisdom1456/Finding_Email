@@ -1,6 +1,6 @@
 """Unit tests for polish fact-integrity checks in LetterValidationService."""
 
-from legal_portal.services.letter_validation_service import LetterValidationService
+from legal_portal.services.letters.letter_validation_service import LetterValidationService
 
 
 def test_polish_fact_integrity_passes_when_facts_preserved() -> None:

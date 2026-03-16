@@ -36,8 +36,8 @@ from legal_portal.core.data_models import (
     PropertyInfo,
     RiskAssessment,
 )
-from legal_portal.services.gap_analysis_service import GapAnalysisService
-from legal_portal.services.statute_recommendation_service import StatuteRecommendationService
+from legal_portal.services.analysis.gap_analysis_service import GapAnalysisService
+from legal_portal.services.shared.statute_recommendation_service import StatuteRecommendationService
 from legal_portal.utils.diagnostic_logger import DiagnosticLogger
 from legal_portal.utils.logging_config import get_module_logger
 from legal_portal.utils.openai_client import OpenAIClient

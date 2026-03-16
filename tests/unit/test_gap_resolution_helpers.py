@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from legal_portal.api.routes import analysis as analysis_routes
 from legal_portal.api.routes import gap_routes
+from legal_portal.services.analysis import gap_helpers
+from legal_portal.services.analysis import gap_hashing
 from legal_portal.api.routes.analysis import (
     GapResolutionItemRequest,
     GapResolutionRefreshRequest,
@@ -381,7 +383,7 @@ def test_gap_analysis_input_hash_changes_when_logic_version_changes(monkeypatch)
     )
 
     monkeypatch.setattr(
-        gap_routes,
+        gap_hashing,
         "_GAP_ANALYSIS_INPUT_SCHEMA_VERSION",
         "test-version-v2",
     )

@@ -1,5 +1,5 @@
 from legal_portal.core.data_models import DocumentGroup, GroupType
-from legal_portal.services.group_quality_metrics import GroupingMetrics, build_grouping_metrics
+from legal_portal.services.grouping.group_quality_metrics import GroupingMetrics, build_grouping_metrics
 
 
 def test_build_grouping_metrics():

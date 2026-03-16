@@ -6,12 +6,15 @@ import json
 import os
 from typing import TYPE_CHECKING, Any
 
-import tiktoken
 import yaml
 from openai import APIError, APITimeoutError, BadRequestError, OpenAI, RateLimitError
 from pydantic import ValidationError
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_fixed
 
+from legal_portal.core.constants import MODEL_CONTEXT_WINDOWS
+from legal_portal.utils.token_manager import TokenManager, estimate_tokens as _estimate_tokens_simple
+
+_token_manager = TokenManager()
 from legal_portal.core.data_models import (
     AIAnalysisError,
     AnalysisError,
@@ -349,39 +352,11 @@ class AIAnalyzer:
 
     def _estimate_prompt_tokens_detailed(self, prompt_content: str) -> int:
         """Enhanced token estimation with more accurate calculation."""
-        # More accurate token estimation: ~3.5 characters per token for English text
-        base_tokens = len(prompt_content) // 3.5
-
-        # Add overhead for JSON structure, special characters, etc.
-        overhead_factor = 1.15
-        estimated_tokens = int(base_tokens * overhead_factor)
-
-        logger.info("AI ANALYZER: 🔍 Token estimation details:")
-        logger.info(f"AI ANALYZER: 🔍   - Content length: {len(prompt_content):,} characters")
-        logger.info(f"AI ANALYZER: 🔍   - Base tokens: {int(base_tokens):,}")
-        logger.info(f"AI ANALYZER: 🔍   - With overhead: {estimated_tokens:,}")
-
-        return estimated_tokens
+        return _token_manager.estimate_tokens_detailed(prompt_content)
 
     def _count_tokens_accurate(self, text: str, model: str = "gpt-5.4") -> int:
         """Count tokens using tiktoken for accurate token counting."""
-        try:
-            # Get the encoding for the model
-            if model.startswith("gpt-4"):
-                encoding_name = "cl100k_base"  # GPT-4 encoding
-            else:
-                encoding_name = "cl100k_base"  # Default to GPT-4 encoding
-
-            encoding = tiktoken.get_encoding(encoding_name)
-            tokens = encoding.encode(text)
-            token_count = len(tokens)
-
-            logger.info(f"AI ANALYZER: 🔢 Accurate token count ({model}): {token_count:,}")
-            return token_count
-        except (ImportError, AttributeError, ValueError, TypeError) as e:
-            logger.error(f"AI ANALYZER: ⚠️  tiktoken error, falling back to estimation: {e}")
-            # Fallback to existing estimation method
-            return self._estimate_prompt_tokens_detailed(text)
+        return _token_manager.count_tokens_accurate(text, model)
 
     async def _check_token_threshold_precomputation(
         self, analysis: CaseAnalysisResult, model: str = "gpt-5.4"
@@ -389,14 +364,7 @@ class AIAnalyzer:
         """Check if video insights would exceed token threshold before building prompt."""
         logger.debug(f"AI ANALYZER: 🔍 Pre-computation token checking for model: {model}")
 
-        # Define thresholds (80% of context window)
-        model_limits = {
-            "gpt-5.4": 1050000,
-            "gpt-5.2": 1050000,
-            "gpt-5-mini": 400000,
-        }
-
-        threshold = model_limits.get(model, 96000)  # Default to 120k * 0.8
+        threshold = MODEL_CONTEXT_WINDOWS.get(model, 96000)  # Default to 120k * 0.8
         logger.info(f"AI ANALYZER: 🔍 Token threshold for {model}: {threshold:,}")
 
         # Estimate token usage from video insights
@@ -901,7 +869,7 @@ BEGIN.
 
     def _estimate_tokens(self, text: str) -> int:
         """Rough estimation of tokens (approximately 4 characters per token)."""
-        return len(text) // 4
+        return _estimate_tokens_simple(text)
 
     def _truncate_content_if_needed(self, content: str, max_tokens: int = 25000) -> str:
         """Truncate content if it exceeds token limit."""

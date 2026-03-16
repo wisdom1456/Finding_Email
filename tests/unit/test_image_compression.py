@@ -9,7 +9,7 @@ import time
 import pytest
 from PIL import Image
 
-from legal_portal.services.file_compression_service import FileCompressionService
+from legal_portal.services.documents.file_compression_service import FileCompressionService
 
 
 def _make_png(width: int, height: int, color: tuple = (0, 128, 255)) -> bytes:

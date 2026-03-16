@@ -257,7 +257,7 @@ def test_enrichment_fields_stored_under_attorney_enrichment_key():
 def test_verify_endpoint_syncs_denormalized_columns_via_registry():
     """When a registry exists, attorney overrides sync denormalized columns
     via resolve_denormalized_columns() — not inline column sets."""
-    from legal_portal.services.document_registry_service import DocumentRegistryService
+    from legal_portal.services.documents.document_registry_service import DocumentRegistryService
 
     # Simulate existing registry (from extraction stage)
     registry = {
@@ -286,7 +286,7 @@ def test_verify_endpoint_syncs_denormalized_columns_via_registry():
 def test_verify_endpoint_syncs_signed_status_via_registry():
     """When attorney verifies signature as signed, signed_status column
     updates via resolve_denormalized_columns()."""
-    from legal_portal.services.document_registry_service import DocumentRegistryService
+    from legal_portal.services.documents.document_registry_service import DocumentRegistryService
 
     registry = {
         "document_type": "Contract",

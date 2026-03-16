@@ -21,7 +21,7 @@ from legal_portal.core.data_models import (
     GapAnalysisResult,
     RecommendedLetterType,
 )
-from legal_portal.services.document_formatter import DocumentFormatterService
+from legal_portal.services.shared.document_formatter import DocumentFormatterService
 from legal_portal.utils.logging_config import get_module_logger
 from legal_portal.utils.openai_client import OpenAIClient
 from legal_portal.utils.type_safety import safe_str_required

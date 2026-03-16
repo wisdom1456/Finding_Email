@@ -25,7 +25,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from supabase import create_client
 
-from legal_portal.services.document_registry_service import DocumentRegistryService
+from legal_portal.services.documents.document_registry_service import DocumentRegistryService
 
 
 def main():

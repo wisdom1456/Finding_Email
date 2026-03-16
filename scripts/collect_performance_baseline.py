@@ -25,7 +25,7 @@ def measure_import_time() -> dict:
     modules = [
         "legal_portal.api.main",
         "legal_portal.core.data_models",
-        "legal_portal.services.main_processor",
+        "legal_portal.services.analysis.main_processor",
         "legal_portal.api.routes.analysis",
     ]
     for mod in modules:

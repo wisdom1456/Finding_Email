@@ -6,7 +6,7 @@ from legal_portal.core.data_models import (
     GapItem,
     GapSeverity,
 )
-from legal_portal.services.gap_analysis_service import GapAnalysisService
+from legal_portal.services.analysis.gap_analysis_service import GapAnalysisService
 
 
 def test_reconcile_removes_false_missing_executed_gap_when_signed_doc_matches():

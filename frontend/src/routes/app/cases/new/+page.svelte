@@ -9,7 +9,7 @@
 	import { clioStore } from '$lib/stores/clioStore';
 	import { toastStore } from '$lib/stores/toastStore';
 	import { getApiUrl } from '$lib/config';
-	import { supabase } from '$lib/supabase';
+	import { supabase, getSecureAccessToken } from '$lib/supabase';
 	import { AlertTriangle, Info, ArrowLeft } from 'lucide-svelte';
 
 	interface ProgressStep {
@@ -59,9 +59,9 @@
 		error = null;
 
 		try {
-			const token = localStorage.getItem('supabase_access_token');
+			const token = await getSecureAccessToken();
 			if (!token) {
-				throw new Error('Not authenticated');
+				throw new Error('Not authenticated. Please log in again.');
 			}
 
 			const apiUrl = getApiUrl();

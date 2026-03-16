@@ -5,6 +5,8 @@ from typing import Any, Dict, List, Literal, Optional, Union
 
 from pydantic import BaseModel, Field, validator
 
+from legal_portal.core.constants import DEFAULT_JURISDICTION, DEFAULT_MODEL, FALLBACK_MODEL
+
 # Re-export moved models for backward compatibility
 from legal_portal.core.models.enums import *  # noqa: F401,F403
 from legal_portal.core.models.party_models import *  # noqa: F401,F403
@@ -188,10 +190,10 @@ class ProcessingResult(BaseModel):
 class AIPreferences(BaseModel):
     """User preferences for AI model selection and document handling."""
 
-    document_analysis: str = "gpt-5-mini"
-    letter_generation: str = "gpt-5.4"
-    case_chat: str = "gpt-5-mini"
-    multi_stage_analysis: str = "gpt-5.4"
+    document_analysis: str = FALLBACK_MODEL
+    letter_generation: str = DEFAULT_MODEL
+    case_chat: str = FALLBACK_MODEL
+    multi_stage_analysis: str = DEFAULT_MODEL
     blacklisted_documents: List[str] = Field(default_factory=list)
 
     # Document processing preferences
@@ -244,7 +246,7 @@ class StatsProgress(BaseModel):
     elapsed_seconds: float
     estimated_remaining: Optional[float] = None
     tokens_used: int = 0
-    model: str = "gpt-5.4"
+    model: str = DEFAULT_MODEL
 
 
 class EnhancedProgressEvent(BaseModel):
@@ -297,7 +299,7 @@ class ProfileResponse(BaseModel):
     bar_number: Optional[str] = None
     email_signature: Optional[str] = None
     default_demand_deadline: Optional[str] = None
-    default_jurisdiction: Optional[str] = "Florida"
+    default_jurisdiction: Optional[str] = DEFAULT_JURISDICTION
     avatar_url: Optional[str] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
@@ -406,7 +408,7 @@ class CostEstimate(BaseModel):
     total_input_tokens: int = 0
     total_output_tokens: int = 0
     estimated_cost_usd: float = 0.0
-    model_used: str = "gpt-5.4"
+    model_used: str = DEFAULT_MODEL
 
     model_config = {"protected_namespaces": ()}  # Allow 'model_' prefix
 

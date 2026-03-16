@@ -9,7 +9,7 @@ from typing import Optional, Tuple
 
 import requests
 
-from legal_portal.services.file_compression_service import get_compression_service
+from legal_portal.services.documents.file_compression_service import get_compression_service
 from legal_portal.utils.compression_utils import format_file_size
 from legal_portal.utils.logging_config import get_module_logger
 

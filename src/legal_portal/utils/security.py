@@ -26,8 +26,13 @@ try:
 except ImportError:
     HAS_MAGIC = False
 
-# Maximum file size: 100MB
-MAX_FILE_SIZE = 100 * 1024 * 1024  # 100MB
+# Maximum file size — derived at import time from Settings so that the
+# env-var override (MAX_FILE_SIZE_MB) is respected.  Falls back to 100 MB.
+try:
+    from legal_portal.config.default import settings as _settings
+    MAX_FILE_SIZE = _settings.max_file_size_mb * 1024 * 1024
+except Exception:
+    MAX_FILE_SIZE = 100 * 1024 * 1024  # 100 MB fallback
 
 # Maximum extracted text size for database storage (~500 KB)
 MAX_EXTRACTED_TEXT_CHARS = 500_000

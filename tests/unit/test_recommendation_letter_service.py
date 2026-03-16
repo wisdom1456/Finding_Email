@@ -3,7 +3,7 @@
 from unittest.mock import MagicMock
 
 from legal_portal.core.data_models import RecommendedLetterType
-from legal_portal.services.recommendation_letter_service import RecommendationLetterService
+from legal_portal.services.letters.recommendation_letter_service import RecommendationLetterService
 
 
 def test_request_documents_render_uses_intent_specific_title() -> None:

@@ -49,7 +49,7 @@ class ChunkStateManager:
             The initialized chunk_state
 
         """
-        from legal_portal.services.chunk_service import create_chunk_state
+        from legal_portal.services.documents.chunk_service import create_chunk_state
 
         chunk_state = create_chunk_state(documents, max_tokens_per_chunk)
 

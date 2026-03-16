@@ -10,8 +10,8 @@ from legal_portal.core.data_models import (
     FileType,
     ProcessedDocument,
 )
-from legal_portal.services.document_registry_service import DocumentRegistryService
-from legal_portal.services.main_processor import _format_registry_context
+from legal_portal.services.documents.document_registry_service import DocumentRegistryService
+from legal_portal.services.analysis.main_processor import _format_registry_context
 
 
 def _processed_doc(

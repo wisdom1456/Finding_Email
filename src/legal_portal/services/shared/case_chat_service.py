@@ -6,7 +6,7 @@ import json
 from typing import AsyncGenerator, Dict, List, Optional
 
 from legal_portal.core.data_models import ProcessingResult
-from legal_portal.services.statute_recommendation_service import (
+from legal_portal.services.shared.statute_recommendation_service import (
     StatuteRecommendationService,
 )
 from legal_portal.utils.logging_config import get_module_logger

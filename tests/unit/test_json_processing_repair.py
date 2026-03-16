@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 
-from legal_portal.services.json_processing_service import JsonProcessingService
+from legal_portal.services.shared.json_processing_service import JsonProcessingService
 
 
 def test_repair_skips_when_no_violations() -> None:

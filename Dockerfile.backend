@@ -24,7 +24,7 @@ ENV PATH="/opt/venv/bin:$PATH"
 COPY requirements.txt .
 RUN pip install --upgrade pip && \
     pip install -r requirements.txt && \
-    pip install uvloop gunicorn
+    pip install uvloop
 
 # Production stage
 FROM python:3.11-slim
@@ -75,7 +75,7 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
 EXPOSE ${PORT}
 
 # Run FastAPI with uvicorn and uvloop
-CMD uvicorn src.legal_portal.api.main:app \
+CMD uvicorn legal_portal.api.main:app \
     --host 0.0.0.0 \
     --port ${PORT} \
     --loop uvloop \
@@ -84,6 +84,3 @@ CMD uvicorn src.legal_portal.api.main:app \
     --no-access-log \
     --proxy-headers \
     --forwarded-allow-ips '*'
-
-
-

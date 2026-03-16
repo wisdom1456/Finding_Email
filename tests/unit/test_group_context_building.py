@@ -3,7 +3,7 @@ import pytest
 from unittest.mock import patch, MagicMock
 
 from legal_portal.core.data_models import DocumentSummaryStructured, GroupSummary, GroupType
-from legal_portal.services.multi_stage_analyzer import MultiStageAnalyzer
+from legal_portal.services.analysis.multi_stage_analyzer import MultiStageAnalyzer
 
 
 def _make_summary(name="doc.pdf", doc_type="contract", content="Some content", key_content=None):

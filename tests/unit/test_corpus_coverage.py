@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from legal_portal.services.corpus_coverage_service import CorpusCoverageService
+from legal_portal.services.analysis.corpus_coverage_service import CorpusCoverageService
 
 
 def test_landlord_tenant_case_covered():

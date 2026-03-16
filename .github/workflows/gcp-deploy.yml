@@ -117,7 +117,7 @@ jobs:
         
         # Health check with retries
         for i in {1..5}; do
-          if curl -f "${{ env.SERVICE_URL }}/_stcore/health" > /dev/null 2>&1; then
+          if curl -f "${{ env.SERVICE_URL }}/api/health" > /dev/null 2>&1; then
             echo "✅ Health check passed"
             break
           else

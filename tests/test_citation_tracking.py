@@ -2,8 +2,8 @@
 
 import pytest
 
-from legal_portal.services.citation_tracking_service import CitationThreshold, CitationTrackingService
-from legal_portal.services.statute_validation_service import StatuteValidationService
+from legal_portal.services.shared.citation_tracking_service import CitationThreshold, CitationTrackingService
+from legal_portal.services.shared.statute_validation_service import StatuteValidationService
 
 
 def test_adaptive_threshold_corpus_covered():

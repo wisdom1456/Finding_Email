@@ -19,4 +19,4 @@ if str(src_path) not in sys.path:
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run("legal_portal.api.main:app", host="0.0.0.0", port=8000, reload=False)
+    uvicorn.run("legal_portal.api.main:app", host="0.0.0.0", port=8080, reload=False)

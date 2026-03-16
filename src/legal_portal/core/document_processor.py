@@ -12,7 +12,7 @@ from legal_portal.config.default import settings
 
 # Import from the backend utils (to be moved to root utils later)
 from legal_portal.core.data_models import DocumentType, ProcessedDocument
-from legal_portal.services.file_compression_service import get_compression_service
+from legal_portal.services.documents.file_compression_service import get_compression_service
 
 # Maps file content types to their respective processing functions
 from legal_portal.services.file_processors import PROCESSOR_MAP
@@ -47,7 +47,7 @@ class DocumentProcessingError(Exception):
         self.error_code = error_code
 
 
-class ValidationError(DocumentProcessingError):
+class DocumentValidationError(DocumentProcessingError):
     """Validation-specific errors with categorization."""
 
     def __init__(self, message: str, error_code: str, file_size_mb: Optional[float] = None):
@@ -62,6 +62,10 @@ class ValidationError(DocumentProcessingError):
         """
         super().__init__(message, error_code)
         self.file_size_mb = file_size_mb
+
+
+# Backward-compatible alias — callers importing ValidationError will get DocumentValidationError
+ValidationError = DocumentValidationError
 
 
 class DocumentProcessor:

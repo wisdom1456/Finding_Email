@@ -21,7 +21,7 @@ echo ">>> Installing Python dependencies"
 if [ -f "api/requirements.txt" ]; then
   cd api
   mkdir -p packages
-  python3 -m pip install -r requirements.txt -c constraints.txt --target packages
+  python3 -m pip install -q -r requirements.txt -c constraints.txt --target packages
   echo "✅ Python dependencies installed to api/packages/"
   cd ..
 else

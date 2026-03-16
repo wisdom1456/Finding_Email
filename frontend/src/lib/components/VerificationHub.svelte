@@ -112,6 +112,9 @@
 		count?: number;
 	}>({ open: false, type: 'delete' });
 
+	// Compute filtered documents using registry-backed columns
+	let displayDocuments = $derived(filterDocuments(localDocuments, activeFilters));
+
 	// Triage Groups — sourced from displayDocuments so chip filters take effect
 	let triageGroups = $derived(groupDocuments(displayDocuments));
 
@@ -141,9 +144,6 @@
 		}
 		activeFilters = newFilters;
 	}
-
-	// Compute filtered documents using registry-backed columns
-	let displayDocuments = $derived(filterDocuments(localDocuments, activeFilters));
 
 	// Selection Handlers
 	function toggleSelection(docId: string) {

@@ -2,6 +2,7 @@ import { createServerClient } from '@supabase/ssr';
 import { type Handle, redirect } from '@sveltejs/kit';
 import { sequence } from '@sveltejs/kit/hooks';
 import { PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY } from '$env/static/public';
+import type { Profile } from '$lib/types';
 
 const supabase: Handle = async ({ event, resolve }) => {
   event.locals.supabase = createServerClient(PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY, {
@@ -75,14 +76,14 @@ const authGuard: Handle = async ({ event, resolve }) => {
     // Fetch user profile (single query) to check approval status and populate locals.
     // Wrapped in try-catch: if profile fetch throws (network error, etc.),
     // fail closed — null profile → isApproved = false → /app routes blocked.
-    let fullProfile: Record<string, any> | null = null;
+    let fullProfile: Profile | null = null;
     try {
       const { data } = await event.locals.supabase
         .from('profiles')
         .select('*')
         .eq('id', userId)
         .single();
-      fullProfile = data;
+      fullProfile = data as Profile | null;
     } catch (err) {
       console.error('Profile fetch failed, denying access:', err);
       fullProfile = null;

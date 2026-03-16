@@ -1,4 +1,5 @@
 import type { LayoutServerLoad } from './$types';
+import type { Profile } from '$lib/types';
 
 export const load: LayoutServerLoad = async ({ locals: { safeGetSession, supabase, user } }) => {
 	const { session } = await safeGetSession();
@@ -11,7 +12,7 @@ export const load: LayoutServerLoad = async ({ locals: { safeGetSession, supabas
 			.select('id, email, full_name, avatar_url, approved, role, created_at, updated_at')
 			.eq('id', user.id)
 			.single();
-		profile = data;
+		profile = data as Profile | null;
 	}
 
 	return {

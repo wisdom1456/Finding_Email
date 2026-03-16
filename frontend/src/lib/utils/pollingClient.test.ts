@@ -1,20 +1,21 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { PollingClient } from './pollingClient';
+import type { PollingMessageHandler, PollingErrorHandler, PollingCompleteHandler } from './pollingClient';
 
 describe('PollingClient', () => {
 	let client: PollingClient;
-	let onMessage: ReturnType<typeof vi.fn>;
-	let onError: ReturnType<typeof vi.fn>;
-	let onComplete: ReturnType<typeof vi.fn>;
-	let mockFetch: ReturnType<typeof vi.fn>;
+	let onMessage: ReturnType<typeof vi.fn<PollingMessageHandler>>;
+	let onError: ReturnType<typeof vi.fn<PollingErrorHandler>>;
+	let onComplete: ReturnType<typeof vi.fn<PollingCompleteHandler>>;
+	let mockFetch: ReturnType<typeof vi.fn<typeof fetch>>;
 
 	beforeEach(() => {
 		vi.useFakeTimers();
 		client = new PollingClient();
-		onMessage = vi.fn();
-		onError = vi.fn();
-		onComplete = vi.fn();
-		mockFetch = vi.fn();
+		onMessage = vi.fn<PollingMessageHandler>();
+		onError = vi.fn<PollingErrorHandler>();
+		onComplete = vi.fn<PollingCompleteHandler>();
+		mockFetch = vi.fn<typeof fetch>();
 		vi.stubGlobal('fetch', mockFetch);
 	});
 

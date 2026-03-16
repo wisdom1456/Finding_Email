@@ -10,8 +10,8 @@ export interface Profile {
 	email: string;
 	full_name: string | null;
 	avatar_url: string | null;
-	approved: boolean;
-	role: 'user' | 'admin';
+	approved: boolean | null;
+	role: 'user' | 'admin' | null;
 	default_jurisdiction?: string;
 	created_at: string;
 	updated_at: string;

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { SSEClient } from './sseClient';
+import type { ProgressEvent, SSEMessageHandler, SSEErrorHandler, SSECompleteHandler } from './sseClient';
 
 // ── fetch + ReadableStream Mock ──
 
@@ -36,17 +37,17 @@ function sseData(obj: Record<string, unknown>): string {
 
 describe('SSEClient', () => {
 	let client: SSEClient;
-	let onMessage: ReturnType<typeof vi.fn>;
-	let onError: ReturnType<typeof vi.fn>;
-	let onComplete: ReturnType<typeof vi.fn>;
+	let onMessage: ReturnType<typeof vi.fn<SSEMessageHandler>>;
+	let onError: ReturnType<typeof vi.fn<SSEErrorHandler>>;
+	let onComplete: ReturnType<typeof vi.fn<SSECompleteHandler>>;
 	let mockStream: ReturnType<typeof createMockStream>;
 
 	beforeEach(() => {
 		vi.useFakeTimers();
 		client = new SSEClient();
-		onMessage = vi.fn();
-		onError = vi.fn();
-		onComplete = vi.fn();
+		onMessage = vi.fn<SSEMessageHandler>();
+		onError = vi.fn<SSEErrorHandler>();
+		onComplete = vi.fn<SSECompleteHandler>();
 		mockStream = createMockStream();
 
 		// Default: successful fetch returning our controllable stream

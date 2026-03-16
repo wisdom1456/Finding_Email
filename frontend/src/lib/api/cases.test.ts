@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { dedupCaseDocuments, syncClioMatter } from './cases';
+import { makeAuthenticatedSession } from '../../tests/componentHelpers';
 
 // Mock dependencies
 vi.mock('$lib/config', () => ({
@@ -12,10 +13,7 @@ vi.mock('$lib/supabase', () => ({
 
 import { getSecureSession } from '$lib/supabase';
 
-const mockSession = {
-	session: { access_token: 'test-token' },
-	user: { id: 'user-1' },
-};
+const mockSession = makeAuthenticatedSession();
 
 describe('dedupCaseDocuments', () => {
 	beforeEach(() => {

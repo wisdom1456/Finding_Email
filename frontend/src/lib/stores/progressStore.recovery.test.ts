@@ -138,7 +138,7 @@ describe('progressStore recovery integration', () => {
 			// until it gets a real update or times out.
 			// Key assertion: the store attempted reconciliation (status fetch was called)
 			const statusCalls = fetchMock.mock.calls.filter(
-				(c: [string]) => c[0] === STATUS_URL
+				(c: any[]) => c[0] === STATUS_URL
 			);
 			expect(statusCalls.length).toBeGreaterThanOrEqual(1);
 		});
@@ -392,7 +392,7 @@ describe('progressStore recovery integration', () => {
 			await flushAsync();
 
 			const statusCalls = fetchMock.mock.calls.filter(
-				(c: [string]) => c[0] === STATUS_URL
+				(c: any[]) => c[0] === STATUS_URL
 			);
 			// At least 2: one from reconcile, one from polling
 			expect(statusCalls.length).toBeGreaterThanOrEqual(2);
@@ -502,7 +502,7 @@ describe('progressStore recovery integration', () => {
 
 			// No status endpoint calls needed — stream delivered the terminal event
 			const statusCalls = fetchMock.mock.calls.filter(
-				(c: [string]) => c[0] === STATUS_URL
+				(c: any[]) => c[0] === STATUS_URL
 			);
 			expect(statusCalls.length).toBe(0);
 		});

@@ -22,7 +22,7 @@
 		results?: any | null;
 		showReextract?: boolean;
 		onclose: () => void;
-		onreextract?: (detail: { docId: string; method: string }) => void;
+		onreextract?: (detail: { docId: string; method: 'ocr' | 'vision' }) => void;
 	} = $props();
 
 	// Internal state

@@ -51,11 +51,11 @@ function makeDoc(overrides: Record<string, any> = {}) {
 }
 
 describe('VerificationHub handler patterns', () => {
-	let mockFetch: ReturnType<typeof vi.fn>;
+	let mockFetch: ReturnType<typeof vi.fn<typeof fetch>>;
 
 	beforeEach(() => {
 		vi.clearAllMocks();
-		mockFetch = vi.fn();
+		mockFetch = vi.fn<typeof fetch>();
 		vi.stubGlobal('fetch', mockFetch);
 	});
 
@@ -92,7 +92,7 @@ describe('VerificationHub handler patterns', () => {
 			session: { access_token: 'test-token' },
 			user: { id: 'user-1' },
 		});
-		mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({}) });
+		mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({}) } as Response);
 
 		const { session } = await mockGetSession();
 		const docId = 'doc-001';
@@ -123,7 +123,7 @@ describe('VerificationHub handler patterns', () => {
 			session: { access_token: 'test-token' },
 			user: { id: 'user-1' },
 		});
-		mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({}) });
+		mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({}) } as Response);
 
 		const { session } = await mockGetSession();
 		const docId = 'doc-001';
@@ -150,7 +150,7 @@ describe('VerificationHub handler patterns', () => {
 			ok: false,
 			status: 500,
 			json: () => Promise.resolve({ detail: 'OCR_SERVICE_TOKEN must be set' }),
-		});
+		} as Response);
 
 		const response = await mockFetch('http://localhost:8000/api/documents/doc-001/extract');
 		expect(response.ok).toBe(false);
@@ -165,7 +165,7 @@ describe('VerificationHub handler patterns', () => {
 			ok: false,
 			status: 502,
 			json: () => Promise.reject(new Error('not json')),
-		});
+		} as Response);
 
 		const response = await mockFetch('http://localhost:8000/api/documents/doc-001/extract');
 		const errBody = await response.json().catch(() => ({}));
@@ -180,7 +180,7 @@ describe('VerificationHub handler patterns', () => {
 			session: { access_token: 'test-token' },
 			user: { id: 'user-1' },
 		});
-		mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({}) });
+		mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({}) } as Response);
 
 		const { session } = await mockGetSession();
 		const docIds = ['doc-1', 'doc-2', 'doc-3'];

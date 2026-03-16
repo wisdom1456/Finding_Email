@@ -16,7 +16,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 describe('Case Detail - Data Loading', () => {
-	let mockFrom: ReturnType<typeof vi.fn>;
+	let mockFrom: ReturnType<typeof vi.fn<(...args: any[]) => any>>;
 	let mockSelect: ReturnType<typeof vi.fn>;
 	let mockEq: ReturnType<typeof vi.fn>;
 	let mockSingle: ReturnType<typeof vi.fn>;
@@ -31,7 +31,7 @@ describe('Case Detail - Data Loading', () => {
 		mockOrder = vi.fn().mockReturnValue({ limit: mockLimit });
 		mockEq = vi.fn().mockReturnValue({ single: mockSingle, order: mockOrder });
 		mockSelect = vi.fn().mockReturnValue({ eq: mockEq });
-		mockFrom = vi.fn().mockReturnValue({ select: mockSelect });
+		mockFrom = vi.fn<(...args: any[]) => any>().mockReturnValue({ select: mockSelect });
 	});
 
 	it('loadCase queries cases table with correct case ID', async () => {

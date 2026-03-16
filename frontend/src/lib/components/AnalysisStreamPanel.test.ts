@@ -5,10 +5,10 @@ import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 // 2. onComplete is called even if saveAnalysis fails
 
 describe('AnalysisStreamPanel save timing', () => {
-	let mockFetch: ReturnType<typeof vi.fn>;
+	let mockFetch: ReturnType<typeof vi.fn<typeof fetch>>;
 
 	beforeEach(() => {
-		mockFetch = vi.fn();
+		mockFetch = vi.fn<typeof fetch>();
 		vi.stubGlobal('fetch', mockFetch);
 	});
 
@@ -25,7 +25,7 @@ describe('AnalysisStreamPanel save timing', () => {
 		});
 
 		// Mock fetch to return a delayed response for the save endpoint
-		mockFetch.mockImplementation((url: string) => {
+		mockFetch.mockImplementation((url: string | URL | Request) => {
 			if (typeof url === 'string' && url.includes('/save')) {
 				callOrder.push('save-started');
 				return savePromise.then(() => {
@@ -70,7 +70,7 @@ describe('AnalysisStreamPanel save timing', () => {
 
 	it('onComplete called even if save fails', async () => {
 		// Mock fetch to reject for the save endpoint
-		mockFetch.mockImplementation((url: string) => {
+		mockFetch.mockImplementation((url: string | URL | Request) => {
 			if (typeof url === 'string' && url.includes('/save')) {
 				return Promise.reject(new Error('Network error'));
 			}

@@ -73,6 +73,9 @@ Dockerfile*
 docker-compose*.yml
 cloudbuild.yaml
 
+# Git worktrees (development only, ~100MB+)
+.worktrees/
+
 # Python virtual environments (not needed)
 venv/
 env/

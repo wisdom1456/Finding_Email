@@ -88,4 +88,30 @@ describe('DemandLetterSection', () => {
 		expect(screen.getByText('Copy Rich Text')).toBeTruthy();
 		expect(screen.getByText('Download HTML')).toBeTruthy();
 	});
+
+	it('populates initial demand amount from prop', () => {
+		render(DemandLetterSection, {
+			props: {
+				caseId: 'case-1',
+				opposingParties: makeParties(),
+				initialDemandAmount: 50000,
+			},
+		});
+		const input = document.querySelector('#demand-amount') as HTMLInputElement;
+		expect(input).toBeTruthy();
+		expect(Number(input.value)).toBe(50000);
+	});
+
+	it('populates initial specific demands from prop', () => {
+		render(DemandLetterSection, {
+			props: {
+				caseId: 'case-1',
+				opposingParties: makeParties(),
+				initialSpecificDemands: 'Return the deposit',
+			},
+		});
+		const textarea = document.querySelector('#specific-demands') as HTMLTextAreaElement;
+		expect(textarea).toBeTruthy();
+		expect(textarea.value).toBe('Return the deposit');
+	});
 });

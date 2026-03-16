@@ -1381,6 +1381,44 @@
 					</div>
 				{/if}
 
+				<!-- Streaming Analysis Panel — persists across tab switches -->
+				{#if showStreamingPanel}
+					<div class:hidden={activeTab !== 'analysis'} class="mb-6 page-spacing">
+						<AnalysisStreamPanel
+							caseId={caseId}
+							bind:this={streamingAnalysisRef}
+							onComplete={handleStreamingComplete}
+							onError={handleStreamingError}
+						/>
+					</div>
+				{/if}
+
+				<!-- Inline Progress — persists across tab switches -->
+				{#if showProgressModal && currentAnalysisId}
+					<div class:hidden={activeTab !== 'analysis'} class="page-spacing">
+						<InlineAnalysisProgress
+							analysisId={currentAnalysisId}
+							onComplete={async () => {
+								showProgressModal = false;
+								await loadAnalysisStatus();
+								await loadCase();
+								analyzing = false;
+								activeTab = 'analysis';
+								showingEmbeddedResults = true;
+								await loadEmbeddedResults(true);
+								persistAnalysisViewToUrl();
+							}}
+							onError={(error) => {
+								showProgressModal = false;
+								analyzing = false;
+								errorMessage = error;
+								toastStore.error(error);
+							}}
+							onCancel={cancelAnalysis}
+						/>
+					</div>
+				{/if}
+
 				<!-- Analysis Tab -->
 				{#if activeTab === 'analysis'}
 					<div class="page-spacing">
@@ -1416,41 +1454,6 @@
 						</div>
 					{/if}
 
-						<!-- Streaming Analysis Panel -->
-						{#if showStreamingPanel}
-							<div class="mb-6">
-								<AnalysisStreamPanel
-									caseId={caseId}
-									bind:this={streamingAnalysisRef}
-									onComplete={handleStreamingComplete}
-									onError={handleStreamingError}
-								/>
-							</div>
-						{/if}
-
-						<!-- Inline Progress (when analysis is running) -->
-						{#if showProgressModal && currentAnalysisId}
-								<InlineAnalysisProgress 
-									analysisId={currentAnalysisId}
-									onComplete={async () => {
-										showProgressModal = false;
-										await loadAnalysisStatus();
-										await loadCase();
-										analyzing = false;
-										activeTab = 'analysis';
-										showingEmbeddedResults = true;
-										await loadEmbeddedResults(true);
-										persistAnalysisViewToUrl();
-									}}
-								onError={(error) => {
-									showProgressModal = false;
-									analyzing = false;
-									errorMessage = error;
-									toastStore.error(error);
-								}}
-								onCancel={cancelAnalysis}
-							/>
-						{/if}
 
 						<!-- Analysis Section - hidden when streaming panel is active -->
 						{#if !showStreamingPanel}

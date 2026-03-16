@@ -74,4 +74,25 @@ describe('FindingsEmailSection', () => {
 		});
 		expect(screen.getByText('Advisory Letters')).toBeTruthy();
 	});
+
+	it('initializes findingsLetter state from initialFindingsLetter prop', () => {
+		const { container } = render(FindingsEmailSection, {
+			props: baseProps({ initialFindingsLetter: '<div>Pre-existing letter</div>' }),
+		});
+		// When initialFindingsLetter is provided, component should render the iframe (complete state)
+		const iframe = container.querySelector('iframe');
+		expect(iframe).toBeTruthy();
+		expect(iframe?.getAttribute('srcdoc')).toContain('Pre-existing letter');
+	});
+
+	it('shows quality badges when metrics are provided', () => {
+		render(FindingsEmailSection, {
+			props: baseProps({
+				initialFindingsLetter: '<div>Letter</div>',
+				initialFindingsMetrics: { repair_applied: true, critic_applied: true },
+			}),
+		});
+		expect(screen.getByText('Quality pass applied')).toBeTruthy();
+		expect(screen.getByText('Critic-guided repair')).toBeTruthy();
+	});
 });

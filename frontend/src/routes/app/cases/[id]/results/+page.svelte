@@ -977,7 +977,8 @@
 			</nav>
 		</div>
 
-		{#if activeTab === 'analysis'}
+		<!-- CSS toggle tabs: keep mounted to preserve in-flight state across tab switches -->
+		<div class:hidden={activeTab !== 'analysis'}>
 			<div class="card-standard">
 				<h2 class="text-2xl font-heading font-bold text-contrast mb-8 border-b border-gray-100 pb-4">Case Analysis</h2>
 				{#if results.case_analysis}
@@ -1073,7 +1074,9 @@
 					<p class="text-gray-500">No case analysis available.</p>
 				{/if}
 			</div>
-		{:else if activeTab === 'gaps'}
+		</div>
+
+		<div class:hidden={activeTab !== 'gaps'}>
 			{#if gapAnalysis}
 				<div class="card-standard mb-4">
 					<div class="flex flex-wrap items-center justify-between gap-3">
@@ -1163,7 +1166,46 @@
 					</div>
 				</div>
 			{/if}
-		{:else if activeTab === 'fullAnalysis'}
+		</div>
+
+		<div class:hidden={activeTab !== 'letters'}>
+			<div class="space-y-6">
+				<FindingsEmailSection
+					analysisId={results.analysis_id}
+					{caseId}
+					{hasMultiStageSupport}
+					{multiStageError}
+					{gapAnalysis}
+					{recommendationLetters}
+					{initialFindingsLetter}
+					{initialFindingsQualityReport}
+					{initialFindingsMetrics}
+				/>
+
+				{#if hasMultiStageSupport}
+					<DemandLetterSection
+						{caseId}
+						{opposingParties}
+						{initialDemandLetters}
+						{initialDemandAmount}
+						{initialSpecificDemands}
+					/>
+				{/if}
+			</div>
+		</div>
+
+		<div class:hidden={activeTab !== 'chat'}>
+			<ChatTab analysisId={results.analysis_id} />
+		</div>
+
+		<div class:hidden={activeTab !== 'quality'}>
+			<QualityTab
+				qualityReport={results.quality_report}
+				onviewdocument={viewDocument}
+			/>
+		</div>
+
+		{#if activeTab === 'fullAnalysis'}
 			{#if results.streaming_analysis}
 				<FullAnalysisDisplay content={results.streaming_analysis} />
 			{:else}
@@ -1179,7 +1221,9 @@
 					</div>
 				</div>
 			{/if}
-		{:else if activeTab === 'documents'}
+		{/if}
+
+		{#if activeTab === 'documents'}
 			<!-- Signature status is now set in Verification Hub. This is read-only. -->
 			{#if results.document_summaries && results.document_summaries.length > 0}
 				{@const groupSummaries = results.document_summaries.filter((s: any) => s.group_type && s.member_count && s.member_count > 1)}
@@ -1242,37 +1286,6 @@
 					<p class="text-gray-500">No document summaries available.</p>
 				</div>
 			{/if}
-		{:else if activeTab === 'letters'}
-			<div class="space-y-6">
-				<FindingsEmailSection
-					analysisId={results.analysis_id}
-					{caseId}
-					{hasMultiStageSupport}
-					{multiStageError}
-					{gapAnalysis}
-					{recommendationLetters}
-					{initialFindingsLetter}
-					{initialFindingsQualityReport}
-					{initialFindingsMetrics}
-				/>
-
-				{#if hasMultiStageSupport}
-					<DemandLetterSection
-						{caseId}
-						{opposingParties}
-						{initialDemandLetters}
-						{initialDemandAmount}
-						{initialSpecificDemands}
-					/>
-				{/if}
-			</div>
-		{:else if activeTab === 'chat'}
-			<ChatTab analysisId={results.analysis_id} />
-		{:else if activeTab === 'quality'}
-			<QualityTab
-				qualityReport={results.quality_report}
-				onviewdocument={viewDocument}
-			/>
 		{/if}
 	{/if}
 </div>

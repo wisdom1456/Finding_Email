@@ -279,7 +279,7 @@
 					initialFindingsMetrics = res.generated_letters.findings_meta.generation_metrics ?? null;
 				}
 				const demandEntries = Object.entries(res.generated_letters).filter(([key]) =>
-					key.startsWith('demand_')
+					key.startsWith('demand_') && !key.endsWith('_meta')
 				);
 				if (demandEntries.length) {
 					initialDemandLetters = demandEntries.reduce<Record<string, string>>((acc, [key, value]) => {
@@ -290,7 +290,7 @@
 				}
 				// Load recommendation letters
 				const recommendationEntries = Object.entries(res.generated_letters).filter(([key]) =>
-					key.startsWith('recommendation_')
+					key.startsWith('recommendation_') && !key.endsWith('_meta')
 				);
 				if (recommendationEntries.length) {
 					recommendationLetters = recommendationEntries.reduce<Record<string, string>>((acc, [key, value]) => {

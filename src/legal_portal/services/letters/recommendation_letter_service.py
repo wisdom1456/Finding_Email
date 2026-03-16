@@ -56,7 +56,7 @@ class RecommendationLetterService:
 
         """
         self.client = openai_client
-        self.prompts_dir = Path(__file__).parent.parent / "prompts"
+        self.prompts_dir = Path(__file__).parent.parent.parent / "prompts"
 
     def _get_generation_model(self) -> str:
         """Resolve preferred model for recommendation letter generation."""

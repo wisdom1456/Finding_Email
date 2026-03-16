@@ -3,8 +3,8 @@ set -e
 
 echo ">>> Building frontend with SvelteKit"
 cd frontend
-npm ci --legacy-peer-deps
-npm run build
+npm ci --legacy-peer-deps 2>&1 | tail -5
+npm run build 2>&1 | tail -3
 cd ..
 
 echo ">>> Moving SvelteKit build output to root"
@@ -21,8 +21,14 @@ echo ">>> Installing Python dependencies"
 if [ -f "api/requirements.txt" ]; then
   cd api
   mkdir -p packages
-  python3 -m pip install -q -r requirements.txt -c constraints.txt --target packages
-  echo "✅ Python dependencies installed to api/packages/"
+  if python3 -m pip install -q -r requirements.txt -c constraints.txt --target packages 2>&1; then
+    echo "✅ Python dependencies installed to api/packages/"
+  else
+    echo "❌ pip install failed with exit code $?"
+    echo ">>> Retrying with verbose output for diagnostics..."
+    python3 -m pip install -r requirements.txt -c constraints.txt --target packages 2>&1 | tail -30
+    exit 1
+  fi
   cd ..
 else
   echo "⚠️ WARNING: api/requirements.txt not found"

@@ -390,6 +390,56 @@ class Settings(BaseSettings):
     )
 
     # ==================================================
+    # REDIS PROGRESS BACKEND
+    # ==================================================
+
+    redis_progress_enabled: bool = Field(
+        False,
+        alias="REDIS_PROGRESS_ENABLED",
+        description="Use Redis pub/sub for real-time progress instead of in-memory queues.",
+    )
+
+    redis_progress_url: str = Field(
+        "redis://localhost:6379/1",
+        alias="REDIS_PROGRESS_URL",
+        description="Redis URL for progress backend (only used when REDIS_PROGRESS_ENABLED=true).",
+    )
+
+    # ==================================================
+    # REDIS CACHE BACKEND
+    # ==================================================
+
+    redis_cache_enabled: bool = Field(
+        False,
+        alias="REDIS_CACHE_ENABLED",
+        description="Enable Redis as a distributed cache layer alongside file cache.",
+    )
+
+    redis_cache_host: str = Field(
+        "localhost",
+        alias="REDIS_CACHE_HOST",
+        description="Redis hostname for cache backend.",
+    )
+
+    redis_cache_port: int = Field(
+        6379,
+        alias="REDIS_CACHE_PORT",
+        description="Redis port for cache backend.",
+    )
+
+    redis_cache_password: Optional[str] = Field(
+        None,
+        alias="REDIS_CACHE_PASSWORD",
+        description="Redis password for cache backend (optional).",
+    )
+
+    redis_cache_db: int = Field(
+        0,
+        alias="REDIS_CACHE_DB",
+        description="Redis database number for cache backend.",
+    )
+
+    # ==================================================
     # OPTIONAL CONFIGURATION
     # ==================================================
 

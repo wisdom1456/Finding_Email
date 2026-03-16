@@ -98,7 +98,7 @@ async def import_clio_documents_helper(
     Returns import status with counts and any errors.
     """
     # Import classify_document_type from documents module
-    from legal_portal.api.routes.documents import classify_document_type
+    from legal_portal.services.documents.extraction_service import classify_document_type
 
     # Throttle DB progress writes to reduce disk I/O (SSE remains real-time)
     async def _write_import_progress(progress_payload):

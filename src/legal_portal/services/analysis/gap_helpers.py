@@ -10,7 +10,7 @@ from dataclasses import dataclass, field as dc_field
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from legal_portal.api.routes._analysis_helpers import (
+from legal_portal.core.analysis_state import (
     _get_user_ai_preferences,
 )
 

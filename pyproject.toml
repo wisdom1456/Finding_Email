@@ -30,6 +30,9 @@ dependencies = [
     "html2text>=2020.1.16"
 ]
 
+[project.optional-dependencies]
+redis = ["redis>=5.0.0"]
+
 [tool.setuptools.packages.find]
 where = ["src"]
 

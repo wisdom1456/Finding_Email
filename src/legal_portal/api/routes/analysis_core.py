@@ -1343,18 +1343,54 @@ async def stream_case_analysis(
                 _sections_seen = 0
                 _line_buffer = ""  # Buffer to detect headings across token boundaries
 
-                # Use asyncio.Queue to handle tokens with heartbeat timeout
+                # Use asyncio.Queue to handle tokens with heartbeat timeout.
+                # The collector accumulates content independently so that if
+                # the client disconnects mid-stream, the finally block can
+                # save whatever the LLM has produced so far.
                 token_queue: asyncio.Queue = asyncio.Queue()
-                done_event = asyncio.Event()
+                _collector_content = []  # mutable list shared with collector
 
                 async def collect_tokens():
-                    """Collect tokens and put them in queue."""
+                    """Collect tokens, put in queue, and accumulate for recovery."""
                     try:
                         async for token in token_generator:
+                            _collector_content.append(token)
                             await token_queue.put(('token', token))
                         await token_queue.put(('done', None))
                     except Exception as e:
                         await token_queue.put(('error', str(e)))
+                    finally:
+                        # Collector finished (success or error) — save result
+                        # so recovery endpoint can find it even if the SSE
+                        # generator was already cancelled by client disconnect.
+                        _all = "".join(_collector_content)
+                        if _all:
+                            try:
+                                service_supabase.table("analysis_results").insert({
+                                    "id": str(uuid.uuid4()),
+                                    "case_id": case_id,
+                                    "status": "processing",
+                                    "result": {
+                                        "raw_streaming_content": _all,
+                                        "docs_in_scope": ctx_result.docs_in_scope,
+                                        "docs_omitted": ctx_result.docs_omitted,
+                                        "context_tokens": ctx_result.total_tokens,
+                                        "omission_reason": ctx_result.omission_reason,
+                                        "jurisdiction": jurisdiction,
+                                        "collector_saved": True,
+                                        "streaming_completed_at": datetime.utcnow().isoformat(),
+                                    },
+                                    "created_at": datetime.utcnow().isoformat(),
+                                }).execute()
+                                logger.info(
+                                    f"[STREAM:COLLECTOR_SAVE] Saved {len(_all)} chars "
+                                    f"for case {case_id}"
+                                )
+                            except Exception as _csave_err:
+                                logger.error(
+                                    f"[STREAM:COLLECTOR_SAVE] Failed for case "
+                                    f"{case_id}: {_csave_err}"
+                                )
 
                 # Start token collection in background
                 collector_task = asyncio.create_task(collect_tokens())
@@ -1403,32 +1439,9 @@ async def stream_case_analysis(
                                     f"docs_in_scope={_docs_in_scope} docs_omitted={_docs_omitted}"
                                 )
 
-                                # Auto-save raw content for recovery if frontend loses connection.
-                                # Uses "processing" status (valid per DB constraint) so the
-                                # frontend's subsequent save_streaming_analysis call can
-                                # create the authoritative "completed" record with full
-                                # structured extraction.
-                                try:
-                                    analysis_id = str(uuid.uuid4())
-                                    service_supabase.table("analysis_results").insert({
-                                        "id": analysis_id,
-                                        "case_id": case_id,
-                                        "status": "processing",
-                                        "result": {
-                                            "raw_streaming_content": full_content,
-                                            "docs_in_scope": ctx_result.docs_in_scope,
-                                            "docs_omitted": ctx_result.docs_omitted,
-                                            "context_tokens": ctx_result.total_tokens,
-                                            "omission_reason": ctx_result.omission_reason,
-                                            "jurisdiction": jurisdiction,
-                                            "streaming_completed_at": datetime.utcnow().isoformat(),
-                                        },
-                                        "created_at": datetime.utcnow().isoformat(),
-                                    }).execute()
-                                    logger.info(f"[STREAM] Auto-saved streaming result for case {case_id}")
-                                except Exception as save_err:
-                                    logger.error(f"[STREAM] Auto-save failed for case {case_id}: {save_err}")
-
+                                # Auto-save is handled by the collector task's
+                                # finally block (runs on both normal completion
+                                # and client disconnect).  No duplicate save needed.
                                 break
 
                             elif msg_type == 'error':
@@ -1448,13 +1461,35 @@ async def stream_case_analysis(
                                 yield f"data: {json.dumps({'heartbeat': elapsed})}\n\n"
 
                 finally:
-                    # Ensure collector task is cleaned up
+                    # On client disconnect Starlette cancels this generator.
+                    # We must NOT cancel the collector — let it finish the
+                    # LLM call and save via its own finally block.
+                    #
+                    # asyncio.shield prevents cancellation from propagating
+                    # to the collector task.  We catch CancelledError on
+                    # the outer await so the finally block completes.
                     if not collector_task.done():
-                        collector_task.cancel()
+                        logger.info(
+                            f"[STREAM:DISCONNECT] Generator exiting while "
+                            f"collector still running for case {case_id} — "
+                            f"awaiting LLM completion server-side "
+                            f"(accumulated {len(full_content)} chars so far)"
+                        )
                         try:
-                            await collector_task
-                        except asyncio.CancelledError:
-                            pass
+                            # Shield keeps collector alive; wrapping in
+                            # try/except ensures CancelledError on the
+                            # outer await doesn't kill the finally block.
+                            await asyncio.shield(collector_task)
+                        except (asyncio.CancelledError, Exception):
+                            # CancelledError is expected here — the
+                            # generator is being torn down.  The collector
+                            # task itself is NOT cancelled (shield) and
+                            # will save when it finishes.
+                            logger.info(
+                                f"[STREAM:DISCONNECT] Shield caught cancel "
+                                f"for case {case_id} — collector will "
+                                f"continue in background"
+                            )
 
             except Exception as e:
                 logger.error(f"[STREAM] Error during streaming: {e}")

@@ -163,12 +163,16 @@
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let buffer = '';
+      let _chunkCount = 0;
+      let _lastChunkAt = performance.now();
+      console.log('[STREAM:FE] headers received, starting reader loop');
 
       while (true) {
         const { done, value } = await reader.read();
-        
+
         if (done) {
           // Stream ended - flush any pending render and complete
+          console.log(`[STREAM:FE] reader done after ${_chunkCount} chunks, ${((performance.now() - _fetchStart) / 1000).toFixed(1)}s total, content=${content.length} chars`);
           flushRender();
           if (status === 'streaming') {
             emitComplete(content);
@@ -177,6 +181,8 @@
         }
 
         // Decode chunk and add to buffer
+        _chunkCount++;
+        _lastChunkAt = performance.now();
         buffer += decoder.decode(value, { stream: true });
         
         // Process complete SSE lines from buffer
@@ -296,7 +302,14 @@
         return;
       }
 
-      console.warn('Stream interrupted:', e);
+      const _sinceLast = ((performance.now() - _lastChunkAt) / 1000).toFixed(1);
+      const _total = ((performance.now() - _fetchStart) / 1000).toFixed(1);
+      console.warn(
+        `[STREAM:FE] Stream interrupted: ${e instanceof Error ? e.message : e}`,
+        `| chunks=${_chunkCount} content=${content.length}chars`,
+        `| last_chunk=${_sinceLast}s_ago total=${_total}s`,
+        `| status=${status} retry=${retryCount}/${MAX_RETRIES}`
+      );
 
       // Try to recover instead of showing error immediately
       if (retryCount < MAX_RETRIES) {

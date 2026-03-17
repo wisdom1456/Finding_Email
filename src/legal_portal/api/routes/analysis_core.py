@@ -1316,6 +1316,12 @@ async def stream_case_analysis(
                         except Exception as persist_err:
                             logger.warning(f"[STREAM:PREVIEW] Classification persistence failed: {persist_err}")
 
+                # Heartbeat before context build — the gap between preview-done
+                # and the first heartbeat from the token loop can be 5-15s for
+                # large cases (context build + prompt assembly).  Without this,
+                # Vercel's edge proxy may consider the stream idle and drop it.
+                yield f"data: {json.dumps({'phase': 'thinking', 'elapsed': int(time.time() - start_time)})}\n\n"
+
                 # Create the token generator (now returns tuple)
                 _t_analyze = time.time()
                 token_generator, ctx_result = await analyzer.analyze_streaming(

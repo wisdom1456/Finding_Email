@@ -66,16 +66,17 @@ def find_analysis(token: str, case_id: str | None) -> tuple[str, str, dict]:
         print(f"\n[2/4] Using provided case: {case_id}")
     else:
         print("\n[2/4] Finding a case with completed analysis...")
-        cases = _get_json(
-            f"{SUPABASE_URL}/rest/v1/cases?select=id,client_name,status"
-            "&status=eq.completed&order=updated_at.desc&limit=5",
+        # Fetch analysis results directly to find cases that actually have multi_stage_result
+        analyses = _get_json(
+            f"{SUPABASE_URL}/rest/v1/analysis_results?select=id,case_id"
+            "&order=created_at.desc&limit=10",
             headers,
         )
-        if not cases:
-            print("  No completed cases found.")
+        if not analyses:
+            print("  No analysis results found.")
             sys.exit(1)
-        case_id = cases[0]["id"]
-        print(f"  Selected case: {case_id[:8]}... ({cases[0].get('client_name', '?')})")
+        case_id = analyses[0]["case_id"]
+        print(f"  Selected case: {case_id[:8]}... (from latest analysis)")
 
     # Fetch analysis results
     results = _get_json(
@@ -127,7 +128,7 @@ def find_target_party(msr: dict, party_name: str | None) -> str:
 def stream_letter(token: str, analysis_id: str, target_party: str):
     print()
     print("=" * 60)
-    print(f"[4/4] Streaming GET /api/letter/{analysis_id}/demand-letter/stream")
+    print(f"[4/4] Streaming GET /api/analysis/{analysis_id}/demand-letter/stream")
     print("=" * 60)
     print()
 
@@ -136,7 +137,7 @@ def stream_letter(token: str, analysis_id: str, target_party: str):
         "demand_deadline": "10 business days",
         "schema_version": 2,
     })
-    url = f"{API_BASE}/api/letter/{analysis_id}/demand-letter/stream?{params}"
+    url = f"{API_BASE}/api/analysis/{analysis_id}/demand-letter/stream?{params}"
     print(f"  URL: {url[:100]}...")
     print(f"  Party: {target_party}")
     print(f"  Started: {time.strftime('%H:%M:%S')}")

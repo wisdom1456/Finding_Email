@@ -2,8 +2,9 @@
 """Gap analysis latency diagnostic — measures phase timing on production.
 
 Usage:
-    python3 scripts/test_gap_latency.py              # auto-picks a case
-    python3 scripts/test_gap_latency.py <case_id>    # specific case
+    python3 scripts/test_gap_latency.py                      # auto-picks, uses cache
+    python3 scripts/test_gap_latency.py --force               # force fresh LLM analysis
+    python3 scripts/test_gap_latency.py <case_id> --force     # specific case, fresh
 """
 
 import json
@@ -83,15 +84,17 @@ def find_case_with_analysis(token: str, case_id: str | None) -> str:
     return selected
 
 
-def stream_gap_analysis(token: str, case_id: str):
+def stream_gap_analysis(token: str, case_id: str, force_refresh: bool = False):
     print()
     print("=" * 60)
-    print(f"[3/3] Streaming POST /api/gap-analysis/analyze-gaps/stream")
+    print(f"[3/3] Streaming POST /api/analysis/analyze-gaps/stream")
+    if force_refresh:
+        print("     (force_refresh=true — bypassing cache)")
     print("=" * 60)
     print()
 
-    url = f"{API_BASE}/api/gap-analysis/analyze-gaps/stream"
-    body = json.dumps({"case_id": case_id}).encode()
+    url = f"{API_BASE}/api/analysis/analyze-gaps/stream"
+    body = json.dumps({"case_id": case_id, "force_refresh": force_refresh}).encode()
 
     req = urllib.request.Request(
         url,
@@ -162,7 +165,8 @@ def stream_gap_analysis(token: str, case_id: str):
                     score = result_data.get("overall_completeness_score", "?")
                     categories = result_data.get("gaps_by_category", {})
 
-                    print(f"\n  RESULT at {elapsed:.1f}s (server_elapsed={server_elapsed:.1f}s)")
+                    se_str = f"{server_elapsed:.1f}s" if server_elapsed else "n/a"
+                    print(f"\n  RESULT at {elapsed:.1f}s (server_elapsed={se_str})")
                     print(f"    total_gaps:       {total_gaps}")
                     print(f"    completeness:     {score}")
                     print(f"    categories:")
@@ -200,10 +204,12 @@ def stream_gap_analysis(token: str, case_id: str):
 
 
 def main():
-    case_id = sys.argv[1] if len(sys.argv) > 1 else None
+    args = [a for a in sys.argv[1:] if not a.startswith("--")]
+    force = "--force" in sys.argv
+    case_id = args[0] if args else None
     token = authenticate()
     case_id = find_case_with_analysis(token, case_id)
-    stream_gap_analysis(token, case_id)
+    stream_gap_analysis(token, case_id, force_refresh=force)
 
 
 if __name__ == "__main__":

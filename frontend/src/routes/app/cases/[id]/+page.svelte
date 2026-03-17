@@ -838,6 +838,42 @@
 		await startStreamingAnalysis(true); // Skip the missing text check and use streaming
 	}
 
+	async function resumeProcessingAnalysis() {
+		// Check if the server-side collector finished and saved the analysis.
+		// This handles the case where the stream disconnected mid-flight but
+		// the LLM completed server-side.
+		try {
+			const { session } = await getSecureSession();
+			if (!session) throw new Error('Not authenticated');
+
+			const apiUrl = getApiUrl();
+			const resp = await fetch(`${apiUrl}/api/analysis/stream/${caseId}/result`, {
+				headers: { 'Authorization': `Bearer ${session.access_token}` },
+			});
+
+			if (resp.ok) {
+				const data = await resp.json();
+				if (data.found && data.content) {
+					// Server has the result — show the streaming panel with recovered content
+					showStreamingPanel = true;
+					await tick();
+					if (streamingAnalysisRef) {
+						// Directly complete with server content
+						handleStreamingComplete(data.content);
+					}
+					return;
+				}
+			}
+
+			// No saved result — offer to restart
+			toastStore.info('Server has not finished yet. Starting fresh analysis...');
+			await startStreamingAnalysis();
+		} catch (err: any) {
+			console.error('Resume failed:', err);
+			toastStore.error('Could not resume. Try starting a new analysis.');
+		}
+	}
+
 	async function cancelAnalysis() {
 		try {
 			const { session, user } = await getSecureSession();
@@ -1493,6 +1529,14 @@
 								{#if documents.length > 0 && !showProgressModal}
 									<div class="flex items-center gap-2">
 										{#if analysisStatus?.status === 'processing'}
+											<AsyncButton
+												onclick={resumeProcessingAnalysis}
+												loading={false}
+												variant="primary"
+												title="Check if the server completed the analysis"
+											>
+												Resume
+											</AsyncButton>
 											<AsyncButton
 												onclick={cancelAnalysis}
 												loading={false}

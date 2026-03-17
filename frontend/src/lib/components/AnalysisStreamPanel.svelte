@@ -100,7 +100,9 @@
 
     const isReconnect = status === 'reconnecting';
     stopTimer();  // Clear any leaked timer from prior recovery cycle
-    content = '';
+    if (!isReconnect) {
+      content = '';  // Only clear on fresh start, preserve on reconnect
+    }
     status = 'thinking';  // Start in thinking phase
     hasEmittedComplete = false;
     errorMessage = '';
@@ -348,36 +350,48 @@
 
     if (!isMounted) return;
 
-    // Check if backend already completed
-    try {
-      const { session } = await getSecureSession();
-      if (!session) throw new Error('No session');
-
-      const apiUrl = getApiUrl();
-      const resp = await fetch(`${apiUrl}/api/analysis/stream/${caseId}/result`, {
-        headers: { 'Authorization': `Bearer ${session.access_token}` },
-      });
-
-      if (resp.ok) {
-        const data = await resp.json();
-        if (data.found) {
-          // Backend completed — use saved result
-          content = data.content;
-          docsInScope = data.docs_in_scope || 0;
-          docsOmitted = data.docs_omitted || 0;
-          serverSaved = true;
-          flushRender();
-          emitComplete(content);
-          return;
-        }
+    // Poll the recovery endpoint — the server-side collector may still be
+    // finishing the LLM call.  On retry 2+ we poll up to 6 times (30s total)
+    // before falling back to a full stream restart.
+    const maxPolls = retryCount >= 2 ? 6 : 1;
+    for (let poll = 0; poll < maxPolls; poll++) {
+      if (poll > 0) {
+        await new Promise(r => setTimeout(r, 5000));
+        if (!isMounted) return;
       }
-    } catch {
-      // Recovery endpoint failed, try reconnecting stream
+
+      try {
+        const { session } = await getSecureSession();
+        if (!session) throw new Error('No session');
+
+        const apiUrl = getApiUrl();
+        const resp = await fetch(`${apiUrl}/api/analysis/stream/${caseId}/result`, {
+          headers: { 'Authorization': `Bearer ${session.access_token}` },
+        });
+
+        if (resp.ok) {
+          const data = await resp.json();
+          if (data.found) {
+            // Backend completed — use saved result
+            console.log(`[STREAM:FE] Recovery found server-saved result (poll=${poll + 1}/${maxPolls}, retry=${retryCount})`);
+            content = data.content;
+            docsInScope = data.docs_in_scope || 0;
+            docsOmitted = data.docs_omitted || 0;
+            serverSaved = true;
+            flushRender();
+            emitComplete(content);
+            return;
+          }
+        }
+      } catch {
+        // Recovery endpoint failed (network still down), continue polling
+      }
     }
 
     if (!isMounted) return;
 
     // Backend hasn't finished — retry the stream
+    console.log(`[STREAM:FE] Recovery endpoint returned not found after ${maxPolls} polls, reconnecting stream`);
     status = 'reconnecting';
     startStreaming();
   }

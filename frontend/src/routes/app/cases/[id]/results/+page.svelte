@@ -165,10 +165,12 @@
 	});
 
 	function extractDemandAmount(res: any): number | null {
-		// 1. Try multi_stage_result first
+		// 1. Try multi_stage_result financial_data (most structured source)
 		if (res.multi_stage_result) {
 			const factMatrix = res.multi_stage_result.fact_matrix || {};
 			const financialData = factMatrix.financial_data || [];
+
+			// Priority: claimed > owed > damage-related > any amount
 			const claimedAmount = financialData.find(
 				(item: any) => item.payment_type === 'claimed' || item.category === 'damages_claimed'
 			);
@@ -181,6 +183,20 @@
 					item.description?.toLowerCase().includes('damage')
 			);
 			if (owedAmount?.amount) return owedAmount.amount;
+
+			// Fallback: use the largest financial_data amount (e.g. appraised value, contract value)
+			if (financialData.length > 0) {
+				const maxEntry = financialData.reduce((max: any, item: any) =>
+					(item.amount || 0) > (max.amount || 0) ? item : max, financialData[0]);
+				if (maxEntry?.amount) return maxEntry.amount;
+			}
+
+			// Also try financial_items (itemized amounts from streaming extraction)
+			const financialItems = factMatrix.financial_items || [];
+			if (financialItems.length > 0) {
+				const total = financialItems.reduce((sum: number, item: any) => sum + (item.amount || 0), 0);
+				if (total > 0) return total;
+			}
 		}
 
 		// 2. Fall back to case_analysis financial_impact

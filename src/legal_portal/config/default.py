@@ -286,7 +286,7 @@ class Settings(BaseSettings):
     )
 
     gap_analysis_budget_seconds: int = Field(
-        180,
+        300,
         alias="GAP_ANALYSIS_BUDGET_SECONDS",
         description="Maximum seconds for gap analysis AI call (single-pass or reduce phase).",
     )

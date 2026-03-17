@@ -1100,7 +1100,7 @@ class JsonProcessingService:
             markdown_response = self._make_openai_request_responses_api(
                 formatted_prompt,
                 model="gpt-5.4",
-                reasoning_effort="low",
+                reasoning_effort="medium",
                 verbosity="high"
             )
 
@@ -1703,7 +1703,7 @@ class JsonProcessingService:
                 model=model,
                 instructions=self._findings_writer_instructions(),
                 input=prompt,
-                reasoning_effort="low",
+                reasoning_effort="medium",
                 verbosity="medium",
             ):
                 stream_started = True
@@ -1741,7 +1741,7 @@ class JsonProcessingService:
                 model=model,
                 instructions=self._findings_writer_instructions(),
                 input=compact_prompt,
-                reasoning_effort="low",
+                reasoning_effort="medium",
                 verbosity="medium",
             ):
                 yield token

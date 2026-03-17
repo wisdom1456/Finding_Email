@@ -514,7 +514,7 @@ class RecommendationLetterService:
                     letter_display=letter_display,
                 ),
                 input=filled_prompt,
-                reasoning_effort="low" if self.client._is_gpt5_model(model) else None,
+                reasoning_effort="medium" if self.client._is_gpt5_model(model) else None,
             ):
                 yield token
 

@@ -97,7 +97,7 @@
 			if (!session || !user) throw new Error('Not authenticated');
 
 			const apiUrl = getApiUrl();
-			const response = await fetch(`${apiUrl}/api/analysis/calculate-demand-amount`, {
+			const response = await fetchWithRetry(`${apiUrl}/api/analysis/calculate-demand-amount`, {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json',

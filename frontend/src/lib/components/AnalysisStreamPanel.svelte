@@ -57,7 +57,7 @@
   let sectionTotal = $state(0);
   // Recovery state for network interruptions
   let retryCount = $state(0);
-  const MAX_RETRIES = 3;
+  const MAX_RETRIES = 10;
   let serverSaved = $state(false);
   let isMounted = false;
 
@@ -327,8 +327,8 @@
     status = 'recovering';
     retryCount++;
 
-    // Wait for network to stabilize + exponential backoff
-    const delay = Math.pow(2, retryCount) * 1000; // 2s, 4s, 8s
+    // Wait for network to stabilize — capped exponential backoff (2s, 4s, 5s, 5s, ...)
+    const delay = Math.min(Math.pow(2, retryCount) * 1000, 5000);
     await new Promise(r => setTimeout(r, delay));
 
     if (!isMounted) return;

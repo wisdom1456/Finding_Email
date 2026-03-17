@@ -47,6 +47,14 @@
   // Track save failures so the user can retry
   let saveError = $state(false);
   let savePendingContent = $state('');
+  // Document inventory count from quick preview
+  let docInventoryCount = $state(0);
+  // Track whether preview content was received (for separator)
+  let hasPreviewContent = $state(false);
+  // Section progress tracking
+  let currentSection = $state('');
+  let sectionIndex = $state(0);
+  let sectionTotal = $state(0);
   // Recovery state for network interruptions
   let retryCount = $state(0);
   const MAX_RETRIES = 3;
@@ -104,6 +112,11 @@
       docsOmitted = 0;
       retryCount = 0;
       serverSaved = false;
+      docInventoryCount = 0;
+      hasPreviewContent = false;
+      currentSection = '';
+      sectionIndex = 0;
+      sectionTotal = 0;
     }
     
     // Start elapsed time counter
@@ -176,6 +189,37 @@
               const data = JSON.parse(line.slice(6));
               
               // Handle phase transitions
+              if (data.phase === 'inventory') {
+                docInventoryCount = data.total || 0;
+              }
+
+              if (data.phase === 'preview' && data.token) {
+                // Preview tokens stream into content area immediately
+                if (status === 'thinking') {
+                  status = 'streaming';
+                  thinkingTime = 0; // Preview is instant, no real thinking time
+                }
+                hasPreviewContent = true;
+                content += data.token;
+                scheduleRender();
+                scheduleScroll();
+              }
+
+              if (data.phase === 'preview' && data.done) {
+                // Preview complete — add separator before full analysis
+                if (hasPreviewContent) {
+                  content += '\n\n<hr class="preview-separator" />\n\n';
+                  scheduleRender();
+                }
+                // Transition back to thinking for GPT-5.4 phase
+                status = 'thinking';
+              }
+
+              // preview_classifications are silent — persisted backend-only
+              if (data.phase === 'preview_classifications') {
+                // Classifications persisted to DB by backend, no UI action
+              }
+
               if (data.phase === 'thinking') {
                 status = 'thinking';
                 // Update thinking elapsed time from server
@@ -183,7 +227,7 @@
                   // Server sends elapsed time during thinking
                 }
               }
-              
+
               if (data.phase === 'streaming') {
                 // Transition from thinking to streaming
                 status = 'streaming';
@@ -207,7 +251,14 @@
               if (data.heartbeat !== undefined) {
                 // Connection is alive
               }
-              
+
+              // Section progress — update status bar with current section
+              if (data.phase === 'section') {
+                currentSection = data.section || '';
+                sectionIndex = data.index || 0;
+                sectionTotal = data.total || 0;
+              }
+
               if (data.done) {
                 // Capture scope counts before emitting complete
                 if (data.docs_in_scope !== undefined) docsInScope = data.docs_in_scope;
@@ -508,7 +559,7 @@
           Connection was interrupted. Checking if the analysis completed on the server.
         </p>
       </div>
-    {:else if status === 'thinking'}
+    {:else if status === 'thinking' && !hasPreviewContent}
       <div class="thinking-state">
         <div class="thinking-icon-container">
           <Brain class="h-12 w-12 text-purple-500" />
@@ -516,7 +567,7 @@
         </div>
         <h4 class="thinking-title">AI is reasoning...</h4>
         <p class="thinking-description">
-          Prioritizing key documents, grouping related files, and building a comprehensive legal analysis.
+          {docInventoryCount > 0 ? `Analyzing ${docInventoryCount} documents` : 'Prioritizing key documents'}, grouping related files, and building a comprehensive legal analysis.
         </p>
         <p class="thinking-time">Usually takes 2-5 minutes depending on case size</p>
         <div class="thinking-elapsed">{formatTime(elapsedTime)}</div>
@@ -576,12 +627,12 @@
   {:else if status === 'thinking'}
     <div class="status-bar thinking">
       <div class="status-indicator thinking"></div>
-      <span>GPT-5.4 is reasoning about your case...</span>
+      <span>{hasPreviewContent ? 'Running full analysis with GPT-5.4...' : 'GPT-5.4 is reasoning about your case...'}</span>
     </div>
   {:else if status === 'streaming'}
     <div class="status-bar">
       <div class="status-indicator streaming"></div>
-      <span>Streaming analysis{thinkingTime > 0 ? ` (thought for ${formatTime(thinkingTime)})` : ''}...</span>
+      <span>{currentSection ? `Section ${sectionIndex}/${sectionTotal}: ${currentSection}` : `Streaming analysis${thinkingTime > 0 ? ` (thought for ${formatTime(thinkingTime)})` : ''}`}...</span>
     </div>
   {:else if status === 'complete'}
     <div class="status-bar complete">
@@ -592,6 +643,12 @@
 </div>
 
 <style>
+  :global(hr.preview-separator) {
+    border: none;
+    border-top: 1px dashed #e5e7eb;
+    margin: 16px 0;
+  }
+
   .analysis-stream-panel {
     background: white;
     border: 1px solid #e5e7eb;

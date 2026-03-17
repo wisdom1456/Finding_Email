@@ -134,6 +134,7 @@ class MultiStageAnalyzer:
         document_summaries: List[DocumentSummaryStructured],
         max_tokens: int = _DEFAULT_BUDGET_TOKENS,
         group_summaries: Optional[List] = None,
+        preview_classifications: Optional[List[Dict[str, Any]]] = None,
     ) -> ContextBuildResult:
         """Build token-budget context from document summaries and optional group summaries.
 
@@ -178,15 +179,35 @@ class MultiStageAnalyzer:
 
                 entries.append((pri, idx, entry_text, group_budget, gs.label))
 
+        # Build relevance lookup from preview classifications
+        _relevance_by_name: dict[str, dict] = {}
+        if preview_classifications:
+            for cls in preview_classifications:
+                cname = (cls.get("document_name") or "").strip()
+                if cname:
+                    _relevance_by_name[cname] = cls
+            _bg_count = sum(1 for c in preview_classifications if c.get("relevance_level") == "background")
+            if _bg_count:
+                logger.info(f"[ANALYSIS:CONTEXT] Preview-guided reduction: {_bg_count} background docs will use one-line summaries")
+
         # Add individual document entries
         group_offset = len(group_summaries or [])
         for idx, summary in enumerate(document_summaries):
             pri = self._get_doc_priority(summary)
             doc_name = (summary.document_name or "unknown").strip()
             doc_type = summary.document_type or "document"
-            content = (summary.key_content or summary.executive_summary or "")[:4000]
-            entry_text = f"{doc_name} ({doc_type})\n    {content}\n"
-            entries.append((pri, group_offset + idx, entry_text, _MAX_ENTRY_TOKENS, doc_name))
+
+            # If preview classified this doc as "background", use one-line summary
+            cls_info = _relevance_by_name.get(doc_name)
+            if cls_info and cls_info.get("relevance_level") == "background":
+                one_liner = cls_info.get("one_line_summary", "background document")
+                entry_text = f"{doc_name} ({doc_type}) — {one_liner}\n"
+                entry_budget = 100  # minimal token budget for background docs
+            else:
+                content = (summary.key_content or summary.executive_summary or "")[:4000]
+                entry_text = f"{doc_name} ({doc_type})\n    {content}\n"
+                entry_budget = _MAX_ENTRY_TOKENS
+            entries.append((pri, group_offset + idx, entry_text, entry_budget, doc_name))
 
         # Sort by priority (lower = higher importance), then index
         entries.sort(key=lambda x: (x[0], x[1]))
@@ -423,6 +444,7 @@ This block MUST be valid JSON wrapped in a code fence:
         document_summaries: List[DocumentSummaryStructured],
         jurisdiction: str = "Florida",
         group_summaries: Optional[List] = None,
+        preview_classifications: Optional[List[Dict[str, Any]]] = None,
     ) -> Tuple[AsyncGenerator[str, None], ContextBuildResult]:
         """Build context and return (token_generator, context_result).
 
@@ -453,6 +475,7 @@ This block MUST be valid JSON wrapped in a code fence:
         ctx = self._build_condensed_context(
             document_summaries,
             group_summaries=group_summaries if _settings.enable_group_context else None,
+            preview_classifications=preview_classifications,
         )
         document_context = ctx.context_text
         logger.info(
@@ -517,6 +540,94 @@ IMPORTANT: Your response MUST end with the ```json structured data block as spec
             )
 
         return _generate(), ctx
+
+    async def quick_preview_streaming(
+        self,
+        document_summaries: List[DocumentSummaryStructured],
+    ) -> AsyncGenerator[Dict[str, Any], None]:
+        """Emit a quick case preview + document classifications via gpt-5-mini.
+
+        Yields dicts with either:
+          {"token": "..."}       — preview prose tokens
+          {"classifications": []} — structured doc classifications
+          {"done": True}          — signals preview complete
+        """
+        from legal_portal.core.constants import FALLBACK_MODEL
+
+        # Build a compact doc manifest for the prompt
+        doc_lines = []
+        for i, ds in enumerate(document_summaries):
+            name = (ds.document_name or "unknown").strip()
+            snippet = (ds.executive_summary or ds.key_content or "")[:300]
+            doc_lines.append(f"[{i+1}] {name}: {snippet}")
+        doc_manifest = "\n".join(doc_lines)
+
+        prompt = f"""You are a legal case analyst. Given these {len(document_summaries)} documents, respond in EXACTLY two parts.
+
+PART 1 - CASE PREVIEW (plain text):
+Write a 2-3 sentence case summary, then a bullet list of key findings (injuries, treatments, financial impacts, key dates). Keep it concise.
+
+PART 2 - DOCUMENT CLASSIFICATIONS (JSON only, on its own line starting with ```json):
+For each document, provide a JSON array:
+```json
+[
+  {{"doc_index": 0, "document_name": "...", "document_type": "...", "relevance_level": "critical|supporting|background", "one_line_summary": "..."}}
+]
+```
+
+document_type must be one of: medical_record, billing_record, police_report, correspondence, intake_form, case_summary, legal_filing, insurance_document, photograph, contract, other
+
+DOCUMENTS:
+{doc_manifest}"""
+
+        logger.info(
+            f"[PREVIEW] Starting quick preview | docs={len(document_summaries)} "
+            f"model={FALLBACK_MODEL}"
+        )
+        _t_start = time.time()
+        full_text = ""
+        token_count = 0
+
+        try:
+            async for token in self.client.create_chat_completion_stream(
+                model=FALLBACK_MODEL,
+                messages=[
+                    {"role": "system", "content": "You are a fast, accurate legal document analyst."},
+                    {"role": "user", "content": prompt},
+                ],
+                max_tokens=2000,
+            ):
+                token_count += 1
+                full_text += token
+                # Stream tokens until we hit the JSON fence
+                if "```json" not in full_text:
+                    yield {"token": token}
+
+            # Extract classifications from the JSON block
+            classifications = []
+            if "```json" in full_text:
+                try:
+                    json_start = full_text.index("```json") + 7
+                    json_end = full_text.index("```", json_start)
+                    raw_json = full_text[json_start:json_end].strip()
+                    classifications = json.loads(raw_json)
+                except (ValueError, json.JSONDecodeError) as e:
+                    logger.warning(f"[PREVIEW] Failed to parse classifications JSON: {e}")
+
+            if classifications:
+                yield {"classifications": classifications}
+
+            elapsed = time.time() - _t_start
+            logger.info(
+                f"[PREVIEW] Complete | duration={elapsed:.1f}s tokens={token_count} "
+                f"classifications={len(classifications)}"
+            )
+
+        except Exception as e:
+            logger.error(f"[PREVIEW] Error during quick preview: {e}")
+            # Preview failure is non-fatal — full analysis will proceed
+
+        yield {"done": True}
 
     # =========================================================================
     # LEGACY MULTI-STAGE ANALYSIS (kept for backward compatibility)

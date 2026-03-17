@@ -182,6 +182,16 @@ class Settings(BaseSettings):
     )
 
     # ==================================================
+    # ANALYSIS QUICK PREVIEW FEATURE FLAGS (phased rollout)
+    # ==================================================
+
+    enable_analysis_quick_preview: bool = Field(
+        False,
+        alias="ENABLE_ANALYSIS_QUICK_PREVIEW",
+        description="Enable gpt-5-mini quick preview before full GPT-5.4 analysis",
+    )
+
+    # ==================================================
     # LETTER GENERATION FEATURE FLAGS
     # ==================================================
 

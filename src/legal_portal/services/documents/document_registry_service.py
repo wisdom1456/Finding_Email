@@ -537,6 +537,74 @@ class DocumentRegistryService:
             ).eq("id", document_id).execute()
 
     # ------------------------------------------------------------------ #
+    #  Quick Preview Classification Persistence
+    # ------------------------------------------------------------------ #
+
+    @staticmethod
+    def apply_preview_classifications(
+        classifications: List[Dict[str, Any]],
+        documents: List[Dict[str, Any]],
+        supabase_client: Any,
+    ) -> int:
+        """Write AI preview classifications to document metadata.
+
+        Only updates documents where enrichment_stage < "ai_analysis" and
+        no attorney document_type_override exists (attorney overrides always win).
+
+        Returns count of documents updated.
+        """
+        # Build lookup: doc name -> doc row
+        doc_by_name: Dict[str, Dict[str, Any]] = {}
+        for doc in documents:
+            name = (doc.get("file_name") or "").strip()
+            if name:
+                doc_by_name[name] = doc
+
+        # Enrichment stages ordered for comparison
+        _STAGE_ORDER = {"none": 0, "extraction": 1, "cross_doc": 2, "ai_analysis": 3, "migration": 4}
+        updated = 0
+
+        for cls in classifications:
+            doc_name = (cls.get("document_name") or "").strip()
+            doc = doc_by_name.get(doc_name)
+            if not doc:
+                continue
+
+            doc_id = doc.get("id")
+            if not doc_id:
+                continue
+
+            metadata = doc.get("metadata") or {}
+            registry = metadata.get("registry") or {}
+
+            # Skip if attorney has overridden the type
+            attorney = metadata.get("attorney_enrichment") or {}
+            if attorney.get("document_type_override"):
+                continue
+
+            # Skip if already at ai_analysis or beyond
+            current_stage = registry.get("enrichment_stage", "extraction")
+            if _STAGE_ORDER.get(current_stage, 0) >= _STAGE_ORDER["ai_analysis"]:
+                continue
+
+            # Update registry fields
+            registry["document_type"] = cls.get("document_type", registry.get("document_type", "other"))
+            registry["system_summary"] = cls.get("one_line_summary", "")
+            registry["enrichment_stage"] = "ai_analysis"
+            if cls.get("relevance_level"):
+                registry["relevance_level"] = cls["relevance_level"]
+
+            # Persist through standard write path
+            try:
+                DocumentRegistryService.persist_to_document(doc_id, registry, supabase_client)
+                updated += 1
+            except Exception as e:
+                logger.warning(f"[PREVIEW:PERSIST] Failed to update doc {doc_id}: {e}")
+
+        logger.info(f"[PREVIEW:PERSIST] Updated {updated}/{len(classifications)} document classifications")
+        return updated
+
+    # ------------------------------------------------------------------ #
     #  Diagnostic
     # ------------------------------------------------------------------ #
 

@@ -1266,7 +1266,15 @@ async def stream_case_analysis(
         # 3. Determine jurisdiction
         jurisdiction = case_data.get("jurisdiction", "Florida")
 
-        # 4. Stream the analysis with thinking heartbeats
+        # 4. Check quick preview feature flag
+        from legal_portal.config.default import get_settings
+        _preview_settings = get_settings()
+        _quick_preview_enabled = _preview_settings.enable_analysis_quick_preview
+
+        # Count documents for inventory event
+        _doc_count = len(doc_summaries)
+
+        # 5. Stream the analysis with thinking heartbeats
         async def generate():
             try:
                 openai_client = OpenAIClient()
@@ -1277,8 +1285,37 @@ async def stream_case_analysis(
                 start_time = time.time()
                 last_heartbeat = start_time
 
+                # Emit document inventory event (immediate, no LLM call)
+                if _quick_preview_enabled:
+                    yield f"data: {json.dumps({'phase': 'inventory', 'total': _doc_count})}\n\n"
+
                 # Signal that we're starting (thinking phase begins)
                 yield f"data: {json.dumps({'phase': 'thinking', 'elapsed': 0})}\n\n"
+
+                # Quick preview via gpt-5-mini (fast, ~3-5s)
+                _preview_classifications = []
+                if _quick_preview_enabled:
+                    try:
+                        async for preview_msg in analyzer.quick_preview_streaming(doc_summaries):
+                            if "token" in preview_msg:
+                                yield f"data: {json.dumps({'phase': 'preview', 'token': preview_msg['token']})}\n\n"
+                            elif "classifications" in preview_msg:
+                                _preview_classifications = preview_msg["classifications"]
+                                yield f"data: {json.dumps({'phase': 'preview_classifications', 'classifications': _preview_classifications})}\n\n"
+                            elif preview_msg.get("done"):
+                                yield f"data: {json.dumps({'phase': 'preview', 'done': True})}\n\n"
+                    except Exception as preview_err:
+                        logger.warning(f"[STREAM:PREVIEW] Preview failed (non-fatal): {preview_err}")
+
+                    # Persist classifications in background (non-blocking)
+                    if _preview_classifications:
+                        try:
+                            from legal_portal.services.documents.document_registry_service import DocumentRegistryService
+                            DocumentRegistryService.apply_preview_classifications(
+                                _preview_classifications, documents, service_supabase,
+                            )
+                        except Exception as persist_err:
+                            logger.warning(f"[STREAM:PREVIEW] Classification persistence failed: {persist_err}")
 
                 # Create the token generator (now returns tuple)
                 _t_analyze = time.time()
@@ -1286,6 +1323,7 @@ async def stream_case_analysis(
                     intake_content=intake_content,
                     document_summaries=doc_summaries,
                     jurisdiction=jurisdiction,
+                    preview_classifications=_preview_classifications if _quick_preview_enabled else None,
                 )
                 _docs_in_scope = ctx_result.docs_in_scope
                 _docs_omitted = ctx_result.docs_omitted
@@ -1295,6 +1333,16 @@ async def stream_case_analysis(
                     f"docs_in_scope={_docs_in_scope} docs_omitted={_docs_omitted} "
                     f"context_tokens={ctx_result.total_tokens:,}"
                 )
+
+                # Section progress tracking — detect ## headings in token stream
+                import re
+                _section_names = [
+                    "Case Overview", "Key Facts", "Legal Issues",
+                    "Risk Assessment", "Recommended Actions", "Structured Data",
+                ]
+                _total_sections = len(_section_names)
+                _sections_seen = 0
+                _line_buffer = ""  # Buffer to detect headings across token boundaries
 
                 # Use asyncio.Queue to handle tokens with heartbeat timeout
                 token_queue: asyncio.Queue = asyncio.Queue()
@@ -1335,6 +1383,18 @@ async def stream_case_analysis(
 
                                 full_content += msg_data
                                 yield f"data: {json.dumps({'token': msg_data})}\n\n"
+
+                                # Detect section headings for progress tracking
+                                _line_buffer += msg_data
+                                if "\n" in _line_buffer:
+                                    _lb_lines = _line_buffer.split("\n")
+                                    _line_buffer = _lb_lines[-1]  # keep incomplete line
+                                    for _lb_line in _lb_lines[:-1]:
+                                        _stripped = _lb_line.strip()
+                                        if _stripped.startswith("## "):
+                                            _heading = _stripped[3:].strip()
+                                            _sections_seen += 1
+                                            yield f"data: {json.dumps({'phase': 'section', 'section': _heading, 'index': _sections_seen, 'total': _total_sections})}\n\n"
 
                             elif msg_type == 'done':
                                 # Signal completion — include scope counts for UI warning

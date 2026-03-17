@@ -1156,10 +1156,14 @@ async def stream_case_analysis(
     MAX_DOC_CHARS = 200_000
 
     try:
+        _stream_t0 = time.time()
+        logger.info(f"[STREAM:ENTER] case_id={case_id}")
+
         # 1. Verify case ownership — fetch case metadata and document stubs only.
         # extracted_text is intentionally excluded from the nested relation to
         # avoid a single HTTP response that could exceed 100+ MB for cases with
         # many large email documents.
+        _t_case = time.time()
         case_response = (
             supabase.table("cases")
             .select("*, documents(id,file_name,file_type,status,metadata)")
@@ -1173,6 +1177,10 @@ async def stream_case_analysis(
 
         case_data = case_response.data[0]
         doc_stubs = case_data.get("documents", [])
+        logger.info(
+            f"[STREAM:CASE_FETCH] elapsed={time.time()-_t_case:.2f}s "
+            f"doc_stubs={len(doc_stubs)}"
+        )
 
         if not doc_stubs:
             raise HTTPException(status_code=400, detail="No documents found for this case")
@@ -1183,15 +1191,31 @@ async def stream_case_analysis(
         doc_ids = [stub["id"] for stub in doc_stubs]
         text_by_id: dict = {}
         try:
+            _t_text = time.time()
             text_resp = (
                 supabase.table("documents")
                 .select("id, extracted_text")
                 .in_("id", doc_ids)
                 .execute()
             )
-            for row in text_resp.data or []:
+            _text_rows = text_resp.data or []
+            _nonempty = 0
+            _max_doc_bytes = 0
+            _total_text_bytes = 0
+            for row in _text_rows:
                 raw = row.get("extracted_text") or ""
+                _raw_len = len(raw)
+                _total_text_bytes += _raw_len
+                if _raw_len > _max_doc_bytes:
+                    _max_doc_bytes = _raw_len
+                if _raw_len > 0:
+                    _nonempty += 1
                 text_by_id[row["id"]] = raw[:MAX_DOC_CHARS]
+            logger.info(
+                f"[STREAM:TEXT_FETCH] elapsed={time.time()-_t_text:.2f}s "
+                f"rows={len(_text_rows)} nonempty={_nonempty} "
+                f"total_text_bytes={_total_text_bytes:,} max_doc_bytes={_max_doc_bytes:,}"
+            )
         except Exception as text_err:
             logger.warning(f"[STREAM] Could not batch-fetch extracted_text: {text_err}")
 
@@ -1233,13 +1257,14 @@ async def stream_case_analysis(
             # Use first document if no intake found
             intake_content = doc_summaries[0].key_content or ""
 
+        logger.info(
+            f"[STREAM:DOC_SUMMARIES] count={len(doc_summaries)} "
+            f"intake_chars={len(intake_content)} "
+            f"elapsed_since_entry={time.time()-_stream_t0:.2f}s"
+        )
+
         # 3. Determine jurisdiction
         jurisdiction = case_data.get("jurisdiction", "Florida")
-
-        logger.info(
-            f"[STREAM] Starting streaming analysis for case {case_id} | "
-            f"docs={len(doc_summaries)} jurisdiction={jurisdiction}"
-        )
 
         # 4. Stream the analysis with thinking heartbeats
         async def generate():
@@ -1256,6 +1281,7 @@ async def stream_case_analysis(
                 yield f"data: {json.dumps({'phase': 'thinking', 'elapsed': 0})}\n\n"
 
                 # Create the token generator (now returns tuple)
+                _t_analyze = time.time()
                 token_generator, ctx_result = await analyzer.analyze_streaming(
                     intake_content=intake_content,
                     document_summaries=doc_summaries,
@@ -1263,6 +1289,12 @@ async def stream_case_analysis(
                 )
                 _docs_in_scope = ctx_result.docs_in_scope
                 _docs_omitted = ctx_result.docs_omitted
+                logger.info(
+                    f"[STREAM:LLM_START] elapsed_since_entry={_t_analyze - _stream_t0:.2f}s "
+                    f"analyze_streaming_setup={time.time()-_t_analyze:.2f}s "
+                    f"docs_in_scope={_docs_in_scope} docs_omitted={_docs_omitted} "
+                    f"context_tokens={ctx_result.total_tokens:,}"
+                )
 
                 # Use asyncio.Queue to handle tokens with heartbeat timeout
                 token_queue: asyncio.Queue = asyncio.Queue()
@@ -1293,7 +1325,11 @@ async def stream_case_analysis(
                                 if not first_token_received:
                                     first_token_received = True
                                     elapsed = int(time.time() - start_time)
-                                    logger.info(f"[STREAM] First token received after {elapsed}s thinking")
+                                    _total_ttft = time.time() - _stream_t0
+                                    logger.info(
+                                        f"[STREAM:FIRST_TOKEN] thinking_time={elapsed}s "
+                                        f"total_time_to_first_token={_total_ttft:.1f}s"
+                                    )
                                     # Signal transition from thinking to streaming
                                     yield f"data: {json.dumps({'phase': 'streaming', 'thinking_time': elapsed})}\n\n"
 

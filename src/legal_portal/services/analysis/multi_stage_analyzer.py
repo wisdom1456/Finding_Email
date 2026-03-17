@@ -438,6 +438,7 @@ This block MUST be valid JSON wrapped in a code fence:
         Returns:
             Tuple of (async token generator, ContextBuildResult with scope metadata)
         """
+        _t_streaming_start = time.time()
         logger.info(
             f"[STREAMING] Starting streaming analysis | "
             f"jurisdiction={jurisdiction} docs={len(document_summaries)} "
@@ -448,11 +449,17 @@ This block MUST be valid JSON wrapped in a code fence:
         from legal_portal.config.default import get_settings as _get_settings
         _settings = _get_settings()
 
+        _t_ctx = time.time()
         ctx = self._build_condensed_context(
             document_summaries,
             group_summaries=group_summaries if _settings.enable_group_context else None,
         )
         document_context = ctx.context_text
+        logger.info(
+            f"[STREAM:CONTEXT_BUILT] elapsed={time.time()-_t_ctx:.2f}s "
+            f"docs_in_scope={ctx.docs_in_scope} docs_omitted={ctx.docs_omitted} "
+            f"context_tokens={ctx.total_tokens:,} context_chars={len(document_context):,}"
+        )
 
         # Preflight guard
         if ctx.total_tokens > _PROMPT_GUARD_TOKENS:
@@ -470,9 +477,9 @@ This block MUST be valid JSON wrapped in a code fence:
         )
 
         logger.info(
-            f"[STREAMING] Prompt built | "
-            f"prompt_chars={len(prompt)} context_chars={len(document_context)} "
-            f"context_tokens={ctx.total_tokens:,} docs_in_scope={ctx.docs_in_scope}"
+            f"[STREAM:PROMPT_STATS] prompt_chars={len(prompt):,} "
+            f"model=gpt-5.4 reasoning_effort=medium max_tokens=24000 "
+            f"setup_elapsed={time.time()-_t_streaming_start:.2f}s"
         )
 
         system_prompt = f"""You are a senior {jurisdiction} attorney with 20+ years of experience.

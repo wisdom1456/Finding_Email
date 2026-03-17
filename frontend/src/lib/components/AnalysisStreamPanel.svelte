@@ -51,6 +51,7 @@
   let retryCount = $state(0);
   const MAX_RETRIES = 3;
   let serverSaved = $state(false);
+  let isMounted = false;
 
   // ── Performance: throttled markdown rendering ──
   // Accumulate raw tokens and only re-parse markdown at most every 80ms.
@@ -90,6 +91,7 @@
     if (status === 'streaming' || status === 'thinking') return;
 
     const isReconnect = status === 'reconnecting';
+    stopTimer();  // Clear any leaked timer from prior recovery cycle
     content = '';
     status = 'thinking';  // Start in thinking phase
     hasEmittedComplete = false;
@@ -121,8 +123,10 @@
 
       const apiUrl = getApiUrl();
       const url = `${apiUrl}/api/analysis/stream/${caseId}`;
-      
+
       // Use fetch with Authorization header (EventSource doesn't support custom headers)
+      const _fetchStart = performance.now();
+      console.log('[STREAM:FE] fetch started');
       const response = await fetch(url, {
         method: 'GET',
         headers: {
@@ -131,6 +135,7 @@
         },
         signal: abortController.signal,
       });
+      console.log(`[STREAM:FE] response received: ${((performance.now() - _fetchStart) / 1000).toFixed(1)}s status=${response.status}`);
 
       if (!response.ok) {
         const errorText = await response.text();
@@ -183,7 +188,7 @@
                 // Transition from thinking to streaming
                 status = 'streaming';
                 thinkingTime = data.thinking_time || elapsedTime;
-                console.log(`AI thinking completed in ${thinkingTime}s, now streaming...`);
+                console.log(`[STREAM:FE] first token: ${((performance.now() - _fetchStart) / 1000).toFixed(1)}s after fetch (thinking=${thinkingTime}s)`);
               }
               
               if (data.token) {
@@ -269,6 +274,8 @@
     const delay = Math.pow(2, retryCount) * 1000; // 2s, 4s, 8s
     await new Promise(r => setTimeout(r, delay));
 
+    if (!isMounted) return;
+
     // Check if backend already completed
     try {
       const { session } = await getSecureSession();
@@ -295,6 +302,8 @@
     } catch {
       // Recovery endpoint failed, try reconnecting stream
     }
+
+    if (!isMounted) return;
 
     // Backend hasn't finished — retry the stream
     status = 'reconnecting';
@@ -391,7 +400,9 @@
 
   // Cleanup on destroy
   $effect(() => {
+    isMounted = true;
     return () => {
+      isMounted = false;
       if (abortController) {
         abortController.abort();
       }

@@ -1184,6 +1184,7 @@
 
 				{#if hasMultiStageSupport}
 					<DemandLetterSection
+						analysisId={results.analysis_id}
 						{caseId}
 						{opposingParties}
 						{initialDemandLetters}

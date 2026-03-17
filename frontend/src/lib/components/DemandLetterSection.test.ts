@@ -20,6 +20,20 @@ vi.mock('$lib/utils/letterCopy', () => ({
 	normalizeLetterHtml: (html: string) => html,
 }));
 
+vi.mock('$lib/utils/markdown', () => ({
+	parseMarkdown: (md: string) => md,
+}));
+
+vi.mock('$lib/utils/sseEventParser', () => ({
+	SSEEventParser: vi.fn().mockImplementation(() => ({
+		push: vi.fn().mockReturnValue([]),
+	})),
+}));
+
+vi.mock('$lib/utils/fetchWithRetry', () => ({
+	fetchWithRetry: vi.fn().mockResolvedValue(new Response('', { status: 200 })),
+}));
+
 function makeParties() {
 	return [
 		{ name: 'Acme Corp', role: 'Defendant' },
@@ -30,7 +44,7 @@ function makeParties() {
 describe('DemandLetterSection', () => {
 	it('renders party dropdown with options', () => {
 		render(DemandLetterSection, {
-			props: { caseId: 'case-1', opposingParties: makeParties() },
+			props: { analysisId: 'analysis-1', caseId: 'case-1', opposingParties: makeParties() },
 		});
 		const select = document.querySelector('[data-testid="party-select"]') as HTMLSelectElement;
 		expect(select).toBeTruthy();
@@ -40,7 +54,7 @@ describe('DemandLetterSection', () => {
 
 	it('disables generate without party selected', () => {
 		render(DemandLetterSection, {
-			props: { caseId: 'case-1', opposingParties: [] },
+			props: { analysisId: 'analysis-1', caseId: 'case-1', opposingParties: [] },
 		});
 		const generateBtn = document.querySelector('[data-testid="generate-btn"]') as HTMLButtonElement;
 		expect(generateBtn.disabled).toBe(true);
@@ -48,7 +62,7 @@ describe('DemandLetterSection', () => {
 
 	it('shows demand amount input', () => {
 		render(DemandLetterSection, {
-			props: { caseId: 'case-1', opposingParties: makeParties() },
+			props: { analysisId: 'analysis-1', caseId: 'case-1', opposingParties: makeParties() },
 		});
 		const input = document.querySelector('#demand-amount') as HTMLInputElement;
 		expect(input).toBeTruthy();
@@ -57,7 +71,7 @@ describe('DemandLetterSection', () => {
 
 	it('renders attorney info fields', () => {
 		render(DemandLetterSection, {
-			props: { caseId: 'case-1', opposingParties: makeParties() },
+			props: { analysisId: 'analysis-1', caseId: 'case-1', opposingParties: makeParties() },
 		});
 		const inputs = document.querySelectorAll('input[type="text"], input[type="tel"], input[type="email"]');
 		// attorneyName, firmName, contactPhone, contactEmail

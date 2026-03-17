@@ -275,6 +275,18 @@ class Settings(BaseSettings):
         description="Interval in seconds for SSE heartbeats during silent stream intervals.",
     )
 
+    gap_analysis_budget_seconds: int = Field(
+        180,
+        alias="GAP_ANALYSIS_BUDGET_SECONDS",
+        description="Maximum seconds for gap analysis AI call (single-pass or reduce phase).",
+    )
+
+    demand_letter_stream_enabled: bool = Field(
+        False,
+        alias="DEMAND_LETTER_STREAM_ENABLED",
+        description="Enable SSE streaming endpoint for demand letter generation.",
+    )
+
     letter_strategy_budget_seconds: int = Field(
         30,
         alias="LETTER_STRATEGY_BUDGET_SECONDS",

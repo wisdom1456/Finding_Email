@@ -198,19 +198,38 @@ class GapAnalysisService:
                 f"model={model} prompt_chars={len(prompt)} max_tokens=4000"
             )
 
-            # Call OpenAI API
+            # Call OpenAI API with timeout guard
+            from legal_portal.config.default import get_settings
+            _gap_settings = get_settings()
+
             api_start = time.time()
-            response_dict = await asyncio.to_thread(
-                self.client.create_response,
-                model=model,
-                instructions=(
-                    "You are a critical legal analyst identifying gaps and inconsistencies in case materials. "
-                    "Return only valid JSON matching the GapAnalysisResult schema. Do not include any text before or after the JSON."
-                ),
-                input=prompt,
-                max_output_tokens=4000,
-                # No reasoning_effort for GPT-4.x - it outputs content directly
-            )
+            try:
+                response_dict = await asyncio.wait_for(
+                    asyncio.to_thread(
+                        self.client.create_response,
+                        model=model,
+                        instructions=(
+                            "You are a critical legal analyst identifying gaps and inconsistencies in case materials. "
+                            "Return only valid JSON matching the GapAnalysisResult schema. Do not include any text before or after the JSON."
+                        ),
+                        input=prompt,
+                        max_output_tokens=4000,
+                        reasoning_effort="low" if self.client._is_gpt5_model(model) else None,
+                    ),
+                    timeout=_gap_settings.gap_analysis_budget_seconds,
+                )
+            except asyncio.TimeoutError:
+                api_duration = time.time() - api_start
+                logger.error(
+                    f"[STAGE:3.5:TIMEOUT] Gap analysis AI call timed out after {api_duration:.1f}s "
+                    f"(budget={_gap_settings.gap_analysis_budget_seconds}s)"
+                )
+                fallback = self._create_fallback_result(error=f"Gap analysis timed out after {api_duration:.0f}s")
+                fallback.recommendation = self._generate_recommendation(
+                    gap_analysis=fallback,
+                    deep_analysis=deep_analysis,
+                )
+                return fallback
             api_duration = time.time() - api_start
 
             finish_reason = response_dict.get("finish_reason", "unknown")
@@ -1893,18 +1912,31 @@ Return ONLY valid JSON. No markdown, no explanation.
         prompt_chars = len(prompt)
         logger.info(f"[GAP:PROMPT] prompt_size={prompt_chars} chars (~{prompt_chars // 4} tokens)")
 
-        response_dict = await asyncio.to_thread(
-            self.client.create_response,
-            model=reduce_model,
-            instructions=(
-                "You are a senior legal analyst merging batch gap analysis reports "
-                "into a unified assessment. Return only valid JSON matching the "
-                "GapAnalysisResult schema. Do not include any text before or after the JSON."
-            ),
-            input=prompt,
-            max_output_tokens=16000,
-            reasoning_effort="medium" if self.client._is_gpt5_model(reduce_model) else None,
-        )
+        from legal_portal.config.default import get_settings
+        _gap_settings = get_settings()
+
+        try:
+            response_dict = await asyncio.wait_for(
+                asyncio.to_thread(
+                    self.client.create_response,
+                    model=reduce_model,
+                    instructions=(
+                        "You are a senior legal analyst merging batch gap analysis reports "
+                        "into a unified assessment. Return only valid JSON matching the "
+                        "GapAnalysisResult schema. Do not include any text before or after the JSON."
+                    ),
+                    input=prompt,
+                    max_output_tokens=16000,
+                    reasoning_effort="medium" if self.client._is_gpt5_model(reduce_model) else None,
+                ),
+                timeout=_gap_settings.gap_analysis_budget_seconds,
+            )
+        except asyncio.TimeoutError:
+            logger.error(
+                f"[GAP:REDUCE:TIMEOUT] Reduce phase timed out "
+                f"(budget={_gap_settings.gap_analysis_budget_seconds}s)"
+            )
+            raise
 
         raw = (response_dict.get("content") or "").strip()
         if not raw:

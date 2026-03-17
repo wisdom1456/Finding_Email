@@ -111,55 +111,15 @@ def _configure_supabase(mock_client, analysis_row):
 
 
 @pytest.mark.asyncio
-async def test_generate_recommendation_letter_reachable(app_client: AsyncClient, mock_supabase_client):
-    """Recommendation letter endpoint is reachable and validates input.
-
-    Note: This endpoint parses deeply nested Pydantic models (FactMatrix, DeepAnalysis)
-    which may raise validation errors in test env with simplified mock data.
-    We verify the endpoint is reachable through auth + case access checks.
-    """
-    row = _analysis_result_row()
-    _configure_supabase(mock_supabase_client, row)
-
-    try:
-        response = await app_client.post(
-            "/api/analysis/generate-recommendation-letter",
-            json={
-                "case_id": "case-001",
-                "letter_type": "proceed",
-            },
-            headers={"Authorization": "Bearer mock_token"},
-        )
-        # Endpoint reaches through auth + case access + analysis fetch.
-        assert response.status_code in [200, 400, 409, 500]
-    except Exception:
-        # Pydantic ValidationError propagated through ASGITransport — endpoint was reached
-        pass
-
-
-@pytest.mark.asyncio
-async def test_generate_recommendation_letter_unauthorized(app_client: AsyncClient, mock_supabase_client):
-    """401/403 without auth header."""
-    response = await app_client.post(
-        "/api/analysis/generate-recommendation-letter",
-        json={"case_id": "case-001", "letter_type": "proceed"},
-    )
-
-    assert response.status_code in [401, 403]
-
-
-@pytest.mark.asyncio
-async def test_generate_recommendation_letter_not_found(app_client: AsyncClient, mock_supabase_client):
-    """404 for missing analysis."""
-    _configure_supabase(mock_supabase_client, None)
-
+async def test_generate_recommendation_letter_returns_410_gone(app_client: AsyncClient, mock_supabase_client):
+    """Synchronous recommendation letter endpoint now returns 410 Gone."""
     response = await app_client.post(
         "/api/analysis/generate-recommendation-letter",
         json={"case_id": "case-001", "letter_type": "proceed"},
         headers={"Authorization": "Bearer mock_token"},
     )
 
-    assert response.status_code == 404
+    assert response.status_code == 410
 
 
 # ---------------------------------------------------------------------------

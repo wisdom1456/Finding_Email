@@ -180,7 +180,10 @@ async def _no_op_ensure_gap(*_args, **_kwargs) -> None:
 
 
 @pytest.mark.asyncio
-async def test_generate_letter_findings_returns_professional_html(monkeypatch):
+async def test_generate_letter_findings_returns_410_gone(monkeypatch):
+    """Synchronous findings letter endpoint now returns 410 Gone — use streaming."""
+    from fastapi import HTTPException
+
     analysis_record = _build_analysis_record()
     supabase = _FakeSupabase(analysis_record)
 
@@ -193,8 +196,6 @@ async def test_generate_letter_findings_returns_professional_html(monkeypatch):
     )
     monkeypatch.setattr(letter_routes, "_ensure_fresh_gap_analysis_for_letter_generation", _no_op_ensure_gap)
     monkeypatch.setattr(letter_routes, "_get_user_ai_preferences", _no_op_ensure_gap)
-    monkeypatch.setattr(letter_routes, "OpenAIClient", _FakeOpenAIClient)
-    monkeypatch.setattr(letter_routes, "JsonProcessingService", _FakeJsonProcessingService)
     monkeypatch.setattr(letter_routes, "_emit_generation_metrics", lambda _metrics: None)
 
     request = Request(
@@ -207,21 +208,15 @@ async def test_generate_letter_findings_returns_professional_html(monkeypatch):
         }
     )
 
-    response = await letter_routes.generate_letter.__wrapped__(  # type: ignore[attr-defined]
-        letter_request=letter_routes.LetterGenerationRequest(
-            case_id="case-1",
-            letter_type=LetterType.FINDINGS,
-        ),
-        request=request,
-        user={"id": "user-1"},
-        supabase=supabase,
-    )
+    with pytest.raises(HTTPException) as exc_info:
+        await letter_routes.generate_letter.__wrapped__(  # type: ignore[attr-defined]
+            letter_request=letter_routes.LetterGenerationRequest(
+                case_id="case-1",
+                letter_type=LetterType.FINDINGS,
+            ),
+            request=request,
+            user={"id": "user-1"},
+            supabase=supabase,
+        )
 
-    assert "<!DOCTYPE html>" in response.letter_html
-    assert "<head>" in response.letter_html
-    assert "<style>" in response.letter_html
-    assert "Findings draft body." in response.letter_html
-    assert supabase.last_update_payload is not None
-    persisted_findings = supabase.last_update_payload["result"]["generated_letters"]["findings"]
-    assert "<!DOCTYPE html>" in persisted_findings
-    assert "<style>" in persisted_findings
+    assert exc_info.value.status_code == 410

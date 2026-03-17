@@ -103,6 +103,7 @@ async def analyze_gaps_on_demand(
     service_supabase=Depends(get_supabase_client),  # noqa: B008
 ):
     """Run gap analysis on-demand for a completed case analysis."""
+    request_start = time.monotonic()
     case_id = gap_request.case_id
     logger.info(f"[GAP_ENDPOINT] Starting on-demand gap analysis for case {case_id}")
 
@@ -146,7 +147,11 @@ async def analyze_gaps_on_demand(
     existing_gap_state = result_payload.get("gap_analysis_state") or {}
     if existing_gap and not gap_request.force_refresh:
         if existing_gap_state.get("input_hash") == gap_input_hash:
-            logger.info(f"[GAP_ENDPOINT] Returning cached gap analysis for case {case_id}")
+            total_elapsed = time.monotonic() - request_start
+            logger.info(
+                f"[GAP_ENDPOINT] Complete | case_id={case_id} "
+                f"total_elapsed={total_elapsed:.1f}s cache_hit=True"
+            )
             return existing_gap
         logger.info(
             "[GAP_ENDPOINT] Cached gap analysis invalidated for case %s (state mismatch)",
@@ -221,7 +226,11 @@ async def analyze_gaps_on_demand(
             "result": result_payload,
         }).eq("id", analysis_id).execute()
 
-        logger.info(f"[GAP_ENDPOINT] Gap analysis saved for case {case_id}")
+        total_elapsed = time.monotonic() - request_start
+        logger.info(
+            f"[GAP_ENDPOINT] Complete | case_id={case_id} "
+            f"total_elapsed={total_elapsed:.1f}s cache_hit=False"
+        )
         return gap_dict
 
     except HTTPException:

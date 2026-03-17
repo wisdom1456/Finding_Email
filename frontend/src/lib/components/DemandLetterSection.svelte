@@ -2,17 +2,22 @@
 	import { getApiUrl } from '$lib/config';
 	import { getSecureSession } from '$lib/supabase';
 	import { toastStore } from '$lib/stores/toastStore';
+	import { parseMarkdown } from '$lib/utils/markdown';
 	import { letterHtmlToPlainText, letterHtmlToRichFragment, normalizeLetterHtml } from '$lib/utils/letterCopy';
+	import { SSEEventParser } from '$lib/utils/sseEventParser';
 	import { fetchWithRetry } from '$lib/utils/fetchWithRetry';
+	import { onDestroy } from 'svelte';
 	import AsyncButton from '$lib/components/ui/AsyncButton.svelte';
 
 	let {
+		analysisId,
 		caseId,
 		opposingParties,
 		initialDemandLetters = {},
 		initialDemandAmount = null,
 		initialSpecificDemands = '',
 	}: {
+		analysisId: string;
 		caseId: string;
 		opposingParties: Array<{ name: string; role: string }>;
 		initialDemandLetters?: Record<string, string>;
@@ -33,6 +38,46 @@
 	let firmName = $state('');
 	let contactPhone = $state('');
 	let contactEmail = $state('');
+
+	type DemandGenerationState =
+		| 'idle'
+		| 'connecting'
+		| 'strategy'
+		| 'context_build'
+		| 'draft_generation'
+		| 'lint_validation'
+		| 'repair'
+		| 'polishing'
+		| 'finalizing'
+		| 'complete'
+		| 'error';
+
+	const DEMAND_PHASE_LABELS: Record<string, string> = {
+		strategy: 'Planning strategy',
+		context_build: 'Building context',
+		draft_generation: 'Drafting letter',
+		lint_validation: 'Reviewing for accuracy',
+		repair: 'Fixing issues',
+		polishing: 'Final polish',
+		finalizing: 'Saving',
+	};
+
+	let demandGenerationState = $state<DemandGenerationState>('idle');
+	let demandPhaseMessage = $state('');
+	let demandGenerationPercent = $state(0);
+	let demandStreamingPreview = $state<string | null>(null);
+
+	type ActiveDemandRequest = {
+		requestId: number;
+		controller: AbortController;
+	};
+	let activeDemandRequest: ActiveDemandRequest | null = null;
+	let demandRequestCounter = 0;
+
+	onDestroy(() => {
+		activeDemandRequest?.controller.abort();
+		activeDemandRequest = null;
+	});
 
 	async function calculateDemandAmount() {
 		if (!selectedParty) {
@@ -78,62 +123,264 @@
 		}
 	}
 
+	async function generateDemandLetterStreaming() {
+		const previousRequest = activeDemandRequest;
+		if (previousRequest) {
+			previousRequest.controller.abort();
+		}
 
+		const controller = new AbortController();
+		const requestId = ++demandRequestCounter;
+		activeDemandRequest = { requestId, controller };
+		const isCurrentRequest = () => activeDemandRequest?.requestId === requestId;
+
+		demandGenerationState = 'connecting';
+		demandPhaseMessage = 'Connecting...';
+		demandGenerationPercent = 0;
+		demandStreamingPreview = null;
+
+		const { session, user } = await getSecureSession();
+		if (!session || !user) throw new Error('Not authenticated');
+
+		const apiUrl = getApiUrl();
+		const demandLines = specificDemands
+			.split('\n')
+			.map((line) => line.trim())
+			.filter(Boolean);
+
+		const params = new URLSearchParams({
+			target_party_name: selectedParty,
+			demand_deadline: demandDeadline,
+			schema_version: '2',
+			mode: 'strict_quality',
+		});
+		if (demandAmount != null) {
+			params.set('demand_amount', String(demandAmount));
+		}
+		if (demandLines.length > 0) {
+			params.set('specific_demands', demandLines.join('|'));
+		}
+
+		const response = await fetchWithRetry(
+			`${apiUrl}/api/analysis/${analysisId}/demand-letter/stream?${params.toString()}`,
+			{
+				headers: { Authorization: `Bearer ${session.access_token}` },
+				signal: controller.signal,
+			}
+		);
+
+		if (response.status === 404) {
+			// Feature flag is off — fall back to synchronous POST
+			await generateDemandLetterSync();
+			return;
+		}
+
+		if (!response.ok) {
+			const detail = await response.json().catch(() => ({}));
+			throw new Error(detail?.detail || 'Failed to stream demand letter');
+		}
+
+		const reader = response.body?.getReader();
+		if (!reader) throw new Error('No reader available');
+
+		const decoder = new TextDecoder();
+		const parser = new SSEEventParser();
+		let markdownBuffer = '';
+		let pendingTokens = '';
+		let flushTimer: ReturnType<typeof setTimeout> | null = null;
+		let processedEventCount = 0;
+		let streamDone = false;
+		let draftStarted = false;
+
+		const renderPreview = () => {
+			if (!isCurrentRequest()) return;
+			demandStreamingPreview = `<div class="legal-letter">${parseMarkdown(markdownBuffer)}</div>`;
+		};
+
+		const flushPendingTokens = () => {
+			if (!isCurrentRequest()) return;
+			if (pendingTokens) {
+				markdownBuffer += pendingTokens;
+				pendingTokens = '';
+				renderPreview();
+			}
+			if (flushTimer) {
+				clearTimeout(flushTimer);
+				flushTimer = null;
+			}
+		};
+
+		const queueToken = (token: string) => {
+			if (!isCurrentRequest()) return;
+			if (!draftStarted) {
+				draftStarted = true;
+				markdownBuffer = '';
+				pendingTokens = '';
+				demandStreamingPreview = '';
+			}
+			pendingTokens += token;
+			if (flushTimer) return;
+			flushTimer = setTimeout(() => {
+				if (!isCurrentRequest()) { pendingTokens = ''; flushTimer = null; return; }
+				if (!pendingTokens) { flushTimer = null; return; }
+				markdownBuffer += pendingTokens;
+				pendingTokens = '';
+				flushTimer = null;
+				renderPreview();
+			}, 80);
+		};
+
+		const applyPhase = (phase: string, message?: string, percent?: number) => {
+			if (!isCurrentRequest()) return;
+			const allowed: DemandGenerationState[] = [
+				'strategy', 'context_build', 'draft_generation',
+				'lint_validation', 'repair', 'polishing', 'finalizing',
+			];
+			if (allowed.includes(phase as DemandGenerationState)) {
+				demandGenerationState = phase as DemandGenerationState;
+			}
+			if (message) demandPhaseMessage = message;
+			if (typeof percent === 'number' && percent > demandGenerationPercent) {
+				demandGenerationPercent = percent;
+			}
+		};
+
+		while (true) {
+			if (!isCurrentRequest()) throw new DOMException('Demand request superseded', 'AbortError');
+			const { done, value } = await reader.read();
+			if (done) { flushPendingTokens(); break; }
+
+			const chunk = decoder.decode(value, { stream: true });
+			const events = parser.push(chunk);
+
+			for (const data of events) {
+				const eventType =
+					(typeof data.event === 'string' && data.event) ||
+					(typeof data.type === 'string' && data.type) ||
+					(data.token ? 'token' : data.done ? 'done' : data.error ? 'error' : '');
+
+				if (eventType === 'phase') {
+					applyPhase(
+						String(data.phase || ''),
+						typeof data.message === 'string' ? data.message : undefined,
+						typeof data.percent === 'number' ? data.percent : undefined,
+					);
+				} else if (eventType === 'token' && typeof data.token === 'string') {
+					demandGenerationState = 'draft_generation';
+					queueToken(data.token);
+				} else if (eventType === 'final') {
+					flushPendingTokens();
+					const content = data.content as Record<string, unknown> | undefined;
+					if (content && typeof content.html === 'string') {
+						demandLetters = { ...demandLetters, [selectedParty]: content.html };
+					} else if (content && typeof content.markdown === 'string') {
+						demandLetters = {
+							...demandLetters,
+							[selectedParty]: `<div class="legal-letter">${parseMarkdown(content.markdown as string)}</div>`,
+						};
+					}
+					demandGenerationState = 'complete';
+					demandPhaseMessage = 'Complete';
+					demandStreamingPreview = null;
+				} else if (eventType === 'error') {
+					const message = (typeof data.error === 'string' && data.error) || 'Demand letter generation failed';
+					if (!Boolean(data.recoverable)) {
+						demandGenerationState = 'error';
+						demandPhaseMessage = message;
+						throw new Error(message);
+					}
+				} else if (eventType === 'done') {
+					flushPendingTokens();
+					streamDone = true;
+					break;
+				}
+
+				processedEventCount += 1;
+				if (processedEventCount % 120 === 0) {
+					await new Promise((resolve) => setTimeout(resolve, 0));
+				}
+			}
+
+			if (streamDone) break;
+		}
+
+		flushPendingTokens();
+
+		if (demandGenerationState !== 'complete' && demandGenerationState !== 'error') {
+			if (markdownBuffer.trim()) {
+				demandLetters = {
+					...demandLetters,
+					[selectedParty]: `<div class="legal-letter">${parseMarkdown(markdownBuffer)}</div>`,
+				};
+			}
+			demandGenerationState = 'complete';
+			demandPhaseMessage = 'Complete';
+			demandStreamingPreview = null;
+		}
+	}
+
+	async function generateDemandLetterSync() {
+		const demandLines = specificDemands.split('\n').map((line) => line.trim()).filter(Boolean);
+		demandGenerationState = 'draft_generation';
+		demandPhaseMessage = 'Generating...';
+
+		const { session, user } = await getSecureSession();
+		if (!session || !user) throw new Error('Not authenticated');
+
+		const apiUrl = getApiUrl();
+		const response = await fetchWithRetry(`${apiUrl}/api/analysis/generate-letter`, {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json',
+				Authorization: `Bearer ${session.access_token}`
+			},
+			body: JSON.stringify({
+				case_id: caseId,
+				letter_type: 'demand',
+				target_party_name: selectedParty,
+				demand_amount: demandAmount ?? undefined,
+				demand_deadline: demandDeadline,
+				specific_demands: demandLines,
+				attorney_name: attorneyName || undefined,
+				firm_name: firmName || undefined,
+				contact_phone: contactPhone || undefined,
+				contact_email: contactEmail || undefined
+			})
+		});
+
+		if (!response.ok) {
+			const detail = await response.json().catch(() => ({}));
+			throw new Error(detail?.detail || 'Failed to generate demand letter');
+		}
+
+		const data = await response.json();
+		if (data.target_party_name) {
+			demandLetters = { ...demandLetters, [data.target_party_name]: data.letter_html };
+		}
+		demandGenerationState = 'complete';
+		demandPhaseMessage = 'Complete';
+	}
 
 	async function generateDemandLetter() {
 		if (!selectedParty) {
 			alert('Please select an opposing party');
 			return;
 		}
-
-		const demandLines = specificDemands
-			.split('\n')
-			.map((line) => line.trim())
-			.filter(Boolean);
-
 		generatingDemand = true;
+		demandStreamingPreview = null;
+		demandGenerationState = 'idle';
 		try {
-			const { session, user } = await getSecureSession();
-			if (!session || !user) throw new Error('Not authenticated');
-
-			const apiUrl = getApiUrl();
-			const response = await fetchWithRetry(`${apiUrl}/api/analysis/generate-letter`, {
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json',
-					Authorization: `Bearer ${session.access_token}`
-				},
-				body: JSON.stringify({
-					case_id: caseId,
-					letter_type: 'demand',
-					target_party_name: selectedParty,
-					demand_amount: demandAmount ?? undefined,
-					demand_deadline: demandDeadline,
-					specific_demands: demandLines,
-					attorney_name: attorneyName || undefined,
-					firm_name: firmName || undefined,
-					contact_phone: contactPhone || undefined,
-					contact_email: contactEmail || undefined
-				})
-			});
-
-			if (!response.ok) {
-				const detail = await response.json().catch(() => ({}));
-				throw new Error(detail?.detail || 'Failed to generate demand letter');
-			}
-
-			const data = await response.json();
-			if (data.target_party_name) {
-				demandLetters = {
-					...demandLetters,
-					[data.target_party_name]: data.letter_html
-				};
-			}
+			await generateDemandLetterStreaming();
 		} catch (err: any) {
+			if (err.name === 'AbortError') return;
 			if (err instanceof TypeError && /fetch|network/i.test(err.message)) {
-				console.warn('Network error during letter generation — checking if letter was saved...', err);
+				console.warn('Network error during streaming — checking if letter was saved...', err);
 				const recovered = await tryRecoverSavedLetter();
 				if (recovered) return;
+			}
+			if (demandGenerationState !== 'error') {
+				demandGenerationState = 'error';
+				demandPhaseMessage = err.message || 'Generation failed';
 			}
 			alert(err.message || 'Letter generation failed');
 		} finally {
@@ -325,6 +572,47 @@
 			</div>
 		</div>
 	</div>
+
+	{#if generatingDemand && demandGenerationState !== 'idle'}
+		<div class="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg animate-fade-in-up">
+			<div class="flex items-center gap-3">
+				<div class="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+				<div class="flex-1">
+					<p class="text-sm font-bold text-blue-900">
+						{DEMAND_PHASE_LABELS[demandGenerationState] || demandPhaseMessage || 'Processing...'}
+					</p>
+					{#if demandPhaseMessage && demandPhaseMessage !== DEMAND_PHASE_LABELS[demandGenerationState]}
+						<p class="text-xs text-blue-700 mt-0.5">{demandPhaseMessage}</p>
+					{/if}
+				</div>
+				{#if demandGenerationPercent > 0}
+					<span class="text-xs font-mono text-blue-600">{demandGenerationPercent}%</span>
+				{/if}
+			</div>
+			{#if demandGenerationPercent > 0}
+				<div class="mt-2 w-full bg-blue-200 rounded-full h-1.5">
+					<div
+						class="bg-blue-500 h-1.5 rounded-full transition-all duration-300"
+						style="width: {demandGenerationPercent}%"
+					></div>
+				</div>
+			{/if}
+		</div>
+	{/if}
+
+	{#if demandStreamingPreview}
+		<div class="mt-4 border border-gray-200 rounded-xl overflow-hidden bg-gray-50 shadow-sm animate-fade-in-up">
+			<div class="flex items-center justify-between p-4 bg-white border-b border-gray-200">
+				<h4 class="font-bold text-contrast">Preview: {selectedParty}</h4>
+				<span class="text-xs text-blue-600 font-medium animate-pulse">Streaming...</span>
+			</div>
+			<div class="p-4">
+				<div class="border border-gray-200 rounded-lg bg-white overflow-hidden shadow-inner">
+					<iframe srcdoc={demandStreamingPreview} title="Demand Letter Preview" class="w-full h-[400px] border-0" sandbox=""></iframe>
+				</div>
+			</div>
+		</div>
+	{/if}
 
 	<div class="mt-8 flex justify-end border-t border-gray-100 pt-6">
 		<AsyncButton

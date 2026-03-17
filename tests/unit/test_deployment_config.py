@@ -106,3 +106,20 @@ class TestDeploymentConfigConsistency:
             f"Ghostscript subprocess timeout ({ghostscript_timeout}s). "
             f"Otherwise the function is killed before Ghostscript can timeout."
         )
+
+    def test_max_duration_sufficient_for_gap_analysis(self):
+        """The platform maxDuration must exceed the gap analysis budget.
+
+        Gap analysis AI calls use asyncio.wait_for with this budget.
+        If the platform kills the function first, the timeout is useless.
+        """
+        from legal_portal.config.default import Settings
+
+        settings = Settings(openai_api_key="sk-test-placeholder-key")
+        platform_limit = _get_vc_config_max_duration()
+
+        assert platform_limit > settings.gap_analysis_budget_seconds, (
+            f"Platform maxDuration ({platform_limit}s) must exceed "
+            f"gap_analysis_budget_seconds ({settings.gap_analysis_budget_seconds}s). "
+            f"Otherwise Vercel kills the function before the AI call can timeout."
+        )

@@ -11,11 +11,10 @@ import re
 import time
 from typing import Any, Dict, List, Literal, Optional
 
-import html2text
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import StreamingResponse
 
-from legal_portal.api.dependencies import get_current_user, get_supabase_client, get_user_supabase_client
+from legal_portal.api.dependencies import get_current_user, get_user_supabase_client
 from legal_portal.api.rate_limiter import limiter
 from legal_portal.api.routes._analysis_helpers import (
     _emit_generation_metrics,
@@ -31,8 +30,6 @@ from legal_portal.api.routes._analysis_helpers import (
     CalculateDemandAmountResponse,
     LetterGenerationRequest,
     LetterGenerationResponse,
-    RecommendationLetterRequest,
-    RecommendationLetterResponse,
 )
 from legal_portal.services.analysis.gap_helpers import _ensure_fresh_gap_analysis_for_letter_generation
 from legal_portal.config.default import get_settings
@@ -54,6 +51,7 @@ __all__ = [
     "generate_letter",
     "generate_recommendation_letter",
     "stream_recommendation_letter",
+    "stream_demand_letter",
     "calculate_demand_amount",
 ]
 
@@ -745,131 +743,13 @@ async def generate_letter(
             return text
 
         if letter_request.letter_type == LetterType.FINDINGS:
-            from legal_portal.core.data_models import (
-                DeepAnalysis,
-                FactMatrix,
-                GapAnalysisResult,
-                LetterStructure,
+            raise HTTPException(
+                status_code=status.HTTP_410_GONE,
+                detail=(
+                    "The synchronous findings letter endpoint has been retired. "
+                    "Use the streaming endpoint: GET /{analysis_id}/letter/stream"
+                ),
             )
-
-            fact_matrix = FactMatrix(**msr["fact_matrix"])
-            deep_analysis = DeepAnalysis(**msr["deep_analysis"])
-            letter_structure = LetterStructure(**msr["letter_structure"])
-            verified_statutes = msr.get("verified_statutes", [])
-            client_name = _resolve_client_name_for_letter(
-                resolved_identity=resolved_identity,
-                artifacts=artifacts,
-                fact_matrix=fact_matrix,
-            )
-
-            gap_analysis_data = msr.get("gap_analysis")
-            if gap_analysis_data:
-                try:
-                    gap_analysis = GapAnalysisResult(**gap_analysis_data)
-                    logger.info(
-                        "Gap analysis loaded: completeness=%s, critical_gaps=%s",
-                        gap_analysis.overall_completeness_score,
-                        gap_analysis.critical_count,
-                    )
-                except Exception as gap_err:
-                    logger.warning(f"Could not load gap analysis for guardrails: {gap_err}")
-
-            document_summaries_for_context: List[Dict[str, Any]] = []
-            if processing_result.document_summaries:
-                try:
-                    parsed_summaries = json.loads(processing_result.document_summaries)
-                    if isinstance(parsed_summaries, list):
-                        document_summaries_for_context = [
-                            item for item in parsed_summaries if isinstance(item, dict)
-                        ]
-                except Exception as parse_err:
-                    logger.warning(
-                        "[LETTER] Failed to parse document_summaries for findings context: %s",
-                        parse_err,
-                    )
-
-            if gap_analysis:
-                if gap_analysis.overall_completeness_score < 40:
-                    if not letter_request.force_generation:
-                        raise HTTPException(
-                            status_code=status.HTTP_409_CONFLICT,
-                            detail={
-                                "error": "documentation_insufficient",
-                                "message": (
-                                    "Case documentation is insufficient for letter generation. "
-                                    "Please provide the missing documents identified in Gap Analysis "
-                                    "before generating a letter."
-                                ),
-                                "completeness_score": gap_analysis.overall_completeness_score,
-                                "critical_gaps": gap_analysis.critical_count,
-                                "recommendation": (
-                                    "Review the Gap Analysis tab to identify which documents are needed."
-                                ),
-                                "allow_override": True,
-                            },
-                        )
-                    logger.warning(
-                        "OVERRIDE: force_generation used for case %s with low completeness score "
-                        "(%s%%) - critical_gaps=%s",
-                        letter_request.case_id,
-                        gap_analysis.overall_completeness_score,
-                        gap_analysis.critical_count,
-                    )
-                elif gap_analysis.overall_completeness_score < 60:
-                    logger.warning(
-                        "Generating letter with low completeness score: %s%% "
-                        "(critical_gaps=%s, high_gaps=%s)",
-                        gap_analysis.overall_completeness_score,
-                        gap_analysis.critical_count,
-                        gap_analysis.high_count,
-                    )
-
-            if settings.letter_strategy_enabled and _remaining_seconds() >= (strategy_budget + finalize_budget):
-                strategy_started = time.monotonic()
-                try:
-                    metrics["model_calls"] = int(metrics.get("model_calls", 0)) + 1
-                    strategy_object = await json_service.build_findings_strategy(
-                        fact_matrix=fact_matrix,
-                        deep_analysis=deep_analysis,
-                        gap_analysis=gap_analysis,
-                        timeout_seconds=strategy_budget,
-                        allow_model=True,
-                        model="gpt-5-mini",
-                    )
-                    metrics["strategy_used"] = bool(strategy_object)
-                except Exception as strategy_err:
-                    logger.warning("[LETTER] Findings strategy build failed: %s", strategy_err)
-                finally:
-                    metrics["strategy_latency_ms"] = int((time.monotonic() - strategy_started) * 1000)
-
-            metrics["model_calls"] = int(metrics.get("model_calls", 0)) + 1
-            raw_findings_html = await json_service.generate_findings_letter_adaptive(
-                intake_content=processing_result.intake_content or "",
-                fact_matrix=fact_matrix,
-                legal_analysis=deep_analysis,
-                structure_guidance=letter_structure,
-                verified_statutes=verified_statutes,
-                attorney_name=attorney_info["name"],
-                firm_name=attorney_info["firm"],
-                confirmed_qa_pairs=artifacts.get("confirmed_qa_pairs", []),
-                contact_phone=attorney_info["phone"],
-                contact_email=attorney_info["email"],
-                quality_context=artifacts.get("quality_context", ""),
-                clio_matter_context=artifacts.get("clio_matter_context", ""),
-                jurisdiction=jurisdiction,
-                diag_logger=diag_logger,
-                original_documents=msr.get("original_documents"),
-                document_summaries_for_context=document_summaries_for_context,
-                document_registry=msr.get("document_registry"),
-                strategy_object=strategy_object,
-                gap_analysis=gap_analysis,
-            )
-            draft_markdown_for_repair = html2text.html2text(raw_findings_html)
-            letter_html = DocumentFormatterService.format_findings_letter(
-                letter_html=raw_findings_html,
-                client_name=client_name,
-            )
-            letter_key = "findings"
         else:
             if not letter_request.target_party_name:
                 raise HTTPException(
@@ -1164,6 +1044,13 @@ async def generate_letter(
 
         _emit_generation_metrics(metrics)
 
+        total_elapsed = time.monotonic() - started_at
+        logger.info(
+            f"[LETTER_ENDPOINT] Complete | case_id={letter_request.case_id} "
+            f"letter_type={letter_request.letter_type.value} "
+            f"total_elapsed={total_elapsed:.1f}s"
+        )
+
         return LetterGenerationResponse(
             letter_html=letter_html,
             letter_type=letter_request.letter_type,
@@ -1187,197 +1074,20 @@ async def generate_letter(
 
 
 # =============================================================================
-# RECOMMENDATION LETTER GENERATION ENDPOINT
+# RECOMMENDATION LETTER GENERATION ENDPOINT (RETIRED)
 # =============================================================================
 
 
-@router.post("/generate-recommendation-letter", response_model=RecommendationLetterResponse)
-async def generate_recommendation_letter(
-    letter_request: RecommendationLetterRequest,
-    user=Depends(get_current_user),  # noqa: B008
-    supabase=Depends(get_user_supabase_client),  # noqa: B008
-    service_supabase=Depends(get_supabase_client),  # noqa: B008
-):
-    """Generate a recommendation-based letter (proceed, request_documents, settlement_advisory, declination).
-
-    This endpoint generates letters based on the case recommendation category from gap analysis.
-    Unlike findings/demand letters, these are advisory letters about case status.
-    """
-    settings = get_settings()
-    started_at = time.monotonic()
-    case_id = letter_request.case_id
-    logger.info(f"[REC_LETTER_ENDPOINT] Generating {letter_request.letter_type} letter for case {case_id}")
-
-    _ensure_case_access(supabase, case_id, user["id"])
-    analysis_record = _fetch_latest_analysis_result(supabase, case_id)
-    metrics = _new_generation_metrics(
-        analysis_id=analysis_record["id"],
-        letter_type=letter_request.letter_type,
-        streaming=False,
+@router.post("/generate-recommendation-letter")
+async def generate_recommendation_letter():
+    """Retired — use the streaming endpoint instead."""
+    raise HTTPException(
+        status_code=status.HTTP_410_GONE,
+        detail=(
+            "The synchronous recommendation letter endpoint has been retired. "
+            "Use the streaming endpoint: GET /{analysis_id}/recommendation-letter/stream"
+        ),
     )
-
-    try:
-        result_payload = analysis_record["result"]
-        processing_result = ProcessingResult(**result_payload)
-
-        if not processing_result.multi_stage_result:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=(
-                    "Recommendation letter requires a completed multi-stage analysis. "
-                    "Please run case analysis first."
-                ),
-            )
-
-        msr = processing_result.multi_stage_result
-
-        from legal_portal.core.data_models import (
-            DeepAnalysis,
-            DocumentSummaryStructured,
-            FactMatrix,
-            GapAnalysisResult,
-            RecommendedLetterType,
-        )
-        from legal_portal.services.letters.recommendation_letter_service import RecommendationLetterService
-
-        try:
-            letter_type_enum = RecommendedLetterType(letter_request.letter_type)
-        except ValueError:
-            valid_types = [
-                t.value for t in RecommendedLetterType if t.value not in ["findings", "demand"]
-            ]
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail=f"Invalid letter_type '{letter_request.letter_type}'. Valid types: {valid_types}",
-            )
-
-        gap_analysis_data = msr.get("gap_analysis")
-        if not gap_analysis_data:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="Recommendation letter requires gap analysis. Please run gap analysis first.",
-            )
-
-        gap_analysis = GapAnalysisResult(**gap_analysis_data)
-        fact_matrix = FactMatrix(**msr.get("fact_matrix", {})) if msr.get("fact_matrix") else None
-        deep_analysis = DeepAnalysis(**msr.get("deep_analysis", {})) if msr.get("deep_analysis") else None
-
-        document_summaries = None
-        if processing_result.document_summaries:
-            try:
-                doc_summaries_raw = json.loads(processing_result.document_summaries)
-                document_summaries = [DocumentSummaryStructured(**ds) for ds in doc_summaries_raw]
-            except Exception as parse_err:
-                logger.warning(f"Failed to parse document_summaries: {parse_err}")
-
-        artifacts = processing_result.artifacts or {}
-        resolved_identity = _resolve_letter_identity_context(
-            supabase=supabase,
-            case_id=case_id,
-            artifacts=artifacts,
-            overrides={
-                "attorney_name": letter_request.attorney_name,
-                "firm_name": letter_request.firm_name,
-                "contact_phone": letter_request.contact_phone,
-                "contact_email": letter_request.contact_email,
-                "client_name": letter_request.client_name,
-            },
-        )
-        jurisdiction = artifacts.get("jurisdiction", "Florida")
-        attorney_info = {
-            "attorney_name": resolved_identity.get("attorney_name"),
-            "firm_name": resolved_identity.get("firm_name"),
-            "contact_phone": resolved_identity.get("contact_phone"),
-            "contact_email": resolved_identity.get("contact_email"),
-        }
-
-        client_name = _resolve_client_name_for_letter(
-            resolved_identity=resolved_identity,
-            artifacts=artifacts,
-            fact_matrix=fact_matrix,
-        )
-
-        ai_preferences = await _get_user_ai_preferences(user["id"], supabase)
-        openai_client = OpenAIClient(user_preferences=ai_preferences)
-        rec_letter_service = RecommendationLetterService(openai_client)
-        metrics["model_calls"] = int(metrics.get("model_calls", 0)) + 1
-
-        try:
-            letter_html = await rec_letter_service.generate_recommendation_letter(
-                letter_type=letter_type_enum,
-                gap_analysis=gap_analysis,
-                deep_analysis=deep_analysis,
-                fact_matrix=fact_matrix,
-                document_summaries=document_summaries,
-                attorney_info=attorney_info,
-                client_name=client_name,
-                jurisdiction=jurisdiction,
-            )
-        except Exception as gen_err:
-            logger.error(f"[REC_LETTER_ENDPOINT] Error generating letter: {gen_err}", exc_info=True)
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to generate recommendation letter: {str(gen_err)}",
-            )
-
-        quality_report = _quality_report_placeholder(mode="default", letter_type="recommendation")
-        if settings.letter_quality_lint_enabled:
-            try:
-                validator = LetterValidationService()
-                quality_report = validator.lint_client_letter(
-                    letter_html,
-                    mode="default",
-                    letter_type="recommendation",
-                )
-            except Exception as lint_err:
-                logger.warning(f"[REC_LETTER_ENDPOINT] Lint failed; using placeholder report: {lint_err}")
-
-        metrics["lint_passed"] = quality_report.get("lint_passed")
-        metrics["lint_score"] = quality_report.get("score")
-        metrics["total_latency_ms"] = int((time.monotonic() - started_at) * 1000)
-
-        letter_key = f"recommendation_{letter_request.letter_type}"
-        generated_letters = result_payload.setdefault("generated_letters", {})
-        generated_letters[letter_key] = letter_html
-        generated_letters[f"{letter_key}_meta"] = {
-            "quality_report": quality_report,
-            "generation_metrics": metrics,
-        }
-        service_supabase.table("analysis_results").update({"result": result_payload}).eq(
-            "id", analysis_record["id"]
-        ).execute()
-
-        logger.info(
-            "[REC_LETTER_ENDPOINT] %s letter generated and saved for case %s",
-            letter_request.letter_type,
-            case_id,
-        )
-        _emit_generation_metrics(metrics)
-
-        recommendation_category = None
-        if gap_analysis.recommendation:
-            recommendation_category = gap_analysis.recommendation.category.value
-
-        return RecommendationLetterResponse(
-            letter_html=letter_html,
-            letter_type=letter_request.letter_type,
-            recommendation_category=recommendation_category,
-            quality_report=quality_report,
-            generation_metrics=metrics,
-        )
-    except HTTPException as exc:
-        metrics["total_latency_ms"] = int((time.monotonic() - started_at) * 1000)
-        if isinstance(exc.detail, dict):
-            metrics["error_code"] = exc.detail.get("error") or str(exc.status_code)
-        else:
-            metrics["error_code"] = str(exc.status_code)
-        _emit_generation_metrics(metrics)
-        raise
-    except Exception as exc:
-        metrics["total_latency_ms"] = int((time.monotonic() - started_at) * 1000)
-        metrics["error_code"] = type(exc).__name__
-        _emit_generation_metrics(metrics)
-        raise
 
 
 @router.get("/{analysis_id}/recommendation-letter/stream")
@@ -1733,6 +1443,462 @@ async def stream_recommendation_letter(
             if done_msg:
                 yield done_msg
             _emit_generation_metrics(metrics)
+
+        except Exception as stream_err:
+            if isinstance(stream_err, TimeoutError):
+                metrics["timeout"] = True
+                metrics["error_code"] = "timeout"
+            else:
+                metrics["error_code"] = type(stream_err).__name__
+            metrics["total_latency_ms"] = int((time.monotonic() - request_started) * 1000)
+            _emit_generation_metrics(metrics)
+
+            error_msg = _emit(
+                "error",
+                error=str(stream_err),
+                code=metrics.get("error_code"),
+                recoverable=recoverable_timeout,
+            )
+            if error_msg:
+                yield error_msg
+
+            done_msg = _emit("done")
+            if done_msg:
+                yield done_msg
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache, no-transform",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+# =============================================================================
+# STREAMING DEMAND LETTER ENDPOINT
+# =============================================================================
+
+
+@router.get("/{analysis_id}/demand-letter/stream")
+async def stream_demand_letter(
+    analysis_id: str,
+    target_party_name: str = Query(..., description="Name of the opposing party"),
+    demand_amount: Optional[float] = Query(default=None, description="Dollar amount demanded"),
+    demand_deadline: str = Query(default="10 business days", description="Response deadline"),
+    specific_demands: str = Query(default="", description="Pipe-separated list of specific demands"),
+    schema_version: int = Query(default=2, ge=1, le=2),
+    mode: Literal["default", "strict_quality"] = Query(default="default"),
+    user=Depends(get_current_user),
+    supabase=Depends(get_user_supabase_client),
+):
+    """Stream demand letter generation with SSE events and quality pipeline."""
+    settings = get_settings()
+    if not settings.demand_letter_stream_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Streaming demand letters not enabled. Use POST /generate-letter instead.",
+        )
+
+    response = supabase.table("analysis_results").select("*").eq("id", analysis_id).execute()
+    if not response.data:
+        raise HTTPException(status_code=404, detail="Analysis not found")
+
+    analysis_data = response.data[0]
+    _ensure_case_access(supabase, analysis_data["case_id"], user["id"])
+    result_payload = analysis_data.get("result")
+    if not result_payload:
+        raise HTTPException(status_code=400, detail="Analysis result not yet available")
+
+    processing_result = ProcessingResult(**result_payload)
+    if not processing_result.multi_stage_result:
+        raise HTTPException(status_code=400, detail="Multi-stage analysis results missing")
+
+    msr = processing_result.multi_stage_result
+    effective_schema_version = 2 if (schema_version == 2 and settings.letter_stream_schema_v2) else 1
+    artifacts = processing_result.artifacts or {}
+    resolved_identity = _resolve_letter_identity_context(
+        supabase=supabase,
+        case_id=analysis_data["case_id"],
+        artifacts=artifacts,
+    )
+    ai_preferences = await _get_user_ai_preferences(user["id"], supabase)
+    demands_list = [d.strip() for d in specific_demands.split("|") if d.strip()] if specific_demands else []
+
+    def _event_payload(event_name: str, **kwargs: Any) -> Optional[Dict[str, Any]]:
+        if effective_schema_version == 1:
+            if event_name == "token":
+                return {"token": kwargs.get("token", "")}
+            if event_name == "done":
+                return {"done": True}
+            if event_name == "error":
+                return {"error": kwargs.get("error", "Stream failed")}
+            return None
+        payload: Dict[str, Any] = {
+            "schema_version": 2,
+            "event": event_name,
+            "type": event_name,
+        }
+        payload.update(kwargs)
+        if event_name == "done":
+            payload["done"] = True
+        return payload
+
+    async def generate():
+        request_started = time.monotonic()
+        metrics = _new_generation_metrics(
+            analysis_id=analysis_id,
+            letter_type="demand",
+            streaming=True,
+        )
+        quality_report = _quality_report_placeholder(mode=mode, letter_type="demand")
+        draft_markdown = ""
+        recoverable_timeout = False
+        internal_budget = max(30, int(settings.letter_internal_budget_seconds))
+        lint_budget = max(1, int(settings.letter_lint_budget_seconds))
+        repair_budget = max(1, int(settings.letter_repair_budget_seconds))
+        finalize_budget = max(1, int(settings.letter_finalize_budget_seconds))
+        strategy_budget = max(1, int(settings.letter_strategy_budget_seconds))
+        heartbeat_interval = max(1, int(settings.letter_stream_heartbeat_seconds))
+        internal_deadline = request_started + internal_budget
+
+        def _emit(event_name: str, **kwargs: Any) -> Optional[str]:
+            payload = _event_payload(event_name, **kwargs)
+            if payload is None:
+                return None
+            return _to_sse(payload)
+
+        try:
+            phase_msg = _emit("phase", phase="context_build", message="Building context", percent=5)
+            if phase_msg:
+                yield phase_msg
+
+            attorney_info = {
+                "name": resolved_identity.get("attorney_name"),
+                "firm": resolved_identity.get("firm_name"),
+                "phone": resolved_identity.get("contact_phone"),
+                "email": resolved_identity.get("contact_email"),
+            }
+            client_name = _resolve_client_name_for_letter(
+                resolved_identity=resolved_identity,
+                artifacts=artifacts,
+                fact_matrix=msr.get("fact_matrix"),
+            )
+
+            document_summaries = []
+            if processing_result.document_summaries:
+                try:
+                    document_summaries = json.loads(processing_result.document_summaries)
+                except Exception as parse_err:
+                    logger.warning(f"Failed to parse document_summaries: {parse_err}")
+
+            openai_client = OpenAIClient(user_preferences=ai_preferences)
+            demand_service = DemandLetterService(openai_client)
+            json_service = JsonProcessingService(client=openai_client, config={})
+            normalize_markdown_fn = getattr(json_service, "normalize_client_letter_markdown", None)
+
+            def _normalize_markdown(text: str, letter_kind: str) -> str:
+                if callable(normalize_markdown_fn):
+                    return normalize_markdown_fn(
+                        text,
+                        letter_type=letter_kind,
+                        attorney_name=attorney_info.get("name"),
+                        firm_name=attorney_info.get("firm"),
+                    )
+                return text
+
+            # Strategy phase
+            strategy_object = None
+            if settings.letter_strategy_enabled and (internal_deadline - time.monotonic()) >= (strategy_budget + finalize_budget):
+                phase_msg = _emit("phase", phase="strategy", message="Planning letter strategy", percent=8)
+                if phase_msg:
+                    yield phase_msg
+                try:
+                    from legal_portal.core.data_models import DeepAnalysis, FactMatrix, GapAnalysisResult
+                    demand_fact_matrix = FactMatrix(**msr["fact_matrix"])
+                    demand_deep_analysis = DeepAnalysis(**msr["deep_analysis"])
+                    gap_analysis = None
+                    if msr.get("gap_analysis"):
+                        try:
+                            gap_analysis = GapAnalysisResult(**msr["gap_analysis"])
+                        except Exception:
+                            pass
+                    metrics["model_calls"] = int(metrics.get("model_calls", 0)) + 1
+                    strategy_object = await demand_service.build_demand_strategy(
+                        fact_matrix=demand_fact_matrix,
+                        deep_analysis=demand_deep_analysis,
+                        target_party_name=target_party_name,
+                        demand_amount=demand_amount,
+                        demand_deadline=demand_deadline,
+                        specific_demands=demands_list,
+                        client_name=client_name,
+                        gap_analysis=gap_analysis,
+                        timeout_seconds=strategy_budget,
+                        allow_model=True,
+                        model="gpt-5-mini",
+                    )
+                    metrics["strategy_used"] = bool(strategy_object)
+                except Exception as strategy_err:
+                    logger.warning("[DEMAND_STREAM] Strategy build failed: %s", strategy_err)
+
+            # Draft generation phase
+            phase_msg = _emit("phase", phase="draft_generation", message="Generating draft", percent=15)
+            if phase_msg:
+                yield phase_msg
+
+            metrics["model_calls"] = int(metrics.get("model_calls", 0)) + 1
+            token_queue: asyncio.Queue = asyncio.Queue()
+
+            async def _collect_tokens() -> None:
+                try:
+                    async for token in demand_service.stream_demand_letter(
+                        fact_matrix_dict=msr["fact_matrix"],
+                        deep_analysis_dict=msr["deep_analysis"],
+                        target_party_name=target_party_name,
+                        demand_amount=demand_amount,
+                        demand_deadline=demand_deadline,
+                        specific_demands=demands_list,
+                        attorney_info=attorney_info,
+                        client_name=client_name,
+                        document_summaries=document_summaries,
+                        jurisdiction=artifacts.get("jurisdiction", "Florida"),
+                        strategy_object=strategy_object,
+                    ):
+                        await token_queue.put(("token", token))
+                except Exception as stream_err:
+                    await token_queue.put(("error", stream_err))
+                finally:
+                    await token_queue.put(("done", None))
+
+            collector_task = asyncio.create_task(_collect_tokens())
+            draft_deadline = internal_deadline - (lint_budget + finalize_budget)
+            _draft_token_count = 0
+            _last_wc_emit_token = 0
+            try:
+                while True:
+                    if time.monotonic() > draft_deadline:
+                        metrics["timeout"] = True
+                        metrics["error_code"] = "draft_budget_exceeded"
+                        break
+                    try:
+                        msg_type, msg_data = await asyncio.wait_for(
+                            token_queue.get(),
+                            timeout=heartbeat_interval,
+                        )
+                    except asyncio.TimeoutError:
+                        heartbeat_msg = _emit(
+                            "heartbeat",
+                            phase="draft_generation",
+                            elapsed_ms=int((time.monotonic() - request_started) * 1000),
+                        )
+                        if heartbeat_msg:
+                            yield heartbeat_msg
+                        continue
+
+                    if msg_type == "token":
+                        token = str(msg_data or "")
+                        if not token:
+                            continue
+                        draft_markdown += token
+                        _draft_token_count += 1
+                        if metrics["ttft_ms"] is None:
+                            metrics["ttft_ms"] = int((time.monotonic() - request_started) * 1000)
+                        token_msg = _emit("token", token=token)
+                        if token_msg:
+                            yield token_msg
+                        if _draft_token_count - _last_wc_emit_token >= 200:
+                            _last_wc_emit_token = _draft_token_count
+                            _wc = len(re.findall(r"\b[\w'-]+\b", draft_markdown))
+                            _pct = min(88, 15 + _wc * 73 // 1000)
+                            wc_msg = _emit("phase", phase="draft_generation", message=f"Drafting letter... ({_wc:,} words)", percent=_pct)
+                            if wc_msg:
+                                yield wc_msg
+                    elif msg_type == "error":
+                        if isinstance(msg_data, Exception):
+                            raise msg_data
+                        raise RuntimeError(str(msg_data))
+                    elif msg_type == "done":
+                        break
+            finally:
+                if not collector_task.done():
+                    collector_task.cancel()
+                    try:
+                        await collector_task
+                    except asyncio.CancelledError:
+                        pass
+
+            draft_word_count = len(re.findall(r"\b[\w'-]+\b", draft_markdown))
+            if metrics["timeout"] and draft_word_count >= 80:
+                recoverable_timeout = True
+                timeout_msg = _emit(
+                    "error",
+                    error="Draft generation exceeded time budget; finalizing best available content.",
+                    code=metrics.get("error_code"),
+                    recoverable=True,
+                )
+                if timeout_msg:
+                    yield timeout_msg
+
+            if not draft_markdown.strip():
+                raise RuntimeError("Demand letter generation produced no content.")
+
+            draft_markdown = _normalize_markdown(draft_markdown, "demand")
+
+            # Lint validation phase
+            phase_msg = _emit("phase", phase="lint_validation", message="Validating quality", percent=90)
+            if phase_msg:
+                yield phase_msg
+
+            validator = LetterValidationService()
+            if settings.letter_quality_lint_enabled and (internal_deadline - time.monotonic()) > finalize_budget:
+                quality_report = validator.lint_client_letter(
+                    draft_markdown,
+                    mode=mode,
+                    letter_type="demand",
+                )
+
+            final_markdown = draft_markdown
+            if (
+                settings.letter_conditional_repair_enabled
+                and settings.letter_quality_lint_enabled
+                and not quality_report.get("lint_passed", True)
+            ):
+                remaining_seconds = internal_deadline - time.monotonic()
+                if remaining_seconds >= (repair_budget + finalize_budget):
+                    phase_msg = _emit("phase", phase="repair", message="Repairing quality issues")
+                    if phase_msg:
+                        yield phase_msg
+                    metrics["repair_attempted"] = True
+                    metrics["model_calls"] = int(metrics.get("model_calls", 0)) + 1
+                    repaired = await json_service.repair_letter_constraints(
+                        draft_markdown,
+                        quality_report.get("violations", []),
+                        mode=mode,
+                        model="gpt-5-mini",
+                    )
+                    repaired = _normalize_markdown(repaired, "demand")
+                    post_report = validator.lint_client_letter(
+                        repaired,
+                        mode=mode,
+                        letter_type="demand",
+                    )
+                    quality_report = {
+                        **post_report,
+                        "pre_repair": quality_report,
+                        "post_repair": post_report,
+                    }
+                    if repaired.strip() and repaired.strip() != draft_markdown.strip():
+                        final_markdown = repaired
+                        metrics["repair_applied"] = True
+                else:
+                    quality_report = {
+                        **quality_report,
+                        "repair_skipped": "insufficient_budget",
+                    }
+
+            # Polish phase
+            if getattr(settings, "letter_polish_enabled", True) and (internal_deadline - time.monotonic()) > finalize_budget:
+                phase_msg = _emit("phase", phase="polishing", message="Final polish", percent=93)
+                if phase_msg:
+                    yield phase_msg
+                try:
+                    from legal_portal.utils.letter_polish import polish_letter_async
+                    _polish_timeout = getattr(settings, "letter_polish_timeout_seconds", 55)
+                    remaining = internal_deadline - time.monotonic() - finalize_budget
+                    _polish_timeout = min(_polish_timeout, max(10, remaining))
+                    polish_result = await polish_letter_async(
+                        openai_client,
+                        final_markdown,
+                        timeout_seconds=float(_polish_timeout),
+                    )
+                    if polish_result.get("success") and polish_result.get("polished_letter"):
+                        polished_candidate = polish_result["polished_letter"]
+                        integrity_report = {"passed": True, "reason": "unsupported"}
+                        if hasattr(LetterValidationService, "check_polish_fact_integrity"):
+                            integrity_report = LetterValidationService().check_polish_fact_integrity(
+                                final_markdown,
+                                polished_candidate,
+                                tracked_entities=[
+                                    client_name or "",
+                                    target_party_name,
+                                    attorney_info.get("name") or "",
+                                    attorney_info.get("firm") or "",
+                                ],
+                            )
+                        metrics["polish_integrity_passed"] = bool(integrity_report.get("passed", True))
+                        if integrity_report.get("passed", True):
+                            final_markdown = polished_candidate
+                            metrics["polish_applied"] = True
+                        else:
+                            metrics["polish_applied"] = False
+                            metrics["polish_reverted"] = True
+                except Exception as polish_err:
+                    logger.warning("[DEMAND_STREAM] Polish pass failed: %s", polish_err)
+
+            # Finalize phase
+            phase_msg = _emit("phase", phase="finalizing", message="Finalizing letter", percent=96)
+            if phase_msg:
+                yield phase_msg
+
+            final_markdown = _normalize_markdown(final_markdown, "demand")
+            final_html_raw = json_service._convert_markdown_to_html(final_markdown)
+            final_html = DocumentFormatterService.format_demand_letter(
+                letter_html=final_html_raw,
+                recipient_name=target_party_name,
+            )
+
+            metrics["lint_passed"] = quality_report.get("lint_passed")
+            metrics["lint_score"] = quality_report.get("score")
+            metrics["total_latency_ms"] = int((time.monotonic() - request_started) * 1000)
+
+            # Persist
+            persisted_result = analysis_data.get("result") or {}
+            generated_letters = persisted_result.setdefault("generated_letters", {})
+            letter_key = f"demand_{target_party_name.replace(' ', '_')}".lower()
+            generated_letters[letter_key] = final_html
+            generated_letters[f"{letter_key}_meta"] = {
+                "quality_report": quality_report,
+                "quality_report_v2": quality_report.get("quality_report_v2"),
+                "generation_metrics": metrics,
+                "strategy_object": strategy_object,
+            }
+            supabase.table("analysis_results").update({"result": persisted_result}).eq(
+                "id", analysis_id
+            ).execute()
+
+            quality_msg = _emit(
+                "quality",
+                quality_report=quality_report,
+                generation_metrics=metrics,
+            )
+            if quality_msg:
+                yield quality_msg
+
+            final_msg = _emit(
+                "final",
+                content={
+                    "format": "html",
+                    "html": final_html,
+                    "markdown": final_markdown,
+                },
+                quality_report=quality_report,
+                generation_metrics=metrics,
+            )
+            if final_msg:
+                yield final_msg
+
+            done_msg = _emit("done")
+            if done_msg:
+                yield done_msg
+            _emit_generation_metrics(metrics)
+
+            total_elapsed = time.monotonic() - request_started
+            logger.info(
+                f"[DEMAND_STREAM] Complete | analysis_id={analysis_id} "
+                f"target_party={target_party_name} total_elapsed={total_elapsed:.1f}s"
+            )
 
         except Exception as stream_err:
             if isinstance(stream_err, TimeoutError):

@@ -1403,13 +1403,17 @@ async def stream_case_analysis(
                                     f"docs_in_scope={_docs_in_scope} docs_omitted={_docs_omitted}"
                                 )
 
-                                # Auto-save raw content for recovery if frontend loses connection
+                                # Auto-save raw content for recovery if frontend loses connection.
+                                # Uses "processing" status (valid per DB constraint) so the
+                                # frontend's subsequent save_streaming_analysis call can
+                                # create the authoritative "completed" record with full
+                                # structured extraction.
                                 try:
                                     analysis_id = str(uuid.uuid4())
                                     service_supabase.table("analysis_results").insert({
                                         "id": analysis_id,
                                         "case_id": case_id,
-                                        "status": "streaming_complete",
+                                        "status": "processing",
                                         "result": {
                                             "raw_streaming_content": full_content,
                                             "docs_in_scope": ctx_result.docs_in_scope,
@@ -1483,7 +1487,7 @@ async def get_streaming_result(
     response = supabase.table("analysis_results") \
         .select("id, status, result, created_at") \
         .eq("case_id", case_id) \
-        .in_("status", ["streaming_complete", "completed"]) \
+        .in_("status", ["processing", "completed"]) \
         .order("created_at", desc=True) \
         .limit(1) \
         .execute()

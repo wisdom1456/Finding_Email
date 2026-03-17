@@ -267,7 +267,9 @@
                 if (data.docs_omitted !== undefined) docsOmitted = data.docs_omitted;
                 // Final render with full content before completing
                 flushRender();
-                emitComplete(content);
+                // Use server-side full_content for saving (clean GPT-5.4 analysis only,
+                // without preview text). The display `content` keeps preview + analysis.
+                emitComplete(content, data.content || undefined);
               }
               
               if (data.error) {
@@ -308,13 +310,15 @@
     }
   }
 
-  async function emitComplete(analysisContent: string) {
+  async function emitComplete(analysisContent: string, serverContent?: string) {
     if (hasEmittedComplete) return;
     hasEmittedComplete = true;
     status = 'complete';
     stopTimer();
     if (!serverSaved) {
-      await saveAnalysis(analysisContent);
+      // Prefer server-side content (clean GPT-5.4 analysis without preview text)
+      // for structured extraction. Falls back to accumulated content.
+      await saveAnalysis(serverContent || analysisContent);
     }
     onComplete?.(analysisContent);
   }

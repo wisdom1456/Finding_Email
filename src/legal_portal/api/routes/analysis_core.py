@@ -693,38 +693,60 @@ async def save_streaming_analysis(
             # Add financial data if present (parse currency strings to floats)
             if structured_data.get("financial_summary"):
                 fin = structured_data["financial_summary"]
-                total_claimed = _parse_currency(fin.get("total_claimed"))
-                documented_damages = _parse_currency(fin.get("documented_damages"))
 
-                if total_claimed > 0:
-                    # Add to financial_items (legacy field for backward compatibility)
-                    multi_stage_result["fact_matrix"]["financial_items"].append({
-                        "description": "Total Claimed",
-                        "amount": total_claimed,
-                    })
-                    # Add to financial_data (correct field for FactMatrix model)
-                    multi_stage_result["fact_matrix"]["financial_data"].append({
-                        "amount": total_claimed,
-                        "description": "Total Claimed",
-                        "source_document": "Streaming Analysis",
-                        "payment_type": "claimed",
-                        "category": "damages_claimed",
-                        "date": None,
-                    })
+                # Prefer itemized financial_items when present
+                items = fin.get("financial_items") or []
+                if items:
+                    for item in items:
+                        amount = _parse_currency(item.get("amount"))
+                        if amount > 0:
+                            desc = item.get("description", "Financial item")
+                            cat = item.get("category", "other")
+                            ptype = item.get("payment_type", "claimed")
+                            multi_stage_result["fact_matrix"]["financial_items"].append({
+                                "description": desc,
+                                "amount": amount,
+                            })
+                            multi_stage_result["fact_matrix"]["financial_data"].append({
+                                "amount": amount,
+                                "description": desc,
+                                "source_document": "Streaming Analysis",
+                                "payment_type": ptype,
+                                "category": cat,
+                                "date": None,
+                            })
+                else:
+                    # Fallback: legacy 2-field parsing for old saved results
+                    total_claimed = _parse_currency(fin.get("total_claimed"))
+                    documented_damages = _parse_currency(fin.get("documented_damages"))
 
-                if documented_damages > 0:
-                    multi_stage_result["fact_matrix"]["financial_items"].append({
-                        "description": "Documented Damages",
-                        "amount": documented_damages,
-                    })
-                    multi_stage_result["fact_matrix"]["financial_data"].append({
-                        "amount": documented_damages,
-                        "description": "Documented Damages",
-                        "source_document": "Streaming Analysis",
-                        "payment_type": "claimed",
-                        "category": "damages_claimed",
-                        "date": None,
-                    })
+                    if total_claimed > 0:
+                        multi_stage_result["fact_matrix"]["financial_items"].append({
+                            "description": "Total Claimed",
+                            "amount": total_claimed,
+                        })
+                        multi_stage_result["fact_matrix"]["financial_data"].append({
+                            "amount": total_claimed,
+                            "description": "Total Claimed",
+                            "source_document": "Streaming Analysis",
+                            "payment_type": "claimed",
+                            "category": "damages_claimed",
+                            "date": None,
+                        })
+
+                    if documented_damages > 0:
+                        multi_stage_result["fact_matrix"]["financial_items"].append({
+                            "description": "Documented Damages",
+                            "amount": documented_damages,
+                        })
+                        multi_stage_result["fact_matrix"]["financial_data"].append({
+                            "amount": documented_damages,
+                            "description": "Documented Damages",
+                            "source_document": "Streaming Analysis",
+                            "payment_type": "claimed",
+                            "category": "damages_claimed",
+                            "date": None,
+                        })
 
             # Verify statutes against legal corpus for letter generation
             # Defensive check: ensure multi_stage_result exists before modifying it

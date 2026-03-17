@@ -70,8 +70,22 @@ _EXTRACTION_JSON_SCHEMA = {
                     "properties": {
                         "total_claimed": {"type": "string"},
                         "documented_damages": {"type": "string"},
+                        "financial_items": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "amount": {"type": "string"},
+                                    "description": {"type": "string"},
+                                    "category": {"type": "string"},
+                                    "payment_type": {"type": "string"},
+                                },
+                                "required": ["amount", "description", "category", "payment_type"],
+                                "additionalProperties": False,
+                            },
+                        },
                     },
-                    "required": ["total_claimed", "documented_damages"],
+                    "required": ["total_claimed", "documented_damages", "financial_items"],
                     "additionalProperties": False,
                 },
             },

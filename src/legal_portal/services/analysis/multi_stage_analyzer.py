@@ -400,7 +400,10 @@ This block MUST be valid JSON wrapped in a code fence:
   ],
   "financial_summary": {{
     "total_claimed": "$X,XXX.XX or null if not applicable",
-    "documented_damages": "$X,XXX.XX or null"
+    "documented_damages": "$X,XXX.XX or null",
+    "financial_items": [
+      {{"amount": "$X,XXX.XX", "description": "What this amount is for", "category": "contract_price | payment_made | damages_claimed | fees_owed | refund_owed | other", "payment_type": "paid | owed | claimed | estimated"}}
+    ]
   }},
   "parties": [
     {{

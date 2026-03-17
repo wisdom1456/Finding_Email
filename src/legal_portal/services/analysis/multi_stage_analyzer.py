@@ -478,7 +478,7 @@ This block MUST be valid JSON wrapped in a code fence:
 
         logger.info(
             f"[STREAM:PROMPT_STATS] prompt_chars={len(prompt):,} "
-            f"model=gpt-5.4 reasoning_effort=medium max_tokens=24000 "
+            f"model=gpt-5.4 reasoning_effort=low max_tokens=24000 "
             f"setup_elapsed={time.time()-_t_streaming_start:.2f}s"
         )
 
@@ -501,7 +501,7 @@ IMPORTANT: Your response MUST end with the ```json structured data block as spec
                         {"role": "user", "content": prompt}
                     ],
                     max_tokens=24000,
-                    reasoning_effort="medium",
+                    reasoning_effort="low",
                 ):
                     token_count += 1
                     yield token

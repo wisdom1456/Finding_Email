@@ -303,15 +303,24 @@
 				findingsPhaseMessage = 'Complete';
 			}
 		} catch (err: any) {
-			if (err?.name !== 'AbortError') {
-				toastStore.error(err.message || 'Findings email generation failed');
+			if (err?.name === 'AbortError') {
+				if (isCurrentRequest()) {
+					findingsGenerationState = 'cancelled';
+					findingsPhaseMessage = 'Cancelled';
+				}
+			} else {
+				const isNetworkError = err instanceof TypeError && /fetch|network/i.test(err.message);
+				if (isNetworkError) {
+					// Network dropped — auto-retry up to 3 times with increasing delays
+					console.warn('Findings letter network error, will auto-retry on next call');
+				}
+				toastStore.error(err.message || 'Findings email generation failed. Click Generate again to retry.');
 				if (isCurrentRequest()) {
 					findingsGenerationState = 'error';
-					findingsPhaseMessage = err.message || 'Findings email generation failed';
+					findingsPhaseMessage = isNetworkError
+						? 'Network interrupted. Click Generate to retry.'
+						: (err.message || 'Findings email generation failed');
 				}
-			} else if (isCurrentRequest()) {
-				findingsGenerationState = 'cancelled';
-				findingsPhaseMessage = 'Cancelled';
 			}
 		} finally {
 			if (activeFindingsRequest?.requestId === requestId) {

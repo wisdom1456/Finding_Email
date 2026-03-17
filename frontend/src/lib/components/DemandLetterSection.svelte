@@ -379,23 +379,42 @@
 		generatingDemand = true;
 		demandStreamingPreview = null;
 		demandGenerationState = 'idle';
-		try {
-			await generateDemandLetterStreaming();
-		} catch (err: any) {
-			if (err.name === 'AbortError') return;
-			if (err instanceof TypeError && /fetch|network/i.test(err.message)) {
-				console.warn('Network error during streaming — checking if letter was saved...', err);
-				const recovered = await tryRecoverSavedLetter();
-				if (recovered) return;
+
+		const MAX_NETWORK_RETRIES = 3;
+		for (let attempt = 0; attempt <= MAX_NETWORK_RETRIES; attempt++) {
+			try {
+				await generateDemandLetterStreaming();
+				break; // Success — exit retry loop
+			} catch (err: any) {
+				if (err.name === 'AbortError') return;
+				const isNetworkError = err instanceof TypeError && /fetch|network/i.test(err.message);
+
+				if (isNetworkError && attempt < MAX_NETWORK_RETRIES) {
+					// Network dropped — wait for it to come back, then retry
+					const delay = 3000 * (attempt + 1); // 3s, 6s, 9s
+					console.warn(`Network error on attempt ${attempt + 1}, retrying in ${delay / 1000}s...`, err);
+					demandGenerationState = 'loading';
+					demandPhaseMessage = `Network interrupted. Retrying... (${attempt + 1}/${MAX_NETWORK_RETRIES})`;
+					demandStreamingPreview = null; // Reset partial content
+					await new Promise((r) => setTimeout(r, delay));
+					if (!isMounted) return;
+					continue;
+				}
+
+				if (isNetworkError) {
+					console.warn('Network error during streaming — checking if letter was saved...', err);
+					const recovered = await tryRecoverSavedLetter();
+					if (recovered) return;
+				}
+				if (demandGenerationState !== 'error') {
+					demandGenerationState = 'error';
+					demandPhaseMessage = err.message || 'Generation failed';
+				}
+				toastStore.error(err.message || 'Letter generation failed');
+				break;
 			}
-			if (demandGenerationState !== 'error') {
-				demandGenerationState = 'error';
-				demandPhaseMessage = err.message || 'Generation failed';
-			}
-			toastStore.error(err.message || 'Letter generation failed');
-		} finally {
-			generatingDemand = false;
 		}
+		generatingDemand = false;
 	}
 
 	async function tryRecoverSavedLetter(): Promise<boolean> {

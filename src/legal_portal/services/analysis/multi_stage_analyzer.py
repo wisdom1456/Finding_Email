@@ -562,17 +562,13 @@ IMPORTANT: Your response MUST end with the ```json structured data block as spec
             doc_lines.append(f"[{i+1}] {name}: {snippet}")
         doc_manifest = "\n".join(doc_lines)
 
-        prompt = f"""You are a legal case analyst. Given these {len(document_summaries)} documents, respond in EXACTLY two parts.
+        prompt = f"""You are a legal case analyst. Given these {len(document_summaries)} documents, respond in two parts.
 
-PART 1 - CASE PREVIEW (plain text):
-Write a 2-3 sentence case summary, then a bullet list of key findings (injuries, treatments, financial impacts, key dates). Keep it concise.
+First, write a 2-3 sentence case summary followed by a bullet list of key findings (injuries, treatments, financial impacts, key dates). Keep it concise. Do NOT include any headings like "PART 1" or "CASE PREVIEW" — just start with the summary text directly.
 
-PART 2 - DOCUMENT CLASSIFICATIONS (JSON only, on its own line starting with ```json):
-For each document, provide a JSON array:
+Then, on a new line, output a JSON array inside a ```json fence with document classifications:
 ```json
-[
-  {{"doc_index": 0, "document_name": "...", "document_type": "...", "relevance_level": "critical|supporting|background", "one_line_summary": "..."}}
-]
+[{{"doc_index": 0, "document_name": "...", "document_type": "...", "relevance_level": "critical|supporting|background", "one_line_summary": "..."}}]
 ```
 
 document_type must be one of: medical_record, billing_record, police_report, correspondence, intake_form, case_summary, legal_filing, insurance_document, photograph, contract, other

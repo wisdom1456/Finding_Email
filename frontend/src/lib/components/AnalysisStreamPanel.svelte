@@ -235,8 +235,9 @@
                 console.log(`[STREAM:FE] first token: ${((performance.now() - _fetchStart) / 1000).toFixed(1)}s after fetch (thinking=${thinkingTime}s)`);
               }
               
-              if (data.token) {
+              if (data.token && data.phase !== 'preview') {
                 // Ensure we're in streaming status when tokens arrive
+                // (preview tokens are handled separately above to avoid double-append)
                 if (status === 'thinking') {
                   status = 'streaming';
                   thinkingTime = elapsedTime;

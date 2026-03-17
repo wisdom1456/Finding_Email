@@ -596,12 +596,20 @@ DOCUMENTS:
                     {"role": "user", "content": prompt},
                 ],
                 max_tokens=2000,
+                reasoning_effort="low",
             ):
                 token_count += 1
                 full_text += token
                 # Stream tokens until we hit the JSON fence
                 if "```json" not in full_text:
                     yield {"token": token}
+
+            # Log what the model actually produced
+            logger.info(
+                f"[PREVIEW] Raw output | tokens={token_count} "
+                f"has_json_fence={'```json' in full_text} "
+                f"first_100={full_text[:100]!r}"
+            )
 
             # Extract classifications from the JSON block
             classifications = []

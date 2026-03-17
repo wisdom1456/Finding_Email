@@ -1286,9 +1286,6 @@ async def stream_case_analysis(
                 start_time = time.time()
                 last_heartbeat = start_time
 
-                # Emit debug flag value so we can diagnose in test client
-                yield f"data: {json.dumps({'debug': 'preview_flag', 'raw': _raw_flag, 'enabled': _quick_preview_enabled})}\n\n"
-
                 # Emit document inventory event (immediate, no LLM call)
                 if _quick_preview_enabled:
                     yield f"data: {json.dumps({'phase': 'inventory', 'total': _doc_count})}\n\n"

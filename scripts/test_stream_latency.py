@@ -245,8 +245,9 @@ def stream_analysis(token: str, case_id: str):
                 if "heartbeat" in data:
                     pass  # silent
 
-                # Done
-                if data.get("done"):
+                # Done — the final done event has 'content' or 'docs_in_scope';
+                # preview done has 'phase': 'preview' and should NOT terminate.
+                if data.get("done") and data.get("phase") != "preview":
                     total = time.time() - t_start
                     print()
                     print(f"  ✓ Stream complete at {total:.1f}s")

@@ -469,7 +469,7 @@
 
 	async function confirmIntakeSelection() {
 		if (!selectedIntakeDocId) {
-			alert('Please select an intake document');
+			toastStore.error('Please select an intake document');
 			return;
 		}
 

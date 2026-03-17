@@ -66,6 +66,8 @@
 	let demandPhaseMessage = $state('');
 	let demandGenerationPercent = $state(0);
 	let demandStreamingPreview = $state<string | null>(null);
+	let streamRouteAvailable = $state(true);
+	let isMounted = true;
 
 	type ActiveDemandRequest = {
 		requestId: number;
@@ -75,13 +77,14 @@
 	let demandRequestCounter = 0;
 
 	onDestroy(() => {
+		isMounted = false;
 		activeDemandRequest?.controller.abort();
 		activeDemandRequest = null;
 	});
 
 	async function calculateDemandAmount() {
 		if (!selectedParty) {
-			alert('Please select an opposing party first');
+			toastStore.error('Please select an opposing party first');
 			return;
 		}
 
@@ -116,7 +119,7 @@
 			calculationReasoning = data.reasoning;
 			calculationBreakdown = data.breakdown || [];
 		} catch (err: any) {
-			alert(err.message || 'Failed to calculate demand amount');
+			toastStore.error(err.message || 'Failed to calculate demand amount');
 			console.error('Demand calculation error:', err);
 		} finally {
 			calculatingAmount = false;
@@ -124,6 +127,11 @@
 	}
 
 	async function generateDemandLetterStreaming() {
+		if (!streamRouteAvailable) {
+			await generateDemandLetterSync();
+			return;
+		}
+
 		const previousRequest = activeDemandRequest;
 		if (previousRequest) {
 			previousRequest.controller.abort();
@@ -170,7 +178,8 @@
 		);
 
 		if (response.status === 404) {
-			// Feature flag is off — fall back to synchronous POST
+			// Feature flag is off — remember and fall back to synchronous POST
+			streamRouteAvailable = false;
 			await generateDemandLetterSync();
 			return;
 		}
@@ -334,6 +343,7 @@
 				'Content-Type': 'application/json',
 				Authorization: `Bearer ${session.access_token}`
 			},
+			signal: activeDemandRequest?.controller.signal,
 			body: JSON.stringify({
 				case_id: caseId,
 				letter_type: 'demand',
@@ -363,7 +373,7 @@
 
 	async function generateDemandLetter() {
 		if (!selectedParty) {
-			alert('Please select an opposing party');
+			toastStore.error('Please select an opposing party');
 			return;
 		}
 		generatingDemand = true;
@@ -382,7 +392,7 @@
 				demandGenerationState = 'error';
 				demandPhaseMessage = err.message || 'Generation failed';
 			}
-			alert(err.message || 'Letter generation failed');
+			toastStore.error(err.message || 'Letter generation failed');
 		} finally {
 			generatingDemand = false;
 		}
@@ -390,6 +400,8 @@
 
 	async function tryRecoverSavedLetter(): Promise<boolean> {
 		await new Promise((r) => setTimeout(r, 5000));
+
+		if (!isMounted) return false;
 
 		try {
 			const { session } = await getSecureSession();

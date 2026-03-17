@@ -162,6 +162,7 @@ class DemandLetterService:
                 "Use proper HTML-compatible line breaks and structure."
             ),
             input=prompt,
+            reasoning_effort="low" if self.client._is_gpt5_model(model) else None,
         ):
             yield token
 

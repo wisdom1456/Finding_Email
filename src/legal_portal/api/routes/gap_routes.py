@@ -4,6 +4,7 @@ Thin controller layer — all business logic lives in
 legal_portal.services.analysis.gap_helpers.
 """
 
+import asyncio
 import json
 import logging
 import time
@@ -120,8 +121,11 @@ async def analyze_gaps_on_demand(
             detail="Gap analysis requires a completed multi-stage analysis. Please run case analysis first.",
         )
 
-    case_document_rows = _fetch_case_documents_for_gap_context(supabase, case_id)
-    all_doc_metadata = _fetch_all_case_document_metadata(supabase, case_id)
+    # Parallel fetch: documents with text + lightweight metadata
+    case_document_rows, all_doc_metadata = await asyncio.gather(
+        asyncio.to_thread(_fetch_case_documents_for_gap_context, supabase, case_id),
+        asyncio.to_thread(_fetch_all_case_document_metadata, supabase, case_id),
+    )
     case_document_state_hash = _build_case_document_state_hash(case_document_rows)
     all_doc_metadata_hash = _build_case_document_state_hash_lightweight(all_doc_metadata)
 
@@ -284,8 +288,11 @@ async def resolve_gaps_and_refresh(
         all_doc_ids.update(item.related_document_ids or [])
     all_doc_ids_list = sorted(all_doc_ids)
 
-    case_document_rows = _fetch_case_documents_for_gap_context(supabase, case_id)
-    all_doc_metadata = _fetch_all_case_document_metadata(supabase, case_id)
+    # Parallel fetch: documents with text + lightweight metadata
+    case_document_rows, all_doc_metadata = await asyncio.gather(
+        asyncio.to_thread(_fetch_case_documents_for_gap_context, supabase, case_id),
+        asyncio.to_thread(_fetch_all_case_document_metadata, supabase, case_id),
+    )
     case_document_state_hash = _build_case_document_state_hash(case_document_rows)
 
     text_ids = {doc.get("id") for doc in case_document_rows}
@@ -462,8 +469,11 @@ async def analyze_gaps_streaming(
                 yield f"data: {json.dumps({'type': 'error', 'error': 'Gap analysis requires a completed multi-stage analysis. Please run case analysis first.'})}\n\n"
                 return
 
-            case_document_rows = _fetch_case_documents_for_gap_context(supabase, case_id)
-            all_doc_metadata = _fetch_all_case_document_metadata(supabase, case_id)
+            # Parallel fetch: documents with text + lightweight metadata
+            case_document_rows, all_doc_metadata = await asyncio.gather(
+                asyncio.to_thread(_fetch_case_documents_for_gap_context, supabase, case_id),
+                asyncio.to_thread(_fetch_all_case_document_metadata, supabase, case_id),
+            )
             case_document_state_hash = _build_case_document_state_hash(case_document_rows)
             all_doc_metadata_hash = _build_case_document_state_hash_lightweight(all_doc_metadata)
 

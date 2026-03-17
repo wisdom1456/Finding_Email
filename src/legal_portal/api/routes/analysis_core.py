@@ -1268,9 +1268,7 @@ async def stream_case_analysis(
 
         # 4. Check quick preview feature flag — read from env directly to avoid
         # stale Settings() singleton on warm Vercel instances after env var changes.
-        _raw_flag = os.environ.get("ENABLE_ANALYSIS_QUICK_PREVIEW", "")
-        _quick_preview_enabled = _raw_flag.strip().lower() in ("true", "1", "yes")
-        logger.info(f"[STREAM:PREVIEW_FLAG] raw={_raw_flag!r} enabled={_quick_preview_enabled}")
+        _quick_preview_enabled = os.environ.get("ENABLE_ANALYSIS_QUICK_PREVIEW", "").strip().lower() in ("true", "1", "yes")
 
         # Count documents for inventory event
         _doc_count = len(doc_summaries)

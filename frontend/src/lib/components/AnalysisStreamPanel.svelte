@@ -127,6 +127,11 @@
     // Create abort controller for cancellation
     abortController = new AbortController();
 
+    // Diagnostics — declared at function scope so the catch block can read them
+    const _fetchStart = performance.now();
+    let _chunkCount = 0;
+    let _lastChunkAt = _fetchStart;
+
     try {
       // Get auth token (securely validated)
       const { session, user } = await getSecureSession();
@@ -138,7 +143,6 @@
       const url = `${apiUrl}/api/analysis/stream/${caseId}`;
 
       // Use fetch with Authorization header (EventSource doesn't support custom headers)
-      const _fetchStart = performance.now();
       console.log('[STREAM:FE] fetch started');
       const response = await fetch(url, {
         method: 'GET',
@@ -163,8 +167,6 @@
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let buffer = '';
-      let _chunkCount = 0;
-      let _lastChunkAt = performance.now();
       console.log('[STREAM:FE] headers received, starting reader loop');
 
       while (true) {

@@ -260,8 +260,9 @@
                 sectionTotal = data.total || 0;
               }
 
-              if (data.done) {
-                // Capture scope counts before emitting complete
+              if (data.done && data.phase !== 'preview') {
+                // Only the final done event (with content/docs_in_scope) ends the stream.
+                // The preview done event (phase='preview') just marks preview complete.
                 if (data.docs_in_scope !== undefined) docsInScope = data.docs_in_scope;
                 if (data.docs_omitted !== undefined) docsOmitted = data.docs_omitted;
                 // Final render with full content before completing

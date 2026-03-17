@@ -587,17 +587,51 @@
 					} else {
 						console.warn('[GapAnalysis] Streaming failed, retrying via non-stream endpoint', streamErr);
 						gapAnalysisProgress = 'Connection interrupted. Retrying...';
-						const gapResult = await runGapAnalysisFallback(
-							apiUrl,
-							session.access_token,
-							forceRefresh,
-							controller.signal
-						);
-						if (!isCurrentRequest()) {
-							throw new DOMException('Gap analysis request superseded', 'AbortError');
+						try {
+							const gapResult = await runGapAnalysisFallback(
+								apiUrl,
+								session.access_token,
+								forceRefresh,
+								controller.signal
+							);
+							if (!isCurrentRequest()) {
+								throw new DOMException('Gap analysis request superseded', 'AbortError');
+							}
+							applyGapAnalysisResult(gapResult);
+							toastStore.success(`Gap analysis complete! Found ${gapResult.total_gaps} gaps.`);
+						} catch (fallbackErr: any) {
+							// Both stream and fallback failed (likely network outage).
+							// Wait for network recovery, then retry the non-stream endpoint
+							// which will return cached results if the backend completed.
+							if (controller.signal.aborted || !isCurrentRequest()) throw fallbackErr;
+							console.warn('[GapAnalysis] Fallback also failed, waiting for network recovery...', fallbackErr);
+							gapAnalysisProgress = 'Network interrupted. Waiting to reconnect...';
+
+							// Wait up to 30s for network to come back, checking every 3s
+							let recovered = false;
+							for (let wait = 0; wait < 10; wait++) {
+								await new Promise((r) => setTimeout(r, 3000));
+								if (controller.signal.aborted || !isCurrentRequest()) throw fallbackErr;
+								try {
+									const recoveryResult = await runGapAnalysisFallback(
+										apiUrl,
+										session.access_token,
+										false, // Don't force refresh — use cached result
+										controller.signal
+									);
+									if (!isCurrentRequest()) {
+										throw new DOMException('Gap analysis request superseded', 'AbortError');
+									}
+									applyGapAnalysisResult(recoveryResult);
+									toastStore.success(`Gap analysis recovered! Found ${recoveryResult.total_gaps} gaps.`);
+									recovered = true;
+									break;
+								} catch {
+									gapAnalysisProgress = `Network interrupted. Retrying... (${wait + 1}/10)`;
+								}
+							}
+							if (!recovered) throw fallbackErr;
 						}
-						applyGapAnalysisResult(gapResult);
-						toastStore.success(`Gap analysis complete! Found ${gapResult.total_gaps} gaps.`);
 					}
 				}
 		} catch (err: any) {

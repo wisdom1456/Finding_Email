@@ -387,12 +387,15 @@
         if (resp.ok) {
           const data = await resp.json();
           if (data.found) {
-            // Backend completed — use saved result
-            console.log(`[STREAM:FE] Recovery found server-saved result (poll=${poll + 1}/${maxPolls}, retry=${retryCount})`);
+            // Backend has a result — use it
+            console.log(`[STREAM:FE] Recovery found server-saved result (poll=${poll + 1}/${maxPolls}, retry=${retryCount}, status=${data.status})`);
             content = data.content;
             docsInScope = data.docs_in_scope || 0;
             docsOmitted = data.docs_omitted || 0;
-            serverSaved = true;
+            // Only skip /save if the row is already "completed".
+            // A "processing" row (collector-saved) still needs /save to
+            // transition to "completed" with structured extraction.
+            serverSaved = data.status === 'completed';
             flushRender();
             emitComplete(content);
             return;

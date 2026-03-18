@@ -453,38 +453,57 @@
     }
   }
 
-  // Save the analysis result to the database
+  // Save the analysis result to the database (retries up to 3 times on failure)
   async function saveAnalysis(analysisContent: string) {
     saveError = false;
     savePendingContent = analysisContent;
-    try {
-      const { session, user } = await getSecureSession();
-      if (!session || !user) {
-        console.error('No session for saving analysis');
-        saveError = true;
-        return;
-      }
+    const maxAttempts = 3;
 
-      const apiUrl = getApiUrl();
-      const response = await fetch(`${apiUrl}/api/analysis/stream/${caseId}/save`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`,
-        },
-        body: JSON.stringify({ content: analysisContent, stream_run_id: streamRunId }),
-      });
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        const { session, user } = await getSecureSession();
+        if (!session || !user) {
+          console.error('No session for saving analysis');
+          saveError = true;
+          return;
+        }
 
-      if (!response.ok) {
-        console.error('Failed to save analysis:', await response.text());
+        const apiUrl = getApiUrl();
+        const response = await fetch(`${apiUrl}/api/analysis/stream/${caseId}/save`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({ content: analysisContent, stream_run_id: streamRunId }),
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error(`Failed to save analysis (attempt ${attempt}/${maxAttempts}):`, errorText);
+          // Don't retry on 409 (cancelled) — it won't succeed
+          if (response.status === 409) {
+            saveError = true;
+            return;
+          }
+          if (attempt < maxAttempts) {
+            await new Promise(r => setTimeout(r, attempt * 2000));
+            continue;
+          }
+          saveError = true;
+        } else {
+          console.log('Streaming analysis saved successfully');
+          savePendingContent = '';
+          return;
+        }
+      } catch (e) {
+        console.error(`Error saving analysis (attempt ${attempt}/${maxAttempts}):`, e);
+        if (attempt < maxAttempts) {
+          await new Promise(r => setTimeout(r, attempt * 2000));
+          continue;
+        }
         saveError = true;
-      } else {
-        console.log('Streaming analysis saved successfully');
-        savePendingContent = '';
       }
-    } catch (e) {
-      console.error('Error saving analysis:', e);
-      saveError = true;
     }
   }
 

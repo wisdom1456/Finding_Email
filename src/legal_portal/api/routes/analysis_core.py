@@ -1062,7 +1062,7 @@ async def save_streaming_analysis(
 
         # Create or update analysis result
         # Note: Gap analysis is now handled on-demand via POST /analyze-gaps endpoint
-        analysis_id = str(uuid.uuid4())  # Generate proper UUID for database
+        analysis_id = str(uuid.uuid4())  # Default UUID for legacy path
 
         try:
             # Check if case exists before saving (prevents race condition in Clio import)
@@ -1087,17 +1087,82 @@ async def save_streaming_analysis(
                 )
 
             logger.info(f"[STREAM] Case {case_id} confirmed, saving analysis results...")
-            _upsert_with_retry(
-                service_supabase, "analysis_results",
-                {
-                    "id": analysis_id,
-                    "case_id": case_id,
-                    "status": "completed",
-                    "result": streaming_result,
-                    "created_at": datetime.utcnow().isoformat(),
-                },
-                case_id,
-            )
+
+            if request.stream_run_id:
+                # Update the collector's row — single row per stream_run_id (Invariant #3)
+                # Status guard: only transition processing → completed
+                update_result = service_supabase.table("analysis_results") \
+                    .update({
+                        "status": "completed",
+                        "result": streaming_result,
+                        "completed_at": datetime.utcnow().isoformat(),
+                    }) \
+                    .eq("stream_run_id", request.stream_run_id) \
+                    .eq("case_id", case_id) \
+                    .eq("status", "processing") \
+                    .execute()
+
+                if update_result.data:
+                    analysis_id = update_result.data[0]["id"]
+                else:
+                    # UPDATE matched zero rows. Determine why.
+                    existing = service_supabase.table("analysis_results") \
+                        .select("id, status") \
+                        .eq("stream_run_id", request.stream_run_id) \
+                        .limit(1).execute()
+
+                    if existing.data:
+                        existing_status = existing.data[0].get("status")
+                        if existing_status == "completed":
+                            # Already completed (duplicate /save call) — idempotent
+                            analysis_id = existing.data[0]["id"]
+                            logger.info(f"[STREAM:SAVE] Row already completed for stream_run_id={request.stream_run_id}")
+                        else:
+                            # Row exists but status is cancelled/error — do NOT resurrect
+                            logger.warning(f"[STREAM:SAVE] Row is {existing_status}, refusing to complete")
+                            raise HTTPException(status_code=409, detail=f"Analysis is {existing_status}, cannot save")
+                    else:
+                        # No row exists — collector hasn't saved yet. Create one.
+                        try:
+                            analysis_id = str(uuid.uuid4())
+                            service_supabase.table("analysis_results").insert({
+                                "id": analysis_id,
+                                "case_id": case_id,
+                                "stream_run_id": request.stream_run_id,
+                                "status": "completed",
+                                "result": streaming_result,
+                                "completed_at": datetime.utcnow().isoformat(),
+                                "created_at": datetime.utcnow().isoformat(),
+                            }).execute()
+                        except Exception as e:
+                            if "duplicate key" in str(e) or "unique" in str(e).lower():
+                                # Collector saved between our SELECT and INSERT — retry UPDATE
+                                retry_result = service_supabase.table("analysis_results") \
+                                    .update({
+                                        "status": "completed",
+                                        "result": streaming_result,
+                                        "completed_at": datetime.utcnow().isoformat(),
+                                    }) \
+                                    .eq("stream_run_id", request.stream_run_id) \
+                                    .eq("status", "processing") \
+                                    .execute()
+                                if retry_result.data:
+                                    analysis_id = retry_result.data[0]["id"]
+                            else:
+                                raise
+            else:
+                # Legacy path: no stream_run_id, create new row (backwards compat)
+                _upsert_with_retry(
+                    service_supabase, "analysis_results",
+                    {
+                        "id": analysis_id,
+                        "case_id": case_id,
+                        "status": "completed",
+                        "result": streaming_result,
+                        "created_at": datetime.utcnow().isoformat(),
+                    },
+                    case_id,
+                )
         except HTTPException:
             raise
         except Exception as db_err:
@@ -1157,7 +1222,8 @@ async def stream_case_analysis(
 
     try:
         _stream_t0 = time.time()
-        logger.info(f"[STREAM:ENTER] case_id={case_id}")
+        stream_run_id = str(uuid.uuid4())
+        logger.info(f"[STREAM:ENTER] case_id={case_id} stream_run_id={stream_run_id}")
 
         # 1. Verify case ownership — fetch case metadata and document stubs only.
         # extracted_text is intentionally excluded from the nested relation to
@@ -1289,7 +1355,7 @@ async def stream_case_analysis(
                     yield f"data: {json.dumps({'phase': 'inventory', 'total': _doc_count})}\n\n"
 
                 # Signal that we're starting (thinking phase begins)
-                yield f"data: {json.dumps({'phase': 'thinking', 'elapsed': 0})}\n\n"
+                yield f"data: {json.dumps({'phase': 'thinking', 'elapsed': 0, 'stream_run_id': stream_run_id})}\n\n"
 
                 # Quick preview via gpt-5-mini (fast, ~3-5s)
                 _preview_classifications = []
@@ -1375,6 +1441,7 @@ async def stream_case_analysis(
                                 service_supabase.table("analysis_results").insert({
                                     "id": str(uuid.uuid4()),
                                     "case_id": case_id,
+                                    "stream_run_id": stream_run_id,
                                     "status": "processing",
                                     "result": {
                                         "raw_streaming_content": _all,
@@ -1390,13 +1457,21 @@ async def stream_case_analysis(
                                 }).execute()
                                 logger.info(
                                     f"[STREAM:COLLECTOR_SAVE] Saved {len(_all)} chars "
-                                    f"for case {case_id}"
+                                    f"for case {case_id} stream_run_id={stream_run_id}"
                                 )
                             except Exception as _csave_err:
-                                logger.error(
-                                    f"[STREAM:COLLECTOR_SAVE] Failed for case "
-                                    f"{case_id}: {_csave_err}"
-                                )
+                                if "duplicate key" in str(_csave_err) or "unique" in str(_csave_err).lower():
+                                    # Row already exists (frontend /save or prior collector).
+                                    # Do NOT overwrite — existing row may be completed/cancelled.
+                                    logger.info(
+                                        f"[STREAM:COLLECTOR_SAVE] Row already exists for "
+                                        f"stream_run_id={stream_run_id}, skipping"
+                                    )
+                                else:
+                                    logger.error(
+                                        f"[STREAM:COLLECTOR_SAVE] Failed for case "
+                                        f"{case_id}: {_csave_err}"
+                                    )
 
                 # Start token collection in background
                 collector_task = asyncio.create_task(collect_tokens())
@@ -1439,7 +1514,7 @@ async def stream_case_analysis(
 
                             elif msg_type == 'done':
                                 # Signal completion — include scope counts for UI warning
-                                yield f"data: {json.dumps({'done': True, 'content': full_content, 'docs_in_scope': ctx_result.docs_in_scope, 'docs_omitted': ctx_result.docs_omitted, 'context_tokens': ctx_result.total_tokens, 'omission_reason': ctx_result.omission_reason, 'omitted_doc_names': ctx_result.omitted_doc_names[:10]})}\n\n"
+                                yield f"data: {json.dumps({'done': True, 'content': full_content, 'stream_run_id': stream_run_id, 'docs_in_scope': ctx_result.docs_in_scope, 'docs_omitted': ctx_result.docs_omitted, 'context_tokens': ctx_result.total_tokens, 'omission_reason': ctx_result.omission_reason, 'omitted_doc_names': ctx_result.omitted_doc_names[:10]})}\n\n"
                                 logger.info(
                                     f"[STREAM] Completed streaming for case {case_id} | "
                                     f"docs_in_scope={_docs_in_scope} docs_omitted={_docs_omitted}"
@@ -1521,26 +1596,46 @@ async def stream_case_analysis(
 @router.get("/stream/{case_id}/result")
 async def get_streaming_result(
     case_id: str,
+    stream_run_id: Optional[str] = Query(default=None),
     user=Depends(get_current_user),
     supabase=Depends(get_user_supabase_client),
 ):
-    """Check if a streaming analysis has completed for this case (recovery endpoint)."""
-    response = supabase.table("analysis_results") \
+    """Check if a streaming analysis has completed for this case (recovery endpoint).
+
+    When stream_run_id is provided (active streaming session), filters by exact
+    stream_run_id + status IN (processing, completed). This prevents returning
+    stale results from a different run.
+
+    When stream_run_id is NULL (Resume button), only returns completed analyses.
+    """
+    query = supabase.table("analysis_results") \
         .select("id, status, result, created_at") \
-        .eq("case_id", case_id) \
-        .in_("status", ["processing", "completed"]) \
-        .order("created_at", desc=True) \
-        .limit(1) \
-        .execute()
+        .eq("case_id", case_id)
+
+    if stream_run_id:
+        # DB-level filter — uses the UNIQUE index on stream_run_id.
+        # Only return processing (collector-saved) or completed rows.
+        query = query.eq("stream_run_id", stream_run_id) \
+                     .in_("status", ["processing", "completed"])
+    else:
+        # Legacy/Resume: latest completed only (never partial/processing)
+        query = query.eq("status", "completed")
+
+    query = query.order("created_at", desc=True).limit(1)
+    response = query.execute()
 
     if response.data:
         row = response.data[0]
         result = row.get("result", {})
-        content = result.get("raw_streaming_content") or result.get("streaming_analysis_content", "")
+        # Content key read order: collector → legacy → /save
+        content = (result.get("raw_streaming_content")
+                   or result.get("streaming_analysis_content", "")
+                   or result.get("streaming_analysis", ""))
         if content:
             return {
                 "found": True,
                 "content": content,
+                "status": row.get("status"),
                 "docs_in_scope": result.get("docs_in_scope", 0),
                 "docs_omitted": result.get("docs_omitted", 0),
                 "analysis_id": row["id"],

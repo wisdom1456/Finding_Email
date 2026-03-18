@@ -115,7 +115,7 @@ async def _cancel_analysis(
 ):
     """Cancel an analysis by updating DB state and emitting progress."""
     # Mark analysis as cancelled
-    supabase.table("analysis_results").update({"status": "cancelled"}).eq("id", analysis_id).execute()
+    supabase.table("analysis_results").update({"status": "cancelled"}).eq("id", analysis_id).in_("status", ["pending", "processing"]).execute()
 
     # Un-stick the case so a new analysis can be started
     # (we keep the case and documents; user can retry later)

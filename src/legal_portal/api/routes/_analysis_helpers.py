@@ -243,6 +243,7 @@ class StreamingAnalysisSaveRequest(BaseModel):
     """Request to save streaming analysis result."""
 
     content: str = Field(..., description="The markdown content from streaming analysis")
+    stream_run_id: Optional[str] = Field(default=None, description="Stream run ID for row-level isolation")
 
 
 class RecommendationLetterRequest(BaseModel):

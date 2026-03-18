@@ -60,6 +60,9 @@
   const MAX_RETRIES = 10;
   let serverSaved = $state(false);
   let isMounted = false;
+  // Stream run isolation — prevents recovery from returning stale results
+  let streamRunId = $state<string | null>(null);
+  let receivedDone = $state(false);
 
   // ── Performance: throttled markdown rendering ──
   // Accumulate raw tokens and only re-parse markdown at most every 80ms.
@@ -119,6 +122,8 @@
       currentSection = '';
       sectionIndex = 0;
       sectionTotal = 0;
+      streamRunId = null;
+      receivedDone = false;
     }
     
     // Start elapsed time counter
@@ -232,6 +237,10 @@
 
               if (data.phase === 'thinking') {
                 status = 'thinking';
+                // Capture stream_run_id from first thinking event
+                if (data.stream_run_id && !streamRunId) {
+                  streamRunId = data.stream_run_id;
+                }
                 // Update thinking elapsed time from server
                 if (data.elapsed !== undefined) {
                   // Server sends elapsed time during thinking
@@ -273,6 +282,8 @@
               if (data.done && data.phase !== 'preview') {
                 // Only the final done event (with content/docs_in_scope) ends the stream.
                 // The preview done event (phase='preview') just marks preview complete.
+                receivedDone = true;
+                if (data.stream_run_id) streamRunId = data.stream_run_id;
                 if (data.docs_in_scope !== undefined) docsInScope = data.docs_in_scope;
                 if (data.docs_omitted !== undefined) docsOmitted = data.docs_omitted;
                 // Final render with full content before completing
@@ -365,7 +376,11 @@
         if (!session) throw new Error('No session');
 
         const apiUrl = getApiUrl();
-        const resp = await fetch(`${apiUrl}/api/analysis/stream/${caseId}/result`, {
+        let recoveryUrl = `${apiUrl}/api/analysis/stream/${caseId}/result`;
+        if (streamRunId) {
+          recoveryUrl += `?stream_run_id=${encodeURIComponent(streamRunId)}`;
+        }
+        const resp = await fetch(recoveryUrl, {
           headers: { 'Authorization': `Bearer ${session.access_token}` },
         });
 
@@ -390,8 +405,16 @@
 
     if (!isMounted) return;
 
+    if (receivedDone) {
+      // We got the full content via SSE done event before disconnect.
+      // Complete with local content — no need to retry.
+      console.log(`[STREAM:FE] Received done event before disconnect, completing with ${content.length} chars`);
+      emitComplete(content);
+      return;
+    }
+
     // Backend hasn't finished — retry the stream
-    console.log(`[STREAM:FE] Recovery endpoint returned not found after ${maxPolls} polls, reconnecting stream`);
+    console.log(`[STREAM:FE] Recovery endpoint returned not found after ${maxPolls} polls, reconnecting stream (retry=${retryCount})`);
     status = 'reconnecting';
     startStreaming();
   }
@@ -446,7 +469,7 @@
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${session.access_token}`,
         },
-        body: JSON.stringify({ content: analysisContent }),
+        body: JSON.stringify({ content: analysisContent, stream_run_id: streamRunId }),
       });
 
       if (!response.ok) {

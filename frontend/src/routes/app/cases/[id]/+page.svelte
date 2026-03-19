@@ -730,7 +730,11 @@
 				
 				currentAnalysisId = analysisId;
 				showProgressModal = true;
-				
+
+				// In backend-only mode, stop reading the SSE stream — polling handles progress
+				if (analysisBackendOnly) {
+					reader.cancel();
+				} else {
 				// Continue reading the SSE stream and forward events to progress store
 				// This provides real-time updates without needing to poll
 				(async () => {
@@ -790,6 +794,7 @@
 						console.log('[Analysis SSE] Stream error:', e);
 					}
 				})();
+				} // end else (non-backend-only SSE reading)
 				
 			} else {
 				// Local: JSON response

@@ -1134,6 +1134,7 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
             stage: Optional[dict] = None,
             document: Optional[dict] = None,
             tokens_used: int = 0,
+            chunk_status: Optional[dict] = None,
         ):
             """Publish progress updates to SSE stream and persistent storage."""
             nonlocal total_tokens_used
@@ -1153,6 +1154,8 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
                 payload["stage"] = stage
             if document:
                 payload["document"] = document
+            if chunk_status:
+                payload["chunk_status"] = chunk_status
 
             # Add stats periodically
             elapsed = time.time() - analysis_start_time

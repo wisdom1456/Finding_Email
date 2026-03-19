@@ -513,7 +513,7 @@ class OpenAIClient:
             messages: List of message dicts with 'role' and 'content'
             temperature: Sampling temperature (0.0-2.0)
             max_tokens: Maximum tokens to generate (None for model default)
-            reasoning_effort: For GPT-5.x models: "none", "minimal", "low", "medium", "high"
+            reasoning_effort: For GPT-5.x models: "none", "low", "medium", "high", "xhigh"
 
         Yields:
         ------

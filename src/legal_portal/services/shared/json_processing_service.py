@@ -246,7 +246,7 @@ class JsonProcessingService:
                 self._make_openai_request_responses_api,
                 prompt=prompt,
                 model=model,
-                reasoning_effort="minimal",
+                reasoning_effort="low",
                 verbosity="low",
                 max_output_tokens=max_output_tokens,
                 instructions=(

@@ -1345,18 +1345,17 @@ Return JSON:
 
         logger.info(
             f"[STAGE:2:API] Calling OpenAI for issue_mapping | "
-            f"model={model} prompt_chars={len(prompt)} max_tokens=3000"
+            f"model={model} prompt_chars={len(prompt)} max_tokens=12000"
         )
 
         # Use asyncio.to_thread to avoid blocking the event loop during API call
-        # GPT-4.1-mini: Fast pattern matching without reasoning overhead
         api_start = time.time()
         response_dict = await asyncio.to_thread(
             self.client.create_response,
             model=model,
             instructions=f"You are an expert {jurisdiction} legal analyst. Return only valid JSON.",
             input=prompt,
-            max_output_tokens=3000,  # GPT-4.1-mini doesn't need reasoning token overhead
+            max_output_tokens=12000,  # Complex cases need room for detailed issue mapping
         )
         api_duration = time.time() - api_start
 
@@ -1499,11 +1498,10 @@ Return ONLY valid JSON.
 
         logger.info(
             f"[STAGE:3:API] Calling OpenAI for deep_analysis | "
-            f"model={model} prompt_chars={len(prompt)} max_tokens=6000"
+            f"model={model} prompt_chars={len(prompt)} max_tokens=16000"
         )
 
         # Use asyncio.to_thread to avoid blocking the event loop during API call
-        # GPT-4.1: Higher quality synthesis without reasoning overhead
         api_start = time.time()
         response_dict = await asyncio.to_thread(
             self.client.create_response,
@@ -1513,7 +1511,7 @@ Return ONLY valid JSON.
                 "Provide comprehensive analysis."
             ),
             input=prompt,
-            max_output_tokens=6000,  # GPT-4.1 doesn't need reasoning token overhead
+            max_output_tokens=16000,  # Complex multi-document cases need room
         )
         api_duration = time.time() - api_start
 

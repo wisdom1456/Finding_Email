@@ -1,16 +1,19 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
+	import { writable } from 'svelte/store';
 	import { Loader2, CheckCircle, Circle, XCircle, X } from 'lucide-svelte';
 	import { progressStore } from '$lib/stores/progressStore';
 	import type { EnhancedProgressState } from '$lib/stores/progressStore';
 
-	let { 
+	let {
 		analysisId,
+		pollingOnly = false,
 		onComplete,
 		onError,
 		onCancel
-	}: { 
+	}: {
 		analysisId: string;
+		pollingOnly?: boolean;
 		onComplete?: () => void;
 		onError?: (error: string) => void;
 		onCancel?: () => void;
@@ -44,7 +47,7 @@
 
 	onMount(async () => {
 		// Start listening to the analysis stream
-		await progressStore.startListening(analysisId);
+		await progressStore.startListening(analysisId, { pollingOnly });
 
 		// Safety valve — prevent indefinite stuck state
 		safetyTimer = setTimeout(() => {
@@ -68,6 +71,51 @@
 		}
 		progressStore.stopListening();
 	});
+
+	// Elapsed timer per active stage — uses a Svelte store for reactivity
+	const elapsedStore = writable<Record<string, number>>({});
+	let timerInterval: ReturnType<typeof setInterval> | null = null;
+
+	function startElapsedTimer() {
+		if (timerInterval) return;
+		timerInterval = setInterval(() => {
+			const now = Date.now();
+			elapsedStore.update(prev => {
+				const updated = { ...prev };
+				for (const stage of state.stages) {
+					if (stage.status === 'active' && stage.startedAt) {
+						updated[stage.id] = Math.floor((now - new Date(stage.startedAt).getTime()) / 1000);
+					} else if (stage.status === 'active' && !stage.startedAt) {
+						updated[stage.id] = (prev[stage.id] ?? 0) + 1;
+					}
+				}
+				return updated;
+			});
+		}, 1000);
+	}
+
+	$effect(() => {
+		const hasActive = state.stages.some(s => s.status === 'active');
+		if (hasActive) {
+			startElapsedTimer();
+		} else if (timerInterval && !hasActive) {
+			clearInterval(timerInterval);
+			timerInterval = null;
+		}
+	});
+
+	onDestroy(() => {
+		if (timerInterval) {
+			clearInterval(timerInterval);
+			timerInterval = null;
+		}
+	});
+
+	function formatElapsed(seconds: number): string {
+		const m = Math.floor(seconds / 60);
+		const s = seconds % 60;
+		return `${m}:${String(s).padStart(2, '0')}`;
+	}
 
 	// Calculate overall progress: use state.percent directly, or calculate from stages
 	let overallProgress = $derived.by(() => {
@@ -124,28 +172,40 @@
 	<!-- Stage Checklist -->
 	<div class="space-y-2">
 		{#each state.stages as stage}
-			<div class="flex items-center gap-3 py-1.5 px-2 rounded-lg {stage.status === 'active' ? 'bg-accent/10' : ''}">
-				{#if stage.status === 'completed'}
-					<CheckCircle class="w-4 h-4 text-accent flex-shrink-0" />
-				{:else if stage.status === 'active'}
-					<Loader2 class="w-4 h-4 text-accent animate-spin flex-shrink-0" />
-				{:else if stage.status === 'error'}
-					<XCircle class="w-4 h-4 text-red-500 flex-shrink-0" />
-				{:else}
-					<Circle class="w-4 h-4 text-gray-300 flex-shrink-0" />
-				{/if}
-				<span class={`text-sm ${
-					stage.status === 'completed' ? 'text-gray-700 font-medium' : 
-					stage.status === 'active' ? 'text-contrast font-semibold' : 
-					stage.status === 'error' ? 'text-red-600' :
-					'text-gray-400'
-				}`}>
-					{stage.name}
-				</span>
-				{#if stage.extracted}
-					<span class="ml-auto text-xs text-accent font-medium">
-						{stage.extracted.count} {stage.extracted.type}
+			<div class="py-1.5 px-2 rounded-lg {stage.status === 'active' ? 'bg-accent/10 stage-pulse' : ''}">
+				<div class="flex items-center gap-3">
+					{#if stage.status === 'completed'}
+						<CheckCircle class="w-4 h-4 text-accent flex-shrink-0" />
+					{:else if stage.status === 'active'}
+						<Loader2 class="w-4 h-4 text-accent animate-spin flex-shrink-0" />
+					{:else if stage.status === 'error'}
+						<XCircle class="w-4 h-4 text-red-500 flex-shrink-0" />
+					{:else}
+						<Circle class="w-4 h-4 text-gray-300 flex-shrink-0" />
+					{/if}
+					<span class={`text-sm ${
+						stage.status === 'completed' ? 'text-gray-700 font-medium' :
+						stage.status === 'active' ? 'text-contrast font-semibold' :
+						stage.status === 'error' ? 'text-red-600' :
+						'text-gray-400'
+					}`}>
+						{stage.name}
 					</span>
+					{#if stage.extracted}
+						<span class="ml-auto text-xs text-accent font-medium">
+							{stage.extracted.count} {stage.extracted.type}
+						</span>
+					{/if}
+					{#if stage.status === 'active' && $elapsedStore[stage.id] !== undefined}
+						<span class="ml-auto text-xs text-gray-400 tabular-nums">
+							{formatElapsed($elapsedStore[stage.id])}
+						</span>
+					{/if}
+				</div>
+				{#if stage.id === 'doc_analysis' && stage.status === 'active' && state.current_doc}
+					<div class="text-xs text-gray-400 ml-7 mt-0.5">
+						{state.current_doc.name} ({state.current_doc.index}/{state.current_doc.total})
+					</div>
 				{/if}
 			</div>
 		{/each}
@@ -175,3 +235,20 @@
 		<span>Model: {state.stats.model}</span>
 	</div>
 </div>
+
+<style>
+	@keyframes stage-pulse {
+		0%, 100% { opacity: 1; }
+		50% { opacity: 0.7; }
+	}
+
+	:global(.stage-pulse) {
+		animation: stage-pulse 3s ease-in-out infinite;
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		:global(.stage-pulse) {
+			animation: none;
+		}
+	}
+</style>

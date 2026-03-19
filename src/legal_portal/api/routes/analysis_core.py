@@ -252,9 +252,12 @@ async def start_analysis(
                     logger.info(f"[VERCEL] Analysis stream completed for {analysis_id} with status: {final_status}")
 
                 except asyncio.CancelledError:
-                    logger.warning(f"Analysis stream cancelled for {analysis_id}")
-                    analysis_task.cancel()
-                    yield f"data: {json.dumps({'type': 'cancelled'})}\n\n"
+                    # Client disconnected. Do NOT cancel the analysis task.
+                    # Task continues in event loop until maxDuration (800s).
+                    logger.info(
+                        f"[VERCEL] Client disconnected for {analysis_id}. "
+                        f"Analysis task continues in event loop."
+                    )
                 except Exception as e:
                     logger.error(f"Analysis stream error for {analysis_id}: {e}", exc_info=True)
                     yield f"data: {json.dumps({'type': 'error', 'error': str(e)})}\n\n"

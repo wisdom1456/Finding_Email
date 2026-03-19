@@ -1,10 +1,11 @@
-"""Health check endpoints."""
+"""Health check and configuration endpoints."""
 
 import os
 
 from fastapi import APIRouter, Depends
 
 from legal_portal.api.dependencies import get_supabase_client
+from legal_portal.config.default import get_settings
 
 router = APIRouter()
 
@@ -76,7 +77,7 @@ async def detailed_health_check(supabase=Depends(get_supabase_client)):
         checks["openai"] = "not configured"
 
     # Check OCR service
-    from legal_portal.config.default import get_settings
+    from legal_portal.config.default import get_settings  # noqa: E402
     settings = get_settings()
     ocr_status = "disabled"
     if settings.ocr_remote_enabled:
@@ -96,3 +97,12 @@ async def detailed_health_check(supabase=Depends(get_supabase_client)):
     overall_status = "healthy" if checks["supabase"] == "healthy" else "degraded"
 
     return {"status": overall_status, "checks": checks}
+
+
+@router.get("/api/config/flags")
+async def get_config_flags():
+    """Return public feature flags for frontend configuration."""
+    settings = get_settings()
+    return {
+        "analysis_backend_only": settings.analysis_backend_only,
+    }

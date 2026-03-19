@@ -182,6 +182,16 @@ class Settings(BaseSettings):
     )
 
     # ==================================================
+    # ANALYSIS EXECUTION MODE
+    # ==================================================
+
+    analysis_backend_only: bool = Field(
+        False,
+        alias="ANALYSIS_BACKEND_ONLY",
+        description="When true, analysis runs backend-only with polling progress (no SSE streaming to frontend).",
+    )
+
+    # ==================================================
     # ANALYSIS QUICK PREVIEW FEATURE FLAGS (phased rollout)
     # ==================================================
 

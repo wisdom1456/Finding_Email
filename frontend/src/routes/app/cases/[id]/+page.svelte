@@ -50,6 +50,9 @@
 	let autoRunGapAnalysis = $state(false);
 	let embeddedResultsError = $state('');
 	
+	// Feature flags
+	let analysisBackendOnly = $state(false);
+
 	// Streaming analysis state
 	let showStreamingPanel = $state(false);
 	let streamingAnalysisRef: AnalysisStreamPanel | null = $state(null);
@@ -226,11 +229,14 @@
 	onMount(async () => {
 		applyViewFromUrl();
 		await loadCase();
-		await loadDocuments();
-		await loadAnalysisStatus();
-		await loadSettings();
+		await Promise.all([loadDocuments(), loadAnalysisStatus(), loadSettings(), loadFeatureFlags()]);
 		if (analysisStatus?.status === 'completed' && showingEmbeddedResults) {
 			await loadEmbeddedResults(true);
+		}
+		// Auto-mount progress for in-flight analyses (backend-only mode)
+		if (analysisBackendOnly && analysisStatus?.status === 'processing') {
+			currentAnalysisId = analysisStatus.id;
+			showProgressModal = true;
 		}
 	});
 
@@ -239,6 +245,18 @@
 		// Clean up SSE connection if active
 		progressStore.disconnect();
 	});
+
+	async function loadFeatureFlags() {
+		try {
+			const response = await fetch(`${getApiUrl()}/api/config/flags`);
+			if (response.ok) {
+				const data = await response.json();
+				analysisBackendOnly = data.analysis_backend_only ?? false;
+			}
+		} catch (error) {
+			console.error('Failed to load feature flags:', error);
+		}
+	}
 
 	async function loadSettings(retried = false) {
 		try {
@@ -363,20 +381,35 @@
 
 	async function loadAnalysisStatus() {
 		try {
-			// Fetch status fields only — the full result JSONB can be large (up to 40MB
-			// for cases with many documents). The complete result is loaded separately
-			// via the /api/analysis/results/{caseId} backend endpoint when needed.
-			const { data, error } = await withRetry(() =>
+			// Prefer terminal states — prevents stale processing rows from shadowing completed results
+			let { data, error } = await withRetry(() =>
 				supabase
 					.from('analysis_results')
 					.select('id, status, created_at, completed_at')
 					.eq('case_id', caseId as string)
+					.in('status', ['completed', 'failed'])
 					.order('created_at', { ascending: false })
 					.limit(1)
 					.maybeSingle()
 			);
 
 			if (error) throw error;
+
+			if (!data) {
+				// No terminal row — fall back to latest of any status
+				const fallback = await withRetry(() =>
+					supabase
+						.from('analysis_results')
+						.select('id, status, created_at, completed_at')
+						.eq('case_id', caseId as string)
+						.order('created_at', { ascending: false })
+						.limit(1)
+						.maybeSingle()
+				);
+				if (fallback.error) throw fallback.error;
+				data = fallback.data;
+			}
+
 			analysisStatus = data;
 		} catch (error: any) {
 			console.error('Failed to load analysis status:', error);
@@ -481,7 +514,7 @@
 				showIntakeDocumentSelector = false;
 				if (startAnalysisAfterIntakeSelection) {
 					startAnalysisAfterIntakeSelection = false;
-					await startStreamingAnalysis();
+					await runAnalysis();
 				}
 				return;
 			}
@@ -494,7 +527,7 @@
 			// Start analysis if this was triggered during analysis flow
 			if (startAnalysisAfterIntakeSelection) {
 				startAnalysisAfterIntakeSelection = false;
-				await startStreamingAnalysis();
+				await runAnalysis();
 			}
 		} catch (error: any) {
 			errorMessage = error.message || 'Failed to update intake form';
@@ -824,7 +857,7 @@
 
 			// If all docs now have text, proceed with analysis
 			if (docsWithoutText.length === 0) {
-				await startStreamingAnalysis();
+				await runAnalysis();
 			}
 		} catch (error: any) {
 			toastStore.error(`OCR failed: ${error.message}`);
@@ -835,7 +868,7 @@
 
 	async function proceedWithoutMissingDocs() {
 		showMissingTextWarning = false;
-		await startStreamingAnalysis(true); // Skip the missing text check and use streaming
+		await runAnalysis(true); // Skip the missing text check
 	}
 
 	async function resumeProcessingAnalysis() {
@@ -867,7 +900,7 @@
 
 			// No saved result — offer to restart
 			toastStore.info('Server has not finished yet. Starting fresh analysis...');
-			await startStreamingAnalysis();
+			await runAnalysis();
 		} catch (err: any) {
 			console.error('Resume failed:', err);
 			toastStore.error('Could not resume. Try starting a new analysis.');
@@ -913,6 +946,18 @@
 	}
 
 
+
+	/**
+	 * Unified analysis entry point — delegates to startAnalysis (backend-only/polling)
+	 * or startStreamingAnalysis (SSE streaming) based on the feature flag.
+	 */
+	async function runAnalysis(skipMissingTextCheck = false) {
+		if (analysisBackendOnly) {
+			await startAnalysis(skipMissingTextCheck);
+		} else {
+			await startStreamingAnalysis(skipMissingTextCheck);
+		}
+	}
 
 	// Idempotency guard — prevents double completion from concurrent Resume + panel recovery
 	let completionHandled = false;
@@ -1438,6 +1483,7 @@
 					<div class:hidden={activeTab !== 'analysis'} class="page-spacing">
 						<InlineAnalysisProgress
 							analysisId={currentAnalysisId}
+							pollingOnly={analysisBackendOnly}
 							onComplete={async () => {
 								showProgressModal = false;
 								await loadAnalysisStatus();
@@ -1483,7 +1529,7 @@
 									</div>
 								</div>
 								<AsyncButton
-									onclick={() => startStreamingAnalysis()}
+									onclick={() => runAnalysis()}
 									loading={showStreamingPanel || analyzing}
 									variant="primary"
 									loadingText="Starting..."
@@ -1516,7 +1562,7 @@
 									<AsyncButton
 										onclick={() => {
 											showingEmbeddedResults = false;
-											startStreamingAnalysis();
+											runAnalysis();
 										}}
 										loading={showStreamingPanel || analyzing}
 										variant="primary"
@@ -1552,7 +1598,7 @@
 										{/if}
 
 										<AsyncButton
-											onclick={() => startStreamingAnalysis()}
+											onclick={() => runAnalysis()}
 											loading={analyzing || (analysisStatus && analysisStatus.status === 'processing')}
 											variant="primary"
 											loadingText="Analyzing..."
@@ -1602,7 +1648,7 @@
 								Open Results Workspace
 							</AsyncButton>
 					<AsyncButton
-						onclick={() => startStreamingAnalysis()}
+						onclick={() => runAnalysis()}
 						loading={showStreamingPanel || analyzing}
 						variant="secondary"
 						loadingText="Re-running..."
@@ -1619,7 +1665,7 @@
 					{#if analysisStatus.status === 'error'}
 					<div>
 						<AsyncButton
-							onclick={() => startStreamingAnalysis()}
+							onclick={() => runAnalysis()}
 							loading={showStreamingPanel || analyzing}
 							variant="primary"
 							loadingText="Retrying..."

@@ -78,11 +78,12 @@ export interface EnhancedProgressState<T = unknown> extends ProgressState<T> {
 }
 
 const DEFAULT_STAGES: StageState[] = [
-	{ id: 'doc_summary', name: 'Analyzing Documents', status: 'pending', progress: 0 },
-	{ id: 'fact_matrix', name: 'Extracting Key Facts', status: 'pending', progress: 0 },
-	{ id: 'issue_mapping', name: 'Mapping Legal Issues', status: 'pending', progress: 0 },
-	{ id: 'deep_analysis', name: 'Deep Analysis', status: 'pending', progress: 0 },
-	{ id: 'letter_structure', name: 'Findings Email Structure', status: 'pending', progress: 0 },
+	{ id: 'preparing', name: 'Preparing Documents', status: 'pending', progress: 0 },
+	{ id: 'doc_analysis', name: 'Analyzing Documents', status: 'pending', progress: 0 },
+	{ id: 'fact_extraction', name: 'Extracting Key Facts', status: 'pending', progress: 0 },
+	{ id: 'legal_mapping', name: 'Mapping Legal Issues', status: 'pending', progress: 0 },
+	{ id: 'deep_analysis', name: 'Running Deep Analysis', status: 'pending', progress: 0 },
+	{ id: 'finalizing', name: 'Finalizing Results', status: 'pending', progress: 0 },
 ];
 
 const initialState: EnhancedProgressState<unknown> = {
@@ -495,18 +496,103 @@ function createProgressStore() {
 		subscribe,
 
 		/**
-		 * Start listening to a specialized analysis progress stream
+		 * Start listening to a specialized analysis progress stream.
+		 * When pollingOnly is true, skips SSE and uses PollingClient directly.
 		 */
-		startListening: async (analysisId: string) => {
-			console.log('[progressStore] startListening called:', analysisId);
+		startListening: async (analysisId: string, options?: { pollingOnly?: boolean }) => {
+			console.log('[progressStore] startListening called:', analysisId, options);
 			const { session, user } = await getSecureSession();
 			if (!session || !user) return;
 
 			const apiUrl = getApiUrl();
-			// Token is sent via Authorization header — never in the URL
 			const streamUrl = `${apiUrl}/api/progress/analysis/${analysisId}`;
 			const statusUrl = `${apiUrl}/api/progress/analysis/${analysisId}/status`;
 			console.log('[progressStore] URLs:', { streamUrl, statusUrl });
+
+			if (options?.pollingOnly) {
+				// Polling-only mode: skip SSE entirely
+				// Reset document state tracking
+				lastLoggedDocStates = {};
+				if (sseClient) { sseClient.disconnect(); sseClient = null; }
+				if (pollingClient) { pollingClient.stopPolling(); pollingClient = null; }
+
+				currentStatusUrl = statusUrl;
+				currentToken = session.access_token;
+
+				update(state => ({
+					...initialState,
+					status: 'connecting',
+					message: 'Connecting to progress stream...'
+				}));
+
+				let finalData: unknown = null;
+
+				const messageHandler = (event: ProgressEvent | any) => {
+					if (event.stage) {
+						console.log('[progressStore] Stage:', event.stage.id, event.stage.status);
+					}
+					if (event.data) finalData = event.data;
+
+					let newStatus: ProgressState['status'] = 'active';
+					if (event.type === 'completed' || event.status === 'completed') newStatus = 'completed';
+					else if (event.type === 'error' || event.type === 'failed' || event.status === 'error') newStatus = 'error';
+
+					update(state => {
+						let newStages = [...state.stages];
+						if (event.stage) {
+							const stageIdx = newStages.findIndex(s => s.id === event.stage.id);
+							if (stageIdx !== -1) {
+								newStages[stageIdx] = { ...newStages[stageIdx], ...event.stage };
+								if (event.stage.status === 'active' || event.stage.status === 'completed') {
+									for (let i = 0; i < stageIdx; i++) {
+										if (newStages[i].status !== 'completed') {
+											newStages[i] = { ...newStages[i], status: 'completed', progress: 100 };
+										}
+									}
+								}
+							}
+						}
+						let newDocs = [...state.documents];
+						if (event.document) {
+							const docIdx = newDocs.findIndex(d => d.id === event.document.id);
+							if (docIdx !== -1) { newDocs[docIdx] = { ...newDocs[docIdx], ...event.document }; }
+							else { newDocs.push(event.document); }
+						}
+						return {
+							...state,
+							message: event.message || state.message,
+							phase: event.phase || state.phase,
+							percent: event.percent !== undefined ? event.percent : state.percent,
+							docs_processed: event.docs_processed || state.docs_processed,
+							current_doc: event.current_doc || state.current_doc,
+							sub_step: event.sub_step || state.sub_step,
+							status: newStatus,
+							error: event.error || null,
+							timestamp: event.timestamp || new Date().toISOString(),
+							data: event.data || state.data,
+							stages: newStages,
+							documents: newDocs,
+							stats: event.stats ? { ...state.stats, ...event.stats } : state.stats,
+							chunkStatus: event.chunk_status || state.chunkStatus,
+							hasRecoveryPending: event.chunk_status?.type === 'chunk_complete_with_errors' || state.hasRecoveryPending,
+							failedDocs: (event.chunk_status?.failed_docs?.length > 0 ? event.chunk_status.failed_docs : state.failedDocs)
+						};
+					});
+				};
+
+				pollingClient = new PollingClient();
+				pollingClient.startPolling(
+					statusUrl,
+					session.access_token,
+					messageHandler,
+					(pollError: Error) => {
+						update(state => ({ ...state, status: 'error', error: pollError.message }));
+					},
+					() => {},
+					tokenRefresher
+				);
+				return;
+			}
 
 			connectInternal(streamUrl, undefined, statusUrl, session.access_token);
 		},

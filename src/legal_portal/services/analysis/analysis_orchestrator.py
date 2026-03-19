@@ -725,6 +725,16 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
             f"Preparing documents | total_docs={len(documents)} jurisdiction={jurisdiction}"
         )
 
+        # Emit preparing stage
+        await progress_manager.publish_progress(
+            channel_id=analysis_id,
+            message="Preparing documents...",
+            phase="preparing",
+            percent=1,
+            timestamp=datetime.utcnow().isoformat(),
+            stage={"id": "preparing", "name": "Preparing Documents", "status": "active", "progress": 0},
+        )
+
         # Step 0: Extract text for deferred documents (bulk imports skip extraction)
         deferred_docs = [
             d for d in documents
@@ -826,12 +836,14 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
         processed_case_docs = []
         skipped_documents = []
 
+        # Mark preparing stage as completed
         await progress_manager.publish_progress(
             channel_id=analysis_id,
-            message="Checking document signatures...",
+            message="Documents prepared.",
             phase="preparing",
             percent=5,
             timestamp=datetime.utcnow().isoformat(),
+            stage={"id": "preparing", "name": "Preparing Documents", "status": "completed", "progress": 100},
         )
 
         for doc in documents:

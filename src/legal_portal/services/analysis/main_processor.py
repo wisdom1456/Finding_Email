@@ -715,7 +715,7 @@ async def process_case_documents(
                     [d.file_name for d in all_processed_docs],
                     "document_analysis",
                     15,
-                    stage={"id": "doc_summary", "name": "Document Analysis", "status": "active", "progress": 10}
+                    stage={"id": "doc_analysis", "name": "Analyzing Documents", "status": "active", "progress": 10}
                 )
             # Filter out docs that were grouped (Phase B) for individual summarization
             docs_for_summary = [
@@ -742,7 +742,7 @@ async def process_case_documents(
                     [],
                     "document_analysis",
                     20,
-                    stage={"id": "doc_summary", "name": "Document Analysis", "status": "completed", "progress": 100}
+                    stage={"id": "doc_analysis", "name": "Analyzing Documents", "status": "completed", "progress": 100}
                 )
         else:
             logger.info("No case documents provided; skipping document summary stage")
@@ -752,7 +752,7 @@ async def process_case_documents(
                     [],
                     "document_analysis",
                     20,
-                    stage={"id": "doc_summary", "name": "Document Analysis", "status": "skipped", "progress": 100}
+                    stage={"id": "doc_analysis", "name": "Analyzing Documents", "status": "skipped", "progress": 100}
                 )
 
         # Stage 3: Log Per-Document Summaries
@@ -810,7 +810,7 @@ async def process_case_documents(
                 [],
                 "case_synthesis",
                 25,
-                stage={"id": "case_synthesis", "name": "Extracting Facts", "status": "active", "progress": 0}
+                stage={"id": "fact_extraction", "name": "Extracting Key Facts", "status": "active", "progress": 0}
             )
 
         # 5.5. AI Call #2.5: Generate case-level analysis summary (with heartbeats)
@@ -838,7 +838,7 @@ async def process_case_documents(
                     [],
                     "error",
                     25,
-                    stage={"id": "case_synthesis", "name": "Extracting Facts", "status": "failed", "progress": 0}
+                    stage={"id": "fact_extraction", "name": "Extracting Key Facts", "status": "failed", "progress": 0}
                 )
             raise  # Re-raise to fail the analysis properly
 
@@ -848,7 +848,7 @@ async def process_case_documents(
                 [],
                 "case_synthesis",
                 35,
-                stage={"id": "case_synthesis", "name": "Extracting Facts", "status": "completed", "progress": 100}
+                stage={"id": "fact_extraction", "name": "Extracting Key Facts", "status": "completed", "progress": 100}
             )
 
         # Stage 4: Log Case Synthesis
@@ -875,7 +875,7 @@ async def process_case_documents(
                 [],
                 "deadline_extraction",
                 40,
-                stage={"id": "legal_issues", "name": "Legal Issues", "status": "active", "progress": 0}
+                stage={"id": "legal_mapping", "name": "Mapping Legal Issues", "status": "active", "progress": 0}
             )
 
         # Check corpus coverage for this case
@@ -952,7 +952,7 @@ async def process_case_documents(
                 [],
                 "deadline_extraction",
                 50,
-                stage={"id": "legal_issues", "name": "Legal Issues", "status": "completed", "progress": 100}
+                stage={"id": "legal_mapping", "name": "Mapping Legal Issues", "status": "completed", "progress": 100}
             )
 
         # Check if CLIO context is available in review_data
@@ -978,7 +978,7 @@ async def process_case_documents(
                 [],
                 "deep_analysis",
                 55,
-                stage={"id": "deep_analysis", "name": "Deep Analysis", "status": "active", "progress": 0}
+                stage={"id": "deep_analysis", "name": "Running Deep Analysis", "status": "active", "progress": 0}
             )
 
         # Multi-stage analysis is REQUIRED for letter generation
@@ -1123,7 +1123,7 @@ async def process_case_documents(
                     [],
                     "deep_analysis",
                     75,
-                    stage={"id": "deep_analysis", "name": "Deep Analysis", "status": "completed", "progress": 100}
+                    stage={"id": "deep_analysis", "name": "Running Deep Analysis", "status": "completed", "progress": 100}
                 )
 
         except Exception as e:
@@ -1142,7 +1142,7 @@ async def process_case_documents(
                     [],
                     "deep_analysis",
                     75,
-                    stage={"id": "deep_analysis", "name": "Deep Analysis", "status": "failed", "progress": 100}
+                    stage={"id": "deep_analysis", "name": "Running Deep Analysis", "status": "failed", "progress": 100}
                 )
 
         # Derive opposing parties from fact matrix
@@ -1169,7 +1169,7 @@ async def process_case_documents(
                 [],
                 "letter_structure",
                 80,
-                stage={"id": "letter_structure", "name": "Letter Structure", "status": "active", "progress": 0}
+                stage={"id": "finalizing", "name": "Finalizing Results", "status": "active", "progress": 0}
             )
 
         # 9. Calculate processing time
@@ -1181,7 +1181,7 @@ async def process_case_documents(
                 [],
                 "letter_structure",
                 90,
-                stage={"id": "letter_structure", "name": "Letter Structure", "status": "completed", "progress": 100}
+                stage={"id": "finalizing", "name": "Finalizing Results", "status": "completed", "progress": 100}
             )
 
         logger.info(

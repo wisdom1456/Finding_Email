@@ -17,7 +17,7 @@
   import { getApiUrl } from '$lib/config';
   import { getSecureSession } from '$lib/supabase';
 
-  type StreamStatus = 'idle' | 'thinking' | 'streaming' | 'complete' | 'error' | 'recovering' | 'reconnecting';
+  type StreamStatus = 'idle' | 'thinking' | 'streaming' | 'complete' | 'error' | 'recovering';
 
   let {
     caseId,
@@ -47,6 +47,7 @@
   // Track save failures so the user can retry
   let saveError = $state(false);
   let savePendingContent = $state('');
+  let savePendingRunId = $state<string | null>(null);
   // Document inventory count from quick preview
   let docInventoryCount = $state(0);
   // Track whether preview content was received (for separator)
@@ -56,8 +57,9 @@
   let sectionIndex = $state(0);
   let sectionTotal = $state(0);
   // Recovery state for network interruptions
-  let retryCount = $state(0);
-  const MAX_RETRIES = 10;
+  const RECOVERY_TIMEOUT_MS = 3 * 60 * 1000;  // 3 minutes
+  const RECOVERY_POLL_MS = 5000;               // 5s between polls
+  let recoveryGeneration = 0;                  // cancels stale recovery loops
   let serverSaved = $state(false);
   let isMounted = false;
   // Stream run isolation — prevents recovery from returning stale results
@@ -101,30 +103,27 @@
   export async function startStreaming() {
     if (status === 'streaming' || status === 'thinking') return;
 
-    const isReconnect = status === 'reconnecting';
-    stopTimer();  // Clear any leaked timer from prior recovery cycle
-    if (!isReconnect) {
-      content = '';  // Only clear on fresh start, preserve on reconnect
-    }
-    status = 'thinking';  // Start in thinking phase
+    // Cancel any in-flight recovery polling
+    recoveryGeneration++;
+
+    stopTimer();
+    content = '';
+    status = 'thinking';
     hasEmittedComplete = false;
     errorMessage = '';
-    if (!isReconnect) {
-      startTime = Date.now();
-      elapsedTime = 0;
-      thinkingTime = 0;
-      docsInScope = 0;
-      docsOmitted = 0;
-      retryCount = 0;
-      serverSaved = false;
-      docInventoryCount = 0;
-      hasPreviewContent = false;
-      currentSection = '';
-      sectionIndex = 0;
-      sectionTotal = 0;
-      streamRunId = null;
-      receivedDone = false;
-    }
+    startTime = Date.now();
+    elapsedTime = 0;
+    thinkingTime = 0;
+    docsInScope = 0;
+    docsOmitted = 0;
+    serverSaved = false;
+    docInventoryCount = 0;
+    hasPreviewContent = false;
+    currentSection = '';
+    sectionIndex = 0;
+    sectionTotal = 0;
+    streamRunId = null;
+    receivedDone = false;
     
     // Start elapsed time counter
     timerInterval = setInterval(() => {
@@ -323,18 +322,11 @@
         `[STREAM:FE] Stream interrupted: ${e instanceof Error ? e.message : e}`,
         `| chunks=${_chunkCount} content=${content.length}chars`,
         `| last_chunk=${_sinceLast}s_ago total=${_total}s`,
-        `| status=${status} retry=${retryCount}/${MAX_RETRIES}`
+        `| status=${status}`
       );
 
-      // Try to recover instead of showing error immediately
-      if (retryCount < MAX_RETRIES) {
-        await attemptRecovery();
-      } else {
-        status = 'error';
-        errorMessage = e instanceof Error ? e.message : 'Failed to start streaming';
-        stopTimer();
-        onError?.(errorMessage);
-      }
+      // Enter poll-only recovery (never starts new LLM call)
+      await attemptRecovery();
     }
   }
 
@@ -353,24 +345,25 @@
 
   async function attemptRecovery() {
     status = 'recovering';
-    retryCount++;
+    const myGeneration = ++recoveryGeneration;
 
-    // Wait for network to stabilize — capped exponential backoff (2s, 4s, 5s, 5s, ...)
-    const delay = Math.min(Math.pow(2, retryCount) * 1000, 5000);
-    await new Promise(r => setTimeout(r, delay));
+    // Fast path: done event received before disconnect
+    if (receivedDone && content) {
+      console.log(`[STREAM:FE] receivedDone=true, completing with ${content.length} chars`);
+      emitComplete(content);
+      return;
+    }
 
-    if (!isMounted) return;
+    // Initial pause for network stabilization
+    await new Promise(r => setTimeout(r, 2000));
 
-    // Poll the recovery endpoint — the server-side collector may still be
-    // finishing the LLM call.  On retry 2+ we poll up to 6 times (30s total)
-    // before falling back to a full stream restart.
-    const maxPolls = retryCount >= 2 ? 6 : 1;
-    for (let poll = 0; poll < maxPolls; poll++) {
-      if (poll > 0) {
-        await new Promise(r => setTimeout(r, 5000));
-        if (!isMounted) return;
-      }
+    const recoveryStart = Date.now();
+    let pollCount = 0;
 
+    while (Date.now() - recoveryStart < RECOVERY_TIMEOUT_MS) {
+      if (!isMounted || myGeneration !== recoveryGeneration) return;
+
+      pollCount++;
       try {
         const { session } = await getSecureSession();
         if (!session) throw new Error('No session');
@@ -387,14 +380,11 @@
         if (resp.ok) {
           const data = await resp.json();
           if (data.found) {
-            // Backend has a result — use it
-            console.log(`[STREAM:FE] Recovery found server-saved result (poll=${poll + 1}/${maxPolls}, retry=${retryCount}, status=${data.status})`);
+            if (myGeneration !== recoveryGeneration) return;
+            console.log(`[STREAM:FE] Recovery found result (poll=${pollCount}, elapsed=${Math.round((Date.now() - recoveryStart) / 1000)}s, status=${data.status})`);
             content = data.content;
             docsInScope = data.docs_in_scope || 0;
             docsOmitted = data.docs_omitted || 0;
-            // Only skip /save if the row is already "completed".
-            // A "processing" row (collector-saved) still needs /save to
-            // transition to "completed" with structured extraction.
             serverSaved = data.status === 'completed';
             flushRender();
             emitComplete(content);
@@ -402,24 +392,20 @@
           }
         }
       } catch {
-        // Recovery endpoint failed (network still down), continue polling
+        // Network still down or auth issue — continue polling
       }
+
+      await new Promise(r => setTimeout(r, RECOVERY_POLL_MS));
     }
 
-    if (!isMounted) return;
+    if (!isMounted || myGeneration !== recoveryGeneration) return;
 
-    if (receivedDone) {
-      // We got the full content via SSE done event before disconnect.
-      // Complete with local content — no need to retry.
-      console.log(`[STREAM:FE] Received done event before disconnect, completing with ${content.length} chars`);
-      emitComplete(content);
-      return;
-    }
-
-    // Backend hasn't finished — retry the stream
-    console.log(`[STREAM:FE] Recovery endpoint returned not found after ${maxPolls} polls, reconnecting stream (retry=${retryCount})`);
-    status = 'reconnecting';
-    startStreaming();
+    // Timeout — show error with manual restart option
+    console.warn(`[STREAM:FE] Recovery timed out after ${pollCount} polls (${RECOVERY_TIMEOUT_MS / 1000}s)`);
+    status = 'error';
+    errorMessage = 'Connection lost. The analysis may still be running on the server.';
+    stopTimer();
+    onError?.(errorMessage);
   }
 
   function stopTimer() {
@@ -454,9 +440,11 @@
   }
 
   // Save the analysis result to the database (retries up to 3 times on failure)
-  async function saveAnalysis(analysisContent: string) {
+  // runId is captured at call time so retries never read a stale module-level streamRunId.
+  async function saveAnalysis(analysisContent: string, runId: string | null = streamRunId) {
     saveError = false;
     savePendingContent = analysisContent;
+    savePendingRunId = runId;
     const maxAttempts = 3;
 
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
@@ -475,12 +463,12 @@
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${session.access_token}`,
           },
-          body: JSON.stringify({ content: analysisContent, stream_run_id: streamRunId }),
+          body: JSON.stringify({ content: analysisContent, stream_run_id: runId }),
         });
 
         if (!response.ok) {
           const errorText = await response.text();
-          console.error(`Failed to save analysis (attempt ${attempt}/${maxAttempts}):`, errorText);
+          console.error(`Failed to save analysis (attempt ${attempt}/${maxAttempts}, run=${runId}):`, errorText);
           // Don't retry on 409 (cancelled) — it won't succeed
           if (response.status === 409) {
             saveError = true;
@@ -492,12 +480,13 @@
           }
           saveError = true;
         } else {
-          console.log('Streaming analysis saved successfully');
+          console.log(`Streaming analysis saved successfully (run=${runId})`);
           savePendingContent = '';
+          savePendingRunId = null;
           return;
         }
       } catch (e) {
-        console.error(`Error saving analysis (attempt ${attempt}/${maxAttempts}):`, e);
+        console.error(`Error saving analysis (attempt ${attempt}/${maxAttempts}, run=${runId}):`, e);
         if (attempt < maxAttempts) {
           await new Promise(r => setTimeout(r, attempt * 2000));
           continue;
@@ -507,10 +496,10 @@
     }
   }
 
-  // Retry saving analysis after a failure
+  // Retry saving analysis after a failure — uses the run ID captured when save first failed
   function retrySave() {
     if (savePendingContent) {
-      void saveAnalysis(savePendingContent);
+      void saveAnalysis(savePendingContent, savePendingRunId);
     }
   }
 
@@ -561,7 +550,7 @@
           <Loader2 class="h-5 w-5 animate-spin text-blue-500" />
         {:else if status === 'complete'}
           <CheckCircle2 class="h-5 w-5 text-green-500" />
-        {:else if status === 'recovering' || status === 'reconnecting'}
+        {:else if status === 'recovering'}
           <Loader2 class="h-5 w-5 animate-spin text-amber-500" />
         {:else if status === 'error'}
           <AlertCircle class="h-5 w-5 text-red-500" />
@@ -569,7 +558,7 @@
         <span>Case Analysis</span>
       </h3>
       
-      {#if status === 'thinking' || status === 'streaming' || status === 'complete' || status === 'recovering' || status === 'reconnecting'}
+      {#if status === 'thinking' || status === 'streaming' || status === 'complete' || status === 'recovering'}
         <span class="elapsed-time">
           {formatTime(elapsedTime)}
         </span>
@@ -591,7 +580,7 @@
         </button>
       {/if}
       
-      {#if status === 'error'}
+      {#if status === 'error' || status === 'recovering'}
         <button
           class="action-btn"
           onclick={retry}
@@ -695,14 +684,9 @@
 
   <!-- Status bar -->
   {#if status === 'recovering'}
-    <div class="status-bar reconnecting">
-      <div class="status-indicator reconnecting"></div>
-      <span>Connection lost. Checking for results...</span>
-    </div>
-  {:else if status === 'reconnecting'}
-    <div class="status-bar reconnecting">
-      <div class="status-indicator reconnecting"></div>
-      <span>Reconnecting (attempt {retryCount}/{MAX_RETRIES})...</span>
+    <div class="status-bar recovering">
+      <div class="status-indicator recovering"></div>
+      <span>Connection lost. Waiting for server to finish analysis...</span>
     </div>
   {:else if status === 'thinking'}
     <div class="status-bar thinking">
@@ -983,7 +967,7 @@
     color: #7c3aed;
   }
 
-  .status-bar.reconnecting {
+  .status-bar.recovering {
     background: #fffbeb;
     border-top-color: #fde68a;
     color: #92400e;
@@ -1005,7 +989,7 @@
     50% { transform: scale(1.3); opacity: 0.6; }
   }
 
-  .status-indicator.reconnecting {
+  .status-indicator.recovering {
     background: #f59e0b;
     animation: pulse 1.5s ease-in-out infinite;
   }

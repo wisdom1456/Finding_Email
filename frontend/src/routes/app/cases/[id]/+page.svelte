@@ -914,8 +914,12 @@
 
 
 
+	// Idempotency guard — prevents double completion from concurrent Resume + panel recovery
+	let completionHandled = false;
+
 	// Start streaming analysis (fast single-pass)
 	async function startStreamingAnalysis(skipMissingTextCheck = false) {
+		completionHandled = false;  // reset on genuinely new run
 		if (!componentActive) return;
 
 		// Pre-flight check using already-loaded documents (avoids blocking the click handler)
@@ -946,7 +950,8 @@
 	}
 
 	async function handleStreamingComplete(content: string) {
-		if (!componentActive) return;
+		if (completionHandled || !componentActive) return;
+		completionHandled = true;
 		streamedContent = content;
 		toastStore.success('Analysis complete! Loading results workspace...');
 		if (!componentActive) return;
@@ -977,7 +982,6 @@
 
 	function handleStreamingError(error: string) {
 		toastStore.error(`Streaming analysis failed: ${error}`);
-		showStreamingPanel = false;
 	}
 
 

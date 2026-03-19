@@ -5,7 +5,7 @@
 
 -- Expire stale processing rows (>30 min old)
 UPDATE analysis_results
-SET status = 'failed', error = 'Expired: stuck in processing'
+SET status = 'error', error = 'Expired: stuck in processing'
 WHERE status IN ('pending', 'processing')
 AND created_at < NOW() - INTERVAL '30 minutes';
 

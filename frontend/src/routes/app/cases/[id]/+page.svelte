@@ -387,7 +387,7 @@
 					.from('analysis_results')
 					.select('id, status, created_at, completed_at')
 					.eq('case_id', caseId as string)
-					.in('status', ['completed', 'failed'])
+					.in('status', ['completed', 'error'])
 					.order('created_at', { ascending: false })
 					.limit(1)
 					.maybeSingle()

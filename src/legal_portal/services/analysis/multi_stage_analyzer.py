@@ -732,7 +732,7 @@ DOCUMENTS:
                 [],
                 "fact_extraction",
                 20,
-                stage={"id": "fact_matrix", "name": "Extracting Facts", "status": "active", "progress": 5}
+                stage={"id": "fact_extraction", "name": "Extracting Facts", "status": "active", "progress": 5}
             )
 
         stage_start = time.time()
@@ -769,7 +769,7 @@ DOCUMENTS:
                 "fact_extraction",
                 35,
                 stage={
-                    "id": "fact_matrix",
+                    "id": "fact_extraction",
                     "name": "Extracting Facts",
                     "status": "completed",
                     "progress": 100,
@@ -1190,7 +1190,7 @@ RULES:
 
         logger.info(
             f"[STAGE:1:API] Calling OpenAI for fact_matrix | "
-            f"model={model} prompt_chars={len(prompt)} max_tokens=4000"
+            f"model={model} prompt_chars={len(prompt)} max_tokens=16000"
         )
 
         # Use asyncio.to_thread to avoid blocking the event loop during API call
@@ -1204,7 +1204,7 @@ RULES:
                 "Return only valid JSON."
             ),
             input=prompt,
-            max_output_tokens=4000,  # GPT-4.1-mini doesn't need reasoning token overhead
+            max_output_tokens=16000,  # Large cases (30+ docs) can exceed 4k tokens
         )
         api_duration = time.time() - api_start
 

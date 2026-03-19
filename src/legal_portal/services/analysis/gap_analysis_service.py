@@ -195,7 +195,7 @@ class GapAnalysisService:
 
             logger.info(
                 f"[STAGE:3.5:API] Calling OpenAI for gap_analysis | "
-                f"model={model} prompt_chars={len(prompt)} max_tokens=4000"
+                f"model={model} prompt_chars={len(prompt)} max_tokens=12000"
             )
 
             # Call OpenAI API with timeout guard
@@ -213,7 +213,7 @@ class GapAnalysisService:
                             "Return only valid JSON matching the GapAnalysisResult schema. Do not include any text before or after the JSON."
                         ),
                         input=prompt,
-                        max_output_tokens=4000,
+                        max_output_tokens=12000,
                         reasoning_effort="low" if self.client._is_gpt5_model(model) else None,
                     ),
                     timeout=_gap_settings.gap_analysis_budget_seconds,

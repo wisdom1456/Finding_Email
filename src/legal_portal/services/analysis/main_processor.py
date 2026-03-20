@@ -117,7 +117,10 @@ _SIGNATURE_INSTRUMENT_HINT_PATTERNS = [
 # Long documents are chunked into excerpts so batching/token estimates stay stable.
 PROMPT_MAX_DOC_CHARS = 24000
 PROMPT_LONG_DOC_CHUNKS = 3
-PROMPT_MAX_DOCS_PER_BATCH = 10
+# Reduced from 10 → 6 to prevent batch timeout (180s). A 10-doc batch with
+# gpt-5.4 routinely exceeds 180s at 50K chars. 6 docs / ~20K chars completes
+# in 60-70s with headroom.
+PROMPT_MAX_DOCS_PER_BATCH = 6
 PROMPT_MAX_CONCURRENT_BATCHES = 3
 
 # Prompt-shaping controls for case synthesis.
@@ -1884,6 +1887,7 @@ Return ONLY valid JSON, no markdown code blocks.
                     percent=15 + int((processed_count / total_docs) * 60),
                 )
 
+            batch_start_time = time.time()
             try:
                 batch_result, batch_errors = await asyncio.wait_for(
                     _process_document_batch(
@@ -1898,16 +1902,18 @@ Return ONLY valid JSON, no markdown code blocks.
                         statute_context,
                         jurisdiction=jurisdiction,
                     ),
-                    timeout=180.0,
+                    timeout=300.0,  # 5 min — increased from 180s to handle large-doc batches
                 )
 
+                batch_duration = time.time() - batch_start_time
                 processed_count += batch_doc_count
 
                 completed_doc_count = 0
                 if batch_result:
                     logger.info(
                         f"[BATCH {batch_num}/{total_batches}] Completed: {len(batch_result)} summaries "
-                        f"from {batch_doc_count} docs"
+                        f"from {batch_doc_count} docs | duration={batch_duration:.1f}s "
+                        f"chars={batch_est_tokens * 4}"
                     )
 
                     summaries_by_name: Dict[str, List[Any]] = {}
@@ -1989,9 +1995,14 @@ Return ONLY valid JSON, no markdown code blocks.
                 return batch_result or [], batch_errors or []
 
             except asyncio.TimeoutError:
+                batch_duration = time.time() - batch_start_time
                 processed_count += batch_doc_count
-                error_msg = f"Batch {batch_num} timed out after 3 minutes ({batch_doc_count} docs)"
-                logger.error(f"[BATCH {batch_num}/{total_batches}] TIMEOUT: {', '.join(batch_doc_names)}")
+                error_msg = f"Batch {batch_num} timed out after {batch_duration:.0f}s ({batch_doc_count} docs, ~{batch_est_tokens} tokens)"
+                logger.error(
+                    f"[BATCH {batch_num}/{total_batches}] TIMEOUT | "
+                    f"duration={batch_duration:.0f}s docs={batch_doc_count} "
+                    f"est_tokens={batch_est_tokens} names={', '.join(batch_doc_names)}"
+                )
 
                 for doc in batch:
                     doc_id = tracking_doc_id(doc)

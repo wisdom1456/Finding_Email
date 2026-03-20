@@ -498,20 +498,27 @@ function createProgressStore() {
 		/**
 		 * Start listening to a specialized analysis progress stream.
 		 * When pollingOnly is true, skips SSE and uses PollingClient directly.
+		 * When jobId is provided, polls the durable job endpoint instead of the
+		 * legacy analysis progress endpoint.
 		 */
-		startListening: async (analysisId: string, options?: { pollingOnly?: boolean }) => {
+		startListening: async (analysisId: string, options?: { pollingOnly?: boolean; jobId?: string }) => {
 			console.log('[progressStore] startListening called:', analysisId, options);
 			const { session, user } = await getSecureSession();
 			if (!session || !user) return;
 
 			const apiUrl = getApiUrl();
-			const streamUrl = `${apiUrl}/api/progress/analysis/${analysisId}`;
-			const statusUrl = `${apiUrl}/api/progress/analysis/${analysisId}/status`;
-			console.log('[progressStore] URLs:', { streamUrl, statusUrl });
+			const isDurable = !!options?.jobId;
 
-			if (options?.pollingOnly) {
-				// Polling-only mode: skip SSE entirely
-				// Reset document state tracking
+			// Durable mode: poll job endpoint. Legacy: poll analysis endpoint.
+			const streamUrl = isDurable ? '' : `${apiUrl}/api/progress/analysis/${analysisId}`;
+			const statusUrl = isDurable
+				? `${apiUrl}/api/progress/jobs/${options!.jobId}/status`
+				: `${apiUrl}/api/progress/analysis/${analysisId}/status`;
+			console.log('[progressStore] URLs:', { streamUrl, statusUrl, isDurable });
+
+			if (options?.pollingOnly || isDurable) {
+				// Polling-only mode: skip SSE entirely.
+				// In durable mode, always use polling (no SSE for durable jobs).
 				lastLoggedDocStates = {};
 				if (sseClient) { sseClient.disconnect(); sseClient = null; }
 				if (pollingClient) { pollingClient.stopPolling(); pollingClient = null; }
@@ -522,24 +529,72 @@ function createProgressStore() {
 				update(state => ({
 					...initialState,
 					status: 'connecting',
-					message: 'Connecting to progress stream...'
+					message: isDurable ? 'Analysis queued — starting shortly...' : 'Connecting to progress stream...'
 				}));
 
 				let finalData: unknown = null;
 
+				// Job stage → frontend stage ID mapping for durable mode
+				const JOB_STAGE_MAP: Record<string, string> = {
+					'queued': 'preparing',
+					'preparing': 'preparing',
+					'summarization': 'doc_analysis',
+					'synthesis': 'doc_analysis',
+					'fact_extraction': 'fact_extraction',
+					'issue_mapping': 'legal_mapping',
+					'deep_analysis': 'deep_analysis',
+					'gap_analysis': 'deep_analysis',
+					'finalizing': 'finalizing',
+					'completed': 'finalizing',
+				};
+
 				const messageHandler = (event: ProgressEvent | any) => {
 					if (event.stage) {
-						console.log('[progressStore] Stage:', event.stage.id, event.stage.status);
+						console.log('[progressStore] Stage:', event.stage.id || event.stage, event.stage.status || '');
 					}
 					if (event.data) finalData = event.data;
 
+					// Determine status — handle both legacy and durable response shapes
 					let newStatus: ProgressState['status'] = 'active';
-					if (event.type === 'completed' || event.status === 'completed') newStatus = 'completed';
-					else if (event.type === 'error' || event.type === 'failed' || event.status === 'error') newStatus = 'error';
+					const eventStatus = event.status || event.type;
+					if (eventStatus === 'completed') newStatus = 'completed';
+					else if (eventStatus === 'error' || eventStatus === 'failed') newStatus = 'error';
+					else if (eventStatus === 'cancelled') newStatus = 'error'; // show cancelled as error state
+					else if (eventStatus === 'pending') newStatus = 'connecting'; // queued state
+
+					// Build message for durable queued/retry states
+					let message = event.message || '';
+					if (isDurable && eventStatus === 'pending') {
+						if (event.attempts > 0) {
+							message = `Retrying analysis (attempt ${event.attempts}/${event.max_attempts})...`;
+						} else {
+							message = 'Analysis queued — starting shortly...';
+						}
+					}
 
 					update(state => {
 						let newStages = [...state.stages];
-						if (event.stage) {
+
+						if (isDurable && event.stage && typeof event.stage === 'string') {
+							// Durable mode: event.stage is a string (job stage name).
+							// Map to frontend stage ID and mark it active.
+							const frontendStageId = JOB_STAGE_MAP[event.stage] || event.stage;
+							const stageIdx = newStages.findIndex(s => s.id === frontendStageId);
+							if (stageIdx !== -1 && eventStatus === 'running') {
+								newStages[stageIdx] = { ...newStages[stageIdx], status: 'active', progress: event.percent || 0 };
+								// Mark all prior stages as completed
+								for (let i = 0; i < stageIdx; i++) {
+									if (newStages[i].status !== 'completed') {
+										newStages[i] = { ...newStages[i], status: 'completed', progress: 100 };
+									}
+								}
+							}
+							if (eventStatus === 'completed') {
+								// Mark all stages completed
+								newStages = newStages.map(s => ({ ...s, status: 'completed' as const, progress: 100 }));
+							}
+						} else if (event.stage && typeof event.stage === 'object') {
+							// Legacy mode: event.stage is an object with id, status, progress
 							const stageIdx = newStages.findIndex(s => s.id === event.stage.id);
 							if (stageIdx !== -1) {
 								newStages[stageIdx] = { ...newStages[stageIdx], ...event.stage };
@@ -552,6 +607,7 @@ function createProgressStore() {
 								}
 							}
 						}
+
 						let newDocs = [...state.documents];
 						if (event.document) {
 							const docIdx = newDocs.findIndex(d => d.id === event.document.id);
@@ -560,15 +616,15 @@ function createProgressStore() {
 						}
 						return {
 							...state,
-							message: event.message || state.message,
-							phase: event.phase || state.phase,
+							message: message || state.message,
+							phase: event.phase || (isDurable ? event.stage : '') || state.phase,
 							percent: event.percent !== undefined ? event.percent : state.percent,
 							docs_processed: event.docs_processed || state.docs_processed,
 							current_doc: event.current_doc || state.current_doc,
 							sub_step: event.sub_step || state.sub_step,
 							status: newStatus,
 							error: event.error || null,
-							timestamp: event.timestamp || new Date().toISOString(),
+							timestamp: event.timestamp || event.server_time || new Date().toISOString(),
 							data: event.data || state.data,
 							stages: newStages,
 							documents: newDocs,

@@ -327,6 +327,78 @@ async def get_analysis_status(
     return status
 
 
+@router.get("/jobs/{job_id}/status")
+async def get_job_status(
+    request: Request,
+    job_id: str,
+    token: str | None = Query(None, description="Access token (legacy, prefer Authorization header)"),
+    supabase=Depends(get_supabase_client),
+):
+    """Get analysis job status for durable worker mode (polling endpoint).
+
+    Returns a flat, typed response — frontend should not parse raw progress JSONB.
+    The stage field maps directly to the 6-stage UI.
+    """
+    user = await _authenticate_request(request, token)
+
+    try:
+        job_resp = (
+            supabase.table("analysis_jobs")
+            .select(
+                "id, status, stage, progress, attempts, max_attempts, error, "
+                "heartbeat_at, created_at, started_at, completed_at, analysis_id, case_id"
+            )
+            .eq("id", job_id)
+            .single()
+            .execute()
+        )
+    except Exception:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    if not job_resp.data:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    j = job_resp.data
+
+    # Verify ownership via case_id → user_id
+    case_resp = supabase.table("cases").select("user_id").eq("id", j["case_id"]).single().execute()
+    if not case_resp.data or case_resp.data["user_id"] != user["id"]:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    progress = j.get("progress") or {}
+
+    # Compute heartbeat age for frontend stall detection
+    heartbeat_age = None
+    if j.get("heartbeat_at"):
+        try:
+            from dateutil.parser import parse as parse_dt
+            hb_time = parse_dt(j["heartbeat_at"])
+            now = datetime.utcnow()
+            if hb_time.tzinfo:
+                from datetime import timezone
+                now = now.replace(tzinfo=timezone.utc)
+            heartbeat_age = round((now - hb_time).total_seconds(), 1)
+        except Exception:
+            pass
+
+    return {
+        "job_id": j["id"],
+        "analysis_id": j["analysis_id"],
+        "status": j["status"],
+        "stage": j["stage"],
+        "message": progress.get("message", ""),
+        "percent": progress.get("percent", 0),
+        "attempts": j["attempts"],
+        "max_attempts": j["max_attempts"],
+        "error": j["error"],
+        "heartbeat_age_seconds": heartbeat_age,
+        "created_at": j["created_at"],
+        "started_at": j["started_at"],
+        "completed_at": j["completed_at"],
+        "server_time": datetime.utcnow().isoformat(),
+    }
+
+
 @router.get("/clio-import/{import_id}/status")
 async def get_clio_import_status(
     request: Request,

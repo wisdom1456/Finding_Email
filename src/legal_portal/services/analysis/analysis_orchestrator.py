@@ -641,7 +641,7 @@ def _download_and_extract_documents(
 
 
 
-async def process_case_background(case_id: str, analysis_id: str, supabase, provider: str = "openai", *, progress_manager: "ProgressManager" = None):
+async def process_case_background(case_id: str, analysis_id: str, supabase, provider: str = "openai", *, progress_manager: "ProgressManager" = None, durable_mode: bool = False):
     """Background task to process case documents.
 
     Args:
@@ -651,6 +651,13 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
         supabase: Supabase client
         provider: AI provider to use
         progress_manager: ProgressManager instance (from app.state)
+        durable_mode: When True, returns ProcessingResult instead of writing
+            to analysis_results/cases. The caller (durable worker) owns all
+            finalization writes. Exceptions propagate to the caller.
+
+    Returns:
+    -------
+        ProcessingResult when durable_mode=True, None otherwise.
 
     """
     bg_start_time = time.time()
@@ -671,8 +678,9 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
         if _analysis_is_cancelled(supabase, analysis_id):
             raise AnalysisCancelledError("Analysis cancelled before processing began.")
 
-        # Update status to processing
-        supabase.table("analysis_results").update({"status": "processing"}).eq("id", analysis_id).execute()
+        # Update status to processing (skip in durable mode — worker manages state)
+        if not durable_mode:
+            supabase.table("analysis_results").update({"status": "processing"}).eq("id", analysis_id).execute()
 
         # Publish initial progress
         initial_payload = {
@@ -1280,12 +1288,21 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
             f"| processed_docs={len(result.processed_documents)}"
         )
 
-        # Update analysis record with results
+        if durable_mode:
+            # In durable mode, return the result to the worker.
+            # The worker owns all finalization writes.
+            elapsed = time.time() - bg_start_time
+            logger.info(
+                f"[BACKGROUND:COMPLETE:DURABLE] [CASE:{case_id}] [ELAPSED:{elapsed:.1f}s] "
+                f"Returning result to worker"
+            )
+            return result
+
+        # --- Non-durable (legacy) path: write results directly ---
         supabase.table("analysis_results").update(
             {"status": "completed", "result": result_dict, "completed_at": datetime.utcnow().isoformat()}
         ).eq("id", analysis_id).execute()
 
-        # Update case status
         supabase.table("cases").update({"status": "completed"}).eq("id", case_id).execute()
 
         elapsed = time.time() - bg_start_time
@@ -1309,6 +1326,8 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
         await _update_analysis_progress(supabase, analysis_id, completion_payload)
 
     except AnalysisCancelledError:
+        if durable_mode:
+            raise  # Let worker handle cancellation
         await _cancel_analysis(
             supabase=supabase,
             case_id=case_id,
@@ -1317,7 +1336,10 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
         )
         return
     except Exception as e:
-        # Log error and update status
+        if durable_mode:
+            raise  # Let worker handle all errors
+
+        # --- Non-durable (legacy) error handling ---
         error_message = str(e)
         error_traceback = traceback.format_exc()
         elapsed = time.time() - bg_start_time

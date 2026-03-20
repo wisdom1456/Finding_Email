@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 import time
 from dataclasses import dataclass, field
 from typing import Any, AsyncGenerator, Callable, Dict, List, Optional, Tuple
@@ -57,6 +58,16 @@ _DOC_TYPE_PRIORITY = {
 _MAX_ENTRY_TOKENS = 1_000       # Hard cap per document entry (~4K chars)
 _DEFAULT_BUDGET_TOKENS = 50_000  # Total context budget in tokens
 _PROMPT_GUARD_TOKENS = 200_000   # Abort if total prompt would exceed this
+
+# --- Batched fact extraction constants ---
+# Reduced from 40K/12 after Devlin verification: batches with >30K chars
+# caused gpt-5-mini timeouts (483s read timeout × 3 retries = ~1400s wasted).
+# At 25K/8, the worst-case prompt is ~35K chars, completing in 100-230s.
+_FACT_BATCH_MAX_CHARS = 25_000   # Max serialized chars per batch
+_FACT_BATCH_MAX_DOCS = 8         # Hard cap docs per batch
+_FACT_BATCH_CONCURRENCY = 2      # Max parallel batch LLM calls
+_FACT_BATCH_DOC_THRESHOLD = 12   # Use batching when doc count exceeds this
+_FACT_BATCH_CHAR_THRESHOLD = 30_000  # Or when total summary chars exceed this
 
 
 @dataclass(frozen=True)
@@ -742,16 +753,35 @@ DOCUMENTS:
             f"jurisdiction={jurisdiction}"
         )
 
-        # Use heartbeat to show progress during long API call
-        fact_matrix = await self._run_with_heartbeat(
-            lambda: self._extract_fact_matrix(
-                intake_content, document_summaries, jurisdiction, document_registry
-            ),
-            progress_callback,
-            "fact_extraction",
-            "Extracting Facts",
-            20,
+        # Decide: batched vs single-call fact extraction
+        total_summary_chars = sum(
+            len(json.dumps(d.model_dump(mode="json"))) for d in document_summaries
         )
+        use_batched = (
+            len(document_summaries) > _FACT_BATCH_DOC_THRESHOLD
+            or total_summary_chars > _FACT_BATCH_CHAR_THRESHOLD
+        )
+
+        if use_batched:
+            logger.info(
+                f"[STAGE:1] Using BATCHED fact extraction | "
+                f"docs={len(document_summaries)} summary_chars={total_summary_chars}"
+            )
+            fact_matrix = await self._extract_fact_matrix_batched(
+                intake_content, document_summaries, jurisdiction,
+                document_registry, progress_callback,
+            )
+        else:
+            # Use heartbeat to show progress during single API call
+            fact_matrix = await self._run_with_heartbeat(
+                lambda: self._extract_fact_matrix(
+                    intake_content, document_summaries, jurisdiction, document_registry
+                ),
+                progress_callback,
+                "fact_extraction",
+                "Extracting Facts",
+                20,
+            )
         self.stage_timings["fact_extraction"] = time.time() - stage_start
         elapsed = time.time() - start_time
 
@@ -1281,6 +1311,439 @@ RULES:
             tail_chars = max_chars - head_chars - len(separator)
 
         return summary[:head_chars] + separator + summary[-tail_chars:]
+
+    # -------------------------------------------------------------------------
+    # Batched fact extraction: map-reduce over document batches
+    # -------------------------------------------------------------------------
+
+    @staticmethod
+    def _build_docs_context(
+        document_summaries: List[DocumentSummaryStructured],
+    ) -> List[dict]:
+        """Build the docs_context list used by fact extraction prompts.
+
+        Extracted as a static method so both single-call and batched paths
+        produce identical per-document context dicts.
+        """
+        docs_context = []
+        for doc in document_summaries:
+            doc_dict = doc.model_dump(mode="json")
+            structured_data = doc_dict.get("structured_data") or {}
+            summary = doc_dict.get("key_content") or doc_dict.get("executive_summary") or ""
+            summary = MultiStageAnalyzer._condense_doc_summary_for_fact_matrix(summary)
+
+            docs_context.append({
+                "filename": doc_dict.get("document_name") or doc_dict.get("source_document") or "Unknown",
+                "document_type": doc_dict.get("document_type") or "Unknown",
+                "content_summary": summary,
+                "important_details": doc_dict.get("important_details", [])[:8],
+                "legal_significance": doc_dict.get("legal_significance"),
+                "parties": (
+                    doc_dict.get("parties")
+                    or structured_data.get("parties")
+                    or doc_dict.get("parties_mentioned")
+                    or []
+                ),
+                "dates": (
+                    doc_dict.get("key_dates")
+                    or structured_data.get("dates")
+                    or doc_dict.get("dates_mentioned")
+                    or []
+                ),
+                "amounts": (
+                    doc_dict.get("key_amounts")
+                    or structured_data.get("amounts")
+                    or []
+                ),
+            })
+        return docs_context
+
+    @staticmethod
+    def _partition_fact_batches(docs_context: List[dict]) -> List[List[dict]]:
+        """Partition docs_context into batches respecting char and doc-count budgets."""
+        batches: List[List[dict]] = []
+        current: List[dict] = []
+        current_chars = 0
+
+        for doc in docs_context:
+            doc_chars = len(json.dumps(doc))
+            if (current_chars + doc_chars > _FACT_BATCH_MAX_CHARS and current) \
+                    or len(current) >= _FACT_BATCH_MAX_DOCS:
+                batches.append(current)
+                current = [doc]
+                current_chars = doc_chars
+            else:
+                current.append(doc)
+                current_chars += doc_chars
+
+        if current:
+            batches.append(current)
+        return batches
+
+    async def _extract_fact_matrix_batched(
+        self,
+        intake_content: str,
+        document_summaries: List[DocumentSummaryStructured],
+        jurisdiction: str,
+        document_registry: Optional[List[Dict[str, Any]]] = None,
+        progress_callback: Optional[Callable] = None,
+    ) -> FactMatrix:
+        """Stage 1 (batched): Extract facts via map-reduce over document batches.
+
+        Used when document count > _FACT_BATCH_DOC_THRESHOLD or total summary
+        chars > _FACT_BATCH_CHAR_THRESHOLD. Each batch gets the same prompt
+        template as the single-call path, scoped to its subset of documents.
+        Partial results are merged with deterministic deduplication.
+        """
+        docs_context = self._build_docs_context(document_summaries)
+        batches = self._partition_fact_batches(docs_context)
+        registry_context = self._build_document_registry_context(document_registry)
+
+        logger.info(
+            f"[STAGE:1:BATCHED] Starting batched fact extraction | "
+            f"docs={len(document_summaries)} batches={len(batches)} "
+            f"total_chars={sum(len(json.dumps(d)) for d in docs_context)}"
+        )
+
+        semaphore = asyncio.Semaphore(_FACT_BATCH_CONCURRENCY)
+        batch_metrics: List[dict] = []
+
+        async def run_batch(batch_idx: int, batch_docs: List[dict]) -> Optional[FactMatrix]:
+            batch_chars = sum(len(json.dumps(d)) for d in batch_docs)
+            metric = {
+                "batch": batch_idx + 1,
+                "docs": len(batch_docs),
+                "chars": batch_chars,
+                "duration_s": 0,
+                "success": False,
+                "error": None,
+            }
+            batch_metrics.append(metric)
+
+            async with semaphore:
+                batch_start = time.time()
+                logger.info(
+                    f"[STAGE:1:BATCH:{batch_idx+1}/{len(batches)}] Starting | "
+                    f"docs={len(batch_docs)} chars={batch_chars}"
+                )
+                try:
+                    result = await self._extract_fact_matrix_single_batch(
+                        intake_content, batch_docs, jurisdiction,
+                        registry_context, batch_idx, len(batches),
+                    )
+                    metric["duration_s"] = round(time.time() - batch_start, 1)
+                    metric["success"] = True
+                    logger.info(
+                        f"[STAGE:1:BATCH:{batch_idx+1}/{len(batches)}] Complete | "
+                        f"duration={metric['duration_s']}s "
+                        f"parties={len(result.parties)} events={len(result.timeline)}"
+                    )
+                    return result
+                except Exception as e:
+                    metric["duration_s"] = round(time.time() - batch_start, 1)
+                    metric["error"] = str(e)[:200]
+                    logger.error(
+                        f"[STAGE:1:BATCH:{batch_idx+1}/{len(batches)}] Failed | "
+                        f"duration={metric['duration_s']}s error={e}"
+                    )
+                    return None
+
+        # Run batches with concurrency limit
+        tasks = [run_batch(i, batch) for i, batch in enumerate(batches)]
+        results = await asyncio.gather(*tasks)
+
+        # Emit progress after all batches complete
+        if progress_callback:
+            await progress_callback(
+                "Fact extraction batches complete, merging results...",
+                [], "fact_extraction", 30,
+                stage={"id": "fact_extraction", "name": "Extracting Facts",
+                       "status": "active", "progress": 85}
+            )
+
+        # Filter successes
+        successful = [r for r in results if r is not None]
+        failed_count = len(results) - len(successful)
+
+        if not successful:
+            logger.error(
+                f"[STAGE:1:BATCHED] ALL {len(batches)} batches failed | "
+                f"metrics={json.dumps(batch_metrics)}"
+            )
+            raise ValueError(
+                f"All {len(batches)} fact extraction batches failed. "
+                f"Batch errors: {[m.get('error') for m in batch_metrics]}"
+            )
+
+        if failed_count > 0:
+            logger.warning(
+                f"[STAGE:1:BATCHED] {failed_count}/{len(batches)} batches failed, "
+                f"merging {len(successful)} successful batches"
+            )
+
+        merged = self._merge_fact_matrices(successful)
+
+        logger.info(
+            f"[STAGE:1:BATCHED] Merge complete | "
+            f"batches={len(successful)}/{len(batches)} "
+            f"parties={len(merged.parties)} timeline={len(merged.timeline)} "
+            f"financial={len(merged.financial_data)} "
+            f"batch_metrics={json.dumps(batch_metrics)}"
+        )
+
+        return merged
+
+    async def _extract_fact_matrix_single_batch(
+        self,
+        intake_content: str,
+        batch_docs: List[dict],
+        jurisdiction: str,
+        registry_context: str,
+        batch_idx: int,
+        total_batches: int,
+    ) -> FactMatrix:
+        """Extract facts from a single batch of documents.
+
+        Uses the same prompt template as _extract_fact_matrix, scoped to
+        the batch's subset of documents.
+        """
+        prompt = f"""You are a precise legal fact extractor focusing on a matter in {jurisdiction}.
+Extract ONLY factual information from the case materials. Do NOT perform legal analysis.
+
+INTAKE INFORMATION:
+{self._condense_intake_for_prompt(intake_content, max_chars=3000)}
+
+DOCUMENT REGISTRY (AUTHORITATIVE CLASSIFICATION/EXECUTION SIGNALS):
+{registry_context}
+
+DOCUMENT SUMMARIES (batch {batch_idx + 1} of {total_batches}):
+{json.dumps(batch_docs, indent=2)}
+
+Extract and structure the following facts FROM THESE DOCUMENTS ONLY:
+
+1. **PARTIES**: Identify all parties mentioned
+   - Name (exact spelling)
+   - Role (Client, Opposing Party, Contractor, Landlord, Tenant, Subcontractor, etc.)
+   - First mentioned in which document
+   - Is this an opposing party? (true/false)
+   - Entity type (individual, LLC, corporation, partnership, government, or unknown)
+
+2. **TIMELINE**: Chronological events with dates
+   - Date (be as specific as possible; if unknown, use null)
+   - Description of event
+   - Source document
+   - Significance (why this event matters)
+   - Supporting evidence (list of document names that prove the event)
+
+3. **FINANCIAL DATA**: All monetary amounts
+   - Amount (exact number)
+   - Description (what this money represents)
+   - Date if applicable
+   - Source document
+   - Type (paid, owed, claimed, estimated)
+   - Category (contract_price, payment_made, damages_claimed, fees_owed, refund_owed, other)
+
+4. **KEY DOCUMENTS**: Important documents referenced
+   - Document name
+   - Type (Contract, Notice, Correspondence, Evidence, etc.)
+   - Date if known
+   - Why this document is significant
+
+5. **PROPERTY INFO** (if applicable):
+   - Full address
+   - Property type
+
+6. **PRELIMINARY ISSUES**: Initial legal issues you can identify (just list, no analysis)
+
+Return a JSON object with this EXACT structure:
+{{
+  "parties": [
+    {{
+      "name": "string",
+      "role": "string",
+      "contact_info": "string or null",
+      "first_mentioned_in": "string or null",
+      "is_opposing_party": true,
+      "entity_type": "individual | LLC | corporation | partnership | government | unknown"
+    }}
+  ],
+  "timeline": [
+    {{
+      "date": "YYYY-MM-DD or Month YYYY or null",
+      "description": "string",
+      "source_document": "string",
+      "significance": "string or null",
+      "supporting_evidence": ["DocumentA.pdf"]
+    }}
+  ],
+  "financial_data": [
+    {{
+      "amount": number,
+      "description": "string",
+      "date": "string or null",
+      "source_document": "string",
+      "payment_type": "paid | owed | claimed | estimated",
+      "category": "contract_price | payment_made | damages_claimed | fees_owed | refund_owed | other"
+    }}
+  ],
+  "key_documents": [
+    {{
+      "document_name": "string",
+      "document_type": "Contract | Notice | Correspondence | Evidence | Other",
+      "date": "string or null",
+      "significance": "string"
+    }}
+  ],
+  "property_details": {{
+    "address": "string",
+    "property_type": "string or null",
+    "additional_details": {{}}
+  }} or null,
+  "preliminary_issues": ["string"],
+  "extraction_notes": "string or null"
+}}
+
+RULES:
+- Be extremely precise with dates, amounts, names
+- Include source document for everything
+- Do NOT invent facts - only extract what's clearly stated
+- If date is truly unknown, use null - do NOT guess
+- If unsure about a detail, note it in extraction_notes
+- Return ONLY valid JSON, no markdown formatting
+"""
+
+        model = self.client.get_preferred_model("multi_stage_analysis", "gpt-5-mini")
+
+        response_dict = await asyncio.to_thread(
+            self.client.create_response,
+            model=model,
+            instructions=(
+                f"You are a precise legal fact extractor for {jurisdiction} law. "
+                "Return only valid JSON."
+            ),
+            input=prompt,
+            max_output_tokens=16000,
+        )
+
+        if response_dict.get("success") is False:
+            raise ValueError(f"API error in batch {batch_idx+1}: {response_dict.get('error')}")
+
+        raw_response = safe_str_required(response_dict.get("content"), "")
+        if not raw_response:
+            raise ValueError(f"Empty response from API for batch {batch_idx+1}")
+
+        if raw_response.startswith("```"):
+            lines = raw_response.split("\n")
+            raw_response = "\n".join(lines[1:-1])
+
+        try:
+            fact_data = json.loads(raw_response)
+        except json.JSONDecodeError as e:
+            raise ValueError(f"JSON parse failed for batch {batch_idx+1}: {e}")
+
+        return FactMatrix(
+            parties=[Party(**p) for p in fact_data.get("parties", [])],
+            timeline=[Event(**e) for e in fact_data.get("timeline", [])],
+            financial_data=[FinancialItem(**f) for f in fact_data.get("financial_data", [])],
+            key_documents=[KeyDocument(**d) for d in fact_data.get("key_documents", [])],
+            preliminary_issues=fact_data.get("preliminary_issues", []),
+            property_details=(
+                PropertyInfo(**fact_data["property_details"])
+                if fact_data.get("property_details") else None
+            ),
+            extraction_notes=fact_data.get("extraction_notes"),
+        )
+
+    @staticmethod
+    def _normalize_party_name(name: str) -> str:
+        """Normalize party name for deduplication."""
+        n = name.strip().lower()
+        n = re.sub(r'\s+', ' ', n)
+        for suffix in [', inc.', ', llc', ', corp.', ', ltd.', ' inc', ' llc', ' corp']:
+            if n.endswith(suffix):
+                n = n[:-len(suffix)]
+        return n
+
+    @staticmethod
+    def _merge_fact_matrices(matrices: List[FactMatrix]) -> FactMatrix:
+        """Merge partial FactMatrix results from batched extraction.
+
+        Deduplication rules:
+        - Parties: by normalized name; is_opposing_party sticky-true; role conflicts logged
+        - Timeline: by (date, description[:80] lowered)
+        - Financial: by (amount_cents, description[:60] lowered)
+        - Key documents: by normalized filename
+        - Issues: by normalized text
+        """
+        parties: Dict[str, Party] = {}
+        timeline_seen: set = set()
+        timeline: List[Event] = []
+        financial_seen: set = set()
+        financial: List[FinancialItem] = []
+        key_docs: Dict[str, KeyDocument] = {}
+        issues: set = set()
+
+        for m in matrices:
+            for p in m.parties:
+                key = MultiStageAnalyzer._normalize_party_name(p.name)
+                if key in parties:
+                    existing = parties[key]
+                    if p.is_opposing_party and not existing.is_opposing_party:
+                        parties[key] = existing.model_copy(
+                            update={"is_opposing_party": True}
+                        )
+                    if p.contact_info and not existing.contact_info:
+                        parties[key] = parties[key].model_copy(
+                            update={"contact_info": p.contact_info}
+                        )
+                    if p.name.strip() != existing.name.strip():
+                        logger.info(
+                            f"[MERGE] Party alias: '{p.name}' matches existing '{existing.name}'"
+                        )
+                    if p.role != existing.role:
+                        logger.info(
+                            f"[MERGE] Party '{p.name}' role conflict: "
+                            f"'{existing.role}' vs '{p.role}' — keeping '{existing.role}'"
+                        )
+                else:
+                    parties[key] = p
+
+            for event in m.timeline:
+                date_str = str(event.date) if event.date else ""
+                tkey = (date_str, event.description[:80].strip().lower())
+                if tkey not in timeline_seen:
+                    timeline_seen.add(tkey)
+                    timeline.append(event)
+
+            for f in m.financial_data:
+                amount_cents = round((f.amount or 0) * 100)
+                fkey = (amount_cents, f.description[:60].strip().lower())
+                if fkey not in financial_seen:
+                    financial_seen.add(fkey)
+                    financial.append(f)
+
+            for d in m.key_documents:
+                dkey = d.document_name.strip().lower()
+                if dkey not in key_docs:
+                    key_docs[dkey] = d
+
+            for issue in m.preliminary_issues:
+                issues.add(issue.strip().lower())
+
+        timeline.sort(key=lambda e: str(e.date) if e.date else "9999-99-99")
+
+        property_details = next(
+            (m.property_details for m in matrices if m.property_details), None
+        )
+
+        return FactMatrix(
+            parties=list(parties.values()),
+            timeline=timeline,
+            financial_data=financial,
+            key_documents=list(key_docs.values()),
+            preliminary_issues=list(issues),
+            property_details=property_details,
+        )
 
     async def _map_legal_issues(
         self,

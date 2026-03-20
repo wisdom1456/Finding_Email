@@ -7,12 +7,14 @@
 
 	let {
 		analysisId,
+		jobId = null,
 		pollingOnly = false,
 		onComplete,
 		onError,
 		onCancel
 	}: {
 		analysisId: string;
+		jobId?: string | null;
 		pollingOnly?: boolean;
 		onComplete?: () => void;
 		onError?: (error: string) => void;
@@ -26,11 +28,12 @@
 	let prevStatus = '';
 	let completionTimeout: ReturnType<typeof setTimeout> | null = null;
 
-	// Safety valve: if the component is alive for more than 10 minutes without
-	// reaching a terminal state, stop listening and report an error.
-	// This prevents the UI from staying stuck indefinitely.
+	// Safety valve: if the component is alive too long without reaching a
+	// terminal state, stop listening and report an error.
+	// Durable mode (Railway worker): 60 min — large cases take 30-60 min.
+	// Legacy mode: 10 min — Vercel SSE/polling has shorter lifecycle.
 	let safetyTimer: ReturnType<typeof setTimeout> | null = null;
-	const MAX_PROGRESS_AGE_MS = 10 * 60 * 1000; // 10 minutes
+	const MAX_PROGRESS_AGE_MS = jobId ? 60 * 60 * 1000 : 10 * 60 * 1000;
 
 	$effect(() => {
 		if (state.status === 'completed' && prevStatus !== 'completed') {
@@ -46,8 +49,12 @@
 	});
 
 	onMount(async () => {
-		// Start listening to the analysis stream
-		await progressStore.startListening(analysisId, { pollingOnly });
+		// Start listening to the analysis stream.
+		// In durable mode, pass jobId to poll the job endpoint instead.
+		await progressStore.startListening(analysisId, {
+			pollingOnly,
+			jobId: jobId ?? undefined,
+		});
 
 		// Safety valve — prevent indefinite stuck state
 		safetyTimer = setTimeout(() => {

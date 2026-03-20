@@ -131,6 +131,7 @@ async def start_analysis(
     """
     import os
     is_vercel = os.getenv("VERCEL") is not None
+    is_durable = os.getenv("ENABLE_DURABLE_WORKER", "").lower() in ("true", "1", "yes")
 
     try:
         # Verify case ownership using user client (respects RLS)
@@ -176,6 +177,42 @@ async def start_analysis(
         user_supabase.table("cases").update({"status": "processing"}).eq(
             "id", analysis_request.case_id
         ).execute()
+
+        # --- Durable worker path: create job row and return immediately ---
+        if is_durable:
+            # Get doc count for scheduling priority
+            doc_count_resp = service_supabase.table("documents").select(
+                "id", count="exact"
+            ).eq("case_id", analysis_request.case_id).execute()
+            doc_count = doc_count_resp.count if hasattr(doc_count_resp, "count") and doc_count_resp.count else len(doc_count_resp.data or [])
+
+            # Create job row (service key — no RLS write policy for analysis_jobs)
+            job_response = service_supabase.table("analysis_jobs").insert({
+                "case_id": analysis_request.case_id,
+                "analysis_id": analysis["id"],
+                "status": "pending",
+                "provider": analysis_request.provider,
+                "doc_count": doc_count,
+            }).execute()
+
+            if not job_response.data:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="Failed to create analysis job",
+                )
+
+            job = job_response.data[0]
+            logger.info(
+                f"[DURABLE] Created job {job['id'][:12]} for analysis {analysis['id'][:12]} "
+                f"| case={analysis_request.case_id[:12]} docs={doc_count}"
+            )
+
+            return {
+                "id": analysis["id"],
+                "job_id": job["id"],
+                "status": "pending",
+                "mode": "durable",
+            }
 
         if is_vercel:
             # On Vercel: Return SSE stream that runs analysis inline
@@ -299,11 +336,13 @@ async def cancel_analysis(
     request: Request,
     user=Depends(get_current_user),  # noqa: B008
     user_supabase=Depends(get_user_supabase_client),  # noqa: B008
+    service_supabase=Depends(get_supabase_client),  # noqa: B008
 ):
-    """Cancel an in-progress analysis and un-stick the case.
+    """Cancel an in-progress analysis.
 
-    This is a cooperative cancel: we mark the analysis as cancelled and set the case back to pending.
-    The background worker checks this status and stops as soon as it hits a checkpoint.
+    In durable mode: cancels analysis_jobs + analysis_results, then conditionally
+    resets cases.status only if no other active jobs exist for the case.
+    In legacy mode: delegates to _cancel_analysis (sets cases.status='pending').
     """
     try:
         # Verify analysis belongs to the user (RLS via user_supabase)
@@ -322,12 +361,62 @@ async def cancel_analysis(
         analysis = resp.data[0]
         case_id = analysis["case_id"]
 
-        await _cancel_analysis(
-            supabase=user_supabase,
-            case_id=case_id,
-            analysis_id=analysis_id,
-            progress_manager=request.app.state.progress_manager,
-        )
+        # Check if this analysis has a durable job
+        job_resp = service_supabase.table("analysis_jobs").select("id, status").eq(
+            "analysis_id", analysis_id
+        ).in_("status", ["pending", "running"]).execute()
+
+        has_durable_job = bool(job_resp.data)
+
+        if has_durable_job:
+            # --- Durable cancel path ---
+            # 1. Cancel the job (worker checks this on next progress callback)
+            service_supabase.table("analysis_jobs").update({
+                "status": "cancelled",
+            }).eq("analysis_id", analysis_id).in_(
+                "status", ["pending", "running"]
+            ).execute()
+
+            # 2. Cancel the analysis_results row
+            service_supabase.table("analysis_results").update({
+                "status": "cancelled",
+            }).eq("id", analysis_id).in_(
+                "status", ["pending", "processing"]
+            ).execute()
+
+            # 3. Update cases.status ONLY if no other active jobs exist
+            # This prevents resetting a case that has another analysis in progress.
+            other_active = service_supabase.table("analysis_jobs").select("id").eq(
+                "case_id", case_id
+            ).in_("status", ["pending", "running"]).execute()
+
+            if not other_active.data:
+                # No active jobs remain — set case to 'pending' so user can retry.
+                # 'pending' (not 'cancelled') because the case itself isn't cancelled,
+                # only this analysis attempt was.
+                service_supabase.table("cases").update({
+                    "status": "pending",
+                }).eq("id", case_id).execute()
+
+            # Best-effort progress update on the job
+            try:
+                service_supabase.table("analysis_jobs").update({
+                    "progress": {
+                        "message": "Analysis cancelled by user.",
+                        "phase": "cancelled",
+                        "percent": 0,
+                    },
+                }).eq("analysis_id", analysis_id).execute()
+            except Exception:
+                pass
+        else:
+            # --- Legacy cancel path (no durable job) ---
+            await _cancel_analysis(
+                supabase=user_supabase,
+                case_id=case_id,
+                analysis_id=analysis_id,
+                progress_manager=request.app.state.progress_manager,
+            )
 
         return {"status": "cancelled", "analysis_id": analysis_id, "case_id": case_id}
     except HTTPException:
@@ -345,10 +434,12 @@ async def cancel_case_analysis(
     request: Request,
     user=Depends(get_current_user),  # noqa: B008
     user_supabase=Depends(get_user_supabase_client),  # noqa: B008
+    service_supabase=Depends(get_supabase_client),  # noqa: B008
 ):
     r"""Cancel the most recent in-progress analysis for a case.
 
     This enables "Cancel" from the cases list UI without needing an analysis_id.
+    Handles both durable and legacy analysis modes.
     """
     try:
         # Verify ownership of the case (RLS via user_supabase)
@@ -374,12 +465,39 @@ async def cancel_case_analysis(
 
         analysis_id = analysis_resp.data[0]["id"]
 
-        await _cancel_analysis(
-            supabase=user_supabase,
-            case_id=case_id,
-            analysis_id=analysis_id,
-            progress_manager=request.app.state.progress_manager,
-        )
+        # Check for durable job — cancel via analysis endpoint (shared logic)
+        job_resp = service_supabase.table("analysis_jobs").select("id").eq(
+            "analysis_id", analysis_id
+        ).in_("status", ["pending", "running"]).execute()
+
+        if job_resp.data:
+            # Durable path: cancel job + analysis_results, conditionally reset case
+            service_supabase.table("analysis_jobs").update({
+                "status": "cancelled",
+            }).eq("analysis_id", analysis_id).in_(
+                "status", ["pending", "running"]
+            ).execute()
+
+            service_supabase.table("analysis_results").update({
+                "status": "cancelled",
+            }).eq("id", analysis_id).in_(
+                "status", ["pending", "processing"]
+            ).execute()
+
+            # Reset case only if no other active jobs
+            other_active = service_supabase.table("analysis_jobs").select("id").eq(
+                "case_id", case_id
+            ).in_("status", ["pending", "running"]).execute()
+            if not other_active.data:
+                service_supabase.table("cases").update({"status": "pending"}).eq("id", case_id).execute()
+        else:
+            # Legacy path
+            await _cancel_analysis(
+                supabase=user_supabase,
+                case_id=case_id,
+                analysis_id=analysis_id,
+                progress_manager=request.app.state.progress_manager,
+            )
 
         return {"status": "cancelled", "analysis_id": analysis_id, "case_id": case_id}
     except HTTPException:

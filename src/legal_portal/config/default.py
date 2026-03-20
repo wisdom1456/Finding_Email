@@ -330,9 +330,10 @@ class Settings(BaseSettings):
     # ==================================================
 
     max_tokens_per_batch: int = Field(
-        50000,
+        20000,
         alias="MAX_TOKENS_PER_BATCH",
-        description="Maximum tokens per batch when processing documents with AI",
+        description="Maximum tokens per batch when processing documents with AI. "
+                    "Reduced from 50000 to prevent gpt-5.4 timeout at 180s batch limit.",
     )
 
     duplicate_similarity_threshold: float = Field(

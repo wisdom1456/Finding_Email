@@ -42,6 +42,7 @@
 	let analyzing = $state(false);
 	let showProgressModal = $state(false);
 	let currentAnalysisId = $state<string | null>(null);
+	let currentJobId = $state<string | null>(null);
 	let navigatingToResults = $state(false);
 	let showingEmbeddedResults = $state(false);
 	let embeddedResultsData = $state<any | null>(null);
@@ -797,11 +798,17 @@
 				} // end else (non-backend-only SSE reading)
 				
 			} else {
-				// Local: JSON response
+				// JSON response — could be local dev or durable worker mode
 				const analysisData = await response.json();
 				const analysisId = analysisData.id;
 				currentAnalysisId = analysisId;
 				showProgressModal = true;
+
+				// Durable worker mode: store job_id for job-based polling
+				if (analysisData.mode === 'durable' && analysisData.job_id) {
+					currentJobId = analysisData.job_id;
+					console.log('[Analysis] Durable mode — job_id:', currentJobId);
+				}
 			}
 
 			// Reload analysis status
@@ -1488,9 +1495,11 @@
 					<div class:hidden={activeTab !== 'analysis'} class="page-spacing">
 						<InlineAnalysisProgress
 							analysisId={currentAnalysisId}
-							pollingOnly={analysisBackendOnly}
+							jobId={currentJobId}
+							pollingOnly={analysisBackendOnly || !!currentJobId}
 							onComplete={async () => {
 								showProgressModal = false;
+								currentJobId = null;
 								await loadAnalysisStatus();
 								await loadCase();
 								analyzing = false;

@@ -340,8 +340,11 @@ async def cancel_analysis(
 ):
     """Cancel an in-progress analysis.
 
-    In durable mode: cancels analysis_jobs + analysis_results, then conditionally
-    resets cases.status only if no other active jobs exist for the case.
+    In durable mode:
+    - Pending jobs (no worker): API owns finalization of all three tables.
+    - Running jobs (worker active): API sets ONLY analysis_jobs.status='cancelled'.
+      The worker detects cancellation and owns finalization of analysis_results
+      and cases. If the worker crashes, reconcile_analysis_jobs() propagates.
     In legacy mode: delegates to _cancel_analysis (sets cases.status='pending').
     """
     try:
@@ -369,34 +372,37 @@ async def cancel_analysis(
         has_durable_job = bool(job_resp.data)
 
         if has_durable_job:
+            job = job_resp.data[0]
+            job_is_pending = job["status"] == "pending"
+
             # --- Durable cancel path ---
-            # 1. Cancel the job (worker checks this on next progress callback)
+            # 1. Cancel the job (atomic signal to worker)
             service_supabase.table("analysis_jobs").update({
                 "status": "cancelled",
             }).eq("analysis_id", analysis_id).in_(
                 "status", ["pending", "running"]
             ).execute()
 
-            # 2. Cancel the analysis_results row
-            service_supabase.table("analysis_results").update({
-                "status": "cancelled",
-            }).eq("id", analysis_id).in_(
-                "status", ["pending", "processing"]
-            ).execute()
+            if job_is_pending:
+                # Pending job: no worker is processing, so API owns finalization
+                # of analysis_results and cases.
+                service_supabase.table("analysis_results").update({
+                    "status": "cancelled",
+                }).eq("id", analysis_id).in_(
+                    "status", ["pending", "processing"]
+                ).execute()
 
-            # 3. Update cases.status ONLY if no other active jobs exist
-            # This prevents resetting a case that has another analysis in progress.
-            other_active = service_supabase.table("analysis_jobs").select("id").eq(
-                "case_id", case_id
-            ).in_("status", ["pending", "running"]).execute()
-
-            if not other_active.data:
-                # No active jobs remain — set case to 'pending' so user can retry.
-                # 'pending' (not 'cancelled') because the case itself isn't cancelled,
-                # only this analysis attempt was.
-                service_supabase.table("cases").update({
-                    "status": "pending",
-                }).eq("id", case_id).execute()
+                # Reset case only if no other active jobs
+                other_active = service_supabase.table("analysis_jobs").select("id").eq(
+                    "case_id", case_id
+                ).in_("status", ["pending", "running"]).execute()
+                if not other_active.data:
+                    service_supabase.table("cases").update({
+                        "status": "pending",
+                    }).eq("id", case_id).execute()
+            # else: Running job — worker owns analysis_results + cases finalization.
+            # Worker will detect cancelled status on next progress callback.
+            # If worker crashes, reconcile_analysis_jobs() propagates the cancel.
 
             # Best-effort progress update on the job
             try:
@@ -466,30 +472,35 @@ async def cancel_case_analysis(
         analysis_id = analysis_resp.data[0]["id"]
 
         # Check for durable job — cancel via analysis endpoint (shared logic)
-        job_resp = service_supabase.table("analysis_jobs").select("id").eq(
+        job_resp = service_supabase.table("analysis_jobs").select("id, status").eq(
             "analysis_id", analysis_id
         ).in_("status", ["pending", "running"]).execute()
 
         if job_resp.data:
-            # Durable path: cancel job + analysis_results, conditionally reset case
+            job = job_resp.data[0]
+            job_is_pending = job.get("status") == "pending"
+
+            # Durable path: signal cancellation on the job row
             service_supabase.table("analysis_jobs").update({
                 "status": "cancelled",
             }).eq("analysis_id", analysis_id).in_(
                 "status", ["pending", "running"]
             ).execute()
 
-            service_supabase.table("analysis_results").update({
-                "status": "cancelled",
-            }).eq("id", analysis_id).in_(
-                "status", ["pending", "processing"]
-            ).execute()
+            if job_is_pending:
+                # Pending: no worker processing — API owns finalization
+                service_supabase.table("analysis_results").update({
+                    "status": "cancelled",
+                }).eq("id", analysis_id).in_(
+                    "status", ["pending", "processing"]
+                ).execute()
 
-            # Reset case only if no other active jobs
-            other_active = service_supabase.table("analysis_jobs").select("id").eq(
-                "case_id", case_id
-            ).in_("status", ["pending", "running"]).execute()
-            if not other_active.data:
-                service_supabase.table("cases").update({"status": "pending"}).eq("id", case_id).execute()
+                other_active = service_supabase.table("analysis_jobs").select("id").eq(
+                    "case_id", case_id
+                ).in_("status", ["pending", "running"]).execute()
+                if not other_active.data:
+                    service_supabase.table("cases").update({"status": "pending"}).eq("id", case_id).execute()
+            # else: Running — worker owns analysis_results + cases finalization
         else:
             # Legacy path
             await _cancel_analysis(

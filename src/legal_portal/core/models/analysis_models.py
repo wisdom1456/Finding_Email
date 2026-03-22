@@ -4,7 +4,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Union
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from legal_portal.core.models.enums import (
     CaseRecommendationCategory,
@@ -54,9 +54,14 @@ class Event(BaseModel):
 
     date: Optional[Union[datetime, str]] = None  # Allow null if date is unknown
     description: str
-    source_document: str
+    source_document: str = "Unknown"
     significance: Optional[str] = None  # Why this event matters legally
     supporting_evidence: List[str] = Field(default_factory=list)
+
+    @field_validator("source_document", mode="before")
+    @classmethod
+    def _coerce_source_document(cls, v: Any) -> str:
+        return str(v) if v is not None else "Unknown"
 
 
 class FinancialItem(BaseModel):
@@ -65,9 +70,14 @@ class FinancialItem(BaseModel):
     amount: float
     description: str  # "Contract price", "Payment made", "Damages claimed"
     date: Optional[Union[datetime, str]] = None
-    source_document: str
+    source_document: str = "Unknown"
     payment_type: Optional[str] = None  # "paid", "owed", "claimed", "estimated"
     category: Optional[str] = None  # "contract_price", "payment_made", etc.
+
+    @field_validator("source_document", mode="before")
+    @classmethod
+    def _coerce_source_document(cls, v: Any) -> str:
+        return str(v) if v is not None else "Unknown"
 
 
 class KeyDocument(BaseModel):

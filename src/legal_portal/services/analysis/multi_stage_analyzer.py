@@ -60,14 +60,25 @@ _DEFAULT_BUDGET_TOKENS = 50_000  # Total context budget in tokens
 _PROMPT_GUARD_TOKENS = 200_000   # Abort if total prompt would exceed this
 
 # --- Batched fact extraction constants ---
-# Reduced from 40K/12 after Devlin verification: batches with >30K chars
-# caused gpt-5-mini timeouts (483s read timeout × 3 retries = ~1400s wasted).
-# At 25K/8, the worst-case prompt is ~35K chars, completing in 100-230s.
-_FACT_BATCH_MAX_CHARS = 25_000   # Max serialized chars per batch
+# Reduced from 25K → 18K after Devlin v2 verification: batch 5 at 24K chars
+# produced a 41K-char prompt (batch + template + registry + intake overhead)
+# that timed out at 240s × 3 retries.  At 18K, the worst-case prompt is
+# ~30K chars, completing in 100-130s with headroom.
+_FACT_BATCH_MAX_CHARS = 18_000   # Max serialized chars per batch
 _FACT_BATCH_MAX_DOCS = 8         # Hard cap docs per batch
 _FACT_BATCH_CONCURRENCY = 2      # Max parallel batch LLM calls
 _FACT_BATCH_DOC_THRESHOLD = 12   # Use batching when doc count exceeds this
 _FACT_BATCH_CHAR_THRESHOLD = 30_000  # Or when total summary chars exceed this
+
+# --- Per-document cap for fact extraction ---
+# Large OCR-heavy documents can produce oversized per-doc dicts (summary +
+# important_details + legal_significance + parties/dates/amounts) that dominate
+# a batch and trigger provider timeouts.  Cap total serialized per-doc JSON to
+# _FACT_DOC_MAX_SERIALIZED_CHARS; if exceeded, progressively truncate
+# content_summary using head/tail preservation (signatures live near the end).
+_FACT_DOC_MAX_SERIALIZED_CHARS = 8_000
+_FACT_DOC_HEAD_CHARS = 6_000
+_FACT_DOC_TAIL_CHARS = 2_000
 
 
 @dataclass(frozen=True)
@@ -1080,8 +1091,7 @@ DOCUMENTS:
             summary = doc_dict.get("key_content") or doc_dict.get("executive_summary") or ""
             summary = self._condense_doc_summary_for_fact_matrix(summary)
 
-            docs_context.append(
-                {
+            entry = {
                     "filename": doc_dict.get("document_name") or doc_dict.get("source_document") or "Unknown",
                     "document_type": doc_dict.get("document_type") or "Unknown",
                     "content_summary": summary,
@@ -1106,7 +1116,8 @@ DOCUMENTS:
                         or []
                     ),
                 }
-            )
+            # Cap total serialized per-doc contribution (same as batched path)
+            docs_context.append(self._cap_doc_for_fact_extraction(entry))
 
         registry_context = self._build_document_registry_context(document_registry)
 
@@ -1277,6 +1288,18 @@ RULES:
             logger.error(f"[STAGE:1:ERROR] JSON parse failed: {e}. Response: {raw_response[:500]}")
             raise ValueError(f"Failed to parse fact extraction response as JSON: {e}")
 
+        # Log null source_document values before Pydantic coerces them
+        for category, items in [
+            ("timeline", fact_data.get("timeline", [])),
+            ("financial_data", fact_data.get("financial_data", [])),
+        ]:
+            for item in items:
+                if item.get("source_document") is None:
+                    logger.warning(
+                        f"[STAGE:1] Null source_document in {category} | "
+                        f"description={str(item.get('description', ''))[:80]} — coercing to 'Unknown'"
+                    )
+
         return FactMatrix(
             parties=[Party(**p) for p in fact_data.get("parties", [])],
             timeline=[Event(**e) for e in fact_data.get("timeline", [])],
@@ -1312,6 +1335,50 @@ RULES:
 
         return summary[:head_chars] + separator + summary[-tail_chars:]
 
+    @staticmethod
+    def _cap_doc_for_fact_extraction(doc: dict) -> dict:
+        """Cap total per-document serialized JSON for fact extraction prompts.
+
+        If the serialized dict exceeds _FACT_DOC_MAX_SERIALIZED_CHARS, truncate
+        content_summary using head/tail preservation until it fits.  Structured
+        fields (parties, dates, amounts) are left intact because they are already
+        small and high-signal.
+
+        Returns the (potentially mutated) doc dict.  Logs when truncation occurs.
+        """
+        original_chars = len(json.dumps(doc))
+        if original_chars <= _FACT_DOC_MAX_SERIALIZED_CHARS:
+            return doc
+
+        filename = doc.get("filename", "Unknown")
+
+        # Calculate how much to shave off content_summary
+        summary = doc.get("content_summary", "")
+        overhead = original_chars - len(summary)  # non-summary bytes
+        target_summary_chars = max(
+            _FACT_DOC_MAX_SERIALIZED_CHARS - overhead - 100,  # 100 char margin
+            500,  # absolute minimum to preserve some context
+        )
+
+        if target_summary_chars < len(summary):
+            head = min(_FACT_DOC_HEAD_CHARS, int(target_summary_chars * 0.75))
+            tail = min(_FACT_DOC_TAIL_CHARS, target_summary_chars - head)
+            if tail < 200:
+                tail = min(200, target_summary_chars // 4)
+                head = target_summary_chars - tail
+            separator = "\n... [truncated for fact extraction] ...\n"
+            doc["content_summary"] = (
+                summary[:head] + separator + summary[-tail:]
+                if tail > 0 else summary[:target_summary_chars]
+            )
+
+        capped_chars = len(json.dumps(doc))
+        logger.info(
+            f"[FACT_CAP] {filename}: {original_chars} -> {capped_chars} chars "
+            f"(summary: {len(summary)} -> {len(doc.get('content_summary', ''))})"
+        )
+        return doc
+
     # -------------------------------------------------------------------------
     # Batched fact extraction: map-reduce over document batches
     # -------------------------------------------------------------------------
@@ -1332,7 +1399,7 @@ RULES:
             summary = doc_dict.get("key_content") or doc_dict.get("executive_summary") or ""
             summary = MultiStageAnalyzer._condense_doc_summary_for_fact_matrix(summary)
 
-            docs_context.append({
+            entry = {
                 "filename": doc_dict.get("document_name") or doc_dict.get("source_document") or "Unknown",
                 "document_type": doc_dict.get("document_type") or "Unknown",
                 "content_summary": summary,
@@ -1355,7 +1422,9 @@ RULES:
                     or structured_data.get("amounts")
                     or []
                 ),
-            })
+            }
+            # Cap total serialized per-doc contribution to prevent oversized batches
+            docs_context.append(MultiStageAnalyzer._cap_doc_for_fact_extraction(entry))
         return docs_context
 
     @staticmethod
@@ -1399,11 +1468,22 @@ RULES:
         batches = self._partition_fact_batches(docs_context)
         registry_context = self._build_document_registry_context(document_registry)
 
+        # Log per-doc serialized sizes for observability / cap verification
+        doc_sizes = [(d.get("filename", "?"), len(json.dumps(d))) for d in docs_context]
+        over_cap = [(n, s) for n, s in doc_sizes if s > _FACT_DOC_MAX_SERIALIZED_CHARS]
         logger.info(
             f"[STAGE:1:BATCHED] Starting batched fact extraction | "
             f"docs={len(document_summaries)} batches={len(batches)} "
-            f"total_chars={sum(len(json.dumps(d)) for d in docs_context)}"
+            f"total_chars={sum(s for _, s in doc_sizes)} "
+            f"max_doc={max(s for _, s in doc_sizes) if doc_sizes else 0} "
+            f"over_cap={len(over_cap)}"
         )
+        if over_cap:
+            for name, size in over_cap:
+                logger.warning(
+                    f"[STAGE:1:BATCHED] Doc over cap: {name} = {size} chars "
+                    f"(cap={_FACT_DOC_MAX_SERIALIZED_CHARS})"
+                )
 
         semaphore = asyncio.Semaphore(_FACT_BATCH_CONCURRENCY)
         batch_metrics: List[dict] = []
@@ -1640,6 +1720,18 @@ RULES:
             fact_data = json.loads(raw_response)
         except json.JSONDecodeError as e:
             raise ValueError(f"JSON parse failed for batch {batch_idx+1}: {e}")
+
+        # Log null source_document values before Pydantic coerces them
+        for category, items in [
+            ("timeline", fact_data.get("timeline", [])),
+            ("financial_data", fact_data.get("financial_data", [])),
+        ]:
+            for item in items:
+                if item.get("source_document") is None:
+                    logger.warning(
+                        f"[STAGE:1:BATCH:{batch_idx+1}] Null source_document in {category} | "
+                        f"description={str(item.get('description', ''))[:80]} — coercing to 'Unknown'"
+                    )
 
         return FactMatrix(
             parties=[Party(**p) for p in fact_data.get("parties", [])],

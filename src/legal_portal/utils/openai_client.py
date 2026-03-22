@@ -40,14 +40,17 @@ class OpenAIClient:
         )
         limits = httpx.Limits(max_connections=100, max_keepalive_connections=20)
 
-        # Sync client
+        # Sync client — max_retries=1 keeps worst-case timeout chain to ~250s
+        # (2 attempts × 120s read + backoff), fitting within 300s batch timeout.
+        # Previously max_retries=3 caused ~500s per call on timeout, exceeding
+        # the batch timeout and wasting wall-clock time in leaked threads.
         http_client = httpx.Client(timeout=timeout, limits=limits)
-        self.client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"), http_client=http_client, max_retries=3)
+        self.client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"), http_client=http_client, max_retries=1)
 
         # Async client for streaming and parallel processing
         async_http_client = httpx.AsyncClient(timeout=timeout, limits=limits)
         self.async_client = AsyncOpenAI(
-            api_key=os.getenv("OPENAI_API_KEY"), http_client=async_http_client, max_retries=3
+            api_key=os.getenv("OPENAI_API_KEY"), http_client=async_http_client, max_retries=1
         )
 
         self.default_model = DEFAULT_MODEL
@@ -672,17 +675,19 @@ class OpenAIClient:
                     "model": model,
                 }
 
-            except httpx.TimeoutException as e:
+            except (httpx.TimeoutException, openai.APITimeoutError) as e:
                 elapsed = time.time() - start_time
                 logger.error(
                     f"[OPENAI:TIMEOUT] GPT-5 Chat Completions timeout | "
-                    f"duration={elapsed:.1f}s model={model} error={str(e)} attempt={attempt+1}/{max_retries+1}"
+                    f"duration={elapsed:.1f}s model={model} error_type={type(e).__name__} "
+                    f"error={str(e)} attempt={attempt+1}/{max_retries+1}"
                 )
-                last_error = e
-                if attempt < max_retries:
-                    import time as time_module
-                    time_module.sleep(2)  # Longer delay for timeout
-                    continue
+                # Do NOT retry timeouts at the application level.
+                # The OpenAI SDK already retried internally (max_retries on the
+                # httpx client).  If all SDK retries timed out, the prompt is too
+                # large or the model is overloaded — retrying here just wastes
+                # hundreds of seconds of wall-clock time with no benefit.
+                # The caller (batch pipeline) handles the failure gracefully.
                 raise
             except Exception as e:
                 elapsed = time.time() - start_time

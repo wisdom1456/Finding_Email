@@ -115,7 +115,11 @@ _SIGNATURE_INSTRUMENT_HINT_PATTERNS = [
 
 # Prompt-shaping controls for document summarization.
 # Long documents are chunked into excerpts so batching/token estimates stay stable.
-PROMPT_MAX_DOC_CHARS = 24000
+# Per-document text cap for summarization prompts.
+# Reduced from 24K → 8K to prevent oversized batches triggering provider timeouts.
+# At 8K × 6 docs/batch = 48K chars ≈ 12K tokens, well within the 20K token budget.
+# Documents exceeding this are chunked into beginning/middle/end excerpts.
+PROMPT_MAX_DOC_CHARS = 8000
 PROMPT_LONG_DOC_CHUNKS = 3
 # Reduced from 10 → 6 to prevent batch timeout (180s). A 10-doc batch with
 # gpt-5.4 routinely exceeds 180s at 50K chars. 6 docs / ~20K chars completes
@@ -765,44 +769,93 @@ async def process_case_documents(
         # ========================================================================
         # SYNTHESIS GATE CHECK
         # ========================================================================
-        # Check if we can proceed to synthesis (all docs completed or skipped)
+        # Check if we can proceed to synthesis (all docs completed or skipped).
+        # MISSING_SUMMARY failures (LLM name-mismatch) are non-blocking — they
+        # indicate a cosmetic matching issue, not a data-loss failure.  Only
+        # hard failures (TIMEOUT, PROCESSING_ERROR, TASK_ERROR, etc.) block.
         if chunk_state_mgr:
             can_proceed = await chunk_state_mgr.can_proceed_to_synthesis()
             if not can_proceed:
+                doc_summary = await chunk_state_mgr.get_document_summary()
                 failed_docs = await chunk_state_mgr.get_failed_documents()
-                await chunk_state_mgr.update_phase("awaiting_recovery")
 
-                logger.warning(
-                    f"[SYNTHESIS_GATE] Cannot proceed - {len(failed_docs)} documents need attention"
-                )
+                # Separate hard failures from soft (name-mismatch) failures
+                hard_failures = [
+                    d for d in failed_docs
+                    if d.get("error_type") != "MISSING_SUMMARY"
+                ]
+                soft_failures = [
+                    d for d in failed_docs
+                    if d.get("error_type") == "MISSING_SUMMARY"
+                ]
 
-                if progress_callback:
-                    await progress_callback(
-                        f"Waiting for {len(failed_docs)} failed documents to be addressed",
-                        [],
-                        "awaiting_recovery",
-                        20,
-                        chunk_status={
-                            "type": "chunk_complete_with_errors",
-                            "completed": len(structured_summaries),
-                            "failed": len(failed_docs),
-                            "failed_docs": [
-                                {"id": d.get("id"), "name": d.get("name"), "error": d.get("error"), "error_type": d.get("error_type")}
-                                for d in failed_docs
-                            ]
-                        }
+                if soft_failures:
+                    logger.warning(
+                        f"[SYNTHESIS_GATE] {len(soft_failures)} docs have MISSING_SUMMARY "
+                        f"(LLM name-mismatch) — treating as non-blocking: "
+                        + ", ".join(d.get("name", "?") for d in soft_failures)
+                    )
+                    # Auto-skip soft failures so they don't block future checks
+                    soft_ids = [d.get("id") for d in soft_failures if d.get("id")]
+                    if soft_ids:
+                        await chunk_state_mgr.mark_documents_skipped(soft_ids)
+                    # Surface in result metadata so callers can see what was skipped
+                    if skipped_documents is not None:
+                        for sf in soft_failures:
+                            skipped_documents.append(
+                                SkippedDocument(
+                                    document_id=sf.get("id", "unknown"),
+                                    file_name=sf.get("name", "unknown"),
+                                    reason=f"Auto-skipped: {sf.get('error', 'LLM name-mismatch')}",
+                                    error_type="MISSING_SUMMARY",
+                                    recommendation="Summary name did not match file name; document content was still available to synthesis.",
+                                )
+                            )
+
+                # Block on hard failures OR docs stuck in pending/processing
+                has_stuck_docs = doc_summary.get("pending", 0) > 0 or doc_summary.get("processing", 0) > 0
+                if hard_failures or has_stuck_docs:
+                    await chunk_state_mgr.update_phase("awaiting_recovery")
+
+                    block_reasons = []
+                    if hard_failures:
+                        block_reasons.append(f"{len(hard_failures)} hard failures")
+                    if has_stuck_docs:
+                        block_reasons.append(
+                            f"stuck docs: {doc_summary.get('pending', 0)} pending, "
+                            f"{doc_summary.get('processing', 0)} processing"
+                        )
+                    logger.warning(
+                        f"[SYNTHESIS_GATE] Cannot proceed - {', '.join(block_reasons)}"
                     )
 
-                # Return partial results - frontend will show recovery modal
-                return ProcessingResult(
-                    document_summaries=[],
-                    status="awaiting_recovery",
-                    errors=errors,
-                    processing_time_seconds=time.time() - start_time,
-                )
-            else:
-                await chunk_state_mgr.update_phase("synthesis")
-                logger.info("[SYNTHESIS_GATE] All documents addressed, proceeding to synthesis")
+                    if progress_callback:
+                        await progress_callback(
+                            f"Waiting for {len(hard_failures)} failed documents to be addressed",
+                            [],
+                            "awaiting_recovery",
+                            20,
+                            chunk_status={
+                                "type": "chunk_complete_with_errors",
+                                "completed": len(structured_summaries),
+                                "failed": len(hard_failures),
+                                "failed_docs": [
+                                    {"id": d.get("id"), "name": d.get("name"), "error": d.get("error"), "error_type": d.get("error_type")}
+                                    for d in hard_failures
+                                ]
+                            }
+                        )
+
+                    # Return partial results - frontend will show recovery modal
+                    return ProcessingResult(
+                        document_summaries=[],
+                        status="awaiting_recovery",
+                        errors=errors,
+                        processing_time_seconds=time.time() - start_time,
+                    )
+
+            await chunk_state_mgr.update_phase("synthesis")
+            logger.info("[SYNTHESIS_GATE] All documents addressed, proceeding to synthesis")
 
         # ========================================================================
         # CASE SYNTHESIS STAGE (25-40%)
@@ -1630,6 +1683,61 @@ def _aggregate_quality_results(results: List[QualityScore]) -> Dict[str, Any]:
     }
 
 
+def match_summaries_to_docs(
+    summaries: List[Any],
+    doc_names: List[str],
+) -> List[Optional[Any]]:
+    """Match LLM-returned summaries to input documents by name.
+
+    Returns a list parallel to *doc_names* where each element is the matched
+    summary object or ``None`` if no match was found.
+
+    Match strategy (first wins):
+      1. Exact string match on ``summary.document_name == doc_name``
+      2. Case-insensitive match
+      3. Stem match (filename without extension, case-insensitive) — only
+         when the stem maps to a single summary (ambiguous stems are skipped)
+    """
+    # Primary index: exact name → list of summaries
+    by_exact: Dict[str, List[Any]] = {}
+    for s in summaries:
+        by_exact.setdefault(s.document_name, []).append(s)
+
+    # Secondary: case-insensitive
+    by_lower: Dict[str, List[Any]] = {}
+    for name, slist in by_exact.items():
+        by_lower.setdefault(name.lower(), []).extend(slist)
+
+    # Tertiary: stem (no extension), case-insensitive
+    by_stem: Dict[str, List[Any]] = {}
+    _stem_counts: Dict[str, int] = {}
+    for name in by_exact:
+        stem = os.path.splitext(name)[0].lower()
+        _stem_counts[stem] = _stem_counts.get(stem, 0) + 1
+    for name, slist in by_exact.items():
+        stem = os.path.splitext(name)[0].lower()
+        if _stem_counts[stem] == 1:  # unambiguous stem only
+            by_stem.setdefault(stem, []).extend(slist)
+
+    results: List[Optional[Any]] = []
+    for doc_name in doc_names:
+        # 1. Exact
+        candidates = by_exact.get(doc_name, [])
+        match = candidates.pop(0) if candidates else None
+        # 2. Case-insensitive
+        if match is None:
+            ci = by_lower.get(doc_name.lower(), [])
+            match = ci.pop(0) if ci else None
+        # 3. Stem (only unambiguous)
+        if match is None:
+            stem = os.path.splitext(doc_name)[0].lower()
+            sc = by_stem.get(stem, [])
+            match = sc.pop(0) if sc else None
+        results.append(match)
+
+    return results
+
+
 def _estimate_tokens(text: str) -> int:
     """Rough estimate: 1 token ≈ 4 characters."""
     return _estimate_tokens_imported(text)
@@ -1916,16 +2024,18 @@ Return ONLY valid JSON, no markdown code blocks.
                         f"chars={batch_est_tokens * 4}"
                     )
 
-                    summaries_by_name: Dict[str, List[Any]] = {}
-                    for summary in batch_result:
-                        summaries_by_name.setdefault(summary.document_name, []).append(summary)
+                    batch_doc_names = [getattr(d, "file_name", "unknown") for d in batch]
+                    matched = match_summaries_to_docs(batch_result, batch_doc_names)
 
                     missing_docs: List[str] = []
-                    for doc in batch:
+                    for doc, matching_summary in zip(batch, matched):
                         doc_id = tracking_doc_id(doc)
                         doc_name = getattr(doc, "file_name", "unknown")
-                        candidates = summaries_by_name.get(doc_name, [])
-                        matching_summary = candidates.pop(0) if candidates else None
+                        if matching_summary and doc_name != getattr(matching_summary, "document_name", doc_name):
+                            logger.info(
+                                f"[BATCH {batch_num}] Fuzzy-matched summary "
+                                f"'{getattr(matching_summary, 'document_name', '?')}' → '{doc_name}'"
+                            )
                         if chunk_state_mgr:
                             if matching_summary:
                                 summary_data = (

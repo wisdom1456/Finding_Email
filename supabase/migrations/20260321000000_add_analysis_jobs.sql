@@ -224,12 +224,14 @@ BEGIN
       AND ar.status IN ('pending', 'processing')
     RETURNING j.id AS job_id, 'analysis_results'::TEXT AS fixed_table;
 
-    -- Phase 2: Fix cases where job is terminal but case is still processing
+    -- Phase 2: Fix cases where job is terminal but case is still processing.
+    -- cancelled → 'pending' (not 'cancelled'): only the attempt is cancelled,
+    -- the case remains retryable.
     RETURN QUERY
     UPDATE cases c
     SET status = CASE
             WHEN j.status = 'failed' THEN 'error'
-            WHEN j.status = 'cancelled' THEN 'cancelled'
+            WHEN j.status = 'cancelled' THEN 'pending'
             ELSE c.status
         END
     FROM analysis_jobs j

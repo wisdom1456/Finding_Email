@@ -206,24 +206,41 @@ class AnalysisWorker:
                 f"result_size={result_size} bytes"
             )
 
-            # 2. Write final result to analysis_results (single atomic update)
+            # 2. Conditional finalization: only proceed if job is still 'running'.
+            #    If the API cancelled the job while the pipeline was executing,
+            #    the status will be 'cancelled' and we must NOT overwrite it.
+            claim_resp = self.supabase.table("analysis_jobs").update({
+                "status": "completed",
+                "stage": "completed",
+                "completed_at": datetime.utcnow().isoformat(),
+                "updated_at": datetime.utcnow().isoformat(),
+            }).eq("id", job_id).eq("status", "running").execute()
+
+            if not claim_resp.data:
+                # Job was cancelled (or otherwise mutated) while pipeline ran.
+                # Re-read to confirm, then handle accordingly.
+                current = self.supabase.table("analysis_jobs").select(
+                    "status"
+                ).eq("id", job_id).execute()
+                current_status = current.data[0]["status"] if current.data else "unknown"
+                logger.info(
+                    f"[JOB:{job_id[:8]}] Finalization skipped — job status is "
+                    f"'{current_status}' (expected 'running'). "
+                    f"Cancel wins; result discarded."
+                )
+                return  # Cancel wins — do not write to analysis_results or cases
+
+            # 3. Write final result to analysis_results (single atomic update)
             self.supabase.table("analysis_results").update({
                 "status": "completed",
                 "result": result_dict,
                 "completed_at": datetime.utcnow().isoformat(),
             }).eq("id", analysis_id).execute()
 
-            # 3. Update case status
+            # 4. Update case status
             self.supabase.table("cases").update({
                 "status": "completed",
             }).eq("id", case_id).execute()
-
-            # 4. Mark job completed (LAST — frontend reads results after this)
-            self._update_job(job_id,
-                status="completed",
-                stage="completed",
-                completed_at=datetime.utcnow().isoformat(),
-            )
 
             logger.info(f"[JOB:{job_id[:8]}] Completed | duration={elapsed:.0f}s")
 
@@ -243,14 +260,20 @@ class AnalysisWorker:
             self.current_job_id = None
 
     def _handle_cancel(self, job_id: str, analysis_id: str, case_id: str) -> None:
-        """Handle job cancellation."""
+        """Handle job cancellation.
+
+        Worker is the sole writer of analysis_results and cases for running jobs.
+        Sets cases.status='pending' (not 'cancelled') because only the analysis
+        attempt is cancelled — the case itself remains retryable.
+        """
         logger.info(f"[JOB:{job_id[:8]}] Cancelled")
         self._update_job(job_id, status="cancelled")
         self.supabase.table("analysis_results").update(
             {"status": "cancelled"}
         ).eq("id", analysis_id).execute()
+        # 'pending' so user can retry — only the attempt is cancelled, not the case
         self.supabase.table("cases").update(
-            {"status": "cancelled"}
+            {"status": "pending"}
         ).eq("id", case_id).execute()
 
     def _handle_retry(self, job_id: str, job: dict, error: Exception) -> None:

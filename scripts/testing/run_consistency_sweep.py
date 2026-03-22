@@ -107,7 +107,13 @@ LETTER_ERROR_PATTERNS = [
 # Auth
 # ---------------------------------------------------------------------------
 
-def get_user_token() -> str:
+_token_cache: Dict[str, str] = {}
+
+
+def get_token_for_email(email: str) -> str:
+    """Get a JWT for a specific user email via admin magic link."""
+    if email in _token_cache:
+        return _token_cache[email]
     resp = requests.post(
         f"{SUPABASE_URL}/auth/v1/admin/generate_link",
         headers={
@@ -115,7 +121,7 @@ def get_user_token() -> str:
             "Authorization": f"Bearer {SERVICE_KEY}",
             "Content-Type": "application/json",
         },
-        json={"type": "magiclink", "email": SWEEP_USER_EMAIL},
+        json={"type": "magiclink", "email": email},
     )
     data = resp.json()
     parsed = urlparse(data.get("action_link", ""))
@@ -128,9 +134,49 @@ def get_user_token() -> str:
     )
     token = verify.json().get("access_token")
     if not token:
-        print(f"Auth failed: {verify.text[:200]}")
+        print(f"Auth failed for {email}: {verify.text[:200]}")
+        return ""
+    _token_cache[email] = token
+    return token
+
+
+def get_user_token() -> str:
+    """Get token for the default sweep user (used for preflight)."""
+    token = get_token_for_email(SWEEP_USER_EMAIL)
+    if not token:
+        print(f"FATAL: Auth failed for {SWEEP_USER_EMAIL}")
         sys.exit(1)
     return token
+
+
+def get_case_owner_email(case_id: str) -> Optional[str]:
+    """Look up the owner email for a case via service key."""
+    case_resp = requests.get(
+        f"{SUPABASE_URL}/rest/v1/cases?id=eq.{case_id}&select=user_id",
+        headers=service_headers(),
+    )
+    case_data = case_resp.json()
+    if not case_data:
+        return None
+    user_id = case_data[0].get("user_id")
+    if not user_id:
+        return None
+    # Look up user email via admin API
+    user_resp = requests.get(
+        f"{SUPABASE_URL}/auth/v1/admin/users/{user_id}",
+        headers={"apikey": SERVICE_KEY, "Authorization": f"Bearer {SERVICE_KEY}"},
+    )
+    if user_resp.status_code == 200:
+        return user_resp.json().get("email")
+    return None
+
+
+def get_token_for_case(case_id: str) -> Optional[str]:
+    """Get an auth token for the user who owns a specific case."""
+    email = get_case_owner_email(case_id)
+    if not email:
+        return None
+    return get_token_for_email(email)
 
 
 # ---------------------------------------------------------------------------
@@ -801,7 +847,15 @@ def run_case(
     token: str,
     force_cleanup: bool = False,
 ) -> Dict[str, Any]:
-    """Run analysis for a single case and verify outputs."""
+    """Run analysis for a single case and verify outputs.
+
+    Authenticates as the case owner (not the default sweep user) since the API
+    enforces RLS ownership checks.
+    """
+    # Get the correct token for this case's owner
+    case_token = get_token_for_case(case["id"])
+    if case_token:
+        token = case_token  # Override with case-owner token
     case_id = case["id"]
     case_name = case["name"]
     category = case["category"]
@@ -1319,7 +1373,8 @@ def print_summary(results: List[Dict[str, Any]], assessment: Dict[str, Any]) -> 
         docs = str(r.get("doc_count", "?"))
         rt = f"{r.get('runtime_seconds', 0):.0f}s"
         cls = r.get("classification", "?")
-        quality = r.get("quality", "-")
+        quality = r.get("quality") or r.get("quality_classification") or "-"
+        quality = quality if quality else "-"
         flag = " *" if r.get("manual_review_recommended") else ""
         print(f"{name:<25s} {cat:<10s} {docs:>4s} {rt:>7s} {cls:<35s} {quality:<12s}{flag}")
 
@@ -1396,7 +1451,7 @@ def write_markdown_report(
         docs = r.get("doc_count", "?")
         rt = f"{r.get('runtime_seconds', 0):.0f}s"
         cls = r.get("classification", "?")
-        quality = r.get("quality", "-")
+        quality = r.get("quality") or r.get("quality_classification") or "-"
         review = "Yes" if r.get("manual_review_recommended") else ""
         lines.append(f"| {name} | {cat} | {docs} | {rt} | {cls} | {quality} | {review} |")
 
@@ -1503,7 +1558,7 @@ def write_csv_summary(results: List[Dict[str, Any]], path: str) -> None:
                 "category": r["category"],
                 "runtime": round(r.get("runtime_seconds", 0), 1),
                 "reliability": r.get("classification", "?"),
-                "quality": r.get("quality", "-"),
+                "quality": r.get("quality") or r.get("quality_classification") or "-",
                 "findings_chars": r.get("findings_chars", 0),
                 "demand_chars": r.get("demand_chars", 0),
             })
@@ -1650,7 +1705,7 @@ def main() -> None:
 
         # Print inline summary
         cls = result.get("classification", "?")
-        quality = result.get("quality", "-")
+        quality = result.get("quality") or result.get("quality_classification") or "-"
         rt = result.get("runtime_seconds", 0)
         print(f"\n  RESULT: {cls} | quality={quality} | {rt:.0f}s")
 

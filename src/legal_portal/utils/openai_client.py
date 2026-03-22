@@ -524,12 +524,11 @@ class OpenAIClient:
 
         """
         try:
-            # Detect model type for parameter handling
-            is_gpt4 = model.startswith("gpt-4")
+            is_gpt5 = self._is_gpt5_model(model)
 
             logger.info(
-                f"Starting async chat stream | model={model} is_gpt4={is_gpt4} "
-                f"reasoning_effort={reasoning_effort if not is_gpt4 else 'N/A'} "
+                f"Starting async chat stream | model={model} is_gpt5={is_gpt5} "
+                f"reasoning_effort={reasoning_effort if is_gpt5 else 'N/A'} "
                 f"max_tokens={max_tokens}"
             )
 
@@ -540,18 +539,18 @@ class OpenAIClient:
                 "stream": True,
             }
 
-            if is_gpt4:
-                # GPT-4.x: Use max_tokens, temperature, no reasoning_effort
-                if max_tokens:
-                    request_params["max_tokens"] = max_tokens
-                request_params["temperature"] = temperature
-            else:
+            if is_gpt5:
                 # GPT-5.x: Use max_completion_tokens, reasoning_effort
                 if max_tokens:
                     request_params["max_completion_tokens"] = max_tokens
                 if reasoning_effort:
                     request_params["reasoning_effort"] = reasoning_effort
                 # Note: GPT-5.x with reasoning doesn't support temperature parameter
+            else:
+                # Non-GPT-5: Use max_tokens, temperature, no reasoning_effort
+                if max_tokens:
+                    request_params["max_tokens"] = max_tokens
+                request_params["temperature"] = temperature
 
             stream = await self.async_client.chat.completions.create(**request_params)
 
@@ -588,14 +587,14 @@ class OpenAIClient:
         Includes automatic retry on empty responses.
         """
         last_error = None
-        is_gpt4 = self._is_gpt4_model(model)
+        is_gpt5 = self._is_gpt5_model(model)
 
         for attempt in range(max_retries + 1):
             start_time = time.time()
             try:
                 logger.info(
                     f"[OPENAI:REQUEST] Making Chat Completions request | "
-                    f"model={model} is_gpt4={is_gpt4} reasoning_effort={reasoning_effort if not is_gpt4 else 'N/A'} "
+                    f"model={model} is_gpt5={is_gpt5} reasoning_effort={reasoning_effort if is_gpt5 else 'N/A'} "
                     f"input_chars={len(input) if input else 0} instructions_chars={len(instructions) if instructions else 0} "
                     f"max_tokens={max_output_tokens} attempt={attempt+1}/{max_retries+1}"
                 )
@@ -612,12 +611,7 @@ class OpenAIClient:
                     "messages": messages,
                 }
 
-                if is_gpt4:
-                    # GPT-4.x models: Use standard max_tokens, no reasoning_effort
-                    if max_output_tokens:
-                        request_params["max_tokens"] = max_output_tokens
-                    # Skip reasoning_effort - not supported by GPT-4.x
-                else:
+                if is_gpt5:
                     # GPT-5.x models: Use reasoning_effort and max_completion_tokens
                     if reasoning_effort:
                         request_params["reasoning_effort"] = reasoning_effort
@@ -630,6 +624,10 @@ class OpenAIClient:
                         extra_body["verbosity"] = verbosity
                     if extra_body:
                         request_params["extra_body"] = extra_body
+                else:
+                    # Non-GPT-5 models: Use standard max_tokens, no reasoning_effort
+                    if max_output_tokens:
+                        request_params["max_tokens"] = max_output_tokens
 
                 # Make the API call using Chat Completions
                 response = self.client.chat.completions.create(**request_params)
@@ -731,13 +729,14 @@ class OpenAIClient:
                 "messages": messages,
             }
 
-            if reasoning_effort:
+            # reasoning_effort only supported on GPT-5.x models
+            if reasoning_effort and self._is_gpt5_model(model):
                 request_params["reasoning_effort"] = reasoning_effort
             if max_output_tokens:
                 request_params["max_completion_tokens"] = max_output_tokens
 
             # verbosity is not a standard Chat Completions param; pass via extra_body
-            if verbosity:
+            if verbosity and self._is_gpt5_model(model):
                 request_params["extra_body"] = {"verbosity": verbosity}
 
             response = await self.async_client.chat.completions.create(**request_params)
@@ -756,7 +755,7 @@ class OpenAIClient:
             }
 
         except Exception as e:
-            logger.error(f"Error in async GPT-5 Chat Completions call: {e}")
+            logger.error(f"Error in async Chat Completions call: {e}")
             raise
 
     async def create_response_stream(
@@ -767,9 +766,9 @@ class OpenAIClient:
         reasoning_effort: Optional[str] = None,
         verbosity: Optional[str] = None,
     ) -> AsyncGenerator[str, None]:
-        """Stream response tokens using Chat Completions API with GPT-5.2 parameters."""
+        """Stream response tokens using Chat Completions API."""
         try:
-            logger.info(f"Starting async GPT-5 Chat Completions stream with {model}")
+            logger.info(f"Starting async Chat Completions stream with {model}")
 
             # Build messages from input and instructions
             messages = []
@@ -783,11 +782,12 @@ class OpenAIClient:
                 "stream": True,
             }
 
-            if reasoning_effort:
+            # reasoning_effort only supported on GPT-5.x models
+            if reasoning_effort and self._is_gpt5_model(model):
                 request_params["reasoning_effort"] = reasoning_effort
 
             # verbosity is not a standard Chat Completions param; pass via extra_body
-            if verbosity:
+            if verbosity and self._is_gpt5_model(model):
                 request_params["extra_body"] = {"verbosity": verbosity}
 
             stream = await self.async_client.chat.completions.create(**request_params)

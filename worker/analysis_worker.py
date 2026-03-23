@@ -69,10 +69,12 @@ RETRYABLE_PATTERNS = [
 
 
 def classify_error(e: Exception) -> str:
-    """Classify an error as retryable, terminal, or multi_stage_failure."""
+    """Classify an error as retryable, terminal, pipeline_failed, or multi_stage_failure."""
     error_str = str(e).lower()
     if any(p in error_str for p in RETRYABLE_PATTERNS):
         return "retryable"
+    if "pipeline_failed" in error_str:
+        return "pipeline_failed"
     if "multi_stage_missing" in error_str or "multi_stage_failure" in error_str:
         return "multi_stage_failure"
     return "terminal"
@@ -194,22 +196,37 @@ class AnalysisWorker:
 
             # 1. Validate result
             result_dict = result.model_dump(mode="json")
+            pipeline_status = result_dict.get("status", "unknown")
+            pipeline_errors = result_dict.get("errors") or []
+
+            # Check if pipeline itself reported failure
+            if pipeline_status == "failed":
+                error_details = "; ".join(
+                    e.get("error_message") or e.get("error", "?")
+                    for e in pipeline_errors if isinstance(e, dict)
+                )[:1500]
+                raise ValueError(
+                    f"[PIPELINE_FAILED] Pipeline returned status=failed. "
+                    f"Errors: {error_details or 'none captured'}"
+                )
+
             msr = result_dict.get("multi_stage_result")
             if not msr:
                 # Extract the real error from pipeline artifacts or errors list
                 artifacts = result_dict.get("artifacts") or {}
                 real_error = artifacts.get("multi_stage_error", "")
-                pipeline_errors = result_dict.get("errors") or []
                 msa_errors = [e for e in pipeline_errors
                               if isinstance(e, dict) and e.get("stage") == "multi_stage_analysis"]
                 if msa_errors:
                     real_error = real_error or msa_errors[0].get("error", "")
 
                 error_msg = (
-                    f"[MULTI_STAGE_MISSING] Pipeline completed summarization but "
+                    f"[MULTI_STAGE_MISSING] Pipeline status={pipeline_status} but "
                     f"multi_stage_result is absent.\n"
                     f"Root cause: {real_error[:1500]}" if real_error
-                    else "Pipeline completed but multi_stage_result is missing (no root cause captured)"
+                    else f"[MULTI_STAGE_MISSING] Pipeline status={pipeline_status}, "
+                         f"multi_stage_result missing, no root cause captured. "
+                         f"Pipeline errors: {pipeline_errors[:3]}"
                 )
                 raise ValueError(error_msg)
 

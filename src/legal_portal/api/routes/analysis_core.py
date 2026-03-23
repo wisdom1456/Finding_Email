@@ -548,7 +548,33 @@ async def get_analysis_status(
         if not case_response.data:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Case not found")
 
-        # Get latest analysis for case
+        # Check for active job first (pending/running)
+        active_response = (
+            supabase.table("analysis_results")
+            .select("*")
+            .eq("case_id", case_id)
+            .in_("status", ["pending", "processing"])
+            .order("created_at", desc=True)
+            .limit(1)
+            .execute()
+        )
+        if active_response.data:
+            return active_response.data[0]
+
+        # Prefer latest completed analysis
+        completed_response = (
+            supabase.table("analysis_results")
+            .select("*")
+            .eq("case_id", case_id)
+            .eq("status", "completed")
+            .order("created_at", desc=True)
+            .limit(1)
+            .execute()
+        )
+        if completed_response.data:
+            return completed_response.data[0]
+
+        # Fall back to latest of any status (error, cancelled, etc.)
         response = (
             supabase.table("analysis_results")
             .select("*")
@@ -603,15 +629,28 @@ async def get_analysis_results(
         if not case_response.data:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Case not found")
 
-        # Get most recent analysis (regardless of status)
+        # Prefer the latest completed analysis. A failed rerun should not
+        # hide a prior successful result.
         response = (
             supabase.table("analysis_results")
             .select("*")
             .eq("case_id", case_id)
+            .eq("status", "completed")
             .order("created_at", desc=True)
             .limit(1)
             .execute()
         )
+
+        if not response.data:
+            # No completed result — fall back to most recent of any status
+            response = (
+                supabase.table("analysis_results")
+                .select("*")
+                .eq("case_id", case_id)
+                .order("created_at", desc=True)
+                .limit(1)
+                .execute()
+            )
 
         if not response.data:
             return {"status": "pending", "message": "Analysis results not yet available"}

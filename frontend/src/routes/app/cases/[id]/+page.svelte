@@ -382,22 +382,59 @@
 
 	async function loadAnalysisStatus() {
 		try {
-			// Prefer terminal states — prevents stale processing rows from shadowing completed results
+			// Resolution precedence:
+			// 1. Active job (pending/processing) — show progress
+			// 2. Latest completed — show results (even if a newer rerun failed)
+			// 3. Latest error/cancelled — show error state
+			// 4. Latest of any status — fallback
+
+			// Step 1: check for active analysis
 			let { data, error } = await withRetry(() =>
 				supabase
 					.from('analysis_results')
 					.select('id, status, created_at, completed_at')
 					.eq('case_id', caseId as string)
-					.in('status', ['completed', 'error'])
+					.in('status', ['pending', 'processing'])
 					.order('created_at', { ascending: false })
 					.limit(1)
 					.maybeSingle()
 			);
-
 			if (error) throw error;
 
 			if (!data) {
-				// No terminal row — fall back to latest of any status
+				// Step 2: latest completed analysis
+				const completed = await withRetry(() =>
+					supabase
+						.from('analysis_results')
+						.select('id, status, created_at, completed_at')
+						.eq('case_id', caseId as string)
+						.eq('status', 'completed')
+						.order('created_at', { ascending: false })
+						.limit(1)
+						.maybeSingle()
+				);
+				if (completed.error) throw completed.error;
+				data = completed.data;
+			}
+
+			if (!data) {
+				// Step 3: latest terminal (error/cancelled)
+				const terminal = await withRetry(() =>
+					supabase
+						.from('analysis_results')
+						.select('id, status, created_at, completed_at')
+						.eq('case_id', caseId as string)
+						.in('status', ['error', 'cancelled'])
+						.order('created_at', { ascending: false })
+						.limit(1)
+						.maybeSingle()
+				);
+				if (terminal.error) throw terminal.error;
+				data = terminal.data;
+			}
+
+			if (!data) {
+				// Step 4: anything at all
 				const fallback = await withRetry(() =>
 					supabase
 						.from('analysis_results')

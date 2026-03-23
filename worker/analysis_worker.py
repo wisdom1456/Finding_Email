@@ -69,10 +69,12 @@ RETRYABLE_PATTERNS = [
 
 
 def classify_error(e: Exception) -> str:
-    """Classify an error as retryable or terminal."""
+    """Classify an error as retryable, terminal, or multi_stage_failure."""
     error_str = str(e).lower()
     if any(p in error_str for p in RETRYABLE_PATTERNS):
         return "retryable"
+    if "multi_stage_missing" in error_str or "multi_stage_failure" in error_str:
+        return "multi_stage_failure"
     return "terminal"
 
 
@@ -194,7 +196,22 @@ class AnalysisWorker:
             result_dict = result.model_dump(mode="json")
             msr = result_dict.get("multi_stage_result")
             if not msr:
-                raise ValueError("Pipeline completed but multi_stage_result is missing")
+                # Extract the real error from pipeline artifacts or errors list
+                artifacts = result_dict.get("artifacts") or {}
+                real_error = artifacts.get("multi_stage_error", "")
+                pipeline_errors = result_dict.get("errors") or []
+                msa_errors = [e for e in pipeline_errors
+                              if isinstance(e, dict) and e.get("stage") == "multi_stage_analysis"]
+                if msa_errors:
+                    real_error = real_error or msa_errors[0].get("error", "")
+
+                error_msg = (
+                    f"[MULTI_STAGE_MISSING] Pipeline completed summarization but "
+                    f"multi_stage_result is absent.\n"
+                    f"Root cause: {real_error[:1500]}" if real_error
+                    else "Pipeline completed but multi_stage_result is missing (no root cause captured)"
+                )
+                raise ValueError(error_msg)
 
             doc_summaries = result_dict.get("document_summaries")
             if not doc_summaries:

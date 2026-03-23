@@ -1183,14 +1183,24 @@ async def process_case_documents(
                 )
 
         except Exception as e:
+            import traceback as _tb
             elapsed = time.time() - start_time
+            multi_stage_tb = _tb.format_exc()
             logger.error(
                 f"[PROCESSOR:MULTISTAGE] [CASE:{case_id}] [ELAPSED:{elapsed:.1f}s] "
                 f"Multi-stage analysis FAILED | error_type={type(e).__name__} error={str(e)}",
                 exc_info=True
             )
             multi_stage_result = None
-            multi_stage_error = str(e)
+            multi_stage_error = (
+                f"[MULTI_STAGE_FAILURE] {type(e).__name__}: {str(e)}\n\n{multi_stage_tb}"
+            )
+            # Add to errors list so it surfaces in ProcessingResult.errors
+            errors.append(ProcessingError(
+                stage="multi_stage_analysis",
+                error=f"{type(e).__name__}: {str(e)[:500]}",
+                document_id=None,
+            ))
             # Surface the error so it's visible in results
             if progress_callback:
                 await progress_callback(

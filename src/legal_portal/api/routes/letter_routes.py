@@ -115,20 +115,15 @@ async def stream_findings_letter(
                         },
                     )
                 logger.warning(
-                    "OVERRIDE: force_generation used for streaming letter with low completeness score "
-                    "(%s%%) - analysis_id=%s, critical_gaps=%s",
-                    gap_analysis.overall_completeness_score,
-                    analysis_id,
-                    gap_analysis.critical_count,
+                    f"OVERRIDE: force_generation used for streaming letter with low completeness score "
+                    f"({gap_analysis.overall_completeness_score}%) - analysis_id={analysis_id}, "
+                    f"critical_gaps={gap_analysis.critical_count}"
                 )
             elif gap_analysis.overall_completeness_score < 60:
                 logger.warning(
-                    "Streaming letter with moderate completeness score: %s%% "
-                    "(critical_gaps=%s, high_gaps=%s) - analysis_id=%s",
-                    gap_analysis.overall_completeness_score,
-                    gap_analysis.critical_count,
-                    gap_analysis.high_count,
-                    analysis_id,
+                    f"Streaming letter with moderate completeness score: {gap_analysis.overall_completeness_score}% "
+                    f"(critical_gaps={gap_analysis.critical_count}, high_gaps={gap_analysis.high_count}) "
+                    f"- analysis_id={analysis_id}"
                 )
 
         artifacts = processing_result.artifacts or {}
@@ -230,8 +225,7 @@ async def stream_findings_letter(
                             ]
                     except Exception as parse_err:
                         logger.warning(
-                            "[LETTER] Failed to parse document_summaries for stream context: %s",
-                            parse_err,
+                            f"[LETTER] Failed to parse document_summaries for stream context: {parse_err}"
                         )
 
                 if (time.monotonic() - context_started) > context_budget:
@@ -532,8 +526,7 @@ async def stream_findings_letter(
                                     f"fact_integrity:{integrity_report.get('reason', 'unknown')}"
                                 )
                                 logger.warning(
-                                    "[LETTER] Polish reverted due to fact integrity drift: %s",
-                                    integrity_report,
+                                    f"[LETTER] Polish reverted due to fact integrity drift: {integrity_report}"
                                 )
                     except Exception as polish_err:
                         logger.warning(f"[LETTER] Polish pass failed, using raw draft: {polish_err}")
@@ -861,8 +854,7 @@ async def generate_letter(
                                 f"fact_integrity:{integrity_report.get('reason', 'unknown')}"
                             )
                             logger.warning(
-                                "[DEMAND] Polish reverted due to fact integrity drift: %s",
-                                integrity_report,
+                                f"[DEMAND] Polish reverted due to fact integrity drift: {integrity_report}"
                             )
                 except Exception as polish_err:
                     logger.warning(f"[DEMAND] Polish pass failed, using raw draft: {polish_err}")
@@ -883,9 +875,7 @@ async def generate_letter(
                 if validation_result.warnings:
                     warning_summary = "; ".join([w.message for w in validation_result.warnings[:5]])
                     logger.warning(
-                        "Letter validation warnings (%s total): %s",
-                        len(validation_result.warnings),
-                        warning_summary,
+                        f"Letter validation warnings ({len(validation_result.warnings)} total): {warning_summary}"
                     )
                 else:
                     logger.info("Letter passed source-of-truth validation with no warnings")

@@ -876,9 +876,12 @@ async def process_case_documents(
                 failed_docs = await chunk_state_mgr.get_failed_documents()
 
                 # Separate hard failures from soft (non-blocking) failures.
-                # Non-blocking: MISSING_SUMMARY (LLM name-mismatch) and
-                # CONTENT_FILTER (provider safety filter blocked summarization).
-                SOFT_ERROR_TYPES = {"MISSING_SUMMARY", "CONTENT_FILTER"}
+                # Non-blocking: MISSING_SUMMARY (LLM name-mismatch),
+                # CONTENT_FILTER (provider safety filter blocked summarization),
+                # PARSE_ERROR (LLM returned unparseable JSON — doc content still
+                # available for synthesis/fact-extraction), and
+                # EMPTY_BATCH_RESULT (batch returned no summaries).
+                SOFT_ERROR_TYPES = {"MISSING_SUMMARY", "CONTENT_FILTER", "PARSE_ERROR", "EMPTY_BATCH_RESULT"}
                 hard_failures = [
                     d for d in failed_docs
                     if d.get("error_type") not in SOFT_ERROR_TYPES

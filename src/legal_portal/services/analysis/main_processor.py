@@ -848,7 +848,15 @@ async def process_case_documents(
 
                     # Return partial results - frontend will show recovery modal
                     return ProcessingResult(
-                        document_summaries=[],
+                        main_letter="",
+                        document_summaries="",
+                        case_analysis=json.dumps({
+                            "case_summary": "Analysis blocked at synthesis gate",
+                            "practice_area": "Unknown",
+                            "key_issues": block_reasons,
+                            "relevant_statutes": [],
+                            "additional_details": f"Blocked: {', '.join(block_reasons)}",
+                        }),
                         status="awaiting_recovery",
                         errors=errors,
                         processing_time_seconds=time.time() - start_time,
@@ -1197,9 +1205,9 @@ async def process_case_documents(
             )
             # Add to errors list so it surfaces in ProcessingResult.errors
             errors.append(ProcessingError(
-                stage="multi_stage_analysis",
-                error=f"{type(e).__name__}: {str(e)[:500]}",
-                document_id=None,
+                source="multi_stage_analysis",
+                error_type=type(e).__name__,
+                error_message=str(e)[:500],
             ))
             # Surface the error so it's visible in results
             if progress_callback:

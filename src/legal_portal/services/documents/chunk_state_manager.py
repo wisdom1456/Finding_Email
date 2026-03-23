@@ -37,18 +37,40 @@ class ChunkStateManager:
     async def initialize_chunk_state(
         self,
         documents: List[Any],
-        max_tokens_per_chunk: int = 50000
+        max_tokens_per_chunk: int = 50000,
+        force_reinit: bool = False,
     ) -> Dict[str, Any]:
         """Initialize chunk_state for a new analysis.
-        
+
+        On retry, if chunk_state already exists with completed summaries and
+        force_reinit is False, the existing state is preserved so that
+        try_recover_summaries() can read back previously completed work.
+
         Args:
             documents: List of documents to process
             max_tokens_per_chunk: Maximum tokens per chunk
-            
+            force_reinit: If True, always create fresh state (discards previous)
+
         Returns:
             The initialized chunk_state
 
         """
+        if not force_reinit:
+            existing = await self.get_chunk_state()
+            if existing and existing.get("summaries"):
+                completed = sum(
+                    1 for d in existing.get("documents", {}).values()
+                    if d.get("status") in ("completed", "skipped")
+                )
+                total = len(existing.get("documents", {}))
+                if completed > 0:
+                    logger.info(
+                        f"[CHUNK_STATE] Existing state found for {self.analysis_id}: "
+                        f"{completed}/{total} docs addressed, "
+                        f"{len(existing.get('summaries', {}))} summaries — preserving for recovery"
+                    )
+                    return existing
+
         from legal_portal.services.documents.chunk_service import create_chunk_state
 
         chunk_state = create_chunk_state(documents, max_tokens_per_chunk)
@@ -365,6 +387,49 @@ class ChunkStateManager:
 
         summaries = state.get("summaries", {})
         return list(summaries.values())
+
+    async def try_recover_summaries(self) -> Optional[List[Dict[str, Any]]]:
+        """Attempt to recover completed document summaries from a previous run.
+
+        Used on retry to avoid re-running summarization.  Returns the list of
+        summary dicts if recovery is possible, or None if not.
+
+        Recovery requires:
+        - chunk_state exists in DB
+        - phase is 'synthesis' or later (summarization was fully completed)
+        - summaries dict is non-empty
+        """
+        try:
+            state = await self.get_chunk_state()
+            if not state:
+                logger.info("[CHECKPOINT:RECOVER] No chunk_state found — cannot recover summaries")
+                return None
+
+            phase = state.get("phase", "")
+            # Phases that indicate summarization completed successfully
+            post_summarization_phases = {"synthesis", "multi_stage", "completed"}
+            if phase not in post_summarization_phases:
+                logger.info(
+                    f"[CHECKPOINT:RECOVER] chunk_state phase={phase!r} — "
+                    f"summarization not yet complete, cannot recover"
+                )
+                return None
+
+            summaries = state.get("summaries", {})
+            if not summaries:
+                logger.info("[CHECKPOINT:RECOVER] chunk_state has no summaries — cannot recover")
+                return None
+
+            summary_list = list(summaries.values())
+            logger.info(
+                f"[CHECKPOINT:RECOVER] Found {len(summary_list)} summaries "
+                f"in chunk_state (phase={phase!r})"
+            )
+            return summary_list
+
+        except Exception as e:
+            logger.warning(f"[CHECKPOINT:RECOVER] Failed to read chunk_state: {e}")
+            return None
 
     async def finalize(self) -> None:
         """Flush any pending updates before closing. Call this at the end of processing."""

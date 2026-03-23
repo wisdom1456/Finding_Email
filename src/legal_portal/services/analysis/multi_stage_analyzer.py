@@ -719,6 +719,13 @@ DOCUMENTS:
             raise error
         return result
 
+    # Monotonic stage ordering — checkpoint writes must never go backward.
+    _STAGE_RANK: Dict[str, int] = {
+        "fact_extraction": 1,
+        "issue_mapping": 2,
+        "deep_analysis": 3,
+    }
+
     async def analyze_case(
         self,
         intake_content: str,
@@ -730,9 +737,19 @@ DOCUMENTS:
         diag_logger: Optional[DiagnosticLogger] = None,
         signature_evidence: Optional[List[Dict[str, Any]]] = None,
         document_registry: Optional[List[Dict[str, Any]]] = None,
+        checkpoint: Optional[Dict[str, Any]] = None,
+        checkpoint_callback: Optional[Callable] = None,
     ) -> MultiStageAnalysisResult:
-        """Execute 4-stage analysis pipeline."""
+        """Execute 4-stage analysis pipeline.
+
+        Args:
+            checkpoint: Previously saved checkpoint dict from analysis_jobs.
+                If provided, stages with existing results are skipped.
+            checkpoint_callback: async callable(stage, data) that persists
+                checkpoint data. Called after each stage completes.
+        """
         start_time = time.time()
+        checkpoint = checkpoint or {}
         logger.info(
             f"[PIPELINE:START] [ELAPSED:0s] Starting multi-stage analysis | "
             f"jurisdiction={jurisdiction} docs={len(document_summaries)} "
@@ -748,52 +765,70 @@ DOCUMENTS:
             self.statute_service = StatuteRecommendationService(jurisdiction=jurisdiction)
 
         # Stage 1: Extract Fact Matrix
-        if progress_callback:
-            await progress_callback(
-                "Extracting key facts and timeline...",
-                [],
-                "fact_extraction",
-                20,
-                stage={"id": "fact_extraction", "name": "Extracting Facts", "status": "active", "progress": 5}
-            )
+        fact_matrix_recovered = False
+        if checkpoint.get("fact_matrix"):
+            try:
+                fact_matrix = FactMatrix(**checkpoint["fact_matrix"])
+                fact_matrix_recovered = True
+                self.stage_timings["fact_extraction"] = 0.0
+                logger.info(
+                    f"[CHECKPOINT:RESUME] Skipping fact_extraction — "
+                    f"recovered from checkpoint (parties={len(fact_matrix.parties)})"
+                )
+            except Exception as e:
+                logger.warning(
+                    f"[CHECKPOINT:DESER_FAIL] fact_matrix deserialization failed: {e} — re-running"
+                )
 
-        stage_start = time.time()
-        elapsed = time.time() - start_time
-        logger.info(
-            f"[STAGE:1] [ELAPSED:{elapsed:.1f}s] Starting fact_matrix extraction | "
-            f"jurisdiction={jurisdiction}"
-        )
+        if not fact_matrix_recovered:
+            if progress_callback:
+                await progress_callback(
+                    "Extracting key facts and timeline...",
+                    [],
+                    "fact_extraction",
+                    20,
+                    stage={"id": "fact_extraction", "name": "Extracting Facts", "status": "active", "progress": 5}
+                )
 
-        # Decide: batched vs single-call fact extraction
-        total_summary_chars = sum(
-            len(json.dumps(d.model_dump(mode="json"))) for d in document_summaries
-        )
-        use_batched = (
-            len(document_summaries) > _FACT_BATCH_DOC_THRESHOLD
-            or total_summary_chars > _FACT_BATCH_CHAR_THRESHOLD
-        )
-
-        if use_batched:
+            stage_start = time.time()
+            elapsed = time.time() - start_time
             logger.info(
-                f"[STAGE:1] Using BATCHED fact extraction | "
-                f"docs={len(document_summaries)} summary_chars={total_summary_chars}"
+                f"[STAGE:1] [ELAPSED:{elapsed:.1f}s] Starting fact_matrix extraction | "
+                f"jurisdiction={jurisdiction}"
             )
-            fact_matrix = await self._extract_fact_matrix_batched(
-                intake_content, document_summaries, jurisdiction,
-                document_registry, progress_callback,
+
+            # Decide: batched vs single-call fact extraction
+            total_summary_chars = sum(
+                len(json.dumps(d.model_dump(mode="json"))) for d in document_summaries
             )
-        else:
-            # Use heartbeat to show progress during single API call
-            fact_matrix = await self._run_with_heartbeat(
-                lambda: self._extract_fact_matrix(
-                    intake_content, document_summaries, jurisdiction, document_registry
-                ),
-                progress_callback,
-                "fact_extraction",
-                "Extracting Facts",
-                20,
+            use_batched = (
+                len(document_summaries) > _FACT_BATCH_DOC_THRESHOLD
+                or total_summary_chars > _FACT_BATCH_CHAR_THRESHOLD
             )
-        self.stage_timings["fact_extraction"] = time.time() - stage_start
+
+            if use_batched:
+                logger.info(
+                    f"[STAGE:1] Using BATCHED fact extraction | "
+                    f"docs={len(document_summaries)} summary_chars={total_summary_chars}"
+                )
+                fact_matrix = await self._extract_fact_matrix_batched(
+                    intake_content, document_summaries, jurisdiction,
+                    document_registry, progress_callback,
+                )
+            else:
+                fact_matrix = await self._run_with_heartbeat(
+                    lambda: self._extract_fact_matrix(
+                        intake_content, document_summaries, jurisdiction, document_registry
+                    ),
+                    progress_callback,
+                    "fact_extraction",
+                    "Extracting Facts",
+                    20,
+                )
+            self.stage_timings["fact_extraction"] = time.time() - stage_start
+
+            if checkpoint_callback:
+                await checkpoint_callback("fact_matrix", fact_matrix.model_dump(mode="json"))
         elapsed = time.time() - start_time
 
         logger.info(
@@ -822,33 +857,51 @@ DOCUMENTS:
             diag_logger.log_stage("multi_stage_1_fact_matrix", fact_matrix.model_dump(mode="json"))
 
         # Stage 2: Map Legal Issues
-        if progress_callback:
-            await progress_callback(
-                "Mapping legal issues and statutes...",
-                [],
-                "issue_mapping",
-                40,
-                stage={"id": "issue_mapping", "name": "Legal Issues", "status": "active", "progress": 5}
+        issue_map_recovered = False
+        if checkpoint.get("issue_map"):
+            try:
+                issue_map = LegalIssueMap(**checkpoint["issue_map"])
+                issue_map_recovered = True
+                self.stage_timings["issue_mapping"] = 0.0
+                logger.info(
+                    f"[CHECKPOINT:RESUME] Skipping issue_mapping — "
+                    f"recovered from checkpoint (primary={len(issue_map.primary_issues)})"
+                )
+            except Exception as e:
+                logger.warning(
+                    f"[CHECKPOINT:DESER_FAIL] issue_map deserialization failed: {e} — re-running"
+                )
+
+        if not issue_map_recovered:
+            if progress_callback:
+                await progress_callback(
+                    "Mapping legal issues and statutes...",
+                    [],
+                    "issue_mapping",
+                    40,
+                    stage={"id": "issue_mapping", "name": "Legal Issues", "status": "active", "progress": 5}
+                )
+
+            stage_start = time.time()
+            elapsed = time.time() - start_time
+            logger.info(
+                f"[STAGE:2] [ELAPSED:{elapsed:.1f}s] Starting issue_mapping | "
+                f"parties={len(fact_matrix.parties)} case_type={case_type}"
             )
 
-        stage_start = time.time()
-        elapsed = time.time() - start_time
-        logger.info(
-            f"[STAGE:2] [ELAPSED:{elapsed:.1f}s] Starting issue_mapping | "
-            f"parties={len(fact_matrix.parties)} case_type={case_type}"
-        )
+            issue_map = await self._run_with_heartbeat(
+                lambda: self._map_legal_issues(
+                    fact_matrix, intake_content, case_type, legal_issues, jurisdiction
+                ),
+                progress_callback,
+                "issue_mapping",
+                "Legal Issues",
+                40,
+            )
+            self.stage_timings["issue_mapping"] = time.time() - stage_start
 
-        # Use heartbeat to show progress during long API call
-        issue_map = await self._run_with_heartbeat(
-            lambda: self._map_legal_issues(
-                fact_matrix, intake_content, case_type, legal_issues, jurisdiction
-            ),
-            progress_callback,
-            "issue_mapping",
-            "Legal Issues",
-            40,
-        )
-        self.stage_timings["issue_mapping"] = time.time() - stage_start
+            if checkpoint_callback:
+                await checkpoint_callback("issue_map", issue_map.model_dump(mode="json"))
         elapsed = time.time() - start_time
 
         logger.info(
@@ -877,33 +930,51 @@ DOCUMENTS:
             diag_logger.log_stage("multi_stage_2_issue_map", issue_map.model_dump(mode="json"))
 
         # Stage 3: Deep Legal Analysis
-        if progress_callback:
-            await progress_callback(
-                "Performing deep legal analysis...",
-                [],
-                "deep_analysis",
-                70,
-                stage={"id": "deep_analysis", "name": "Deep Analysis", "status": "active", "progress": 5}
+        deep_analysis_recovered = False
+        if checkpoint.get("deep_analysis"):
+            try:
+                deep_analysis = DeepAnalysis(**checkpoint["deep_analysis"])
+                deep_analysis_recovered = True
+                self.stage_timings["deep_analysis"] = 0.0
+                logger.info(
+                    f"[CHECKPOINT:RESUME] Skipping deep_analysis — "
+                    f"recovered from checkpoint (analyses={len(deep_analysis.issue_analyses)})"
+                )
+            except Exception as e:
+                logger.warning(
+                    f"[CHECKPOINT:DESER_FAIL] deep_analysis deserialization failed: {e} — re-running"
+                )
+
+        if not deep_analysis_recovered:
+            if progress_callback:
+                await progress_callback(
+                    "Performing deep legal analysis...",
+                    [],
+                    "deep_analysis",
+                    70,
+                    stage={"id": "deep_analysis", "name": "Deep Analysis", "status": "active", "progress": 5}
+                )
+
+            stage_start = time.time()
+            elapsed = time.time() - start_time
+            logger.info(
+                f"[STAGE:3] [ELAPSED:{elapsed:.1f}s] Starting deep_analysis | "
+                f"issues_to_analyze={len(issue_map.primary_issues)}"
             )
 
-        stage_start = time.time()
-        elapsed = time.time() - start_time
-        logger.info(
-            f"[STAGE:3] [ELAPSED:{elapsed:.1f}s] Starting deep_analysis | "
-            f"issues_to_analyze={len(issue_map.primary_issues)}"
-        )
+            deep_analysis = await self._run_with_heartbeat(
+                lambda: self._perform_deep_legal_analysis(
+                    fact_matrix, issue_map, intake_content, jurisdiction
+                ),
+                progress_callback,
+                "deep_analysis",
+                "Deep Analysis",
+                70,
+            )
+            self.stage_timings["deep_analysis"] = time.time() - stage_start
 
-        # Use heartbeat to show progress during long API call
-        deep_analysis = await self._run_with_heartbeat(
-            lambda: self._perform_deep_legal_analysis(
-                fact_matrix, issue_map, intake_content, jurisdiction
-            ),
-            progress_callback,
-            "deep_analysis",
-            "Deep Analysis",
-            70,
-        )
-        self.stage_timings["deep_analysis"] = time.time() - stage_start
+            if checkpoint_callback:
+                await checkpoint_callback("deep_analysis", deep_analysis.model_dump(mode="json"))
         elapsed = time.time() - start_time
 
         logger.info(

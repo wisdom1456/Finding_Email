@@ -486,11 +486,21 @@ async def process_case_documents(
     skipped_documents: Optional[List[SkippedDocument]] = None,
     analysis_id: Optional[str] = None,
     supabase_client: Optional[Any] = None,
+    checkpoint: Optional[Dict[str, Any]] = None,
+    checkpoint_callback: Optional[Callable] = None,
 ) -> ProcessingResult:
-    """Decoupled document processing workflow using already extracted text."""
+    """Decoupled document processing workflow using already extracted text.
+
+    Args:
+        checkpoint: Previously saved checkpoint dict from analysis_jobs.
+            Used to skip already-completed stages on retry.
+        checkpoint_callback: async callable(stage, data) that persists
+            checkpoint data after each stage completes.
+    """
     start_time = time.time()
     errors = []
     case_id = case_info.get("case_id", "unknown")
+    checkpoint = checkpoint or {}
 
     # Initialize Chunk State Manager for per-document status tracking
     chunk_state_mgr = None
@@ -718,8 +728,67 @@ async def process_case_documents(
             except Exception as e:
                 logger.warning(f"Failed to generate statute recommendations: {e}", exc_info=True)
 
+        # ================================================================
+        # CHECKPOINT: Summarization Recovery
+        # ================================================================
+        # On retry, if summarization previously completed and the document
+        # set hasn't changed, recover summaries from chunk_state instead
+        # of re-running LLM calls.
+        summarization_recovered = False
         structured_summaries: List[DocumentSummaryStructured] = []
-        if all_processed_docs:
+
+        if (
+            checkpoint.get("summarization", {}).get("completed")
+            and chunk_state_mgr
+            and all_processed_docs
+        ):
+            # Validate doc_ids_hash to ensure the document set hasn't changed
+            doc_ids = sorted(
+                getattr(d, "document_id", "") or f"local_{i}"
+                for i, d in enumerate(all_processed_docs)
+            )
+            current_hash = hashlib.sha256(
+                "|".join(doc_ids).encode()
+            ).hexdigest()[:16]
+            saved_hash = checkpoint["summarization"].get("doc_ids_hash")
+
+            if current_hash == saved_hash:
+                recovered = await chunk_state_mgr.try_recover_summaries()
+                if recovered:
+                    # Validate: deserialize each summary to ensure usable shape
+                    valid_summaries = []
+                    for raw in recovered:
+                        try:
+                            s = DocumentSummaryStructured(**raw)
+                            valid_summaries.append(s)
+                        except Exception:
+                            pass  # Skip malformed entries
+
+                    expected = checkpoint["summarization"].get("summary_count", 0)
+                    if valid_summaries and len(valid_summaries) >= expected * 0.8:
+                        structured_summaries = valid_summaries
+                        summarization_recovered = True
+                        logger.info(
+                            f"[CHECKPOINT:RESUME] Recovered {len(valid_summaries)} summaries "
+                            f"from chunk_state (expected ~{expected})"
+                        )
+                    else:
+                        logger.warning(
+                            f"[CHECKPOINT:INVALIDATE] Summary count mismatch: "
+                            f"recovered={len(valid_summaries)} expected={expected} — re-running"
+                        )
+                else:
+                    logger.warning(
+                        "[CHECKPOINT:INVALIDATE] chunk_state recovery returned None — re-running"
+                    )
+            else:
+                logger.warning(
+                    f"[CHECKPOINT:INVALIDATE] doc_ids_hash mismatch: "
+                    f"current={current_hash} saved={saved_hash} — re-running"
+                )
+                checkpoint = {}  # Invalidate entire checkpoint
+
+        if not summarization_recovered and all_processed_docs:
             if progress_callback:
                 await progress_callback(
                     "Analyzing extracted content...",
@@ -858,6 +927,21 @@ async def process_case_documents(
                     stage={"id": "doc_analysis", "name": "Analyzing Documents", "status": "skipped", "progress": 100}
                 )
 
+        # Checkpoint: save summarization completion marker
+        if checkpoint_callback and structured_summaries and not summarization_recovered:
+            doc_ids = sorted(
+                getattr(d, "document_id", "") or f"local_{i}"
+                for i, d in enumerate(all_processed_docs)
+            )
+            doc_ids_hash = hashlib.sha256(
+                "|".join(doc_ids).encode()
+            ).hexdigest()[:16]
+            await checkpoint_callback("summarization", {
+                "completed": True,
+                "doc_ids_hash": doc_ids_hash,
+                "summary_count": len(structured_summaries),
+            })
+
         # Stage 3: Log Per-Document Summaries
         if diag_logger:
             diag_logger.log_stage("stage3_document_summaries", [s.model_dump() for s in structured_summaries])
@@ -985,43 +1069,63 @@ async def process_case_documents(
         # ========================================================================
         # CASE SYNTHESIS STAGE (25-40%)
         # ========================================================================
-        if progress_callback:
-            await progress_callback(
-                "Synthesizing case analysis...",
-                [],
-                "case_synthesis",
-                25,
-                stage={"id": "fact_extraction", "name": "Extracting Key Facts", "status": "active", "progress": 0}
-            )
+        synthesis_recovered = False
+        if checkpoint.get("synthesis"):
+            try:
+                case_analysis_dict = checkpoint["synthesis"]
+                # Validate required keys are present
+                if isinstance(case_analysis_dict, dict) and case_analysis_dict.get("practice_area"):
+                    synthesis_recovered = True
+                    logger.info(
+                        f"[CHECKPOINT:RESUME] Skipping case synthesis — "
+                        f"recovered from checkpoint (practice_area={case_analysis_dict.get('practice_area')})"
+                    )
+                else:
+                    logger.warning(
+                        "[CHECKPOINT:DESER_FAIL] synthesis checkpoint missing required keys — re-running"
+                    )
+            except Exception as e:
+                logger.warning(f"[CHECKPOINT:DESER_FAIL] synthesis recovery failed: {e} — re-running")
 
-        # 5.5. AI Call #2.5: Generate case-level analysis summary (with heartbeats)
-        logger.info("AI Call #2.5: Generating case-level analysis summary...")
-        try:
-            # Use heartbeat wrapper to prevent SSE timeout during long GPT call
-            case_analysis_dict = await _run_with_heartbeat(
-                _generate_case_analysis_summary,
-                progress_callback,
-                "case_synthesis",
-                25,
-                10.0,
-                intake_content,
-                structured_summaries,
-                openai_client_wrapper,
-                review_data,
-                jurisdiction=jurisdiction,
-            )
-            logger.info("Case-level analysis summary generated successfully")
-        except Exception as e:
-            logger.error(f"Case synthesis failed: {e}", exc_info=True)
+        if not synthesis_recovered:
             if progress_callback:
                 await progress_callback(
-                    f"Error in case synthesis: {str(e)[:100]}",
+                    "Synthesizing case analysis...",
                     [],
-                    "error",
+                    "case_synthesis",
                     25,
-                    stage={"id": "fact_extraction", "name": "Extracting Key Facts", "status": "failed", "progress": 0}
+                    stage={"id": "fact_extraction", "name": "Extracting Key Facts", "status": "active", "progress": 0}
                 )
-            raise  # Re-raise to fail the analysis properly
+
+            logger.info("AI Call #2.5: Generating case-level analysis summary...")
+            try:
+                case_analysis_dict = await _run_with_heartbeat(
+                    _generate_case_analysis_summary,
+                    progress_callback,
+                    "case_synthesis",
+                    25,
+                    10.0,
+                    intake_content,
+                    structured_summaries,
+                    openai_client_wrapper,
+                    review_data,
+                    jurisdiction=jurisdiction,
+                )
+                logger.info("Case-level analysis summary generated successfully")
+
+                if checkpoint_callback:
+                    await checkpoint_callback("synthesis", case_analysis_dict)
+            except Exception as e:
+                logger.error(f"Case synthesis failed: {e}", exc_info=True)
+                if progress_callback:
+                    await progress_callback(
+                        f"Error in case synthesis: {str(e)[:100]}",
+                        [],
+                        "error",
+                        25,
+                        stage={"id": "fact_extraction", "name": "Extracting Key Facts", "status": "failed", "progress": 0}
+                    )
+                raise  # Re-raise to fail the analysis properly
 
         if progress_callback:
             await progress_callback(
@@ -1253,6 +1357,8 @@ async def process_case_documents(
                 diag_logger=diag_logger,
                 signature_evidence=signature_evidence,
                 document_registry=document_registry_seed,
+                checkpoint=checkpoint,
+                checkpoint_callback=checkpoint_callback,
             )
             multi_stage_duration = time.time() - multi_stage_start
 

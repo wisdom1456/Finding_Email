@@ -641,7 +641,7 @@ def _download_and_extract_documents(
 
 
 
-async def process_case_background(case_id: str, analysis_id: str, supabase, provider: str = "openai", *, progress_manager: "ProgressManager" = None, durable_mode: bool = False):
+async def process_case_background(case_id: str, analysis_id: str, supabase, provider: str = "openai", *, progress_manager: "ProgressManager" = None, durable_mode: bool = False, checkpoint: dict | None = None, checkpoint_callback=None):
     """Background task to process case documents.
 
     Args:
@@ -1207,6 +1207,8 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
             skipped_documents=skipped_documents,
             analysis_id=analysis_id,
             supabase_client=supabase,
+            checkpoint=checkpoint,
+            checkpoint_callback=checkpoint_callback,
         )
         processor_duration = time.time() - processor_start
         elapsed = time.time() - bg_start_time

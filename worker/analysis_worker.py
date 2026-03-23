@@ -177,6 +177,59 @@ class AnalysisWorker:
 
             pm = DBProgressManager(self.supabase, job_id)
 
+            # --- Checkpoint callback (monotonic stage writes) ---
+            # Stage ordering ensures last_completed_stage never moves backward,
+            # even if a stale/delayed callback fires out of order.
+            _STAGE_RANK = {
+                "summarization": 1,
+                "synthesis": 2,
+                "fact_matrix": 3,
+                "issue_map": 4,
+                "deep_analysis": 5,
+            }
+
+            async def _save_checkpoint(stage: str, data: dict) -> None:
+                """Persist checkpoint after a stage completes.
+
+                Writes are monotonic: last_completed_stage only advances forward.
+                Best-effort — failure is logged but does not block the pipeline.
+                """
+                try:
+                    current = self.supabase.table("analysis_jobs").select(
+                        "checkpoint"
+                    ).eq("id", job_id).single().execute()
+                    cp = (current.data or {}).get("checkpoint") or {}
+
+                    # Monotonic guard: never let last_completed_stage go backward
+                    current_rank = _STAGE_RANK.get(cp.get("last_completed_stage", ""), 0)
+                    new_rank = _STAGE_RANK.get(stage, 0)
+                    if new_rank < current_rank:
+                        logger.warning(
+                            f"[JOB:{job_id[:8]}] [CHECKPOINT:SKIP] "
+                            f"stage={stage} (rank={new_rank}) < current "
+                            f"{cp.get('last_completed_stage')} (rank={current_rank}) — skipping"
+                        )
+                        return
+
+                    cp[stage] = data
+                    cp["last_completed_stage"] = stage
+                    self.supabase.table("analysis_jobs").update({
+                        "checkpoint": cp,
+                    }).eq("id", job_id).execute()
+                    logger.info(f"[JOB:{job_id[:8]}] [CHECKPOINT:SAVE] stage={stage}")
+                except Exception as e:
+                    logger.warning(
+                        f"[JOB:{job_id[:8]}] [CHECKPOINT:SAVE] "
+                        f"Failed to write checkpoint for {stage}: {e}"
+                    )
+
+            existing_checkpoint = job.get("checkpoint") or {}
+            if existing_checkpoint.get("last_completed_stage"):
+                logger.info(
+                    f"[JOB:{job_id[:8]}] Resuming with checkpoint | "
+                    f"last_completed_stage={existing_checkpoint['last_completed_stage']}"
+                )
+
             logger.info(f"[JOB:{job_id[:8]}] Starting pipeline | case={case_id[:8]}")
 
             # Run pipeline in durable mode — returns ProcessingResult,
@@ -188,6 +241,8 @@ class AnalysisWorker:
                 provider=job.get("provider", "openai"),
                 progress_manager=pm,
                 durable_mode=True,
+                checkpoint=existing_checkpoint,
+                checkpoint_callback=_save_checkpoint,
             )
 
             elapsed = time.time() - job_start
@@ -275,6 +330,16 @@ class AnalysisWorker:
             self.supabase.table("cases").update({
                 "status": "completed",
             }).eq("id", case_id).execute()
+
+            # 5. Clear checkpoint — only after result persistence succeeded.
+            #    This prevents stale checkpoint data from being read if the
+            #    same case is re-analyzed later.
+            try:
+                self.supabase.table("analysis_jobs").update({
+                    "checkpoint": {},
+                }).eq("id", job_id).execute()
+            except Exception as e:
+                logger.warning(f"[JOB:{job_id[:8]}] Failed to clear checkpoint: {e}")
 
             logger.info(f"[JOB:{job_id[:8]}] Completed | duration={elapsed:.0f}s")
 

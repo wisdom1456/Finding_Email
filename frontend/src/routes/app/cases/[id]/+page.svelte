@@ -231,7 +231,9 @@
 		applyViewFromUrl();
 		await loadCase();
 		await Promise.all([loadDocuments(), loadAnalysisStatus(), loadSettings(), loadFeatureFlags()]);
-		if (analysisStatus?.status === 'completed' && showingEmbeddedResults) {
+		if (analysisStatus?.status === 'completed') {
+			// Auto-show results when a completed analysis exists on the analysis tab
+			showingEmbeddedResults = true;
 			await loadEmbeddedResults(true);
 		}
 		// Auto-mount progress for in-flight analyses (backend-only mode)

@@ -79,9 +79,12 @@ EXPECTED_STAGES = [
 # Terminal classifications that resume skips
 TERMINAL_CLASSIFICATIONS = {
     "FULL_PASS", "PASS_WITH_LIMITATIONS", "DATA_QUALITY_COMPLETENESS_FAILURE",
-    "INFRASTRUCTURE_FAILURE", "PROVIDER_TRANSIENT_FAILURE", "REGRESSION",
+    "REGRESSION",
     "SKIPPED_ACTIVE_JOB", "SKIPPED_NO_READY_DOCS", "CASE_NOT_FOUND",
 }
+# Note: INFRASTRUCTURE_FAILURE and PROVIDER_TRANSIENT_FAILURE are NOT terminal
+# so --resume will retry them (they may be caused by transient script issues
+# like token expiry, not pipeline bugs).
 
 POLL_INTERVAL = 15  # seconds between job status polls
 MAX_POLL_DURATION = 2400  # 40 minutes max per case

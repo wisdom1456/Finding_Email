@@ -779,22 +779,29 @@ async def process_case_documents(
                 doc_summary = await chunk_state_mgr.get_document_summary()
                 failed_docs = await chunk_state_mgr.get_failed_documents()
 
-                # Separate hard failures from soft (name-mismatch) failures
+                # Separate hard failures from soft (non-blocking) failures.
+                # Non-blocking: MISSING_SUMMARY (LLM name-mismatch) and
+                # CONTENT_FILTER (provider safety filter blocked summarization).
+                SOFT_ERROR_TYPES = {"MISSING_SUMMARY", "CONTENT_FILTER"}
                 hard_failures = [
                     d for d in failed_docs
-                    if d.get("error_type") != "MISSING_SUMMARY"
+                    if d.get("error_type") not in SOFT_ERROR_TYPES
                 ]
                 soft_failures = [
                     d for d in failed_docs
-                    if d.get("error_type") == "MISSING_SUMMARY"
+                    if d.get("error_type") in SOFT_ERROR_TYPES
                 ]
 
                 if soft_failures:
-                    logger.warning(
-                        f"[SYNTHESIS_GATE] {len(soft_failures)} docs have MISSING_SUMMARY "
-                        f"(LLM name-mismatch) — treating as non-blocking: "
-                        + ", ".join(d.get("name", "?") for d in soft_failures)
-                    )
+                    soft_by_type = {}
+                    for sf in soft_failures:
+                        et = sf.get("error_type", "?")
+                        soft_by_type.setdefault(et, []).append(sf.get("name", "?"))
+                    for et, names in soft_by_type.items():
+                        logger.warning(
+                            f"[SYNTHESIS_GATE] {len(names)} docs have {et} "
+                            f"— treating as non-blocking: {', '.join(names)}"
+                        )
                     # Auto-skip soft failures so they don't block future checks
                     soft_ids = [d.get("id") for d in soft_failures if d.get("id")]
                     if soft_ids:
@@ -802,13 +809,24 @@ async def process_case_documents(
                     # Surface in result metadata so callers can see what was skipped
                     if skipped_documents is not None:
                         for sf in soft_failures:
+                            et = sf.get("error_type", "MISSING_SUMMARY")
+                            if et == "CONTENT_FILTER":
+                                reason = f"Auto-skipped: provider content filter blocked summarization of '{sf.get('name', '?')}'"
+                                recommendation = (
+                                    "This document triggered OpenAI's content safety filter during summarization. "
+                                    "The document content was not included in the analysis. "
+                                    "Manual review of this document is recommended."
+                                )
+                            else:
+                                reason = f"Auto-skipped: {sf.get('error', 'LLM name-mismatch')}"
+                                recommendation = "Summary name did not match file name; document content was still available to synthesis."
                             skipped_documents.append(
                                 SkippedDocument(
                                     document_id=sf.get("id", "unknown"),
                                     file_name=sf.get("name", "unknown"),
-                                    reason=f"Auto-skipped: {sf.get('error', 'LLM name-mismatch')}",
-                                    error_type="MISSING_SUMMARY",
-                                    recommendation="Summary name did not match file name; document content was still available to synthesis.",
+                                    reason=reason,
+                                    error_type=et,
+                                    recommendation=recommendation,
                                 )
                             )
 
@@ -2045,6 +2063,16 @@ Return ONLY valid JSON, no markdown code blocks.
                     batch_doc_names = [getattr(d, "file_name", "unknown") for d in batch]
                     matched = match_summaries_to_docs(batch_result, batch_doc_names)
 
+                    # Build set of doc names that hit content filter (from singleton retry errors)
+                    content_filtered_docs = set()
+                    for be in (batch_errors or []):
+                        if hasattr(be, "error_type") and be.error_type == "CONTENT_FILTER":
+                            # Extract doc name from error message
+                            msg = be.error_message or ""
+                            if "Document '" in msg:
+                                filtered_name = msg.split("Document '")[1].split("'")[0]
+                                content_filtered_docs.add(filtered_name)
+
                     missing_docs: List[str] = []
                     for doc, matching_summary in zip(batch, matched):
                         doc_id = tracking_doc_id(doc)
@@ -2063,6 +2091,14 @@ Return ONLY valid JSON, no markdown code blocks.
                                 )
                                 await chunk_state_mgr.update_document_status(doc_id, "completed", summary=summary_data)
                                 completed_doc_count += 1
+                            elif doc_name in content_filtered_docs:
+                                await chunk_state_mgr.update_document_status(
+                                    doc_id,
+                                    "failed",
+                                    error=f"Provider content filter blocked summarization of '{doc_name}'",
+                                    error_type="CONTENT_FILTER",
+                                )
+                                missing_docs.append(doc_name)
                             else:
                                 await chunk_state_mgr.update_document_status(
                                     doc_id,
@@ -2289,6 +2325,25 @@ async def _process_document_batch(
             f"TAIL: {tail_preview}"
         )
 
+        # --- Content filter: retry as singleton docs to isolate offender ---
+        if finish_reason == "content_filter" and len(batch_documents) > 1:
+            logger.warning(
+                f"[BATCH_CONTENT_FILTER] batch={batch_num} hit content_filter with "
+                f"{len(batch_documents)} docs — retrying as singletons to isolate"
+            )
+            return await _retry_batch_as_singletons(
+                batch_documents=batch_documents,
+                intake_content=intake_content,
+                batch_num=batch_num,
+                total_batches=total_batches,
+                openai_client_wrapper=openai_client_wrapper,
+                json_processing_service=json_processing_service,
+                review_data=review_data,
+                errors=errors,
+                statute_context=statute_context,
+                jurisdiction=jurisdiction,
+            )
+
         # --- Truncation retry: finish_reason == "length" ---
         if finish_reason == "length":
             elevated_tokens = json_processing_service.TRUNCATION_RETRY_MAX_TOKENS
@@ -2321,7 +2376,11 @@ async def _process_document_batch(
                 )
 
         if not parsed_data:
-            error_type = "TRUNCATION_PARSE_ERROR" if finish_reason == "length" else "PARSE_ERROR"
+            error_type = (
+                "CONTENT_FILTER" if finish_reason == "content_filter"
+                else "TRUNCATION_PARSE_ERROR" if finish_reason == "length"
+                else "PARSE_ERROR"
+            )
             errors.append(
                 ProcessingError(
                     source=f"batch_{batch_num}",
@@ -2367,6 +2426,87 @@ async def _process_document_batch(
     except Exception as e:
         logger.error(f"❌ Batch {batch_num} validation failed: {e}")
         return [], errors
+
+
+async def _retry_batch_as_singletons(
+    batch_documents: List[Any],
+    intake_content: str,
+    batch_num: int,
+    total_batches: int,
+    openai_client_wrapper: OpenAIClient,
+    json_processing_service: JsonProcessingService,
+    review_data: dict,
+    errors: List[ProcessingError],
+    statute_context: str = "",
+    jurisdiction: str = "Florida",
+) -> Tuple[List[Dict[str, Any]], List[ProcessingError]]:
+    """Retry a content-filtered batch by processing each doc individually.
+
+    When a multi-doc batch hits content_filter, we isolate each doc to find
+    which one triggers the filter. Docs that pass are returned as summaries;
+    docs that trigger the filter are recorded with CONTENT_FILTER error type.
+    """
+    all_summaries = []
+    for i, doc in enumerate(batch_documents):
+        doc_name = getattr(doc, "file_name", f"doc_{i}")
+        logger.info(
+            f"[SINGLETON_RETRY] batch={batch_num} doc={i+1}/{len(batch_documents)} "
+            f"name={doc_name}"
+        )
+
+        singleton_prompt = _build_summary_prompt(
+            intake_content,
+            [doc],
+            review_data,
+            is_batch=True,
+            batch_info=(batch_num, total_batches),
+            statute_context=statute_context,
+            jurisdiction=jurisdiction,
+        )
+
+        response_json, doc_errors, meta = await json_processing_service.process_documents_to_json(
+            singleton_prompt,
+        )
+        finish_reason = meta.get("finish_reason")
+        resp_chars = len(response_json or "")
+
+        parsed = None
+        if response_json:
+            parsed = _clean_and_parse_json(response_json, batch_num)
+
+        if parsed:
+            from legal_portal.core.data_models import DocumentSummaryStructured
+            for doc_data in parsed.get("documents", []):
+                try:
+                    summary = DocumentSummaryStructured(**doc_data)
+                    all_summaries.append(summary)
+                except Exception as e:
+                    logger.warning(f"[SINGLETON_RETRY] Validation failed for {doc_name}: {e}")
+            logger.info(
+                f"[SINGLETON_RETRY_OK] {doc_name} finish_reason={finish_reason} "
+                f"response_chars={resp_chars}"
+            )
+        else:
+            error_type = "CONTENT_FILTER" if finish_reason == "content_filter" else "SINGLETON_PARSE_ERROR"
+            logger.warning(
+                f"[SINGLETON_RETRY_FAIL] {doc_name} finish_reason={finish_reason} "
+                f"response_chars={resp_chars} error_type={error_type}"
+            )
+            errors.append(ProcessingError(
+                source=f"batch_{batch_num}_singleton",
+                error_type=error_type,
+                error_message=(
+                    f"Document '{doc_name}' failed singleton summarization. "
+                    f"finish_reason={finish_reason} response_chars={resp_chars}"
+                ),
+            ))
+            errors.extend(doc_errors)
+
+    logger.info(
+        f"[SINGLETON_RETRY_DONE] batch={batch_num} "
+        f"succeeded={len(all_summaries)}/{len(batch_documents)} docs"
+    )
+    return all_summaries, errors
 
 
 def _clean_and_parse_json(json_string: str, batch_num: int = None) -> Optional[Dict[str, Any]]:

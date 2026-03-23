@@ -1047,8 +1047,7 @@ class JsonProcessingService:
 
         if include_raw_documents and len(prompt) > self._MAX_FINDINGS_PROMPT_CHARS:
             logger.warning(
-                "Findings prompt exceeds size guardrail (%s chars); retrying without raw document text",
-                len(prompt),
+                f"Findings prompt exceeds size guardrail ({len(prompt)} chars); retrying without raw document text"
             )
             structured_context = self._format_multi_stage_context(
                 fact_matrix,
@@ -1646,8 +1645,7 @@ class JsonProcessingService:
                     )
                 else:
                     logger.warning(
-                        "Formatting polish reverted due to fact integrity drift: %s",
-                        integrity_report,
+                        f"Formatting polish reverted due to fact integrity drift: {integrity_report}"
                     )
             else:
                 logger.warning(

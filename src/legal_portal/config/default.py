@@ -326,6 +326,18 @@ class Settings(BaseSettings):
     )
 
     # ==================================================
+    # DOCUMENT TRIAGE CONFIGURATION
+    # ==================================================
+
+    enable_document_triage: bool = Field(
+        True,
+        alias="ENABLE_DOCUMENT_TRIAGE",
+        description="Enable pre-summarization document triage. When true, documents are classified "
+                    "into processing tiers (full/light/metadata-only/skip) based on metadata. "
+                    "When false, all documents get full summarization (legacy behavior).",
+    )
+
+    # ==================================================
     # DOCUMENT PROCESSING CONFIGURATION
     # ==================================================
 

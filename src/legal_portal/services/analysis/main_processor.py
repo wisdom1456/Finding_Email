@@ -26,6 +26,10 @@ from legal_portal.core.data_models import (
 from legal_portal.services.documents.chunk_service import build_document_tracking_ids
 from legal_portal.services.documents.chunk_state_manager import ChunkStateManager
 from legal_portal.services.analysis.corpus_coverage_service import CorpusCoverageService
+from legal_portal.services.analysis.document_triage import (
+    TriageTier,
+    triage_documents,
+)
 from legal_portal.services.documents.document_registry_service import DocumentRegistryService
 from legal_portal.services.documents.document_quality_validator import DocumentQualityValidator
 from legal_portal.services.shared.json_processing_service import JsonProcessingService
@@ -730,18 +734,103 @@ async def process_case_documents(
                 if (pdoc.document_id or "") not in grouped_doc_ids
             ]
 
-            structured_summaries, summary_errors = await _generate_document_summaries(
-                intake_content,
-                docs_for_summary,
-                openai_client_wrapper,
-                json_processing_service,  # Pass the instance here
-                review_data,  # Pass through
-                progress_callback,
-                statute_context,  # NEW: Pass statute context
-                jurisdiction=jurisdiction,  # NEW: Pass jurisdiction
-                chunk_state_mgr=chunk_state_mgr,  # NEW: For per-doc status tracking
+            # ---- Document Triage ----
+            # Classify documents into processing tiers before summarization.
+            # NOTE: Group detection has already run (lines above). Grouped docs
+            # (email threads, photo sequences, bank statements, contract families)
+            # are excluded from docs_for_summary via grouped_doc_ids. Triage
+            # operates on the remaining ungrouped documents.
+            triage_enabled = settings.enable_document_triage
+            triage_results = triage_documents(docs_for_summary, enable_triage=triage_enabled)
+
+            t1_docs = [tr.document for tr in triage_results[TriageTier.T1_FULL]]
+            t2_docs = [tr.document for tr in triage_results[TriageTier.T2_LIGHT]]
+            t3_docs = [tr.document for tr in triage_results[TriageTier.T3_METADATA]]
+            t4_results = triage_results[TriageTier.T4_SKIP]
+
+            t1_count = len(t1_docs)
+            t2_count = len(t2_docs)
+            t3_count = len(t3_docs)
+            t4_count = len(t4_results)
+
+            if progress_callback:
+                await progress_callback(
+                    f"Triaged {len(docs_for_summary)} docs: "
+                    f"{t1_count} full, {t2_count} light, {t3_count} metadata-only, {t4_count} skipped",
+                    [],
+                    "document_analysis",
+                    16,
+                )
+
+            summarization_start = time.time()
+
+            # T1: Full summarization (existing path)
+            t1_summaries = []
+            t1_errors = []
+            if t1_docs:
+                t1_start = time.time()
+                t1_summaries, t1_errors = await _generate_document_summaries(
+                    intake_content,
+                    t1_docs,
+                    openai_client_wrapper,
+                    json_processing_service,
+                    review_data,
+                    progress_callback,
+                    statute_context,
+                    jurisdiction=jurisdiction,
+                    chunk_state_mgr=chunk_state_mgr,
+                )
+                errors.extend(t1_errors)
+                t1_duration = time.time() - t1_start
+                logger.info(
+                    f"[TRIAGE:T1] Full summarization: {t1_count} docs → "
+                    f"{len(t1_summaries)} summaries in {t1_duration:.1f}s"
+                )
+
+            # T2: Light summarization (shorter output, larger batches)
+            t2_summaries = []
+            t2_errors = []
+            if t2_docs:
+                t2_start = time.time()
+                t2_summaries, t2_errors = await _generate_document_summaries(
+                    intake_content,
+                    t2_docs,
+                    openai_client_wrapper,
+                    json_processing_service,
+                    review_data,
+                    progress_callback,
+                    statute_context,
+                    jurisdiction=jurisdiction,
+                    chunk_state_mgr=chunk_state_mgr,
+                    light_mode=True,
+                )
+                errors.extend(t2_errors)
+                t2_duration = time.time() - t2_start
+                logger.info(
+                    f"[TRIAGE:T2] Light summarization: {t2_count} docs → "
+                    f"{len(t2_summaries)} summaries in {t2_duration:.1f}s"
+                )
+
+            # T3: Metadata-only register entries (no LLM call)
+            t3_summaries = _build_metadata_only_summaries(t3_docs)
+
+            # Mark T4 docs as skipped in chunk state and surface as skipped
+            if chunk_state_mgr:
+                for tr in t4_results:
+                    doc_id = getattr(tr.document, "document_id", None)
+                    if doc_id:
+                        await chunk_state_mgr.update_document_status(doc_id, "skipped")
+
+            # Merge all summaries
+            structured_summaries = t1_summaries + t2_summaries + t3_summaries
+
+            summarization_total = time.time() - summarization_start
+            logger.info(
+                f"[TRIAGE:TIMING] Total summarization: {summarization_total:.1f}s | "
+                f"T1={t1_count} T2={t2_count} T3={t3_count} T4={t4_count} | "
+                f"grouped={len(grouped_doc_ids)} | "
+                f"summaries_produced={len(structured_summaries)}"
             )
-            errors.extend(summary_errors)
 
             if progress_callback:
                 await progress_callback(
@@ -1852,6 +1941,7 @@ def _create_prompt_aware_batches(
     statute_context: str,
     jurisdiction: str,
     max_tokens_per_batch: int,
+    max_docs_per_batch: int = PROMPT_MAX_DOCS_PER_BATCH,
 ) -> List[List[Any]]:
     """Create batches using full prompt token estimates (includes intake + fixed instructions)."""
     if not documents:
@@ -1874,7 +1964,7 @@ def _create_prompt_aware_batches(
             bool(current_batch)
             and (
                 candidate_tokens > max_tokens_per_batch
-                or len(current_batch) >= PROMPT_MAX_DOCS_PER_BATCH
+                or len(current_batch) >= max_docs_per_batch
             )
         )
         if should_split:
@@ -1899,6 +1989,7 @@ async def _generate_document_summaries(
     statute_context: str = "",  # NEW: Pass statute recommendations
     jurisdiction: str = "Florida",  # NEW: Pass jurisdiction
     chunk_state_mgr: Optional[ChunkStateManager] = None,  # NEW: For per-doc status tracking
+    light_mode: bool = False,  # NEW: Triage T2 light summarization mode
 ) -> Tuple[List[Dict[str, Any]], List[ProcessingError]]:
     """AI Call #1: Generate structured JSON summaries of case documents.
 
@@ -1912,6 +2003,7 @@ async def _generate_document_summaries(
         progress_callback: Optional callback function for progress updates
         statute_context: Formatted statute recommendations
         jurisdiction: Jurisdiction name ("Florida" or "New Mexico")
+        light_mode: If True, use larger batches and shorter output for T2 triage docs.
 
     Returns:
     -------
@@ -1971,6 +2063,8 @@ Return ONLY valid JSON, no markdown code blocks.
         return doc_tracking_id_map.get(id(doc)) or getattr(doc, "document_id", None) or getattr(doc, "id", None) or f"doc_{getattr(doc, 'file_name', 'unknown')}"
 
     max_tokens_per_batch = get_settings().max_tokens_per_batch
+    # Light mode: allow larger batches since output per doc is shorter
+    effective_max_docs_per_batch = PROMPT_MAX_DOCS_PER_BATCH if not light_mode else 12
     batches = _create_prompt_aware_batches(
         documents=case_documents,
         intake_content=intake_content,
@@ -1978,6 +2072,7 @@ Return ONLY valid JSON, no markdown code blocks.
         statute_context=statute_context,
         jurisdiction=jurisdiction,
         max_tokens_per_batch=max_tokens_per_batch,
+        max_docs_per_batch=effective_max_docs_per_batch,
     )
     total_batches = len(batches)
     batch_token_estimates = [
@@ -1995,10 +2090,11 @@ Return ONLY valid JSON, no markdown code blocks.
 
     semaphore = asyncio.Semaphore(min(PROMPT_MAX_CONCURRENT_BATCHES, max(1, total_batches)))
 
+    mode_label = "LIGHT" if light_mode else "FULL"
     logger.info(
-        f"[BATCH-PARALLEL] Starting analysis of {total_docs} documents in "
+        f"[BATCH-PARALLEL:{mode_label}] Starting analysis of {total_docs} documents in "
         f"{total_batches} token-aware batches for {jurisdiction} "
-        f"(max_tokens_per_batch={max_tokens_per_batch})"
+        f"(max_tokens_per_batch={max_tokens_per_batch}, max_docs={effective_max_docs_per_batch})"
     )
 
     async def process_batch_with_limit(batch: List[Any], batch_idx: int):
@@ -2045,6 +2141,7 @@ Return ONLY valid JSON, no markdown code blocks.
                         [],
                         statute_context,
                         jurisdiction=jurisdiction,
+                        light_mode=light_mode,
                     ),
                     timeout=300.0,  # 5 min — increased from 180s to handle large-doc batches
                 )
@@ -2268,23 +2365,33 @@ async def _process_document_batch(
     errors: List[ProcessingError],
     statute_context: str = "",  # NEW: Pass statute context
     jurisdiction: str = "Florida",  # NEW: Pass jurisdiction
+    light_mode: bool = False,  # NEW: T2 triage light summarization
 ) -> Tuple[List[Dict[str, Any]], List[ProcessingError]]:
     """Process a single batch of documents."""
+    mode_label = "LIGHT" if light_mode else "FULL"
     logger.info(
-        f"📦 Processing batch {batch_num}/{total_batches} "
+        f"📦 Processing batch {batch_num}/{total_batches} [{mode_label}] "
         f"({len(batch_documents)} documents) for {jurisdiction}"
     )
 
-    # Build the prompt with the new context
-    prompt = _build_summary_prompt(
-        intake_content,
-        batch_documents,
-        review_data,
-        is_batch=True,
-        batch_info=(batch_num, total_batches),
-        statute_context=statute_context,
-        jurisdiction=jurisdiction,
-    )
+    # Build the prompt — light mode uses a concise prompt requesting brief summaries
+    if light_mode:
+        prompt = _build_light_summary_prompt(
+            intake_content,
+            batch_documents,
+            batch_info=(batch_num, total_batches),
+            jurisdiction=jurisdiction,
+        )
+    else:
+        prompt = _build_summary_prompt(
+            intake_content,
+            batch_documents,
+            review_data,
+            is_batch=True,
+            batch_info=(batch_num, total_batches),
+            statute_context=statute_context,
+            jurisdiction=jurisdiction,
+        )
 
     doc_names = [getattr(d, "file_name", "?") for d in batch_documents]
     prompt_chars = len(prompt)
@@ -2706,3 +2813,120 @@ CRITICAL RULES:
 - Use "Correspondence" for letters, emails, and documented correspondence regardless of file extension
 - Return ONLY valid JSON, no markdown code blocks
 """
+
+
+def _build_light_summary_prompt(
+    intake_content: str,
+    documents: List[Any],
+    batch_info: tuple = (),
+    jurisdiction: str = "Florida",
+) -> str:
+    """Build a concise prompt for T2 light summarization.
+
+    Produces the same DocumentSummaryStructured-compatible output shape but requests
+    much shorter content (1-2 sentence summaries instead of comprehensive narratives).
+    """
+    batch_num, total_batches = batch_info if batch_info else (1, 1)
+
+    return f"""You are a legal document analyst for a matter in {jurisdiction}.
+Provide a BRIEF summary of each document. Keep each summary to 1-3 sentences.
+
+INTAKE CONTEXT (for relevance):
+{intake_content[:2000]}
+
+BATCH {batch_num} of {total_batches} - DOCUMENTS TO ANALYZE:
+{_format_documents_with_metadata(documents)}
+
+OUTPUT FORMAT (STRICT JSON):
+{{
+  "documents": [
+    {{
+      "document_name": "exact_filename.ext",
+      "document_type": "Contract" | "Evidence" | "Notice" | "Correspondence" | "Other",
+      "executive_summary": "1-2 sentence overview of what this document is and why it matters",
+      "key_content": "1-2 sentences of the most important information",
+      "important_details": ["Only include if there are critical facts, dates, or amounts"],
+      "legal_significance": "1 sentence on legal relevance, or omit if unclear",
+      "relevance_to_case": "1 sentence on how this relates to the claim",
+      "extraction_quality": "high" | "medium" | "low",
+      "structured_data": {{
+        "parties": ["Only if clearly identifiable"],
+        "dates": [{{ "date": "YYYY-MM-DD", "event": "What happened" }}],
+        "amounts": [{{ "amount": "$X", "description": "What it represents" }}]
+      }}
+    }}
+  ]
+}}
+
+RULES:
+- Keep summaries SHORT. 1-3 sentences per field maximum.
+- Focus on: what the document IS, key facts (dates, amounts, parties), and legal relevance.
+- Omit empty optional fields rather than including placeholder text.
+- Return ONLY valid JSON, no markdown code blocks.
+"""
+
+
+def _build_metadata_only_summaries(documents: List[Any]) -> List[DocumentSummaryStructured]:
+    """Build T3 metadata-only register entries for documents that don't need LLM summarization.
+
+    These entries ensure the document is visible in the register, gap analysis, and
+    downstream context — without spending an LLM call.
+
+    Args:
+        documents: List of ProcessedDocument objects triaged as T3_METADATA.
+
+    Returns:
+        List of DocumentSummaryStructured entries built from metadata alone.
+    """
+    summaries = []
+    for doc in documents:
+        file_name = getattr(doc, "file_name", "unknown")
+        content = getattr(doc, "content", "") or ""
+        text_snippet = content[:500].strip() if content else ""
+
+        # Determine document type from registry or filename heuristics
+        registry = getattr(doc, "registry", None) or {}
+        doc_type = registry.get("document_type") or registry.get("document_type_label") or ""
+        if not doc_type:
+            fn_lower = file_name.lower()
+            if any(ext in fn_lower for ext in (".jpg", ".jpeg", ".png", ".gif", ".bmp")):
+                doc_type = "Evidence"
+            elif "clio note" in fn_lower:
+                doc_type = "Correspondence"
+            else:
+                doc_type = "Other"
+
+        file_type_raw = getattr(doc, "file_type", None)
+        file_type_str = file_type_raw.value if hasattr(file_type_raw, "value") else str(file_type_raw or "")
+
+        # Build a minimal but informative executive summary from metadata
+        file_size = 0
+        metadata = getattr(doc, "metadata", None)
+        if metadata and hasattr(metadata, "file_size"):
+            file_size = metadata.file_size
+        text_len = len(content)
+
+        exec_summary = f"[Metadata-only] {doc_type} document"
+        if text_snippet:
+            # Use first line or first 120 chars as a hint
+            first_line = text_snippet.split("\n")[0][:120].strip()
+            if first_line:
+                exec_summary += f": {first_line}"
+
+        summary = DocumentSummaryStructured(
+            document_id=getattr(doc, "document_id", None),
+            document_name=file_name,
+            document_type=doc_type,
+            executive_summary=exec_summary,
+            key_content=text_snippet[:300] if text_snippet else None,
+            extraction_quality=getattr(doc, "extraction_quality", "low") or "low",
+            extraction_notes=f"Triage tier: T3_METADATA. File type: {file_type_str}. "
+                           f"Text length: {text_len} chars.",
+            relevance_to_case="Document available in case file; not deeply analyzed.",
+        )
+        summaries.append(summary)
+
+    if summaries:
+        logger.info(f"[TRIAGE:T3] Built {len(summaries)} metadata-only register entries")
+
+    return summaries

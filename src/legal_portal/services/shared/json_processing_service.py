@@ -169,7 +169,7 @@ class JsonProcessingService:
         try:
             template = self._load_prompt_asset(prompt_name)
         except Exception as exc:
-            logger.warning("Critic prompt missing (%s): %s", prompt_name, exc)
+            logger.warning(f"Critic prompt missing ({prompt_name}): {exc}")
             return {"failed_sections": []}
 
         replacements = {

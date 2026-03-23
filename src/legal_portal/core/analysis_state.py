@@ -200,7 +200,7 @@ def _resolve_letter_identity_context(
         if case_resp.data:
             case_data = case_resp.data[0] or {}
     except Exception as case_err:
-        logger.warning("[LETTER] Failed to load case identity context for %s: %s", case_id, case_err)
+        logger.warning(f"[LETTER] Failed to load case identity context for {case_id}: {case_err}")
 
     case_metadata = case_data.get("metadata")
     if not isinstance(case_metadata, dict):

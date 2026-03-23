@@ -107,9 +107,9 @@ def _new_generation_metrics(
 def _emit_generation_metrics(metrics: Dict[str, Any]) -> None:
     """Emit request-level generation metrics in a single structured log line."""
     try:
-        logger.info("[LETTER_METRICS] %s", json.dumps(metrics, default=str))
+        logger.info(f"[LETTER_METRICS] {json.dumps(metrics, default=str)}")
     except Exception:
-        logger.info("[LETTER_METRICS] %s", metrics)
+        logger.info(f"[LETTER_METRICS] {metrics}")
 
 
 def _to_sse(payload: Dict[str, Any]) -> str:

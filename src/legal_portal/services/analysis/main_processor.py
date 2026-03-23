@@ -814,6 +814,13 @@ async def process_case_documents(
             # T3: Metadata-only register entries (no LLM call)
             t3_summaries = _build_metadata_only_summaries(t3_docs)
 
+            # Mark T3 docs as completed in chunk state (they have metadata summaries)
+            if chunk_state_mgr:
+                for doc in t3_docs:
+                    doc_id = getattr(doc, "document_id", None)
+                    if doc_id:
+                        await chunk_state_mgr.update_document_status(doc_id, "completed")
+
             # Mark T4 docs as skipped in chunk state and surface as skipped
             if chunk_state_mgr:
                 for tr in t4_results:

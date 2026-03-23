@@ -2335,11 +2335,19 @@ def _clean_and_parse_json(json_string: str, batch_num: int = None) -> Optional[D
 
     try:
         return json.loads(cleaned_json)
-    except json.JSONDecodeError as e:
-        log_msg = f"Batch {batch_num} JSON parsing failed" if batch_num else "JSON parsing failed"
-        logger.error(f"❌ {log_msg}: {e}")
-        logger.error(f"Raw response: {cleaned_json[:500]}...")
-        return None
+    except json.JSONDecodeError:
+        # Fix common model output issues:
+        # 1. JavaScript-style \' (invalid in JSON, should be plain ')
+        cleaned_json = cleaned_json.replace("\\'", "'")
+        try:
+            return json.loads(cleaned_json)
+        except json.JSONDecodeError:
+            pass
+
+    # All parse attempts failed
+    log_msg = f"Batch {batch_num} JSON parsing failed" if batch_num else "JSON parsing failed"
+    logger.error(f"{log_msg} | raw_response_preview: {cleaned_json[:500]}")
+    return None
 
 
 def _build_summary_prompt(

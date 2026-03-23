@@ -110,9 +110,9 @@ LETTER_ERROR_PATTERNS = [
 _token_cache: Dict[str, str] = {}
 
 
-def get_token_for_email(email: str) -> str:
+def get_token_for_email(email: str, force_refresh: bool = False) -> str:
     """Get a JWT for a specific user email via admin magic link."""
-    if email in _token_cache:
+    if email in _token_cache and not force_refresh:
         return _token_cache[email]
     resp = requests.post(
         f"{SUPABASE_URL}/auth/v1/admin/generate_link",
@@ -956,6 +956,20 @@ def run_case(
             timeout=30,
         )
 
+        if start_resp.status_code == 401:
+            # Token expired — refresh and retry once
+            print(f"  Token expired, refreshing...")
+            owner_email = get_case_owner_email(case_id)
+            if owner_email:
+                token = get_token_for_email(owner_email, force_refresh=True)
+                hdrs = api_headers(token)
+                start_resp = requests.post(
+                    f"{API_BASE}/api/analysis/start",
+                    headers=hdrs,
+                    json={"case_id": case_id, "provider": "openai"},
+                    timeout=30,
+                )
+
         if start_resp.status_code not in (200, 202):
             err = start_resp.text[:300]
             print(f"  ERROR starting analysis: {start_resp.status_code} {err}")
@@ -992,6 +1006,13 @@ def run_case(
                     headers=hdrs,
                     timeout=15,
                 )
+                if poll_resp.status_code == 401:
+                    # Token expired mid-poll — refresh
+                    owner_email = get_case_owner_email(case_id)
+                    if owner_email:
+                        token = get_token_for_email(owner_email, force_refresh=True)
+                        hdrs = api_headers(token)
+                    continue
                 if poll_resp.status_code != 200:
                     print(f"  POLL: HTTP {poll_resp.status_code}")
                     continue
@@ -1048,6 +1069,11 @@ def run_case(
         result_record["provider_signals"] = provider_sigs
 
         # --- Step 4: Fetch results from persistence endpoint ---
+        # Refresh token before results/letters phase (long-running polls may have expired it)
+        owner_email = get_case_owner_email(case_id)
+        if owner_email:
+            token = get_token_for_email(owner_email, force_refresh=True)
+            hdrs = api_headers(token)
         print(f"  Fetching results from /api/analysis/results/{case_id}...")
         result_resp = requests.get(
             f"{API_BASE}/api/analysis/results/{case_id}",

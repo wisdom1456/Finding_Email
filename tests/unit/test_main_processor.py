@@ -686,7 +686,8 @@ class TestProcessDocumentBatch:
     async def test_parse_error_yields_processing_error(self):
         docs = [make_processed_doc(file_name="doc1.pdf", content="content")]
         json_service = MagicMock()
-        json_service.process_documents_to_json = AsyncMock(return_value=("not valid json", []))
+        _meta = {"model": "test", "finish_reason": "stop", "usage": {}, "response_chars": 14}
+        json_service.process_documents_to_json = AsyncMock(return_value=("not valid json", [], _meta))
 
         summaries, errors = await _process_document_batch(
             batch_documents=docs,
@@ -706,7 +707,8 @@ class TestProcessDocumentBatch:
     async def test_empty_documents_array_yields_error(self):
         docs = [make_processed_doc(file_name="doc1.pdf", content="content")]
         json_service = MagicMock()
-        json_service.process_documents_to_json = AsyncMock(return_value=('{"documents": []}', []))
+        _meta = {"model": "test", "finish_reason": "stop", "usage": {}, "response_chars": 20}
+        json_service.process_documents_to_json = AsyncMock(return_value=('{"documents": []}', [], _meta))
 
         summaries, errors = await _process_document_batch(
             batch_documents=docs,

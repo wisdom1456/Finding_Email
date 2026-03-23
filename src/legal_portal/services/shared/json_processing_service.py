@@ -228,22 +228,21 @@ class JsonProcessingService:
 
     # Default fallback model for summarization escalation
     SUMMARIZATION_FALLBACK_MODEL = "gpt-5.4"
+    # Elevated token limit for truncation retries
+    TRUNCATION_RETRY_MAX_TOKENS = 24000
 
-    async def process_documents_to_json(self, prompt: str) -> Tuple[Optional[str], List[ProcessingError]]:
+    async def process_documents_to_json(
+        self, prompt: str,
+    ) -> Tuple[Optional[str], List[ProcessingError], Dict[str, Any]]:
         """Process a prompt to get a JSON response from OpenAI asynchronously.
 
-        If the preferred model returns an empty/null response, retries once
-        with gpt-5.4 (model escalation). This handles cases where gpt-5-mini
-        silently fails on certain prompts.
-
-        Args:
-        ----
-            prompt: The prompt to send to the OpenAI API.
+        Handles two failure modes:
+        1. Empty/null response → escalate to fallback model
+        2. Exception → escalate to fallback model
 
         Returns:
-        -------
-            A tuple containing the JSON response string and a list of any processing errors.
-
+            (content_string, errors, metadata) where metadata contains
+            finish_reason, model, usage, response_chars for diagnostics.
         """
         preferred_model = self.client.get_preferred_model("document_analysis", "gpt-5.4")
         fallback_model = self.SUMMARIZATION_FALLBACK_MODEL
@@ -253,83 +252,95 @@ class JsonProcessingService:
             "You are a precise legal document analyst. "
             "Return valid JSON only with no markdown, code fences, or explanatory text."
         )
+        empty_meta: Dict[str, Any] = {
+            "model": preferred_model, "finish_reason": None,
+            "usage": None, "response_chars": 0,
+        }
 
         # --- Attempt 1: preferred model ---
-        try:
-            response_content = await asyncio.to_thread(
-                self._make_openai_request_responses_api,
-                prompt=prompt,
-                model=preferred_model,
-                reasoning_effort="low",
-                verbosity="low",
-                max_output_tokens=max_output_tokens,
-                instructions=instructions,
-            )
+        response = await self._try_summarization_call(
+            prompt, preferred_model, max_output_tokens, instructions,
+        )
 
-            if response_content:
-                return response_content, []
+        if response:
+            content = response.get("content")
+            finish = response.get("finish_reason")
+            meta = {
+                "model": response.get("model", preferred_model),
+                "finish_reason": finish,
+                "usage": response.get("usage"),
+                "response_chars": len(content) if content else 0,
+            }
+            if content:
+                return content, [], meta
 
-            # Empty/null response from preferred model
+            # Empty/null content
             logger.warning(
-                f"[SUMMARIZATION:EMPTY] model={preferred_model} returned empty/null | "
-                f"prompt_chars={prompt_chars}"
+                f"[SUMMARIZATION:EMPTY] model={preferred_model} finish_reason={finish} | "
+                f"prompt_chars={prompt_chars} usage={response.get('usage')}"
             )
 
-        except Exception as e:
-            logger.error(
-                f"[SUMMARIZATION:EXCEPTION] model={preferred_model} raised {type(e).__name__} | "
-                f"prompt_chars={prompt_chars} error={str(e)[:300]}"
-            )
-            # Fall through to escalation if possible
-
-        # --- Attempt 2: escalate to fallback model (only if different) ---
+        # --- Attempt 2: if preferred != fallback, escalate model ---
         if preferred_model != fallback_model:
             logger.warning(
                 f"[SUMMARIZATION:ESCALATION] Retrying with {fallback_model} "
                 f"(preferred {preferred_model} failed) | prompt_chars={prompt_chars}"
             )
-            try:
-                response_content = await asyncio.to_thread(
-                    self._make_openai_request_responses_api,
-                    prompt=prompt,
-                    model=fallback_model,
-                    reasoning_effort="low",
-                    verbosity="low",
-                    max_output_tokens=max_output_tokens,
-                    instructions=instructions,
-                )
-
-                if response_content:
+            response = await self._try_summarization_call(
+                prompt, fallback_model, max_output_tokens, instructions,
+            )
+            if response:
+                content = response.get("content")
+                meta = {
+                    "model": response.get("model", fallback_model),
+                    "finish_reason": response.get("finish_reason"),
+                    "usage": response.get("usage"),
+                    "response_chars": len(content) if content else 0,
+                }
+                if content:
                     logger.info(
                         f"[SUMMARIZATION:ESCALATION_OK] {fallback_model} succeeded "
                         f"after {preferred_model} failed | prompt_chars={prompt_chars}"
                     )
-                    return response_content, []
+                    return content, [], meta
 
-                # Escalation also returned empty
-                logger.error(
-                    f"[SUMMARIZATION:ESCALATION_EMPTY] {fallback_model} also returned empty | "
-                    f"prompt_chars={prompt_chars}"
-                )
-
-            except Exception as e2:
-                logger.error(
-                    f"[SUMMARIZATION:ESCALATION_FAILED] {fallback_model} raised "
-                    f"{type(e2).__name__} | prompt_chars={prompt_chars} error={str(e2)[:300]}"
-                )
-
-        # Both models failed
+        # All attempts failed
         error_message = (
-            f"OpenAI returned an empty or null response. "
-            f"model={preferred_model}, escalation={'attempted' if preferred_model != fallback_model else 'N/A (same model)'}"
+            f"Summarization failed. model={preferred_model} "
+            f"prompt_chars={prompt_chars} "
+            f"escalation={'attempted' if preferred_model != fallback_model else 'N/A'}"
         )
         logger.error(f"[SUMMARIZATION:FAILED] {error_message}")
-        error = ProcessingError(
+        return None, [ProcessingError(
             source="JsonProcessingService",
             error_type="APIError",
             error_message=error_message,
-        )
-        return None, [error]
+        )], empty_meta
+
+    async def _try_summarization_call(
+        self,
+        prompt: str,
+        model: str,
+        max_output_tokens: int,
+        instructions: str,
+    ) -> Optional[Dict[str, Any]]:
+        """Single summarization API call. Returns full response dict or None on exception."""
+        try:
+            return await asyncio.to_thread(
+                self._make_openai_request_responses_api,
+                prompt=prompt,
+                model=model,
+                reasoning_effort="low",
+                verbosity="low",
+                max_output_tokens=max_output_tokens,
+                instructions=instructions,
+            )
+        except Exception as e:
+            logger.error(
+                f"[SUMMARIZATION:EXCEPTION] model={model} {type(e).__name__} | "
+                f"prompt_chars={len(prompt)} error={str(e)[:300]}"
+            )
+            return None
 
     JURISDICTION_CONFIG = {
         "Florida": {
@@ -2286,11 +2297,11 @@ class JsonProcessingService:
         verbosity: Optional[str] = "high",
         max_output_tokens: int = 12000,
         instructions: str = None,
-    ) -> Optional[str]:
+    ) -> Dict[str, Any]:
         """Make OpenAI API request using Chat Completions API.
 
-        Exceptions are re-raised (not swallowed) so tenacity @retry can
-        actually retry on transient API errors.
+        Returns the full response payload: {content, finish_reason, usage, model}.
+        Exceptions propagate so tenacity @retry can retry on transient API errors.
         """
         if instructions is None:
             instructions = "You are a helpful assistant designed to output JSON."
@@ -2311,4 +2322,4 @@ class JsonProcessingService:
             verbosity=verbosity,
             max_output_tokens=max_output_tokens,
         )
-        return response_dict.get("content")
+        return response_dict

@@ -1927,7 +1927,7 @@ OUTPUT FORMAT (STRICT JSON):
 
 Return ONLY valid JSON, no markdown code blocks.
 """
-        response_json, batch_errors = await json_processing_service.process_documents_to_json(prompt)
+        response_json, batch_errors, _meta = await json_processing_service.process_documents_to_json(prompt)
         errors.extend(batch_errors)
         parsed_data = _clean_and_parse_json(response_json) if response_json else None
         if not parsed_data:
@@ -2250,35 +2250,91 @@ async def _process_document_batch(
         jurisdiction=jurisdiction,
     )
 
-    response_json, batch_errors = await json_processing_service.process_documents_to_json(prompt)
+    doc_names = [getattr(d, "file_name", "?") for d in batch_documents]
+    prompt_chars = len(prompt)
+
+    response_json, batch_errors, meta = await json_processing_service.process_documents_to_json(prompt)
     errors.extend(batch_errors)
+
     if not response_json:
         errors.append(
             ProcessingError(
                 source=f"batch_{batch_num}",
                 error_type="EMPTY_RESPONSE",
-                error_message=f"Model returned empty response for batch {batch_num}",
+                error_message=(
+                    f"Model returned empty response for batch {batch_num}. "
+                    f"model={meta.get('model')} finish_reason={meta.get('finish_reason')} "
+                    f"prompt_chars={prompt_chars} docs={doc_names[:3]}"
+                ),
             )
         )
         return [], errors
 
     # Clean and parse the JSON response
     parsed_data = _clean_and_parse_json(response_json, batch_num)
+
     if not parsed_data:
-        # Include a preview of the raw response so the error is diagnosable
-        # without needing Railway logs
-        raw_preview = (response_json or "")[:300].replace("\n", " ")
-        errors.append(
-            ProcessingError(
-                source=f"batch_{batch_num}",
-                error_type="PARSE_ERROR",
-                error_message=(
-                    f"Failed to parse JSON response for batch {batch_num}. "
-                    f"Response preview ({len(response_json or '')} chars): {raw_preview}"
-                ),
-            )
+        finish_reason = meta.get("finish_reason")
+        model_used = meta.get("model", "?")
+        resp_chars = len(response_json or "")
+        head_preview = (response_json or "")[:500].replace("\n", " ")
+        tail_preview = (response_json or "")[-500:].replace("\n", " ")
+
+        logger.error(
+            f"[BATCH_PARSE_FAIL] batch={batch_num}/{total_batches} "
+            f"model={model_used} finish_reason={finish_reason} "
+            f"prompt_chars={prompt_chars} response_chars={resp_chars} "
+            f"docs={doc_names} "
+            f"HEAD: {head_preview} "
+            f"TAIL: {tail_preview}"
         )
-        return [], errors
+
+        # --- Truncation retry: finish_reason == "length" ---
+        if finish_reason == "length":
+            elevated_tokens = json_processing_service.TRUNCATION_RETRY_MAX_TOKENS
+            prev_completion = (meta.get("usage") or {}).get("completion_tokens", "?")
+            logger.warning(
+                f"[BATCH_TRUNCATION_RETRY] batch={batch_num} "
+                f"retrying with max_output_tokens={elevated_tokens} "
+                f"(previous completion_tokens={prev_completion})"
+            )
+            retry_resp = await json_processing_service._try_summarization_call(
+                prompt, model_used, elevated_tokens,
+                "You are a precise legal document analyst. Return valid JSON only with no markdown, code fences, or explanatory text.",
+            )
+            if retry_resp:
+                retry_content = retry_resp.get("content")
+                retry_finish = retry_resp.get("finish_reason")
+                if retry_content:
+                    retry_parsed = _clean_and_parse_json(retry_content, batch_num)
+                    if retry_parsed:
+                        logger.info(
+                            f"[BATCH_TRUNCATION_RETRY_OK] batch={batch_num} "
+                            f"finish_reason={retry_finish} response_chars={len(retry_content)}"
+                        )
+                        parsed_data = retry_parsed
+
+            if not parsed_data:
+                logger.error(
+                    f"[BATCH_TRUNCATION_RETRY_FAILED] batch={batch_num} "
+                    f"still unparseable after elevated tokens"
+                )
+
+        if not parsed_data:
+            error_type = "TRUNCATION_PARSE_ERROR" if finish_reason == "length" else "PARSE_ERROR"
+            errors.append(
+                ProcessingError(
+                    source=f"batch_{batch_num}",
+                    error_type=error_type,
+                    error_message=(
+                        f"Failed to parse batch {batch_num} JSON. "
+                        f"model={model_used} finish_reason={finish_reason} "
+                        f"prompt_chars={prompt_chars} response_chars={resp_chars} "
+                        f"docs={doc_names[:3]}"
+                    ),
+                )
+            )
+            return [], errors
 
     from legal_portal.core.data_models import DocumentSummaryStructured
 
@@ -2333,16 +2389,18 @@ def _clean_and_parse_json(json_string: str, batch_num: int = None) -> Optional[D
     # Remove markdown code blocks
     cleaned_json = re.sub(r"```json\s*|\s*```", "", json_string.strip())
 
+    # Attempt 1: direct parse
     try:
         return json.loads(cleaned_json)
     except json.JSONDecodeError:
-        # Fix common model output issues:
-        # 1. JavaScript-style \' (invalid in JSON, should be plain ')
-        cleaned_json = cleaned_json.replace("\\'", "'")
-        try:
-            return json.loads(cleaned_json)
-        except json.JSONDecodeError:
-            pass
+        pass
+
+    # Attempt 2: fix JavaScript-style \' (invalid in JSON, should be plain ')
+    fixed = cleaned_json.replace("\\'", "'")
+    try:
+        return json.loads(fixed)
+    except json.JSONDecodeError:
+        pass
 
     # All parse attempts failed
     log_msg = f"Batch {batch_num} JSON parsing failed" if batch_num else "JSON parsing failed"

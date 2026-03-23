@@ -327,7 +327,7 @@ class JsonProcessingService:
         """Single summarization API call. Returns full response dict or None on exception."""
         try:
             return await asyncio.to_thread(
-                self._make_openai_request_responses_api,
+                self._make_openai_request_responses_api_full,
                 prompt=prompt,
                 model=model,
                 reasoning_effort="low",
@@ -2297,11 +2297,11 @@ class JsonProcessingService:
         verbosity: Optional[str] = "high",
         max_output_tokens: int = 12000,
         instructions: str = None,
-    ) -> Dict[str, Any]:
+    ) -> Optional[str]:
         """Make OpenAI API request using Chat Completions API.
 
-        Returns the full response payload: {content, finish_reason, usage, model}.
-        Exceptions propagate so tenacity @retry can retry on transient API errors.
+        Returns content string (or None). Exceptions propagate so tenacity
+        @retry can retry on transient API errors.
         """
         if instructions is None:
             instructions = "You are a helpful assistant designed to output JSON."
@@ -2313,7 +2313,32 @@ class JsonProcessingService:
         )
 
         # Let exceptions propagate so @retry can retry on API errors.
-        # The caller (process_documents_to_json) handles final failure.
+        response_dict = self.client.create_response(
+            model=model,
+            input=prompt,
+            instructions=instructions,
+            reasoning_effort=reasoning_effort,
+            verbosity=verbosity,
+            max_output_tokens=max_output_tokens,
+        )
+        return response_dict.get("content")
+
+    def _make_openai_request_responses_api_full(
+        self,
+        prompt: str,
+        model: Optional[str] = "gpt-5.4",
+        reasoning_effort: Optional[str] = "low",
+        verbosity: Optional[str] = "high",
+        max_output_tokens: int = 12000,
+        instructions: str = None,
+    ) -> Dict[str, Any]:
+        """Like _make_openai_request_responses_api but returns full response dict.
+
+        Used by process_documents_to_json for metadata (finish_reason, usage).
+        """
+        if instructions is None:
+            instructions = "You are a helpful assistant designed to output JSON."
+
         response_dict = self.client.create_response(
             model=model,
             input=prompt,

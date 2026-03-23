@@ -274,7 +274,7 @@ async def stream_findings_letter(
                             )
                             metrics["strategy_used"] = bool(strategy_object)
                         except Exception as strategy_err:
-                            logger.warning("[LETTER] Strategy step failed for stream: %s", strategy_err)
+                            logger.warning(f"[LETTER] Strategy step failed for stream: {strategy_err}")
                         finally:
                             metrics["strategy_latency_ms"] = int(
                                 (time.monotonic() - strategy_started) * 1000
@@ -441,7 +441,7 @@ async def stream_findings_letter(
                                 timeout_seconds=critic_budget,
                             )
                         except Exception as critic_err:
-                            logger.warning("[LETTER] Critic step failed: %s", critic_err)
+                            logger.warning(f"[LETTER] Critic step failed: {critic_err}")
                             metrics["critic_skipped_reason"] = f"critic_error:{type(critic_err).__name__}"
                             critic_feedback = {"failed_sections": []}
                         finally:
@@ -536,7 +536,7 @@ async def stream_findings_letter(
                                     integrity_report,
                                 )
                     except Exception as polish_err:
-                        logger.warning("[LETTER] Polish pass failed, using raw draft: %s", polish_err)
+                        logger.warning(f"[LETTER] Polish pass failed, using raw draft: {polish_err}")
                         metrics["polish_applied"] = False
                 else:
                     logger.info("[LETTER] Polish pass disabled by configuration")
@@ -569,7 +569,7 @@ async def stream_findings_letter(
                         "id", analysis_id
                     ).execute()
                 except Exception as persist_err:
-                    logger.warning("[LETTER] Persisting streamed findings failed: %s", persist_err)
+                    logger.warning(f"[LETTER] Persisting streamed findings failed: {persist_err}")
 
                 quality_msg = _emit(
                     "quality",
@@ -799,7 +799,7 @@ async def generate_letter(
                     )
                     metrics["strategy_used"] = bool(strategy_object)
                 except Exception as strategy_err:
-                    logger.warning("[LETTER] Demand strategy build failed: %s", strategy_err)
+                    logger.warning(f"[LETTER] Demand strategy build failed: {strategy_err}")
                 finally:
                     metrics["strategy_latency_ms"] = int((time.monotonic() - strategy_started) * 1000)
 
@@ -865,7 +865,7 @@ async def generate_letter(
                                 integrity_report,
                             )
                 except Exception as polish_err:
-                    logger.warning("[DEMAND] Polish pass failed, using raw draft: %s", polish_err)
+                    logger.warning(f"[DEMAND] Polish pass failed, using raw draft: {polish_err}")
             else:
                 logger.info("[DEMAND] Polish pass disabled by configuration")
             letter_key = f"demand_{letter_request.target_party_name.replace(' ', '_')}".lower()
@@ -945,7 +945,7 @@ async def generate_letter(
                     timeout_seconds=critic_budget,
                 )
             except Exception as critic_err:
-                logger.warning("[LETTER] Critic step failed: %s", critic_err)
+                logger.warning(f"[LETTER] Critic step failed: {critic_err}")
                 metrics["critic_skipped_reason"] = f"critic_error:{type(critic_err).__name__}"
             finally:
                 metrics["critic_latency_ms"] = int((time.monotonic() - critic_started) * 1000)
@@ -1211,7 +1211,7 @@ async def stream_recommendation_letter(
                     doc_summaries_raw = json.loads(processing_result.document_summaries)
                     document_summaries = [DocumentSummaryStructured(**ds) for ds in doc_summaries_raw]
                 except Exception as parse_err:
-                    logger.warning("Failed to parse document_summaries: %s", parse_err)
+                    logger.warning(f"Failed to parse document_summaries: {parse_err}")
 
             jurisdiction = artifacts.get("jurisdiction", "Florida")
             attorney_info = {
@@ -1641,7 +1641,7 @@ async def stream_demand_letter(
                     )
                     metrics["strategy_used"] = bool(strategy_object)
                 except Exception as strategy_err:
-                    logger.warning("[DEMAND_STREAM] Strategy build failed: %s", strategy_err)
+                    logger.warning(f"[DEMAND_STREAM] Strategy build failed: {strategy_err}")
 
             # Draft generation phase
             phase_msg = _emit("phase", phase="draft_generation", message="Generating draft", percent=15)
@@ -1835,7 +1835,7 @@ async def stream_demand_letter(
                             metrics["polish_applied"] = False
                             metrics["polish_reverted"] = True
                 except Exception as polish_err:
-                    logger.warning("[DEMAND_STREAM] Polish pass failed: %s", polish_err)
+                    logger.warning(f"[DEMAND_STREAM] Polish pass failed: {polish_err}")
 
             # Finalize phase
             phase_msg = _emit("phase", phase="finalizing", message="Finalizing letter", percent=96)

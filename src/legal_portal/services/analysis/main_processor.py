@@ -2265,11 +2265,17 @@ async def _process_document_batch(
     # Clean and parse the JSON response
     parsed_data = _clean_and_parse_json(response_json, batch_num)
     if not parsed_data:
+        # Include a preview of the raw response so the error is diagnosable
+        # without needing Railway logs
+        raw_preview = (response_json or "")[:300].replace("\n", " ")
         errors.append(
             ProcessingError(
                 source=f"batch_{batch_num}",
                 error_type="PARSE_ERROR",
-                error_message=f"Failed to parse JSON response for batch {batch_num}",
+                error_message=(
+                    f"Failed to parse JSON response for batch {batch_num}. "
+                    f"Response preview ({len(response_json or '')} chars): {raw_preview}"
+                ),
             )
         )
         return [], errors

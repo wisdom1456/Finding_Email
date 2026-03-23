@@ -226,8 +226,15 @@ class JsonProcessingService:
         except Exception:
             return None
 
+    # Default fallback model for summarization escalation
+    SUMMARIZATION_FALLBACK_MODEL = "gpt-5.4"
+
     async def process_documents_to_json(self, prompt: str) -> Tuple[Optional[str], List[ProcessingError]]:
         """Process a prompt to get a JSON response from OpenAI asynchronously.
+
+        If the preferred model returns an empty/null response, retries once
+        with gpt-5.4 (model escalation). This handles cases where gpt-5-mini
+        silently fails on certain prompts.
 
         Args:
         ----
@@ -238,45 +245,91 @@ class JsonProcessingService:
             A tuple containing the JSON response string and a list of any processing errors.
 
         """
-        try:
-            model = self.client.get_preferred_model("document_analysis", "gpt-5.4")
-            max_output_tokens = int(self.config.get("openai_max_tokens", 12000)) if isinstance(self.config, dict) else 12000
+        preferred_model = self.client.get_preferred_model("document_analysis", "gpt-5.4")
+        fallback_model = self.SUMMARIZATION_FALLBACK_MODEL
+        max_output_tokens = int(self.config.get("openai_max_tokens", 12000)) if isinstance(self.config, dict) else 12000
+        prompt_chars = len(prompt)
+        instructions = (
+            "You are a precise legal document analyst. "
+            "Return valid JSON only with no markdown, code fences, or explanatory text."
+        )
 
+        # --- Attempt 1: preferred model ---
+        try:
             response_content = await asyncio.to_thread(
                 self._make_openai_request_responses_api,
                 prompt=prompt,
-                model=model,
+                model=preferred_model,
                 reasoning_effort="low",
                 verbosity="low",
                 max_output_tokens=max_output_tokens,
-                instructions=(
-                    "You are a precise legal document analyst. "
-                    "Return valid JSON only with no markdown, code fences, or explanatory text."
-                ),
+                instructions=instructions,
             )
 
             if response_content:
-                # Successfully received content, return it with no errors
                 return response_content, []
-            else:
-                # OpenAI returned an empty response
-                error_message = "OpenAI returned an empty or null response."
-                logger.error(error_message)
-                error = ProcessingError(
-                    source="JsonProcessingService",
-                    error_type="APIError",
-                    error_message=error_message,
-                )
-                return None, [error]
+
+            # Empty/null response from preferred model
+            logger.warning(
+                f"[SUMMARIZATION:EMPTY] model={preferred_model} returned empty/null | "
+                f"prompt_chars={prompt_chars}"
+            )
 
         except Exception as e:
-            logger.exception(f"An unexpected error occurred in process_documents_to_json: {e}")
-            error = ProcessingError(
-                source="JsonProcessingService",
-                error_type=type(e).__name__,
-                error_message=str(e),
+            logger.error(
+                f"[SUMMARIZATION:EXCEPTION] model={preferred_model} raised {type(e).__name__} | "
+                f"prompt_chars={prompt_chars} error={str(e)[:300]}"
             )
-            return None, [error]
+            # Fall through to escalation if possible
+
+        # --- Attempt 2: escalate to fallback model (only if different) ---
+        if preferred_model != fallback_model:
+            logger.warning(
+                f"[SUMMARIZATION:ESCALATION] Retrying with {fallback_model} "
+                f"(preferred {preferred_model} failed) | prompt_chars={prompt_chars}"
+            )
+            try:
+                response_content = await asyncio.to_thread(
+                    self._make_openai_request_responses_api,
+                    prompt=prompt,
+                    model=fallback_model,
+                    reasoning_effort="low",
+                    verbosity="low",
+                    max_output_tokens=max_output_tokens,
+                    instructions=instructions,
+                )
+
+                if response_content:
+                    logger.info(
+                        f"[SUMMARIZATION:ESCALATION_OK] {fallback_model} succeeded "
+                        f"after {preferred_model} failed | prompt_chars={prompt_chars}"
+                    )
+                    return response_content, []
+
+                # Escalation also returned empty
+                logger.error(
+                    f"[SUMMARIZATION:ESCALATION_EMPTY] {fallback_model} also returned empty | "
+                    f"prompt_chars={prompt_chars}"
+                )
+
+            except Exception as e2:
+                logger.error(
+                    f"[SUMMARIZATION:ESCALATION_FAILED] {fallback_model} raised "
+                    f"{type(e2).__name__} | prompt_chars={prompt_chars} error={str(e2)[:300]}"
+                )
+
+        # Both models failed
+        error_message = (
+            f"OpenAI returned an empty or null response. "
+            f"model={preferred_model}, escalation={'attempted' if preferred_model != fallback_model else 'N/A (same model)'}"
+        )
+        logger.error(f"[SUMMARIZATION:FAILED] {error_message}")
+        error = ProcessingError(
+            source="JsonProcessingService",
+            error_type="APIError",
+            error_message=error_message,
+        )
+        return None, [error]
 
     JURISDICTION_CONFIG = {
         "Florida": {
@@ -2234,34 +2287,28 @@ class JsonProcessingService:
         max_output_tokens: int = 12000,
         instructions: str = None,
     ) -> Optional[str]:
-        """Make OpenAI API request using Responses API with reasoning and verbosity controls."""
-        # Default instructions
+        """Make OpenAI API request using Chat Completions API.
+
+        Exceptions are re-raised (not swallowed) so tenacity @retry can
+        actually retry on transient API errors.
+        """
         if instructions is None:
             instructions = "You are a helpful assistant designed to output JSON."
 
         logger.info(
-            "Making Responses API request",
-            extra={
-                "method": "_make_openai_request_responses_api",
-                "model": model,
-                "prompt_length": len(prompt),
-                "reasoning_effort": reasoning_effort,
-                "verbosity": verbosity,
-                "max_output_tokens": max_output_tokens,
-            },
+            f"[OPENAI:SUMMARIZATION] Requesting | model={model} "
+            f"prompt_chars={len(prompt)} max_output_tokens={max_output_tokens} "
+            f"reasoning_effort={reasoning_effort}",
         )
 
-        try:
-            response_dict = self.client.create_response(
-                model=model,
-                input=prompt,
-                instructions=instructions,
-                reasoning_effort=reasoning_effort,
-                verbosity=verbosity,
-                max_output_tokens=max_output_tokens,
-            )
-            return response_dict["content"]
-        except Exception as e:
-            logger.exception(f"An error occurred during the Responses API request: {e}")
-            # Depending on desired behavior, you might want to return None or re-raise
-            return None
+        # Let exceptions propagate so @retry can retry on API errors.
+        # The caller (process_documents_to_json) handles final failure.
+        response_dict = self.client.create_response(
+            model=model,
+            input=prompt,
+            instructions=instructions,
+            reasoning_effort=reasoning_effort,
+            verbosity=verbosity,
+            max_output_tokens=max_output_tokens,
+        )
+        return response_dict.get("content")

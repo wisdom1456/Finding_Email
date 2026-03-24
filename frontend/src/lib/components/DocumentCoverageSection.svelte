@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { FileCheck2, Layers, FileQuestion, Files } from 'lucide-svelte';
+	import { FileCheck2, Layers, FileQuestion, Files, Ban } from 'lucide-svelte';
 
 	interface Props {
 		totalDocuments: number;
@@ -19,9 +19,14 @@
 		skipped = 0,
 	}: Props = $props();
 
+	// Coverage = fully analyzed + grouped (documents that went through AI analysis)
 	const coveragePercent = $derived(
 		totalDocuments > 0 ? Math.round(((fullyAnalyzed + groupedDocuments) / totalDocuments) * 100) : 0
 	);
+
+	// Accounted = analyzed + grouped + metadata-only + skipped
+	// If everything is accounted for, there are no "missing" docs
+	const accountedFor = $derived(fullyAnalyzed + groupedDocuments + metadataOnly + skipped);
 
 	const analyzedWidth = $derived(
 		totalDocuments > 0 ? (fullyAnalyzed / totalDocuments) * 100 : 0
@@ -31,6 +36,9 @@
 	);
 	const metadataWidth = $derived(
 		totalDocuments > 0 ? (metadataOnly / totalDocuments) * 100 : 0
+	);
+	const skippedWidth = $derived(
+		totalDocuments > 0 ? (skipped / totalDocuments) * 100 : 0
 	);
 
 	const coverageColor = $derived(
@@ -47,7 +55,7 @@
 			<Files class="w-4 h-4 text-gray-400" />
 			Document Coverage
 		</h3>
-		<span class="text-sm font-bold {coverageColor}">{coveragePercent}%</span>
+		<span class="text-sm font-bold {coverageColor}">{coveragePercent}% AI-analyzed</span>
 	</div>
 
 	<!-- Stacked progress bar -->
@@ -73,6 +81,13 @@
 				title="{metadataOnly} metadata only"
 			></div>
 		{/if}
+		{#if skippedWidth > 0}
+			<div
+				class="h-full bg-gray-300 transition-all duration-500"
+				style="width: {skippedWidth}%"
+				title="{skipped} skipped"
+			></div>
+		{/if}
 	</div>
 
 	<!-- Legend -->
@@ -93,26 +108,32 @@
 			<span class="inline-flex items-center gap-1.5">
 				<span class="w-2 h-2 rounded-full bg-amber-300 flex-shrink-0"></span>
 				<FileQuestion class="w-3 h-3 text-gray-400" />
-				{metadataOnly} metadata only
+				{metadataOnly} catalogued (metadata only)
 			</span>
 		{/if}
 		{#if skipped > 0}
 			<span class="inline-flex items-center gap-1.5">
 				<span class="w-2 h-2 rounded-full bg-gray-300 flex-shrink-0"></span>
-				{skipped} skipped
+				<Ban class="w-3 h-3 text-gray-400" />
+				{skipped} excluded
 			</span>
 		{/if}
 	</div>
 
-	{#if groupedDocuments > 0 || metadataOnly > 0}
+	{#if groupedDocuments > 0 || metadataOnly > 0 || skipped > 0}
 		<p class="text-[11px] text-gray-400 leading-relaxed">
 			{#if groupedDocuments > 0}
 				Grouped documents were summarized together to reduce redundancy.
 			{/if}
 			{#if metadataOnly > 0}
-				Metadata-only documents were catalogued but not fully evaluated.
+				Metadata-only documents (photos, brief notes) were catalogued from their file info but not sent for AI analysis.
 			{/if}
-			All documents remain in the case file.
+			{#if skipped > 0}
+				Excluded documents are boilerplate templates or zero-content files with no legal value.
+			{/if}
+			{#if accountedFor >= totalDocuments}
+				All {totalDocuments} documents are accounted for.
+			{/if}
 		</p>
 	{/if}
 </div>

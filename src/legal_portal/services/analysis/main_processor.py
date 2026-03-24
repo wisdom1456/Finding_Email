@@ -890,12 +890,22 @@ async def process_case_documents(
                     if doc_id:
                         await chunk_state_mgr.update_document_status(doc_id, "completed")
 
-            # Mark T4 docs as skipped in chunk state and surface as skipped
-            if chunk_state_mgr:
-                for tr in t4_results:
-                    doc_id = getattr(tr.document, "document_id", None)
-                    if doc_id:
-                        await chunk_state_mgr.update_document_status(doc_id, "skipped")
+            # Mark T4 docs as skipped in chunk state and surface in results
+            for tr in t4_results:
+                doc_id = getattr(tr.document, "document_id", None)
+                if chunk_state_mgr and doc_id:
+                    await chunk_state_mgr.update_document_status(doc_id, "skipped")
+                # Surface T4 skips so the frontend can display them
+                if skipped_documents is not None:
+                    skipped_documents.append(
+                        SkippedDocument(
+                            document_id=doc_id or "",
+                            file_name=getattr(tr.document, "file_name", "Unknown"),
+                            reason=f"Triage: {tr.reason}",
+                            error_type="TRIAGE_SKIP",
+                            recommendation="Boilerplate or zero-content document excluded from analysis.",
+                        )
+                    )
 
             # Merge all summaries
             structured_summaries = t1_summaries + t2_summaries + t3_summaries

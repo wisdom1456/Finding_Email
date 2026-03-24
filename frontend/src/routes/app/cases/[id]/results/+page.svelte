@@ -91,29 +91,32 @@
 			return { total: totalDocs, fullyAnalyzed: 0, grouped: 0, groupCount: 0, metadataOnly: 0, skipped: 0 };
 		}
 
-		// Count group summaries vs individual summaries
+		// Count group summaries vs individual vs metadata-only summaries
 		let groupSummaryCount = 0;
 		let groupedDocCount = 0;
 		let individualCount = 0;
+		let metadataOnlyCount = 0;
 
 		for (const s of summaries) {
 			if (s.group_type && s.member_count && s.member_count > 1) {
 				groupSummaryCount++;
 				groupedDocCount += s.member_count;
+			} else if (s.extraction_notes?.includes('T3_METADATA')) {
+				// T3 metadata-only: catalogued from metadata, not LLM-analyzed
+				metadataOnlyCount++;
 			} else {
 				individualCount++;
 			}
 		}
 
 		const skippedArr = results?.artifacts?.skipped_documents || [];
-		const metadataOnly = Math.max(0, totalDocs - individualCount - groupedDocCount - skippedArr.length);
 
 		return {
 			total: totalDocs,
 			fullyAnalyzed: individualCount,
 			grouped: groupedDocCount,
 			groupCount: groupSummaryCount,
-			metadataOnly: metadataOnly > 0 ? metadataOnly : 0,
+			metadataOnly: metadataOnlyCount,
 			skipped: skippedArr.length,
 		};
 	});
@@ -1278,7 +1281,8 @@
 			<!-- Signature status is now set in Verification Hub. This is read-only. -->
 			{#if results.document_summaries && results.document_summaries.length > 0}
 				{@const groupSummaries = results.document_summaries.filter((s: any) => s.group_type && s.member_count && s.member_count > 1)}
-				{@const individualSummaries = results.document_summaries.filter((s: any) => !(s.group_type && s.member_count && s.member_count > 1))}
+				{@const individualSummaries = results.document_summaries.filter((s: any) => !(s.group_type && s.member_count && s.member_count > 1) && !s.extraction_notes?.includes('T3_METADATA'))}
+				{@const metadataOnlySummaries = results.document_summaries.filter((s: any) => s.extraction_notes?.includes('T3_METADATA'))}
 
 				<!-- Document coverage overview -->
 				{#if docCoverageStats.total > 0}
@@ -1315,23 +1319,46 @@
 					</div>
 				{/if}
 
-				<!-- Individual document summaries -->
-				<div class="card-standard">
-					<h2 class="text-2xl font-heading font-bold text-contrast mb-8 border-b border-gray-100 pb-4">
-						{groupSummaries.length > 0 ? 'Individual Documents' : 'Document Analysis'}
-					</h2>
-					<div class="space-y-6">
-						{#each individualSummaries as doc}
-							<DocumentSummaryCard
-								summary={doc}
-								rawText={getDocumentRawText(doc.document_name)}
-								signatureDetection={getDocumentSignatureDetection(doc.document_name)}
-								collapsible={true}
-								defaultCollapsed={collapsedDocs.has(doc.document_name)}
-							/>
-						{/each}
+				<!-- Individual document summaries (fully analyzed) -->
+				{#if individualSummaries.length > 0}
+					<div class="card-standard">
+						<h2 class="text-2xl font-heading font-bold text-contrast mb-8 border-b border-gray-100 pb-4">
+							{groupSummaries.length > 0 ? 'Individual Documents' : 'Document Analysis'}
+						</h2>
+						<div class="space-y-6">
+							{#each individualSummaries as doc}
+								<DocumentSummaryCard
+									summary={doc}
+									rawText={getDocumentRawText(doc.document_name)}
+									signatureDetection={getDocumentSignatureDetection(doc.document_name)}
+									collapsible={true}
+									defaultCollapsed={collapsedDocs.has(doc.document_name)}
+								/>
+							{/each}
+						</div>
 					</div>
-				</div>
+				{/if}
+
+				<!-- Metadata-only documents (catalogued, not LLM-analyzed) -->
+				{#if metadataOnlySummaries.length > 0}
+					<div class="card-standard mt-6">
+						<h2 class="text-lg font-heading font-bold text-gray-600 mb-2 border-b border-gray-100 pb-3">
+							Metadata-Only Documents ({metadataOnlySummaries.length})
+						</h2>
+						<p class="text-sm text-gray-500 mb-4">
+							These documents were catalogued from their metadata (filename, file type) but were not sent for AI analysis. This typically includes photos, brief staff notes, and other low-text items.
+						</p>
+						<div class="space-y-4">
+							{#each metadataOnlySummaries as doc}
+								<DocumentSummaryCard
+									summary={doc}
+									collapsible={true}
+									defaultCollapsed={true}
+								/>
+							{/each}
+						</div>
+					</div>
+				{/if}
 			{:else}
 				<div class="card-standard">
 					<p class="text-gray-500">No document summaries available.</p>

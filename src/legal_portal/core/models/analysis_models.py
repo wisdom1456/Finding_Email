@@ -38,7 +38,13 @@ __all__ = [
 ]
 
 
-class Party(BaseModel):
+class _IgnoreExtra(BaseModel):
+    """Base model that tolerates extra fields from stored LLM output."""
+
+    model_config = {"extra": "ignore"}
+
+
+class Party(_IgnoreExtra):
     """Party involved in the case."""
 
     name: str
@@ -49,7 +55,7 @@ class Party(BaseModel):
     entity_type: Optional[str] = None  # "individual", "LLC", "corporation", "government", etc.
 
 
-class Event(BaseModel):
+class Event(_IgnoreExtra):
     """Chronological event in the case timeline."""
 
     date: Optional[Union[datetime, str]] = None  # Allow null if date is unknown
@@ -64,7 +70,7 @@ class Event(BaseModel):
         return str(v) if v is not None else "Unknown"
 
 
-class FinancialItem(BaseModel):
+class FinancialItem(_IgnoreExtra):
     """Financial transaction or amount in the case."""
 
     amount: float
@@ -80,7 +86,7 @@ class FinancialItem(BaseModel):
         return str(v) if v is not None else "Unknown"
 
 
-class KeyDocument(BaseModel):
+class KeyDocument(_IgnoreExtra):
     """Important document in the case."""
 
     document_name: str
@@ -89,7 +95,7 @@ class KeyDocument(BaseModel):
     significance: str  # Why this document matters
 
 
-class PropertyInfo(BaseModel):
+class PropertyInfo(_IgnoreExtra):
     """Property details for real estate cases."""
 
     address: str
@@ -97,7 +103,7 @@ class PropertyInfo(BaseModel):
     additional_details: Dict[str, Any] = Field(default_factory=dict)
 
 
-class FactMatrix(BaseModel):
+class FactMatrix(_IgnoreExtra):
     """Structured facts extracted from case documents."""
 
     parties: List[Party]
@@ -109,7 +115,7 @@ class FactMatrix(BaseModel):
     extraction_notes: Optional[str] = None  # Any caveats or quality issues
 
 
-class LegalIssue(BaseModel):
+class LegalIssue(_IgnoreExtra):
     """A potential legal issue or cause of action."""
 
     issue_name: str  # e.g., "Implied Warranty Breach"
@@ -120,7 +126,7 @@ class LegalIssue(BaseModel):
     confidence: str = "moderate"  # "strong", "moderate", "weak"
 
 
-class ProceduralStep(BaseModel):
+class ProceduralStep(_IgnoreExtra):
     """A procedural requirement that must be met."""
 
     requirement: str  # Description of what must be done
@@ -129,7 +135,7 @@ class ProceduralStep(BaseModel):
     consequences_if_missed: Optional[str] = None  # What happens if not done
 
 
-class LegalIssueMap(BaseModel):
+class LegalIssueMap(_IgnoreExtra):
     """Map of all legal issues identified in the case."""
 
     primary_issues: List[LegalIssue] = Field(default_factory=list)
@@ -141,7 +147,7 @@ class LegalIssueMap(BaseModel):
     statutory_framework: Optional[str] = None  # Summary of governing law
 
 
-class IssueAnalysis(BaseModel):
+class IssueAnalysis(_IgnoreExtra):
     """Detailed analysis of a single legal issue."""
 
     issue_name: str
@@ -155,7 +161,7 @@ class IssueAnalysis(BaseModel):
     supporting_evidence: List[str] = Field(default_factory=list)  # Key evidence supporting this claim
 
 
-class RiskAssessment(BaseModel):
+class RiskAssessment(_IgnoreExtra):
     """Assessment of risks and challenges."""
 
     major_risks: List[str]
@@ -164,7 +170,7 @@ class RiskAssessment(BaseModel):
     evidence_gaps: List[str] = Field(default_factory=list)
 
 
-class CriticalDeadline(BaseModel):
+class CriticalDeadline(_IgnoreExtra):
     """A critical deadline that must be met."""
 
     deadline_date: Optional[Union[datetime, str]] = None
@@ -174,7 +180,7 @@ class CriticalDeadline(BaseModel):
     statute_basis: Optional[str] = None
 
 
-class EvidenceAssessment(BaseModel):
+class EvidenceAssessment(_IgnoreExtra):
     """Assessment of evidence strength."""
 
     strong_evidence: List[str]
@@ -183,7 +189,7 @@ class EvidenceAssessment(BaseModel):
     overall_strength: str  # "strong", "moderate", "weak"
 
 
-class DeepAnalysis(BaseModel):
+class DeepAnalysis(_IgnoreExtra):
     """Comprehensive legal analysis of all identified issues."""
 
     issue_analyses: List[IssueAnalysis]
@@ -203,7 +209,7 @@ class DeepAnalysis(BaseModel):
     )
 
 
-class CaseRecommendation(BaseModel):
+class CaseRecommendation(_IgnoreExtra):
     """Recommendation generated from gap analysis results."""
 
     category: CaseRecommendationCategory
@@ -215,7 +221,7 @@ class CaseRecommendation(BaseModel):
     category_color: str = Field(description="Color code: green/yellow/orange/red")
 
 
-class GapItem(BaseModel):
+class GapItem(_IgnoreExtra):
     """A specific gap or issue identified in the case."""
 
     gap_id: str = Field(description="Unique identifier for this gap")
@@ -233,7 +239,7 @@ class GapItem(BaseModel):
     impact_on_case: str = Field(description="How this gap affects case viability or strategy")
 
 
-class BatchEvidence(BaseModel):
+class BatchEvidence(_IgnoreExtra):
     """Evidence category detected in a single map-phase batch."""
 
     category: str = Field(description="E.g., 'executed_contracts', 'payment_receipts'")
@@ -245,7 +251,7 @@ class BatchEvidence(BaseModel):
     detail: str = Field(description="1-2 sentence explanation")
 
 
-class BatchFinding(BaseModel):
+class BatchFinding(_IgnoreExtra):
     """A gap, contradiction, or concern found in a single map-phase batch."""
 
     category: str = Field(description="Maps to GapCategory values")
@@ -259,7 +265,7 @@ class BatchFinding(BaseModel):
     )
 
 
-class BatchGapReport(BaseModel):
+class BatchGapReport(_IgnoreExtra):
     """Structured output from a single map-phase batch."""
 
     batch_id: str
@@ -277,7 +283,7 @@ class BatchGapReport(BaseModel):
     )
 
 
-class GapAnalysisResult(BaseModel):
+class GapAnalysisResult(_IgnoreExtra):
     """Complete gap analysis result."""
 
     total_gaps: int = Field(description="Total number of gaps identified")

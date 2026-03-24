@@ -566,10 +566,14 @@ function createProgressStore() {
 					let message = event.message || '';
 					if (isDurable && eventStatus === 'pending') {
 						if (event.attempts > 0) {
-							message = `Retrying analysis (attempt ${event.attempts}/${event.max_attempts})...`;
+							message = `Resuming analysis from last checkpoint (attempt ${event.attempts}/${event.max_attempts})...`;
 						} else {
 							message = 'Analysis queued — starting shortly...';
 						}
+					}
+					// When running a retry and stages jump forward, indicate checkpoint resume
+					if (isDurable && eventStatus === 'running' && event.attempts > 1 && !message) {
+						message = 'Resuming from checkpoint...';
 					}
 
 					update(state => {

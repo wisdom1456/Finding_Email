@@ -1539,7 +1539,13 @@
 							onComplete={async () => {
 								showProgressModal = false;
 								currentJobId = null;
-								await loadAnalysisStatus();
+								// The worker writes analysis_jobs.status='completed' before
+								// analysis_results — poll until the result row is ready.
+								for (let attempt = 0; attempt < 10; attempt++) {
+									await loadAnalysisStatus();
+									if (analysisStatus?.status === 'completed') break;
+									await new Promise(r => setTimeout(r, 1500));
+								}
 								await loadCase();
 								analyzing = false;
 								activeTab = 'analysis';

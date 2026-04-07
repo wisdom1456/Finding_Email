@@ -682,6 +682,12 @@ async def process_case_documents(
                     f"excluding {len(grouped_doc_ids)} docs from individual summarization"
                 )
 
+                # Mark grouped docs as completed in chunk_state so the
+                # synthesis gate doesn't block on them.
+                if chunk_state_mgr:
+                    for doc_id in grouped_doc_ids:
+                        await chunk_state_mgr.update_document_status(doc_id, "completed")
+
                 # Update metrics if available
                 if detected_groups and settings.enable_group_detection:
                     try:

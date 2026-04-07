@@ -172,8 +172,9 @@ class ChunkStateManager:
         """
         async with self._lock:
             try:
-                # Get current state
-                current_state = await self.get_chunk_state()
+                # Use in-memory dirty state if available to avoid overwriting
+                # un-flushed updates with a stale DB read.
+                current_state = self._dirty_state or await self.get_chunk_state()
                 if not current_state:
                     logger.warning(f"[CHUNK_STATE] No state found for {self.analysis_id}")
                     return
@@ -214,7 +215,7 @@ class ChunkStateManager:
                 # Batch writes: only write to DB every N updates or on completion
                 should_flush = (
                     len(self._pending_updates) >= self._batch_size or
-                    status in ["completed", "failed"]  # Always flush on terminal states
+                    status in ["completed", "failed", "skipped"]  # Always flush on terminal states
                 )
 
                 if should_flush:

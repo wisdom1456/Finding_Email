@@ -307,6 +307,7 @@ class AnalysisWorker:
             claim_resp = self.supabase.table("analysis_jobs").update({
                 "status": "completed",
                 "stage": "completed",
+                "progress": {"message": "Analysis complete!", "percent": 100},
                 "completed_at": datetime.utcnow().isoformat(),
                 "updated_at": datetime.utcnow().isoformat(),
             }).eq("id", job_id).eq("status", "running").execute()

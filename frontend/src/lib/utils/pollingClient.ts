@@ -74,7 +74,8 @@ export class PollingClient {
 	 * Generate fingerprint for an event to detect duplicates
 	 */
 	private getEventFingerprint(data: ProgressEvent): string {
-		return `${data.percent}|${data.phase}|${data.timestamp}|${data.document?.status}`;
+		const status = (data as any).status || data.type || '';
+		return `${status}|${data.percent}|${data.phase}|${data.timestamp}|${data.document?.status}`;
 	}
 
 	/**
@@ -194,8 +195,9 @@ export class PollingClient {
 				this.onMessageHandler(data);
 			}
 
-			// Check if terminal state
-			if (data.type === 'completed' || data.type === 'failed' || data.type === 'error') {
+			// Check if terminal state (job endpoint returns 'status', SSE returns 'type')
+			const terminalStatus = (data as any).status || data.type;
+			if (terminalStatus === 'completed' || terminalStatus === 'failed' || terminalStatus === 'error') {
 				this.stopPolling();
 				if (this.onCompleteHandler) {
 					this.onCompleteHandler();

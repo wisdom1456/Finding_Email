@@ -171,7 +171,7 @@ async def start_analysis(
             .execute()
         )
 
-        if existing.data:
+        if existing is not None and existing.data:
             analysis_response = (
                 user_supabase.table("analysis_results")
                 .update({

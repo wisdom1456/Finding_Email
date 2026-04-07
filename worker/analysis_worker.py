@@ -230,6 +230,12 @@ class AnalysisWorker:
                     f"last_completed_stage={existing_checkpoint['last_completed_stage']}"
                 )
 
+            # Transition analysis_results pending → processing.
+            # Guard: only update if still pending (prevents reviving cancelled rows).
+            self.supabase.table("analysis_results").update({
+                "status": "processing",
+            }).eq("id", analysis_id).eq("status", "pending").execute()
+
             logger.info(f"[JOB:{job_id[:8]}] Starting pipeline | case={case_id[:8]}")
 
             # Run pipeline in durable mode — returns ProcessingResult,
@@ -361,19 +367,26 @@ class AnalysisWorker:
     def _handle_cancel(self, job_id: str, analysis_id: str, case_id: str) -> None:
         """Handle job cancellation.
 
-        Worker is the sole writer of analysis_results and cases for running jobs.
-        Sets cases.status='pending' (not 'cancelled') because only the analysis
-        attempt is cancelled — the case itself remains retryable.
+        Guard: only update analysis_results if still 'processing' (this job's run).
+        A re-run may have already reset the row to 'pending' — don't overwrite it.
+        Only reset case status if no other active job exists for this case
+        (a re-run creates a new job before the old worker detects cancellation).
         """
         logger.info(f"[JOB:{job_id[:8]}] Cancelled")
         self._update_job(job_id, status="cancelled")
         self.supabase.table("analysis_results").update(
             {"status": "cancelled"}
-        ).eq("id", analysis_id).execute()
-        # 'pending' so user can retry — only the attempt is cancelled, not the case
-        self.supabase.table("cases").update(
-            {"status": "pending"}
-        ).eq("id", case_id).execute()
+        ).eq("id", analysis_id).eq("status", "processing").execute()
+        # Only reset case if no other active job exists (prevents clobbering re-runs)
+        other_active = self.supabase.table("analysis_jobs").select(
+            "id", count="exact"
+        ).eq("case_id", case_id).in_(
+            "status", ["pending", "running"]
+        ).neq("id", job_id).execute()
+        if not other_active.count:
+            self.supabase.table("cases").update(
+                {"status": "pending"}
+            ).eq("id", case_id).execute()
 
     def _handle_retry(self, job_id: str, job: dict, error: Exception) -> None:
         """Return job to pending with exponential backoff."""

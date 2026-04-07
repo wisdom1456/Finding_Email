@@ -27,6 +27,7 @@
 	import ConfirmDeleteDocumentModal from '$lib/components/ConfirmDeleteDocumentModal.svelte';
 	import ConfirmDeleteCaseModal from '$lib/components/ConfirmDeleteCaseModal.svelte';
 	import MissingTextWarningModal from '$lib/components/MissingTextWarningModal.svelte';
+	import ConfirmDialog from '$lib/components/ui/ConfirmDialog.svelte';
 	import IntakeFormSelector from '$lib/components/IntakeFormSelector.svelte';
 	import FileUploadManager from '$lib/components/FileUploadManager.svelte';
 	import DocumentListSection from '$lib/components/DocumentListSection.svelte';
@@ -61,6 +62,7 @@
 	let errorMessage = $state('');
 
 	// Pre-flight validation state
+	let showRerunConfirm = $state(false);
 	let showMissingTextWarning = $state(false);
 	let runningBulkOcr = $state(false);
 
@@ -236,8 +238,11 @@
 			showingEmbeddedResults = true;
 			await loadEmbeddedResults(true);
 		}
-		// Auto-mount progress for in-flight analyses (backend-only mode)
-		if (analysisBackendOnly && analysisStatus?.status === 'processing') {
+		// Auto-mount progress for in-flight analyses (backend-only / durable mode)
+		if (analysisBackendOnly
+			&& analysisStatus?.status
+			&& ['pending', 'processing'].includes(analysisStatus.status)
+			&& currentJobId) {
 			currentAnalysisId = analysisStatus.id;
 			showProgressModal = true;
 		}
@@ -384,70 +389,33 @@
 
 	async function loadAnalysisStatus() {
 		try {
-			// Resolution precedence:
-			// 1. Active job (pending/processing) — show progress
-			// 2. Latest completed — show results (even if a newer rerun failed)
-			// 3. Latest error/cancelled — show error state
-			// 4. Latest of any status — fallback
-
-			// Step 1: check for active analysis
-			let { data, error } = await withRetry(() =>
+			// One row per case after cleanup; order as safety net during transition
+			const result = await withRetry(() =>
 				supabase
 					.from('analysis_results')
 					.select('id, status, created_at, completed_at')
 					.eq('case_id', caseId as string)
-					.in('status', ['pending', 'processing'])
 					.order('created_at', { ascending: false })
 					.limit(1)
 					.maybeSingle()
 			);
-			if (error) throw error;
+			if (result.error) throw result.error;
+			const data = result.data as { id: string; status: string; created_at: string | null; completed_at: string | null } | null;
 
-			if (!data) {
-				// Step 2: latest completed analysis
-				const completed = await withRetry(() =>
-					supabase
-						.from('analysis_results')
-						.select('id, status, created_at, completed_at')
-						.eq('case_id', caseId as string)
-						.eq('status', 'completed')
-						.order('created_at', { ascending: false })
-						.limit(1)
-						.maybeSingle()
-				);
-				if (completed.error) throw completed.error;
-				data = completed.data;
-			}
-
-			if (!data) {
-				// Step 3: latest terminal (error/cancelled)
-				const terminal = await withRetry(() =>
-					supabase
-						.from('analysis_results')
-						.select('id, status, created_at, completed_at')
-						.eq('case_id', caseId as string)
-						.in('status', ['error', 'cancelled'])
-						.order('created_at', { ascending: false })
-						.limit(1)
-						.maybeSingle()
-				);
-				if (terminal.error) throw terminal.error;
-				data = terminal.data;
-			}
-
-			if (!data) {
-				// Step 4: anything at all
-				const fallback = await withRetry(() =>
-					supabase
-						.from('analysis_results')
-						.select('id, status, created_at, completed_at')
-						.eq('case_id', caseId as string)
-						.order('created_at', { ascending: false })
-						.limit(1)
-						.maybeSingle()
-				);
-				if (fallback.error) throw fallback.error;
-				data = fallback.data;
+			// If active, fetch job info for job_id and real status
+			// analysis_jobs is not in generated Supabase types — bypass type checking
+			if (data && ['pending', 'processing'].includes(data.status)) {
+				// eslint-disable-next-line @typescript-eslint/no-explicit-any
+				const { data: jobData } = await (supabase as any)
+					.from('analysis_jobs')
+					.select('id, status, stage')
+					.eq('analysis_id', data.id)
+					.in('status', ['pending', 'running'])
+					.limit(1)
+					.maybeSingle();
+				if (jobData?.id) {
+					currentJobId = jobData.id;
+				}
 			}
 
 			analysisStatus = data;
@@ -1001,8 +969,16 @@
 	/**
 	 * Unified analysis entry point — delegates to startAnalysis (backend-only/polling)
 	 * or startStreamingAnalysis (SSE streaming) based on the feature flag.
+	 * Shows confirmation dialog before overwriting completed results.
 	 */
 	async function runAnalysis(skipMissingTextCheck = false) {
+		// Confirm before overwriting completed results
+		if (analysisStatus?.status === 'completed' && !showRerunConfirm) {
+			showRerunConfirm = true;
+			return;
+		}
+		showRerunConfirm = false;
+
 		if (analysisBackendOnly) {
 			await startAnalysis(skipMissingTextCheck);
 		} else {
@@ -1830,5 +1806,15 @@
 		onocr={runOcrOnMissingDocs}
 	/>
 {/if}
+
+<!-- Re-run Confirmation Dialog -->
+<ConfirmDialog
+	bind:open={showRerunConfirm}
+	title="Re-run Analysis"
+	message="This will replace your current analysis results. Do you want to re-run the analysis?"
+	confirmText="Re-run"
+	variant="warning"
+	onConfirm={() => runAnalysis()}
+/>
 
 <!-- Analysis progress is now shown inline on the Analysis tab -->

@@ -381,6 +381,30 @@ async def get_job_status(
         except Exception:
             pass
 
+    # Queue position info (only when pending)
+    queue_position = None
+    worker_busy = None
+    if j["status"] == "pending":
+        try:
+            ahead = (
+                supabase.table("analysis_jobs")
+                .select("id", count="exact")
+                .eq("status", "pending")
+                .lt("created_at", j["created_at"])
+                .execute()
+            )
+            queue_position = (ahead.count or 0) + 1
+
+            running = (
+                supabase.table("analysis_jobs")
+                .select("id", count="exact")
+                .eq("status", "running")
+                .execute()
+            )
+            worker_busy = (running.count or 0) > 0
+        except Exception:
+            pass  # Non-critical — omit queue info on error
+
     return {
         "job_id": j["id"],
         "analysis_id": j["analysis_id"],
@@ -392,6 +416,8 @@ async def get_job_status(
         "max_attempts": j["max_attempts"],
         "error": j["error"],
         "heartbeat_age_seconds": heartbeat_age,
+        "queue_position": queue_position,
+        "worker_busy": worker_busy,
         "created_at": j["created_at"],
         "started_at": j["started_at"],
         "completed_at": j["completed_at"],

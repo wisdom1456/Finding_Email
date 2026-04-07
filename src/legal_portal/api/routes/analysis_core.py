@@ -147,24 +147,49 @@ async def start_analysis(
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Case not found")
 
         case = case_response.data[0]
+        case_id = analysis_request.case_id
 
-        # Check if case already has pending/processing analysis
-        if case["status"] in ["processing"]:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT, detail="Case is already being processed"
-            )
+        # Cancel any active analysis_jobs for this case (service key — no RLS)
+        service_supabase.table("analysis_jobs").update({
+            "status": "cancelled",
+            "error": "Superseded by re-run",
+        }).eq("case_id", case_id).in_("status", ["pending", "running"]).execute()
 
         # Clear needs_reanalysis flag when starting new analysis
         user_supabase.table("cases").update({
             "needs_reanalysis": False
-        }).eq("id", analysis_request.case_id).execute()
+        }).eq("id", case_id).execute()
 
-        # Create analysis record using user client
-        analysis_response = (
+        # Reset or create analysis_results row (one row per case)
+        existing = (
             user_supabase.table("analysis_results")
-            .insert({"case_id": analysis_request.case_id, "status": "pending"})
+            .select("id")
+            .eq("case_id", case_id)
+            .order("created_at", desc=True)
+            .limit(1)
+            .maybe_single()
             .execute()
         )
+
+        if existing.data:
+            analysis_response = (
+                user_supabase.table("analysis_results")
+                .update({
+                    "status": "pending",
+                    "result": None,
+                    "error": None,
+                    "completed_at": None,
+                    "progress": None,
+                })
+                .eq("id", existing.data["id"])
+                .execute()
+            )
+        else:
+            analysis_response = (
+                user_supabase.table("analysis_results")
+                .insert({"case_id": case_id, "status": "pending"})
+                .execute()
+            )
 
         if not analysis_response.data:
             raise HTTPException(
@@ -175,7 +200,7 @@ async def start_analysis(
 
         # Update case status
         user_supabase.table("cases").update({"status": "processing"}).eq(
-            "id", analysis_request.case_id
+            "id", case_id
         ).execute()
 
         # --- Durable worker path: create job row and return immediately ---
@@ -183,12 +208,12 @@ async def start_analysis(
             # Get doc count for scheduling priority
             doc_count_resp = service_supabase.table("documents").select(
                 "id", count="exact"
-            ).eq("case_id", analysis_request.case_id).execute()
+            ).eq("case_id", case_id).execute()
             doc_count = doc_count_resp.count if hasattr(doc_count_resp, "count") and doc_count_resp.count else len(doc_count_resp.data or [])
 
             # Create job row (service key — no RLS write policy for analysis_jobs)
             job_response = service_supabase.table("analysis_jobs").insert({
-                "case_id": analysis_request.case_id,
+                "case_id": case_id,
                 "analysis_id": analysis["id"],
                 "status": "pending",
                 "provider": analysis_request.provider,
@@ -204,7 +229,7 @@ async def start_analysis(
             job = job_response.data[0]
             logger.info(
                 f"[DURABLE] Created job {job['id'][:12]} for analysis {analysis['id'][:12]} "
-                f"| case={analysis_request.case_id[:12]} docs={doc_count}"
+                f"| case={case_id[:12]} docs={doc_count}"
             )
 
             return {

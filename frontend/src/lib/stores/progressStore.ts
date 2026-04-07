@@ -565,7 +565,11 @@ function createProgressStore() {
 					// Build message for durable queued/retry states
 					let message = event.message || '';
 					if (isDurable && eventStatus === 'pending') {
-						if (event.attempts > 0) {
+						if (event.queue_position && event.queue_position > 1) {
+							message = `Your analysis is #${event.queue_position} in the queue. The worker is currently processing another case.`;
+						} else if (event.worker_busy) {
+							message = 'Your analysis is next. The worker is currently finishing another case.';
+						} else if (event.attempts > 0) {
 							message = `Resuming analysis from last checkpoint (attempt ${event.attempts}/${event.max_attempts})...`;
 						} else {
 							message = 'Analysis queued — starting shortly...';

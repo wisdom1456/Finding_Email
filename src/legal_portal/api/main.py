@@ -30,6 +30,7 @@ from legal_portal.api.routes import (
     documents,
     health,
     intake,
+    monitor,
     profile,
     progress,
     settings,
@@ -159,6 +160,7 @@ app.include_router(intake.router, prefix="/api", tags=["intake"])
 app.include_router(profile.router, prefix="/api", tags=["profile"])
 app.include_router(settings.router, prefix="/api/settings", tags=["settings"])
 app.include_router(corpus.router, prefix="/api/corpus", tags=["corpus"])
+app.include_router(monitor.router, prefix="/api", tags=["monitor"])
 
 
 @app.get("/")

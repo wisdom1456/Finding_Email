@@ -75,7 +75,6 @@ def check_worker_health(authorization: str = Header(default="")):
         sb.table("analysis_jobs")
         .select("id", count="exact")
         .gte("claimed_at", zombie_cutoff)
-        .not_.in_("status", ["completed", "failed", "cancelled"])
         .execute()
     )
     has_recent_claim = (recent_claims.count or 0) > 0

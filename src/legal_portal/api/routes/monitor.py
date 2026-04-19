@@ -218,8 +218,8 @@ def _send_alert(payload: dict) -> bool:
 
 def _maybe_redeploy(sb) -> bool:
     """Trigger Railway redeploy if cooldown has elapsed. Returns True if triggered."""
-    row = sb.table("monitor_state").select("value").eq("key", "last_restart_at").single().execute()
-    last_restart_raw = (row.data or {}).get("value")
+    row = sb.table("monitor_state").select("value").eq("key", "last_restart_at").maybe_single().execute()
+    last_restart_raw = (row.data or {}).get("value") if row.data else None
 
     if last_restart_raw:
         last_restart = datetime.fromisoformat(last_restart_raw.replace("Z", "+00:00"))

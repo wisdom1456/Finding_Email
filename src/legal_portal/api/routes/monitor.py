@@ -75,6 +75,7 @@ def check_worker_health(authorization: str = Header(default="")):
         sb.table("analysis_jobs")
         .select("id", count="exact")
         .gte("claimed_at", zombie_cutoff)
+        .not_.in_("status", ["completed", "failed", "cancelled"])
         .execute()
     )
     has_recent_claim = (recent_claims.count or 0) > 0
@@ -229,8 +230,12 @@ def _maybe_redeploy(sb) -> bool:
             return False
 
     token = os.getenv("RAILWAY_API_TOKEN", "")
-    service_id = os.getenv("RAILWAY_SERVICE_ID", "cdea3704-576e-49c2-91bd-1071d15c11c5")
-    environment_id = os.getenv("RAILWAY_ENVIRONMENT_ID", "604f43c7-df41-48f2-8179-ea23c41d7f0d")
+    service_id = os.getenv("RAILWAY_SERVICE_ID", "")
+    environment_id = os.getenv("RAILWAY_ENVIRONMENT_ID", "")
+
+    if not service_id or not environment_id:
+        logger.error("[RECOVERY] RAILWAY_SERVICE_ID or RAILWAY_ENVIRONMENT_ID not set — skipping redeploy")
+        return False
 
     query = """
     mutation serviceInstanceRedeploy($environmentId: String!, $serviceId: String!) {
@@ -254,7 +259,7 @@ def _maybe_redeploy(sb) -> bool:
             return False
 
         now_iso = datetime.now(timezone.utc).isoformat()
-        sb.table("monitor_state").update({"value": now_iso}).eq("key", "last_restart_at").execute()
+        sb.table("monitor_state").upsert({"key": "last_restart_at", "value": now_iso}, on_conflict="key").execute()
         logger.warning("[RECOVERY] Railway redeploy triggered successfully")
         return True
     except Exception as e:

@@ -89,8 +89,14 @@ def test_stuck_jobs():
         assert data["checks"]["stuck_jobs"]["triggered"], "stuck_jobs check not triggered"
         print(f"  PASS: STUCK_JOBS detected, status={data['status']}")
     finally:
-        sb.table("analysis_jobs").delete().eq("id", job_id).execute()
-        sb.table("analysis_results").delete().eq("id", ar_id).execute()
+        try:
+            sb.table("analysis_jobs").delete().eq("id", job_id).execute()
+        except Exception as e:
+            print(f"  WARNING: failed to delete job {job_id}: {e}")
+        try:
+            sb.table("analysis_results").delete().eq("id", ar_id).execute()
+        except Exception as e:
+            print(f"  WARNING: failed to delete result {ar_id}: {e}")
         print("  Cleanup: removed test records")
 
 
@@ -126,8 +132,14 @@ def test_zombie_worker():
             print("  INFO: Not triggered — another job was recently claimed (worker active). "
                   "Run when worker is idle for a clean zombie test.")
     finally:
-        sb.table("analysis_jobs").delete().eq("id", job_id).execute()
-        sb.table("analysis_results").delete().eq("id", ar_id).execute()
+        try:
+            sb.table("analysis_jobs").delete().eq("id", job_id).execute()
+        except Exception as e:
+            print(f"  WARNING: failed to delete job {job_id}: {e}")
+        try:
+            sb.table("analysis_results").delete().eq("id", ar_id).execute()
+        except Exception as e:
+            print(f"  WARNING: failed to delete result {ar_id}: {e}")
         print("  Cleanup: removed test records")
 
 
@@ -145,7 +157,10 @@ def test_restart_cooldown():
         assert not data.get("recovery_triggered"), "Redeploy should be skipped within cooldown"
         print(f"  PASS: recovery_triggered={data.get('recovery_triggered')} (expected False)")
     finally:
-        sb.table("monitor_state").update({"value": None}).eq("key", "last_restart_at").execute()
+        try:
+            sb.table("monitor_state").update({"value": None}).eq("key", "last_restart_at").execute()
+        except Exception as e:
+            print(f"  WARNING: failed to reset monitor_state: {e} — manually set last_restart_at=NULL")
         print("  Cleanup: reset last_restart_at to NULL")
 
 

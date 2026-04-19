@@ -149,11 +149,11 @@ def check_worker_health(authorization: str = Header(default="")):
 # ---------------------------------------------------------------------------
 
 def _verify_auth(authorization: str) -> None:
-    """Accept Vercel cron secret or manual invocation with same secret."""
+    """Require valid CRON_SECRET on every request. Missing secret is a misconfiguration."""
     cron_secret = os.getenv("CRON_SECRET", "")
     if not cron_secret:
-        logger.warning("[MONITOR] CRON_SECRET not set — skipping auth")
-        return
+        logger.error("[MONITOR] CRON_SECRET is not set — refusing all requests")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Monitor not configured: CRON_SECRET missing")
     expected = f"Bearer {cron_secret}"
     if authorization != expected:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid monitor secret")

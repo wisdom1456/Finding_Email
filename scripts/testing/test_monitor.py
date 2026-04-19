@@ -35,6 +35,9 @@ CRON_SECRET = os.getenv("CRON_SECRET", "")
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_KEY")
 
+PROD_URL = "https://finding-emails.vercel.app"
+IS_PROD = BASE.rstrip("/") == PROD_URL.rstrip("/")
+
 HEADERS = {"Authorization": f"Bearer {CRON_SECRET}"}
 
 
@@ -168,7 +171,19 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--test", choices=["healthy", "stuck", "zombie", "cooldown", "all"],
                         default="healthy")
+    parser.add_argument("--force-prod", action="store_true",
+                        help="Allow data-mutating tests against the production URL")
     args = parser.parse_args()
+
+    DATA_MUTATING = args.test in ("stuck", "zombie", "cooldown", "all")
+    if IS_PROD and DATA_MUTATING and not args.force_prod:
+        print(
+            f"\nERROR: Refusing to run '{args.test}' against production ({BASE}).\n"
+            "This test inserts or mutates data in the live database.\n"
+            "Use --force-prod to override, or set API_BASE_URL to a local/staging URL.\n"
+            "Example: API_BASE_URL=http://localhost:8000 python3 scripts/testing/test_monitor.py --test stuck\n"
+        )
+        sys.exit(1)
 
     if not CRON_SECRET:
         print("WARNING: CRON_SECRET not set — auth check will be skipped by server")

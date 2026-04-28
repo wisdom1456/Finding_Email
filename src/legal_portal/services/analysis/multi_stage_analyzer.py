@@ -1948,7 +1948,7 @@ Return JSON:
       "category": "contract | tort | statutory | procedural",
       "elements": ["Element 1 that must be proven", "Element 2"],
       "potential_remedies": ["Remedy 1", "Remedy 2"],
-      "florida_statute_references": ["{jurisdiction} Statute § ..."],
+      "statute_references": ["{jurisdiction} Statute § ..."],
       "confidence": "strong | moderate | weak"
     }}
   ],
@@ -1958,7 +1958,7 @@ Return JSON:
       "category": "contract | tort | statutory | procedural",
       "elements": [],
       "potential_remedies": [],
-      "florida_statute_references": [],
+      "statute_references": [],
       "confidence": "weak"
     }}
   ],

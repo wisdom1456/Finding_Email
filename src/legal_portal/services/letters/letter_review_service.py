@@ -692,7 +692,7 @@ minimal changes are fine.
                 category_terms = {
                     "contract": ["contract", "breach", "agreement"],
                     "tort": ["negligence", "duty", "breach of duty"],
-                    "statutory": [ref.lower() for ref in issue.florida_statute_references if ref],
+                    "statutory": [ref.lower() for ref in issue.statute_references if ref],
                 }
                 if issue.category in category_terms:
                     for term in category_terms[issue.category]:

@@ -4,7 +4,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Union
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import AliasChoices, BaseModel, Field, field_validator
 
 from legal_portal.core.models.enums import (
     CaseRecommendationCategory,
@@ -122,7 +122,10 @@ class LegalIssue(_IgnoreExtra):
     category: str = "unknown"  # "contract", "tort", "statutory", "procedural"
     elements: List[str] = Field(default_factory=list)  # Legal elements that must be proven
     potential_remedies: List[str] = Field(default_factory=list)
-    florida_statute_references: List[str] = Field(default_factory=list)  # e.g., ["§83.51", "Chapter 558"]
+    statute_references: List[str] = Field(
+        default_factory=list,
+        validation_alias=AliasChoices("statute_references", "florida_statute_references"),
+    )
     confidence: str = "moderate"  # "strong", "moderate", "weak"
 
 

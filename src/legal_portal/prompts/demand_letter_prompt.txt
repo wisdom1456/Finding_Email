@@ -108,6 +108,11 @@ STYLE REQUIREMENTS:
 - Professional, measured tone with formal legal language
 - Use "hereinafter" definitions in introduction
 - Use phrases: "pursuant to", "on or about", "it is undisputed", "axiomatic", "as you are aware"
+- **PRONOUN ATTRIBUTION (CRITICAL):** This letter is addressed TO the opposing party — "you" and "your" in this letter refer to the recipient (the opposing party), NEVER to the client. When referencing facts, statements, or evidence provided by the client, attribute them to "our Client", "[client name]", or "the Client" — NEVER use "you stated", "you note that", "you advised", "you reported", or any second-person construction to attribute client-side information. The analysis context may contain phrases like "You report that..." or "you stated..." carried over from client-facing materials; rewrite all such attributions to refer to the client by name or as "our Client" before incorporating them into this letter.
+  - WRONG: "You stated that the unit suffered water intrusion in August 2024."
+  - RIGHT: "Our Client has documented that the unit suffered water intrusion in August 2024."
+  - WRONG: "You note that the contractor failed to complete the framing."
+  - RIGHT: "Our Client's records confirm that the contractor failed to complete the framing."
 - Format amounts: "One Hundred Thousand U.S. Dollars and Zero Cents ($100,000.00)"
 - No hedging in demands - be direct and specific
 - **No Markdown code fences in output** (no ``` blocks)

@@ -158,7 +158,7 @@ class DemandLetterService:
         )
 
         logger.info(f"Streaming demand letter for {target_party_name} in {jurisdiction}")
-        model = self.client.get_preferred_model("letter_generation", "gpt-5.4")
+        model = self.client.get_preferred_model("letter_generation", "gpt-5.5")
 
         async for token in self.client.create_response_stream(
             model=model,
@@ -455,7 +455,7 @@ class DemandLetterService:
         gap_analysis=None,
         timeout_seconds: int = 15,
         allow_model: bool = True,
-        model: str = "gpt-5-mini",
+        model: str = "gpt-5.4-mini",
     ) -> Dict[str, Any]:
         """Build a demand strategy object for prompt guidance and metadata."""
         strategy_service = LetterStrategyService(self.client)

@@ -1121,9 +1121,9 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
         analysis_start_time = time.time()
         total_tokens_used = 0
         try:
-            progress_model = OpenAIClient().get_preferred_model("document_analysis", "gpt-5.2")
+            progress_model = OpenAIClient().get_preferred_model("document_analysis", "gpt-5.5")
         except Exception:
-            progress_model = "gpt-5.2"
+            progress_model = "gpt-5.5"
 
         # Throttle DB progress writes to reduce disk I/O (SSE remains real-time)
         _progress_db_writer = ThrottledDBWriter(

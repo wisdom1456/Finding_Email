@@ -354,7 +354,7 @@ Order them from most relevant to least relevant.
     try:
         client = OpenAIClient()
         response = client.create_chat_completion(
-            model="gpt-5-mini",  # Use mini for faster response
+            model="gpt-5.4-mini",  # Use mini for faster response
             messages=[
                 {
                     "role": "system",
@@ -447,7 +447,7 @@ the standard fields above
     try:
         client = OpenAIClient()
         response = client.create_chat_completion(
-            model="gpt-5-mini",
+            model="gpt-5.4-mini",
             messages=[
                 {
                     "role": "system",
@@ -692,7 +692,7 @@ carefully match each labeled field to its corresponding value from the data sect
     try:
         client = OpenAIClient()
         response = client.create_chat_completion(
-            model="gpt-5-mini",
+            model="gpt-5.4-mini",
             messages=[
                 {
                     "role": "system",

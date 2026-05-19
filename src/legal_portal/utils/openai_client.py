@@ -27,7 +27,7 @@ class OpenAIClient:
         Args:
         ----
             user_preferences: Optional dict of user AI model preferences by operation type
-                             e.g., {"document_analysis": "gpt-5-mini", "letter_generation": "gpt-5.4"}
+                             e.g., {"document_analysis": "gpt-5.4-mini", "letter_generation": "gpt-5.5"}
 
         """
         # Configure HTTP client with appropriate timeouts for cloud environments
@@ -61,7 +61,7 @@ class OpenAIClient:
         # Store user preferences for model selection
         self.user_preferences = user_preferences or {}
 
-    def get_preferred_model(self, operation_type: str, fallback: str = "gpt-5.4") -> str:
+    def get_preferred_model(self, operation_type: str, fallback: str = "gpt-5.5") -> str:
         """Get the user's preferred model for a specific operation type.
 
         Args:
@@ -272,7 +272,7 @@ class OpenAIClient:
         try:
             # Make a minimal API call to test the key
             self.client.chat.completions.create(
-                model="gpt-5-mini",
+                model="gpt-5.4-mini",
                 messages=[{"role": "user", "content": "Test"}],
                 max_completion_tokens=1,
             )
@@ -317,7 +317,7 @@ class OpenAIClient:
 
         Args:
         ----
-            model: Model to use (e.g., "gpt-5.4", "gpt-5-mini")
+            model: Model to use (e.g., "gpt-5.5", "gpt-5.4-mini")
             messages: List of message dicts with 'role' and 'content'
             temperature: Sampling temperature (0.0-2.0)
             max_tokens: Maximum tokens to generate (None for model default)
@@ -416,7 +416,7 @@ class OpenAIClient:
 
         Args:
         ----
-            model: Model to use (e.g., "gpt-5.4", "gpt-5-mini")
+            model: Model to use (e.g., "gpt-5.5", "gpt-5.4-mini")
             messages: List of message dicts with 'role' and 'content'
             temperature: Sampling temperature (0.0-2.0)
             max_tokens: Maximum tokens to generate (None for model default)
@@ -512,7 +512,7 @@ class OpenAIClient:
 
         Args:
         ----
-            model: Model to use (e.g., "gpt-5.4", "gpt-5-mini")
+            model: Model to use (e.g., "gpt-5.5", "gpt-5.4-mini")
             messages: List of message dicts with 'role' and 'content'
             temperature: Sampling temperature (0.0-2.0)
             max_tokens: Maximum tokens to generate (None for model default)

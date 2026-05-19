@@ -44,7 +44,7 @@ class TokenManager:
 
         return estimated_tokens
 
-    def count_tokens_accurate(self, text: str, model: str = "gpt-5.4") -> int:
+    def count_tokens_accurate(self, text: str, model: str = "gpt-5.5") -> int:
         """Count tokens using tiktoken for accurate token counting."""
         try:
             import tiktoken
@@ -66,7 +66,7 @@ class TokenManager:
             # Fallback to existing estimation method
             return self.estimate_tokens_detailed(text)
 
-    def check_token_threshold(self, analysis, model: str = "gpt-5.4") -> bool:
+    def check_token_threshold(self, analysis, model: str = "gpt-5.5") -> bool:
         """Check if video insights would exceed token threshold before building prompt."""
         logger.debug(f"TOKEN MANAGER: 🔍 Pre-computation token checking for model: {model}")
 

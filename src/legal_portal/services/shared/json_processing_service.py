@@ -43,7 +43,7 @@ class JsonProcessingService:
         self.client = client
         self.config = config
 
-    def _get_letter_generation_model(self, fallback: str = "gpt-5.4") -> str:
+    def _get_letter_generation_model(self, fallback: str = "gpt-5.5") -> str:
         """Resolve preferred model for letter generation."""
         try:
             return self.client.get_preferred_model("letter_generation", fallback)
@@ -56,7 +56,7 @@ class JsonProcessingService:
         violations: List[Dict[str, Any]],
         *,
         mode: str = "default",
-        model: str = "gpt-5-mini",
+        model: str = "gpt-5.4-mini",
         critic_feedback: Optional[Dict[str, Any]] = None,
     ) -> str:
         """Apply constrained repair only for listed quality violations."""
@@ -133,7 +133,7 @@ class JsonProcessingService:
         deep_analysis,
         gap_analysis=None,
         timeout_seconds: int = 15,
-        model: str = "gpt-5-mini",
+        model: str = "gpt-5.4-mini",
         allow_model: bool = True,
     ) -> Dict[str, Any]:
         """Build strategy object for findings drafting."""
@@ -154,7 +154,7 @@ class JsonProcessingService:
         letter_type: str,
         lint_violations: List[Dict[str, Any]],
         quality_report_v2: Optional[Dict[str, Any]] = None,
-        model: str = "gpt-5-mini",
+        model: str = "gpt-5.4-mini",
         timeout_seconds: int = 20,
     ) -> Dict[str, Any]:
         """Run section-level quality critic and return machine-readable fixes."""
@@ -227,7 +227,7 @@ class JsonProcessingService:
             return None
 
     # Default fallback model for summarization escalation
-    SUMMARIZATION_FALLBACK_MODEL = "gpt-5.4"
+    SUMMARIZATION_FALLBACK_MODEL = "gpt-5.5"
     # Elevated token limit for truncation retries
     TRUNCATION_RETRY_MAX_TOKENS = 24000
 
@@ -244,7 +244,7 @@ class JsonProcessingService:
             (content_string, errors, metadata) where metadata contains
             finish_reason, model, usage, response_chars for diagnostics.
         """
-        preferred_model = self.client.get_preferred_model("document_analysis", "gpt-5.4")
+        preferred_model = self.client.get_preferred_model("document_analysis", "gpt-5.5")
         fallback_model = self.SUMMARIZATION_FALLBACK_MODEL
         max_output_tokens = int(self.config.get("openai_max_tokens", 12000)) if isinstance(self.config, dict) else 12000
         prompt_chars = len(prompt)
@@ -1178,7 +1178,7 @@ class JsonProcessingService:
             logger.info(f"Making OpenAI request with master prompt for {jurisdiction} using gpt-5.2.")
             markdown_response = self._make_openai_request_responses_api(
                 formatted_prompt,
-                model="gpt-5.4",
+                model="gpt-5.5",
                 reasoning_effort="medium",
                 verbosity="high"
             )
@@ -1463,7 +1463,7 @@ class JsonProcessingService:
             None,  # Use the default thread pool executor
             self._make_openai_request_responses_api,
             prompt,
-            "gpt-5.4",  # model
+            "gpt-5.5",  # model
             "medium",  # reasoning_effort
             "medium",  # verbosity
             12000,  # max_output_tokens
@@ -1602,7 +1602,7 @@ class JsonProcessingService:
 
         logger.info("Making OpenAI request for adaptive letter generation")
 
-        model = self._get_letter_generation_model("gpt-5.4")
+        model = self._get_letter_generation_model("gpt-5.5")
         loop = asyncio.get_running_loop()
         markdown_response = await loop.run_in_executor(
             None,
@@ -1811,7 +1811,7 @@ class JsonProcessingService:
         )
 
         logger.info(f"Streaming adaptive findings email for {jurisdiction}")
-        model = self._get_letter_generation_model("gpt-5.4")
+        model = self._get_letter_generation_model("gpt-5.5")
         stream_started = False
         try:
             async for token in self.client.create_response_stream(
@@ -2293,7 +2293,7 @@ class JsonProcessingService:
     def _make_openai_request(
         self,
         prompt: str,
-        model: Optional[str] = "gpt-5.4",
+        model: Optional[str] = "gpt-5.5",
         temperature: float = 0.3,
         max_tokens: int = 12000,
         system_message: str = None,
@@ -2347,7 +2347,7 @@ class JsonProcessingService:
     def _make_openai_request_responses_api(
         self,
         prompt: str,
-        model: Optional[str] = "gpt-5.4",
+        model: Optional[str] = "gpt-5.5",
         reasoning_effort: Optional[str] = "low",
         verbosity: Optional[str] = "high",
         max_output_tokens: int = 12000,
@@ -2381,7 +2381,7 @@ class JsonProcessingService:
     def _make_openai_request_responses_api_full(
         self,
         prompt: str,
-        model: Optional[str] = "gpt-5.4",
+        model: Optional[str] = "gpt-5.5",
         reasoning_effort: Optional[str] = "low",
         verbosity: Optional[str] = "high",
         max_output_tokens: int = 12000,

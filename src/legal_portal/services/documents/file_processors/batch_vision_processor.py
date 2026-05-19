@@ -104,7 +104,7 @@ IMPORTANT: You must analyze ALL {len(image_files)} images and provide a separate
 
         # Make Vision API call
         response = client.chat.completions.create(
-            model="gpt-5.2",
+            model="gpt-5.5",
             messages=[{"role": "user", "content": content}],
             max_completion_tokens=1500 * len(image_files),  # Scale tokens with number of images
             reasoning_effort="none",

@@ -191,7 +191,7 @@ class GapAnalysisService:
 
             # Use GPT-4.1 for gap detection - faster and more reliable for structured JSON
             # GPT-5.2 with reasoning_effort spends tokens on internal reasoning, not output
-            model = self.client.get_preferred_model("gap_analysis", "gpt-5.2")
+            model = self.client.get_preferred_model("gap_analysis", "gpt-5.5")
 
             logger.info(
                 f"[STAGE:3.5:API] Calling OpenAI for gap_analysis | "
@@ -1447,10 +1447,10 @@ Begin your analysis now.
             "pipeline": "map_reduce",
             "total_documents_analyzed": total_docs,
             "map_model": self.client.get_preferred_model(
-                "gap_analysis_map", "gpt-5-mini"
+                "gap_analysis_map", "gpt-5.4-mini"
             ),
             "reduce_model": self.client.get_preferred_model(
-                "gap_analysis_reduce", "gpt-5.4"
+                "gap_analysis_reduce", "gpt-5.5"
             ),
             "batches": batch_metadata,
             "failed_batches": failed_batches,
@@ -1483,7 +1483,7 @@ Begin your analysis now.
         Returns (BatchGapReport, metadata_dict) on success, raises on failure.
         """
         batch_start = time.time()
-        map_model = self.client.get_preferred_model("gap_analysis_map", "gpt-5-mini")
+        map_model = self.client.get_preferred_model("gap_analysis_map", "gpt-5.4-mini")
 
         logger.info(
             f"[GAP:MAP:{batch.batch_id}] Starting | docs={len(batch.document_summaries)} "
@@ -1581,7 +1581,7 @@ Begin your analysis now.
             )
 
         # Attempt 3: fallback to gpt-5.2
-        fallback_model = "gpt-5.2"
+        fallback_model = "gpt-5.5"
         try:
             response_dict = await asyncio.to_thread(
                 self.client.create_response,
@@ -1885,7 +1885,7 @@ Return ONLY valid JSON. No markdown, no explanation.
     ) -> GapAnalysisResult:
         """Merge batch reports into a single GapAnalysisResult."""
         reduce_model = self.client.get_preferred_model(
-            "gap_analysis_reduce", "gpt-5.4"
+            "gap_analysis_reduce", "gpt-5.5"
         )
         total_findings = sum(len(r.findings) for r in successful_reports)
 

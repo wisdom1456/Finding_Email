@@ -540,7 +540,7 @@ IMPORTANT: Your response MUST end with the ```json structured data block as spec
             token_count = 0
             try:
                 async for token in self.client.create_chat_completion_stream(
-                    model="gpt-5.4",
+                    model="gpt-5.5",
                     messages=[
                         {"role": "system", "content": system_prompt},
                         {"role": "user", "content": prompt}
@@ -1298,7 +1298,7 @@ RULES:
 """
 
         # Use GPT-4.1-mini for fast extraction (0.5s latency vs 40s+ for GPT-5.2)
-        model = self.client.get_preferred_model("multi_stage_analysis", "gpt-5-mini")
+        model = self.client.get_preferred_model("multi_stage_analysis", "gpt-5.4-mini")
 
         logger.info(
             f"[STAGE:1:API] Calling OpenAI for fact_matrix | "
@@ -1763,7 +1763,7 @@ RULES:
 - Return ONLY valid JSON, no markdown formatting
 """
 
-        model = self.client.get_preferred_model("multi_stage_analysis", "gpt-5-mini")
+        model = self.client.get_preferred_model("multi_stage_analysis", "gpt-5.4-mini")
 
         response_dict = await asyncio.to_thread(
             self.client.create_response,
@@ -1967,7 +1967,7 @@ Return JSON:
 """
 
         # Use GPT-4.1-mini for fast issue mapping (0.5s latency vs 60s+ for GPT-5.2)
-        model = self.client.get_preferred_model("multi_stage_analysis", "gpt-5-mini")
+        model = self.client.get_preferred_model("multi_stage_analysis", "gpt-5.4-mini")
 
         logger.info(
             f"[STAGE:2:API] Calling OpenAI for issue_mapping | "
@@ -2120,7 +2120,7 @@ Return ONLY valid JSON.
 """
 
         # Use GPT-4.1 (full model) for quality synthesis (0.5s latency vs 60s+ for GPT-5.2)
-        model = self.client.get_preferred_model("multi_stage_analysis", "gpt-5.4")
+        model = self.client.get_preferred_model("multi_stage_analysis", "gpt-5.5")
 
         logger.info(
             f"[STAGE:3:API] Calling OpenAI for deep_analysis | "

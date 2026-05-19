@@ -13,21 +13,29 @@ from decimal import Decimal
 # OpenAI Model Names
 # ============================================================================
 
-DEFAULT_MODEL: str = "gpt-5.4"
-"""Primary model for analysis and letter generation."""
+DEFAULT_MODEL: str = "gpt-5.5"
+"""Primary model for analysis and letter generation. May 2026 flagship —
+1M context, supports tools/structured outputs, $5/M input, $30/M output."""
 
-FALLBACK_MODEL: str = "gpt-5-mini"
-"""Lighter model for document analysis, chat, and cost-sensitive tasks."""
+FALLBACK_MODEL: str = "gpt-5.4-mini"
+"""Workhorse for document analysis, chat, and cost-sensitive tasks.
+400K context, $0.75/M input, $4.50/M output."""
 
-VISION_MODEL: str = "gpt-5.2"
-"""Model used for PDF OCR and image-based processing."""
+VISION_MODEL: str = "gpt-5.5"
+"""Model used for PDF OCR and image-based processing. gpt-5.5 has native
+image input support per the May 2026 release."""
 
 # ============================================================================
 # Model Pricing (per 1 K tokens, USD)
 # ============================================================================
 
 MODEL_PRICING: dict[str, dict[str, float]] = {
+    # Current flagships (May 2026)
+    "gpt-5.5": {"input": 0.005, "output": 0.030},
     "gpt-5.4": {"input": 0.0025, "output": 0.015},
+    "gpt-5.4-mini": {"input": 0.00075, "output": 0.0045},
+    "gpt-5.4-nano": {"input": 0.00010, "output": 0.0008},
+    # Older but still in MODEL_PRICING for cost reporting on legacy calls
     "gpt-5.2": {"input": 0.00175, "output": 0.014},
     "gpt-5.2-pro": {"input": 0.015, "output": 0.045},
     "gpt-5-mini": {"input": 0.00025, "output": 0.002},
@@ -46,10 +54,13 @@ MODEL_PRICING: dict[str, dict[str, float]] = {
 # ============================================================================
 
 MODEL_CONTEXT_WINDOWS: dict[str, int] = {
-    "gpt-5.4": 840_000,   # 1 M context × 0.80
-    "gpt-5.2": 840_000,   # 1 M context × 0.80
-    "gpt-5-mini": 320_000,  # 400 K context × 0.80
-    "gpt-4": 25_600,       # 32 K context × 0.80
+    "gpt-5.5": 840_000,        # 1 M context × 0.80
+    "gpt-5.4": 840_000,        # 1 M context × 0.80
+    "gpt-5.4-mini": 320_000,   # 400 K context × 0.80
+    "gpt-5.4-nano": 320_000,   # 400 K context × 0.80
+    "gpt-5.2": 840_000,        # 1 M context × 0.80
+    "gpt-5-mini": 320_000,     # 400 K context × 0.80
+    "gpt-4": 25_600,           # 32 K context × 0.80
 }
 
 # ============================================================================

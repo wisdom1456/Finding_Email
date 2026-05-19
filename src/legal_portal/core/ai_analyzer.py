@@ -314,7 +314,7 @@ class AIAnalyzer:
         )
         try:
             # Use gpt-5-mini for efficiency, with non-JSON format since prompt doesn't contain 'json'
-            response = await self._make_openai_request(prompt, model="gpt-5-mini", use_json_format=False)
+            response = await self._make_openai_request(prompt, model="gpt-5.4-mini", use_json_format=False)
             # Extract the content from the response wrapper
             summary = response.get("content", "Summary could not be generated.")
             logger.info(f"AI ANALYZER: ✅ Successfully summarized {media_type} for {file_name}")
@@ -354,12 +354,12 @@ class AIAnalyzer:
         """Enhanced token estimation with more accurate calculation."""
         return _token_manager.estimate_tokens_detailed(prompt_content)
 
-    def _count_tokens_accurate(self, text: str, model: str = "gpt-5.4") -> int:
+    def _count_tokens_accurate(self, text: str, model: str = "gpt-5.5") -> int:
         """Count tokens using tiktoken for accurate token counting."""
         return _token_manager.count_tokens_accurate(text, model)
 
     async def _check_token_threshold_precomputation(
-        self, analysis: CaseAnalysisResult, model: str = "gpt-5.4"
+        self, analysis: CaseAnalysisResult, model: str = "gpt-5.5"
     ) -> bool:
         """Check if video insights would exceed token threshold before building prompt."""
         logger.debug(f"AI ANALYZER: 🔍 Pre-computation token checking for model: {model}")
@@ -708,7 +708,7 @@ BEGIN.
             logger.info(f"AI ANALYZER: 🔍 Prompt built successfully, length: {len(prompt)} characters")
 
             logger.info("AI ANALYZER: 🔍 Making OpenAI request with gpt-5-mini...")
-            raw_analysis = await self._make_openai_request(prompt, model="gpt-5-mini")
+            raw_analysis = await self._make_openai_request(prompt, model="gpt-5.4-mini")
             logger.info(f"AI ANALYZER: 🔍 OpenAI response received, type: {type(raw_analysis)}")
             logger.info(
                 f"AI ANALYZER: 🔍 Raw analysis keys: {(list(raw_analysis.keys()) if isinstance(raw_analysis, dict) else 'Not a dict')}"
@@ -934,9 +934,9 @@ BEGIN.
 
             # Estimate total prompt size and choose appropriate model
             total_estimated_tokens = self._estimate_tokens(prompt)
-            model_to_use = "gpt-5-mini" if total_estimated_tokens > 20000 else "gpt-5.4"
+            model_to_use = "gpt-5.4-mini" if total_estimated_tokens > 20000 else "gpt-5.5"
 
-            if model_to_use == "gpt-5-mini":
+            if model_to_use == "gpt-5.4-mini":
                 logger.info(f"AI ANALYZER: 🔄 Using gpt-5-mini for large document: {document.file_name}")
 
             raw_analysis = await self._make_openai_request(prompt, model=model_to_use)
@@ -994,7 +994,7 @@ BEGIN.
             logger.info("AI ANALYZER: Starting final legal assessment...")
 
             # PRE-COMPUTATION TOKEN CHECKING - Check before building prompt
-            model_to_use = "gpt-5.4"
+            model_to_use = "gpt-5.5"
             token_check_passed = await self._check_token_threshold_precomputation(analysis, model_to_use)
 
             # Apply conditional logic based on token threshold
@@ -1036,7 +1036,7 @@ BEGIN.
                     raise ValueError(msg)
 
             try:
-                raw_assessment = await self._make_openai_request(prompt, model="gpt-5.4")
+                raw_assessment = await self._make_openai_request(prompt, model="gpt-5.5")
             except BadRequestError as bad_request_error:
                 # ENHANCED ERROR RECOVERY WITH METADATA PRESERVATION
                 error_details = str(bad_request_error)
@@ -1133,7 +1133,7 @@ BEGIN.
                         logger.info(f"AI ANALYZER: 🔄 Recovery prompt tokens: {retry_tokens:,}")
 
                         logger.info("AI ANALYZER: 🔄 Making recovery API call with preserved data...")
-                        raw_assessment = await self._make_openai_request(retry_prompt, model="gpt-5.4")
+                        raw_assessment = await self._make_openai_request(retry_prompt, model="gpt-5.5")
                         logger.info(
                             "AI ANALYZER: ✅ RECOVERY SUCCESSFUL - BadRequestError resolved with metadata preservation"
                         )

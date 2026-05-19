@@ -121,7 +121,7 @@ async def extract_structured_data_via_api(
     try:
         client = OpenAIClient()
         response = await client.create_chat_completion_async(
-            model="gpt-5-mini",
+            model="gpt-5.4-mini",
             messages=[
                 {
                     "role": "system",

@@ -275,7 +275,7 @@ async def stream_findings_letter(
                                 gap_analysis=stream_gap_analysis,
                                 timeout_seconds=strategy_timeout,
                                 allow_model=True,
-                                model="gpt-5-mini",
+                                model="gpt-5.4-mini",
                             )
                             metrics["strategy_used"] = bool(strategy_object)
                         except Exception as strategy_err:
@@ -446,7 +446,7 @@ async def stream_findings_letter(
                                 letter_type="findings",
                                 lint_violations=quality_report.get("violations", []),
                                 quality_report_v2=quality_report.get("quality_report_v2"),
-                                model="gpt-5-mini",
+                                model="gpt-5.4-mini",
                                 timeout_seconds=critic_budget,
                             )
                         except Exception as critic_err:
@@ -474,7 +474,7 @@ async def stream_findings_letter(
                             draft_markdown,
                             quality_report.get("violations", []),
                             mode=mode,
-                            model="gpt-5-mini",
+                            model="gpt-5.4-mini",
                             critic_feedback=critic_feedback,
                         )
                         repaired = _normalize_markdown(repaired, "findings")
@@ -818,7 +818,7 @@ async def generate_letter(
                         gap_analysis=gap_analysis,
                         timeout_seconds=strategy_budget,
                         allow_model=True,
-                        model="gpt-5-mini",
+                        model="gpt-5.4-mini",
                     )
                     metrics["strategy_used"] = bool(strategy_object)
                 except Exception as strategy_err:
@@ -961,7 +961,7 @@ async def generate_letter(
                     letter_type=letter_request.letter_type.value,
                     lint_violations=quality_report.get("violations", []),
                     quality_report_v2=quality_report.get("quality_report_v2"),
-                    model="gpt-5-mini",
+                    model="gpt-5.4-mini",
                     timeout_seconds=critic_budget,
                 )
             except Exception as critic_err:
@@ -989,7 +989,7 @@ async def generate_letter(
                 lint_input,
                 quality_report.get("violations", []),
                 mode="default",
-                model="gpt-5-mini",
+                model="gpt-5.4-mini",
                 critic_feedback=critic_feedback,
             )
             repaired_markdown = _normalize_markdown(
@@ -1390,7 +1390,7 @@ async def stream_recommendation_letter(
                         draft_markdown,
                         quality_report.get("violations", []),
                         mode=mode,
-                        model="gpt-5-mini",
+                        model="gpt-5.4-mini",
                     )
                     repaired = _normalize_markdown(repaired, "recommendation")
                     post_report = validator.lint_client_letter(
@@ -1660,7 +1660,7 @@ async def stream_demand_letter(
                         gap_analysis=gap_analysis,
                         timeout_seconds=strategy_budget,
                         allow_model=True,
-                        model="gpt-5-mini",
+                        model="gpt-5.4-mini",
                     )
                     metrics["strategy_used"] = bool(strategy_object)
                 except Exception as strategy_err:
@@ -1799,7 +1799,7 @@ async def stream_demand_letter(
                         draft_markdown,
                         quality_report.get("violations", []),
                         mode=mode,
-                        model="gpt-5-mini",
+                        model="gpt-5.4-mini",
                     )
                     repaired = _normalize_markdown(repaired, "demand")
                     post_report = validator.lint_client_letter(
@@ -2026,7 +2026,7 @@ Return a JSON object with:
 Be realistic and evidence-based. Only include amounts supported by the case data."""
 
     try:
-        model = openai_client.get_preferred_model("demand_calculation", "gpt-5-mini")
+        model = openai_client.get_preferred_model("demand_calculation", "gpt-5.4-mini")
         response = await asyncio.to_thread(
             openai_client.create_response,
             model=model,

@@ -16,10 +16,10 @@ logger = logging.getLogger(__name__)
 
 # Model selection by group type
 _GROUP_MODEL = {
-    GroupType.BANK_STATEMENTS: "gpt-5-mini",
-    GroupType.PHOTO_SEQUENCE: "gpt-5-mini",
-    GroupType.EMAIL_THREAD: "gpt-5.4",
-    GroupType.CONTRACT_FAMILY: "gpt-5.4",
+    GroupType.BANK_STATEMENTS: "gpt-5.4-mini",
+    GroupType.PHOTO_SEQUENCE: "gpt-5.4-mini",
+    GroupType.EMAIL_THREAD: "gpt-5.5",
+    GroupType.CONTRACT_FAMILY: "gpt-5.5",
 }
 
 
@@ -48,7 +48,7 @@ class GroupSummarizer:
             GroupSummary with combined narrative and findings
         """
         prompt = self._build_prompt(group, member_texts, jurisdiction, intake_context)
-        model = _GROUP_MODEL.get(group.group_type, "gpt-5.4")
+        model = _GROUP_MODEL.get(group.group_type, "gpt-5.5")
 
         try:
             result = await self.openai_client.create_chat_completion_async(

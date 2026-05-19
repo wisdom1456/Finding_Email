@@ -72,7 +72,7 @@ class LetterStrategyService:
         gap_analysis=None,
         allow_model: bool = True,
         timeout_seconds: int = 15,
-        model: str = "gpt-5-mini",
+        model: str = "gpt-5.4-mini",
     ) -> Dict[str, Any]:
         """Build findings strategy object with model-first, deterministic fallback."""
         fallback = self._build_findings_strategy_fallback(
@@ -138,7 +138,7 @@ class LetterStrategyService:
         gap_analysis=None,
         allow_model: bool = True,
         timeout_seconds: int = 15,
-        model: str = "gpt-5-mini",
+        model: str = "gpt-5.4-mini",
     ) -> Dict[str, Any]:
         """Build demand strategy object with model-first, deterministic fallback."""
         fallback = self._build_demand_strategy_fallback(

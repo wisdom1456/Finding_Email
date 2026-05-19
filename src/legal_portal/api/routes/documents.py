@@ -484,7 +484,7 @@ async def upload_document(
                                 )
                                 def gpt4o_ocr():
                                     return client.chat.completions.create(
-                                        model="gpt-5.2",
+                                        model="gpt-5.5",
                                         messages=[{
                                             "role": "user",
                                             "content": [

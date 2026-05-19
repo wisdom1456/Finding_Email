@@ -2252,10 +2252,17 @@ Return ONLY valid JSON. No markdown, no explanation.
         Decision logic:
         | Condition | Category | Color | Letter Type |
         |-----------|----------|-------|-------------|
-        | !is_viable OR score < 30 OR critical >= 3 | NOT_VIABLE | red | DECLINATION |
+        | !is_viable OR score < 30 | NOT_VIABLE | red | DECLINATION |
         | score < 60 OR (critical >= 1 AND high >= 2) | NEEDS_DOCUMENTATION | yellow | REQUEST_DOCUMENTS |
         | case_strength == "weak" OR (high >= 3 AND score < 75) | SETTLEMENT_RECOMMENDED | orange | SETTLEMENT_ADVISORY |
         | Otherwise | STRONG_CASE | green | PROCEED |
+
+        Note: as of 2026-05-19, `critical >= 3` no longer forces NOT_VIABLE.
+        A 2026-05-19 audit found 29 of 30 historical declination
+        recommendations were on cases the deep analysis flagged as viable
+        — the critical-floor was overriding legal merit. Critical-heavy
+        but viable cases now fall through to NEEDS_DOCUMENTATION, which
+        routes to a request_documents letter (the productive next action).
 
         Args:
             gap_analysis: The completed gap analysis result
@@ -2274,8 +2281,10 @@ Return ONLY valid JSON. No markdown, no explanation.
         case_strength = deep_analysis.overall_case_strength if deep_analysis else "moderate"
         viability_reasoning = deep_analysis.viability_reasoning if deep_analysis else None
 
-        # Decision logic
-        if not is_viable or score < 30 or critical >= 3:
+        # Decision logic. NOT_VIABLE requires either explicit deep-analysis
+        # non-viability OR a near-empty file (score < 30). Critical gap count
+        # alone no longer triggers decline — see 2026-05-19 audit note above.
+        if not is_viable or score < 30:
             category = CaseRecommendationCategory.NOT_VIABLE
             confidence = ConfidenceLevel.HIGH if not is_viable else ConfidenceLevel.MEDIUM
             color = "red"
@@ -2286,11 +2295,6 @@ Return ONLY valid JSON. No markdown, no explanation.
                 reasoning = viability_reasoning or (
                     "The case does not appear to have sufficient legal merit to pursue. "
                     "Critical deficiencies in the evidence or legal basis make success unlikely."
-                )
-            elif critical >= 3:
-                reasoning = (
-                    f"The case has {critical} critical gaps that must be resolved before proceeding. "
-                    "These deficiencies represent fundamental weaknesses that could undermine any legal action."
                 )
             else:
                 reasoning = (

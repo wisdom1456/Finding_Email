@@ -653,7 +653,19 @@ function createProgressStore() {
 						update(state => ({ ...state, status: 'error', error: pollError.message }));
 					},
 					() => {},
-					tokenRefresher
+					tokenRefresher,
+					// Durable worker jobs can run 25-60 min; the old 20-min cap
+					// caused the polling client to give up while the worker was
+					// still healthy and the heartbeat fresh. Use heartbeat-based
+					// stall instead of percent stagnation so long stages
+					// (fact_extraction in particular) don't false-fire.
+					isDurable
+						? {
+							maxPollAttempts: 1200, // 60 minutes @ 3s
+							useHeartbeatStall: true,
+							maxHeartbeatStaleSeconds: 180,
+						}
+						: undefined
 				);
 				return;
 			}

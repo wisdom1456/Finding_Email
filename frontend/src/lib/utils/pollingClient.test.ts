@@ -237,6 +237,97 @@ describe('PollingClient', () => {
 		expect(onComplete).toHaveBeenCalled();
 	});
 
+	// ── configurable options (durable mode) ──
+
+	it('accepts maxPollAttempts via startPolling options (no private-field override)', async () => {
+		// Durable-mode caller passes a higher limit. Default is still 400.
+		let callIdx = 0;
+		mockFetch.mockImplementation(() => {
+			callIdx++;
+			return makeResponse(makeProgressEvent({ percent: callIdx, timestamp: `t${callIdx}` }));
+		});
+
+		client.startPolling(
+			'http://localhost/status', 'tok', onMessage, onError, onComplete,
+			undefined,
+			{ maxPollAttempts: 5 }
+		);
+		await vi.advanceTimersByTimeAsync(0);    // poll 1
+		await vi.advanceTimersByTimeAsync(3000); // 2
+		await vi.advanceTimersByTimeAsync(3000); // 3
+		await vi.advanceTimersByTimeAsync(3000); // 4
+		await vi.advanceTimersByTimeAsync(3000); // 5
+		await vi.advanceTimersByTimeAsync(3000); // 6 — exceeds 5
+
+		expect(onError).toHaveBeenCalledWith(expect.objectContaining({
+			message: expect.stringContaining('POLLING_TIMEOUT'),
+		}));
+	});
+
+	it('useHeartbeatStall=true: stall fires when heartbeat_age exceeds threshold', async () => {
+		// Worker is dead — heartbeat_age keeps growing past threshold
+		let callIdx = 0;
+		mockFetch.mockImplementation(() => {
+			callIdx++;
+			// heartbeat_age=60s, 120s, 200s — third call crosses 180s threshold
+			return makeResponse(makeProgressEvent({
+				percent: 25,
+				timestamp: `t${callIdx}`,
+				heartbeat_age: callIdx * 60,
+			}));
+		});
+
+		client.startPolling(
+			'http://localhost/status', 'tok', onMessage, onError, onComplete,
+			undefined,
+			{ useHeartbeatStall: true, maxHeartbeatStaleSeconds: 180 }
+		);
+		await vi.advanceTimersByTimeAsync(0);    // poll 1 — hb_age=60, fresh
+		await vi.advanceTimersByTimeAsync(3000); // poll 2 — hb_age=120, fresh
+		await vi.advanceTimersByTimeAsync(3000); // poll 3 — hb_age=180 — stalled
+
+		const stalledMsg = onMessage.mock.calls.find(
+			([e]: any) => e?.type === 'stalled'
+		);
+		expect(stalledMsg).toBeTruthy();
+		expect(onComplete).toHaveBeenCalled();
+	});
+
+	it('useHeartbeatStall=true: ignores percent stagnation when heartbeat is fresh', async () => {
+		// Worker is alive (heartbeat_age stays low) but percent is stuck.
+		// This is the fact_extraction / synthesis pattern that previously
+		// false-fired the percent-based stall.
+		let callIdx = 0;
+		mockFetch.mockImplementation(() => {
+			callIdx++;
+			return makeResponse(makeProgressEvent({
+				percent: 30, // flat across many polls
+				timestamp: `t${callIdx}`,
+				heartbeat_age: 15, // worker is alive
+			}));
+		});
+
+		client.startPolling(
+			'http://localhost/status', 'tok', onMessage, onError, onComplete,
+			undefined,
+			{ useHeartbeatStall: true, maxHeartbeatStaleSeconds: 180 }
+		);
+		// Poll for 6 minutes — would have hit maxStallBeforeGracefulExit
+		// under the old percent-only stall (100 polls = 5 min).
+		await vi.advanceTimersByTimeAsync(0);
+		for (let i = 0; i < 120; i++) {
+			await vi.advanceTimersByTimeAsync(3000);
+		}
+
+		// Should NOT have declared stalled — heartbeat is fresh
+		const stalledMsg = onMessage.mock.calls.find(
+			([e]: any) => e?.type === 'stalled'
+		);
+		expect(stalledMsg).toBeFalsy();
+		// Should still be polling
+		expect(client.isPolling()).toBe(true);
+	});
+
 	it('fires error on non-ok HTTP response', async () => {
 		mockFetch
 			.mockReturnValueOnce(makeResponse({}, false, 500))

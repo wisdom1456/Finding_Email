@@ -13,6 +13,30 @@ export type PollingCompleteHandler = () => void;
 /** Returns a fresh access token, or null if refresh failed. */
 export type TokenRefresher = () => Promise<string | null>;
 
+/**
+ * Options for tuning polling behavior. Used to support durable analysis
+ * jobs that can run far longer than the legacy 20-minute default.
+ */
+export interface PollingOptions {
+	/** Hard cap on poll iterations. Default 400 (20 min @ 3s). For durable
+	 * worker jobs, pass 1200 (60 min) or higher. */
+	maxPollAttempts?: number;
+	/**
+	 * When true, declare "stalled" based on response field `heartbeat_age`
+	 * (seconds since worker last beat) rather than progress.percent
+	 * stagnation. Long stages (fact_extraction, synthesis) can sit at the
+	 * same percent for many minutes while the worker is still alive — the
+	 * percent-based stall produced false positives in that case.
+	 */
+	useHeartbeatStall?: boolean;
+	/** Threshold for the heartbeat-stall check. Default 180s (3x the
+	 * worker's typical 30s heartbeat cadence; well below the 120s
+	 * stale-job recovery threshold + safety margin). */
+	maxHeartbeatStaleSeconds?: number;
+	/** Poll frequency override (ms). Default 3000. */
+	pollFrequencyMs?: number;
+}
+
 export class PollingClient {
 	private pollInterval: NodeJS.Timeout | null = null;
 	private pollFrequency = 3000; // Poll every 3 seconds
@@ -31,6 +55,9 @@ export class PollingClient {
 	private lastEventFingerprint = ''; // Track last event to prevent duplicate processing
 	private consecutiveAuthFailures = 0;
 	private maxConsecutiveAuthFailures = 2; // Stop after 2 consecutive 401s
+	// Heartbeat-mode stall detection (durable worker jobs)
+	private useHeartbeatStall = false;
+	private maxHeartbeatStaleSeconds = 180;
 
 	/**
 	 * Start polling for progress updates
@@ -41,7 +68,8 @@ export class PollingClient {
 		onMessage: PollingMessageHandler,
 		onError: PollingErrorHandler,
 		onComplete: PollingCompleteHandler,
-		tokenRefresher?: TokenRefresher
+		tokenRefresher?: TokenRefresher,
+		options?: PollingOptions
 	): void {
 		this.url = statusUrl;
 		this.token = token;
@@ -54,6 +82,18 @@ export class PollingClient {
 		this.lastProgressPercent = -1;
 		this.stallCount = 0;
 		this.consecutiveAuthFailures = 0;
+
+		// Apply options (each falls back to the default if omitted)
+		if (options?.maxPollAttempts !== undefined) {
+			this.maxPollAttempts = options.maxPollAttempts;
+		}
+		if (options?.pollFrequencyMs !== undefined) {
+			this.pollFrequency = options.pollFrequencyMs;
+		}
+		this.useHeartbeatStall = options?.useHeartbeatStall === true;
+		if (options?.maxHeartbeatStaleSeconds !== undefined) {
+			this.maxHeartbeatStaleSeconds = options.maxHeartbeatStaleSeconds;
+		}
 
 		// Start immediate poll
 		this.poll();
@@ -180,16 +220,7 @@ export class PollingClient {
 		}
 		this.lastEventFingerprint = fingerprint;
 
-			// Track progress changes to detect stalls
 			const currentPercent = data.percent ?? 0;
-			if (currentPercent > this.lastProgressPercent) {
-				// Progress is moving, reset stall counter
-				this.lastProgressPercent = currentPercent;
-				this.stallCount = 0;
-			} else {
-				// No progress change, increment stall counter
-				this.stallCount++;
-			}
 
 			if (this.onMessageHandler) {
 				this.onMessageHandler(data);
@@ -205,46 +236,76 @@ export class PollingClient {
 				return;
 			}
 
-		// Check for stall - warn at 90 seconds and provide user-facing message
-		if (this.stallCount === this.maxStallCount) {
-			console.warn(`Processing paused at ${currentPercent}% - server may be working on a large document`);
-			if (this.onMessageHandler) {
-				this.onMessageHandler({
-					type: 'progress',
-					message: `Processing large document... (${currentPercent}% complete)`,
-					phase: data.phase,
-					percent: currentPercent,
-				});
-			}
-		}
-
-		// Continue warning periodically after initial stall
-			if (this.stallCount >= this.maxStallCount && this.stallCount % 20 === 0) {
-				console.warn(`Import appears stalled at ${currentPercent}% for ${Math.round(this.stallCount * this.pollFrequency / 1000)}s`);
-			}
-
-			// After 5 minutes of stall (100 polls * 3s = 300s), treat as "stalled but maybe partial success"
-			// This handles the case where Vercel kills the serverless function
-			const maxStallBeforeGracefulExit = 100; // 5 minutes
-			if (this.stallCount >= maxStallBeforeGracefulExit) {
-				console.warn(`Import stalled for 5+ minutes at ${currentPercent}%. Treating as partial completion.`);
-
-				// Return a special "stalled" completion instead of error
-				// The frontend can check if documents were actually imported
-				if (this.onMessageHandler) {
-					this.onMessageHandler({
-						type: 'stalled',
-						message: `Import may have stopped at ${currentPercent}%. Some documents may have been imported.`,
-						phase: 'stalled',
-						percent: currentPercent,
-						error: 'IMPORT_STALLED'
-					});
+			// Stall detection — two modes:
+			//   Durable mode (useHeartbeatStall=true): check the backend-provided
+			//     `heartbeat_age` field on each response. The worker writes
+			//     heartbeat_at every ~30s even during long stages (fact_extraction
+			//     can stay at the same percent for 20+ minutes while the worker
+			//     is actively running — the old percent-based check produced
+			//     false positives there).
+			//   Legacy mode: track percent stagnation across polls.
+			if (this.useHeartbeatStall) {
+				const heartbeatAge = (data as any).heartbeat_age;
+				if (typeof heartbeatAge === 'number' && heartbeatAge >= this.maxHeartbeatStaleSeconds) {
+					console.warn(`Worker heartbeat stale (${heartbeatAge}s) at ${currentPercent}%. Treating as stalled.`);
+					if (this.onMessageHandler) {
+						this.onMessageHandler({
+							type: 'stalled',
+							message: `Worker appears unresponsive (last heartbeat ${heartbeatAge}s ago at ${currentPercent}%).`,
+							phase: 'stalled',
+							percent: currentPercent,
+							error: 'WORKER_STALLED'
+						});
+					}
+					this.stopPolling();
+					if (this.onCompleteHandler) {
+						this.onCompleteHandler();
+					}
+					return;
 				}
-				this.stopPolling();
-				if (this.onCompleteHandler) {
-					this.onCompleteHandler();
+			} else {
+				// Legacy percent-stagnation stall (kept for non-durable callers)
+				if (currentPercent > this.lastProgressPercent) {
+					this.lastProgressPercent = currentPercent;
+					this.stallCount = 0;
+				} else {
+					this.stallCount++;
 				}
-				return;
+
+				if (this.stallCount === this.maxStallCount) {
+					console.warn(`Processing paused at ${currentPercent}% - server may be working on a large document`);
+					if (this.onMessageHandler) {
+						this.onMessageHandler({
+							type: 'progress',
+							message: `Processing large document... (${currentPercent}% complete)`,
+							phase: data.phase,
+							percent: currentPercent,
+						});
+					}
+				}
+
+				if (this.stallCount >= this.maxStallCount && this.stallCount % 20 === 0) {
+					console.warn(`Import appears stalled at ${currentPercent}% for ${Math.round(this.stallCount * this.pollFrequency / 1000)}s`);
+				}
+
+				const maxStallBeforeGracefulExit = 100; // 5 minutes
+				if (this.stallCount >= maxStallBeforeGracefulExit) {
+					console.warn(`Import stalled for 5+ minutes at ${currentPercent}%. Treating as partial completion.`);
+					if (this.onMessageHandler) {
+						this.onMessageHandler({
+							type: 'stalled',
+							message: `Import may have stopped at ${currentPercent}%. Some documents may have been imported.`,
+							phase: 'stalled',
+							percent: currentPercent,
+							error: 'IMPORT_STALLED'
+						});
+					}
+					this.stopPolling();
+					if (this.onCompleteHandler) {
+						this.onCompleteHandler();
+					}
+					return;
+				}
 			}
 
 			// Schedule next poll

@@ -35,9 +35,11 @@ from legal_portal.services.documents.document_quality_validator import DocumentQ
 from legal_portal.services.shared.json_processing_service import JsonProcessingService
 from legal_portal.services.analysis.multi_stage_analyzer import MultiStageAnalyzer
 from legal_portal.services.shared.statute_recommendation_service import StatuteRecommendationService
+from legal_portal.utils.cache_manager import DocumentCache
 from legal_portal.utils.diagnostic_logger import DiagnosticLogger
 from legal_portal.utils.logging_config import get_module_logger
 from legal_portal.utils.openai_client import OpenAIClient
+from legal_portal.core.constants import FALLBACK_MODEL
 
 logger = get_module_logger(__name__)
 
@@ -130,6 +132,10 @@ PROMPT_LONG_DOC_CHUNKS = 3
 # in 60-70s with headroom.
 PROMPT_MAX_DOCS_PER_BATCH = 6
 PROMPT_MAX_CONCURRENT_BATCHES = 3
+
+# Summary cache version — bump this string to invalidate all cached summaries
+# when prompt logic or model behavior changes without a model name change.
+_SUMMARY_CACHE_VERSION = "v1"
 
 # Prompt-shaping controls for case synthesis.
 CASE_SYNTHESIS_MAX_INTAKE_CHARS = 12000
@@ -474,6 +480,84 @@ OUTPUT AS STRICT JSON:
             "relevant_statutes": [],
             "additional_details": f"Error: {str(e)}",
         }
+
+
+def _compute_summary_cache_key(doc: Any, tier: str, model_version: str) -> str:
+    """Build a deterministic cache key from doc content, tier, and model version."""
+    doc_id = getattr(doc, "document_id", None) or getattr(doc, "file_name", None) or ""
+    content = getattr(doc, "content", None) or ""
+    text_hash = hashlib.sha256(content.encode()).hexdigest()[:16]
+    return hashlib.sha256(f"{doc_id}:{text_hash}:{model_version}:{tier}".encode()).hexdigest()
+
+
+def _split_docs_by_summary_cache(
+    docs: List[Any],
+    tier: str,
+    doc_cache: DocumentCache,
+    model_version: str,
+) -> Tuple[List[DocumentSummaryStructured], List[Any], Dict[str, str]]:
+    """Return (cached_summaries, uncached_docs, key_by_doc_id).
+
+    Corrupt cache entries are treated as misses to prevent stale data propagation.
+    """
+    cached_summaries: List[DocumentSummaryStructured] = []
+    uncached_docs: List[Any] = []
+    key_by_doc_id: Dict[str, str] = {}
+
+    for doc in docs:
+        doc_id = getattr(doc, "document_id", None) or ""
+        key = _compute_summary_cache_key(doc, tier, model_version)
+        raw = doc_cache.get_document_summary(key)
+        if raw is not None:
+            try:
+                cached_summaries.append(DocumentSummaryStructured.model_validate(raw))
+                logger.info(f"[CACHE:HIT] tier={tier} doc_id={doc_id}")
+            except Exception as exc:
+                logger.warning(f"[CACHE:CORRUPT] tier={tier} doc_id={doc_id} — treating as miss: {exc}")
+                uncached_docs.append(doc)
+                key_by_doc_id[doc_id] = key
+        else:
+            logger.info(f"[CACHE:MISS] tier={tier} doc_id={doc_id}")
+            uncached_docs.append(doc)
+            key_by_doc_id[doc_id] = key
+
+    return cached_summaries, uncached_docs, key_by_doc_id
+
+
+def _write_summaries_to_cache(
+    fresh_summaries: List[DocumentSummaryStructured],
+    uncached_docs: List[Any],
+    key_by_doc_id: Dict[str, str],
+    doc_cache: DocumentCache,
+    tier: str,
+) -> int:
+    """Write validated fresh summaries to cache.
+
+    Matches by document_id (not position) to avoid cross-doc cache corruption.
+    Returns count of successful writes.
+    """
+    input_doc_ids = {getattr(doc, "document_id", None) or "" for doc in uncached_docs}
+    writes = 0
+    for summary in fresh_summaries:
+        sid = getattr(summary, "document_id", None) or ""
+        if sid not in input_doc_ids:
+            logger.warning(
+                f"[CACHE:SKIP_WRITE] tier={tier} doc_id={sid} "
+                "not in uncached input set — skipping to avoid corruption"
+            )
+            continue
+        key = key_by_doc_id.get(sid)
+        if not key:
+            logger.warning(f"[CACHE:SKIP_WRITE] tier={tier} doc_id={sid} no cache key found — skipping")
+            continue
+        try:
+            validated = DocumentSummaryStructured.model_validate(summary.model_dump())
+            doc_cache.cache_document_summary(key, validated.model_dump())
+            logger.info(f"[CACHE:WRITE] tier={tier} doc_id={sid}")
+            writes += 1
+        except Exception as exc:
+            logger.warning(f"[CACHE:SKIP_WRITE] tier={tier} doc_id={sid} validation failed: {exc}")
+    return writes
 
 
 async def process_case_documents(
@@ -839,52 +923,84 @@ async def process_case_documents(
 
             summarization_start = time.time()
 
-            # T1: Full summarization (existing path)
-            t1_summaries = []
-            t1_errors = []
-            if t1_docs:
-                t1_start = time.time()
-                t1_summaries, t1_errors = await _generate_document_summaries(
-                    intake_content,
-                    t1_docs,
-                    openai_client_wrapper,
-                    json_processing_service,
-                    review_data,
-                    progress_callback,
-                    statute_context,
-                    jurisdiction=jurisdiction,
-                    chunk_state_mgr=chunk_state_mgr,
-                )
-                errors.extend(t1_errors)
-                t1_duration = time.time() - t1_start
-                logger.info(
-                    f"[TRIAGE:T1] Full summarization: {t1_count} docs → "
-                    f"{len(t1_summaries)} summaries in {t1_duration:.1f}s"
-                )
+            # ---- Summary Cache Setup ----
+            _model_version = f"{FALLBACK_MODEL}:{_SUMMARY_CACHE_VERSION}"
+            doc_cache = DocumentCache()
 
-            # T2: Light summarization (shorter output, larger batches)
-            t2_summaries = []
-            t2_errors = []
+            # T1: Full summarization with incremental cache
+            t1_summaries: List[DocumentSummaryStructured] = []
+            t1_errors: List[ProcessingError] = []
+            t1_cache_hits = 0
+            t1_uncached: List[Any] = []
+            if t1_docs:
+                t1_cached, t1_uncached, t1_key_by_id = _split_docs_by_summary_cache(
+                    t1_docs, "T1", doc_cache, _model_version
+                )
+                t1_cache_hits = len(t1_cached)
+                t1_summaries.extend(t1_cached)
+
+                if t1_uncached:
+                    t1_start = time.time()
+                    t1_fresh, t1_errors = await _generate_document_summaries(
+                        intake_content,
+                        t1_uncached,
+                        openai_client_wrapper,
+                        json_processing_service,
+                        review_data,
+                        progress_callback,
+                        statute_context,
+                        jurisdiction=jurisdiction,
+                        chunk_state_mgr=chunk_state_mgr,
+                    )
+                    errors.extend(t1_errors)
+                    _write_summaries_to_cache(t1_fresh, t1_uncached, t1_key_by_id, doc_cache, "T1")
+                    t1_summaries.extend(t1_fresh)
+                    t1_duration = time.time() - t1_start
+                    logger.info(
+                        f"[TRIAGE:T1] Full summarization: {len(t1_uncached)} uncached docs → "
+                        f"{len(t1_fresh)} summaries in {t1_duration:.1f}s | "
+                        f"cache_hits={t1_cache_hits}/{t1_count}"
+                    )
+                else:
+                    logger.info(f"[TRIAGE:T1] All {t1_count} T1 docs served from cache — skipped LLM")
+
+            # T2: Light summarization with incremental cache
+            t2_summaries: List[DocumentSummaryStructured] = []
+            t2_errors: List[ProcessingError] = []
+            t2_cache_hits = 0
+            t2_uncached: List[Any] = []
             if t2_docs:
-                t2_start = time.time()
-                t2_summaries, t2_errors = await _generate_document_summaries(
-                    intake_content,
-                    t2_docs,
-                    openai_client_wrapper,
-                    json_processing_service,
-                    review_data,
-                    progress_callback,
-                    statute_context,
-                    jurisdiction=jurisdiction,
-                    chunk_state_mgr=chunk_state_mgr,
-                    light_mode=True,
+                t2_cached, t2_uncached, t2_key_by_id = _split_docs_by_summary_cache(
+                    t2_docs, "T2", doc_cache, _model_version
                 )
-                errors.extend(t2_errors)
-                t2_duration = time.time() - t2_start
-                logger.info(
-                    f"[TRIAGE:T2] Light summarization: {t2_count} docs → "
-                    f"{len(t2_summaries)} summaries in {t2_duration:.1f}s"
-                )
+                t2_cache_hits = len(t2_cached)
+                t2_summaries.extend(t2_cached)
+
+                if t2_uncached:
+                    t2_start = time.time()
+                    t2_fresh, t2_errors = await _generate_document_summaries(
+                        intake_content,
+                        t2_uncached,
+                        openai_client_wrapper,
+                        json_processing_service,
+                        review_data,
+                        progress_callback,
+                        statute_context,
+                        jurisdiction=jurisdiction,
+                        chunk_state_mgr=chunk_state_mgr,
+                        light_mode=True,
+                    )
+                    errors.extend(t2_errors)
+                    _write_summaries_to_cache(t2_fresh, t2_uncached, t2_key_by_id, doc_cache, "T2")
+                    t2_summaries.extend(t2_fresh)
+                    t2_duration = time.time() - t2_start
+                    logger.info(
+                        f"[TRIAGE:T2] Light summarization: {len(t2_uncached)} uncached docs → "
+                        f"{len(t2_fresh)} summaries in {t2_duration:.1f}s | "
+                        f"cache_hits={t2_cache_hits}/{t2_count}"
+                    )
+                else:
+                    logger.info(f"[TRIAGE:T2] All {t2_count} T2 docs served from cache — skipped LLM")
 
             # T3: Metadata-only register entries (no LLM call)
             t3_summaries = _build_metadata_only_summaries(t3_docs)
@@ -923,6 +1039,20 @@ async def process_case_documents(
                 f"grouped={len(grouped_doc_ids)} | "
                 f"summaries_produced={len(structured_summaries)}"
             )
+
+            # Cache stats — T3 is metadata-only (no LLM/cache), so stats cover T1+T2 only
+            _cache_total_docs = t1_count + t2_count
+            if _cache_total_docs > 0:
+                _cache_total_hits = t1_cache_hits + t2_cache_hits
+                _cache_uncached = len(t1_uncached) + len(t2_uncached)
+                _cache_hit_pct = int(_cache_total_hits / _cache_total_docs * 100)
+                logger.info(
+                    f"[CACHE:STATS] total={_cache_total_docs} cached={_cache_total_hits} "
+                    f"uncached={_cache_uncached} hit_rate={_cache_hit_pct}% "
+                    f"duration={summarization_total:.0f}s | "
+                    f"T1: hits={t1_cache_hits}/{t1_count} misses={len(t1_uncached)} | "
+                    f"T2: hits={t2_cache_hits}/{t2_count} misses={len(t2_uncached)}"
+                )
 
             if progress_callback:
                 await progress_callback(

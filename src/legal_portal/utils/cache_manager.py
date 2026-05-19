@@ -391,6 +391,14 @@ class DocumentCache:
         key = f"generated_doc:{case_id}:{doc_type}"
         return self.cache.get(key)
 
+    def cache_document_summary(self, cache_key: str, summary: Dict[str, Any], ttl: int = 86400 * 7):
+        """Cache a document summary dict keyed by content+tier+model hash. TTL: 7 days."""
+        self.cache.set(f"doc_summary:{cache_key}", summary, ttl=ttl)
+
+    def get_document_summary(self, cache_key: str) -> Optional[Dict[str, Any]]:
+        """Retrieve a cached document summary dict, or None on miss/expiry."""
+        return self.cache.get(f"doc_summary:{cache_key}")
+
 
 def cleanup_validation_output(validation_dir: str = "validation_output", max_age_hours: int = 24) -> int:
     """Remove old files from validation_output directory.

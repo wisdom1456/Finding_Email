@@ -44,7 +44,7 @@ os.environ.setdefault("LOG_LEVEL", "INFO")
 from dotenv import load_dotenv
 load_dotenv()
 
-from supabase import create_client
+from supabase import create_client, ClientOptions
 
 from legal_portal.utils.logging_config import get_module_logger
 
@@ -95,6 +95,7 @@ class AnalysisWorker:
         self.supabase = create_client(
             os.environ["SUPABASE_URL"],
             os.environ["SUPABASE_SERVICE_KEY"],
+            options=ClientOptions(postgrest_client_timeout=30),
         )
         self.running = True
         self.current_job_id: Optional[str] = None

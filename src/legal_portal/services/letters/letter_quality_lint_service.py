@@ -11,6 +11,40 @@ from dataclasses import asdict, dataclass
 from typing import Any, Dict, List, Tuple
 
 from legal_portal.config.default import get_settings
+from legal_portal.utils.logging_config import get_module_logger
+
+logger = get_module_logger(__name__)
+
+
+def _emit_qa_failure_log(
+    *, letter_type: str, qa: Dict[str, Any], word_count: int
+) -> None:
+    """Log a structured WARN when any QA v2 check fails. Silent on pass."""
+    failed: List[str] = []
+    if qa.get("term_explainer_passed") is False:
+        failed.append("term_explainer")
+    if qa.get("demand_specificity_passed") is False:
+        failed.append("demand_specificity")
+    evidence = qa.get("evidence_linkage_score")
+    if isinstance(evidence, (int, float)) and evidence < 0.5:
+        failed.append(f"evidence_linkage<0.5({evidence:.2f})")
+    flags = qa.get("unsupported_assertion_flags")
+    if isinstance(flags, list) and flags:
+        failed.append(f"unsupported_assertions×{len(flags)}")
+    if not failed:
+        return
+    logger.warning(
+        "letter_qa_failed",
+        extra={
+            "letter_type": letter_type,
+            "failed_checks": failed,
+            "word_count": word_count,
+            "term_explainer_passed": qa.get("term_explainer_passed"),
+            "evidence_linkage_score": qa.get("evidence_linkage_score"),
+            "demand_specificity_passed": qa.get("demand_specificity_passed"),
+            "section_depth_score": qa.get("section_depth_score"),
+        },
+    )
 
 
 @dataclass
@@ -417,6 +451,16 @@ class LetterQualityLintService:
             "term_micro_explainer_coverage": float(term_result["coverage"]),
             "citation_parenthetical_density": float(parenthetical_density["density_score"]),
         }
+
+        # Structured WARN log when a QA check fails. Surfaces to Vercel /
+        # Railway logs so operators can grep `letter_qa_failed` without
+        # building a UI surface. Stays silent on clean letters to avoid
+        # log spam.
+        _emit_qa_failure_log(
+            letter_type=letter_type,
+            qa=quality_report_v2,
+            word_count=word_count,
+        )
 
         return {
             "mode": mode,

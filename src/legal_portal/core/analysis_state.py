@@ -219,7 +219,10 @@ def _resolve_letter_identity_context(
         try:
             profile_resp = (
                 supabase.table("profiles")
-                .select("full_name,firm_name,phone,email")
+                .select(
+                    "full_name,firm_name,firm_address,phone,email,"
+                    "email_signature,bar_number,default_demand_deadline"
+                )
                 .eq("id", user_id)
                 .limit(1)
                 .execute()
@@ -304,12 +307,25 @@ def _resolve_letter_identity_context(
         clio_matter_data.get("clientName"),
     )
 
+    # Profile-only fields (no override/artifact precedence — these are
+    # genuinely user-config and don't appear in case metadata).
+    firm_address = _first_non_empty_text(profile_data.get("firm_address"))
+    bar_number = _first_non_empty_text(profile_data.get("bar_number"))
+    email_signature = _first_non_empty_text(profile_data.get("email_signature"))
+    demand_deadline_default = _first_non_empty_text(
+        profile_data.get("default_demand_deadline")
+    )
+
     return {
         "attorney_name": attorney_name,
         "firm_name": firm_name,
+        "firm_address": firm_address,
         "contact_phone": contact_phone,
         "contact_email": contact_email,
         "client_name": client_name,
+        "bar_number": bar_number,
+        "email_signature": email_signature,
+        "demand_deadline_default": demand_deadline_default,
     }
 
 

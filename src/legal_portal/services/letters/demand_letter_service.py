@@ -11,6 +11,7 @@ import markdown2
 from legal_portal.core.data_models import DeepAnalysis, DocumentSummaryStructured, FactMatrix, Party
 from legal_portal.services.shared.document_formatter import DocumentFormatterService
 from legal_portal.services.letters.letter_strategy_service import LetterStrategyService
+from legal_portal.services.letters.signature_renderer import render_letter_signature_parts
 from legal_portal.utils.logging_config import get_module_logger
 from legal_portal.utils.markdown_utils import clean_markdown_response
 from legal_portal.utils.openai_client import OpenAIClient
@@ -141,10 +142,16 @@ class DemandLetterService:
             demand_amount=demand_amount,
             demand_deadline=demand_deadline,
             specific_demands=self._format_demands(specific_demands),
-            attorney_name=attorney_info.get("name") or "Attorney",
-            firm_name=attorney_info.get("firm") or "",
-            contact_phone=attorney_info.get("phone") or "",
-            contact_email=attorney_info.get("email") or "",
+            # Pass attorney_info fields through unchanged (None preserved).
+            # _build_demand_prompt assembles signature_block / closing_contact
+            # via render_letter_signature_parts; do NOT coerce to "" here.
+            attorney_name=attorney_info.get("name"),
+            firm_name=attorney_info.get("firm"),
+            firm_address=attorney_info.get("firm_address"),
+            contact_phone=attorney_info.get("phone"),
+            contact_email=attorney_info.get("email"),
+            bar_number=attorney_info.get("bar_number"),
+            signature_override=attorney_info.get("signature_block"),
             client_name=client_name or "Client",
             jurisdiction_name=jurisdiction,
             strategy_object=strategy_object,
@@ -174,20 +181,40 @@ class DemandLetterService:
         demand_amount: Optional[float],
         demand_deadline: str,
         specific_demands: str,
-        attorney_name: str,
-        firm_name: str,
-        contact_phone: str,
-        contact_email: str,
+        attorney_name: Optional[str],
+        firm_name: Optional[str],
+        contact_phone: Optional[str],
+        contact_email: Optional[str],
         client_name: str,
         jurisdiction_name: str,
         strategy_object: Optional[Dict[str, Any]] = None,
+        firm_address: Optional[str] = None,
+        bar_number: Optional[str] = None,
+        signature_override: Optional[str] = None,
     ) -> str:
-        """Build demand-letter prompt using normalized context values."""
+        """Build demand-letter prompt using normalized context values.
+
+        Signature block and the closing "reach out to our office" sentence
+        are rendered in Python via render_letter_signature_parts so that
+        missing fields produce *no line* (rather than a labeled-empty line
+        like ``Phone: `` that invites LLM hallucination).
+        """
         statute_example = self.JURISDICTION_STATUTE_EXAMPLES.get(
             jurisdiction_name,
             self.JURISDICTION_STATUTE_EXAMPLES["Florida"],
         )
         demand_amount_text = self._format_demand_amount_for_prompt(demand_amount)
+
+        sig_parts = render_letter_signature_parts(
+            attorney_name=attorney_name or "Attorney",
+            firm_name=firm_name,
+            firm_address=firm_address,
+            phone=contact_phone,
+            email=contact_email,
+            bar_number=bar_number,
+            client_name=client_name,
+            signature_override=signature_override,
+        )
 
         base_prompt = self._load_template().format(
             target_party_name=target_party_name,
@@ -196,10 +223,8 @@ class DemandLetterService:
             demand_amount=demand_amount_text,
             demand_deadline=demand_deadline,
             specific_demands=specific_demands,
-            attorney_name=attorney_name,
-            firm_name=firm_name,
-            contact_phone=contact_phone,
-            contact_email=contact_email,
+            signature_block=sig_parts["signature_block"],
+            closing_contact_sentence=sig_parts["closing_contact_sentence"],
             client_name=client_name,
             jurisdiction_name=jurisdiction_name,
             statute_example=statute_example,

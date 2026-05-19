@@ -6,9 +6,11 @@
 	import ClioConnect from '$lib/components/ClioConnect.svelte';
 	import Modal from '$lib/components/ui/Modal.svelte';
 	import AppNavLink from '$lib/components/ui/AppNavLink.svelte';
+	import ProfileCompleteBanner from '$lib/components/ProfileCompleteBanner.svelte';
 	import { clioStore } from '$lib/stores/clioStore';
 	import { Menu, X, User, Settings, LogOut, Link2, HelpCircle } from 'lucide-svelte';
 	import type { LayoutData } from './$types';
+	import type { LetterProfile } from '$lib/profile';
 	import logoImg from '$lib/assets/logo-br.png';
 
 	let { data, children }: { data: LayoutData; children: any } = $props();
@@ -17,11 +19,30 @@
 	let clioConnected = $derived($clioStore.connected);
 	let isMobileMenuOpen = $state(false);
 	let isUserMenuOpen = $state(false);
+	let profile = $state<LetterProfile | null>(null);
 
-	// Check Clio connection status on mount
+	// Check Clio connection status + load profile completeness check on mount
 	onMount(async () => {
-		await checkClioStatus();
+		await Promise.all([checkClioStatus(), loadProfile()]);
 	});
+
+	async function loadProfile() {
+		try {
+			const { data: { user } } = await supabase.auth.getUser();
+			if (!user) return;
+			const { data: profileRow } = await supabase
+				.from('profiles')
+				.select('full_name, default_jurisdiction')
+				.eq('id', user.id)
+				.single();
+			if (profileRow) {
+				profile = profileRow as LetterProfile;
+			}
+		} catch (err) {
+			// Banner stays hidden if profile fetch fails — fail-safe
+			console.debug('Profile completeness check skipped:', err);
+		}
+	}
 
 	async function checkClioStatus() {
 		try {
@@ -234,6 +255,11 @@
 			</div>
 		{/if}
 	</nav>
+
+	<!-- Profile completeness banner (shows only when incomplete) -->
+	<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4">
+		<ProfileCompleteBanner {profile} />
+	</div>
 
 	<!-- Main Content -->
 	<main id="main-content" class="py-8" tabindex="-1">

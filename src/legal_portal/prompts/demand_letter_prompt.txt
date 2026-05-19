@@ -17,11 +17,8 @@ DEMAND DETAILS:
 If the Amount field says "To be determined based on currently documented losses," do NOT invent a dollar figure.
 In that case, demand full compensation in an amount to be finalized after complete accounting and document review.
 
-ATTORNEY CONTACT:
-{attorney_name}
-{firm_name}
-Phone: {contact_phone}
-Email: {contact_email}
+ATTORNEY CONTEXT (use exactly these names — do not invent or substitute):
+{signature_block}
 Client Name: {client_name}
 
 ---
@@ -92,17 +89,13 @@ REQUIRED LETTER STRUCTURE:
 
 7. **Closing Paragraph**:
    - Blank line
-   - "Thank you for your prompt attention to this matter, and we look forward to your compliance with the above. Please do not hesitate to reach out to our office at {contact_phone} or via e-mail at {contact_email}."
+   - Begin with: "Thank you for your prompt attention to this matter, and we look forward to your compliance with the above."
+   - If the following sentence is non-empty, append it verbatim. If it is empty, omit it entirely — do NOT invent phone numbers or email addresses:
+     {closing_contact_sentence}
    - Blank line
 
-8. **Signature Block**:
-   - "Sincerely,"
-   - Blank line
-   - "/s/ {attorney_name}"
-   - "{attorney_name}, Esq."
-   - "Division Attorney"
-   - "{firm_name}"
-   - "Attorney for {client_name}"
+8. **Signature Block** — output exactly the following block verbatim, line for line. Do NOT add, remove, or substitute any field. If a field is absent below, it must be absent in the output (do not invent phone numbers, addresses, titles, or last names):
+{signature_block}
 
 STYLE REQUIREMENTS:
 - Professional, measured tone with formal legal language
@@ -118,6 +111,7 @@ STYLE REQUIREMENTS:
 - **No Markdown code fences in output** (no ``` blocks)
 - No placeholders like "[insert]" - use actual data from context
 - Never fabricate missing figures (especially dollar amounts)
+- Use ONLY the attorney contact details provided in the signature block above. Do not add a phone number, email address, attorney title, or last name unless it is already present in that block. If a field is not in the block, omit it entirely — do not substitute any value.
 - Use proper paragraph spacing (blank lines between sections)
 - Use blockquotes (>) for contract provisions
 - Use ## for section headings if including them (optional)

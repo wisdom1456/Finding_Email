@@ -19,6 +19,13 @@
 		detail?: string;
 	}
 
+	// data.defaultJurisdiction is resolved BEFORE the page mounts via
+	// +page.ts load(). No race window — by the time this component
+	// renders, jurisdiction is either the user's profile preference or
+	// '' (empty, forcing the user to consciously pick — no silent FL).
+	let { data = { defaultJurisdiction: '' } }: { data?: { defaultJurisdiction: string } } =
+		$props();
+
 	let isCreating = $state(false);
 	let showManualForm = $state(false);
 	let error = $state<string | null>(null);
@@ -29,7 +36,7 @@
 	let clientName = $state('');
 	let referenceNumber = $state('');
 	let description = $state('');
-	let jurisdiction = $state('Florida');
+	let jurisdiction = $state(data.defaultJurisdiction);
 
 	async function handleCaseCreatedFromClio(result: { caseId: string; success: boolean; error?: string }) {
 		console.log('Case created from Clio:', result);
@@ -52,6 +59,14 @@
 	async function createManualCase() {
 		if (!clientName.trim()) {
 			error = 'Client name is required';
+			return;
+		}
+
+		// Jurisdiction must be explicitly chosen. The form no longer
+		// auto-defaults to Florida (that bias caused NM cases to be
+		// silently filed under FL when the profile hadn't loaded yet).
+		if (!jurisdiction) {
+			error = 'Please select a jurisdiction';
 			return;
 		}
 
@@ -100,29 +115,10 @@
 		}
 	}
 
-	// Prevent navigation during creation
+	// Jurisdiction is resolved via +page.ts load() before mount — no
+	// async fetch needed here. Anything that needs to run on mount
+	// (beforeunload guard, etc.) goes below.
 	onMount(() => {
-		// Fetch user profile for default jurisdiction
-		(async () => {
-			try {
-				const { data: { user } } = await supabase.auth.getUser();
-				if (user) {
-					const { data: profile } = await supabase
-						.from('profiles')
-						.select('default_jurisdiction')
-						.eq('id', user.id)
-						.single();
-					
-					const profileData = profile as { default_jurisdiction?: string } | null;
-					if (profileData?.default_jurisdiction) {
-						jurisdiction = profileData.default_jurisdiction;
-					}
-				}
-			} catch (err) {
-				console.error('Error fetching profile:', err);
-			}
-		})();
-
 		const handleBeforeUnload = (e: BeforeUnloadEvent) => {
 			if (isCreating) {
 				e.preventDefault();
@@ -282,6 +278,7 @@
 						required
 						class="input-standard focus:ring-2 focus:ring-accent focus:border-transparent transition-colors"
 					>
+						<option value="" disabled>Select jurisdiction…</option>
 						<option value="Florida">Florida</option>
 						<option value="New Mexico">New Mexico</option>
 					</select>
@@ -318,7 +315,7 @@
 				{/if}
 				<AsyncButton
 					type="submit"
-					disabled={!clientName.trim()}
+					disabled={!clientName.trim() || !jurisdiction}
 					loading={isCreating}
 					variant="primary"
 					loadingText="Creating..."

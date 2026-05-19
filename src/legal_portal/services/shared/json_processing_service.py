@@ -1014,6 +1014,10 @@ class JsonProcessingService:
         gap_analysis,
         strategy_object: Optional[Dict[str, Any]] = None,
         prefer_compact: bool = False,
+        firm_address: Optional[str] = None,
+        bar_number: Optional[str] = None,
+        signature_override: Optional[str] = None,
+        client_name: Optional[str] = None,
     ) -> Tuple[str, bool]:
         """Build adaptive findings prompt and indicate whether raw docs are included."""
         include_raw_documents = bool(original_documents) and not prefer_compact
@@ -1043,6 +1047,10 @@ class JsonProcessingService:
             qa_context=qa_context,
             structure_guidance=structure_guidance,
             strategy_object=strategy_object,
+            firm_address=firm_address,
+            bar_number=bar_number,
+            signature_override=signature_override,
+            client_name=client_name,
         )
 
         if include_raw_documents and len(prompt) > self._MAX_FINDINGS_PROMPT_CHARS:
@@ -1074,6 +1082,10 @@ class JsonProcessingService:
                 qa_context=qa_context,
                 structure_guidance=structure_guidance,
                 strategy_object=strategy_object,
+                firm_address=firm_address,
+                bar_number=bar_number,
+                signature_override=signature_override,
+                client_name=client_name,
             )
             include_raw_documents = False
 
@@ -1119,17 +1131,17 @@ class JsonProcessingService:
                 jurisdiction_statute_citation_short_prefix=statute_citation_short_prefix,
                 jurisdiction_statute_example=statute_example,
                 jurisdiction_specific_guidance=jurisdiction_specific_guidance,
-                # Other placeholders will be filled by the calling function
+                # Other placeholders will be filled by the calling function.
+                # Note: signature_block replaces the prior attorney_name/
+                # attorney_title/firm_name/contact_phone/contact_email slots.
+                # Those bare slots invited LLM hallucination of
+                # placeholder values like "(555) 555-5555" and "[Last Name]".
                 qa_context="{qa_context}",
                 intake_data="{intake_data}",
                 document_summaries="{document_summaries}",
                 quality_context="{quality_context}",
                 statute_context="{statute_context}",
-                attorney_name="{attorney_name}",
-                attorney_title="{attorney_title}",
-                firm_name="{firm_name}",
-                contact_phone="{contact_phone}",
-                contact_email="{contact_email}",
+                signature_block="{signature_block}",
                 clio_matter_context="{clio_matter_context}",
             )
         except FileNotFoundError as e:
@@ -1144,18 +1156,22 @@ class JsonProcessingService:
         try:
             prompt_template = self._load_prompt_template(jurisdiction=jurisdiction)
 
+            # Legacy standalone path — used in scripts/tests, not the
+            # production findings-letter flow. Provide a minimal valid
+            # signature so the template renders without LLM hallucination.
+            from legal_portal.services.letters.signature_renderer import (
+                render_letter_signature_parts,
+            )
+            sig_parts = render_letter_signature_parts(
+                attorney_name="Attorney",
+            )
             formatted_prompt = prompt_template.format(
                 intake_data=intake_data,
                 document_summaries=document_summaries,
-                # Provide empty values for other placeholders to avoid KeyError
                 qa_context="",
                 quality_context="",
                 statute_context="",
-                attorney_name="Attorney",
-                attorney_title="Partner",
-                firm_name="",
-                contact_phone="",
-                contact_email="",
+                signature_block=sig_parts["signature_block"],
                 clio_matter_context="",
             )
 
@@ -1235,7 +1251,10 @@ class JsonProcessingService:
             )
             if not attorney_match:
                 attorney_match = re.search(r'"attorneyName":\s*"([^"]+)"', intake_content or "")
-            resolved_attorney_name = attorney_match.group(1) if attorney_match else "Senior Partner"
+            # If nothing found, leave as None — render_letter_signature_parts
+            # coerces to "Attorney" upstream. Avoid hardcoding "Senior Partner"
+            # which previously leaked into every findings letter.
+            resolved_attorney_name = attorney_match.group(1) if attorney_match else None
 
         resolved_firm_name = firm_name
         if not resolved_firm_name:
@@ -1249,12 +1268,17 @@ class JsonProcessingService:
         jurisdiction: str,
         contact_phone: Optional[str],
         contact_email: Optional[str],
-    ) -> Tuple[str, str]:
-        """Resolve contact phone/email values with jurisdiction-specific defaults."""
-        default_phone = "(727) 275-9575" if jurisdiction == "Florida" else "(505) 555-0199"
-        resolved_contact_phone = contact_phone if contact_phone else default_phone
-        resolved_contact_email = contact_email if contact_email else ""
-        return resolved_contact_phone, resolved_contact_email
+    ) -> Tuple[Optional[str], Optional[str]]:
+        """Pass through contact details — no jurisdiction-default substitution.
+
+        Previously this returned a hardcoded "(727) 275-9575" (FL) or
+        "(505) 555-0199" (NM) when the attorney's profile lacked a phone.
+        That injected an attorney's-firm-isn't-this number into every
+        letter where the field was missing, including for attorneys whose
+        firm phone differs. The profile is now the single source of truth;
+        missing fields cleanly omit the corresponding signature line.
+        """
+        return contact_phone or None, contact_email or None
 
     def _build_verified_statute_context(self, verified_statutes: list, jurisdiction: str) -> str:
         """Build prompt context for verified statutes from the legal corpus."""
@@ -1292,20 +1316,39 @@ class JsonProcessingService:
         qa_context: str,
         structure_guidance=None,  # LetterStructure for adaptive generation
         strategy_object: Optional[Dict[str, Any]] = None,
+        firm_address: Optional[str] = None,
+        bar_number: Optional[str] = None,
+        signature_override: Optional[str] = None,
+        client_name: Optional[str] = None,
     ) -> str:
-        """Build the findings prompt for JSON, adaptive, and streaming generation."""
+        """Build the findings prompt for JSON, adaptive, and streaming generation.
+
+        Signature is pre-rendered in Python (via render_letter_signature_parts)
+        so missing profile fields produce *no line* rather than a bare slot
+        the LLM would fill with placeholders like ``(555) 555-5555``.
+        """
         prompt_template = self._load_prompt_template(jurisdiction=jurisdiction)
+        # Lazy import to avoid circulars at module load
+        from legal_portal.services.letters.signature_renderer import (
+            render_letter_signature_parts,
+        )
+        sig_parts = render_letter_signature_parts(
+            attorney_name=attorney_name or "Attorney",
+            firm_name=firm_name,
+            firm_address=firm_address,
+            phone=contact_phone,
+            email=contact_email,
+            bar_number=bar_number,
+            client_name=client_name,
+            signature_override=signature_override,
+        )
         prompt = prompt_template.format(
             qa_context=qa_context,
             intake_data=(intake_content or "")[:5000],
             document_summaries=document_summaries,
             quality_context=quality_context or "",
             statute_context=statute_context or "",
-            attorney_name=attorney_name,
-            attorney_title="Senior Partner",
-            firm_name=firm_name or "",
-            contact_phone=contact_phone,
-            contact_email=contact_email,
+            signature_block=sig_parts["signature_block"],
             clio_matter_context=clio_matter_context or "",
         )
 
@@ -1700,6 +1743,10 @@ class JsonProcessingService:
         document_registry: Optional[List[Dict[str, Any]]] = None,
         strategy_object: Optional[Dict[str, Any]] = None,
         gap_analysis=None,  # GapAnalysisResult for guardrails
+        firm_address: Optional[str] = None,
+        bar_number: Optional[str] = None,
+        signature_override: Optional[str] = None,
+        client_name: Optional[str] = None,
     ) -> AsyncGenerator[str, None]:
         """Stream adaptive findings email generation.
 
@@ -1723,8 +1770,10 @@ class JsonProcessingService:
         if qa_pair_count > 0:
             logger.info(f"Including {qa_pair_count} confirmed Q&A pairs in streaming generation")
 
-        # Signature details
-        attorney_name = attorney_name or "Senior Partner"
+        # Signature details — preserve None when profile is missing.
+        # render_letter_signature_parts (called downstream) substitutes
+        # the safer "Attorney" sentinel rather than the credentialed-looking
+        # "Senior Partner" string that previously leaked into every letter.
         contact_phone, contact_email_value = self._resolve_contact_details(
             jurisdiction=jurisdiction,
             contact_phone=contact_phone,
@@ -1755,6 +1804,10 @@ class JsonProcessingService:
             strategy_object=strategy_object,
             gap_analysis=gap_analysis,
             jurisdiction=jurisdiction,
+            firm_address=firm_address,
+            bar_number=bar_number,
+            signature_override=signature_override,
+            client_name=client_name,
         )
 
         logger.info(f"Streaming adaptive findings email for {jurisdiction}")
@@ -1798,6 +1851,10 @@ class JsonProcessingService:
                 gap_analysis=gap_analysis,
                 jurisdiction=jurisdiction,
                 prefer_compact=True,
+                firm_address=firm_address,
+                bar_number=bar_number,
+                signature_override=signature_override,
+                client_name=client_name,
             )
             async for token in self.client.create_response_stream(
                 model=model,

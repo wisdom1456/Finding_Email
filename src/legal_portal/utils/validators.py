@@ -137,10 +137,12 @@ def create_fallback_demand_letter_evaluation() -> dict[str, Any]:
             "Matter may be resolved without litigation",
             "Foundation established for potential legal action if needed",
         ],
-        "relevant_statutes": [
-            "Florida Statutes - General Contract Law",
-            "Florida Civil Practice Rules",
-        ],
+        # Statutes intentionally left empty in the fallback: hardcoding
+        # jurisdiction-specific citations here biased letters toward
+        # Florida regardless of the actual case jurisdiction (NM or FL).
+        # Real statute selection happens in the jurisdiction-aware
+        # statute-validation pipeline; the fallback should not inject any.
+        "relevant_statutes": [],
     }
 
 

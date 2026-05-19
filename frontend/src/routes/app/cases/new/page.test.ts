@@ -100,10 +100,12 @@ describe('New Case Page - Button Interactions', () => {
 			});
 		});
 
-		it('create case button enabled when client name filled', async () => {
+		it('create case button enabled when client name filled (profile-set jurisdiction)', async () => {
 			const user = userEvent.setup();
 			mockClioConnected = false;
-			render(NewCasePage);
+			// User's profile has default_jurisdiction set — load function
+			// passes it through, no need to interact with the dropdown
+			render(NewCasePage, { props: { data: { defaultJurisdiction: 'Florida' } } });
 
 			const manualButton = await screen.findByRole('button', {
 				name: /create manual case/i
@@ -126,7 +128,7 @@ describe('New Case Page - Button Interactions', () => {
 				json: async () => ({ id: 'case-123', client_name: 'John Doe' })
 			});
 
-			render(NewCasePage);
+			render(NewCasePage, { props: { data: { defaultJurisdiction: 'Florida' } } });
 
 			const manualButton = await screen.findByRole('button', {
 				name: /create manual case/i
@@ -160,7 +162,7 @@ describe('New Case Page - Button Interactions', () => {
 				json: async () => ({ detail: 'Invalid data' })
 			});
 
-			render(NewCasePage);
+			render(NewCasePage, { props: { data: { defaultJurisdiction: 'Florida' } } });
 
 			const manualButton = await screen.findByRole('button', {
 				name: /create manual case/i
@@ -176,6 +178,47 @@ describe('New Case Page - Button Interactions', () => {
 			await waitFor(() => {
 				expect(screen.getByText(/invalid data/i)).toBeInTheDocument();
 			});
+		});
+
+		it('submit stays disabled with empty jurisdiction even when client name set', async () => {
+			// Regression: this is the bug class we're fixing. Without
+			// profile.default_jurisdiction, the form must NOT silently
+			// default to Florida — the user has to consciously pick.
+			const user = userEvent.setup();
+			mockClioConnected = false;
+			render(NewCasePage, { props: { data: { defaultJurisdiction: '' } } });
+
+			const manualButton = await screen.findByRole('button', {
+				name: /create manual case/i
+			});
+			await user.click(manualButton);
+
+			const clientNameInput = await screen.findByLabelText(/client name/i);
+			await user.type(clientNameInput, 'John Doe');
+
+			const submitButton = screen.getByRole('button', { name: /create case/i });
+			expect(submitButton).toBeDisabled();
+		});
+
+		it('submit enables once user picks a jurisdiction from the dropdown', async () => {
+			const user = userEvent.setup();
+			mockClioConnected = false;
+			render(NewCasePage, { props: { data: { defaultJurisdiction: '' } } });
+
+			const manualButton = await screen.findByRole('button', {
+				name: /create manual case/i
+			});
+			await user.click(manualButton);
+
+			const clientNameInput = await screen.findByLabelText(/client name/i);
+			await user.type(clientNameInput, 'John Doe');
+
+			// Pick jurisdiction
+			const jurisdictionSelect = screen.getByLabelText(/jurisdiction/i);
+			await user.selectOptions(jurisdictionSelect, 'New Mexico');
+
+			const submitButton = screen.getByRole('button', { name: /create case/i });
+			expect(submitButton).not.toBeDisabled();
 		});
 
 		it.skip('shows loading overlay while submitting', async () => {

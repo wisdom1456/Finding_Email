@@ -35,6 +35,7 @@ from legal_portal.services.analysis.gap_helpers import _ensure_fresh_gap_analysi
 from legal_portal.config.default import get_settings
 from legal_portal.core.data_models import LetterType, ProcessingResult
 from legal_portal.services.letters.demand_letter_service import DemandLetterService
+from legal_portal.services.observability.letter_event_logger import LetterEventLogger
 from legal_portal.services.shared.document_formatter import DocumentFormatterService
 from legal_portal.services.shared.json_processing_service import JsonProcessingService
 from legal_portal.services.letters.letter_validation_service import LetterValidationService
@@ -155,12 +156,22 @@ async def stream_findings_letter(
                 payload["done"] = True
             return payload
 
+        event_logger = LetterEventLogger(supabase)
+
         async def generate():
             request_started = time.monotonic()
             metrics = _new_generation_metrics(
                 analysis_id=analysis_id,
                 letter_type="findings",
                 streaming=True,
+            )
+            # One row per generation request — fail-safe (logger never
+            # raises into the stream).
+            event_id = event_logger.begin(
+                user_id=user["id"],
+                case_id=analysis_data.get("case_id"),
+                analysis_id=analysis_id,
+                letter_type="findings",
             )
             quality_report = _quality_report_placeholder(mode=mode, letter_type="findings")
             recoverable_timeout = False
@@ -299,6 +310,10 @@ async def stream_findings_letter(
                     document_registry=msr.get("document_registry"),
                     strategy_object=strategy_object,
                     gap_analysis=stream_gap_analysis,
+                    firm_address=resolved_identity.get("firm_address"),
+                    bar_number=resolved_identity.get("bar_number"),
+                    signature_override=resolved_identity.get("email_signature"),
+                    client_name=resolved_identity.get("client_name"),
                 )
 
                 token_queue: asyncio.Queue = asyncio.Queue()
@@ -564,6 +579,12 @@ async def stream_findings_letter(
                 except Exception as persist_err:
                     logger.warning(f"[LETTER] Persisting streamed findings failed: {persist_err}")
 
+                event_logger.complete(
+                    event_id,
+                    qa_summary=quality_report.get("quality_report_v2"),
+                    duration_ms=metrics.get("total_latency_ms"),
+                )
+
                 quality_msg = _emit(
                     "quality",
                     quality_report=quality_report,
@@ -600,6 +621,12 @@ async def stream_findings_letter(
 
                 metrics["total_latency_ms"] = int((time.monotonic() - request_started) * 1000)
                 _emit_generation_metrics(metrics)
+
+                event_logger.fail(
+                    event_id,
+                    error=f"{metrics.get('error_code')}: {stream_err}",
+                    duration_ms=metrics.get("total_latency_ms"),
+                )
 
                 error_msg = _emit(
                     "error",
@@ -693,8 +720,11 @@ async def generate_letter(
         attorney_info = {
             "name": resolved_identity.get("attorney_name"),
             "firm": resolved_identity.get("firm_name"),
+            "firm_address": resolved_identity.get("firm_address"),
             "phone": resolved_identity.get("contact_phone"),
             "email": resolved_identity.get("contact_email"),
+            "bar_number": resolved_identity.get("bar_number"),
+            "signature_block": resolved_identity.get("email_signature"),
         }
 
         msr = processing_result.multi_stage_result
@@ -1568,8 +1598,11 @@ async def stream_demand_letter(
             attorney_info = {
                 "name": resolved_identity.get("attorney_name"),
                 "firm": resolved_identity.get("firm_name"),
+                "firm_address": resolved_identity.get("firm_address"),
                 "phone": resolved_identity.get("contact_phone"),
                 "email": resolved_identity.get("contact_email"),
+                "bar_number": resolved_identity.get("bar_number"),
+                "signature_block": resolved_identity.get("email_signature"),
             }
             client_name = _resolve_client_name_for_letter(
                 resolved_identity=resolved_identity,

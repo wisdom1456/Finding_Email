@@ -21,6 +21,9 @@
 Suite 213
 Palm Harbor, FL 34683`);
 	let defaultJurisdiction = $state('Florida');
+	let barNumber = $state('');
+	let emailSignature = $state('');
+	let defaultDemandDeadline = $state('14 days from receipt');
 
 	// AI Model Preferences
 	let documentAnalysisModel = $state('gpt-5-mini');
@@ -74,6 +77,9 @@ Palm Harbor, FL 34683`);
 				firmName = profile.firm_name || 'Bernhardt Riley Law Firm';
 				firmAddress = profile.firm_address || firmAddress;
 				defaultJurisdiction = profile.default_jurisdiction || 'Florida';
+				barNumber = profile.bar_number || '';
+				emailSignature = profile.email_signature || '';
+				defaultDemandDeadline = profile.default_demand_deadline || '14 days from receipt';
 
 				// Load AI preferences
 				if (profile.ai_preferences) {
@@ -149,6 +155,9 @@ Palm Harbor, FL 34683`);
 				firm_name: firmName,
 				firm_address: firmAddress,
 				default_jurisdiction: defaultJurisdiction,
+				bar_number: barNumber.trim() || null,
+				email_signature: emailSignature.trim() || null,
+				default_demand_deadline: defaultDemandDeadline.trim() || null,
 				ai_preferences: {
 					document_analysis: documentAnalysisModel,
 					letter_generation: letterGenerationModel,
@@ -285,6 +294,50 @@ Palm Harbor, FL 34683`);
 							class="input-standard focus:ring-accent focus:border-transparent transition-colors resize-none"
 							placeholder="Street Address&#10;Suite/Unit&#10;City, State ZIP"
 						></textarea>
+					</div>
+
+					<div class="col-span-1">
+						<label for="barNumber" class="block text-sm font-semibold text-contrast mb-1">
+							Bar Number <span class="text-xs font-normal text-gray-400">(optional)</span>
+						</label>
+						<input
+							type="text"
+							id="barNumber"
+							bind:value={barNumber}
+							class="input-standard focus:ring-accent focus:border-transparent transition-colors"
+							placeholder="FL-12345"
+						/>
+						<p class="mt-1 text-xs text-gray-500">Included on letter signatures when set.</p>
+					</div>
+
+					<div class="col-span-1">
+						<label for="defaultDemandDeadline" class="block text-sm font-semibold text-contrast mb-1">
+							Default Demand Deadline
+						</label>
+						<input
+							type="text"
+							id="defaultDemandDeadline"
+							bind:value={defaultDemandDeadline}
+							class="input-standard focus:ring-accent focus:border-transparent transition-colors"
+							placeholder="14 days from receipt"
+						/>
+						<p class="mt-1 text-xs text-gray-500">Used as the deadline in new demand letters.</p>
+					</div>
+
+					<div class="col-span-2">
+						<label for="emailSignature" class="block text-sm font-semibold text-contrast mb-1">
+							Custom Letter Signature <span class="text-xs font-normal text-gray-400">(optional)</span>
+						</label>
+						<textarea
+							id="emailSignature"
+							bind:value={emailSignature}
+							rows="6"
+							class="input-standard focus:ring-accent focus:border-transparent transition-colors resize-none font-mono text-sm"
+							placeholder="Leave blank to auto-generate from your contact info above.&#10;&#10;Or paste a fully-formatted signature block to override (e.g. with your firm logo line, multi-line title, etc.)."
+						></textarea>
+						<p class="mt-1 text-xs text-gray-500">
+							When set, replaces the auto-generated signature on all letters. Leave blank to use your contact info above.
+						</p>
 					</div>
 				</div>
 			</div>

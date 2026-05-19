@@ -91,12 +91,11 @@ GOOD examples of specific actions: obtain proof of payment, confirm the legal id
 
 BAD examples (too vague): "review your options," "gather relevant documents," "consider pursuing legal remedies."]
 
-Sincerely,
-{attorney_name}, Esq.
-{attorney_title}
-{firm_name}
+{signature_block}
 
 This analysis is based on the documents provided and represents a preliminary assessment. Additional facts may emerge that will materially affect this analysis. This communication is confidential and subject to attorney-client privilege.
+
+CRITICAL: Output the signature block above verbatim. Do not add a phone number, email address, attorney title, last name, address, or bar number that is not already in the block. If a field is absent from the block, it must be absent from the letter you produce.
 ```
 
 **Formatting Rules:**

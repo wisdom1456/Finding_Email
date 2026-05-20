@@ -82,7 +82,7 @@ def test_polish_letter_calls_correct_model():
     polisher.polish_letter(_BULLET_DRAFT)
 
     call_kwargs = client.create_chat_completion.call_args
-    assert call_kwargs.kwargs["model"] == "gpt-5.2"
+    assert call_kwargs.kwargs["model"] == "gpt-5.5"
 
 
 def test_polish_letter_uses_low_temperature():

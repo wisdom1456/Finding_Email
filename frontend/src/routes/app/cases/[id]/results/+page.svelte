@@ -20,6 +20,7 @@
 	import FindingsEmailSection from '$lib/components/FindingsEmailSection.svelte';
 	import DemandLetterSection from '$lib/components/DemandLetterSection.svelte';
 	import GapAnalysisPanel from '$lib/components/GapAnalysisPanel.svelte';
+	import CaseRecommendationCard from '$lib/components/CaseRecommendationCard.svelte';
 	import FullAnalysisDisplay from '$lib/components/FullAnalysisDisplay.svelte';
 	import DocumentCoverageSection from '$lib/components/DocumentCoverageSection.svelte';
 	import { AlertTriangle } from 'lucide-svelte';
@@ -1032,6 +1033,40 @@
 
 		<!-- CSS toggle tabs: keep mounted to preserve in-flight state across tab switches -->
 		<div class:hidden={activeTab !== 'analysis'}>
+			<!-- Persistent recommendation banner (slim) — sits above the analysis content so
+			     the suggested next action is visible without discovering the Gaps tab. -->
+			{#if gapAnalysis?.recommendation}
+				{@const rec = gapAnalysis.recommendation}
+				{@const bannerColor = rec.category_color === 'green' ? 'border-green-400 bg-green-50' :
+				                       rec.category_color === 'yellow' ? 'border-amber-400 bg-amber-50' :
+				                       rec.category_color === 'orange' ? 'border-orange-400 bg-orange-50' :
+				                       'border-red-400 bg-red-50'}
+				{@const textColor = rec.category_color === 'green' ? 'text-green-900' :
+				                     rec.category_color === 'yellow' ? 'text-amber-900' :
+				                     rec.category_color === 'orange' ? 'text-orange-900' :
+				                     'text-red-900'}
+				<div class="border-l-4 {bannerColor} px-4 py-3 mb-4 rounded-r-md flex items-center gap-3"
+				     role="status"
+				     data-testid="analysis-recommendation-banner">
+					<div class="flex-1 min-w-0">
+						<p class="text-sm font-semibold {textColor}">
+							Recommendation: {rec.category_display_name}
+						</p>
+						<p class="text-xs {textColor} opacity-90 mt-0.5 line-clamp-2">
+							{rec.reasoning}
+						</p>
+					</div>
+					<AsyncButton
+						variant="primary"
+						loading={generatingRecommendationLetter}
+						loadingText="Generating..."
+						onclick={() => generateRecommendationLetter(rec.suggested_letter_type)}
+					>
+						Generate Letter →
+					</AsyncButton>
+				</div>
+			{/if}
+
 			<div class="card-standard">
 				<h2 class="text-2xl font-heading font-bold text-contrast mb-8 border-b border-gray-100 pb-4">Case Analysis</h2>
 				{#if results.case_analysis}
@@ -1127,6 +1162,23 @@
 					<p class="text-gray-500">No case analysis available.</p>
 				{/if}
 			</div>
+
+			<!-- Recommended next action at the end of the analysis content.
+			     Same component as the Gaps tab — placed here so users on the
+			     default Analysis tab see the contextual letter CTA without
+			     having to discover the Gaps tab. Clicking auto-switches to
+			     the Letters tab via the existing generateRecommendationLetter
+			     flow (results/+page.svelte:791). -->
+			{#if gapAnalysis?.recommendation}
+				<div class="mt-6" data-testid="analysis-recommendation-card">
+					<CaseRecommendationCard
+						recommendation={gapAnalysis.recommendation}
+						onGenerateLetter={() =>
+							generateRecommendationLetter(gapAnalysis.recommendation.suggested_letter_type)}
+						generatingLetter={generatingRecommendationLetter}
+					/>
+				</div>
+			{/if}
 		</div>
 
 		<div class:hidden={activeTab !== 'gaps'}>

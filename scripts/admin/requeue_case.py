@@ -83,9 +83,12 @@ def main() -> int:
                 "attempts": 0,
                 "error": None,
                 "error_type": None,
-                "claimed_by": None,
+                "worker_id": None,
                 "claimed_at": None,
-                "finished_at": None,
+                "started_at": None,
+                "completed_at": None,
+                "heartbeat_at": None,
+                "next_retry_at": None,
             }
         )
         .eq("id", target["id"])

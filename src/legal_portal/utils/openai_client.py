@@ -12,6 +12,7 @@ import httpx
 import openai
 from openai import AsyncOpenAI, OpenAI
 
+from legal_portal.config.default import settings
 from legal_portal.core.constants import DEFAULT_MODEL, FALLBACK_MODEL, MODEL_PRICING
 from legal_portal.utils.logging_config import get_module_logger
 
@@ -30,24 +31,21 @@ class OpenAIClient:
                              e.g., {"document_analysis": "gpt-5.4-mini", "letter_generation": "gpt-5.5"}
 
         """
-        # Configure HTTP client with appropriate timeouts for cloud environments
-        # GPT-5 with reasoning can take longer - allow up to 120s for read
+        # Read timeout is driven by settings.openai_timeout so OPENAI_TIMEOUT env
+        # var actually controls the bound. gpt-5.5 reasoning + large output can
+        # exceed 240s; the default in settings is 300s.
+        read_timeout = float(settings.openai_timeout)
         timeout = httpx.Timeout(
-            connect=15.0,  # Connection timeout
-            read=120.0,  # Read timeout - increased for GPT-5 reasoning
-            write=30.0,  # Write timeout
-            pool=180.0,  # Pool timeout
+            connect=15.0,
+            read=read_timeout,
+            write=30.0,
+            pool=max(read_timeout + 30.0, 180.0),
         )
         limits = httpx.Limits(max_connections=100, max_keepalive_connections=20)
 
-        # Sync client — max_retries=1 keeps worst-case timeout chain to ~250s
-        # (2 attempts × 120s read + backoff), fitting within 300s batch timeout.
-        # Previously max_retries=3 caused ~500s per call on timeout, exceeding
-        # the batch timeout and wasting wall-clock time in leaked threads.
         http_client = httpx.Client(timeout=timeout, limits=limits)
         self.client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"), http_client=http_client, max_retries=1)
 
-        # Async client for streaming and parallel processing
         async_http_client = httpx.AsyncClient(timeout=timeout, limits=limits)
         self.async_client = AsyncOpenAI(
             api_key=os.getenv("OPENAI_API_KEY"), http_client=async_http_client, max_retries=1

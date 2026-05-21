@@ -2119,8 +2119,11 @@ CRITICAL INSTRUCTIONS:
 Return ONLY valid JSON.
 """
 
-        # Use GPT-4.1 (full model) for quality synthesis (0.5s latency vs 60s+ for GPT-5.2)
-        model = self.client.get_preferred_model("multi_stage_analysis", "gpt-5.5")
+        # Stage 3 synthesis hardcoded to gpt-5.4 (not 5.5): the 5.5 reasoning
+        # loop on long multi-issue prompts intermittently returns empty
+        # completions after ~500s. Bypass user_preferences here because a
+        # multi_stage_analysis=gpt-5.5 pref would otherwise reintroduce the bug.
+        model = "gpt-5.4"
 
         logger.info(
             f"[STAGE:3:API] Calling OpenAI for deep_analysis | "

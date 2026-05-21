@@ -2124,7 +2124,7 @@ Return ONLY valid JSON.
 
         logger.info(
             f"[STAGE:3:API] Calling OpenAI for deep_analysis | "
-            f"model={model} prompt_chars={len(prompt)} max_tokens=16000"
+            f"model={model} prompt_chars={len(prompt)} max_tokens=8000"
         )
 
         # Use asyncio.to_thread to avoid blocking the event loop during API call
@@ -2137,7 +2137,7 @@ Return ONLY valid JSON.
                 "Provide comprehensive analysis."
             ),
             input=prompt,
-            max_output_tokens=16000,  # Complex multi-document cases need room
+            max_output_tokens=8000,
         )
         api_duration = time.time() - api_start
 

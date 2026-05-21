@@ -68,7 +68,7 @@ class Settings(BaseSettings):
     )
 
     openai_timeout: float = Field(
-        30.0,
+        300.0,
         alias="OPENAI_TIMEOUT",
         description="Timeout in seconds for OpenAI API requests",
     )

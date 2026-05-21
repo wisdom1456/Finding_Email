@@ -2123,46 +2123,53 @@ Return ONLY valid JSON.
         # loop on long multi-issue prompts intermittently returns empty
         # completions after ~500s. Bypass user_preferences here because a
         # multi_stage_analysis=gpt-5.5 pref would otherwise reintroduce the bug.
-        model = "gpt-5.4"
+        # Fallback chain: if the primary model returns empty, retry once with
+        # gpt-5.4-mini before raising. API errors (success=False) propagate
+        # immediately and are not retried via this chain.
+        model_chain = ["gpt-5.4", "gpt-5.4-mini"]
+        raw_response = ""
+        model = model_chain[0]
+        for attempt_model in model_chain:
+            logger.info(
+                f"[STAGE:3:API] Calling OpenAI for deep_analysis | "
+                f"model={attempt_model} prompt_chars={len(prompt)} max_tokens=8000"
+            )
+            api_start = time.time()
+            response_dict = await asyncio.to_thread(
+                self.client.create_response,
+                model=attempt_model,
+                instructions=(
+                    f"You are a senior {jurisdiction} attorney with 20+ years experience. "
+                    "Provide comprehensive analysis."
+                ),
+                input=prompt,
+                max_output_tokens=8000,
+            )
+            api_duration = time.time() - api_start
 
-        logger.info(
-            f"[STAGE:3:API] Calling OpenAI for deep_analysis | "
-            f"model={model} prompt_chars={len(prompt)} max_tokens=8000"
-        )
+            logger.info(
+                f"[STAGE:3:API] OpenAI response received | model={attempt_model} "
+                f"duration={api_duration:.1f}s "
+                f"prompt_tokens={response_dict.get('usage', {}).get('prompt_tokens', 0)} "
+                f"completion_tokens={response_dict.get('usage', {}).get('completion_tokens', 0)} "
+                f"response_chars={len(response_dict.get('content', '') or '')}"
+            )
 
-        # Use asyncio.to_thread to avoid blocking the event loop during API call
-        api_start = time.time()
-        response_dict = await asyncio.to_thread(
-            self.client.create_response,
-            model=model,
-            instructions=(
-                f"You are a senior {jurisdiction} attorney with 20+ years experience. "
-                "Provide comprehensive analysis."
-            ),
-            input=prompt,
-            max_output_tokens=8000,
-        )
-        api_duration = time.time() - api_start
+            if response_dict.get("success") is False:
+                error_msg = response_dict.get("error", "Unknown API error")
+                logger.error(f"[STAGE:3:ERROR] API returned error: {error_msg}")
+                raise ValueError(f"GPT API error in deep analysis: {error_msg}")
 
-        logger.info(
-            f"[STAGE:3:API] OpenAI response received | "
-            f"duration={api_duration:.1f}s "
-            f"prompt_tokens={response_dict.get('usage', {}).get('prompt_tokens', 0)} "
-            f"completion_tokens={response_dict.get('usage', {}).get('completion_tokens', 0)} "
-            f"response_chars={len(response_dict.get('content', '') or '')}"
-        )
+            raw_response = safe_str_required(response_dict.get("content"), "")
+            if raw_response:
+                model = attempt_model
+                break
+            logger.warning(
+                f"[STAGE:3:WARN] Empty response from {attempt_model}; trying next model in chain"
+            )
 
-        # Check for API error response
-        if response_dict.get("success") is False:
-            error_msg = response_dict.get("error", "Unknown API error")
-            logger.error(f"[STAGE:3:ERROR] API returned error: {error_msg}")
-            raise ValueError(f"GPT API error in deep analysis: {error_msg}")
-
-        raw_response = safe_str_required(response_dict.get("content"), "")
-
-        # Handle empty responses
         if not raw_response:
-            logger.error("[STAGE:3:ERROR] Empty response from GPT API")
+            logger.error("[STAGE:3:ERROR] Empty response from GPT API on all fallback models")
             raise ValueError("GPT API returned an empty response for deep analysis")
 
         if raw_response.startswith("```"):

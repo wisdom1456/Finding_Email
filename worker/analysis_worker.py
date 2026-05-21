@@ -61,10 +61,14 @@ LLM_CONCURRENCY = int(os.getenv("LLM_CONCURRENCY", "4"))
 RECONCILE_INTERVAL = 300  # 5 minutes
 STALE_CLEANUP_INTERVAL = 300  # 5 minutes
 
-# Retryable error patterns
+# Retryable error patterns. "empty response" covers gpt-5.5 reasoning-loop
+# failures where the model returns finish_reason=None with no completion;
+# the call-site has a model fallback chain, but a worker-level retry gives
+# a fresh attempt across the whole stage in case of intermittent triggers.
 RETRYABLE_PATTERNS = [
     "timeout", "rate_limit", "429", "503", "502",
     "connection reset", "econnreset", "connection refused",
+    "empty response",
 ]
 
 

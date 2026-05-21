@@ -6,7 +6,7 @@ All environment variables are defined here with proper validation and documentat
 
 from __future__ import annotations
 
-from typing import Dict, Optional, Union
+from typing import Optional
 
 from dotenv import load_dotenv
 from pydantic import Field, field_validator
@@ -689,18 +689,3 @@ def get_google_cloud_config() -> tuple[str, str, str]:
     )
 
 
-def get_openai_config() -> Dict[str, Union[float, int, str]]:
-    """Get OpenAI configuration for content generation.
-
-    Returns
-    -------
-        dict: OpenAI configuration parameters
-
-    """
-    return {
-        "model": settings.openai_model,
-        "timeout": settings.openai_timeout,
-        "max_retries": settings.openai_max_retries,
-        "temperature": settings.openai_temperature,
-        "max_tokens": settings.openai_max_tokens,
-    }

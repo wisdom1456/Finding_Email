@@ -30,11 +30,21 @@ def _assert_no_placeholders(text: str) -> None:
         assert token not in text, f"placeholder {token!r} leaked into output: {text!r}"
 
 
+# Old Palm Harbor HQ street tokens that must never resurface in rendered output
+# after the 2026-07-01 Trinity address migration.
+OLD_ADDRESS_TOKENS = ("2706", "US-19", "Suite 213", "34683", "Palm Harbor")
+
+
+def _assert_no_old_address(text: str) -> None:
+    for token in OLD_ADDRESS_TOKENS:
+        assert token not in text, f"old-address token {token!r} leaked into output: {text!r}"
+
+
 def test_full_profile_renders_all_lines():
     parts = render_letter_signature_parts(
         attorney_name="Franklin Riley",
-        firm_name="Bernhardt Riley Law Firm",
-        firm_address="2706 US-19 ALT\nSuite 213\nPalm Harbor, FL 34683",
+        firm_name="Bernhardt Riley, Attorneys at Law, PLLC",
+        firm_address="1810 Wellness Lane\nSuite A\nTrinity, FL 34655",
         phone="(727) 275-9575",
         email="franklin@brflorida.com",
         client_name="Jane Doe",
@@ -42,10 +52,14 @@ def test_full_profile_renders_all_lines():
 
     sig = parts["signature_block"]
     assert "Franklin Riley" in sig
-    assert "Bernhardt Riley Law Firm" in sig
+    assert "Bernhardt Riley, Attorneys at Law, PLLC" in sig
+    assert "1810 Wellness Lane" in sig
+    assert "Suite A" in sig
+    assert "Trinity, FL 34655" in sig
     assert "(727) 275-9575" in sig
     assert "franklin@brflorida.com" in sig
     _assert_no_placeholders(sig)
+    _assert_no_old_address(sig)
 
     contact_line = parts["closing_contact_sentence"]
     assert "(727) 275-9575" in contact_line

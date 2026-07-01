@@ -2,11 +2,16 @@
 -- Migration: 20251122000000_add_user_profile_fields
 
 -- Add contact and firm information fields
+-- NOTE (2026-06-30, address migration): the firm_name / firm_address DEFAULTs below
+-- reflect the current Trinity HQ so a fresh `supabase db reset` seeds correct values.
+-- Databases where this migration ALREADY ran (with the old Palm Harbor default) are
+-- corrected by 20260630000000_migrate_firm_address_trinity.sql, which resets the
+-- column DEFAULTs and updates the existing rows.
 ALTER TABLE profiles ADD COLUMN IF NOT EXISTS phone TEXT DEFAULT '(727) 275-9575';
-ALTER TABLE profiles ADD COLUMN IF NOT EXISTS firm_name TEXT DEFAULT 'Bernhardt Riley Law Firm';
-ALTER TABLE profiles ADD COLUMN IF NOT EXISTS firm_address TEXT DEFAULT '2706 US-19 ALT
-Suite 213
-Palm Harbor, FL 34683';
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS firm_name TEXT DEFAULT 'Bernhardt Riley, Attorneys at Law, PLLC';
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS firm_address TEXT DEFAULT '1810 Wellness Lane
+Suite A
+Trinity, FL 34655';
 
 -- Add AI model preferences (JSONB for flexibility)
 ALTER TABLE profiles ADD COLUMN IF NOT EXISTS ai_preferences JSONB DEFAULT '{

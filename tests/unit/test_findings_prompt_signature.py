@@ -38,22 +38,27 @@ def test_findings_prompt_with_full_profile_renders_signature_cleanly():
         quality_context="",
         statute_context="",
         attorney_name="Franklin Riley",
-        firm_name="Bernhardt Riley Law Firm",
+        firm_name="Bernhardt Riley, Attorneys at Law, PLLC",
         contact_phone="(727) 275-9575",
         contact_email="franklin@brflorida.com",
         clio_matter_context="",
         qa_context="",
-        firm_address="2706 US-19 ALT\nPalm Harbor, FL 34683",
+        firm_address="1810 Wellness Lane\nSuite A\nTrinity, FL 34655",
         bar_number="FL-12345",
         client_name="Jane Doe",
     )
 
     assert "Franklin Riley" in prompt
-    assert "Bernhardt Riley Law Firm" in prompt
+    assert "Bernhardt Riley, Attorneys at Law, PLLC" in prompt
+    assert "1810 Wellness Lane" in prompt
+    assert "Trinity, FL 34655" in prompt
     assert "(727) 275-9575" in prompt
     assert "franklin@brflorida.com" in prompt
     assert "FL-12345" in prompt
     _assert_no_placeholders(prompt)
+    # Old Palm Harbor HQ street tokens must not resurface post-migration.
+    for _old in ("2706", "US-19", "Suite 213", "34683", "Palm Harbor"):
+        assert _old not in prompt, f"old-address token {_old!r} leaked into findings prompt"
 
 
 def test_findings_prompt_with_missing_contact_omits_phone_line():

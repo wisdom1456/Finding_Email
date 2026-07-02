@@ -40,6 +40,7 @@
 
 	let isPdfDocument = $derived(isPdfLikeDocument(document));
 	let isImageDocument = $derived(isImageLikeDocument(document));
+	const needsRecovery = $derived(Boolean(document && (document.status === 'extraction_failed' || !document.extracted_at || document.extraction_quality === 'low')));
 
 	// Auto-load when document changes. Only `document` may be tracked here:
 	// the cleanup below reads pdfBlobUrl, and without untrack the effect
@@ -513,7 +514,7 @@
 
 			<!-- Footer -->
 			<div class="flex justify-end space-x-3 px-6 py-4 border-t border-gray-200">
-				{#if showReextract && onreextract}
+				{#if showReextract && needsRecovery && onreextract}
 					<button
 						onclick={() => onreextract!({ docId: document.id, method: 'ocr' })}
 						class="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent"

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { env } from '$env/dynamic/public';
 	import { getApiUrl } from '$lib/config';
 	import { supabase, getSecureSession } from '$lib/supabase';
 	import { toastStore } from '$lib/stores/toastStore';
@@ -1002,21 +1003,23 @@ const { session, user } = await getSecureSession();
 						</div>
 						<h3 class="text-xl font-black text-gray-900 uppercase tracking-tight">Pending Review</h3>
 						
-						<!-- Bulk Extraction Action -->
-						{#if docsNeedingExtraction.length > 0}
-							<button
-								data-testid="bulk-extract-btn"
-								onclick={handleBulkExtract}
-								disabled={bulkActionLoading}
-								class="ml-4 btn btn-secondary py-1.5 text-xs font-bold text-accent border-accent/20 hover:bg-accent/5"
-							>
-								<RefreshCw class={`w-3.5 h-3.5 ${bulkActionLoading ? 'animate-spin' : ''}`} />
-								{#if bulkActionLoading}
-									Processing {remainingOcrCount} Doc{remainingOcrCount === 1 ? '' : 's'}...
-								{:else}
-									Run OCR on {docsNeedingExtraction.length} Doc{docsNeedingExtraction.length === 1 ? '' : 's'}
-								{/if}
-							</button>
+						<!-- Bulk Extraction Action (hidden when auto-extract handles recovery automatically) -->
+						{#if env.PUBLIC_ENABLE_AUTO_EXTRACT !== 'true'}
+							{#if docsNeedingExtraction.length > 0}
+								<button
+									data-testid="bulk-extract-btn"
+									onclick={handleBulkExtract}
+									disabled={bulkActionLoading}
+									class="ml-4 btn btn-secondary py-1.5 text-xs font-bold text-accent border-accent/20 hover:bg-accent/5"
+								>
+									<RefreshCw class={`w-3.5 h-3.5 ${bulkActionLoading ? 'animate-spin' : ''}`} />
+									{#if bulkActionLoading}
+										Processing {remainingOcrCount} Doc{remainingOcrCount === 1 ? '' : 's'}...
+									{:else}
+										Run OCR on {docsNeedingExtraction.length} Doc{docsNeedingExtraction.length === 1 ? '' : 's'}
+									{/if}
+								</button>
+							{/if}
 						{/if}
 
 						<span class="ml-auto text-xs font-bold text-amber-600 bg-amber-50 px-2 py-1 rounded-full border border-amber-100">

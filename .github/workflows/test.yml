@@ -340,19 +340,25 @@ jobs:
           supabase start
           supabase db reset
 
-      # A fresh `db reset` doesn't re-establish the standard service_role grants
-      # on migration-created tables, so the service client hits "permission
-      # denied for table profiles" when seeding/approving test users. In prod
-      # service_role already has full access; restore it here to match. This
-      # does NOT touch the authenticated/anon column-level hardening the RLS
-      # tests actually verify.
-      - name: Restore service_role table grants
+      # A fresh `db reset` doesn't re-establish the standard Supabase API-role
+      # grants on migration-created tables, so both the service client (seeding)
+      # and authenticated clients (the RLS test bodies) hit "permission denied".
+      # Prod already has these grants; restore them to match, then re-assert the
+      # profiles write hardening from migration 20260702000000 so the security
+      # the RLS tests verify stays intact. (Keep the profiles column lists in
+      # sync with that migration.)
+      - name: Restore Supabase API-role grants
         run: |
           sudo apt-get install -y --no-install-recommends postgresql-client
           DB_URL=$(supabase status --output json | jq -r '.DB_URL // .db_url')
           psql "$DB_URL" -v ON_ERROR_STOP=1 \
             -c "GRANT ALL ON ALL TABLES IN SCHEMA public TO service_role;" \
-            -c "GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO service_role;"
+            -c "GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO service_role;" \
+            -c "GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO authenticated, anon;" \
+            -c "GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO authenticated, anon;" \
+            -c "REVOKE INSERT, UPDATE ON public.profiles FROM authenticated, anon;" \
+            -c "GRANT UPDATE (full_name, avatar_url, phone, firm_name, firm_address, ai_preferences, bar_number, email_signature, default_demand_deadline, default_jurisdiction) ON public.profiles TO authenticated;" \
+            -c "GRANT INSERT (id, email, full_name, avatar_url, phone, firm_name, firm_address, ai_preferences, bar_number, email_signature, default_demand_deadline, default_jurisdiction) ON public.profiles TO authenticated;"
 
       # Export the ACTUAL keys the running instance issued. Different CLI
       # versions sign JWTs with different default secrets, so the conftest's

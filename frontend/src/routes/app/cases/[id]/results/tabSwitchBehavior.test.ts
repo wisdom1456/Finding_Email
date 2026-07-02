@@ -135,9 +135,7 @@ describe('InlineAnalysisProgress lifecycle under CSS toggle', () => {
 		vi.useRealTimers();
 	});
 
-	// [QUARANTINE] asserts InlineAnalysisProgress lifecycle (startListening once
-	// across hide/show) that changed; needs re-baselining. See TESTS_QUARANTINE.md.
-	it.skip('startListening called exactly once even after hide/show cycle', async () => {
+	it('startListening called exactly once even after hide/show cycle', async () => {
 		const InlineAnalysisProgress = (await import('$lib/components/InlineAnalysisProgress.svelte')).default;
 
 		const { container } = render(InlineAnalysisProgress, {
@@ -151,7 +149,9 @@ describe('InlineAnalysisProgress lifecycle under CSS toggle', () => {
 		// onMount should have called startListening once
 		await vi.advanceTimersByTimeAsync(0);
 		expect(mockStartListening).toHaveBeenCalledTimes(1);
-		expect(mockStartListening).toHaveBeenCalledWith('analysis-42');
+		// startListening now takes an options arg (durable-mode jobId/pollingOnly);
+		// assert the analysisId positionally so this stays robust to option changes.
+		expect(mockStartListening.mock.calls[0][0]).toBe('analysis-42');
 
 		// Simulate CSS toggle: hide then show (tab away and back)
 		const wrapper = container.firstElementChild as HTMLElement;

@@ -1280,6 +1280,10 @@
 						{initialDemandLetters}
 						{initialDemandAmount}
 						{initialSpecificDemands}
+						{attorneyName}
+						{firmName}
+						{contactPhone}
+						{contactEmail}
 					/>
 				{/if}
 			</div>

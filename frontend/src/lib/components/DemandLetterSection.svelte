@@ -8,6 +8,7 @@
 	import { fetchWithRetry } from '$lib/utils/fetchWithRetry';
 	import { onDestroy } from 'svelte';
 	import AsyncButton from '$lib/components/ui/AsyncButton.svelte';
+	import { buildDemandStreamParams } from './DemandLetterSection.utils';
 
 	let {
 		analysisId,
@@ -16,6 +17,10 @@
 		initialDemandLetters = {},
 		initialDemandAmount = null,
 		initialSpecificDemands = '',
+		attorneyName: attorneyNameProp = '',
+		firmName: firmNameProp = '',
+		contactPhone: contactPhoneProp = '',
+		contactEmail: contactEmailProp = '',
 	}: {
 		analysisId: string;
 		caseId: string;
@@ -23,6 +28,10 @@
 		initialDemandLetters?: Record<string, string>;
 		initialDemandAmount?: number | null;
 		initialSpecificDemands?: string;
+		attorneyName?: string;
+		firmName?: string;
+		contactPhone?: string;
+		contactEmail?: string;
 	} = $props();
 
 	let demandLetters = $state<Record<string, string>>(initialDemandLetters);
@@ -34,10 +43,11 @@
 	let calculatingAmount = $state(false);
 	let calculationReasoning = $state('');
 	let calculationBreakdown = $state<Array<{ description: string; amount: number }>>([]);
-	let attorneyName = $state('');
-	let firmName = $state('');
-	let contactPhone = $state('');
-	let contactEmail = $state('');
+	// Seeded once from the profile-derived props; user edits win from here on (no $effect sync).
+	let attorneyName = $state(attorneyNameProp);
+	let firmName = $state(firmNameProp);
+	let contactPhone = $state(contactPhoneProp);
+	let contactEmail = $state(contactEmailProp);
 
 	type DemandGenerationState =
 		| 'idle'
@@ -151,23 +161,18 @@
 		if (!session || !user) throw new Error('Not authenticated');
 
 		const apiUrl = getApiUrl();
-		const demandLines = specificDemands
-			.split('\n')
-			.map((line) => line.trim())
-			.filter(Boolean);
-
-		const params = new URLSearchParams({
-			target_party_name: selectedParty,
-			demand_deadline: demandDeadline,
-			schema_version: '2',
-			mode: 'strict_quality',
-		});
-		if (demandAmount != null) {
-			params.set('demand_amount', String(demandAmount));
-		}
-		if (demandLines.length > 0) {
-			params.set('specific_demands', demandLines.join('|'));
-		}
+		const params = new URLSearchParams(
+			buildDemandStreamParams({
+				targetPartyName: selectedParty,
+				demandDeadline,
+				demandAmount,
+				specificDemands,
+				attorneyName,
+				firmName,
+				contactPhone,
+				contactEmail,
+			})
+		);
 
 		const response = await fetchWithRetry(
 			`${apiUrl}/api/analysis/${analysisId}/demand-letter/stream?${params.toString()}`,

@@ -13,7 +13,6 @@ from legal_portal.api.dependencies import get_current_user, get_supabase_client,
 from legal_portal.api.services.clio_client import ClioAPIError, ClioAuthError, ClioClient
 from legal_portal.services.cases.clio_import_service import (
     analyze_intake_documents,
-    analyze_intake_priority,
     get_clio_client_for_user as _get_clio_client_for_user_impl,
     import_clio_documents_helper,
     process_clio_import_background,

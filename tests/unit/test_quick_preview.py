@@ -8,11 +8,8 @@ Covers:
 - Section heading detection in the SSE stream
 """
 
-import asyncio
-import json
-from types import SimpleNamespace
-from typing import Any, AsyncGenerator, Dict, List
-from unittest.mock import AsyncMock, MagicMock, patch
+from typing import Any, Dict, List
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -378,7 +375,6 @@ class TestContextReduction:
 class TestSectionHeadingDetection:
     def test_detects_h2_headings(self):
         """Verify the heading detection regex pattern works."""
-        import re
 
         # Simulate the heading detection logic from analysis_core.py
         test_lines = [

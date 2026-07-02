@@ -2,11 +2,8 @@
 
 from __future__ import annotations
 
-import tempfile
 from types import SimpleNamespace
-from unittest.mock import MagicMock, patch
 
-import pytest
 
 from legal_portal.utils.cache_manager import CacheManager, DocumentCache
 from legal_portal.services.analysis.main_processor import (

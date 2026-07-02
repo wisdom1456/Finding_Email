@@ -6,7 +6,7 @@ Verifies:
 - Returns full results when available (unchanged behavior)
 """
 
-from unittest.mock import MagicMock, AsyncMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 from fastapi import HTTPException

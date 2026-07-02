@@ -19,14 +19,19 @@ pip install -r requirements.txt
 cd frontend && npm install && cd ..
 
 # Start backend (Terminal 1)
-cd src && uvicorn legal_portal.api.main:app --reload --port 8000
+make debug          # Vercel-simulation mode on port 8080 (or: make backend)
 
 # Start frontend (Terminal 2)
-cd frontend && npm run dev
+make frontend
+
+# Optional: durable analysis worker (Terminal 3)
+make worker
 ```
 
 - Application: http://localhost:5173
-- API docs: http://localhost:8000/docs
+- API docs: http://localhost:8080/docs
+
+See [DEPLOY.md](DEPLOY.md) for the production topology (Vercel + Railway + Supabase + OCR service).
 
 ## 📋 Features
 
@@ -34,17 +39,17 @@ cd frontend && npm run dev
 
 - **Multi-format Support**: PDF, DOCX, DOC, CSV, TXT, EML, images (JPG, PNG)
 - **Batch Processing**: Process multiple documents simultaneously
-- **OCR Support**: Extract text from images using GPT-4o Vision
+- **OCR Support**: Google Cloud Vision OCR microservice with GPT-5.5 vision fallback
 - **Smart Citation Tracking**: Automatically tracks source documents for citations
 
 ### AI-Powered Analysis
 
-- **Document Analysis**: Comprehensive legal document analysis using OpenAI GPT-5.2, GPT-5-mini, and GPT-4.1
+- **Document Analysis**: Comprehensive legal document analysis using OpenAI GPT-5.5 (flagship) and GPT-5.4/GPT-5.4-mini (workhorse)
 - **Quality Validation**: Built-in QA service for data quality checks
 - **Structured Output**: JSON-based structured data extraction
 - **Token Management**: Cost tracking and optimization
 - **AI Auto-Fill**: Automatic pre-selection of most likely legal issue
-- **Multi-Model Architecture**: Optimized model selection for different tasks (GPT-5.2 for complex reasoning, GPT-5-mini for fast extraction)
+- **Multi-Model Architecture**: Optimized model selection for different tasks (GPT-5.5 for complex reasoning, GPT-5.4-mini for fast extraction)
 
 ### Clio Integration
 
@@ -230,7 +235,7 @@ python validate_corpus.py
 - **Backend**: FastAPI, Python 3.11+, Pydantic
 - **Database**: Supabase (PostgreSQL)
 - **Authentication**: Supabase Auth
-- **AI/ML**: OpenAI GPT-5.2, GPT-5-mini, GPT-4.1, GPT-4o Vision
+- **AI/ML**: OpenAI GPT-5.5, GPT-5.4, GPT-5.4-mini; Google Cloud Vision OCR
 - **Document Processing**: PyMuPDF, python-docx, Pillow
 - **Deployment**: Vercel (frontend + serverless backend)
 

@@ -6,7 +6,6 @@ Every feature must be a byte-identical passthrough with its flag OFF
 
 from unittest.mock import MagicMock
 
-import pytest
 
 from legal_portal.config.default import settings
 from legal_portal.utils.prompt_hardening import (

@@ -46,6 +46,7 @@ load_dotenv()
 from supabase import create_client, ClientOptions
 
 from legal_portal.utils.logging_config import get_module_logger
+from legal_portal.utils.structured_logger import set_job_context
 
 logger = get_module_logger(__name__)
 
@@ -167,6 +168,10 @@ class AnalysisWorker:
         case_id = job["case_id"]
         analysis_id = job["analysis_id"]
         self.current_job_id = job_id
+
+        # Bind job/case ids into the structured-logging context so every log
+        # line from the pipeline carries them (traceable without timestamps).
+        set_job_context(job_id=job_id, case_id=case_id)
 
         # Start heartbeat
         heartbeat_task = asyncio.create_task(self._heartbeat_loop(job_id))
@@ -366,6 +371,7 @@ class AnalysisWorker:
             except asyncio.CancelledError:
                 pass
             self.current_job_id = None
+            set_job_context()  # clear job/case ids from the logging context
 
     def _handle_cancel(self, job_id: str, analysis_id: str, case_id: str) -> None:
         """Handle job cancellation.
@@ -489,6 +495,9 @@ class AnalysisWorker:
 
 def main() -> None:
     """Start the worker."""
+    from legal_portal.utils.error_tracking import init_error_tracking
+
+    init_error_tracking("worker")
     worker = AnalysisWorker()
     asyncio.run(worker.run())
 

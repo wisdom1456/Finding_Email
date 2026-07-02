@@ -11,9 +11,8 @@ from __future__ import annotations
 import asyncio
 from types import SimpleNamespace
 from typing import Any, Dict, List, Optional
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock
 
-import pytest
 
 from legal_portal.services.analysis.main_processor import match_summaries_to_docs
 

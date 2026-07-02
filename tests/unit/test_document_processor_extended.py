@@ -6,8 +6,6 @@ targeting 60% coverage for document_processor.py.
 
 from __future__ import annotations
 
-import asyncio
-from datetime import datetime
 from io import BytesIO
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -137,7 +135,6 @@ def sample_docx_content():
     # Note: In production, use python-docx to create valid DOCX
     # This is a minimal placeholder for testing
     import zipfile
-    from io import BytesIO
     
     buffer = BytesIO()
     with zipfile.ZipFile(buffer, 'w', zipfile.ZIP_DEFLATED) as zf:

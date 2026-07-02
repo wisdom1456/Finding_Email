@@ -11,10 +11,8 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from legal_portal.api.middleware.retry import retry_sync
-from legal_portal.config.default import get_settings
-from legal_portal.core.data_models import LetterType
 from legal_portal.services.shared.progress_manager import ProgressManager
-from legal_portal.utils.type_safety import safe_str, safe_str_required, sanitize_nested_dict
+from legal_portal.utils.type_safety import safe_str, sanitize_nested_dict
 
 logger = logging.getLogger(__name__)
 

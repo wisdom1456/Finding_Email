@@ -8,7 +8,6 @@ from typing import Any, Dict, Optional
 import pytest
 from starlette.requests import Request
 
-from legal_portal.api.routes import analysis as analysis_routes
 from legal_portal.api.routes import letter_routes
 from legal_portal.core.data_models import LetterType
 

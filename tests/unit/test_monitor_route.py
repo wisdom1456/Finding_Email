@@ -38,16 +38,18 @@ class FakeQuery:
 
 class FakeSupabase:
     """Returns preset results for the monitor's queries in call order:
-    1. stuck jobs, 2. pending count, 3. recent claims, 4. fresh running heartbeat.
+    1. stuck jobs, 2. pending count, 3. recent claims,
+    4. fresh running heartbeat, 5. recent failed count.
     """
 
     def __init__(self, stuck=None, pending_count=0, recent_claims=0, fresh_running=0,
-                 reconcile_data=None):
+                 failed_count=0, reconcile_data=None):
         self._results = [
             _result(data=stuck or []),
             _result(count=pending_count),
             _result(count=recent_claims),
             _result(count=fresh_running),
+            _result(count=failed_count),
         ]
         self._table_calls = 0
         self.reconcile_calls = 0
@@ -160,6 +162,26 @@ class TestRedeployGating:
 
         resp = monitor.check_worker_health(authorization=AUTH)
         assert resp["recovery_triggered"] is True
+
+
+class TestFailedSpike:
+    def test_spike_triggers_alert(self, monkeypatch):
+        sb = FakeSupabase(pending_count=0, failed_count=5)
+        _patch_sb(monkeypatch, sb)
+
+        resp = monitor.check_worker_health(authorization=AUTH)
+        assert resp["checks"]["failed_spike"]["triggered"] is True
+        assert "FAILED_SPIKE" in resp["alerts"]
+        # Failure spikes alert but never auto-redeploy
+        assert resp["recovery_triggered"] is False
+
+    def test_below_threshold_is_healthy(self, monkeypatch):
+        sb = FakeSupabase(pending_count=0, failed_count=2)
+        _patch_sb(monkeypatch, sb)
+
+        resp = monitor.check_worker_health(authorization=AUTH)
+        assert resp["checks"]["failed_spike"]["triggered"] is False
+        assert resp["status"] == "no_pending_jobs"
 
 
 class TestReconcile:

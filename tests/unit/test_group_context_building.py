@@ -1,6 +1,5 @@
 """Tests for group-aware context building."""
-import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock
 
 from legal_portal.core.data_models import DocumentSummaryStructured, GroupSummary, GroupType
 from legal_portal.services.analysis.multi_stage_analyzer import MultiStageAnalyzer

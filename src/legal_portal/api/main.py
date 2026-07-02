@@ -44,6 +44,11 @@ load_dotenv()
 setup_logging(app_name="legal-portal-api")
 logger = logging.getLogger(__name__)
 
+# Optional Sentry (no-op unless SENTRY_DSN is set)
+from legal_portal.utils.error_tracking import init_error_tracking  # noqa: E402
+
+init_error_tracking("api")
+
 # Rate limiter is imported from rate_limiter.py module
 
 

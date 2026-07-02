@@ -4,8 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import io
-from dataclasses import dataclass
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 

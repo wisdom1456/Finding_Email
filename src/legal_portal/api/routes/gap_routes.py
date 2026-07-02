@@ -9,7 +9,6 @@ import json
 import logging
 import time
 from datetime import datetime
-from typing import Dict
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
@@ -19,7 +18,6 @@ from legal_portal.api.rate_limiter import limiter
 from legal_portal.api.routes._analysis_helpers import (
     _ensure_case_access,
     _fetch_latest_analysis_result,
-    _GAP_ANALYSIS_INPUT_SCHEMA_VERSION,
     _get_user_ai_preferences,
     GapAnalysisRequest,
     GapResolutionRefreshRequest,

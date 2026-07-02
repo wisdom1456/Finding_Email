@@ -4,11 +4,9 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-import pytest
 
 from legal_portal.services.analysis.document_triage import (
     TriageTier,
-    TriageResult,
     triage_document,
     triage_documents,
 )

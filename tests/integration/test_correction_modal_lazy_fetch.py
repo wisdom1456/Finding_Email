@@ -15,7 +15,6 @@ real local Supabase schema.
 
 import uuid
 
-import pytest
 
 from .conftest import pytestmark  # noqa: F401 – applies skip + marker
 

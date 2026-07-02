@@ -6,7 +6,6 @@ import base64
 import json
 import os
 from functools import lru_cache
-from typing import Optional
 
 from legal_portal.utils.logging_config import get_module_logger
 

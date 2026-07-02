@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 from unittest.mock import MagicMock
 
-import pytest
 
 from legal_portal.utils.letter_polish import LetterPolisher, polish_letter_async
 

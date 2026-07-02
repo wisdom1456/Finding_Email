@@ -1,6 +1,5 @@
 """Unit tests for Clio sync functionality."""
 
-import pytest
 from src.legal_portal.api.routes.clio import categorize_clio_sync_items
 
 

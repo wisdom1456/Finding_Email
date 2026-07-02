@@ -228,7 +228,6 @@ async def clio_callback(
 
         # Determine frontend URL - use production URL for consistency
         import os
-        from urllib.parse import quote
 
         # Priority: CLIO_PRODUCTION_URL > FRONTEND_URL > fallback
         production_url = os.getenv("CLIO_PRODUCTION_URL")

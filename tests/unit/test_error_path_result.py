@@ -9,7 +9,6 @@ successful batches), the fallback ProcessingResult:
 """
 import json
 import pytest
-from datetime import datetime
 
 from legal_portal.core.data_models import ProcessingResult, ProcessingError
 
@@ -140,7 +139,7 @@ class TestErrorPathProcessingResult:
             errors.append(ProcessingError(
                 source="batch_summarization",
                 error_type="EmptyResponse",
-                error_message=f"OpenAI returned an empty or null response.",
+                error_message="OpenAI returned an empty or null response.",
             ))
             errors.append(ProcessingError(
                 source="batch_summarization",

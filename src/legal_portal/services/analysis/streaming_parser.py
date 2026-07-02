@@ -242,7 +242,6 @@ def _extract_embedded_json(content: str) -> dict:
 
     The JSON is embedded in a ```json code fence at the end of the markdown.
     """
-    import re
 
     # Look for JSON code block
     json_pattern = r"```json\s*\n(.*?)\n```"
@@ -264,7 +263,6 @@ def _extract_embedded_json(content: str) -> dict:
 
 def _extract_section(content: str, section_name: str) -> str:
     """Extract a section from markdown content."""
-    import re
     pattern = rf"## {section_name}\n(.*?)(?=\n## |$)"
     match = re.search(pattern, content, re.DOTALL)
     if match:
@@ -274,7 +272,6 @@ def _extract_section(content: str, section_name: str) -> str:
 
 def _extract_list_items(content: str, section_name: str) -> List[str]:
     """Extract list items from a section."""
-    import re
     section = _extract_section(content, section_name)
     if not section:
         return []

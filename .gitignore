@@ -226,3 +226,4 @@ output/summaries/
 
 # Git worktrees
 .worktrees/
+.claude/

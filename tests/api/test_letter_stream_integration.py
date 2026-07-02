@@ -10,7 +10,6 @@ from typing import Any, Dict, List, Optional
 
 import pytest
 
-from legal_portal.api.routes import analysis as analysis_routes
 from legal_portal.api.routes import letter_routes
 
 

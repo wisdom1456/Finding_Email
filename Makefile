@@ -43,10 +43,11 @@ run:
 	@echo "Running the main application..."
 	@$(PYTHON) -m $(SRC).main
 
-# Run the test suite
+# Run the test suite (pytest — the project's actual runner; the old
+# unittest-discover invocation silently found nothing)
 test:
 	@echo "Running the test suite..."
-	@PYTHONPATH=. $(PYTHON) -m unittest discover -s $(TESTS)
+	@PYTHONPATH=. pytest tests/ -q
 
 # Remove all temporary files
 clean:
@@ -70,6 +71,12 @@ backend:
 # Start frontend dev server
 frontend:
 	@cd frontend && npm run dev
+
+# Run the durable analysis worker locally (the primary execution path in
+# durable mode; needs SUPABASE_URL/SUPABASE_SERVICE_KEY/OPENAI_API_KEY)
+worker:
+	@echo "Starting durable analysis worker..."
+	@source venv/bin/activate && python -m worker.analysis_worker
 
 # Pull case data from Supabase (default: Mary Ann Rivera)
 # Usage: make pull-case NAME="Client Name"

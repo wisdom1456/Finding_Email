@@ -1,5 +1,4 @@
 """Tests for document grouping feature flag behavior."""
-from unittest.mock import patch, MagicMock
 
 
 def test_grouping_disabled_by_default():

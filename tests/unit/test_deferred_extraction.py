@@ -4,9 +4,6 @@ Verifies that documents uploaded with skip_extraction=True (Clio imports)
 get their text extracted before analysis runs.
 """
 
-import asyncio
-import os
-import tempfile
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest

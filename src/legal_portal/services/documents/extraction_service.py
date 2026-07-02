@@ -9,11 +9,11 @@ HTTP routing concerns.
 import asyncio
 import logging
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 from fastapi import HTTPException, status
 
-from legal_portal.api.middleware.retry import is_transient_supabase_error, retry_async
+from legal_portal.api.middleware.retry import retry_async
 from legal_portal.api.utils.content_extractor import DocumentProcessor as ContentExtractor
 from legal_portal.core.data_models import (
     DocumentStatus,
@@ -317,7 +317,6 @@ async def analyze_image_with_vision(file_bytes: bytes, file_name: str, case_cont
 
     Returns (visual_description, extraction_method)
     """
-    import asyncio
     import base64
     from starlette.concurrency import run_in_threadpool
     from legal_portal.utils.openai_client import OpenAIClient
@@ -432,10 +431,10 @@ async def _trigger_extraction_inner(
         use_vision_analysis = False
         if force_method == "vision":
             use_vision_analysis = True
-            logger.info(f"Forcing vision analysis (user requested)")
+            logger.info("Forcing vision analysis (user requested)")
         elif force_method != "ocr" and classification == "IMAGE":
             use_vision_analysis = True
-            logger.info(f"Using vision analysis based on classification (IMAGE)")
+            logger.info("Using vision analysis based on classification (IMAGE)")
 
         # Download file from storage, or use extracted_text for Clio import-only docs.
         # Clio import records store content in extracted_text but may not have a real
@@ -717,7 +716,7 @@ async def _trigger_extraction_inner(
                 # Route to Cloud Run OCR service (Google Vision only)
                 try:
                     from legal_portal.utils.ocr_service_client import (
-                        get_ocr_client, OCRServiceError, OCRConfigError,
+                        get_ocr_client, OCRConfigError,
                     )
                     ocr_client = get_ocr_client()
                     img_content_type = file_type if file_type in ["image/png", "image/jpeg", "image/jpg"] else "image/png"
@@ -956,7 +955,7 @@ async def _trigger_extraction_inner(
                         extraction_error = f"Image OCR failed: {str(ocr_err)}"
                         extraction_method = "failed"
                         extraction_quality = "low"
-                    logger.error(f"Image extraction error for {file_name}: {ocr_err}")
+                        logger.error(f"Image extraction error for {file_name}: {ocr_err}")
 
         elif file_type in ["message/rfc822", "eml"] or file_name.lower().endswith(".eml"):
             # Email file (.eml)

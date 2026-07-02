@@ -6,7 +6,6 @@ import io
 import os
 import time
 
-import pytest
 from PIL import Image
 
 from legal_portal.services.documents.file_compression_service import FileCompressionService

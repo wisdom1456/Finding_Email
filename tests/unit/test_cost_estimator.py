@@ -1,11 +1,9 @@
 """Tests for CostEstimator — pre-processing cost estimation."""
 
-from decimal import Decimal
 from unittest.mock import MagicMock
 
 import pytest
 
-from legal_portal.core.constants import SERVICE_PRICING_RATES
 from legal_portal.utils.cost_estimator import CostEstimator
 
 

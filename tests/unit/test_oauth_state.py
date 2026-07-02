@@ -4,7 +4,6 @@ import time
 
 import pytest
 
-from legal_portal.utils import oauth_state
 from legal_portal.utils.oauth_state import (
     OAuthStateError,
     generate_oauth_state,

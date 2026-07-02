@@ -9,7 +9,6 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import pytest
 
 # Project root — tests/ is one level below
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent

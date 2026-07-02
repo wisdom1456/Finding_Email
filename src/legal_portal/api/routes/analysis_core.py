@@ -11,22 +11,19 @@ import os
 import time
 import uuid
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, status
 from fastapi.responses import StreamingResponse
 from postgrest.exceptions import APIError
-from pydantic import BaseModel, Field
 
 from legal_portal.api.dependencies import get_current_user, get_supabase_client, get_user_supabase_client
 from legal_portal.api.rate_limiter import limiter
 from legal_portal.api.routes._analysis_helpers import (
-    AnalysisCancelledError,
     AnalysisRequest,
     AnalysisResponse,
     StreamingAnalysisSaveRequest,
     _cancel_analysis,
-    _ensure_case_access,
     _update_case_with_retry,
     _upsert_with_retry,
 )
@@ -62,7 +59,6 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 # Re-export for backward compatibility (tests import from analysis module)
-from legal_portal.api.routes._analysis_helpers import _db_columns_cache as _DB_COLUMNS_CACHE  # noqa: E402
 
 __all__ = [
     "router",
@@ -1616,7 +1612,6 @@ async def stream_case_analysis(
                 )
 
                 # Section progress tracking — detect ## headings in token stream
-                import re
                 _section_names = [
                     "Case Overview", "Key Facts", "Legal Issues",
                     "Risk Assessment", "Recommended Actions", "Structured Data",

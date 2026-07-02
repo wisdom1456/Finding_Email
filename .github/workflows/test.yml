@@ -340,12 +340,24 @@ jobs:
           supabase start
           supabase db reset
 
-      # Note: we deliberately do NOT scrape keys from `supabase status --output
-      # json` — its key names have shifted between CLI versions and a wrong name
-      # yields `null`, silently downgrading the "service" client to a non-service
-      # role (which then hits RLS/grants → "permission denied for table profiles").
-      # Local Supabase always issues the same deterministic demo JWTs, which the
-      # integration conftest already provides as defaults, so no export is needed.
+      # Export the ACTUAL keys the running instance issued. Different CLI
+      # versions sign JWTs with different default secrets, so the conftest's
+      # hardcoded demo keys aren't valid here — and a wrong jq key name yields
+      # null, silently downgrading the "service" client to a non-service role
+      # ("permission denied for table profiles"). Handle key-name casing drift
+      # and fail loudly if extraction breaks, instead of degrading silently.
+      - name: Export Supabase credentials
+        run: |
+          STATUS=$(supabase status --output json)
+          SVC=$(echo "$STATUS" | jq -r '.SERVICE_ROLE_KEY // .service_role_key // empty')
+          ANON=$(echo "$STATUS" | jq -r '.ANON_KEY // .anon_key // empty')
+          if [ -z "$SVC" ] || [ -z "$ANON" ]; then
+            echo "::error::Could not extract Supabase keys from status output:"; echo "$STATUS"; exit 1
+          fi
+          echo "SUPABASE_TEST_URL=http://127.0.0.1:54321" >> "$GITHUB_ENV"
+          echo "SUPABASE_TEST_SERVICE_KEY=$SVC" >> "$GITHUB_ENV"
+          echo "SUPABASE_TEST_ANON_KEY=$ANON" >> "$GITHUB_ENV"
+
       - name: Run integration tests
         env:
           PYTHONPATH: ${{ github.workspace }}:${{ github.workspace }}/src

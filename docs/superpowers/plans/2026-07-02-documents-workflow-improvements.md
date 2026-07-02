@@ -818,3 +818,79 @@ git commit -m "feat(documents): show re-extract controls only for failed/missing
 - [ ] `cd frontend && npx vitest run 2>&1 | tail -4` — 4 baseline failures, none new.
 - [ ] `cd frontend && npx svelte-check 2>&1 | tail -2` — 10 baseline errors, none new.
 - [ ] Confirm flag-off inertness: grep that `ENABLE_AI_INTAKE_SELECTION` and `PUBLIC_ENABLE_AUTO_EXTRACT` gate every new behavior path.
+
+---
+
+## Feature F: Stop gap-analysis failure storm on legacy cases (bug fix)
+
+### Task F1: Gate the auto-run on multi-stage support
+
+**Files:**
+- Modify: `frontend/src/routes/app/cases/[id]/results/+page.svelte:379-381` (onMount auto-run)
+- Test: `frontend/src/lib/components/gapAutoRun.test.ts` (create; pure-helper test)
+
+**Interfaces:**
+- Produces: `shouldAutoRunGapAnalysis(opts: {hasMultiStageSupport: boolean, hasGapAnalysis: boolean, autoRunEnabled: boolean}): boolean` — pure, exported from `frontend/src/lib/utils/gapAutoRun.ts` (create).
+
+Background: today `onMount` auto-runs gap analysis whenever `!gapAnalysis`, but cases without `multi_stage_result` (a) hide the Gaps tab entirely (`+page.svelte:82`) and (b) are rejected by the stream endpoint (`gap_routes.py:466-468`), sending the frontend through a stream failure → sync fallback failure → 10×3s retry loop → error toast. The fix: never auto-run when `hasMultiStageSupport` is false.
+
+- [ ] **Step 1: Write the failing test** — `shouldAutoRunGapAnalysis({hasMultiStageSupport: false, hasGapAnalysis: false, autoRunEnabled: true})` must be `false`; true/false matrix for the other combinations (`true,false,true` → true; `true,true,true` → false; `true,false,false` → false).
+- [ ] **Step 2: Run — expect FAIL** (module missing).
+- [ ] **Step 3: Implement the util** (trivial boolean AND/NOT composition), then replace the inline condition at `+page.svelte:379-381` with a call to it, passing the page's real variables (`hasMultiStageSupport`, `Boolean(gapAnalysis)`, and the existing `autoRunGapAnalysis` prop).
+- [ ] **Step 4: Run — expect PASS**; full vitest vs 4-failure baseline.
+- [ ] **Step 5: Commit** `fix(results): don't auto-run gap analysis for cases without multi-stage support`
+
+## Feature G: Attorney info prefill for demand letters
+
+### Task G1: Pass profile fields through and send them on the streaming path
+
+**Files:**
+- Modify: `frontend/src/routes/app/cases/[id]/results/+page.svelte:1275-1282` (DemandLetterSection props; profile fields already loaded at `:303-307`)
+- Modify: `frontend/src/lib/components/DemandLetterSection.svelte` (props ~`:37-40`, streaming params `:159-170`)
+- Test: extend existing DemandLetterSection tests if present, else `frontend/src/lib/components/DemandLetterSection.attorneyPrefill.test.ts`
+
+**Interfaces:**
+- Produces: `DemandLetterSection` gains optional props `attorneyName`, `firmName`, `contactPhone`, `contactEmail` (strings, default `''`) used as the INITIAL values of its four attorney fields (user edits still win — props seed `$state`, they do not override later edits).
+- The streaming generator's params (`:159-170`) must include the four attorney fields exactly as the sync fallback does (`:353-357`) — same param names the backend expects (read the sync path and reuse its names verbatim).
+
+- [ ] **Step 1: Failing test** — render `DemandLetterSection` with the four props and assert the inputs are prefilled; assert (via a fetch/EventSource mock consistent with existing tests in the file's test suite, if any) that generated streaming request includes the attorney params. If no test harness exists for this component's streaming, cover the param-building by extracting `buildDemandStreamParams(...)` as a pure exported function and unit-testing it directly (preferred — matches the codebase's pure-helper pattern).
+- [ ] **Step 2: FAIL run.**
+- [ ] **Step 3: Implement** — page passes the already-loaded values; component seeds `$state` from props (`let attorneyName = $state(props.attorneyName ?? '')` per Svelte 5 idiom — do NOT use an `$effect` to sync props into state; if live prop updates matter use `$derived` for display-only values, but here seed-once is correct since the user may edit).
+- [ ] **Step 4: PASS run; full vitest vs baseline; svelte-check vs 10-error baseline.**
+- [ ] **Step 5: Commit** `feat(results): prefill attorney info from profile and send it on the demand streaming path`
+
+## Feature H: Recommendation-letter progress + draft recovery
+
+### Task H1: Render phase progress and recover drafts on stream error
+
+**Files:**
+- Modify: `frontend/src/routes/app/cases/[id]/results/+page.svelte:781-808` (`generateRecommendationLetter`) and the recommendation banner/card area (`:1043-1051`) to show progress text
+- Test: `frontend/src/lib/components/recommendationLetterStream.test.ts` (pure helper test)
+
+**Interfaces:**
+- Produces: `reduceRecommendationStreamEvent(state, event) -> state` — a pure exported reducer in `frontend/src/lib/utils/recommendationLetterStream.ts` handling event types `phase` (sets `phaseLabel`, `percent`), `token` (appends to `markdownBuffer`), `final` (sets `content`, done), `done`, `error` (if `markdownBuffer` non-empty, salvage it as `content` with `recovered: true`, mirroring `DemandLetterSection.svelte:318-328`; else set `error`).
+- Consumes: backend event stream shape from `letter_routes.py:1240-1420` (`phase`, `token`, `final`, `done`, `error` events with `percent`/label fields — read the exact field names before implementing).
+
+- [ ] **Step 1: Failing tests** for the reducer: phase event updates label+percent; token accumulates; error after tokens salvages buffer with `recovered: true`; error with empty buffer sets error; final wins over buffer.
+- [ ] **Step 2: FAIL run.**
+- [ ] **Step 3: Implement reducer; rewire `generateRecommendationLetter`** to drive it and surface `phaseLabel`/`percent` next to the generating button (simple inline text `Generating — {phaseLabel} {percent}%` is enough; no new component). On `recovered`, show the salvaged letter with the existing letter-display path plus a warning toast.
+- [ ] **Step 4: PASS run; full vitest vs baseline.**
+- [ ] **Step 5: Commit** `feat(results): phase progress and draft recovery for recommendation letter generation`
+
+## Feature I: Results-page consistency batch (small fixes)
+
+### Task I1: Mechanical consistency fixes
+
+**Files:**
+- Modify: `frontend/src/lib/components/FindingsEmailSection.svelte:49-52` — add `'repair'` (and verify `context_build` position) to `FINDINGS_PHASE_ORDER` so `indexOf` never returns -1 mid-generation.
+- Modify: `frontend/src/lib/components/DemandLetterSection.svelte:42-53, :396` — add `'loading'` to the `DemandGenerationState` union (and a `DEMAND_PHASE_LABELS` entry "Retrying…") OR change `:396` to an existing union member; pick whichever reads cleaner in context.
+- Modify: `frontend/src/routes/app/cases/[id]/results/+page.svelte:1298, 1316` — switch `documents` and `fullAnalysis` panels from `{#if}` to the same `class:hidden` pattern the other five tabs use (comment at `:1018` explains why).
+- Modify: `frontend/src/routes/app/cases/[id]/results/+page.svelte:68, :170-174` — delete dead `isStale`; the attorney fields become live via Feature G (do not delete them).
+- Modify: remove the duplicate `CaseRecommendationCard` at `+page.svelte:1156-1165` (keep the banner at `:1043` and the Gaps-tab card).
+- Test: existing suites must stay at baseline; add one vitest for the phase-order fix (state `'repair'` yields non-negative index → progress bar keeps prior phases lit) if FindingsEmailSection has a test harness; otherwise cover by extracting the phase-index lookup into the component's exported helper.
+
+- [ ] **Step 1:** Implement the five mechanical changes.
+- [ ] **Step 2:** `npx vitest run` vs 4-failure baseline; `npx svelte-check` vs 10-error baseline (the union fix may REDUCE the error count — record the new count if so).
+- [ ] **Step 3: Commit** `fix(results): phase-order, state-union, tab-mount, and duplicate-CTA consistency batch`
+
+**Svelte 5 practice notes for all frontend tasks (from current svelte.dev docs):** prefer `$derived` for computed values — never sync state with an `$effect`; `$effect` is an escape hatch for DOM/async side effects; an effect must not write state it reads (use `untrack` when a read is intentionally non-reactive); seed-once prop→state is plain `$state(prop)`, not an effect.

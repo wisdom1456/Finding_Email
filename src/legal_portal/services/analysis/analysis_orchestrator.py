@@ -66,6 +66,102 @@ from legal_portal.services.analysis.email_dedup import (  # noqa: F401
 
 logger = logging.getLogger(__name__)
 
+# PDF/DOCX MIME types eligible for mechanical intake-form detection and for
+# AI intake-candidate selection (Task C2).
+INTAKE_DOCUMENT_FILE_TYPES = [
+    "application/pdf",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+]
+
+
+def is_intake_candidate(doc: Dict[str, Any]) -> bool:
+    """Pure predicate: would this document be treated as an intake form?
+
+    Mirrors the mechanical detection conditions used in
+    `_download_and_extract_documents` exactly (metadata flag OR a PDF/DOCX
+    file with "intake" in its filename), so it can be reused to build a
+    candidate list for AI selection without altering that logic.
+    """
+    if doc.get("metadata", {}).get("is_intake_form", False):
+        return True
+    file_type = doc.get("file_type", "").lower()
+    file_name = doc.get("file_name", "").lower()
+    return "intake" in file_name and file_type in INTAKE_DOCUMENT_FILE_TYPES
+
+
+def apply_intake_selection(
+    intake_form_path: Optional[str],
+    file_paths: List[str],
+    candidates: List[tuple],
+    selection: Optional[Any],
+) -> tuple[Optional[str], List[str]]:
+    """Apply an AI intake-selection result to the mechanically chosen layout.
+
+    Pure function — does not mutate `file_paths`. Returns
+    `(new_intake_form_path, new_file_paths)`. This is a no-op (inputs
+    returned unchanged, as new objects) when `selection` is None, when the
+    chosen doc id isn't among `candidates`, or when the winner is already
+    the current intake pick.
+
+    `candidates` is a list of `(doc, temp_path)` tuples collected during the
+    file-prep loop for every doc where `is_intake_candidate(doc)` is True.
+    """
+    if not selection:
+        return intake_form_path, list(file_paths)
+
+    chosen_path = next(
+        (path for doc, path in candidates if doc.get("id") == selection.chosen_doc_id),
+        None,
+    )
+    if not chosen_path or chosen_path == intake_form_path:
+        return intake_form_path, list(file_paths)
+
+    new_file_paths = list(file_paths)
+    if intake_form_path and intake_form_path not in new_file_paths:
+        new_file_paths.append(intake_form_path)
+    if chosen_path in new_file_paths:
+        new_file_paths.remove(chosen_path)
+
+    return chosen_path, new_file_paths
+
+
+def build_intake_selection_candidates(
+    processed_intake: List[Any], documents: List[Dict[str, Any]]
+) -> List[Dict[str, Any]]:
+    """Build candidate dicts for `select_intake_document` from ProcessedDocuments.
+
+    file_type is sourced from the original document rows — pdocs in the live
+    pipeline are constructed with a hardcoded `FileType.PDF` fallback, so the
+    pdoc attribute alone would misreport DOCX/EML intake docs to the LLM.
+    Falls back to the pdoc's file_type only when the row lookup misses.
+    """
+    file_type_by_id = {d.get("id"): d.get("file_type") for d in documents}
+    candidates = []
+    for p in processed_intake:
+        file_type = file_type_by_id.get(p.document_id) or (
+            p.file_type.value if hasattr(p.file_type, "value") else str(p.file_type)
+        )
+        candidates.append(
+            {"id": p.document_id, "file_name": p.file_name, "file_type": file_type}
+        )
+    return candidates
+
+
+def reorder_intake_by_selection(processed_intake: List[Any], chosen_doc_id: str) -> List[Any]:
+    """Pure reorder for the live pipeline (`process_case_background`).
+
+    Returns a new list with the ProcessedDocument whose `.document_id`
+    matches `chosen_doc_id` moved to index 0 (downstream,
+    `main_processor` anchors the analysis on `processed_intake[0]`).
+    The relative order of the remaining docs is preserved and list
+    membership never changes. Unknown id → the same order, as a new list.
+    Does not mutate the input list.
+    """
+    winner = next((p for p in processed_intake if p.document_id == chosen_doc_id), None)
+    if winner is None:
+        return list(processed_intake)
+    return [winner] + [p for p in processed_intake if p is not winner]
+
 
 async def _extract_deferred_documents(
     deferred_docs: list,
@@ -323,6 +419,11 @@ def _download_and_extract_documents(
     intake_form_path = None
     path_to_id_map = {}
     skipped_documents = []
+    # Collected alongside (not instead of) the mechanical intake pick below;
+    # only consumed post-loop, and only when ENABLE_AI_INTAKE_SELECTION is on
+    # (Task C2). Side-effect-free — appending here never changes
+    # intake_form_path/file_paths, so flag-off behavior is unaffected.
+    intake_candidates: List[tuple] = []
 
     for doc in documents:
         # Check status first - skip critical failures
@@ -569,6 +670,11 @@ def _download_and_extract_documents(
             except Exception as e:
                 logger.warning(f"Failed to extract zip file {doc['file_name']}: {e}")
 
+        # Collect AI intake-selection candidates (Task C2). Purely additive:
+        # does not affect intake_form_path/file_paths on its own.
+        if is_intake_candidate(doc):
+            intake_candidates.append((doc, temp_path))
+
         # Check if this is an intake form
         # Prioritize: 1) metadata flag, 2) PDF/DOCX files with "intake" in name, 3) other files with "intake"
         is_intake = doc.get("metadata", {}).get("is_intake_form", False)
@@ -608,6 +714,58 @@ def _download_and_extract_documents(
                 logger.info(f"Identified intake form: {doc['file_name']}")
         else:
             file_paths.append(temp_path)
+
+    # AI intake selection (Task C2): when >1 candidate was mechanically
+    # identified, let the LLM compare them and pick the most detailed one.
+    # Entirely flag-gated and never allowed to raise out of this function —
+    # any failure here falls back silently to the mechanical pick above.
+    settings = get_settings()
+    if settings.enable_ai_intake_selection and len(intake_candidates) > 1:
+        try:
+            from legal_portal.services.analysis.intake_selection_service import (
+                select_intake_document,
+            )
+
+            openai_client = OpenAIClient()
+            selection = select_intake_document(
+                [doc for doc, _ in intake_candidates], supabase, openai_client
+            )
+            new_intake_form_path, new_file_paths = apply_intake_selection(
+                intake_form_path, file_paths, intake_candidates, selection
+            )
+            if selection and new_intake_form_path != intake_form_path:
+                intake_form_path = new_intake_form_path
+                file_paths = new_file_paths
+                chosen_doc = next(
+                    (doc for doc, _ in intake_candidates if doc.get("id") == selection.chosen_doc_id),
+                    None,
+                )
+                chosen_name = chosen_doc.get("file_name", "?") if chosen_doc else "?"
+                logger.info(
+                    f"[INTAKE-SELECT] Chose '{chosen_name}' among {len(intake_candidates)} "
+                    f"candidates: {selection.reasoning}"
+                )
+                # Persist for display; a DB hiccup here must not fail the analysis.
+                if chosen_doc is not None:
+                    try:
+                        supabase.table("documents").update(
+                            {
+                                "metadata": {
+                                    **(chosen_doc.get("metadata") or {}),
+                                    "intake_selection": {
+                                        "selected": True,
+                                        "reasoning": selection.reasoning,
+                                        "candidates": len(intake_candidates),
+                                    },
+                                }
+                            }
+                        ).eq("id", selection.chosen_doc_id).execute()
+                    except Exception as e:
+                        logger.warning(
+                            f"[INTAKE-SELECT] Failed to persist selection metadata: {e}"
+                        )
+        except Exception as e:
+            logger.warning(f"[INTAKE-SELECT] AI intake selection failed, keeping mechanical pick: {e}")
 
     # If no intake form found, prefer first PDF/DOCX, then any document
     if not intake_form_path and file_paths:
@@ -969,6 +1127,65 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
                 processed_intake[0].document_type = DocumentType.INTAKE_FORM
             else:
                 raise ValueError("No documents with text found for analysis. Please run OCR first.")
+
+        # AI intake selection (Task C2, live pipeline): downstream,
+        # main_processor anchors the analysis on processed_intake[0], so
+        # list ORDER decides which intake doc wins. When flagged on and
+        # multiple intake docs exist, ask the LLM which is the most
+        # detailed and move it to index 0 (membership unchanged).
+        # Entirely flag-gated and never allowed to raise out of here —
+        # any failure keeps today's order.
+        if get_settings().enable_ai_intake_selection and len(processed_intake) > 1:
+            try:
+                from legal_portal.services.analysis.intake_selection_service import (
+                    select_intake_document,
+                )
+
+                candidates = build_intake_selection_candidates(processed_intake, documents)
+                selection = select_intake_document(candidates, supabase, OpenAIClient())
+                if selection:
+                    processed_intake = reorder_intake_by_selection(
+                        processed_intake, selection.chosen_doc_id
+                    )
+                    chosen_name = processed_intake[0].file_name
+                    logger.info(
+                        f"[INTAKE-SELECT] Chose '{chosen_name}' among {len(processed_intake)} "
+                        f"candidates: {selection.reasoning}"
+                    )
+                    await progress_manager.publish_progress(
+                        channel_id=analysis_id,
+                        message=f"Selected intake document: {chosen_name} (best of {len(processed_intake)} candidates)",
+                        phase="preparing",
+                        percent=5,
+                        timestamp=datetime.utcnow().isoformat(),
+                    )
+                    # Persist for display; a DB hiccup here must not fail the analysis.
+                    try:
+                        chosen_row = next(
+                            (d for d in documents if d.get("id") == selection.chosen_doc_id),
+                            None,
+                        )
+                        existing_metadata = (chosen_row or {}).get("metadata") or {}
+                        supabase.table("documents").update(
+                            {
+                                "metadata": {
+                                    **existing_metadata,
+                                    "intake_selection": {
+                                        "selected": True,
+                                        "reasoning": selection.reasoning,
+                                        "candidates": len(processed_intake),
+                                    },
+                                }
+                            }
+                        ).eq("id", selection.chosen_doc_id).execute()
+                    except Exception as e:
+                        logger.warning(
+                            f"[INTAKE-SELECT] Failed to persist selection metadata: {e}"
+                        )
+            except Exception as e:
+                logger.warning(
+                    f"[INTAKE-SELECT] AI intake selection failed, keeping mechanical order: {e}"
+                )
 
         # Cooperative cancellation checkpoint after preparing documents.
         if _analysis_is_cancelled(supabase, analysis_id):

@@ -1511,6 +1511,10 @@ async def stream_demand_letter(
     specific_demands: str = Query(default="", description="Pipe-separated list of specific demands"),
     schema_version: int = Query(default=2, ge=1, le=2),
     mode: Literal["default", "strict_quality"] = Query(default="default"),
+    attorney_name: Optional[str] = Query(default=None, description="Attorney name override"),
+    firm_name: Optional[str] = Query(default=None, description="Firm name override"),
+    contact_phone: Optional[str] = Query(default=None, description="Contact phone override"),
+    contact_email: Optional[str] = Query(default=None, description="Contact email override"),
     user=Depends(get_current_user),
     supabase=Depends(get_user_supabase_client),
 ):
@@ -1539,10 +1543,24 @@ async def stream_demand_letter(
     msr = processing_result.multi_stage_result
     effective_schema_version = 2 if (schema_version == 2 and settings.letter_stream_schema_v2) else 1
     artifacts = processing_result.artifacts or {}
+    # Same override-precedence semantics as POST /generate-letter: explicit
+    # request values win over profile/case-derived identity. Omitted params
+    # leave overrides as None — byte-identical to pre-override behavior.
+    identity_overrides = {
+        key: value
+        for key, value in (
+            ("attorney_name", attorney_name),
+            ("firm_name", firm_name),
+            ("contact_phone", contact_phone),
+            ("contact_email", contact_email),
+        )
+        if value
+    }
     resolved_identity = _resolve_letter_identity_context(
         supabase=supabase,
         case_id=analysis_data["case_id"],
         artifacts=artifacts,
+        overrides=identity_overrides or None,
     )
     ai_preferences = await _get_user_ai_preferences(user["id"], supabase)
     demands_list = [d.strip() for d in specific_demands.split("|") if d.strip()] if specific_demands else []

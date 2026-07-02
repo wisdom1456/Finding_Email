@@ -231,6 +231,12 @@ class Settings(BaseSettings):
         description="Mark statute citations that fail corpus verification with an inline letter marker and surface a count for the review UI",
     )
 
+    enable_ai_intake_selection: bool = Field(
+        False,
+        alias="ENABLE_AI_INTAKE_SELECTION",
+        description="AI-compare multiple intake candidates and pick the most detailed",
+    )
+
     # ==================================================
     # LETTER GENERATION FEATURE FLAGS
     # ==================================================

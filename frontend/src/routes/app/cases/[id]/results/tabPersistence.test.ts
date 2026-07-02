@@ -37,12 +37,12 @@ describe('ResultsWorkspace tab persistence (CSS toggle)', () => {
 		expect(pageSource).not.toMatch(/\{:else if activeTab ===/);
 	});
 
-	it('still uses destructive {#if} for heavy fullAnalysis tab', () => {
-		expect(pageSource).toContain("{#if activeTab === 'fullAnalysis'}");
+	it('uses class:hidden for fullAnalysis tab instead of {#if}', () => {
+		expect(pageSource).toContain("class:hidden={activeTab !== 'fullAnalysis'}");
 	});
 
-	it('still uses destructive {#if} for heavy documents tab', () => {
-		expect(pageSource).toContain("{#if activeTab === 'documents'}");
+	it('uses class:hidden for documents tab instead of {#if}', () => {
+		expect(pageSource).toContain("class:hidden={activeTab !== 'documents'}");
 	});
 
 	it('FindingsEmailSection is inside a CSS-toggled letters div', () => {

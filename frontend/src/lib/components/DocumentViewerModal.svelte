@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import { isPdfLikeDocument, isImageLikeDocument, isTextLikeDocument } from '$lib/utils/documentClassification';
 	import { formatFileSize } from '$lib/utils/formatters';
 	import { getSecureSession } from '$lib/supabase';
@@ -39,34 +40,41 @@
 
 	let isPdfDocument = $derived(isPdfLikeDocument(document));
 	let isImageDocument = $derived(isImageLikeDocument(document));
+	const needsRecovery = $derived(Boolean(document && (document.status === 'extraction_failed' || !document.extracted_at || document.extraction_quality === 'low')));
 
-	// Auto-load when document changes
+	// Auto-load when document changes. Only `document` may be tracked here:
+	// the cleanup below reads pdfBlobUrl, and without untrack the effect
+	// re-runs when loadDocumentBinaryPreview sets it, immediately revoking
+	// the just-loaded preview.
 	$effect(() => {
-		if (document) {
-			// Reset internal state first, then initialize
-			documentViewerContent = '';
-			documentViewerTab = 'preview';
-			documentSummary = null;
-			loadingPreview = false;
-			extractedTextData = null;
+		const doc = document;
+		untrack(() => {
+			if (doc) {
+				// Reset internal state first, then initialize
+				documentViewerContent = '';
+				documentViewerTab = 'preview';
+				documentSummary = null;
+				loadingPreview = false;
+				extractedTextData = null;
 
-			// Cleanup previous blob URL
-			if (pdfBlobUrl) {
-				URL.revokeObjectURL(pdfBlobUrl);
-				pdfBlobUrl = null;
-			}
-			previewBlobDocumentId = null;
+				// Cleanup previous blob URL
+				if (pdfBlobUrl) {
+					URL.revokeObjectURL(pdfBlobUrl);
+					pdfBlobUrl = null;
+				}
+				previewBlobDocumentId = null;
 
-			// Initialize the viewer
-			initializeViewer(document);
-		} else {
-			// document became null — cleanup blob URL
-			if (pdfBlobUrl) {
-				URL.revokeObjectURL(pdfBlobUrl);
-				pdfBlobUrl = null;
+				// Initialize the viewer
+				initializeViewer(doc);
+			} else {
+				// document became null — cleanup blob URL
+				if (pdfBlobUrl) {
+					URL.revokeObjectURL(pdfBlobUrl);
+					pdfBlobUrl = null;
+				}
+				previewBlobDocumentId = null;
 			}
-			previewBlobDocumentId = null;
-		}
+		});
 	});
 
 	// Auto-load extracted text when switching to text tab
@@ -506,7 +514,7 @@
 
 			<!-- Footer -->
 			<div class="flex justify-end space-x-3 px-6 py-4 border-t border-gray-200">
-				{#if showReextract && onreextract}
+				{#if showReextract && needsRecovery && onreextract}
 					<button
 						onclick={() => onreextract!({ docId: document.id, method: 'ocr' })}
 						class="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent"

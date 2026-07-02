@@ -10,6 +10,14 @@
 	import { parseMarkdown } from '$lib/utils/markdown';
 	import { SSEEventParser } from '$lib/utils/sseEventParser';
 	import { fetchWithRetry } from '$lib/utils/fetchWithRetry';
+	import {
+		initialRecommendationStreamState,
+		reduceRecommendationStreamEvent,
+		resolveTerminalOutcome,
+		type RecommendationLetterContent,
+		type RecommendationStreamEvent
+	} from '$lib/utils/recommendationLetterStream';
+	import { shouldAutoRunGapAnalysis } from '$lib/utils/gapAutoRun';
 	import type { GapResolutionRefreshRequest, RecommendedLetterType } from '$lib/types';
 	import { onMount, onDestroy, tick } from 'svelte';
 	import SkippedDocumentsAlert from '$lib/components/SkippedDocumentsAlert.svelte';
@@ -20,7 +28,6 @@
 	import FindingsEmailSection from '$lib/components/FindingsEmailSection.svelte';
 	import DemandLetterSection from '$lib/components/DemandLetterSection.svelte';
 	import GapAnalysisPanel from '$lib/components/GapAnalysisPanel.svelte';
-	import CaseRecommendationCard from '$lib/components/CaseRecommendationCard.svelte';
 	import FullAnalysisDisplay from '$lib/components/FullAnalysisDisplay.svelte';
 	import DocumentCoverageSection from '$lib/components/DocumentCoverageSection.svelte';
 	import { AlertTriangle } from 'lucide-svelte';
@@ -65,7 +72,6 @@
 	let opposingParties = $derived(results?.opposing_parties ?? []);
 	let analysisStatus = $derived(results?.status ?? 'completed');
 	let analysisCreatedAt = $derived(results?.created_at ? new Date(results.created_at) : new Date());
-	let isStale = $derived(analysisStatus !== 'completed' || (new Date().getTime() - analysisCreatedAt.getTime() > 1000 * 60 * 60 * 24 * 7));
 	let modelsUsed = $derived(results?.artifacts?.models_used ?? null);
 	let skippedDocs = $derived(results?.artifacts?.skipped_documents ?? []);
 
@@ -122,6 +128,14 @@
 	// Recommendation letter state
 	let generatingRecommendationLetter = $state(false);
 	let recommendationLetters = $state<Record<string, string>>({});
+	let recommendationStreamState = $state(initialRecommendationStreamState());
+	let recommendationProgressText = $derived(
+		generatingRecommendationLetter && recommendationStreamState.phaseLabel
+			? `Generating — ${recommendationStreamState.phaseLabel}${
+					typeof recommendationStreamState.percent === 'number' ? ` ${recommendationStreamState.percent}%` : ''
+				}`
+			: ''
+	);
 	
 	// Document coverage stats (derived from summaries and documents)
 	let docCoverageStats = $derived.by(() => {
@@ -375,8 +389,8 @@
 
 			results = res;
 
-			// Auto-run if: explicitly requested (just ran analysis) OR no gap analysis exists yet
-			if (autoRunGapAnalysis || !gapAnalysis) {
+			// Auto-run if multi-stage supported AND (explicitly requested OR no gap analysis exists yet)
+			if (shouldAutoRunGapAnalysis({ hasMultiStageSupport, hasGapAnalysis: Boolean(gapAnalysis), autoRunEnabled: autoRunGapAnalysis })) {
 				analyzeGaps();
 			}
 		} catch (err) {
@@ -740,8 +754,40 @@
 		}
 	}
 
+	/** Renders final/recovered recommendation-letter content into the letter map. Returns whether content was applied. */
+	function applyRecommendationLetterContent(letterType: string, content: RecommendationLetterContent | null): boolean {
+		if (!content) return false;
+		if (typeof content.html === 'string') {
+			recommendationLetters[letterType] = content.html;
+			return true;
+		}
+		if (typeof content.markdown === 'string') {
+			recommendationLetters[letterType] = `<div class="legal-letter">${parseMarkdown(content.markdown)}</div>`;
+			return true;
+		}
+		return false;
+	}
+
+	/**
+	 * Applies whatever the reducer landed on (final content, or a salvaged/`recovered`
+	 * draft) to the letter map and shows the matching toast. Returns whether the tab
+	 * should switch to the letters view.
+	 */
+	function finalizeRecommendationLetterState(letterType: string): boolean {
+		if (!applyRecommendationLetterContent(letterType, recommendationStreamState.content)) return false;
+		if (recommendationStreamState.recovered) {
+			toastStore.warning(
+				`${letterType.replace('_', ' ')} letter recovered after a stream interruption — please review before sending`
+			);
+		} else {
+			toastStore.success(`${letterType.replace('_', ' ')} letter generated successfully`);
+		}
+		return true;
+	}
+
 	async function generateRecommendationLetter(letterType: string) {
 		generatingRecommendationLetter = true;
+		recommendationStreamState = initialRecommendationStreamState();
 		let shouldSwitchToLetters = false;
 
 		try {
@@ -769,9 +815,8 @@
 
 			const decoder = new TextDecoder();
 			const parser = new SSEEventParser();
-			let markdownBuffer = '';
 
-			while (true) {
+			streamLoop: while (true) {
 				const { done, value } = await reader.read();
 				if (done) break;
 
@@ -779,33 +824,52 @@
 				const events = parser.push(chunk);
 
 				for (const data of events) {
-					const eventType =
-						(typeof data.event === 'string' && data.event) ||
-						(typeof data.type === 'string' && data.type) ||
-						(data.token ? 'token' : data.done ? 'done' : data.error ? 'error' : '');
+					const event = data as RecommendationStreamEvent;
+					recommendationStreamState = reduceRecommendationStreamEvent(recommendationStreamState, event);
 
-					if (eventType === 'token' && typeof data.token === 'string') {
-						// Accumulate markdown tokens
-						markdownBuffer += data.token;
-					} else if (eventType === 'final') {
-						// Final HTML ready
-						const content = data.content as Record<string, unknown> | undefined;
-						if (content && typeof content.html === 'string') {
-							recommendationLetters[letterType] = content.html;
-						} else if (content && typeof content.markdown === 'string') {
-							recommendationLetters[letterType] = `<div class="legal-letter">${parseMarkdown(content.markdown)}</div>`;
-						}
+					// A non-recoverable error with no salvageable draft — surfaced via the
+					// catch block below. Recoverable errors and salvaged (recovered) drafts
+					// never set `.error`, so this only fires on a genuine terminal failure.
+					if (recommendationStreamState.error) {
+						throw new Error(recommendationStreamState.error);
+					}
+
+					if (recommendationStreamState.done) {
 						// Flag the tab switch; defer until after loading state resets to avoid
 						// unmounting CaseRecommendationCard while its button disabled state is still updating.
-						shouldSwitchToLetters = true;
-						toastStore.success(`${letterType.replace('_', ' ')} letter generated successfully`);
-					} else if (eventType === 'done') {
-						break;
-					} else if (eventType === 'error') {
-						const message =
-							(typeof data.error === 'string' && data.error) || 'Recommendation letter generation failed';
-						throw new Error(message);
+						if (finalizeRecommendationLetterState(letterType)) {
+							shouldSwitchToLetters = true;
+						}
+						break streamLoop;
 					}
+				}
+			}
+
+			if (!recommendationStreamState.done) {
+				// The HTTP stream closed without ever delivering a `final` or terminal
+				// `error` event (e.g. the connection dropped mid-draft). Mirror
+				// DemandLetterSection.svelte's post-loop buffer flush: salvage whatever
+				// tokens we accumulated rather than silently losing the draft.
+				recommendationStreamState = reduceRecommendationStreamEvent(recommendationStreamState, {
+					event: 'error',
+					error: 'Recommendation letter stream ended before completion.'
+				});
+				// Unlike the in-loop empty-buffer error path (which throws so the outer
+				// catch shows the toast), this post-loop variant must surface the
+				// failure itself — branch on the terminal outcome, not on `done`,
+				// which the reducer sets for BOTH salvage and plain-error outcomes.
+				switch (resolveTerminalOutcome(recommendationStreamState)) {
+					case 'recovered':
+					case 'final':
+						if (finalizeRecommendationLetterState(letterType)) {
+							shouldSwitchToLetters = true;
+						}
+						break;
+					case 'error':
+						toastStore.error(
+							recommendationStreamState.error || 'Recommendation letter stream ended before completion.'
+						);
+						break;
 				}
 			}
 		} catch (err: any) {
@@ -1040,14 +1104,21 @@
 							{rec.reasoning}
 						</p>
 					</div>
-					<AsyncButton
-						variant="primary"
-						loading={generatingRecommendationLetter}
-						loadingText="Generating..."
-						onclick={() => generateRecommendationLetter(rec.suggested_letter_type)}
-					>
-						Generate Letter →
-					</AsyncButton>
+					<div class="flex items-center gap-3 flex-shrink-0">
+						{#if recommendationProgressText}
+							<span class="text-xs {textColor} opacity-90 whitespace-nowrap" data-testid="recommendation-progress-text">
+								{recommendationProgressText}
+							</span>
+						{/if}
+						<AsyncButton
+							variant="primary"
+							loading={generatingRecommendationLetter}
+							loadingText="Generating..."
+							onclick={() => generateRecommendationLetter(rec.suggested_letter_type)}
+						>
+							Generate Letter →
+						</AsyncButton>
+					</div>
 				</div>
 			{/if}
 
@@ -1146,23 +1217,6 @@
 					<p class="text-gray-500">No case analysis available.</p>
 				{/if}
 			</div>
-
-			<!-- Recommended next action at the end of the analysis content.
-			     Same component as the Gaps tab — placed here so users on the
-			     default Analysis tab see the contextual letter CTA without
-			     having to discover the Gaps tab. Clicking auto-switches to
-			     the Letters tab via the existing generateRecommendationLetter
-			     flow (results/+page.svelte:791). -->
-			{#if gapAnalysis?.recommendation}
-				<div class="mt-6" data-testid="analysis-recommendation-card">
-					<CaseRecommendationCard
-						recommendation={gapAnalysis.recommendation}
-						onGenerateLetter={() =>
-							generateRecommendationLetter(gapAnalysis.recommendation.suggested_letter_type)}
-						generatingLetter={generatingRecommendationLetter}
-					/>
-				</div>
-			{/if}
 		</div>
 
 		<div class:hidden={activeTab !== 'gaps'} role="tabpanel" id="results-panel-gaps" aria-labelledby="results-tab-gaps">
@@ -1279,6 +1333,10 @@
 						{initialDemandLetters}
 						{initialDemandAmount}
 						{initialSpecificDemands}
+						{attorneyName}
+						{firmName}
+						{contactPhone}
+						{contactEmail}
 					/>
 				{/if}
 			</div>
@@ -1295,7 +1353,7 @@
 			/>
 		</div>
 
-		{#if activeTab === 'fullAnalysis'}
+		<div class:hidden={activeTab !== 'fullAnalysis'} role="tabpanel" id="results-panel-fullAnalysis" aria-labelledby="results-tab-fullAnalysis">
 			{#if results.streaming_analysis}
 				<FullAnalysisDisplay content={results.streaming_analysis} />
 			{:else}
@@ -1311,9 +1369,9 @@
 					</div>
 				</div>
 			{/if}
-		{/if}
+		</div>
 
-		{#if activeTab === 'documents'}
+		<div class:hidden={activeTab !== 'documents'} role="tabpanel" id="results-panel-documents" aria-labelledby="results-tab-documents">
 			<!-- Signature status is now set in Verification Hub. This is read-only. -->
 			{#if results.document_summaries && results.document_summaries.length > 0}
 				{@const groupSummaries = results.document_summaries.filter((s: any) => s.group_type && s.member_count && s.member_count > 1)}
@@ -1400,7 +1458,7 @@
 					<p class="text-gray-500">No document summaries available.</p>
 				</div>
 			{/if}
-		{/if}
+		</div>
 	{/if}
 </div>
 

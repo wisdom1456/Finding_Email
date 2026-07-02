@@ -48,6 +48,14 @@ export interface ChunkStatus {
 	failed_docs?: FailedDocument[];
 }
 
+export interface DocLogEntry {
+	i: number;
+	name: string;
+	size_bytes: number;
+	outcome: string;
+	reason?: string;
+}
+
 export interface ProgressState<T = unknown> {
 	message: string;
 	phase: string;
@@ -63,6 +71,7 @@ export interface ProgressState<T = unknown> {
 	error: string | null;
 	timestamp: string | null;
 	data: T | null;
+	doc_log: DocLogEntry[] | null;
 }
 
 export interface EnhancedProgressState<T = unknown> extends ProgressState<T> {
@@ -97,6 +106,7 @@ const initialState: EnhancedProgressState<unknown> = {
 	error: null,
 	timestamp: null,
 	data: null,
+	doc_log: null,
 	stages: [...DEFAULT_STAGES],
 	documents: [],
 	stats: {
@@ -298,6 +308,7 @@ function createProgressStore() {
 					percent: event.percent !== undefined ? event.percent : state.percent,
 					docs_processed: event.docs_processed || state.docs_processed,
 					current_doc: event.current_doc || state.current_doc,
+					doc_log: event.doc_log || state.doc_log,
 					sub_step: event.sub_step || state.sub_step,
 					status: newStatus,
 					error: event.error || null,
@@ -629,6 +640,7 @@ function createProgressStore() {
 							percent: event.percent !== undefined ? event.percent : state.percent,
 							docs_processed: event.docs_processed || state.docs_processed,
 							current_doc: event.current_doc || state.current_doc,
+							doc_log: event.doc_log || state.doc_log,
 							sub_step: event.sub_step || state.sub_step,
 							status: newStatus,
 							error: event.error || null,
@@ -736,6 +748,7 @@ function createProgressStore() {
 					percent: event.percent !== undefined ? event.percent : state.percent,
 					docs_processed: event.docs_processed || state.docs_processed,
 					current_doc: event.current_doc || state.current_doc,
+					doc_log: event.doc_log || state.doc_log,
 					sub_step: event.sub_step || state.sub_step,
 					status: event.type === 'completed' ? 'completed' : 
 					        event.type === 'error' || event.type === 'failed' ? 'error' : 'active',

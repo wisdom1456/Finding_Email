@@ -188,7 +188,7 @@ const { session, user } = await getSecureSession();
 const { session, user } = await getSecureSession();
 		if (!session || !user) throw new Error('Not authenticated');
 
-			const response = await fetch(`${getApiUrl()}/api/documents/${document.id}/extract`, {
+			const response = await fetch(`${getApiUrl()}/api/documents/${document.id}/extract?force=true`, {
 				method: 'POST',
 				headers: {
 					Authorization: `Bearer ${session.access_token}`,

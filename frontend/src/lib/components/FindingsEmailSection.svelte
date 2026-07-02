@@ -9,6 +9,11 @@
 	import { onDestroy } from 'svelte';
 	import AsyncButton from '$lib/components/ui/AsyncButton.svelte';
 	import { AlertTriangle } from 'lucide-svelte';
+	import {
+		FINDINGS_PHASE_ORDER,
+		FINDINGS_PHASE_LABELS,
+		type FindingsGenerationState
+	} from './FindingsEmailSection.utils';
 
 	let {
 		analysisId,
@@ -31,34 +36,6 @@
 		initialFindingsQualityReport?: Record<string, any> | null;
 		initialFindingsMetrics?: Record<string, any> | null;
 	} = $props();
-
-	type FindingsGenerationState =
-		| 'idle'
-		| 'connecting'
-		| 'strategy'
-		| 'context_build'
-		| 'draft_generation'
-		| 'lint_validation'
-		| 'repair'
-		| 'polishing'
-		| 'finalizing'
-		| 'complete'
-		| 'error'
-		| 'cancelled';
-
-	const FINDINGS_PHASE_ORDER: FindingsGenerationState[] = [
-		'strategy', 'context_build', 'draft_generation',
-		'lint_validation', 'polishing', 'finalizing'
-	];
-	const FINDINGS_PHASE_LABELS: Record<string, string> = {
-		strategy: 'Preparing strategy',
-		context_build: 'Prioritizing key documents',
-		draft_generation: 'Drafting letter',
-		lint_validation: 'Reviewing for accuracy',
-		repair: 'Fixing issues',
-		polishing: 'Final polish',
-		finalizing: 'Saving'
-	};
 
 	let findingsLetter = $state<string | null>(initialFindingsLetter);
 	let findingsGenerationState = $state<FindingsGenerationState>(initialFindingsLetter ? 'complete' : 'idle');

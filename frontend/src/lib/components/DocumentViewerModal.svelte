@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import { isPdfLikeDocument, isImageLikeDocument, isTextLikeDocument } from '$lib/utils/documentClassification';
 	import { formatFileSize } from '$lib/utils/formatters';
 	import { getSecureSession } from '$lib/supabase';
@@ -40,33 +41,39 @@
 	let isPdfDocument = $derived(isPdfLikeDocument(document));
 	let isImageDocument = $derived(isImageLikeDocument(document));
 
-	// Auto-load when document changes
+	// Auto-load when document changes. Only `document` may be tracked here:
+	// the cleanup below reads pdfBlobUrl, and without untrack the effect
+	// re-runs when loadDocumentBinaryPreview sets it, immediately revoking
+	// the just-loaded preview.
 	$effect(() => {
-		if (document) {
-			// Reset internal state first, then initialize
-			documentViewerContent = '';
-			documentViewerTab = 'preview';
-			documentSummary = null;
-			loadingPreview = false;
-			extractedTextData = null;
+		const doc = document;
+		untrack(() => {
+			if (doc) {
+				// Reset internal state first, then initialize
+				documentViewerContent = '';
+				documentViewerTab = 'preview';
+				documentSummary = null;
+				loadingPreview = false;
+				extractedTextData = null;
 
-			// Cleanup previous blob URL
-			if (pdfBlobUrl) {
-				URL.revokeObjectURL(pdfBlobUrl);
-				pdfBlobUrl = null;
-			}
-			previewBlobDocumentId = null;
+				// Cleanup previous blob URL
+				if (pdfBlobUrl) {
+					URL.revokeObjectURL(pdfBlobUrl);
+					pdfBlobUrl = null;
+				}
+				previewBlobDocumentId = null;
 
-			// Initialize the viewer
-			initializeViewer(document);
-		} else {
-			// document became null — cleanup blob URL
-			if (pdfBlobUrl) {
-				URL.revokeObjectURL(pdfBlobUrl);
-				pdfBlobUrl = null;
+				// Initialize the viewer
+				initializeViewer(doc);
+			} else {
+				// document became null — cleanup blob URL
+				if (pdfBlobUrl) {
+					URL.revokeObjectURL(pdfBlobUrl);
+					pdfBlobUrl = null;
+				}
+				previewBlobDocumentId = null;
 			}
-			previewBlobDocumentId = null;
-		}
+		});
 	});
 
 	// Auto-load extracted text when switching to text tab

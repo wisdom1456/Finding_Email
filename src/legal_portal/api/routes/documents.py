@@ -1579,25 +1579,58 @@ async def toggle_document_exclusion(
 async def trigger_extraction(
     document_id: str,
     force_method: Optional[str] = None,  # NEW: "ocr", "vision", or None for auto
+    force: bool = False,
     user=Depends(get_current_user),
     user_supabase=Depends(get_user_supabase_client),
     service_supabase=Depends(get_supabase_client),
 ):
     """Manually trigger or re-run text extraction for a single document.
 
+    Skips re-extraction if the document already has healthy extracted text
+    (status "ready" with non-empty extracted_text), unless the caller passes
+    force=true or a force_method — this protects against redundant extraction
+    cost when callers (e.g. bulk/auto-extract) hit already-extracted docs.
+
     Args:
     ----
         document_id: Document ID
         force_method: Force extraction method - "ocr" for text extraction, "vision" for image analysis, None for auto
+        force: Force re-extraction even if the document already has healthy extracted text
         user: Current authenticated user
         user_supabase: User-scoped Supabase client
         service_supabase: Service-role Supabase client
 
     Returns:
     -------
-        Extraction result with extracted text and metadata
+        Extraction result with extracted text and metadata, or a skip marker
+        if the document already has healthy extracted text.
 
     """
+    if not force and force_method is None:
+        guard_response = (
+            user_supabase.table("documents")
+            .select("id, status, extracted_text, cases!inner(user_id)")
+            .eq("id", document_id)
+            .execute()
+        )
+
+        if not guard_response.data:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+
+        doc = guard_response.data[0]
+
+        if doc["cases"]["user_id"] != user["id"]:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+
+        already_extracted = bool((doc.get("extracted_text") or "").strip()) and doc.get(
+            "status"
+        ) == DocumentStatus.READY
+        if already_extracted:
+            logger.info(
+                f"Skipping extraction for {document_id}: already extracted (pass force=true to re-extract)"
+            )
+            return {"success": True, "skipped": True, "reason": "already_extracted"}
+
     async with EXTRACTION_SEMAPHORE:
         return await _trigger_extraction_inner(
             document_id=document_id,

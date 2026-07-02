@@ -82,3 +82,30 @@ def test_extract_runs_for_unextracted_doc():
         resp = client.post("/api/documents/doc-1/extract")
     assert resp.status_code == 200
     mock_extract.assert_called_once()
+
+
+def test_guard_fetch_failure_returns_500_with_extraction_error_detail():
+    """A generic failure in the guard's own fetch must preserve the pre-guard
+    response shape: HTTPException(500, detail="Error extracting text: ...")
+    rendered as {"detail": ...} — not the app-wide generic error envelope."""
+    from legal_portal.api.main import app
+    from legal_portal.api.routes import documents as documents_module
+
+    supabase = MagicMock()
+    supabase.table.return_value.select.return_value.eq.return_value.execute.side_effect = Exception(
+        "connection reset by peer"
+    )
+
+    app.dependency_overrides[documents_module.get_current_user] = lambda: {"id": "user-1"}
+    app.dependency_overrides[documents_module.get_user_supabase_client] = lambda: supabase
+    client = TestClient(app, raise_server_exceptions=False)
+
+    with patch(
+        "legal_portal.api.routes.documents._trigger_extraction_inner"
+    ) as mock_extract:
+        resp = client.post("/api/documents/doc-1/extract")
+
+    assert resp.status_code == 500
+    body = resp.json()
+    assert body.get("detail", "").startswith("Error extracting text:")
+    mock_extract.assert_not_called()

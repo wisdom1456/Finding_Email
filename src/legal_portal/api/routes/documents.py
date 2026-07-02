@@ -1607,29 +1607,38 @@ async def trigger_extraction(
 
     """
     if not force and force_method is None:
-        guard_response = (
-            user_supabase.table("documents")
-            .select("id, status, extracted_text, cases!inner(user_id)")
-            .eq("id", document_id)
-            .execute()
-        )
-
-        if not guard_response.data:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
-
-        doc = guard_response.data[0]
-
-        if doc["cases"]["user_id"] != user["id"]:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
-
-        already_extracted = bool((doc.get("extracted_text") or "").strip()) and doc.get(
-            "status"
-        ) == DocumentStatus.READY
-        if already_extracted:
-            logger.info(
-                f"Skipping extraction for {document_id}: already extracted (pass force=true to re-extract)"
+        try:
+            guard_response = (
+                user_supabase.table("documents")
+                .select("id, status, extracted_text, cases!inner(user_id)")
+                .eq("id", document_id)
+                .execute()
             )
-            return {"success": True, "skipped": True, "reason": "already_extracted"}
+
+            if not guard_response.data:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+
+            doc = guard_response.data[0]
+
+            if doc["cases"]["user_id"] != user["id"]:
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+
+            already_extracted = bool((doc.get("extracted_text") or "").strip()) and doc.get(
+                "status"
+            ) == DocumentStatus.READY
+            if already_extracted:
+                logger.info(
+                    f"Skipping extraction for {document_id}: already extracted (pass force=true to re-extract)"
+                )
+                return {"success": True, "skipped": True, "reason": "already_extracted"}
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"Error in extraction guard for {document_id}: {str(e)}", exc_info=True)
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Error extracting text: {str(e)}",
+            ) from e
 
     async with EXTRACTION_SEMAPHORE:
         return await _trigger_extraction_inner(

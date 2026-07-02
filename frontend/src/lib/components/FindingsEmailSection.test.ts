@@ -1,6 +1,7 @@
 import { render, screen } from '@testing-library/svelte';
 import { describe, it, expect, vi } from 'vitest';
 import FindingsEmailSection from './FindingsEmailSection.svelte';
+import { FINDINGS_PHASE_ORDER } from './FindingsEmailSection.utils';
 
 vi.mock('$lib/config', () => ({
 	getApiUrl: () => 'http://localhost:8000',
@@ -94,5 +95,33 @@ describe('FindingsEmailSection', () => {
 		});
 		expect(screen.getByText('Quality pass applied')).toBeTruthy();
 		expect(screen.getByText('Critic-guided repair')).toBeTruthy();
+	});
+
+	describe('FINDINGS_PHASE_ORDER', () => {
+		it('includes the repair phase so indexOf never returns -1 mid-generation', () => {
+			expect(FINDINGS_PHASE_ORDER.indexOf('repair')).toBeGreaterThanOrEqual(0);
+		});
+
+		it('matches the backend emission sequence from letter_routes.py::stream_letter', () => {
+			// strategy -> context_build -> draft_generation -> lint_validation ->
+			// repair (conditional) -> polishing -> finalizing
+			expect(FINDINGS_PHASE_ORDER).toEqual([
+				'strategy',
+				'context_build',
+				'draft_generation',
+				'lint_validation',
+				'repair',
+				'polishing',
+				'finalizing'
+			]);
+		});
+
+		it('places repair between lint_validation and polishing', () => {
+			const lintIdx = FINDINGS_PHASE_ORDER.indexOf('lint_validation');
+			const repairIdx = FINDINGS_PHASE_ORDER.indexOf('repair');
+			const polishIdx = FINDINGS_PHASE_ORDER.indexOf('polishing');
+			expect(lintIdx).toBeLessThan(repairIdx);
+			expect(repairIdx).toBeLessThan(polishIdx);
+		});
 	});
 });

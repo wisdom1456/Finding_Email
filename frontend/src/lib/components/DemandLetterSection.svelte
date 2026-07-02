@@ -52,6 +52,7 @@
 	type DemandGenerationState =
 		| 'idle'
 		| 'connecting'
+		| 'loading'
 		| 'strategy'
 		| 'context_build'
 		| 'draft_generation'
@@ -70,6 +71,7 @@
 		repair: 'Fixing issues',
 		polishing: 'Final polish',
 		finalizing: 'Saving',
+		loading: 'Retrying…',
 	};
 
 	let demandGenerationState = $state<DemandGenerationState>('idle');

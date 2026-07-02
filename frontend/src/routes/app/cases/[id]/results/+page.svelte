@@ -28,7 +28,6 @@
 	import FindingsEmailSection from '$lib/components/FindingsEmailSection.svelte';
 	import DemandLetterSection from '$lib/components/DemandLetterSection.svelte';
 	import GapAnalysisPanel from '$lib/components/GapAnalysisPanel.svelte';
-	import CaseRecommendationCard from '$lib/components/CaseRecommendationCard.svelte';
 	import FullAnalysisDisplay from '$lib/components/FullAnalysisDisplay.svelte';
 	import DocumentCoverageSection from '$lib/components/DocumentCoverageSection.svelte';
 	import { AlertTriangle } from 'lucide-svelte';
@@ -73,7 +72,6 @@
 	let opposingParties = $derived(results?.opposing_parties ?? []);
 	let analysisStatus = $derived(results?.status ?? 'completed');
 	let analysisCreatedAt = $derived(results?.created_at ? new Date(results.created_at) : new Date());
-	let isStale = $derived(analysisStatus !== 'completed' || (new Date().getTime() - analysisCreatedAt.getTime() > 1000 * 60 * 60 * 24 * 7));
 	let modelsUsed = $derived(results?.artifacts?.models_used ?? null);
 	let skippedDocs = $derived(results?.artifacts?.skipped_documents ?? []);
 
@@ -1219,23 +1217,6 @@
 					<p class="text-gray-500">No case analysis available.</p>
 				{/if}
 			</div>
-
-			<!-- Recommended next action at the end of the analysis content.
-			     Same component as the Gaps tab — placed here so users on the
-			     default Analysis tab see the contextual letter CTA without
-			     having to discover the Gaps tab. Clicking auto-switches to
-			     the Letters tab via the existing generateRecommendationLetter
-			     flow (results/+page.svelte:791). -->
-			{#if gapAnalysis?.recommendation}
-				<div class="mt-6" data-testid="analysis-recommendation-card">
-					<CaseRecommendationCard
-						recommendation={gapAnalysis.recommendation}
-						onGenerateLetter={() =>
-							generateRecommendationLetter(gapAnalysis.recommendation.suggested_letter_type)}
-						generatingLetter={generatingRecommendationLetter}
-					/>
-				</div>
-			{/if}
 		</div>
 
 		<div class:hidden={activeTab !== 'gaps'} role="tabpanel" id="results-panel-gaps" aria-labelledby="results-tab-gaps">
@@ -1372,7 +1353,7 @@
 			/>
 		</div>
 
-		{#if activeTab === 'fullAnalysis'}
+		<div class:hidden={activeTab !== 'fullAnalysis'} role="tabpanel" id="results-panel-fullAnalysis" aria-labelledby="results-tab-fullAnalysis">
 			{#if results.streaming_analysis}
 				<FullAnalysisDisplay content={results.streaming_analysis} />
 			{:else}
@@ -1388,9 +1369,9 @@
 					</div>
 				</div>
 			{/if}
-		{/if}
+		</div>
 
-		{#if activeTab === 'documents'}
+		<div class:hidden={activeTab !== 'documents'} role="tabpanel" id="results-panel-documents" aria-labelledby="results-tab-documents">
 			<!-- Signature status is now set in Verification Hub. This is read-only. -->
 			{#if results.document_summaries && results.document_summaries.length > 0}
 				{@const groupSummaries = results.document_summaries.filter((s: any) => s.group_type && s.member_count && s.member_count > 1)}
@@ -1477,7 +1458,7 @@
 					<p class="text-gray-500">No document summaries available.</p>
 				</div>
 			{/if}
-		{/if}
+		</div>
 	{/if}
 </div>
 

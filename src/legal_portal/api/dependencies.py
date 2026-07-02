@@ -70,7 +70,7 @@ def get_user_supabase_client(credentials: HTTPAuthorizationCredentials = Depends
         extra={
             "has_url": bool(supabase_url),
             "has_key": bool(supabase_key),
-            "token_prefix": credentials.credentials[:20] if credentials else None,
+            "has_token": bool(credentials and credentials.credentials),
         },
     )
 

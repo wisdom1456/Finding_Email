@@ -39,6 +39,13 @@
 	let docLogEl = $state<HTMLDivElement | null>(null);
 	let docLogAtBottom = true; // plain flag, not $state — read via untrack in the auto-scroll effect
 
+	// The store keeps doc_log sticky across phases (later events without the key
+	// retain the last array), so gate rendering on the current step: only the
+	// documents step shows the list; later phases (e.g. analyze_intake) fall
+	// back to the classic message list per the spec. The data itself stays —
+	// it's still the correct history if the documents step is current.
+	const showDocLog = $derived(docLog.length > 0 && currentStep.step === 'documents');
+
 	// Map progress store phase to modal step
 	$effect(() => {
 		const state = $progressStore;
@@ -324,7 +331,7 @@
 					<!-- Step History -->
 					<div class="space-y-2">
 						<h4 class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Progress</h4>
-						{#if docLog.length > 0}
+						{#if showDocLog}
 							<div
 								bind:this={docLogEl}
 								onscroll={handleDocLogScroll}

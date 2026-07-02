@@ -53,6 +53,34 @@ describe('ClioImportProgressModal doc log', () => {
 		expect(screen.getAllByText(/Contract\.pdf/).length).toBeGreaterThan(0);
 	});
 
+	it('hides the doc list and shows the classic message when a later phase arrives without doc_log', async () => {
+		render(ClioImportProgressModal, { props: { show: true, onClose: vi.fn() } });
+		// Documents phase: doc_log populated, list visible
+		mockState.set({
+			status: 'active',
+			phase: 'import_documents',
+			message: 'Downloading document 3 of 3: Contract.pdf',
+			percent: 80,
+			doc_log: docLog(),
+		});
+		await new Promise((r) => setTimeout(r, 0));
+		expect(screen.getByText(/Lease\.pdf/)).toBeTruthy();
+
+		// Later phase: analyze_intake event arrives WITHOUT doc_log (backend omits
+		// it after the documents loop; the store passthrough keeps the last array
+		// sticky) — the modal must switch back to the classic message list.
+		mockState.set({
+			status: 'active',
+			phase: 'analyze_intake',
+			message: 'Analyzing intake documents...',
+			percent: 90,
+			doc_log: docLog(), // sticky value retained by the store passthrough
+		});
+		await new Promise((r) => setTimeout(r, 0));
+		expect(screen.queryByText(/Lease\.pdf/)).toBeNull();
+		expect(screen.getByText(/Analyzing intake documents/)).toBeTruthy();
+	});
+
 	it('renders classic message list when doc_log absent', async () => {
 		render(ClioImportProgressModal, { props: { show: true, onClose: vi.fn() } });
 		mockState.set({

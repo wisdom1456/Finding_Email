@@ -212,3 +212,117 @@ class TestServiceRoleBypass:
             assert result.data[0]["client_name"] == "After Update"
         finally:
             service_supabase.table("cases").delete().eq("id", cid).execute()
+
+
+# ---------------------------------------------------------------------------
+# Profiles privilege escalation (20260702000000_harden_profiles_and_analysis_rls)
+# ---------------------------------------------------------------------------
+class TestProfilesPrivilegeEscalation:
+    """Users must not be able to write approved/role on their own profile."""
+
+    def test_user_cannot_self_approve(self, user_a_supabase, user_a_id):
+        """Writing `approved` with a user JWT is denied at the column level."""
+        with pytest.raises(APIError):
+            user_a_supabase.table("profiles").update({"approved": True}).eq(
+                "id", user_a_id
+            ).execute()
+
+    def test_user_cannot_self_promote_role(self, service_supabase, user_a_supabase, user_a_id):
+        """Writing `role` with a user JWT is denied at the column level."""
+        try:
+            with pytest.raises(APIError):
+                user_a_supabase.table("profiles").update({"role": "admin"}).eq(
+                    "id", user_a_id
+                ).execute()
+        finally:
+            # If the privilege gap regresses, don't leave an admin behind.
+            service_supabase.table("profiles").update({"role": "user"}).eq(
+                "id", user_a_id
+            ).execute()
+
+    def test_user_can_update_own_safe_fields(self, user_a_supabase, user_a_id):
+        """The Settings flow (user JWT updating editable columns) still works."""
+        result = (
+            user_a_supabase.table("profiles")
+            .update({"full_name": "Integration Test User A"})
+            .eq("id", user_a_id)
+            .execute()
+        )
+        assert result.data[0]["full_name"] == "Integration Test User A"
+
+    def test_user_b_cannot_update_user_a_profile(self, user_b_supabase, user_a_id):
+        """Cross-user profile updates are filtered by RLS (0 rows)."""
+        result = (
+            user_b_supabase.table("profiles")
+            .update({"full_name": "Hacked"})
+            .eq("id", user_a_id)
+            .execute()
+        )
+        assert result.data == []
+
+
+# ---------------------------------------------------------------------------
+# Analysis results write ownership (20260702000000_harden_profiles_and_analysis_rls)
+# ---------------------------------------------------------------------------
+class TestAnalysisResultsWriteRLS:
+    """Insert/update on analysis_results must require case ownership."""
+
+    def test_user_b_cannot_insert_analysis_for_user_a_case(self, user_b_supabase, case_id):
+        """User B cannot INSERT an analysis row into User A's case."""
+        with pytest.raises(APIError):
+            user_b_supabase.table("analysis_results").insert({
+                "case_id": str(case_id),
+                "status": "completed",
+                "result": {"poisoned": True},
+            }).execute()
+
+    def test_user_b_cannot_update_user_a_analysis(
+        self, service_supabase, user_b_supabase, case_id
+    ):
+        """User B cannot UPDATE an analysis row belonging to User A's case."""
+        row = service_supabase.table("analysis_results").insert({
+            "case_id": str(case_id),
+            "status": "completed",
+            "result": {"test": True},
+        }).execute()
+        result_id = row.data[0]["id"]
+
+        result = (
+            user_b_supabase.table("analysis_results")
+            .update({"status": "error"})
+            .eq("id", result_id)
+            .execute()
+        )
+        assert result.data == []
+
+        check = (
+            service_supabase.table("analysis_results")
+            .select("status")
+            .eq("id", result_id)
+            .execute()
+        )
+        assert check.data[0]["status"] == "completed"
+
+    def test_user_a_can_insert_analysis_for_own_case(self, user_a_supabase, case_id):
+        """The analysis-start path (user JWT insert on own case) still works."""
+        result = user_a_supabase.table("analysis_results").insert({
+            "case_id": str(case_id),
+            "status": "pending",
+        }).execute()
+        assert result.data[0]["case_id"] == str(case_id)
+
+    def test_user_a_can_update_own_analysis(self, user_a_supabase, case_id):
+        """The analysis-start path (user JWT update on own case) still works."""
+        row = user_a_supabase.table("analysis_results").insert({
+            "case_id": str(case_id),
+            "status": "pending",
+        }).execute()
+        result_id = row.data[0]["id"]
+
+        result = (
+            user_a_supabase.table("analysis_results")
+            .update({"status": "processing"})
+            .eq("id", result_id)
+            .execute()
+        )
+        assert result.data[0]["status"] == "processing"

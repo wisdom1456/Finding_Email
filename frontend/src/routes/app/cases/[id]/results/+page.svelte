@@ -10,6 +10,12 @@
 	import { parseMarkdown } from '$lib/utils/markdown';
 	import { SSEEventParser } from '$lib/utils/sseEventParser';
 	import { fetchWithRetry } from '$lib/utils/fetchWithRetry';
+	import {
+		initialRecommendationStreamState,
+		reduceRecommendationStreamEvent,
+		type RecommendationLetterContent,
+		type RecommendationStreamEvent
+	} from '$lib/utils/recommendationLetterStream';
 	import { shouldAutoRunGapAnalysis } from '$lib/utils/gapAutoRun';
 	import type { GapResolutionRefreshRequest, RecommendedLetterType } from '$lib/types';
 	import { onMount, onDestroy, tick } from 'svelte';
@@ -123,6 +129,14 @@
 	// Recommendation letter state
 	let generatingRecommendationLetter = $state(false);
 	let recommendationLetters = $state<Record<string, string>>({});
+	let recommendationStreamState = $state(initialRecommendationStreamState());
+	let recommendationProgressText = $derived(
+		generatingRecommendationLetter && recommendationStreamState.phaseLabel
+			? `Generating — ${recommendationStreamState.phaseLabel}${
+					typeof recommendationStreamState.percent === 'number' ? ` ${recommendationStreamState.percent}%` : ''
+				}`
+			: ''
+	);
 	
 	// Document coverage stats (derived from summaries and documents)
 	let docCoverageStats = $derived.by(() => {
@@ -741,8 +755,40 @@
 		}
 	}
 
+	/** Renders final/recovered recommendation-letter content into the letter map. Returns whether content was applied. */
+	function applyRecommendationLetterContent(letterType: string, content: RecommendationLetterContent | null): boolean {
+		if (!content) return false;
+		if (typeof content.html === 'string') {
+			recommendationLetters[letterType] = content.html;
+			return true;
+		}
+		if (typeof content.markdown === 'string') {
+			recommendationLetters[letterType] = `<div class="legal-letter">${parseMarkdown(content.markdown)}</div>`;
+			return true;
+		}
+		return false;
+	}
+
+	/**
+	 * Applies whatever the reducer landed on (final content, or a salvaged/`recovered`
+	 * draft) to the letter map and shows the matching toast. Returns whether the tab
+	 * should switch to the letters view.
+	 */
+	function finalizeRecommendationLetterState(letterType: string): boolean {
+		if (!applyRecommendationLetterContent(letterType, recommendationStreamState.content)) return false;
+		if (recommendationStreamState.recovered) {
+			toastStore.warning(
+				`${letterType.replace('_', ' ')} letter recovered after a stream interruption — please review before sending`
+			);
+		} else {
+			toastStore.success(`${letterType.replace('_', ' ')} letter generated successfully`);
+		}
+		return true;
+	}
+
 	async function generateRecommendationLetter(letterType: string) {
 		generatingRecommendationLetter = true;
+		recommendationStreamState = initialRecommendationStreamState();
 		let shouldSwitchToLetters = false;
 
 		try {
@@ -770,9 +816,8 @@
 
 			const decoder = new TextDecoder();
 			const parser = new SSEEventParser();
-			let markdownBuffer = '';
 
-			while (true) {
+			streamLoop: while (true) {
 				const { done, value } = await reader.read();
 				if (done) break;
 
@@ -780,33 +825,42 @@
 				const events = parser.push(chunk);
 
 				for (const data of events) {
-					const eventType =
-						(typeof data.event === 'string' && data.event) ||
-						(typeof data.type === 'string' && data.type) ||
-						(data.token ? 'token' : data.done ? 'done' : data.error ? 'error' : '');
+					const event = data as RecommendationStreamEvent;
+					recommendationStreamState = reduceRecommendationStreamEvent(recommendationStreamState, event);
 
-					if (eventType === 'token' && typeof data.token === 'string') {
-						// Accumulate markdown tokens
-						markdownBuffer += data.token;
-					} else if (eventType === 'final') {
-						// Final HTML ready
-						const content = data.content as Record<string, unknown> | undefined;
-						if (content && typeof content.html === 'string') {
-							recommendationLetters[letterType] = content.html;
-						} else if (content && typeof content.markdown === 'string') {
-							recommendationLetters[letterType] = `<div class="legal-letter">${parseMarkdown(content.markdown)}</div>`;
-						}
+					// A non-recoverable error with no salvageable draft — surfaced via the
+					// catch block below. Recoverable errors and salvaged (recovered) drafts
+					// never set `.error`, so this only fires on a genuine terminal failure.
+					if (recommendationStreamState.error) {
+						throw new Error(recommendationStreamState.error);
+					}
+
+					if (recommendationStreamState.done) {
 						// Flag the tab switch; defer until after loading state resets to avoid
 						// unmounting CaseRecommendationCard while its button disabled state is still updating.
-						shouldSwitchToLetters = true;
-						toastStore.success(`${letterType.replace('_', ' ')} letter generated successfully`);
-					} else if (eventType === 'done') {
-						break;
-					} else if (eventType === 'error') {
-						const message =
-							(typeof data.error === 'string' && data.error) || 'Recommendation letter generation failed';
-						throw new Error(message);
+						if (finalizeRecommendationLetterState(letterType)) {
+							shouldSwitchToLetters = true;
+						}
+						break streamLoop;
 					}
+				}
+			}
+
+			if (!recommendationStreamState.done) {
+				// The HTTP stream closed without ever delivering a `final` or terminal
+				// `error` event (e.g. the connection dropped mid-draft). Mirror
+				// DemandLetterSection.svelte's post-loop buffer flush: salvage whatever
+				// tokens we accumulated rather than silently losing the draft.
+				recommendationStreamState = reduceRecommendationStreamEvent(recommendationStreamState, {
+					event: 'error',
+					error: 'Recommendation letter stream ended before completion.'
+				});
+				if (recommendationStreamState.done) {
+					if (finalizeRecommendationLetterState(letterType)) {
+						shouldSwitchToLetters = true;
+					}
+				} else if (recommendationStreamState.error) {
+					toastStore.error(recommendationStreamState.error);
 				}
 			}
 		} catch (err: any) {
@@ -1041,14 +1095,21 @@
 							{rec.reasoning}
 						</p>
 					</div>
-					<AsyncButton
-						variant="primary"
-						loading={generatingRecommendationLetter}
-						loadingText="Generating..."
-						onclick={() => generateRecommendationLetter(rec.suggested_letter_type)}
-					>
-						Generate Letter →
-					</AsyncButton>
+					<div class="flex items-center gap-3 flex-shrink-0">
+						{#if recommendationProgressText}
+							<span class="text-xs {textColor} opacity-90 whitespace-nowrap" data-testid="recommendation-progress-text">
+								{recommendationProgressText}
+							</span>
+						{/if}
+						<AsyncButton
+							variant="primary"
+							loading={generatingRecommendationLetter}
+							loadingText="Generating..."
+							onclick={() => generateRecommendationLetter(rec.suggested_letter_type)}
+						>
+							Generate Letter →
+						</AsyncButton>
+					</div>
 				</div>
 			{/if}
 

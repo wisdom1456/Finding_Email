@@ -1,5 +1,4 @@
-import { getApiUrl } from '$lib/config';
-import { getSecureSession } from '$lib/supabase';
+import { apiFetch } from '$lib/utils/apiFetch';
 
 export interface ClioSyncItemDetail {
 	name: string;
@@ -34,47 +33,9 @@ export interface DedupResponse {
 }
 
 export async function dedupCaseDocuments(caseId: string): Promise<DedupResponse> {
-	const { session, user } = await getSecureSession();
-
-	if (!session || !user) {
-		throw new Error('Not authenticated - please log in');
-	}
-
-	const apiUrl = getApiUrl();
-	const response = await fetch(`${apiUrl}/api/cases/${caseId}/dedup`, {
-		method: 'POST',
-		headers: {
-			Authorization: `Bearer ${session.access_token}`
-		}
-	});
-
-	if (!response.ok) {
-		const error = await response.json().catch(() => ({ detail: 'Failed to deduplicate documents' }));
-		throw new Error(error.detail || 'Failed to deduplicate documents');
-	}
-
-	return response.json();
+	return apiFetch<DedupResponse>(`/api/cases/${caseId}/dedup`, { method: 'POST' });
 }
 
 export async function syncClioMatter(caseId: string): Promise<ClioSyncResponse> {
-	const { session, user } = await getSecureSession();
-
-	if (!session || !user) {
-		throw new Error('Not authenticated - please log in');
-	}
-
-	const apiUrl = getApiUrl();
-	const response = await fetch(`${apiUrl}/api/clio/sync/${caseId}`, {
-		method: 'POST',
-		headers: {
-			Authorization: `Bearer ${session.access_token}`
-		}
-	});
-
-	if (!response.ok) {
-		const error = await response.json().catch(() => ({ detail: 'Failed to sync Clio matter' }));
-		throw new Error(error.detail || 'Failed to sync Clio matter');
-	}
-
-	return response.json();
+	return apiFetch<ClioSyncResponse>(`/api/clio/sync/${caseId}`, { method: 'POST' });
 }

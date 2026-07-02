@@ -5,6 +5,7 @@
 	import { getSecureSession } from '$lib/supabase';
 	import { progressStore } from '$lib/stores/progressStore';
 	import ClioImportProgressModal from './ClioImportProgressModal.svelte';
+	import ConfirmDialog from './ui/ConfirmDialog.svelte';
 	
 	let { 
 		caseId, 
@@ -92,14 +93,23 @@
 		}
 	}
 
-	async function createCaseFromMatter(matterId: number) {
+	let showCreateConfirm = $state(false);
+	let pendingCreateMatterId = $state<number | null>(null);
+	let showImportConfirm = $state(false);
+	let pendingImportMatterId = $state<number | null>(null);
+
+	function createCaseFromMatter(matterId: number) {
 		// Find the matter to get its name
 		const matter = matters.find(m => m.id === matterId);
 		currentMatterName = matter ? `${matter.display_number} - ${matter.client_name}` : 'Clio Matter';
-		
-		if (!confirm(`Create a new case from ${currentMatterName}?\n\nAll documents will be imported automatically.`)) {
-			return;
-		}
+		pendingCreateMatterId = matterId;
+		showCreateConfirm = true;
+	}
+
+	async function confirmCreateCaseFromMatter() {
+		const matterId = pendingCreateMatterId;
+		if (matterId === null) return;
+		pendingCreateMatterId = null;
 
 		importingMatterId = matterId;
 		showImportModal = true;
@@ -240,15 +250,19 @@
 	}
 	
 
-	async function importMatter(matterId: number) {
+	function importMatter(matterId: number) {
 		if (!caseId) {
 			errorMessage = 'Case ID is required for import';
 			return;
 		}
+		pendingImportMatterId = matterId;
+		showImportConfirm = true;
+	}
 
-		if (!confirm('Import communications, notes, and documents from this Clio matter?')) {
-			return;
-		}
+	async function confirmImportMatter() {
+		const matterId = pendingImportMatterId;
+		if (matterId === null) return;
+		pendingImportMatterId = null;
 
 		importingMatterId = matterId;
 		errorMessage = '';
@@ -349,6 +363,28 @@
 	caseId={createdCaseId || undefined}
 	importResult={importResult}
 	onClose={closeModalAndRedirect}
+/>
+
+<!-- Create-case Confirmation -->
+<ConfirmDialog
+	bind:open={showCreateConfirm}
+	title="Create Case from Clio"
+	message={`Create a new case from ${currentMatterName}? All documents will be imported automatically.`}
+	confirmText="Create Case"
+	variant="info"
+	onConfirm={confirmCreateCaseFromMatter}
+	onCancel={() => (pendingCreateMatterId = null)}
+/>
+
+<!-- Import Confirmation -->
+<ConfirmDialog
+	bind:open={showImportConfirm}
+	title="Import from Clio"
+	message="Import communications, notes, and documents from this Clio matter?"
+	confirmText="Import"
+	variant="info"
+	onConfirm={confirmImportMatter}
+	onCancel={() => (pendingImportMatterId = null)}
 />
 
 <div class="space-y-4">

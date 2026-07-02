@@ -40,13 +40,10 @@ describe('dedupCaseDocuments', () => {
 
 		const result = await dedupCaseDocuments('case-1');
 		expect(result).toEqual(mockResponse);
-		expect(fetch).toHaveBeenCalledWith(
-			'http://localhost:8000/api/cases/case-1/dedup',
-			expect.objectContaining({
-				method: 'POST',
-				headers: { Authorization: 'Bearer test-token' },
-			})
-		);
+		const [url, init] = vi.mocked(fetch).mock.calls[0];
+		expect(url).toBe('http://localhost:8000/api/cases/case-1/dedup');
+		expect(init?.method).toBe('POST');
+		expect((init?.headers as Headers).get('Authorization')).toBe('Bearer test-token');
 	});
 
 	it('throws with backend error detail on failure', async () => {
@@ -63,13 +60,14 @@ describe('dedupCaseDocuments', () => {
 		vi.mocked(getSecureSession).mockResolvedValue(mockSession);
 		vi.mocked(fetch).mockResolvedValue({
 			ok: false,
+			status: 500,
 			json: () => Promise.reject(new Error('not json')),
 		} as Response);
 
-		await expect(dedupCaseDocuments('case-1')).rejects.toThrow('Failed to deduplicate documents');
+		await expect(dedupCaseDocuments('case-1')).rejects.toThrow('Request failed (500)');
 	});
 
-	it('throws generic message when error JSON has no detail field', async () => {
+	it('uses the normalized message field when detail is absent', async () => {
 		vi.mocked(getSecureSession).mockResolvedValue(mockSession);
 		vi.mocked(fetch).mockResolvedValue({
 			ok: false,
@@ -77,7 +75,7 @@ describe('dedupCaseDocuments', () => {
 			json: () => Promise.resolve({ message: 'Internal Server Error' }),
 		} as Response);
 
-		await expect(dedupCaseDocuments('case-1')).rejects.toThrow('Failed to deduplicate documents');
+		await expect(dedupCaseDocuments('case-1')).rejects.toThrow('Internal Server Error');
 	});
 
 	it('handles 401 unauthorized', async () => {
@@ -150,10 +148,11 @@ describe('syncClioMatter', () => {
 		vi.mocked(getSecureSession).mockResolvedValue(mockSession);
 		vi.mocked(fetch).mockResolvedValue({
 			ok: false,
+			status: 502,
 			json: () => Promise.reject(new Error('not json')),
 		} as Response);
 
-		await expect(syncClioMatter('case-1')).rejects.toThrow('Failed to sync Clio matter');
+		await expect(syncClioMatter('case-1')).rejects.toThrow('Request failed (502)');
 	});
 
 	it('handles 500 server error', async () => {

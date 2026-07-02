@@ -194,7 +194,8 @@ describe('Cases List Page - Button Interactions', () => {
 
 		render(CasesListPage);
 
-		expect(screen.getByText(/loading cases/i)).toBeInTheDocument();
+		// Skeleton placeholders render while loading (role="status" per skeleton)
+		expect(screen.getAllByRole('status').length).toBeGreaterThan(0);
 	});
 
 	it('displays error message on API failure', async () => {

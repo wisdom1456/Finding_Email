@@ -3,6 +3,7 @@
 	import { supabase, getSecureSession } from '$lib/supabase';
 	import PageHeader from '$lib/components/ui/PageHeader.svelte';
 	import Badge from '$lib/components/ui/Badge.svelte';
+	import SkeletonList from '$lib/components/ui/SkeletonList.svelte';
 	import ConfirmDialog from '$lib/components/ui/ConfirmDialog.svelte';
 	import { getApiUrl } from '$lib/config';
 	import { toastStore } from '$lib/stores/toastStore';
@@ -206,13 +207,15 @@
 	<!-- Cases List -->
 	<div class="card-standard !p-0 overflow-hidden animate-fade-in-up">
 		{#if loading}
-			<div class="p-8 text-center">
-				<div class="inline-block animate-spin rounded-full h-8 w-8 border-2 border-accent border-t-transparent"></div>
-				<p class="mt-3 text-sm text-gray-500">Loading cases...</p>
+			<div class="p-4">
+				<SkeletonList count={6} />
 			</div>
 		{:else if errorMessage}
 			<div class="p-8 text-center">
 				<p class="text-sm text-red-600">{errorMessage}</p>
+				<button class="mt-4 btn btn-secondary px-6" onclick={() => loadCases()}>
+					Try again
+				</button>
 			</div>
 		{:else if filteredCases.length === 0}
 			<div class="p-8 text-center">

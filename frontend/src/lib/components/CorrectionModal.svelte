@@ -4,6 +4,7 @@
 	import { toastStore } from '$lib/stores/toastStore';
 	import AsyncButton from './ui/AsyncButton.svelte';
 	import Modal from './ui/Modal.svelte';
+	import ConfirmDialog from './ui/ConfirmDialog.svelte';
 	import Badge from './ui/Badge.svelte';
 	import DocumentPreviewPane from './DocumentPreviewPane.svelte';
 
@@ -228,12 +229,23 @@ const { session, user } = await getSecureSession();
 		toastStore.success('Text copied to clipboard');
 	}
 
+	let showClearConfirm = $state(false);
+
 	function clearText() {
-		if (confirm('Clear all text? This cannot be undone.')) {
-			editedText = '';
-		}
+		showClearConfirm = true;
 	}
 </script>
+
+<ConfirmDialog
+	bind:open={showClearConfirm}
+	title="Clear Text"
+	message="Clear all text? This cannot be undone."
+	confirmText="Clear"
+	variant="danger"
+	onConfirm={() => {
+		editedText = '';
+	}}
+/>
 
 <!-- Modal Wrapper -->
 <Modal

@@ -181,6 +181,14 @@ class FakeLetterOpenAIClient:
         """Return fallback model to preserve service behavior."""
         return fallback
 
+    def _is_gpt5_model(self, model: str) -> bool:
+        """Mirror OpenAIClient: GPT-5 family detection (used for request shaping)."""
+        return model.startswith("gpt-5") or "gpt-5" in model
+
+    def _is_gpt4_model(self, model: str) -> bool:
+        """Mirror OpenAIClient: GPT-4.x family detection."""
+        return model.startswith("gpt-4") and not self._is_gpt5_model(model)
+
     def create_response(self, **kwargs) -> Dict:
         """Return deterministic findings content for non-streaming calls."""
         self.last_response_request = kwargs

@@ -79,9 +79,12 @@ SERVICE_PRICING_RATES: dict[str, dict[str, Decimal]] = {
         "input_tokens": Decimal("0.15") / Decimal("1000000"),  # $0.15 per 1M tokens
         "output_tokens": Decimal("0.60") / Decimal("1000000"),  # $0.60 per 1M tokens
     },
+    # Derived from MODEL_PRICING (per-1K) so the two tables cannot disagree.
+    # This entry previously said $10/$30 per 1M while MODEL_PRICING said
+    # $1.75/$14 — cost reports silently used whichever table the caller hit.
     "openai_gpt5_2": {
-        "input_tokens": Decimal("10.00") / Decimal("1000000"),  # $10.00 per 1M tokens
-        "output_tokens": Decimal("30.00") / Decimal("1000000"),  # $30.00 per 1M tokens
+        "input_tokens": Decimal(str(MODEL_PRICING["gpt-5.2"]["input"])) / Decimal("1000"),
+        "output_tokens": Decimal(str(MODEL_PRICING["gpt-5.2"]["output"])) / Decimal("1000"),
     },
     "openai_whisper": {
         "per_minute": Decimal("0.006"),  # $0.006 per minute

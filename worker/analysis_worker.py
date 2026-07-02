@@ -20,7 +20,6 @@ Environment variables:
     OPENAI_API_KEY        - OpenAI API key
     WORKER_POLL_INTERVAL  - Seconds between job polls (default: 5)
     WORKER_HEARTBEAT_INTERVAL - Seconds between heartbeats (default: 30)
-    LLM_CONCURRENCY       - Max concurrent OpenAI calls (default: 4)
 """
 
 from __future__ import annotations
@@ -33,7 +32,7 @@ import sys
 import time
 import traceback
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
 # Ensure src/ is on the path for legal_portal imports
@@ -57,7 +56,6 @@ logger = get_module_logger(__name__)
 WORKER_ID = f"worker-{uuid.uuid4().hex[:8]}"
 POLL_INTERVAL = int(os.getenv("WORKER_POLL_INTERVAL", "5"))
 HEARTBEAT_INTERVAL = int(os.getenv("WORKER_HEARTBEAT_INTERVAL", "30"))
-LLM_CONCURRENCY = int(os.getenv("LLM_CONCURRENCY", "4"))
 RECONCILE_INTERVAL = 300  # 5 minutes
 STALE_CLEANUP_INTERVAL = 300  # 5 minutes
 
@@ -103,7 +101,6 @@ class AnalysisWorker:
         )
         self.running = True
         self.current_job_id: Optional[str] = None
-        self.llm_semaphore = asyncio.Semaphore(LLM_CONCURRENCY)
         self._last_reconcile = time.monotonic()
         self._last_stale_cleanup = time.monotonic()
 
@@ -313,8 +310,8 @@ class AnalysisWorker:
                 "status": "completed",
                 "stage": "completed",
                 "progress": {"message": "Analysis complete!", "percent": 100},
-                "completed_at": datetime.utcnow().isoformat(),
-                "updated_at": datetime.utcnow().isoformat(),
+                "completed_at": datetime.now(timezone.utc).isoformat(),
+                "updated_at": datetime.now(timezone.utc).isoformat(),
             }).eq("id", job_id).eq("status", "running").execute()
 
             if not claim_resp.data:
@@ -335,7 +332,7 @@ class AnalysisWorker:
             self.supabase.table("analysis_results").update({
                 "status": "completed",
                 "result": result_dict,
-                "completed_at": datetime.utcnow().isoformat(),
+                "completed_at": datetime.now(timezone.utc).isoformat(),
             }).eq("id", analysis_id).execute()
 
             # 4. Update case status
@@ -397,7 +394,7 @@ class AnalysisWorker:
     def _handle_retry(self, job_id: str, job: dict, error: Exception) -> None:
         """Return job to pending with exponential backoff."""
         backoff = min(30 * (2 ** (job["attempts"] - 1)), 300)
-        next_retry = (datetime.utcnow() + timedelta(seconds=backoff)).isoformat()
+        next_retry = (datetime.now(timezone.utc) + timedelta(seconds=backoff)).isoformat()
         logger.warning(
             f"[JOB:{job_id[:8]}] Retrying | attempt={job['attempts']}/{job['max_attempts']} "
             f"backoff={backoff}s error={str(error)[:200]}"
@@ -432,7 +429,7 @@ class AnalysisWorker:
 
     def _update_job(self, job_id: str, **fields: Any) -> None:
         """Update analysis_jobs fields."""
-        fields["updated_at"] = datetime.utcnow().isoformat()
+        fields["updated_at"] = datetime.now(timezone.utc).isoformat()
         try:
             self.supabase.table("analysis_jobs").update(fields).eq("id", job_id).execute()
         except Exception as e:
@@ -444,7 +441,7 @@ class AnalysisWorker:
             await asyncio.sleep(HEARTBEAT_INTERVAL)
             try:
                 self.supabase.table("analysis_jobs").update({
-                    "heartbeat_at": datetime.utcnow().isoformat(),
+                    "heartbeat_at": datetime.now(timezone.utc).isoformat(),
                 }).eq("id", job_id).execute()
             except Exception as e:
                 logger.warning(f"[JOB:{job_id[:8]}] Heartbeat write failed: {e}")
@@ -473,7 +470,7 @@ class AnalysisWorker:
             return
         self._last_stale_cleanup = now
         try:
-            cutoff = (datetime.utcnow() - timedelta(seconds=120)).isoformat()
+            cutoff = (datetime.now(timezone.utc) - timedelta(seconds=120)).isoformat()
             self.supabase.table("analysis_jobs").update({
                 "status": "failed",
                 "error": "Stale: no heartbeat for 120s, max attempts exceeded",

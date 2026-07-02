@@ -10,11 +10,12 @@ import logging
 import os
 import time
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, status
 from fastapi.responses import StreamingResponse
+from postgrest.exceptions import APIError
 from pydantic import BaseModel, Field
 
 from legal_portal.api.dependencies import get_current_user, get_supabase_client, get_user_supabase_client
@@ -211,14 +212,26 @@ async def start_analysis(
             ).eq("case_id", case_id).execute()
             doc_count = doc_count_resp.count if hasattr(doc_count_resp, "count") and doc_count_resp.count else len(doc_count_resp.data or [])
 
-            # Create job row (service key — no RLS write policy for analysis_jobs)
-            job_response = service_supabase.table("analysis_jobs").insert({
-                "case_id": case_id,
-                "analysis_id": analysis["id"],
-                "status": "pending",
-                "provider": analysis_request.provider,
-                "doc_count": doc_count,
-            }).execute()
+            # Create job row (service key — no RLS write policy for analysis_jobs).
+            # The prior cancel of active jobs and this insert are separate
+            # PostgREST calls, so two concurrent starts can both get here; the
+            # partial unique index idx_one_active_job_per_case turns the loser
+            # into a 23505, which we surface as 409 instead of a raw 500.
+            try:
+                job_response = service_supabase.table("analysis_jobs").insert({
+                    "case_id": case_id,
+                    "analysis_id": analysis["id"],
+                    "status": "pending",
+                    "provider": analysis_request.provider,
+                    "doc_count": doc_count,
+                }).execute()
+            except APIError as e:
+                if getattr(e, "code", None) == "23505":
+                    raise HTTPException(
+                        status_code=status.HTTP_409_CONFLICT,
+                        detail="An analysis is already in progress for this case",
+                    ) from e
+                raise
 
             if not job_response.data:
                 raise HTTPException(
@@ -292,7 +305,7 @@ async def start_analysis(
                         # Send heartbeat every 10 seconds if no real progress
                         heartbeat_count += 1
                         if heartbeat_count >= 5:  # Every 5 * 2s = 10 seconds
-                            yield f"data: {json.dumps({'type': 'heartbeat', 'timestamp': datetime.utcnow().isoformat()})}\n\n"
+                            yield f"data: {json.dumps({'type': 'heartbeat', 'timestamp': datetime.now(timezone.utc).isoformat()})}\n\n"
                             heartbeat_count = 0
 
                         # Wait 2 seconds before checking again
@@ -1263,7 +1276,6 @@ async def save_streaming_analysis(
         try:
             # Check if case exists before saving (prevents race condition in Clio import)
             # Retry up to 3 times with 2 second delays to allow case creation to complete
-            import time
             case_exists = False
             for retry in range(3):
                 case_check = service_supabase.table("cases").select("id").eq("id", case_id).limit(1).execute()
@@ -1273,7 +1285,9 @@ async def save_streaming_analysis(
 
                 if retry < 2:  # Don't wait on last attempt
                     logger.warning(f"[STREAM] Case {case_id} not found, retry {retry + 1}/3 in 2s...")
-                    time.sleep(2)
+                    # asyncio.sleep, not time.sleep — a blocking sleep here
+                    # stalls the whole event loop for every request.
+                    await asyncio.sleep(2)
 
             if not case_exists:
                 logger.error(f"[STREAM] Case {case_id} still not found after 3 retries")
@@ -1291,7 +1305,7 @@ async def save_streaming_analysis(
                     .update({
                         "status": "completed",
                         "result": streaming_result,
-                        "completed_at": datetime.utcnow().isoformat(),
+                        "completed_at": datetime.now(timezone.utc).isoformat(),
                     }) \
                     .eq("stream_run_id", request.stream_run_id) \
                     .eq("case_id", case_id) \
@@ -1327,8 +1341,8 @@ async def save_streaming_analysis(
                                 "stream_run_id": request.stream_run_id,
                                 "status": "completed",
                                 "result": streaming_result,
-                                "completed_at": datetime.utcnow().isoformat(),
-                                "created_at": datetime.utcnow().isoformat(),
+                                "completed_at": datetime.now(timezone.utc).isoformat(),
+                                "created_at": datetime.now(timezone.utc).isoformat(),
                             }).execute()
                         except Exception as e:
                             if "duplicate key" in str(e) or "unique" in str(e).lower():
@@ -1337,7 +1351,7 @@ async def save_streaming_analysis(
                                     .update({
                                         "status": "completed",
                                         "result": streaming_result,
-                                        "completed_at": datetime.utcnow().isoformat(),
+                                        "completed_at": datetime.now(timezone.utc).isoformat(),
                                     }) \
                                     .eq("stream_run_id", request.stream_run_id) \
                                     .eq("status", "processing") \
@@ -1355,7 +1369,7 @@ async def save_streaming_analysis(
                         "case_id": case_id,
                         "status": "completed",
                         "result": streaming_result,
-                        "created_at": datetime.utcnow().isoformat(),
+                        "created_at": datetime.now(timezone.utc).isoformat(),
                     },
                     case_id,
                 )
@@ -1379,7 +1393,7 @@ async def save_streaming_analysis(
         # Update case status - must use valid status from constraint: pending, processing, completed, error, cancelled
         _update_case_with_retry(
             supabase, case_id,
-            {"status": "completed", "updated_at": datetime.utcnow().isoformat()},
+            {"status": "completed", "updated_at": datetime.now(timezone.utc).isoformat()},
         )
 
         logger.info(f"[STREAM] Saved streaming analysis for case {case_id} | structured_data={'yes' if structured_data else 'no'}")
@@ -1647,9 +1661,9 @@ async def stream_case_analysis(
                                         "omission_reason": ctx_result.omission_reason,
                                         "jurisdiction": jurisdiction,
                                         "collector_saved": True,
-                                        "streaming_completed_at": datetime.utcnow().isoformat(),
+                                        "streaming_completed_at": datetime.now(timezone.utc).isoformat(),
                                     },
-                                    "created_at": datetime.utcnow().isoformat(),
+                                    "created_at": datetime.now(timezone.utc).isoformat(),
                                 }).execute()
                                 logger.info(
                                     f"[STREAM:COLLECTOR_SAVE] Saved {len(_all)} chars "

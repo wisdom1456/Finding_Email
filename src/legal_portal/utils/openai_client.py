@@ -246,7 +246,10 @@ class OpenAIClient:
         pricing = MODEL_PRICING
 
         if model not in pricing:
-            logger.info(f"OPENAI CLIENT: ⚠️  Unknown model for cost estimation: {model}")
+            logger.warning(
+                f"OPENAI CLIENT: unknown model for cost estimation: {model} — "
+                f"cost reported as $0.00; add it to MODEL_PRICING in core/constants.py"
+            )
             return 0.0
 
         model_pricing = pricing[model]

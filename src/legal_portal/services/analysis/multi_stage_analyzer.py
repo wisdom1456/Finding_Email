@@ -521,9 +521,10 @@ This block MUST be valid JSON wrapped in a code fence:
             jurisdiction=jurisdiction,
         )
 
+        stream_model = "gpt-5.5"
         logger.info(
             f"[STREAM:PROMPT_STATS] prompt_chars={len(prompt):,} "
-            f"model=gpt-5.4 reasoning_effort=medium max_tokens=24000 "
+            f"model={stream_model} reasoning_effort=medium max_tokens=24000 "
             f"setup_elapsed={time.time()-_t_streaming_start:.2f}s"
         )
 
@@ -540,7 +541,7 @@ IMPORTANT: Your response MUST end with the ```json structured data block as spec
             token_count = 0
             try:
                 async for token in self.client.create_chat_completion_stream(
-                    model="gpt-5.5",
+                    model=stream_model,
                     messages=[
                         {"role": "system", "content": system_prompt},
                         {"role": "user", "content": prompt}

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import os
 import secrets
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict
 from urllib.parse import urlencode
 
@@ -140,7 +140,7 @@ class ClioAuthService:
 
             # Calculate expiration time (CLIO tokens typically expire in 1 hour)
             expires_in = token_data.get("expires_in", 3600)  # Default 1 hour
-            expires_at = datetime.now() + timedelta(seconds=expires_in)
+            expires_at = datetime.now(timezone.utc) + timedelta(seconds=expires_in)
 
             result = {
                 "access_token": token_data["access_token"],
@@ -188,7 +188,7 @@ class ClioAuthService:
 
             # Calculate new expiration time
             expires_in = token_data.get("expires_in", 3600)
-            expires_at = datetime.now() + timedelta(seconds=expires_in)
+            expires_at = datetime.now(timezone.utc) + timedelta(seconds=expires_in)
 
             result = {
                 "access_token": token_data["access_token"],
@@ -216,4 +216,7 @@ class ClioAuthService:
         """
         # Consider token expired if it expires in less than 5 minutes
         buffer = timedelta(minutes=5)
-        return datetime.now() >= (expires_at - buffer)
+        now = datetime.now(timezone.utc)
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+        return now >= (expires_at - buffer)

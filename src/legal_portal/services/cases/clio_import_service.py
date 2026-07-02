@@ -19,6 +19,7 @@ from legal_portal.api.utils.content_extractor import DocumentProcessor as Conten
 from legal_portal.config.default import get_settings
 from legal_portal.core.data_models import DocumentStatus
 from legal_portal.core.document_processor import DocumentProcessor, ValidationError
+from legal_portal.services.cases.import_doc_log import append_entry, set_outcome
 from legal_portal.services.shared.progress_manager import ProgressManager
 from legal_portal.utils.blacklist import is_name_blacklisted
 from legal_portal.utils.throttled_db_writer import ThrottledDBWriter
@@ -110,6 +111,12 @@ async def import_clio_documents_helper(
         min_interval_seconds=3.0,
     )
 
+    # Accumulated per-document log (index, name, size, outcome). Defined here,
+    # above persist_progress, so the closure below can read it as a free
+    # variable from the very first call — it must exist before persist_progress
+    # is first invoked, not merely before the documents loop.
+    doc_log: list = []
+
     # Helper to persist progress to DB for cross-instance Vercel polling
     async def persist_progress(message: str, phase: str, percent: int, **kwargs):
         """Publish progress to in-memory manager AND persist (throttled) to database."""
@@ -130,6 +137,10 @@ async def import_clio_documents_helper(
                     "phase": phase,
                     "percent": percent,
                 }
+                if "current_doc" in kwargs:
+                    progress_data["current_doc"] = kwargs["current_doc"]
+                if doc_log:
+                    progress_data["doc_log"] = doc_log
                 import_progress = {
                     "import_id": import_id,
                     "progress": progress_data,
@@ -351,6 +362,7 @@ async def import_clio_documents_helper(
         for idx, doc in enumerate(documents):
             try:
                 doc_name = doc.get("name", "Untitled Document")
+                entry = append_entry(doc_log, idx + 1, doc_name, doc.get("size", 0))
                 percent = 52 + int((idx / max(total_docs, 1)) * 40)
                 # Persist EVERY document progress since this is the slow part
                 await persist_progress(
@@ -368,6 +380,7 @@ async def import_clio_documents_helper(
 
                 if is_name_blacklisted(doc_name, blacklist):
                     logger.info("Skipping blacklisted document during Clio import", extra={"doc_name": doc_name})
+                    set_outcome(entry, "blacklisted")
                     continue
 
                 # Filter small images (typically email signature logos, social media icons)
@@ -405,6 +418,7 @@ async def import_clio_documents_helper(
                             f"Small image already recorded, skipping re-insert: {doc_name}",
                             extra={"doc_name": doc_name, "clio_id": doc_id},
                         )
+                    set_outcome(entry, "skipped_small_image")
                     continue
 
                 # Check file size limits before downloading
@@ -443,6 +457,11 @@ async def import_clio_documents_helper(
                         },
                     }
                     supabase.table("documents").insert(skip_record).execute()
+                    set_outcome(
+                        entry,
+                        "failed",
+                        reason=f"File too large ({file_size_mb:.1f}MB). Maximum size is {size_limit_mb}MB.",
+                    )
                     continue
 
                 doc_url = f"https://app.clio.com/api/v4/documents/{doc_id}/download.json"
@@ -475,6 +494,7 @@ async def import_clio_documents_helper(
                         },
                     }
                     supabase.table("documents").insert(skip_record).execute()
+                    set_outcome(entry, "failed", reason=f"Download timed out (>{DOC_TIMEOUT_SECONDS}s)")
                     continue
 
                 original_size = len(file_content)
@@ -534,6 +554,7 @@ async def import_clio_documents_helper(
                             "Skipping blacklisted document after processor check",
                             extra={"doc_name": doc_name},
                         )
+                        set_outcome(entry, "blacklisted")
                         continue
 
                     if doc_record.get("metadata", {}).get("compression", {}).get("compressed"):
@@ -574,6 +595,7 @@ async def import_clio_documents_helper(
 
                     supabase.table("documents").insert(doc_record).execute()
                     doc_success += 1
+                    set_outcome(entry, "duplicate" if is_duplicate else "imported")
                     logger.debug("Successfully imported document", extra={"doc_name": doc_name, "is_duplicate": is_duplicate})
 
                 except ValidationError as e:
@@ -600,12 +622,15 @@ async def import_clio_documents_helper(
                         },
                     }
                     supabase.table("documents").insert(skip_record).execute()
+                    set_outcome(entry, "failed", reason=f"Processing timed out (>{DOC_TIMEOUT_SECONDS}s)")
                     continue
 
             except Exception as e:
                 error_msg = f"Document {doc.get('id', 'unknown')} ({doc.get('name', 'unknown')}): {str(e)}"
                 errors.append(error_msg)
                 logger.warning("Error importing document", extra={"doc_id": doc.get("id"), "error": str(e)})
+                if entry.get("outcome") == "downloading":
+                    set_outcome(entry, "failed", reason=str(e))
 
         # Flush any remaining throttled progress before returning
         await _import_db_writer.flush()
@@ -711,6 +736,13 @@ async def import_clio_documents_helper(
             "Exception in import_clio_documents_helper",
             extra={"error": str(e), "error_type": type(e).__name__},
         )
+
+        # Flush any remaining throttled progress (incl. doc_log) so the UI
+        # sees the full history even when the import aborts with an error.
+        try:
+            await _import_db_writer.flush()
+        except Exception as flush_err:
+            logger.warning(f"Failed to flush import progress on error path: {flush_err}")
 
         return {
             "success": False,

@@ -59,7 +59,9 @@ pillow-heif>=0.16.0
 html2text==2020.1.16
 markdown2>=2.4.0
 nh3>=0.2  # HTML sanitization for LLM-generated letters
-sentry-sdk>=2.0  # Optional error tracking (active only when SENTRY_DSN set)
+# NOTE: sentry-sdk is intentionally NOT in the Vercel bundle — it pushed the
+# function over the 225 MB size cap. Error tracking runs on the worker
+# (Railway, root requirements.txt); error_tracking.py no-ops here.
 
 # HTTP client for Cloud Run OCR service
 httpx>=0.27.0

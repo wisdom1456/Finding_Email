@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
-	import { progressStore } from '$lib/stores/progressStore';
-	
+	import { progressStore, type DocLogEntry } from '$lib/stores/progressStore';
+
 	interface ProgressStep {
 		step: string;
 		current?: number;
@@ -35,12 +35,18 @@
 	let isStalled = $state(false);
 	let stallPercent = $state(0);
 	let errorMessage = $state('');
-	
+	let docLog = $state<DocLogEntry[]>([]);
+	let docLogEl = $state<HTMLDivElement | null>(null);
+	let docLogAtBottom = true; // plain flag, not $state — read via untrack in the auto-scroll effect
+
 	// Map progress store phase to modal step
 	$effect(() => {
 		const state = $progressStore;
 
 		untrack(() => {
+			if (state.doc_log) {
+				docLog = state.doc_log;
+			}
 			if (state.status === 'active' || state.status === 'connecting') {
 				const phaseToStep: Record<string, string> = {
 					'initialization': 'init',
@@ -122,6 +128,47 @@
 		};
 		return icons[step] || '⚙️';
 	}
+
+	function formatSize(bytes: number | undefined): string {
+		if (!bytes) return '—';
+		if (bytes < 1024) return `${bytes} B`;
+		if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+		return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+	}
+
+	const OUTCOME_BADGES: Record<string, string> = {
+		imported: '✓',
+		downloading: '⬇',
+		skipped_small_image: '⤫',
+		duplicate: '≡',
+		blacklisted: '⊘',
+		failed: '✗'
+	};
+
+	function outcomeBadge(outcome: string): string {
+		return OUTCOME_BADGES[outcome] || outcome;
+	}
+
+	function outcomeClass(outcome: string): string {
+		if (outcome === 'imported') return 'text-green-600';
+		if (outcome === 'failed') return 'text-red-600';
+		return 'text-gray-400';
+	}
+
+	function handleDocLogScroll(e: Event) {
+		const el = e.currentTarget as HTMLDivElement;
+		docLogAtBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 24;
+	}
+
+	// Auto-scroll the doc log to the newest entry unless the user scrolled up.
+	// Reads docLogAtBottom (a plain flag, not $state) so this effect doesn't
+	// retrigger itself when it programmatically sets scrollTop.
+	$effect(() => {
+		void docLog.length;
+		if (docLogEl && docLogAtBottom) {
+			docLogEl.scrollTop = docLogEl.scrollHeight;
+		}
+	});
 
 	function getProgressPercentage(): number {
 		// Use progress store percentage if available
@@ -277,16 +324,35 @@
 					<!-- Step History -->
 					<div class="space-y-2">
 						<h4 class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Progress</h4>
-						<div class="space-y-1 max-h-60 overflow-y-auto">
-							{#each steps.slice(-10).reverse() as step}
-								<div class="text-xs text-gray-600 flex items-center">
-									<span class="mr-2">{getStepIcon(step.step)}</span>
-									<span class="truncate">
-										{step.message || `${getStepLabel(step.step)} ${step.item_name || ''}`}
-									</span>
-								</div>
-							{/each}
-						</div>
+						{#if docLog.length > 0}
+							<div
+								bind:this={docLogEl}
+								onscroll={handleDocLogScroll}
+								class="space-y-1 max-h-64 overflow-y-auto"
+							>
+								{#each docLog as entry (entry.i)}
+									<div class="flex items-center gap-2 text-sm text-gray-600">
+										<span class="text-gray-400 w-10 text-right shrink-0">#{entry.i}</span>
+										<span class="truncate flex-1" title={entry.name}>{entry.name}</span>
+										<span class="text-gray-400 shrink-0">{formatSize(entry.size_bytes)}</span>
+										<span class="shrink-0 {outcomeClass(entry.outcome)}" title={entry.reason ?? ''}>
+											{outcomeBadge(entry.outcome)}
+										</span>
+									</div>
+								{/each}
+							</div>
+						{:else}
+							<div class="space-y-1 max-h-60 overflow-y-auto">
+								{#each steps.slice(-10).reverse() as step}
+									<div class="text-xs text-gray-600 flex items-center">
+										<span class="mr-2">{getStepIcon(step.step)}</span>
+										<span class="truncate">
+											{step.message || `${getStepLabel(step.step)} ${step.item_name || ''}`}
+										</span>
+									</div>
+								{/each}
+							</div>
+						{/if}
 					</div>
 				{:else if isComplete && isStalled}
 					<!-- Partial Success - Import Stalled -->

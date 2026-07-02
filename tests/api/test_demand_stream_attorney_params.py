@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from types import SimpleNamespace
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 import pytest
 

@@ -4,6 +4,7 @@ import { shouldAutoExtract } from './autoExtract';
 const needing = [{ status: 'pending', extracted_at: null, extracted_text: null }];
 const healthy = [{ status: 'ready', extracted_at: '2026-01-01', extracted_text: 'x' }];
 const skipped = [{ status: 'skipped_small_image', extracted_at: null, extracted_text: null }];
+const junk = [{ status: 'pending', extracted_at: null, extracted_text: null, is_flagged_as_junk: true }];
 const base = {
 	flagEnabled: true,
 	analysisInProgress: false,
@@ -17,6 +18,9 @@ describe('shouldAutoExtract', () => {
 	});
 	it('never runs when flag off', () => {
 		expect(shouldAutoExtract(needing as any, { ...base, flagEnabled: false })).toBe(false);
+	});
+	it('ignores junk-flagged documents', () => {
+		expect(shouldAutoExtract(junk as any, base)).toBe(false);
 	});
 	it('does not run when all docs healthy', () => {
 		expect(shouldAutoExtract(healthy as any, base)).toBe(false);

@@ -21,6 +21,7 @@
 	import KeyFactsChips from './KeyFactsChips.svelte';
 	import DocumentRelationships from './DocumentRelationships.svelte';
 	import { getAttentionNeeds } from '$lib/utils/documentSorting';
+	import { sanitizeHtml } from '$lib/utils/markdown';
 
 	let {
 		doc,
@@ -812,7 +813,7 @@
 					{#if hasHtmlNotes}
 					<!-- Render AI-generated HTML notes as formatted content -->
 					<div class="text-sm text-gray-700 bg-gray-50 border border-gray-200 rounded-lg p-3 mb-2 prose prose-sm max-w-none [&_p]:my-1 [&_strong]:font-semibold [&_br]:leading-relaxed">
-						{@html existingNotes}
+						{@html sanitizeHtml(existingNotes)}
 					</div>
 					{/if}
 					<textarea

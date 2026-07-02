@@ -20,6 +20,7 @@ dependencies = [
     "pyyaml>=6.0",
     "requests>=2.31.0",
     "markdown2>=2.4.0",
+    "nh3>=0.2",
     "tiktoken>=0.5.1",
     "tenacity>=8.2.3",
     "PyJWT==2.8.0",

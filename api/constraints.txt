@@ -85,6 +85,7 @@ limits==5.8.0
 lxml==6.0.2
     # via python-docx
 markdown2==2.5.5
+nh3==0.3.6
     # via -r api/requirements.txt
 openai==2.25.0
     # via -r api/requirements.txt

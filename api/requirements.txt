@@ -58,6 +58,7 @@ pillow-heif>=0.16.0
 # Lightweight text processing
 html2text==2020.1.16
 markdown2>=2.4.0
+nh3>=0.2  # HTML sanitization for LLM-generated letters
 
 # HTTP client for Cloud Run OCR service
 httpx>=0.27.0

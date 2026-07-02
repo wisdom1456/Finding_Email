@@ -2,7 +2,7 @@
 	import { getApiUrl } from '$lib/config';
 	import { getSecureSession } from '$lib/supabase';
 	import { toastStore } from '$lib/stores/toastStore';
-	import { parseMarkdown } from '$lib/utils/markdown';
+	import { parseMarkdown, sanitizeHtml } from '$lib/utils/markdown';
 	import { letterHtmlToPlainText, normalizeLetterHtml } from '$lib/utils/letterCopy';
 	import { SSEEventParser } from '$lib/utils/sseEventParser';
 	import { fetchWithRetry } from '$lib/utils/fetchWithRetry';
@@ -533,7 +533,7 @@
 						</div>
 					{/if}
 					<div class="p-6 h-[600px] overflow-y-auto prose prose-sm max-w-none">
-						{@html findingsLetter}
+						{@html sanitizeHtml(findingsLetter)}
 					</div>
 				</div>
 			</div>

@@ -26,3 +26,15 @@ export function parseMarkdown(text: string): string {
 		return DOMPurify.sanitize(text);
 	}
 }
+
+/**
+ * Sanitize an HTML string without markdown parsing.
+ * For server-provided HTML rendered outside the sandboxed iframe
+ * (e.g. letter previews, stored notes) as defense in depth.
+ * @param html - Raw HTML string
+ * @returns Sanitized HTML string
+ */
+export function sanitizeHtml(html: string): string {
+	if (!html) return '';
+	return DOMPurify.sanitize(html);
+}

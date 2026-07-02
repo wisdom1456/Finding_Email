@@ -135,12 +135,19 @@ app.add_middleware(
 # Exception handlers
 @app.exception_handler(Exception)
 async def general_exception_handler(request: Request, exc: Exception):
-    """Handle all uncaught exceptions."""
+    """Handle all uncaught exceptions.
+
+    Uses the same envelope as the AppError handler ({error, message, context})
+    and never leaks exception detail to clients outside debug mode — the full
+    traceback goes to the server log instead.
+    """
+    logger.exception("Unhandled exception on %s %s", request.method, request.url.path)
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         content={
-            "message": "Internal server error",
-            "detail": str(exc) if app.debug else "An error occurred",
+            "error": "InternalServerError",
+            "message": str(exc) if app.debug else "Internal server error",
+            "context": None,
         },
     )
 

@@ -17,6 +17,7 @@ from openai import (
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_fixed
 
 from legal_portal.core.data_models import ProcessingError
+from legal_portal.services.shared.html_sanitizer import sanitize_letter_html
 from legal_portal.services.letters.letter_validation_service import LetterValidationService
 from legal_portal.services.letters.letter_strategy_service import LetterStrategyService
 from legal_portal.utils.diagnostic_logger import DiagnosticLogger
@@ -2094,6 +2095,10 @@ class JsonProcessingService:
         try:
             # Convert markdown to HTML
             html_content = markdown2.markdown(cleaned_markdown, extras=extras)
+
+            # Model output is untrusted: strip any embedded active markup
+            # before the trusted class/wrapper transformations below.
+            html_content = sanitize_letter_html(html_content)
 
             # Apply semantic CSS classes to known structural elements
             html_content = re.sub(

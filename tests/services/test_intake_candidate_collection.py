@@ -13,6 +13,7 @@ from types import SimpleNamespace
 
 from legal_portal.services.analysis.analysis_orchestrator import (
     apply_intake_selection,
+    build_intake_selection_candidates,
     is_intake_candidate,
     reorder_intake_by_selection,
 )
@@ -161,3 +162,46 @@ def test_reorder_does_not_mutate_input_list():
     original = [a, b]
     reorder_intake_by_selection(original, "b")
     assert original == [a, b]
+
+
+# ---------------------------------------------------------------------------
+# build_intake_selection_candidates (live pipeline: process_case_background)
+# ---------------------------------------------------------------------------
+
+
+def test_candidates_use_real_file_type_from_document_rows():
+    from legal_portal.core.data_models import FileType
+
+    # Live-pipeline pdocs are constructed with a hardcoded FileType.PDF
+    # fallback; the candidate builder must report the REAL type from the
+    # original document rows instead.
+    pdocs = [
+        SimpleNamespace(document_id="a", file_name="Intake.docx", file_type=FileType.PDF),
+        SimpleNamespace(document_id="b", file_name="Intake.pdf", file_type=FileType.PDF),
+    ]
+    documents = [
+        {
+            "id": "a",
+            "file_type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        },
+        {"id": "b", "file_type": "application/pdf"},
+    ]
+    candidates = build_intake_selection_candidates(pdocs, documents)
+    assert candidates == [
+        {
+            "id": "a",
+            "file_name": "Intake.docx",
+            "file_type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        },
+        {"id": "b", "file_name": "Intake.pdf", "file_type": "application/pdf"},
+    ]
+
+
+def test_candidates_fall_back_to_pdoc_file_type_when_row_missing():
+    from legal_portal.core.data_models import FileType
+
+    pdocs = [SimpleNamespace(document_id="x", file_name="Intake.pdf", file_type=FileType.PDF)]
+    candidates = build_intake_selection_candidates(pdocs, documents=[])
+    assert candidates == [
+        {"id": "x", "file_name": "Intake.pdf", "file_type": "application/pdf"}
+    ]

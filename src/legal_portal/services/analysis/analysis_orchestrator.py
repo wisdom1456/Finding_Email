@@ -125,6 +125,28 @@ def apply_intake_selection(
     return chosen_path, new_file_paths
 
 
+def build_intake_selection_candidates(
+    processed_intake: List[Any], documents: List[Dict[str, Any]]
+) -> List[Dict[str, Any]]:
+    """Build candidate dicts for `select_intake_document` from ProcessedDocuments.
+
+    file_type is sourced from the original document rows — pdocs in the live
+    pipeline are constructed with a hardcoded `FileType.PDF` fallback, so the
+    pdoc attribute alone would misreport DOCX/EML intake docs to the LLM.
+    Falls back to the pdoc's file_type only when the row lookup misses.
+    """
+    file_type_by_id = {d.get("id"): d.get("file_type") for d in documents}
+    candidates = []
+    for p in processed_intake:
+        file_type = file_type_by_id.get(p.document_id) or (
+            p.file_type.value if hasattr(p.file_type, "value") else str(p.file_type)
+        )
+        candidates.append(
+            {"id": p.document_id, "file_name": p.file_name, "file_type": file_type}
+        )
+    return candidates
+
+
 def reorder_intake_by_selection(processed_intake: List[Any], chosen_doc_id: str) -> List[Any]:
     """Pure reorder for the live pipeline (`process_case_background`).
 
@@ -1119,14 +1141,7 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
                     select_intake_document,
                 )
 
-                candidates = [
-                    {
-                        "id": p.document_id,
-                        "file_name": p.file_name,
-                        "file_type": "application/pdf",
-                    }
-                    for p in processed_intake
-                ]
+                candidates = build_intake_selection_candidates(processed_intake, documents)
                 selection = select_intake_document(candidates, supabase, OpenAIClient())
                 if selection:
                     processed_intake = reorder_intake_by_selection(

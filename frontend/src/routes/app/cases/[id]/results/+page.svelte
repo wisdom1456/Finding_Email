@@ -10,6 +10,7 @@
 	import { parseMarkdown } from '$lib/utils/markdown';
 	import { SSEEventParser } from '$lib/utils/sseEventParser';
 	import { fetchWithRetry } from '$lib/utils/fetchWithRetry';
+	import { shouldAutoRunGapAnalysis } from '$lib/utils/gapAutoRun';
 	import type { GapResolutionRefreshRequest, RecommendedLetterType } from '$lib/types';
 	import { onMount, onDestroy, tick } from 'svelte';
 	import SkippedDocumentsAlert from '$lib/components/SkippedDocumentsAlert.svelte';
@@ -375,8 +376,8 @@
 
 			results = res;
 
-			// Auto-run if: explicitly requested (just ran analysis) OR no gap analysis exists yet
-			if (autoRunGapAnalysis || !gapAnalysis) {
+			// Auto-run if: multi-stage supported, no gap analysis yet, and explicitly enabled
+			if (shouldAutoRunGapAnalysis({ hasMultiStageSupport, hasGapAnalysis: Boolean(gapAnalysis), autoRunEnabled: autoRunGapAnalysis })) {
 				analyzeGaps();
 			}
 		} catch (err) {

@@ -27,7 +27,7 @@ jobs:
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements-dev.txt
+          pip install -r requirements.txt -r requirements-dev.txt
       
       # Correctness rules are BLOCKING — they catch real bugs (undefined
       # names, duplicate/unused imports, syntax errors). This gate found two
@@ -95,7 +95,7 @@ jobs:
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements-dev.txt
+          pip install -r requirements.txt -r requirements-dev.txt
       
       - name: Run pytest
         env:
@@ -323,7 +323,7 @@ jobs:
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements-dev.txt
+          pip install -r requirements.txt -r requirements-dev.txt
 
       # The official action puts `supabase` on PATH reliably; the old
       # curl | sh install landed the binary off-PATH (exit 127 on use).

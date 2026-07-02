@@ -340,6 +340,20 @@ jobs:
           supabase start
           supabase db reset
 
+      # A fresh `db reset` doesn't re-establish the standard service_role grants
+      # on migration-created tables, so the service client hits "permission
+      # denied for table profiles" when seeding/approving test users. In prod
+      # service_role already has full access; restore it here to match. This
+      # does NOT touch the authenticated/anon column-level hardening the RLS
+      # tests actually verify.
+      - name: Restore service_role table grants
+        run: |
+          sudo apt-get install -y --no-install-recommends postgresql-client
+          DB_URL=$(supabase status --output json | jq -r '.DB_URL // .db_url')
+          psql "$DB_URL" -v ON_ERROR_STOP=1 \
+            -c "GRANT ALL ON ALL TABLES IN SCHEMA public TO service_role;" \
+            -c "GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO service_role;"
+
       # Export the ACTUAL keys the running instance issued. Different CLI
       # versions sign JWTs with different default secrets, so the conftest's
       # hardcoded demo keys aren't valid here — and a wrong jq key name yields

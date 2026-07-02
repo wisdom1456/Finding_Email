@@ -85,6 +85,20 @@ function eventType(event: RecommendationStreamEvent): string {
 	return '';
 }
 
+export type TerminalOutcome = 'recovered' | 'error' | 'final';
+
+/**
+ * Classifies a terminal (`done: true`) state into its outcome. The reducer's
+ * error case sets `done: true` for BOTH the salvage and plain-error outcomes,
+ * so callers must branch on this classification — not on `done` vs `error` —
+ * or the error branch is unreachable.
+ */
+export function resolveTerminalOutcome(state: RecommendationStreamState): TerminalOutcome {
+	if (state.recovered) return 'recovered';
+	if (state.error) return 'error';
+	return 'final';
+}
+
 export function reduceRecommendationStreamEvent(
 	state: RecommendationStreamState,
 	event: RecommendationStreamEvent

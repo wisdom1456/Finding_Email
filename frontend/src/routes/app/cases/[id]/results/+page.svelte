@@ -13,6 +13,7 @@
 	import {
 		initialRecommendationStreamState,
 		reduceRecommendationStreamEvent,
+		resolveTerminalOutcome,
 		type RecommendationLetterContent,
 		type RecommendationStreamEvent
 	} from '$lib/utils/recommendationLetterStream';
@@ -855,12 +856,22 @@
 					event: 'error',
 					error: 'Recommendation letter stream ended before completion.'
 				});
-				if (recommendationStreamState.done) {
-					if (finalizeRecommendationLetterState(letterType)) {
-						shouldSwitchToLetters = true;
-					}
-				} else if (recommendationStreamState.error) {
-					toastStore.error(recommendationStreamState.error);
+				// Unlike the in-loop empty-buffer error path (which throws so the outer
+				// catch shows the toast), this post-loop variant must surface the
+				// failure itself — branch on the terminal outcome, not on `done`,
+				// which the reducer sets for BOTH salvage and plain-error outcomes.
+				switch (resolveTerminalOutcome(recommendationStreamState)) {
+					case 'recovered':
+					case 'final':
+						if (finalizeRecommendationLetterState(letterType)) {
+							shouldSwitchToLetters = true;
+						}
+						break;
+					case 'error':
+						toastStore.error(
+							recommendationStreamState.error || 'Recommendation letter stream ended before completion.'
+						);
+						break;
 				}
 			}
 		} catch (err: any) {

@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
 	initialRecommendationStreamState,
 	reduceRecommendationStreamEvent,
+	resolveTerminalOutcome,
 	type RecommendationStreamState
 } from '../utils/recommendationLetterStream';
 
@@ -157,5 +158,35 @@ describe('reduceRecommendationStreamEvent', () => {
 			error: null,
 			recovered: false
 		});
+	});
+});
+
+describe('resolveTerminalOutcome', () => {
+	// The reducer sets done:true for BOTH error outcomes (salvage and plain
+	// failure), so terminal handling must branch on this classification —
+	// checking `done` before `error` makes the error branch unreachable.
+
+	it("classifies a salvaged draft as 'recovered'", () => {
+		let state = initialRecommendationStreamState();
+		state = reduceRecommendationStreamEvent(state, { event: 'token', token: 'salvageable draft' });
+		state = reduceRecommendationStreamEvent(state, { event: 'error', error: 'boom' });
+		expect(resolveTerminalOutcome(state)).toBe('recovered');
+	});
+
+	it("classifies an empty-buffer failure as 'error' even though done is true", () => {
+		let state = initialRecommendationStreamState();
+		state = reduceRecommendationStreamEvent(state, { event: 'error', error: 'stream dropped' });
+		expect(state.done).toBe(true);
+		expect(resolveTerminalOutcome(state)).toBe('error');
+	});
+
+	it("classifies a completed stream with final content as 'final'", () => {
+		let state = initialRecommendationStreamState();
+		state = reduceRecommendationStreamEvent(state, { event: 'token', token: 'draft' });
+		state = reduceRecommendationStreamEvent(state, {
+			event: 'final',
+			content: { format: 'html', html: '<p>Letter</p>' }
+		});
+		expect(resolveTerminalOutcome(state)).toBe('final');
 	});
 });
